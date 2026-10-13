@@ -1,8 +1,8 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button, ConfirmDialog, DataTable, StatCard, Tabs } from "@/app/_components/ds";
+import { Button, ConfirmDialog, DataTable, Modal, StatCard, Tabs } from "@/app/_components/ds";
 import type { AdminUserSummary, AdminRoleSummary } from "@/app/_data/loaders";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
@@ -88,10 +88,6 @@ function EditRolesSheet({
   onClose: () => void;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const confirmRef = useRef(false);
-  confirmRef.current = confirmOpen;
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
   const [loading, setLoading] = useState(true);
   const [current, setCurrent] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -100,31 +96,8 @@ function EditRolesSheet({
   const formError = useFormError("user roles");
 
   const userId = user?.id;
-  const panelRef = useRef<HTMLDivElement>(null);
-  // GAP-ADMIN-USERS-07: Esc closes (unless the confirm dialog is on top, which
-  // handles its own Esc), Tab stays inside the sheet, focus moves in on open and
-  // returns to the control that opened it.
-  useEffect(() => {
-    if (!userId) return;
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const panel = panelRef.current;
-    const focusables = () => Array.from(panel?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex='-1'])") ?? []);
-    (focusables()[0] ?? panel)?.focus();
-    function onKey(e: KeyboardEvent) {
-      if (confirmRef.current) return;
-      if (e.key === "Escape") { e.preventDefault(); onCloseRef.current(); return; }
-      if (e.key !== "Tab") return;
-      const items = focusables();
-      if (items.length === 0) { e.preventDefault(); return; }
-      const first = items[0]!;
-      const last = items[items.length - 1]!;
-      const active = document.activeElement;
-      if (e.shiftKey && (active === first || !panel?.contains(active))) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && (active === last || !panel?.contains(active))) { e.preventDefault(); first.focus(); }
-    }
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("keydown", onKey); opener?.focus(); };
-  }, [userId]);
+  // SF-19: the sheet is ds/Modal, which owns focus-in, the Tab trap, Escape,
+  // inert background and focus-restore (this component hand-rolled all of that).
 
   // Fetch this user's REAL effective roles when the sheet opens — the
   // directory list intentionally does not carry a roles column (identity-
@@ -194,17 +167,16 @@ function EditRolesSheet({
   const roleName = (key: string) => roles.find((r) => r.key === key)?.name ?? key;
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="sheet-title" style={{ position: "fixed", inset: 0, display: "flex", zIndex: 50 }}>
-      <div style={{ flex: 1, background: "rgba(0,0,0,0.35)" }} onClick={onClose} aria-hidden="true" />
-      <div ref={panelRef} tabIndex={-1} style={{ width: "min(380px, 100vw)", background: "var(--panel)", height: "100%", padding: 28, overflowY: "auto", display: "flex", flexDirection: "column", gap: 20, boxShadow: "-4px 0 24px rgba(0,0,0,0.15)" }}>
+    <Modal
+      open
+      // Escape closes the sheet, but not while the role-change ConfirmDialog is on top (it handles its own Escape).
+      onClose={() => { if (!confirmOpen) onClose(); }}
+      title="Edit Roles"
+      closeOnOverlayClick={false}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <h2 id="sheet-title" style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700 }}>Edit Roles</h2>
-            <p style={{ margin: 0, fontSize: 12.5, color: "var(--mut)" }}>{user.name} · {user.email}</p>
-          </div>
-          {/* Icon-only close glyph with no .btn/.iconbtn convention applied
-              today -- out of scope for the shared Button (text-button-shaped,
-              not icon-only per its own doc comment); left as-is. */}
+          <p style={{ margin: 0, fontSize: 12.5, color: "var(--mut)" }}>{user.name} · {user.email}</p>
           <button type="button" onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--mut)", lineHeight: 1 }}>×</button>
         </div>
         {error && <p role="alert" style={{ margin: 0, fontSize: 12.5, color: "#b42318" }}>{error}</p>}
@@ -255,7 +227,7 @@ function EditRolesSheet({
         onConfirm={() => void save()}
         onCancel={() => { if (!busy) setConfirmOpen(false); }}
       />
-    </div>
+    </Modal>
   );
 }
 

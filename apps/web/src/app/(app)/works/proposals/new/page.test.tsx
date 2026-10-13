@@ -109,13 +109,22 @@ describe("NewProposalPage — GAP-WORKS-PROPOSALS-NEW-05 (cancel)", () => {
     expect(pushMock).toHaveBeenCalledWith("/works/proposals");
   });
 
-  it("confirms before discarding a dirty form", () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+  it("confirms (ConfirmDialog, not window.confirm) before discarding a dirty form", () => {
+    const confirmSpy = vi.spyOn(window, "confirm");
     render(<NewProposalPage />);
     fireEvent.change(screen.getByLabelText(/Description/i), { target: { value: "typed something" } });
     fireEvent.click(screen.getByRole("button", { name: /^Cancel$/i }));
-    expect(confirmSpy).toHaveBeenCalled();
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
+    // Escape keeps the form (no navigation).
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+    // Confirming discards and navigates.
+    fireEvent.click(screen.getByRole("button", { name: /^Cancel$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^Discard$/i }));
+    expect(pushMock).toHaveBeenCalledWith("/works/proposals");
   });
 });
 

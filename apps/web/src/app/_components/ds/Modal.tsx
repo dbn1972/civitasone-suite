@@ -72,6 +72,12 @@ export interface ModalProps {
   panelClassName?: string;
   /** Extra class name appended to the title <h2> -- see `overlayClassName`. */
   titleClassName?: string;
+  /**
+   * Overlay stacking level, for the rare dialog that must out-rank the
+   * persistent floating widgets (AskCivitasOne 1100, feedback 1000) -- e.g.
+   * the first-run tour. Unset keeps the stylesheet's default (1000).
+   */
+  zIndex?: number;
 }
 
 const FOCUSABLE =
@@ -93,6 +99,7 @@ export function Modal({
   overlayClassName,
   panelClassName,
   titleClassName,
+  zIndex,
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const previouslyFocused = useRef<HTMLElement | null>(null);
@@ -169,6 +176,7 @@ export function Modal({
     <div
       className={joinClassNames("modal-overlay", overlayClassName)}
       role="presentation"
+      style={zIndex !== undefined ? { zIndex } : undefined}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget && closeOnOverlayClick) onClose();
       }}

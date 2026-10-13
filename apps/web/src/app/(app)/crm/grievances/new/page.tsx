@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { Button, PageHeader } from "../../../../_components/ds";
+import { Button, ConfirmDialog, PageHeader } from "../../../../_components/ds";
 import { browserFetch } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
 import {
@@ -80,9 +80,12 @@ export default function NewGrievancePage() {
   }, [dirty]);
 
   // GAP-CRM-GRIEVANCES-NEW-05: intercept Cancel when there is unsaved input.
+  // SF-19: shared ConfirmDialog (focus trap, Escape) instead of window.confirm.
+  const [discardOpen, setDiscardOpen] = useState(false);
   function handleCancel(e: React.MouseEvent<HTMLAnchorElement>) {
-    if (dirty && !window.confirm("Discard this grievance? Your unsaved changes will be lost.")) {
+    if (dirty) {
       e.preventDefault();
+      setDiscardOpen(true);
     }
   }
 
@@ -415,6 +418,19 @@ export default function NewGrievancePage() {
           </div>
         </form>
       </div>
+      <ConfirmDialog
+        open={discardOpen}
+        danger
+        title={t("discardTitle")}
+        description={t("discardMessage")}
+        confirmLabel={t("discardConfirm")}
+        cancelLabel={t("keepEditing")}
+        onConfirm={() => {
+          setDiscardOpen(false);
+          router.push("/crm/grievances");
+        }}
+        onCancel={() => setDiscardOpen(false)}
+      />
     </>
   );
 }

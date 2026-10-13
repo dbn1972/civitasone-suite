@@ -8,7 +8,7 @@
  * convention (local field state, submit-time validation, inline error).
  */
 import { useEffect, useId, useState } from "react";
-import { Button } from "@/app/_components/ds";
+import { Button, Modal } from "@/app/_components/ds";
 import type { ScoreApplicationRequest } from "@/lib/grants/application";
 
 interface ScoreApplicationDialogProps {
@@ -67,9 +67,17 @@ export function ScoreApplicationDialog({ open, busy = false, errorMessage, onCan
   }
 
   return (
-    <div className="cd-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && !busy && onCancel()}>
-      <div className="cd-panel" role="alertdialog" aria-modal="true" aria-labelledby={titleId}>
-        <h2 className="cd-title" id={titleId}>Submit evaluation</h2>
+    // SF-19: ds/Modal (focus trap, inert background, Escape) instead of a hand-rolled overlay.
+    <Modal
+      open
+      role="alertdialog"
+      title="Submit evaluation"
+      onClose={() => { if (!busy) onCancel(); }}
+      closeOnOverlayClick={!busy}
+      overlayClassName="cd-overlay"
+      panelClassName="cd-panel"
+      titleClassName="cd-title"
+    >
 
         <div className="cd-field">
           <label htmlFor={`${titleId}-reviewer`}>Reviewer reference</label>
@@ -129,7 +137,6 @@ export function ScoreApplicationDialog({ open, busy = false, errorMessage, onCan
             {busy ? "Submitting…" : "Submit evaluation"}
           </Button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

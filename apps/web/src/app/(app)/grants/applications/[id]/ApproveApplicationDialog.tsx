@@ -14,7 +14,7 @@
  * server-side; this is a guard + context, not the authority.
  */
 import { useEffect, useId, useState } from "react";
-import { Button } from "@/app/_components/ds";
+import { Button, Modal } from "@/app/_components/ds";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
 import type { ApproveApplicationRequest } from "@/lib/grants/application";
@@ -84,9 +84,17 @@ export function ApproveApplicationDialog({
       : null;
 
   return (
-    <div className="cd-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && !busy && onCancel()}>
-      <div className="cd-panel" role="alertdialog" aria-modal="true" aria-labelledby={titleId}>
-        <h2 className="cd-title" id={titleId}>Approve application</h2>
+    // SF-19: ds/Modal (focus trap, inert background, Escape) instead of a hand-rolled overlay.
+    <Modal
+      open
+      role="alertdialog"
+      title="Approve application"
+      onClose={() => { if (!busy) onCancel(); }}
+      closeOnOverlayClick={!busy}
+      overlayClassName="cd-overlay"
+      panelClassName="cd-panel"
+      titleClassName="cd-title"
+    >
 
         <p style={{ fontSize: 13, color: "var(--ink2)", margin: "0 0 10px" }}>
           {requestedMinor != null ? <>Requested <strong>{formatMoney(requestedMinor)}</strong>. </> : null}
@@ -128,7 +136,6 @@ export function ApproveApplicationDialog({
             {busy ? "Approving…" : "Approve application"}
           </Button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

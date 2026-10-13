@@ -1,13 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
-import { Button } from "@/app/_components/ds";
+import { Button, Modal } from "@/app/_components/ds";
 
 export function PlanAuditButton() {
   const router = useRouter();
-  const titleId = useId();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,15 +20,6 @@ export function PlanAuditButton() {
   const [riskLevel, setRiskLevel] = useState<"low" | "medium" | "high">("medium");
 
   const close = useCallback(() => { if (!busy) { setOpen(false); setError(null); } }, [busy]);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") close();
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, close]);
 
   const submit = useCallback(async () => {
     setError(null);
@@ -78,11 +68,9 @@ export function PlanAuditButton() {
   return (
     <>
       <Button onClick={() => setOpen(true)}>+ Plan Audit</Button>
-      {open && (
-        <div role="dialog" aria-modal="true" aria-labelledby={titleId}
-          style={{ position: "fixed", inset: 0, background: "rgba(16,24,40,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
-          <div className="card" style={{ width: "min(520px,100%)", maxHeight: "90vh", overflowY: "auto" }}>
-            <div className="card-h"><h3 id={titleId}>Plan audit engagement</h3></div>
+      {/* SF-19: ds/Modal (focus trap, inert background, Escape). Overlay click never discards typed input. */}
+      <Modal open={open} onClose={close} title="Plan audit engagement" size="lg" closeOnOverlayClick={false}>
+          <div style={{ maxHeight: "70vh", overflowY: "auto" }}>
             <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <label className="lbl" htmlFor="ps-no">Plan no.</label>
               <input id="ps-no" className="inp" value={planNo} onChange={(e) => setPlanNo(e.target.value)} placeholder="PLAN-FY26-03" />
@@ -122,8 +110,7 @@ export function PlanAuditButton() {
               </div>
             </div>
           </div>
-        </div>
-      )}
+      </Modal>
     </>
   );
 }

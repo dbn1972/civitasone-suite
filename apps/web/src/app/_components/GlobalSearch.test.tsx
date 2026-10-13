@@ -267,9 +267,8 @@ describe("GlobalSearch", () => {
     openPalette();
     expect(screen.getByRole("dialog")).toBeInTheDocument();
 
-    // Backdrop is the div with aria-hidden="true"
-    const backdrop = screen.getByRole("dialog").parentElement!.querySelector("[aria-hidden='true']")!;
-    fireEvent.click(backdrop);
+    // The backdrop is ds/Modal's presentation-role overlay (closes on mousedown).
+    fireEvent.mouseDown(screen.getByRole("presentation"));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 

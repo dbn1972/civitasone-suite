@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { Button, DataTable, ConfirmDialog } from "@/app/_components/ds";
+import { Button, DataTable, ConfirmDialog, Modal } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { rupeesToMinorString } from "@/lib/money";
@@ -61,17 +60,12 @@ async function postJson(url: string, body: unknown): Promise<void> {
   if (!(res.ok || res.status === 202)) throw new Error(assessmentActionError());
 }
 
-const FOCUSABLE =
-  'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
-
-/** Hand-rolled panel that collects the business-data field(s) before the
- * ConfirmDialog gate captures the required reason and submits.
+/** Panel that collects the business-data field(s) before the ConfirmDialog
+ * gate captures the required reason and submits.
  *
- * Accessible-dialog behaviour (mirrors the DS ConfirmDialog): rendered into a
- * body-level portal so the rest of the page can be made `inert` while it's
- * open; focus moves to the input on open and is trapped inside the panel;
- * focus returns to the trigger on close; a validation error re-focuses the
- * invalid input.
+ * SF-19: built on ds/Modal, which owns the body portal, `inert` background,
+ * focus-in (first control = the input), Tab trap, Escape and focus restore.
+ * A validation error re-focuses the invalid input.
  */
 function FieldPanel({
   titleId,
@@ -94,85 +88,17 @@ function FieldPanel({
   onContinue: () => void;
   error?: string;
 }) {
-  const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const previouslyFocused = useRef<HTMLElement | null>(null);
-
-  // Focus the input on open, trap background interaction, restore focus on close.
-  useEffect(() => {
-    previouslyFocused.current = document.activeElement as HTMLElement | null;
-    inputRef.current?.focus();
-
-    const hidden: HTMLElement[] = [];
-    Array.from(document.body.children).forEach((child) => {
-      if (child instanceof HTMLElement && !child.contains(panelRef.current) && child !== panelRef.current) {
-        if (!child.hasAttribute("inert")) {
-          hidden.push(child);
-          child.setAttribute("inert", "");
-        }
-      }
-    });
-
-    return () => {
-      hidden.forEach((el) => el.removeAttribute("inert"));
-      previouslyFocused.current?.focus?.();
-    };
-  }, []);
 
   // Re-focus the invalid field whenever a new validation error appears.
   useEffect(() => {
     if (error) inputRef.current?.focus();
   }, [error]);
 
-  // Escape + Tab-trap via a document-level listener (not a JSX onKeyDown prop
-  // on the role="dialog" panel) so it doesn't trip jsx-a11y's
-  // non-interactive-element-interactions check, and keeps working regardless
-  // of exactly what inside the panel currently has focus.
-  useEffect(() => {
-    function onKeyDown(e: globalThis.KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onCancel();
-        return;
-      }
-      if (e.key !== "Tab") return;
-      const node = panelRef.current;
-      if (!node) return;
-      const focusables = Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE));
-      if (focusables.length === 0) return;
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [onCancel]);
-
-  return createPortal(
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(16,24,40,.45)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 100,
-        padding: 16,
-      }}
-    >
-      <div ref={panelRef} className="card" style={{ width: "min(420px,100%)" }}>
+  return (
+    <Modal open onClose={onCancel} title={title} closeOnOverlayClick={false}>
+      <div>
         <div className="pad" style={{ display: "grid", gap: 10 }}>
-          <h2 id={titleId} style={{ margin: 0, fontSize: 16 }}>{title}</h2>
           <label htmlFor={`${titleId}-input`} style={{ fontSize: 13, fontWeight: 600 }}>
             {label} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
           </label>
@@ -195,8 +121,7 @@ function FieldPanel({
           </div>
         </div>
       </div>
-    </div>,
-    document.body,
+    </Modal>
   );
 }
 

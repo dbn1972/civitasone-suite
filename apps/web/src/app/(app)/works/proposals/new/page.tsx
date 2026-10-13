@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
-import { PageHeader, Button, EntityPicker, Field } from "@/app/_components/ds";
+import { PageHeader, Button, EntityPicker, Field, ConfirmDialog } from "@/app/_components/ds";
 import { formatMoney, rupeeStringToPaise } from "@/lib/formatters";
 import { searchWorkTypes, resolveWorkTypes } from "@/lib/entityAdapters/workType";
 import { useFormError } from "@/lib/useFormError";
@@ -30,6 +30,8 @@ type StringFormField = Exclude<keyof ProposalForm, "category">;
 export default function NewProposalPage() {
   const router = useRouter();
   const { toast } = useToast();
+  // SF-19: unsaved-changes prompt is the shared ConfirmDialog, not window.confirm.
+  const [discardOpen, setDiscardOpen] = useState(false);
   const [form, setForm] = useState<ProposalForm>({
     description: "",
     category: "regular",
@@ -88,7 +90,10 @@ export default function NewProposalPage() {
   const costValid = estimatedCostMinor !== null && estimatedCostMinor !== "0";
 
   function handleCancel() {
-    if (dirty && !window.confirm("Discard this draft proposal? Your entries will be lost.")) return;
+    if (dirty) {
+      setDiscardOpen(true);
+      return;
+    }
     router.push("/works/proposals");
   }
 
@@ -313,6 +318,19 @@ export default function NewProposalPage() {
           </div>
         </form>
       </div>
+      <ConfirmDialog
+        open={discardOpen}
+        danger
+        title="Discard this draft proposal?"
+        description="Your entries will be lost."
+        confirmLabel="Discard"
+        cancelLabel="Keep editing"
+        onConfirm={() => {
+          setDiscardOpen(false);
+          router.push("/works/proposals");
+        }}
+        onCancel={() => setDiscardOpen(false)}
+      />
     </>
   );
 }
