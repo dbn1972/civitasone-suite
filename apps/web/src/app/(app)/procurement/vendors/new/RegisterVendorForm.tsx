@@ -96,7 +96,9 @@ export function RegisterVendorForm() {
           email: email.trim() || undefined,
           phone: phone.trim() ? normalizePhone(phone) : undefined,
           ifsc: ifsc.trim().toUpperCase() || undefined,
-          bankAccountNo: accountNo.trim() || undefined,
+          // Canonical API field name is `bankAccount` (see createVendorBody in
+          // procurement-service); a different name was silently stripped by zod.
+          bankAccount: accountNo.trim() || undefined,
         }),
       });
       if (!res.ok) {

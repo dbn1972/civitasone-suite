@@ -17,7 +17,12 @@ export const createVendorBody = z.object({
   mse:         z.boolean().default(false),
   msme:        z.boolean().default(false),
   udyamNo:     z.string().max(32).optional(),
+  // The bank account number's one canonical name is `bankAccount` (matches the
+  // DB column bank_account and the read responses). The web form sends the same.
   bankAccount: z.string().max(32).optional(),
+  category:    z.enum(["goods", "services", "works"]).optional(),
+  contactPerson: z.string().max(128).optional(),
+  address:     z.string().max(512).optional(),
   ifsc:        z.string().regex(IFSC_REGEX, "IFSC must be in format AAAA0XXXXXX").optional(),
 });
 export type CreateVendorBody = z.infer<typeof createVendorBody>;

@@ -5587,6 +5587,9 @@
   },
   "procurement": {
     "title": "Procurement",
+    "poForm": {
+      "vendorBlacklisted": "This vendor is blacklisted and cannot be used on a purchase order. Choose a different vendor."
+    },
     "gfr": {
       "band": {
         "LS": { "name": "Local Shopping", "note": "Spot purchase up to ₹5,000 without tender" },

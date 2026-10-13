@@ -2,6 +2,22 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import type { VendorRow } from "./schema.js";
 
+/**
+ * Mask a bank account number for read responses: only the last four characters
+ * survive (a number shorter than four is masked in full). The full number is
+ * write-only through this API; payments read it server-side from the row.
+ */
+export function maskAccountNumber(value: string): string {
+  const v = value.trim();
+  if (v.length < 4) return "*".repeat(Math.max(v.length, 4));
+  return `${"*".repeat(v.length - 4)}${v.slice(-4)}`;
+}
+
+/** Vendor row as returned to clients: bank account number masked. */
+export function presentVendor<T extends { bankAccount?: string | null }>(v: T): T {
+  return v.bankAccount ? { ...v, bankAccount: maskAccountNumber(v.bankAccount) } : v;
+}
+
 export type EmpanelmentSummary = {
   id: string;
   vendorName: string;
@@ -36,13 +52,13 @@ export async function getVendor(id: string, tenantId: string): Promise<VendorRow
   );
 }
 
-export async function listVendors(tenantId: string, limit: number, offset = 0): Promise<{ data: Array<{ id: string; name: string; category: string; ratingDisplay: string; blacklisted: boolean; gstin?: string; kycStatus: string; kycVerifiedAt?: string | null; email?: string; phone?: string; pan?: string; bankAccount?: string; ifsc?: string }> }> {
+export async function listVendors(tenantId: string, limit: number, offset = 0): Promise<{ data: Array<{ id: string; name: string; category: string; ratingDisplay: string; blacklisted: boolean; gstin?: string; kycStatus: string; kycVerifiedAt?: string | null; email?: string; phone?: string; pan?: string; bankAccount?: string; ifsc?: string; contactPerson?: string; address?: string }> }> {
   const rows = await repo.listVendorsByTenant(tenantId, limit, offset);
   return {
     data: rows.map((v) => ({
       id: v.id,
       name: v.name,
-      category: v.vendorType,
+      category: v.category ?? v.vendorType,
       ratingDisplay: v.mse ? "MSE ★★★★" : "—",
       kycStatus: v.kycStatus,
       // GAP-PROCUREMENT-RFQ-NEW-02: surface the blacklist state so the RFQ
@@ -56,7 +72,9 @@ export async function listVendors(tenantId: string, limit: number, offset = 0): 
       ...(v.email ? { email: v.email } : {}),
       ...(v.phone ? { phone: v.phone } : {}),
       ...(v.pan ? { pan: v.pan } : {}),
-      ...(v.bankAccount ? { bankAccount: v.bankAccount } : {}),
+      ...(v.bankAccount ? { bankAccount: maskAccountNumber(v.bankAccount) } : {}),
+      ...(v.contactPerson ? { contactPerson: v.contactPerson } : {}),
+      ...(v.address ? { address: v.address } : {}),
       ...(v.ifsc ? { ifsc: v.ifsc } : {}),
     })),
   };
