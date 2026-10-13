@@ -1,0 +1,50 @@
+GAP-CRM-SERVICE-REQUESTS-NEW-04	PARTLY	Contact link done (new/page.tsx:18-26,198,325-341) but no open-request/phone/email duplicate check or 'Possible duplicate: SR-xxx' warning; only a static possibleContactNote (:346); no test for duplicate warning
+GAP-SANDBOX-HOME-05	CONFIRMED	Fix step 1 path: marketing siblings (pricing, contact, layout) also use Tailwind bg-white/gray; left consistent
+GAP-PLATFORM-ADMIN-TENANT-CONFIG-01	CONFIRMED	getTenantConfig loader (loaders.ts:5627), page.tsx passes real config, RefreshErrorState on error, DEFAULT_CONFIG gone, StatCards derived
+GAP-PROJECTS-DETAIL-TASKS-05	CONFIRMED	tasks/page.tsx:29-30 progressColor by status (blocked=bad), ProgressBar clamps, displayed pct clamped :96
+GAP-ESTAB-HANDOVER-06	CONFIRMED	REASON_LABEL used in select/table/dialog (HandoverPanel.tsx:22-28,211,252,266); 900ms timer replaced by await load() :143
+GAP-PROCUREMENT-INDENTS-DETAIL-01	CONFIRMED	NEXT_STEP map (indents/[id]/page.tsx:27-30,91-94) links to approvals/orders/new/tenders/new, all routes exist; role hiding deferred to HOME-01 (minor)
+GAP-CRM-ACTIVITIES-05	CONFIRMED	ActivitiesTable.tsx:140-142 filterable + pageSize 25; exportable not enabled; test file present
+GAP-WORKS-REPORTS-03	CONFIRMED	Truncation notice when page full (reports/page.tsx:119-124,213-214), caption fixed; true pager/server export not built (API gives no total) - accepted fallback path
+GAP-PLATFORM-ADMIN-TENANT-CONFIG-05	CONFIRMED	daysUntilIST in formatters.ts:342, computed server-side in page.tsx, formatIndianDate used in TenantConfigCard
+GAP-FIELD-VISITS-02	PARTLY	Pill now 'in progress'/'overdue' >12h (visits.ts:63-72, page.tsx:65) with unit tests, but the Open-for-duration column (fix step 2) is absent: columns at field/visits/page.tsx:78-86 only show Duration for completed (durationMinutes), open visits show a dash
+GAP-SETUP-HOME-06	CONFIRMED	SetupWizard.tsx:32 STEP_ICON lucide map, no emoji in wizard markup; legacy emoji icon strings remain unused in lib/setupSteps.ts (dead data)
+GAP-REVENUE-ADJUSTMENTS-02	CONFIRMED	Register (AdjustmentRegister.tsx, page.tsx:131-133), backend GET /v1/revenue/adjustments + decide route, success message names FYs/amount (AdjustmentCreateForm.tsx:110-132); no reverse action (conditional)
+GAP-DASHBOARD-HOME-2-02	CONFIRMED	hasRoleFamily in roleGuard.ts:532 used by visibleModules.ts:13 and RoleCommandCenter; unit tests incl chr_manager (moduleRegistry.test.ts:20)
+GAP-GRANTS-DISBURSEMENTS-DETAIL-04	CONFIRMED	grants/disbursements/[id]/page.tsx:17-27 RefreshErrorState on source error (not 404), EmptyState only for genuine not-found
+GAP-KNOWLEDGE-POLICIES-DETAIL-02	PARTLY	authorId/currentUserId wired (page.tsx:76-80, getSessionUserId roleGuard.ts:56) and Approve/Publish disabled for author, BUT disabled button shows no reason: explanation lives only in confirmDescription (PolicyActions.tsx:72-77,116-121) which never opens when disabled (ActionButton.tsx:108-115 has no title/tooltip); no role-eligibility check for approver rights (step 3); server maker-checker exists (policies/commands.ts:123,173)
+GAP-KNOWLEDGE-HOME-02	CONFIRMED	Titles aligned 'Knowledge & Documents' (page.tsx:12, dashboard/page.tsx:104); list redirects to repository
+GAP-NOTIFICATIONS-DELIVERIES-02	CONFIRMED	status groups for tiles and tabs (deliveries/page.tsx:49-74) with sum test (page.test.tsx:60)
+GAP-ESTAB-APPROVALS-01	CONFIRMED	EstabApprovalsPanel.tsx:47-74 pages through workflow tasks via offset (server supports offset, tasks/routes.ts:49) and shows truncation notice (:74,149)
+GAP-ANALYTICS-ML-INSIGHTS-ANOMALIES-07	CONFIRMED	canExport via ML_EXPORT_ROLES (anomalies/page.tsx:8), DataTable onExport (DataTable.tsx:553) posts to ml-service export-audit (evaluations/routes.ts:122-150, role-gated, outbox audit)
+GAP-SETUP-HOME-03	PARTLY	progress.ts:92-110 requires modulesConfirmedAt/modulesConfirmed in tenant settings, but nothing in repo writes that flag (grep: only progress.ts and its test), so the 'modules' step can never reach complete; branches step still completes at >=1 location (copy reworded to head office)
+GAP-TENANT-ADMIN-IDP-04	PARTLY	IdpTable.tsx:12-24,57 posts export audit to /api/proxy/v1/admin/idp/providers/export-audit and excludes endpoint, but no such backend route exists in services (only /v1/admin/idp/providers, admin-service gap/routes.ts:800), so the beacon 404s silently; acceptance 'backend export audit event exists per download' unmet
+GAP-DESIGNER-HOME-03	CONFIRMED	patternLabel via SERVICE_PATTERN_OPTIONS (DesignerHomeClient.tsx:29-31,65), PatternLabel removed
+GAP-TENANT-ADMIN-USERS-DETAIL-04	CONFIRMED	Employee code shown when present (page.tsx:56), toast names email (UserSecurityActions.tsx:74-76); department conditional on API
+GAP-CRM-RTI-03	CONFIRMED	StatusPill keys received/transferred/appeal/responded/disposed (StatusPill.tsx:138-167), normalisation underscore->space (:490), RtiTable no label override (:228-230)
+GAP-CHANGE-COMMS-02	CONFIRMED	comms/page.tsx:7-40,100 client-side pager 10/page, q filter, Showing x-y of N; backend filter not added (stated fallback)
+GAP-LOCATIONS-INFRASTRUCTURE-01	CONFIRMED	Typed mapInfrastructure (_data.ts:133-147, fields match location-service) and InfrastructureTable (_tables.tsx:26-49) Name/Type/Condition/Status, no raw id column
+GAP-PROJECTS-SCHEMES-DETAIL-01	CONFIRMED	Backend list now emits minor-unit strings (scheme/queries.ts:165-172); SchemesTable/page use formatMoney and BigInt sum; list/detail agreement test (schemes/page.test.tsx:119)
+GAP-BILLING-HOME-04	CONFIRMED	loading.tsx uses page-main + TileHubSkeleton 5 tiles, no stat/table blocks
+GAP-ANALYTICS-ML-INSIGHTS-TICKETS-06	CONFIRMED	tickets/page.tsx gates canExport by ML_EXPORT_ROLES; audit endpoint exists; filename ml-tickets-predictions lacks date (minor)
+GAP-CRM-DEDUP-RULES-06	CONFIRMED	Labels maps + i18n (DedupRulesEditor.tsx:30,85), hex replaced by tokens with fallback (:275-281)
+GAP-SETTINGS-BRANDING-01	CONFIRMED	settings/branding/page.tsx:408,443,455 recompute colorPrimaryFg via readableForeground (lib/contrast.ts:49) on load, change and preset
+GAP-ESTABLISHMENT-HOME-03	CONFIRMED	Moved to next.config.mjs:106-107 permanent:true redirects; page files deleted
+GAP-CITIZEN-SURVEYS-06	CONFIRMED	SurveysTable.tsx:64-72 iconBg tokens; loading.tsx has header + 4 stat cards + table skeleton
+GAP-CRM-ONBOARDING-DETAIL-05	CONFIRMED	KYC reference masked server-side to last 4 except KYC approver roles (pii-reveal.ts:104, onboarding/routes.ts:100,107), audited reveal route exists; client shows server value (OnboardingDetail.tsx:397-406); history card not built (needs backend, accepted)
+GAP-DASHBOARD-HOME-2-03	PARTLY	Registry created with Court/Designer/Visitor/Inspection etc. (moduleRegistry.ts:44-75) and dashboard uses it, but Sidebar does NOT import it (only dashboard/visibleModules.ts and marketing page use MODULE_REGISTRY), and no test asserting every navRouteManifest route has a registry entry (moduleRegistry.test.ts:36-50 only checks count and non-empty fields) so acceptance 'registry test fails when a route is added without an entry' unmet
+GAP-PLATFORM-ADMIN-SYSTEM-SETTINGS-03	CONFIRMED	platform-admin/layout.tsx and page.tsx:15 requireAnyRole; security-save reason dialog (SystemSettingsPage.tsx:370-376); admin-service consumer audits settings update with actor and changedFields (tenant-settings/consumer.ts:88); no 'last changed by' display (minor)
+GAP-INSTALL-DOMAIN-PACKS-01	PARTLY	install/layout.tsx role gate + canOperate hides activation (domain-packs/page.tsx:9, panel :242) and server routes check roles, but activation result is only a static 'Activation accepted ... queued' (DomainPackActivatePanel.tsx:204-222) with no job id or status polling; acceptance 'shows job status until completed or failed' unmet
+GAP-LOYALTY-REDEMPTIONS-01	CONFIRMED	ModuleListTable.tsx:113-120 RefreshErrorState for error-no-data; RedemptionsTable.tsx:65-68 same; tests present
+GAP-CRM-ONBOARDING-DETAIL-03	CONFIRMED	page.tsx:13 canApproveKyc from CRM_KYC_APPROVER_ROLES, OnboardingDetail.tsx:165 filters verified/rejected options; server KYC_APPROVER_ROLES unchanged (routes.ts:45,168)
+GAP-NOTIFICATIONS-CAMPAIGNS-01	CONFIRMED	CampaignList.tsx:126 ErrorState with retry; 'saved information' copy removed
+GAP-PROCUREMENT-GRN-DETAIL-SRN-NEW-02	CONFIRMED	signNow defaults false (CreateSrnForm.tsx:40), ConfirmDialog gate (:102-104,208-221), GRN items passed from page.tsx:14-35
+GAP-REVENUE-WAIVERS-02	CONFIRMED	Server page loads assessees/demands, WaiverForm demand select with FY/due/balance, ConfirmDialog echoing assessee, FY, type, formatMoney, checker note (WaiverForm.tsx:212-236)
+GAP-CRM-VOICE-OF-CUSTOMER-06	CONFIRMED	Single 'Voice of Citizen' naming across page/loading/error via i18n; MOOD_LABEL neutral='Neutral' (voc.ts:60); banner uses var(--infobg) (page.tsx:113)
+GAP-SANDBOX-HOME-03	CONFIRMED	sandbox/page.tsx:88 aria-hidden on icon, h2 on card titles (:89) plus sr-only h2 (:71)
+GAP-LIBRARY-HOME-01	CONFIRMED	Retitled 'Audit finding types' (en.json:4643), platform-admin layout gate, /library not in sidebar/nav manifest
+GAP-HELP-HOME-01	CONFIRMED	help/page.tsx:32 subtitle fixed, other-modules note and Helpdesk link :38-39
+GAP-COURT-CASES-03	CONFIRMED	court/cases/page.tsx:64,87-89 count shows dash on error and RefreshErrorState with retry
+GAP-INSPECTION-HOME-02	CONFIRMED	loaders.ts:18-43,127-134 preserves meta.total; page.tsx:28-31 shows total or '50+'
+GAP-CRM-ONBOARDING-03	CONFIRMED	KYC status filter (OnboardingList.tsx:89,117,161), age-in-stage with Overdue pill at SLA 7d (:44,235)
+GAP-TENANT-ADMIN-SECURITY-02	CONFIRMED	loaders.ts:6309-6322 zod securityOverviewSchema, invalid payload -> null -> error; page.tsx:35 RefreshErrorState

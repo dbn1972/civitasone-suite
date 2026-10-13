@@ -1,0 +1,50 @@
+GAP-FIELD-TASKS-01	CONFIRMED	ModuleListTable.tsx error-no-data branch renders RefreshErrorState with retry and optional backHref; EmptyState only on live-empty
+GAP-KNOWLEDGE-ASSISTANT-03	CONFIRMED	AssistantClient.tsx:39 busy guard, isComposing check, form onSubmit, maxLength=1000
+GAP-WORKS-BILLING-NEW-MB-04	PARTLY	back/Cancel/Suspense fallback done, but fix step 4 missing: new-mb/page.tsx post-submit redirect (target built from form.workId.trim()) and backHref from paramWorkId are not UUID-validated
+GAP-DOMAINS-NEW-03	CONFIRMED	domains/schema.ts zod email + PHONE regex, noValidate on form (page.tsx:139), trim in schema
+GAP-ESTAB-DAK-05	CONFIRMED	StatusPill humanised, no 'manual' literal, success msg 'DAK <no> registered' (minor: blank dakNo shows '(auto-assigned)' not response id, dak/page.tsx:112)
+GAP-CRM-SERVICE-REQUESTS-01	CONFIRMED	server page param + limit=15, FilterBar pushes searchParams, server pager, queryKey varies cache
+GAP-AI-COPILOT-DETAIL-02	CONFIRMED	safeHttpUrl in lib/safeUrl.ts used at copilot/[id]/page.tsx:121, unit tests incl javascript:
+GAP-DESIGNER-NEW-01	CONFIRMED	designer/new/page.tsx:180 placeholder now 'Owning office (optional)'
+GAP-GRANTS-RELEASES-03	CONFIRMED	paise end-to-end: *100 removed, amountMinor=amount, list/detail both formatMoney; backend amount_minor passthrough
+GAP-PROJECTS-MILESTONES-04	CONFIRMED	StatusPill delayed:'bad' (:242), loading.tsx length 4
+GAP-INSTALL-STAGES-04	CONFIRMED	stages/page.tsx links to /install wizard and domain-packs; read-only, no new endpoints (no per-stage progress, conditional on API)
+GAP-SETTINGS-BRANDING-02	CONFIRMED	branding/page.tsx:585,589,910 responsive lg: layout (note: no sticky Save added)
+GAP-LEARNING-HOME-02	CONFIRMED	my-learning derives employee via getMyProfile, home cards pass employeeId/status, honest no-record state
+GAP-CRM-DASHBOARD-04	CONFIRMED	StatCard href prop (Link) and dashboard hrefs incl activities?segment=Today
+GAP-GRANTS-APPLICATIONS-02	CONFIRMED	page validates ?status via zod enum and filters; FilterButton has All + aria-checked, pending removed
+GAP-CRM-DEDUP-RULES-04	CONFIRMED	HelpTip on Weight/Threshold, total enabled weight shown (DedupRulesEditor.tsx:300-391)
+GAP-ESTAB-FILES-NEW-03	PARTLY	department select built from operators' divisions (files/new/page.tsx:74) but free-text input fallback remains (:416) so typos possible; dak/page.tsx:316 open-file dept still free text 'e.g. ADMIN'; no master dept endpoint/backend validation; still falls back to 'ADMIN' (:154)
+GAP-CRM-RTI-NEW-06	CONFIRMED	rti/new/loading.tsx and error.tsx exist with RouteError area 'New RTI request' back to /crm/rti
+GAP-PROCUREMENT-ORDERS-DETAIL-AMEND-06	CONFIRMED	amendment-commands.ts:42/amendment-domain.ts:53 SOD_VIOLATION 403, status field, audit() on request/approve/reject in consumer
+GAP-PROCUREMENT-RFQ-DETAIL-04	CONFIRMED	opaqueRefHref/parseOpaqueRef link + formatInternalRef fallback (rfq/[id]/page.tsx:50-86); shows generic 'View indent' not human indent no.
+GAP-ESTAB-HANDOVER-04	CONFIRMED	'(inactive)' tag in label() (HandoverPanel.tsx:120) and From list sorted active-first
+GAP-PROJECTS-DETAIL-TASKS-01	PARTLY	AddTaskForm (POST /tasks, role-gated, backend exists) and empty-state copy done, but no status/progress edit UI: no PATCH call anywhere under projects/[id]/tasks although backend PATCH /tasks/:taskId and /status exist (fix step 2)
+GAP-KNOWLEDGE-REPOSITORY-04	CONFIRMED	shared _data/statusLabels.ts used by repository, search and list
+GAP-TENANT-ADMIN-SUBSCRIPTION-05	CONFIRMED	progressbar aria attrs (page.tsx:76-80), StatusPill humanises, moduleDisplayName, formatMoney
+GAP-PROJECTS-DPR-TRACKING-01	CONFIRMED	DprActions with ConfirmDialog requireReason, PATCH transition route role-gated (DPR_REVIEW_ROLES), state machine+optimistic lock+audit in consumer; tile 'Returned for revision' counts revision (no submitter!=approver SoD)
+GAP-PLATFORM-ADMIN-USERS-02	CONFIRMED	separate suspendError/resetError, openers clear, onCancel clears (UserManagementPage.tsx:187-188,453,475)
+GAP-ESTAB-OPERATORS-06	CONFIRMED	humanizeStatus fallback (OperatorsPanel.tsx:41), Initiate StatusPill (:181); labels still local map not next-intl
+GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-01	PARTLY	default masking via Masked + piiFields/hiddenFields in records.ts:174-260, but: only trade.ts defines piiFields; heuristic piiKindForKey (records.ts:183) omits names/address; no permission-gated reveal with audit (RecordDetailPanel.tsx:53 uses Masked only) as acceptance requires
+GAP-CRM-CONTACTS-06	CONFIRMED	ContactsTable.tsx:115 cellType status with shared LEAD_STATUS_LABELS
+GAP-PROCUREMENT-VENDORS-DETAIL-06	CONFIRMED	vendors/[id]/page.tsx masks PAN/email/phone/bank via Masked for all roles (backend serializer not inspected), test exists
+GAP-PRICING-HOME-06	CONFIRMED	sla nullable -> 'SLA: none (community)'; FAQ 15% has matching annual price
+GAP-CRM-CUSTOM-FIELDS-05	CONFIRMED	validateDraft(row, rows) siblings dup check (customFields.ts:247, Manager.tsx:187,326), unit tests
+GAP-AUDIT-EXPORTS-02	CONFIRMED	canExportPii from AUDIT_PII_EXPORT_ROLES disables checkbox, requireReason when includePii, reason sent; server enforces role+REASON_REQUIRED and audits reason
+GAP-TENANT-ADMIN-READINESS-01	CONFIRMED	checklist derived from backend gates via loader; not-available EmptyState when none
+GAP-CDP-SEGMENTS-01	CONFIRMED	hub tile and page both say 'View audience segments' (read-only decision option 1)
+GAP-DESIGNER-DETAIL-B4-03	CONFIRMED	ConfirmDialog before advanced mode + discard warning in banner (ApprovalChainBuilder.tsx:272-298); persistence of canvas not wired (step conditional on owner)
+GAP-AUTH-LOGIN-03	CONFIRMED	mapped OIDC errors incl invalid_state, 'Reference' string, mailto support (LoginClient.tsx:17-69)
+GAP-REVENUE-BBPS-05	CONFIRMED	single 'Record BBPS payment' verb in subtitle, card, button, dialog, confirmLabel
+GAP-COURT-ORDERS-04	CONFIRMED	submit ConfirmDialog (OrdersConsole.tsx:611), send-back remarks required (:911)
+GAP-PROJECTS-ESCALATIONS-03	CONFIRMED	backend returns projectId, rowLinkKey=projectId, severity label map Critical/High
+GAP-TENANT-SUBSCRIPTIONS-03	CONFIRMED	same shared ModuleListTable error-no-data -> RefreshErrorState; EmptyState only for live-empty
+GAP-DOCUMENTS-LIBRARY-03	CONFIRMED	Sub-folders uses currentFolders.length, Inbox/Urgent labelled (all)
+GAP-REVENUE-REFUNDS-DETAIL-DECIDE-01	CONFIRMED	getSessionUserId, isMaker disables canDecide, status text; server assertMakerChecker (consumer.ts:190)
+GAP-MUNICIPAL-HOME-05	CONFIRMED	aria-label on tiles, loading.tsx, error.tsx exist
+GAP-MEETING-MEETINGS-NEW-04	PARTLY	client sends x-idempotency-key once per mount (NewMeetingForm.tsx:175, client.ts:133) but meeting-service POST /v1/meetings (meeting-core/routes.ts:148) has no idempotency check on the header, so duplicate POST does not return same meeting
+GAP-ESTAB-APPROVALS-06	CONFIRMED	userFacingErrorFromResponse, dismiss button, file number in message
+GAP-CITIZEN-GRIEVANCES-01	CONFIRMED	rowLinkPrefix now /citizen/requests/ (GrievancesTable.tsx:77)
+GAP-REVENUE-INSTALMENTS-02	CONFIRMED	instalments/[id] schedule page, detailPath link, Per Instalment column
+GAP-CITIZEN-REQUESTS-05	CONFIRMED	Segmented options via t(), en+hi keys, stable values (Breached removed)
+GAP-CATALOGUE-PRODUCTS-04	CONFIRMED	description 'Products and services offered.'

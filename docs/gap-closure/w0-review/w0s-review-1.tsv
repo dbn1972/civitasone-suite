@@ -1,0 +1,50 @@
+GAP-PROCUREMENT-PLANNING-DETAIL-04	CONFIRMED	toast.info "request accepted" wording in PlanLifecycleActions.tsx:78,103,121
+GAP-LEARNING-COURSES-DETAIL-01	CONFIRMED	EnrolButton posts JSON via /api/proxy; routes.ts:149 resolveOwnEmployeeIdIfNonHr forces self-scope, 403 NO_EMPLOYEE_LINK; IDOR real-db test exists
+GAP-THEMES-TEMPLATES-05	CONFIRMED	ModuleListTable uses DataTable sortable/filterable pageSize 15 + StatusPill (:66,:138-144)
+GAP-ESTABLISHMENT-FILES-02	CONFIRMED	next.config.mjs:106-107 permanent redirects; establishment page/files/loading removed
+GAP-NOTIFICATIONS-TEMPLATES-03	PARTLY	channelLabel() used in templates/page.tsx:102 and templates/[id]/page.tsx:149,184 but notifications/list/page.tsx:80 (named in files-to-change) still channel.replace(/_/g," "); also deliveries/page.tsx:68, DeliveryDetail.tsx:201; compose/page.tsx:52 keeps its own duplicate map
+GAP-AI-CHAT-DETAIL-01	CONFIRMED	ConfirmDialog danger requireReason minReasonLength=10 (EndConversationButton.tsx:102-114), VERSION_CONFLICT handled :53; consumer.ts end handler writeAudit with reason + audit event
+GAP-GRANTS-LIST-01	CONFIRMED	page.tsx:15-27 RefreshErrorState when source error and empty; GrantsTable/page tests exist
+GAP-CITIZEN-SERVICES-SERVICEKEY-APPLY-08	CONFIRMED	journey labels via t(journeyForm...) in ServiceRuntimeFlow.tsx:54-57; savedJustNow/offlineRetrying in en+hi
+GAP-WORKS-BILLING-BILLS-NEW-05	CONFIRMED	works-service billing/routes.ts:109-112 requireRole(WRITE_ROLES)+zod+award/MB gates; route tests exist
+GAP-AUDIT-DASHBOARD-01	CONFIRMED	dashboard/page.tsx:13-46 errored shows dash tiles + RefreshErrorState, Quick links kept
+GAP-PROJECTS-DETAIL-02	CONFIRMED	canComplete via PROJECT_WRITE_ROLES (page.tsx:62), only next pending milestone (ProjectDetailActions.tsx:30-44), dialog copy corrected, server requireRole+audit+assertMilestoneCanComplete. Note: server does not enforce milestone sequence (UI only)
+GAP-WORKFLOW-MY-TASKS-04	CONFIRMED	TASK_LIMIT truncation banner my-tasks/page.tsx:41-94
+GAP-GRANTS-RELEASES-06	CONFIRMED	"Awaiting bank ref" ReleasesTable.tsx:84; card hint page.tsx:61
+GAP-ESTAB-MIGRATION-06	CONFIRMED	MigrationPanel uses browserJson, next/link, no #4f46e5 (test asserts); note step 3 sweep not done: ApprovalMatrixPanel.tsx:78, approvals/EstabApprovalsPanel.tsx:58, dak/page.tsx:70, compliance/ComplianceTable.tsx:39 still raw fetch (outside acceptance scope)
+GAP-WORKS-APPROVALS-TS-DETAIL-06	CONFIRMED	works-service approval/routes.ts:35-38 GET requireRole(READ_ROLES) paginated; :119-122 finalize WRITE_ROLES + maker-checker
+GAP-APPROVALS-HOME-04	CONFIRMED	helpContent.ts:434 slug "approvals" added; approvalsHelp.test.ts
+GAP-NOTIFICATIONS-CAMPAIGNS-02	CONFIRMED	recipient token validation/cap, invalid list, DPDP consent note (CampaignList.tsx:295-310,447-457), subtitle aligned page.tsx:10
+GAP-CITIZEN-REQUESTS-02	CONFIRMED	Resolved at source: citizen-service application/queries.ts:86,109 returns citizenPhone masked XXXXXX####; UI renders it as-is, no reveal path (ds Masked not used here; acceptable, stricter than ledger). Reveal+audit not built
+GAP-IDENTITY-WEBAUTHN-03	CONFIRMED	zod WebauthnCredential mapper _data.ts:129-146, PasskeyManager columns Registered/Last used (:88-92); no Type column since API returns none
+GAP-STOCK-DASHBOARD-03	CONFIRMED	stock/dashboard/page.tsx:20-87 ledger movements DataTable, error states, pill hidden on error
+GAP-PROJECTS-WBS-02	CONFIRMED	wbsCounts.ts normalizes status, blocked bucket, tiles sum to total; tests present
+GAP-WORKFLOW-DESIGNER-01	PARTLY	Open/Save-as-new-draft/name input exist (DesignerCanvas.tsx:137-196,514-546, page.tsx definitionId) but: no dirty flag and no beforeunload guard (fix step 4, none found under workflow/designer); Save button disabled only while saving (:544), not when validation errors exist (acceptance); always POST new draft, no update of opened definition
+GAP-CRM-DEDUP-RULES-03	PARTLY	duplicate-field validation (DedupRulesEditor.tsx:218-220) and default weight 50 (:168) done; fix step 3 / acceptance "removing then saving shows a summary" missing: no undo or removed-count summary (confirmEmpty at :93,226 only guards saving zero rules)
+GAP-WORKS-REPORTS-04	CONFIRMED	ReportFilters.tsx:32-33 blocks to<from with inline error, active-filter chips :64-148, division UUID check
+GAP-WORKS-PROPOSALS-DETAIL-03	CONFIRMED	paiseToRupeeString/rupeeStringToPaise BigInt exact (formatters.ts:875,911); patch only if costRupees!==prefill (ProposalEditToggle.tsx:82-124); reused in proposals/new/page.tsx:79
+GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-04	CONFIRMED	roving tabindex, arrows/Home/End, aria-required, filled/outline glyphs, rating<1 validation (feedback/page.tsx:55-160)
+GAP-IDENTITY-SESSIONS-01	CONFIRMED	identity/layout.tsx requireAnyRole(IDENTITY_ADMIN_ROLES) before ModuleGate; layout.test.tsx; identity-service sessions GET list requireRole(SESSION_ADMIN) (routes.ts:75-77)
+GAP-REVENUE-WRITE-OFFS-DETAIL-DECIDE-01	CONFIRMED	getSessionUserId passed from decide/page.tsx:110,187; isMaker disables canDecide (WriteOffDecideForm.tsx:49-58,123); test file exists
+GAP-CRM-DEALS-NEW-06	CONFIRMED	router.push to /crm/deals/${newId} fallback list, setTimeout removed (page.tsx:150)
+GAP-LEARNING-TRAINING-PLANS-01	CONFIRMED	row links page.tsx:101-102; [id]/page.tsx with notFound/RefreshErrorState, course/programme title lookups, Yes/No mandatory
+GAP-LEGAL-CASES-DETAIL-03	CONFIRMED	not-found.tsx:11 Link /legal, Cases /legal/list
+GAP-GRANTS-APPLICATIONS-DETAIL-01	CONFIRMED	grants/layout.tsx requireAnyRole(GRANTS_VIEW_ROLES); page.tsx:49-52,160-161 canApprove/canReview from roles matching grant-service REVIEW_ROLES/GRANT_ROLES; server requireRole on score/approve/reject
+GAP-MEETING-MEETINGS-MEETINGID-MINUTES-02	PARTLY	MinutesPanel.tsx:263-285 renders createdByName/approvedByName and loaders.ts:238-239 map them, hash tooltip :308, self-approval warning :186, BUT no meeting-service code ever emits createdByName/approvedByName (grep services/meeting-service/src empty) so names never populate and raw UUIDs still display (fix step 1 backend/lookup undone)
+GAP-PROCUREMENT-INDENTS-NEW-04	CONFIRMED	no client indentNo, "Assigned on submit" (CreateIndentForm.tsx:122,170); UoM select UNIT_OPTIONS in LineItemsEditor.tsx:25, unit sent :132; server allocateDocNo consumer.ts:30
+GAP-RECOMMENDATIONS-NBA-01	CONFIRMED	nba/page.tsx subtitle plain language, no service name
+GAP-ESTABLISHMENT-HOME-02	CONFIRMED	establishment/loading.tsx removed; estab/loading.tsx uses TileHubSkeleton; not-found.tsx:10 link to /estab
+GAP-CRM-QUOTATIONS-01	CONFIRMED	panel canApprove + requester!=current user (QuotationApprovalPanel.tsx:164-168), reject w/ reason dialog; page.tsx:10-21 passes roles/userId; crm-service decide route ADMIN_ROLES + SELF_APPROVAL_FORBIDDEN (quotation-approval-routes.ts:106-125)
+GAP-CRM-SERVICE-REQUESTS-04	CONFIRMED	StatusPill normalises underscores (:489-491), resolved/cancelled mapped; shared PriorityBadge with distinct normal/low
+GAP-TENANT-ADMIN-IDP-02	CONFIRMED	Add Provider/Configure IDP circular CTAs removed on idp/page.tsx and sso/page.tsx with recorded decision
+GAP-POLICY-EVALUATE-02	CONFIRMED	StatusPill decision, Link to /policy/abac#rule-id (EvaluateForm.tsx:149-164), abac rows id=rule-<id> (page.tsx:64)
+GAP-TENANT-ADMIN-ORG-TYPE-04	CONFIRMED	FLAG_HELP (orgConfig.ts:102) used with HelpTip and On/Off for all flags (OrgTypeSelector.tsx:111-112)
+GAP-BILLING-PLANS-NEW-05	PARTLY	step 1 done (browserFetch NewPlanForm.tsx:~125), but steps 2-3 not: no ds FormField/TextInput created (ls ds shows none) and tailwind classes remain at NewPlanForm.tsx:207 (grid classes) and :260 (text-red-600)
+GAP-APPROVALS-HOME-06	CONFIRMED	duplicate tile replaced by Due within 7 days, shared overdue helper (page.tsx:35-69), formatIndianDate in ApprovalsTable.tsx:44
+GAP-TENANT-CODE-LISTS-03	CONFIRMED	ModuleListTable.tsx:113-134 RefreshErrorState on error-no-data, EmptyState only for live empty
+GAP-REVENUE-WRITE-OFFS-01	CONFIRMED	DCB fetched, BigInt cap, fail-closed dcbUnavailable, dialog names assessee/balance (WriteOffCreateForm.tsx:54-72,128-139,250); server WRITEOFF_EXCEEDS_OUTSTANDING (arrears/domain.ts:56)
+GAP-AUDIT-DASHBOARD-04	CONFIRMED	StatCard href (StatCard.tsx:25,81), ObservationsTable reads ?status via useSearchParams, dashboard links; Audit crumb is home by design
+GAP-BILLING-HOME-03	CONFIRMED	LinkTiles.tsx:67-70 Plans/Subscriptions/Invoices/GSTN Console icons
+GAP-PROCUREMENT-TENDERS-NEW-01	CONFIRMED	required Source indent + indentRef (CreateTenderForm.tsx:102,135), GFR band fetch :75, rupeesToMinorString BigInt-string (no Math.round), single-source justification; server assertModeAllowedForValue commands.ts:35 and justification refine. Note: server indentRef is optional/unvalidated (validators.ts:19)
+GAP-TENANT-ORG-HIERARCHY-06	PARTLY	banned term removed via LABELS.tenantTitle ("Office") but tenant/org-hierarchy/page.tsx:16-17 still hard-coded English, no getTranslations/next-intl keys (fix step 1, locale-switch acceptance) and no banned-term test (step 3)
+GAP-GRANTS-DISBURSEMENTS-DETAIL-01	CONFIRMED	layout requireAnyRole(GRANTS_VIEW_ROLES); disbursements/[id]/page.tsx:43-46 RaiseEOfficeNote only if canRaise (GRANTS_DISBURSE_ROLES); page.test.tsx exists

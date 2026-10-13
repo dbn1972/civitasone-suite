@@ -1,0 +1,50 @@
+GAP-AUDIT-VIGILANCE-03	CONFIRMED	chargeSheeted KPI + renamed card at audit/vigilance/page.tsx; test reconciles buckets to total
+GAP-WORKFLOW-HOME-03	CONFIRMED	inProgressCount helper in workflowTypes.ts:154 used on both pages; unit test present
+GAP-WORKFLOW-INSTANCES-DETAIL-01	CONFIRMED	server-side resolveUsers (tenant-scoped identity directory endpoint exists) feeds UserRef in HistoryTimeline/TasksTable; no guessed names. Minor: role/designation (step 5) not shown
+GAP-CATALOGUE-BUNDLES-02	CONFIRMED	extractRows returns null (no [payload] fallback) -> source error; _data.test.ts:167 covers {message:x}
+GAP-KNOWLEDGE-POLICIES-DETAIL-07	CONFIRMED	Supersedes link rendered (policies/[id]/page.tsx:64-73) with test; versions/download are backend-dependent, not in acceptance
+GAP-PROCUREMENT-EMD-BG-02	CONFIRMED	EmdBgTable.tsx:87-105 separate Active Bank Guarantees/Active EMD, combined total labelled, formatMoney; test lines 52-56
+GAP-BILLING-GSTN-02	CONFIRMED	SubmitReturnPanel.tsx rupee inputs, rupeesToMinorString, 2-dp regex, live preview + confirm dialog; payload stays paise. No explicit 12500000000 test found
+GAP-VISITOR-HOST-06	PARTLY	toast auto-dismiss + stale-list notice done, but table only wrapped in .tbl-wrap (overflow-x:auto, civitas-ds.css:138); no stacked mobile layout so acceptance (no sideways scroll at 375px) unmet (HostPortal.tsx:220)
+GAP-CRM-CONTACTS-NEW-05	CONFIRMED	LEAD_STATUS_LABELS (leadQualification.ts:38) used by new form, table, detail, edit; disqualified option present
+GAP-WORKFLOW-MY-TASKS-02	PARTLY	Instance column is now an Open instance link, but Subject is still refType + 8-char refId (TasksTable.tsx:19-23); no requester/amount/summary fields in WorkflowTask or mapTask, so approver still cannot decide without opening instance
+GAP-FLEET-HOME-04	CONFIRMED	asset-service fleet/repo.ts:285-300 7-day window verified; test gap-fleet-home-04-dashboard-window.test.ts; label matches
+GAP-AUDIT-RISK-REGISTER-02	CONFIRMED	tiles are pure band() counts from shared riskScoring, Low relabelled; High+Medium+Low=Total
+GAP-BILLING-GSTN-06	CONFIRMED	lib/gstin.ts mod-36 checksum used in both panels; GstnConsole ?tab= deep link
+GAP-COURT-CASES-01	CONFIRMED	cases/page.tsx server pagination/status/q + getCasesPage total; court-service listCases/countCases support offset,q,total
+GAP-PROCUREMENT-DASHBOARD-03	CONFIRMED	Real-time copy removed, Data as of stamp (dashboard/page.tsx:37-43), test at page.test.tsx:48
+GAP-CRM-VOICE-OF-CUSTOMER-05	CONFIRMED	page.tsx role-gates staff_conduct/corruption themes and export; crm-service sentiment routes enforce excludeSensitive server-side and audit export
+GAP-REVENUE-BILLS-03	CONFIRMED	missing status -> null renders dash; StatusPill has issued/partially paid/generated keys; test at bills/page.test.tsx:104
+GAP-APPROVALS-HOME-05	CONFIRMED	MODULE_LABELS extended, dead hrms removed, humanizeStatus fallback; unit test present
+GAP-CRM-GRIEVANCES-DETAIL-01	CONFIRMED	If-Match: version sent (GrievanceActions.tsx:73), proxy allow-list has if-match, 409 -> conflict message + refresh, crm-service grievances/routes.ts enforces; proxy test
+GAP-ANALYTICS-ML-INSIGHTS-INVENTORY-07	CONFIRMED	canExport role gate (ML_EXPORT_ROLES), onExport -> /v1/ml/predictions/export-audit exists in ml-service with tests; notice shown
+GAP-WORKS-PROPOSALS-NEW-01	PARTLY	EntityPicker used, but searchWorkTypes/fetchAll (lib/entityAdapters/workType.ts) returns [] on non-ok HTTP, so a failing fetch shows No matches rather than an error (acceptance: failing fetch shows an error)
+GAP-METADATA-FIELDS-03	CONFIRMED	EntitySelector + ?entity= drives getFieldsForEntity
+GAP-WORKS-BILLING-WORKID-03	PARTLY	Only a single coarse canFinalize (BILLING_FINALIZE_ROLES) gates all steps; no per-step role map, so estimator/SO can still advance a DAO step; BILL_STEP_AUTHORITY is guidance text only (workRoles.ts:446-486). Acceptance (no DAO role => no button on auditor_finalized) unmet; no maker!=checker; backend WRITE_ROLES also coarse (billing/routes.ts:21)
+GAP-CITIZEN-PAYMENTS-02	CONFIRMED	ActionButton confirm dialog with amount preview, mode/instrument/payer fields (server accepts them), user-facing errors, print receipt. subject still {} and requireReason not used (minor)
+GAP-CITIZEN-CERTIFICATES-03	CONFIRMED	en.json:1078 subtitle reworded to present features
+GAP-PLATFORM-ADMIN-USERS-01	CONFIRMED	requireAnyRole page+layout, masking, role-gated export, audit-before-download via admin-service /v1/admin/user-exports/audit, csvCell formula neutralisation
+GAP-CRM-RTI-NEW-05	CONFIRMED	feePaid coupled: amount cleared/required when Yes, validated with rupeesToMinorString before submit
+GAP-POLICY-ROLE-FEATURES-05	CONFIRMED	Roles with grants label; Granted/Revoked vs Enabled/Disabled consistent
+GAP-AUTH-DEV-03	CONFIRMED	role=note TEST ENVIRONMENT banner in auth/dev/page.tsx:79
+GAP-TENANT-HOME-04	CONFIRMED	short description, LABELS.tenantTitle, explicit tile icons, page.test.tsx checks distinct icons and banned terms
+GAP-PROCUREMENT-BID-EVALUATION-02	CONFIRMED	stats computed in BidEvaluationTable from useSeededResource rows; page.tsx only fetches
+GAP-VISITOR-ADMIN-01	PARTLY	Preset now behind ConfirmDialog with requireReason (AdminConfig.tsx:338-358) but no from->to diff (retention 365->1825) or undo summary, and the reason is dropped: visitor-service POST /config/presets/:preset (config-registry/routes.ts:62-66, presets.ts applyPreset) ignores body so reason is never audited though the dialog says it is
+GAP-GRANTS-RELEASES-01	CONFIRMED	grants/layout.tsx requireAnyRole(GRANTS_VIEW_ROLES), roles.ts, releases page canApprove, schemes/new layout gate; approve endpoint absent so button hidden behind flag
+GAP-CRM-RTI-NEW-04	PARTLY	rtiAuthorities.ts is still a hard-coded central-bodies list (DECISION noted), not tenant/org sourced, so a configured state department does not appear; new/page.tsx:101 uses normaliseAuthority (trim/collapse only), not canonicaliseAuthority, so ministry of finance does not fold to canonical casing
+GAP-CITIZEN-CERTIFICATES-04	CONFIRMED	payloadHash behind Technical details disclosure, certType/status humanised; register role-gate was conditional on a decision
+GAP-METADATA-HOME-04	CONFIRMED	skeleton 5 cards same grid; whole-tile Link
+GAP-ESTAB-MEETINGS-DETAIL-06	CONFIRMED	Absent/Present pill with mut/good variant (MeetingDetailTables.tsx:52)
+GAP-ESTAB-APPROVALS-02	CONFIRMED	approvals panel/subtitle use shared signatureCopy.ts with no DSC claim; DfaPanel wording accurate though not importing the constant
+GAP-SETTINGS-BRANDING-07	PARTLY	loading skeleton added (page.tsx:560) but on brand-fetch failure Save stays enabled and message says Showing defaults — review before saving (page.tsx:411-415), no Retry button; canEdit (page.tsx:366) ignores loadError so defaults can overwrite stored branding
+GAP-GRANTS-UTILIZATION-02	CONFIRMED	isUcVerified helper used in utilization page; validated/verified both counted; StatusPill validated=good
+GAP-WORKS-PROPOSALS-DETAIL-07	CONFIRMED	ProposalEditToggle imports PROPOSAL_WRITE_ROLES; single list
+GAP-TENANT-ADMIN-API-KEYS-05	CONFIRMED	StatusPill for status, custom empty title/message, filter-empty message
+GAP-PROCUREMENT-PLANNING-DETAIL-06	CONFIRMED	planning commands.ts returns 409 on DomainError, SoD 403, consumer.ts audit on create/submit/approve/reject; domain tests exist
+GAP-ANALYTICS-ML-INSIGHTS-ANOMALIES-06	CONFIRMED	anomalies page relabels stat Fallback Rate (no false-positive claim)
+GAP-ESTAB-APPROVAL-MATRIX-01	CONFIRMED	loadFailed state, ErrorState with retry, Add rule disabled (ApprovalMatrixPanel.tsx:295-305)
+GAP-PROJECTS-SCHEMES-01	CONFIRMED	project-service listSchemeSummaries emits minor-unit strings (queries.ts:170); list page sums BigInt + formatMoney; table formatMoney; test
+GAP-CONTRACTS-DETAIL-04	CONFIRMED	StatusPill, vendor name via getVendorOptions with short-id fallback, Type hidden when absent (no vendor link, minor)
+GAP-ESTAB-FILES-NEW-07	CONFIRMED	dirty-check ConfirmDialog Discard this file? on Cancel
+GAP-PROCUREMENT-TENDERS-DETAIL-03	CONFIRMED	page.tsx:85-100 canAward/blockReason, Award disabled until sanction ref; server asserts SoD in command and consumer and requireRole(PROC_ROLES); sanctionRef still optional server-side
+GAP-CRM-HEALTH-06	CONFIRMED	StatCard tone prop replaces hex iconBg on health/page.tsx
