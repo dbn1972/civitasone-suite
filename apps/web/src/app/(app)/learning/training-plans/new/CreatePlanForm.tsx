@@ -9,6 +9,7 @@
 import { useState, useId, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/app/_components/ds";
+import { DirectoryPicker } from "@/app/_components/DirectoryPicker";
 
 type DeptOption = { id: string; name: string };
 
@@ -79,7 +80,7 @@ export function CreatePlanForm({ departments }: { departments: DeptOption[] }) {
             {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
         ) : (
-          <input id={idDept} value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} placeholder="Department UUID (optional)" style={inputStyle} />
+          <DirectoryPicker source="department" id={idDept} value={departmentId || null} onChange={(v) => setDepartmentId(v ?? "")} />
         )}
       </div>
       <div>

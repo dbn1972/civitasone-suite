@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@/test-utils/intl-render";
 import { UserFacingError } from "@/lib/userFacingError";
 
 const pushMock = vi.fn();
@@ -19,17 +19,33 @@ import { NewMeetingForm } from "./NewMeetingForm";
 const VALID_UUID_1 = "11111111-1111-1111-1111-111111111111";
 const VALID_UUID_2 = "22222222-2222-2222-2222-222222222222";
 
-function fillRequiredFields() {
+// Chairperson / Secretary / Convener are now pickers over the identity user
+// directory (SF-06) instead of raw UUID boxes: stub that one directory fetch
+// and choose people by name, exactly as a user would.
+let directory: Array<{ id: string; name: string }> = [];
+function stubDirectory() {
+  directory = [
+    { id: VALID_UUID_1, name: "Chair Person" },
+    { id: VALID_UUID_2, name: "Secretary Person" },
+  ];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response(JSON.stringify({ data: directory }), { status: 200 })),
+  );
+}
+
+async function pickUser(label: RegExp, query: string, name: string) {
+  fireEvent.change(screen.getByLabelText(label), { target: { value: query } });
+  fireEvent.mouseDown(await screen.findByRole("option", { name: new RegExp(name) }));
+}
+
+async function fillRequiredFields() {
   fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Budget review" } });
   fireEvent.change(screen.getByLabelText(/Scheduled date/), {
     target: { value: "2027-01-15T10:00" },
   });
-  fireEvent.change(screen.getByLabelText(/Chairperson user ID/), {
-    target: { value: VALID_UUID_1 },
-  });
-  fireEvent.change(screen.getByLabelText(/Secretary user ID/), {
-    target: { value: VALID_UUID_2 },
-  });
+  await pickUser(/Chairperson/, "Chair", "Chair Person");
+  await pickUser(/Secretary/, "Secretary", "Secretary Person");
 }
 
 describe("NewMeetingForm", () => {
@@ -37,7 +53,10 @@ describe("NewMeetingForm", () => {
     pushMock.mockClear();
     createMeetingMock.mockReset();
     listCommitteesMock.mockReset().mockResolvedValue([]);
+    stubDirectory();
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it("shows validation errors and does not submit when required fields are empty", async () => {
     render(<NewMeetingForm />);
@@ -51,11 +70,12 @@ describe("NewMeetingForm", () => {
   });
 
   it("rejects a chairperson id that isn't a UUID", async () => {
+    // Defence in depth: the form can no longer type a free-text id, but it
+    // still refuses a directory row whose id is not a UUID.
+    directory.push({ id: "not-a-uuid", name: "Malformed Id" });
     render(<NewMeetingForm />);
-    fillRequiredFields();
-    fireEvent.change(screen.getByLabelText(/Chairperson user ID/), {
-      target: { value: "not-a-uuid" },
-    });
+    await fillRequiredFields();
+    await pickUser(/Chairperson/, "Malformed", "Malformed Id");
     fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
 
     expect(await screen.findByText("Enter a valid user ID (UUID format).")).toBeInTheDocument();
@@ -64,7 +84,7 @@ describe("NewMeetingForm", () => {
 
   it("rejects a duration of 0 or below", async () => {
     render(<NewMeetingForm />);
-    fillRequiredFields();
+    await fillRequiredFields();
     fireEvent.change(screen.getByLabelText(/Duration/), { target: { value: "0" } });
     fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
 
@@ -76,7 +96,7 @@ describe("NewMeetingForm", () => {
 
   it("rejects a duration over 1440 minutes", async () => {
     render(<NewMeetingForm />);
-    fillRequiredFields();
+    await fillRequiredFields();
     fireEvent.change(screen.getByLabelText(/Duration/), { target: { value: "1441" } });
     fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
 
@@ -89,7 +109,7 @@ describe("NewMeetingForm", () => {
   it("submits a well-formed payload and navigates to the new meeting on success", async () => {
     createMeetingMock.mockResolvedValue({ id: "meeting-123" });
     render(<NewMeetingForm />);
-    fillRequiredFields();
+    await fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
 
     await waitFor(() => expect(createMeetingMock).toHaveBeenCalledTimes(1));
@@ -112,7 +132,7 @@ describe("NewMeetingForm", () => {
   it("shows the plain-language error and does not navigate when the create call fails", async () => {
     createMeetingMock.mockRejectedValue(new UserFacingError("We couldn't schedule the meeting. Try again in a few minutes."));
     render(<NewMeetingForm />);
-    fillRequiredFields();
+    await fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
 
     // The banner renders "⚠ {message}" as sibling text nodes, so match on
@@ -124,7 +144,7 @@ describe("NewMeetingForm", () => {
   it("never shows a raw server error string from an unclassified throw", async () => {
     createMeetingMock.mockRejectedValue(new Error("COMMITTEE_NOT_FOUND: committee not found"));
     render(<NewMeetingForm />);
-    fillRequiredFields();
+    await fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
@@ -154,14 +174,17 @@ describe("NewMeetingForm — gap items", () => {
     pushMock.mockClear();
     createMeetingMock.mockReset();
     listCommitteesMock.mockReset().mockResolvedValue([]);
+    stubDirectory();
   });
+
+  afterEach(() => vi.unstubAllGlobals());
 
   it("GAP-MEETING-MEETINGS-NEW-01: rejects chairperson == secretary", async () => {
     render(<NewMeetingForm />);
     fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Dup roles" } });
     fireEvent.change(screen.getByLabelText(/Scheduled date/), { target: { value: "2027-01-15T10:00" } });
-    fireEvent.change(screen.getByLabelText(/Chairperson user ID/), { target: { value: VALID_UUID_1 } });
-    fireEvent.change(screen.getByLabelText(/Secretary user ID/), { target: { value: VALID_UUID_1 } });
+    await pickUser(/Chairperson/, "Chair", "Chair Person");
+    await pickUser(/Secretary/, "Chair", "Chair Person");
     fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
     expect(
       await screen.findByText("The secretary must be a different person from the chairperson."),
@@ -172,7 +195,7 @@ describe("NewMeetingForm — gap items", () => {
   it("GAP-MEETING-MEETINGS-NEW-02: converts the datetime-local as IST (+05:30) regardless of TZ", async () => {
     createMeetingMock.mockResolvedValue({ id: "m-1" });
     render(<NewMeetingForm />);
-    fillRequiredFields();
+    await fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
     await waitFor(() => expect(createMeetingMock).toHaveBeenCalledTimes(1));
     // 10:00 IST == 04:30 UTC.
@@ -182,7 +205,7 @@ describe("NewMeetingForm — gap items", () => {
   it("GAP-MEETING-MEETINGS-NEW-04: reuses one idempotency key across retries", async () => {
     createMeetingMock.mockRejectedValueOnce(new Error("transient")).mockResolvedValueOnce({ id: "m-2" });
     render(<NewMeetingForm />);
-    fillRequiredFields();
+    await fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
     await waitFor(() => expect(createMeetingMock).toHaveBeenCalledTimes(1));
     fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));

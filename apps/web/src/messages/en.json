@@ -7216,6 +7216,7 @@
     "policyNote": "Per DoPT O.M., WFH is permitted for eligible cadres up to <strong>{limit} days per week</strong>. Requests beyond this limit require DG/Secretary approval.",
     "labelEmployee": "Employee ID",
     "placeholderEmployee": "Select employee…",
+    "errorEmployeeRequired": "Choose an employee before submitting.",
     "labelFromDate": "From Date",
     "labelToDate": "To Date",
     "labelReason": "Reason / Purpose",
@@ -9359,6 +9360,7 @@
     "policyNote": "Shift changes require supervisor approval per DoPT staffing guidelines.",
     "labelEmployee": "Employee",
     "placeholderEmployee": "Select employee…",
+    "errorEmployeeRequired": "Choose an employee before submitting.",
     "labelCurrentShift": "Current Shift",
     "labelRequestedShift": "Requested Shift",
     "placeholderShift": "Select shift…",
@@ -9423,7 +9425,24 @@
     "searching": "Searching…",
     "noResults": "No matching employees",
     "clear": "Clear",
-    "clearAriaLabel": "Clear selected employee"
+    "clearAriaLabel": "Clear selected employee",
+    "searchFailed": "Could not load employees. Check your connection and try again."
+  },
+  "directoryPicker": {
+    "placeholder": {
+      "user": "Type a name to search users…",
+      "department": "Type a department name or code…",
+      "location": "Type a location name or city…",
+      "warehouse": "Type a warehouse name or code…"
+    },
+    "searching": "Searching…",
+    "searchFailed": "Could not load the list. Check your connection and try again.",
+    "noResults": {
+      "user": "No matching users",
+      "department": "No matching departments",
+      "location": "No matching locations",
+      "warehouse": "No matching warehouses"
+    }
   },
   "flexElectionApprovals": {
     "noneMessage": "No flex benefit elections are waiting for approval.",

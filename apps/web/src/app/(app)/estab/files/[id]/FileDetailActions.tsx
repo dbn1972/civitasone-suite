@@ -4,6 +4,7 @@ import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button, useConfirmAction, ConfirmDialog } from "../../../../_components/ds";
+import { EmployeePicker } from "../../../../_components/EmployeePicker";
 import { loadMaps, resolveLabel, type OfficerMaps } from "./OfficerName";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -275,13 +276,13 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
               ))}
             </select>
           ) : (
-            <input
-              id="estab-refer-officer"
-              value={toOfficer}
-              onChange={(e) => setToOfficer(e.target.value)}
-              placeholder="Officer UUID (no operators enrolled yet)"
-              style={{ width: "100%", padding: 8, marginBottom: 8, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }}
-            />
+            <div style={{ marginBottom: 8 }}>
+              <EmployeePicker
+                id="estab-refer-officer"
+                value={toOfficer || null}
+                onChange={(id) => setToOfficer(id ?? "")}
+              />
+            </div>
           )}
           <label htmlFor="estab-refer-remarks" className="l" style={{ fontSize: 12 }}>Refer-back remarks</label>
           <input

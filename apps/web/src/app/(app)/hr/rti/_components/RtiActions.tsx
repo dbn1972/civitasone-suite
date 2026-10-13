@@ -12,6 +12,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Modal, Field, Input, Textarea } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { DirectoryPicker } from "@/app/_components/DirectoryPicker";
 
 type Props = { id: string; status: string };
 
@@ -57,12 +58,12 @@ function AssignAction({ id }: { id: string }) {
       <Modal open={open} onClose={() => !busy && setOpen(false)} title="Assign a PIO">
         <form onSubmit={(e) => { e.preventDefault(); void post({ pioId }); }} style={{ display: "grid", gap: 14 }}>
           {err.message && <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--danger, #b91c1c)" }}>{err.message}</p>}
-          <Field id="assign-pio" label="PIO user ID (UUID)" error={err.fieldError("pioId")} required>
-            <Input required value={pioId} onChange={(e) => setPioId(e.target.value)} placeholder="e.g. the PIO's account id" />
+          <Field id="assign-pio" label="Public Information Officer" error={err.fieldError("pioId")} required>
+            <DirectoryPicker source="user" value={pioId || null} onChange={(v) => setPioId(v ?? "")} />
           </Field>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>
-            <Button type="submit" disabled={busy}>{busy ? "Assigning…" : "Assign"}</Button>
+            <Button type="submit" disabled={busy || !pioId}>{busy ? "Assigning…" : "Assign"}</Button>
           </div>
         </form>
       </Modal>

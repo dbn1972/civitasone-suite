@@ -38,6 +38,39 @@ describe("EntityPicker", () => {
     expect(input).toHaveAttribute("role", "combobox");
   });
 
+  it("shows an error alert, not \"No matches\", when search rejects (SF-06)", async () => {
+    const search = vi.fn(async () => {
+      throw new Error("entity lookup failed: HTTP 500");
+    });
+    render(<Harness search={search} searchErrorText="Could not load the list." />);
+    fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "Asha" } });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load the list.");
+    expect(screen.queryByText("No matches")).not.toBeInTheDocument();
+  });
+
+  it("clears the error and lists results once a later search succeeds", async () => {
+    const search = vi
+      .fn<(q: string, s: AbortSignal) => Promise<EntityOption[]>>()
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce(OPTIONS);
+    render(<Harness search={search} />);
+    const input = screen.getByLabelText("Manager");
+    fireEvent.change(input, { target: { value: "As" } });
+    await screen.findByRole("alert");
+
+    fireEvent.change(input, { target: { value: "Asha" } });
+    expect(await screen.findByText("Asha Rao")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("still says \"No matches\" when search succeeds with an empty list", async () => {
+    render(<Harness search={vi.fn(async () => [])} />);
+    fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "zzz" } });
+    expect(await screen.findByText("No matches")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("calls search with the typed query and an AbortSignal, then lists results", async () => {
     const search = vi.fn(async (_q: string, _signal: AbortSignal) => OPTIONS);
     render(<Harness search={search} />);
