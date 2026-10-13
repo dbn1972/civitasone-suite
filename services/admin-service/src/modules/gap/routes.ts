@@ -24,6 +24,7 @@ import * as rolePermissionAuditCommands from "../role-permissions-audit/commands
 import * as userExportCommands from "../user-export/commands.js";
 import * as securityExportCommands from "../security-export/commands.js";
 import * as mfaExportCommands from "../mfa-export/commands.js";
+import * as idpExportCommands from "../idp-export/commands.js";
 import * as tenantsRepo from "../tenants/repo.js";
 // Mirrors the web ADMIN_USERS_LIST_LIMIT: the browser can only ever export the rows it loaded.
 const USER_EXPORT_MAX_ROWS = 200;
@@ -387,6 +388,21 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     }).safeParse(req.body);
     if (!parsed.success) throw new HttpError(400, "VALIDATION_FAILED", "body must be { rowCount: number (0-10000), filtered?: boolean }");
     return sendAccepted(reply, acceptedResponseSchema, await mfaExportCommands.recordMfaExport(ctx, parsed.data.rowCount, parsed.data.filtered === true));
+  });
+
+  // ─── Audit record for an IdP-provider CSV export (w0-report, F5) ───
+  // The web IdpTable POSTs here before building the file (fail-closed
+  // exportGuard); this route did not exist, so exports were never audited.
+  // Tenant-admin roles only (ROLES). 202: the consumer writes the audit row.
+  app.post("/v1/admin/idp/providers/export-audit", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const parsed = z.object({
+      rowCount: z.number().int().min(0).max(10000),
+      filter: z.string().max(200).nullable().optional(),
+    }).safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, "VALIDATION_FAILED", "body must be { rowCount: number (0-10000), filter?: string | null }");
+    return sendAccepted(reply, acceptedResponseSchema, await idpExportCommands.recordIdpExport(ctx, parsed.data.rowCount, (parsed.data.filter ?? "").trim().length > 0));
   });
 
   // ─── Tenant configuration — real, read from admin-service's own

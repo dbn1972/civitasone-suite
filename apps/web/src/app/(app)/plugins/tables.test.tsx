@@ -10,6 +10,13 @@ import { PluginCatalogTable } from "./PluginCatalogTable";
 import { HooksTable } from "./HooksTable";
 import { MarketplaceTable } from "./MarketplaceTable";
 import type { PluginCatalogRow, PluginHookRow } from "./_data";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+import hiMessages from "@/messages/hi.json";
+const withIntl = (ui: React.ReactElement, locale: "en" | "hi" = "en") => (
+  <NextIntlClientProvider locale={locale} messages={locale === "en" ? enMessages : hiMessages}>{ui}</NextIntlClientProvider>
+);
+
 
 describe("PluginsTable — GAP-PLUGINS-INSTALLED-04 (StatusPill, not binary Enabled/Disabled)", () => {
   it("status 'error' renders 'Error', not 'Disabled'", () => {
@@ -64,7 +71,7 @@ describe("HooksTable — GAP-PLUGINS-HOOKS-01 (owner + failures columns)", () =>
 describe("MarketplaceTable — GAP-PLUGINS-MARKETPLACE-01", () => {
   it("renders an Install action per row for a manager", () => {
     const rows: PluginCatalogRow[] = [{ id: "m1", name: "Billing", publisher: "Acme" }];
-    render(<MarketplaceTable rows={rows} canManage />);
+    render(withIntl(<MarketplaceTable rows={rows} canManage />));
     expect(screen.getByRole("button", { name: "Install" })).toBeInTheDocument();
   });
 });

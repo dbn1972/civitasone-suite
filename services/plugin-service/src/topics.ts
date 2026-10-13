@@ -9,6 +9,9 @@ export const COMMANDS = {
   hookDeregister: "plugins.hook.deregister",
   storePut: "plugins.store.put",
   storeDelete: "plugins.store.delete",
+  // Marketplace install (GAP-PLUGINS-MARKETPLACE-01 / w0-report): published by
+  // POST /v1/plugins/marketplace/:id/install; previously had no subscriber.
+  marketplaceInstall: "plugin.marketplace.install",
 } as const;
 
 export const EVENTS = {

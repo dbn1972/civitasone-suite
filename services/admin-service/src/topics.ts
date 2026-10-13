@@ -78,6 +78,9 @@ export const COMMANDS = {
   // GAP-TENANT-ADMIN-MFA-03: audit-on-export for the MFA-status CSV (staff
   // names + emails are personal data under DPDP; bulk extraction is recorded).
   mfaExportRecorded: "admin.mfa_status.export_recorded",
+  // w0-report defect: audit-on-export for the tenant-admin IdP providers CSV
+  // (the web called a route that did not exist, so exports were never audited).
+  idpExportRecorded: "admin.idp_providers.export_recorded",
   backupTrigger:      "admin.backup.trigger",
   breakGlassOpen:     "admin.breakglass.open",
   breakGlassClose:    "admin.breakglass.close",
