@@ -61,7 +61,7 @@ Counts: ACTION 9
 
 ### GAP-HELP-HOME-04  ·  MEDIUM  ·  confirmed  ·  theme UX (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1924, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 closed by #1924; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: ReplayTourButton uses router.push and shows an alert instead of navigating when storage throws; FirstRunTour is now ds/Modal)
 - **First-pass claim:** "Take the welcome tour again" silently clears one localStorage key and hard-navigates to /dashboard (ReplayTourButton.tsx:98-105): full reload, no confirmation, and if storage is blocked the catch swallows the error yet still navigates, so the tour does not replay and the user is told nothing.
 - **Verified evidence:** help/ReplayTourButton.tsx:7-13: replay() runs localStorage.removeItem('civitasone.tour.dashboard.v1') inside try/catch that ignores errors, then window.location.assign('/dashboard') (full reload). No confirmation, no toast. FirstRunTour.tsx:34 uses the same key and its own catch (about line 74) simply does not show the tour when storage is unavailable, so with blocked storage the user lands on the dashboard with no tour and no message. Line numbers in the observation (98-105) are wrong; file is 18 lines. ConfirmDialog/maker-checker do not apply to a harmless preference reset.
 - **Files to change:** `apps/web/src/app/(app)/help/ReplayTourButton.tsx`, `apps/web/src/app/(app)/dashboard/FirstRunTour.tsx`
