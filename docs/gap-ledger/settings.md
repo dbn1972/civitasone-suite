@@ -14,7 +14,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 ### GAP-SETTINGS-BRANDING-01  ·  HIGH  ·  confirmed  ·  theme CONTRAST (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** Primary foreground is never recomputed: updateColor("colorPrimary") only sets the one key, colorPrimaryFg stays "#ffffff", and readableForeground is applied to the accent button alone — choose a light primary and the header, active nav item and Primary Action render white on light, and the unreadable pair is what gets PUT (page.tsx:24,190,217,270,295,331,412-416).
 - **Verified evidence:** apps/web/src/app/(app)/settings/branding/page.tsx:412-416 updateColor only sets the given key; :331 colorPrimaryFg defaults '#ffffff'; applyPreset (:418-428) changes colorPrimary/Secondary/Accent without touching colorPrimaryFg. readableForeground (:24) is only called for the accent button at :295. colorPrimaryFg is used at :190, :217, :270 and the whole config is PUT at handleSave (body JSON.stringify(config)). So a light primary gives white-on-light and that pair is persisted.
 - **Files to change:** `apps/web/src/app/(app)/settings/branding/page.tsx`
@@ -31,7 +31,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 ### GAP-SETTINGS-BRANDING-02  ·  HIGH  ·  confirmed  ·  theme RESPONSIVE (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** Editor is not responsive: root is `flex h-screen` with a fixed `w-[420px]` column and an `overflow-y-auto` panel, no breakpoints, so on a phone or narrow window the preview is pushed off-screen and the page is fixed to 100vh inside AppShell (page.tsx:463-466).
 - **Verified evidence:** apps/web/src/app/(app)/settings/branding/page.tsx:464 root is `flex h-screen` and :466 the editor is `w-[420px] border-e overflow-y-auto`, with the preview `flex-1` (:~640). No sm:/md: breakpoints anywhere in the file, so below ~700px the preview is squeezed to nothing. Note AppShell also adds its own chrome, so h-screen overflows the viewport. Theme PII is wrong; this is a responsive-layout issue.
 - **Files to change:** `apps/web/src/app/(app)/settings/branding/page.tsx`
@@ -47,7 +47,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 ### GAP-SETTINGS-BRANDING-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Drag & drop logo here" has no drop handler and no file input — the only working control is the "Logo image URL" text box, and the arbitrary URL is rendered in <img> in the preview and sent unchecked to the API (page.tsx:503-530).
 - **Verified evidence:** apps/web/src/app/(app)/settings/branding/page.tsx:503-530 the dashed zone shows 'Drag & drop logo here' (:515) and 'SVG or PNG, max 200KB' but has no onDrop/onDragOver/onClick handlers and no <input type=file>; the only control is a text input `Logo image URL` writing config.logoUrl, rendered via <img src> in the zone (:511) and in the preview (:~182), and sent in the PUT. No validation of scheme or type. Also, middleware CSP is `img-src 'self' data: blob:` (middleware.ts:73), so an external https logo URL will be blocked in the browser anyway; only same-origin or data: URLs render. There is a FileUpload DS component (_components/ds/FileUpload.tsx) that could be reused, but its backend upload endpoint is not visible.
 - **Files to change:** `apps/web/src/app/(app)/settings/branding/page.tsx`, `apps/web/src/app/_components/ds/FileUpload.tsx`, `(backend) theme-service logo upload endpoint if absent`
@@ -65,6 +65,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 ### GAP-SETTINGS-BRANDING-05  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1925 — Added tagline, footer, poweredBy controls; dark logo, favicon, login bg, fonts, sidebar/header style still no controls
 - **First-pass claim:** Only colours, app name, logo URL and roundness are editable; tagline, dark logo, favicon, login background, footer text, poweredBy, fonts, sidebar/header style exist in BrandConfig and defaults but have no controls, and the file header still promises a "font selector" (page.tsx:1-10,322-345).
 - **Verified evidence:** apps/web/src/app/(app)/settings/branding/page.tsx:10 header comment still mentions 'font selector'. BrandConfig (:51-~80) and the defaults (:321-348) include tagline, logoDarkUrl, faviconUrl, loginBgUrl, footerText, poweredBy, fontFamily, fontFamilyMono, sidebarStyle, headerStyle, customCss; the editor renders controls only for appName, logoUrl, presets, nine colours (Primary/Secondary/Accent/Background/Surface/Text/Success/Warning/Error, no Border/Muted/PrimaryFg) and roundness. The full config is PUT, so unedited fields are round-tripped as loaded.
 - **Files to change:** `apps/web/src/app/(app)/settings/branding/page.tsx`
@@ -80,7 +81,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 ### GAP-SETTINGS-BRANDING-06  ·  MEDIUM  ·  confirmed  ·  theme CONTRAST (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** Text-on-Background and Text-on-Surface contrast is never checked, so a tenant can save an inaccessible palette; only the accent button gets a derived foreground (page.tsx:295).
 - **Verified evidence:** apps/web/src/app/(app)/settings/branding/page.tsx only calls readableForeground for the accent button (:295). There is no contrast check between colorText and colorBackground/colorSurface (preview uses them at :~209,:217), nor for links/borders, and handleSave (:~440) sends whatever is chosen. Theme I18N is wrong (accessibility).
 - **Files to change:** `apps/web/src/app/(app)/settings/branding/page.tsx`, `apps/web/src/lib/contrast.ts (new)`
@@ -96,7 +97,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 ### GAP-SETTINGS-BRANDING-07  ·  LOW  ·  confirmed  ·  theme LOADING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** On first load the editor shows hard-coded defaults with no skeleton or "loading" state until the brand fetch resolves, so a returning admin may edit and save over their real branding before it loads (page.tsx:383-409).
 - **Verified evidence:** apps/web/src/app/(app)/settings/branding/page.tsx:321-348 initial state is hard-coded defaults; the load effect at :373-393 replaces it via .then(setConfig) with no loading flag. Save is disabled only by `!dirty || saving` (:~640), so an admin can edit within the fetch window, and then setConfig overwrites their edit, or if they save first, the PUT (whole config) writes defaults over stored branding. On load failure the banner says 'Showing defaults — saving will still work' (:~396), which invites overwriting real branding with defaults.
 - **Files to change:** `apps/web/src/app/(app)/settings/branding/page.tsx`
@@ -116,6 +117,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 ### GAP-SETTINGS-BRANDING-03  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1925 — Client role check (BRANDING_ADMIN_ROLES) and save confirm added; no settings layout gate; server auth/audit unverifiable
 - **First-pass claim:** Any signed-in user can rewrite tenant-wide branding: no requireAnyRole, no settings/layout.tsx and no ModuleGate; Save PUTs the entire BrandConfig with no confirmation and no audit indication in the UI. theme-service is absent from the snapshot (services/ has only hrms-service), so server role checks and auditing are undeterminable (page.tsx:430-455).
 - **Service:** `theme-service`  ·  **Endpoint(s):** `['GET/PUT /api/proxy/v1/themes/brand', 'GET /api/proxy/v1/themes/brand/presets']`
 - **Question:** Does PUT /v1/themes/brand require a tenant-admin role and emit an audit event with before/after?

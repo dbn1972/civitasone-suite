@@ -14,7 +14,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 
 ### GAP-DOMAINS-NEW-01  ·  HIGH  ·  defect  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** Both post-save targets are dead: the page links back to /domains and, on success, routes to /domains/{id} (page.tsx:66,79) but the snapshot contains only apps/web/src/app/(app)/domains/new — no /domains index or [id] route — so a successful registration lands on a 404.
 - **Service:** ``  ·  **Endpoint(s):** `['POST /api/v1/domains']`
 - **Question:** 
@@ -26,7 +26,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 
 ### GAP-DOMAINS-NEW-02  ·  HIGH  ·  confirmed  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** Validation contradicts its message: regex /^[a-z0-9.-]+\.(gov\.in|nic\.in|gov\.in|in)$/i (gov\.in listed twice) accepts any ".in" host such as example.co.in, while the error says ".gov.in or .nic.in" (page.tsx:42-43). Domain Type is never cross-checked against the typed name, and "Other" is offered although no non-.in name can pass.
 - **Verified evidence:** domains/new/page.tsx:42 regex /^[a-z0-9.-]+\.(gov\.in|nic\.in|gov\.in|in)$/i : the 'in' alternative subsumes the others, so example.co.in, foo.in pass; message at :43 says '.gov.in or .nic.in'. domainType (default 'gov.in', options :137-140: gov.in, nic.in, state.gov.in, other) is never compared to domainName, and 'Other' is selectable though the regex rejects non-.in names. Whole form object is posted (:59). Backend validation not verifiable.
 - **Files to change:** `apps/web/src/app/(app)/domains/new/page.tsx`, `apps/web/src/app/(app)/domains/schema.ts (new, zod)`
@@ -43,7 +43,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 
 ### GAP-DOMAINS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** Email validated only by includes("@") (page.tsx:45); native type=email plus required will usually pre-empt the custom message. Phone has no format check.
 - **Verified evidence:** Email check at domains/new/page.tsx:45 is includes('@'); input is type='email' with required (:201,206) and the <form> has no noValidate, so the browser's native validation blocks submit before handleSubmit for most bad values, making the custom message mostly unreachable. Phone (:223-231) is type='tel' with no pattern/validation. Theme PII is wrong (nothing is masked/displayed).
 - **Files to change:** `apps/web/src/app/(app)/domains/new/page.tsx`, `apps/web/src/app/(app)/domains/schema.ts (new, zod)`
@@ -59,7 +59,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 
 ### GAP-DOMAINS-NEW-04  ·  MEDIUM  ·  partly  ·  theme DESIGN-SYSTEM (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** Design-system drift: hard-coded hex colours (#4f46e5 primary, #d1d5db borders, #b42318 errors) and unlabelled inline-styled buttons instead of ds Button / form components (page.tsx:8-10,251-272); primary button turns grey #9ca3af while busy.
 - **Verified evidence:** Hard-coded hex confirmed: #d1d5db (:8,111,205,254), #b42318 (:10,87), #fef2f2/#fecaca (:87), #dc2626 (:111,205), #4f46e5/#9ca3af/#f3f4f6/#374151 (:254,264), none dark-mode aware; native <button> with inline style instead of ds Button / .btn primary. Overstated: buttons are not 'unlabelled', they have text ('Cancel', 'Register Domain'). Ds has no shared input component (see NEW-04). Theme is design-system drift, not FABRICATED.
 - **Files to change:** `apps/web/src/app/(app)/domains/new/page.tsx`, `apps/web/src/app/_components/ds/FormField.tsx (new)`
@@ -76,6 +76,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 ### GAP-DOMAINS-NEW-06  ·  LOW  ·  partly  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1925 — Per-keystroke lowercasing removed (lowercase on blur/submit); state select still has no tenant-state default
 - **First-pass claim:** State / UT is a native select element of 36 items with no default of the tenant's state; domain name is lower-cased on every keystroke (page.tsx:109), which moves the caret in the middle of the text.
 - **Verified evidence:** State select has 36 options (INDIAN_STATES :12-20, 28 states + 8 UTs) with placeholder '— Select state / UT —' (:187); a tenant default is not verifiable (no tenant-state source seen in the page). Lowercasing on each keystroke at :109 is real: controlled input value differs from typed text when an uppercase char is entered mid-string, so React resets the caret to the end. A native select of 36 is acceptable; the caret bug is the real defect.
 - **Files to change:** `apps/web/src/app/(app)/domains/new/page.tsx`
@@ -94,6 +95,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 ### GAP-DOMAINS-NEW-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1925 — DPDP purpose notice added and layout.tsx requireAnyRole admin gate; server enforcement/audit unverifiable (no backend)
 - **First-pass claim:** Contact email and phone are personal data (DPDP) collected with no purpose or consent note and no indication of an audit entry for the create; backend absent — undeterminable. No module gate: any authenticated user reaches the form (no layout.tsx).
 - **Service:** `domain-service`  ·  **Endpoint(s):** `['POST /api/v1/domains']`
 - **Question:** Does the create handler require an authorised role, validate email/phone with zod, and emit an audit event including PII-safe payload?

@@ -14,7 +14,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-HOME-01  ·  MEDIUM  ·  confirmed  ·  theme ICONS (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** All seven tiles render the same 📁 emoji because no tile title matches TILE_ICONS (LinkTiles.tsx:52-59), so the hub gives no visual differentiation between users, keys and emergency access; pastel backgrounds are hard-coded hex (LinkTiles.tsx:50) and ignore dark theme.
 - **Verified evidence:** LinkTiles.tsx:10-49 TILE_ICONS has no keys for Users, Sessions, API keys, Break-glass, WebAuthn, MFA (admin), SSO (admin); fallbacks at 55-59 match only dashboard/employees/leave/payroll/procurement/orders, none in identity hrefs, so all seven get 📁 (line 60). TILE_BG is hard-coded pastel hex at line 51 (not 50) applied inline at line 97; dark-mode appearance not run-tested. NavTile type in @civitasone/types absent, so an `icon` field on tiles is cannot-verify.
 - **Files to change:** `apps/web/src/app/_components/LinkTiles.tsx`, `apps/web/src/app/_components/ModuleHub.tsx`, `apps/web/src/app/(app)/identity/page.tsx`
@@ -30,7 +30,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** No role check: identity/layout.tsx applies ModuleGate only (layout.tsx:5), so the hub advertises Users, API keys and Break-glass to every signed-in user of the tenant; hiding tiles by role is not done client-side.
 - **Verified evidence:** identity/layout.tsx:5 has no requireAnyRole; identity/page.tsx:10-16 shows all seven links to everyone. The two tenant-admin links lead to tenant-admin/layout.tsx which redirects non-admins to /dashboard, so those users click and bounce.
 - **Files to change:** `apps/web/src/app/(app)/identity/layout.tsx`, `apps/web/src/app/(app)/identity/page.tsx`, `apps/web/src/app/_components/ModuleHub.tsx`
@@ -47,6 +47,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 ### GAP-IDENTITY-HOME-03  ·  MEDIUM  ·  partly  ·  theme WIRING (was I18N)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1862 — '(admin)' reworded to 'Managed in Tenant Admin'; no at-a-glance MFA/SSO/session stats added (decision pending)
 - **First-pass claim:** Two tiles leave the module for Tenant Admin (page.tsx:14-15), labelled "(admin)"; there is no MFA or SSO status here, and the hub carries no counts or health (nothing to show an admin at a glance).
 - **Verified evidence:** The two tenant-admin links are at page.tsx:15-16 (not 14-15) labelled '(admin)'; true that the hub shows no MFA/SSO status or counts (ModuleHub children slot unused). This is an enhancement request rather than a defect; endpoints for MFA/SSO/session counts cannot-verify. Theme I18N is wrong.
 - **Files to change:** `apps/web/src/app/(app)/identity/page.tsx`
@@ -60,7 +61,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-HOME-04  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle names the internal service ("from identity-service", page.tsx:9); the group loading state is just "Loading identity…" with no header or skeleton (loading.tsx:4).
 - **Verified evidence:** identity/page.tsx:7 description 'Users, sessions, API keys, break-glass and WebAuthn credentials from identity-service.' (line 7, not 9). identity/loading.tsx:4 is just <p>Loading identity…</p> inside page-main, no PageHeader or skeleton (other modules use skeleton loading, e.g. grants/utilization/loading.tsx).
 - **Files to change:** `apps/web/src/app/(app)/identity/page.tsx`, `apps/web/src/app/(app)/identity/loading.tsx`
@@ -81,7 +82,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-API-KEYS-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** No role check on an identity-administration route: identity/layout.tsx only checks that the module is enabled (layout.tsx:5) and the page calls the loader directly (page.tsx:7-8), so any signed-in tenant user reaches this list; DPDP-sensitive identity data depends entirely on the unseen backend.
 - **Verified evidence:** identity/layout.tsx:5 only ModuleGate; api-keys/page.tsx:8 calls getIdentityApiKeys (_data.ts:90 -> /api/v1/admin/api-keys) with no role check. The equivalent tenant-admin/api-keys route is behind tenant-admin/layout.tsx requireAnyRole, so the same data is guarded on one path and open on the other. Backend enforcement cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/identity/layout.tsx`
@@ -97,7 +98,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-API-KEYS-02  ·  HIGH  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** No create, rotate or revoke control for API keys (ModuleListTable.tsx:36-56); keys are the highest-risk credential in the module and the list cannot act on one, nor show scopes, owner, expiry or last-used.
 - **Verified evidence:** True for this route: ModuleListTable.tsx:36-56 is a read-only 5-column table (ID, Name, Detail, Status, Meta) with no actions, scopes, expiry or last-used. But tenant-admin/api-keys already has APIKeyActions.tsx (create with scopes, rotate, revoke via ConfirmDialog) and APIKeysTable.tsx with Scope, Last used, Expires columns. So the capability exists; the identity route is a redundant weaker stub.
 - **Files to change:** `apps/web/src/app/(app)/identity/api-keys/page.tsx`, `apps/web/src/app/(app)/identity/page.tsx`
@@ -113,7 +114,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-API-KEYS-04  ·  MEDIUM  ·  partly  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Detail" repeats "Status" whenever there is no description (sublabel falls back to status, _data.ts:55-64) and Meta prints the raw ISO createdAt/updatedAt string (_data.ts:65-69), e.g. 2026-09-28T09:14:22Z.
 - **Verified evidence:** _data.ts:51-59: sublabel = description ?? status ?? state ..., so Detail duplicates Status when no description (ModuleListTable.tsx:52-53). Meta (_data.ts:61-67) = code ?? currency ?? updatedAt ?? createdAt, so raw ISO timestamp appears only when code and currency are absent (updatedAt is preferred over createdAt). Shared mapRows, so all identity lists are affected.
 - **Files to change:** `apps/web/src/app/(app)/identity/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -128,7 +129,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-API-KEYS-05  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** On failure the page shows the badge "Couldn't load — showing nothing" and then the EmptyState "No records" (ModuleListTable.tsx:27-33): no retry, and an empty result and an error look alike.
 - **Verified evidence:** fetchJson returns [] with source 'error' on failure (apiClient.ts:170-172). ModuleListTable.tsx:33-35 renders DataSourceBadge then EmptyState 'No records / Nothing to show yet for this module.' when data is empty; no retry. Same component serves many modules.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -144,7 +145,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-API-KEYS-06  ·  LOW  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle names the internal service ("from identity-service", page.tsx:15) and titles use "Identity — X" while the breadcrumb is a bare back link built with <a href> (full page reload, page.tsx:12).
 - **Verified evidence:** api-keys/page.tsx:16 description 'API keys from identity-service.' (line 16, not 15); title 'Identity — API keys' at line 15; breadcrumb is a manual <nav><a href="/identity"> at lines 11-13 causing full reload. ModuleListPage.tsx:84 PageHeader has no back prop plumbed.
 - **Files to change:** `apps/web/src/app/(app)/identity/api-keys/page.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -167,7 +168,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-BREAKGLASS-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** No role check on an identity-administration route: identity/layout.tsx only checks that the module is enabled (layout.tsx:5) and the page calls the loader directly (page.tsx:7-8), so any signed-in tenant user reaches this list; DPDP-sensitive identity data depends entirely on the unseen backend.
 - **Verified evidence:** identity/layout.tsx:5 ModuleGate only; breakglass/page.tsx:8 loads /api/v1/admin/breakglass (_data.ts:91) with no role check. tenant-admin/breakglass is under the requireAnyRole tenant-admin layout. Backend enforcement cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/identity/layout.tsx`
@@ -183,7 +184,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-BREAKGLASS-02  ·  HIGH  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** Emergency-access requests can be listed but not approved, denied or closed (ModuleListTable.tsx:36-56), and requester, approver, reason, window and expiry are not columns (_data.ts:33-70); a break-glass workflow needs dual control and a visible audit trail.
 - **Verified evidence:** Identity list is read-only with only ID/Name/Detail/Status/Meta (ModuleListTable.tsx:36-56; mapRows _data.ts:28-77 has no requester/approver/reason/window). tenant-admin/breakglass has BreakglassTable.tsx (Requester, Reason, Requested, Duration, Status) and BreakglassActions.tsx 'Close session' plus an [id] detail page. No approve/deny action exists in either place; whether break-glass is approve-first or self-activate-then-review is a product decision not visible in the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/identity/breakglass/page.tsx`, `apps/web/src/app/(app)/identity/page.tsx`
@@ -199,7 +200,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-BREAKGLASS-03  ·  HIGH  ·  partly  ·  theme ROLEGATE (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** Break-glass reasons and target systems may sit in `description`/`status`, which the mapper prints verbatim to any viewer (_data.ts:55-64) — no masking or role gate is applied client-side.
 - **Verified evidence:** mapRows (_data.ts:51-59) shows description ?? status as Detail verbatim, and ModuleListTable.tsx:52 prints it to any viewer, no masking. But mapRows never reads reason/justification/targetSystem keys, so a reason is displayed only if the API names it 'description'; no evidence it does. Risk is real only combined with the missing role gate (BREAKGLASS-01).
 - **Files to change:** `apps/web/src/app/(app)/identity/_data.ts`, `apps/web/src/app/(app)/identity/layout.tsx`
@@ -215,7 +216,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-BREAKGLASS-04  ·  MEDIUM  ·  partly  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Detail" repeats "Status" whenever there is no description (sublabel falls back to status, _data.ts:55-64) and Meta prints the raw ISO createdAt/updatedAt string (_data.ts:65-69), e.g. 2026-09-28T09:14:22Z.
 - **Verified evidence:** Same shared mapper as API-KEYS-04: _data.ts:51-59 sublabel falls back to status; _data.ts:61-67 meta uses code ?? currency ?? updatedAt ?? createdAt raw ISO only when code/currency absent.
 - **Files to change:** `apps/web/src/app/(app)/identity/_data.ts`
@@ -228,7 +229,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-BREAKGLASS-05  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** On failure the page shows the badge "Couldn't load — showing nothing" and then the EmptyState "No records" (ModuleListTable.tsx:27-33): no retry, and an empty result and an error look alike.
 - **Verified evidence:** Identical to API-KEYS-05: ModuleListTable.tsx:33-35 badge plus 'No records' EmptyState on failed fetch; no retry.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -241,7 +242,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-BREAKGLASS-06  ·  LOW  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle names the internal service ("from identity-service", page.tsx:15) and titles use "Identity — X" while the breadcrumb is a bare back link built with <a href> (full page reload, page.tsx:12).
 - **Verified evidence:** breakglass/page.tsx:16 description 'Break-glass access requests.' (no service name, differs from claim), but title 'Identity — Break-glass' line 15 and manual <a href="/identity"> breadcrumb lines 11-13 (full reload) are true. The 'from identity-service' wording applies to api-keys/users/sessions, not this page.
 - **Files to change:** `apps/web/src/app/(app)/identity/breakglass/page.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -262,7 +263,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-SESSIONS-01  ·  HIGH  ·  confirmed  ·  theme ROLEGATE (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** No role check on an identity-administration route: identity/layout.tsx only checks that the module is enabled (layout.tsx:5) and the page calls the loader directly (page.tsx:7-8), so any signed-in tenant user reaches this list; DPDP-sensitive identity data depends entirely on the unseen backend.
 - **Verified evidence:** identity/layout.tsx:4-5 renders only <ModuleGate moduleKey="identity"> (ModuleGate.tsx:22-27 checks tenant module enablement only, no roles). sessions/page.tsx:8 calls the loader directly with no role check. Contrast tenant-admin/layout.tsx:4-8 and hr/layout.tsx:44-46 which call requireAnyRole. Any signed-in user with the module enabled renders the list; backend identity-service is absent from the snapshot so server-side scoping is cannot-verify. Line refs in the observation (layout.tsx:5, page.tsx:7-8) are correct.
 - **Files to change:** `apps/web/src/app/(app)/identity/layout.tsx`, `apps/web/src/lib/auth/identityRoles.ts (new)`
@@ -279,7 +280,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-SESSIONS-02  ·  HIGH  ·  partly  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** No way to end a session: list has no revoke / sign-out-everywhere control (ModuleListTable.tsx:36-56), the main reason an admin opens a sessions page after a lost device or suspected compromise.
 - **Verified evidence:** ModuleListTable.tsx:57-90 renders a read-only 5-column table (ID, Name, Detail, Status, Meta) with no actions, so the identity/sessions page (page.tsx:8-22) indeed has no revoke control. But the capability exists elsewhere: tenant-admin/sessions/SessionsTable.tsx:51-66 revokes via DELETE /api/proxy/identity/sessions/{id} with ConfirmDialog and reason, and tenant-admin/sessions/page.tsx uses getActiveSessions (loaders.ts:4298, the same /api/identity/sessions endpoint). The observation's line range 36-56 is off (actual table 57-90). No 'sign out everywhere' exists anywhere (backend cannot be verified).
 - **Files to change:** `apps/web/src/app/(app)/identity/sessions/page.tsx`, `apps/web/src/app/(app)/tenant-admin/sessions/SessionsTable.tsx`
@@ -296,7 +297,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-SESSIONS-03  ·  HIGH  ·  confirmed  ·  theme WIRING (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** A sessions list without user, device, IP or last-seen: the mapper keeps only id/type/status/date (_data.ts:41-70), so rows cannot be attributed to a person and Name may show a bare id.
 - **Verified evidence:** _data.ts:33-70 mapRows keeps id/label/sublabel/status/meta only. Sessions have no userName/email/ipAddress/userAgent in its key lists, so label falls to name/title/label/code/type/entityType/direction/id (lines 43-51) and can be the bare id; ID column shows row.id.slice(0,8) (ModuleListTable.tsx:81). No user, device, IP or last-seen columns. The richer typed shape SessionSummary (userEmail,userName,ipAddress,userAgent,lastActiveAt,mfaVerified,status) is already consumed by tenant-admin/sessions/page.tsx from the same endpoint via getActiveSessions (loaders.ts:4298). Theme is not really DATEFMT.
 - **Files to change:** `apps/web/src/app/(app)/identity/sessions/page.tsx`, `apps/web/src/app/(app)/identity/_data.ts`
@@ -313,7 +314,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-SESSIONS-04  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Detail" repeats "Status" whenever there is no description (sublabel falls back to status, _data.ts:55-64) and Meta prints the raw ISO createdAt/updatedAt string (_data.ts:65-69), e.g. 2026-09-28T09:14:22Z.
 - **Verified evidence:** _data.ts:55-64 sublabel = description ?? status ?? state ?? ... so when no description exists Detail equals Status (ModuleListTable.tsx:83-84 prints both). Meta (_data.ts:65-69) = code ?? currency ?? updatedAt ?? createdAt and is rendered raw at ModuleListTable.tsx:85, so an ISO string like 2026-09-28T09:14:22Z is shown untouched. Note updatedAt is preferred over createdAt and only one date is shown, unlabelled. No date formatting anywhere in the pipeline.  Superseded if SESSIONS-03 is done.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/identity/_data.ts`, `apps/web/src/lib/formatters.ts`
@@ -329,7 +330,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-SESSIONS-05  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** On failure the page shows the badge "Couldn't load — showing nothing" and then the EmptyState "No records" (ModuleListTable.tsx:27-33): no retry, and an empty result and an error look alike.
 - **Verified evidence:** ModuleListPage.tsx:28 maps source==='error' to ModuleListTable source 'error'; ModuleListTable.tsx:50-56 uses useSeededResource; with no cache it yields provenance 'error-no-data', DataSourceBadge.tsx:71-72 prints "Couldn't load — showing nothing" (no retry), and ModuleListTable.tsx:65-66 then shows EmptyState "No records / Nothing to show yet for this module." because data is []. Empty ok-result and error differ only by the amber badge. Observation's lines 27-33 are actually 64-66. sessions inherits it via _data.ts fetchJson default [] fallback. RefreshErrorState exists (ds/RefreshErrorState.tsx) and uses router.refresh().
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -344,7 +345,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-SESSIONS-06  ·  LOW  ·  confirmed  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle names the internal service ("from identity-service", page.tsx:15) and titles use "Identity — X" while the breadcrumb is a bare back link built with <a href> (full page reload, page.tsx:12).
 - **Verified evidence:** page.tsx:14-16 description="Sessions from identity-service." names an internal service; title "Identity — Sessions" (line 15); breadcrumb at lines 11-13 is a plain <a href="/identity"> (full reload) rather than next/link or PageHeader back prop. Same pattern in api-keys/breakglass pages. The observation's page.tsx:15/12 refs are approximately right (description line 16, anchor line 12).
 - **Files to change:** `apps/web/src/app/(app)/identity/sessions/page.tsx`
@@ -366,7 +367,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-USERS-01  ·  HIGH  ·  confirmed  ·  theme ROLEGATE (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** No role check on an identity-administration route: identity/layout.tsx only checks that the module is enabled (layout.tsx:5) and the page calls the loader directly (page.tsx:7-8), so any signed-in tenant user reaches this list; DPDP-sensitive identity data depends entirely on the unseen backend.
 - **Verified evidence:** identity/layout.tsx:4-5 renders only <ModuleGate moduleKey="identity"> (ModuleGate.tsx:22-27 checks tenant module enablement only, no roles). users/page.tsx:8 calls the loader directly with no role check. Contrast tenant-admin/layout.tsx:4-8 and hr/layout.tsx:44-46 which call requireAnyRole. Any signed-in user with the module enabled renders the list; backend identity-service is absent from the snapshot so server-side scoping is cannot-verify. Line refs in the observation (layout.tsx:5, page.tsx:7-8) are correct.
 - **Files to change:** `apps/web/src/app/(app)/identity/layout.tsx`, `apps/web/src/lib/auth/identityRoles.ts (new)`
@@ -383,7 +384,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-USERS-02  ·  HIGH  ·  partly  ·  theme WIRING (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** Users list is read-only with no invite / lock / role change (ModuleListTable.tsx:36-56), and is the only user directory the Identity hub links to.
 - **Verified evidence:** identity/users/page.tsx:8-22 is a read-only ModuleListPage (ModuleListTable.tsx:57-90 has no actions) so no invite/lock/role change here. But the claim that it is the only user directory the hub links to is a hub-only truth: identity/page.tsx:10-16 links /identity/users plus /tenant-admin/mfa and /tenant-admin/sso, yet a full tenant-admin/users route (UsersTable.tsx POSTs /api/proxy/v1/admin/users at :181, [id] detail, roles at /tenant-admin/roles) exists behind requireAnyRole and is simply not linked from the hub. Theme DEADROUTE is wrong; it is a duplicate/underpowered page.
 - **Files to change:** `apps/web/src/app/(app)/identity/page.tsx`, `apps/web/src/app/(app)/identity/users/page.tsx`
@@ -399,7 +400,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-USERS-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** Generic mapper drops identity-specific fields: it keeps id/label/sublabel/status/meta by guessing keys such as name, title, code, description, updatedAt (_data.ts:33-70), so email, role, IP, scopes or expiry are never shown, and when no name-like key exists the Name column repeats the raw id.
 - **Verified evidence:** _data.ts:33-70 mapRows: id from id/key/code/name/..., label from name/title/label/code/type/entityType/direction/id, so email, roles, lastLogin are dropped and Name repeats the id when no name key exists (a user record with only email/username falls to id, line 51). ID column is slice(0,8) (ModuleListTable.tsx:81). The richer UserSummary typed loader (getAdminUsers, loaders.ts:4155, same /api/identity/users endpoint) and tenant-admin UsersTable already exist.
 - **Files to change:** `apps/web/src/app/(app)/identity/users/page.tsx`, `apps/web/src/app/_components/Masked.tsx (new, if masking wanted)`
@@ -415,7 +416,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-USERS-04  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Detail" repeats "Status" whenever there is no description (sublabel falls back to status, _data.ts:55-64) and Meta prints the raw ISO createdAt/updatedAt string (_data.ts:65-69), e.g. 2026-09-28T09:14:22Z.
 - **Verified evidence:** _data.ts:55-64 sublabel = description ?? status ?? state ?? ... so when no description exists Detail equals Status (ModuleListTable.tsx:83-84 prints both). Meta (_data.ts:65-69) = code ?? currency ?? updatedAt ?? createdAt and is rendered raw at ModuleListTable.tsx:85, so an ISO string like 2026-09-28T09:14:22Z is shown untouched. Note updatedAt is preferred over createdAt and only one date is shown, unlabelled. No date formatting anywhere in the pipeline.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/identity/_data.ts`, `apps/web/src/lib/formatters.ts`
@@ -431,7 +432,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-USERS-05  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** On failure the page shows the badge "Couldn't load — showing nothing" and then the EmptyState "No records" (ModuleListTable.tsx:27-33): no retry, and an empty result and an error look alike.
 - **Verified evidence:** ModuleListPage.tsx:28 maps source==='error' to ModuleListTable source 'error'; ModuleListTable.tsx:50-56 uses useSeededResource; with no cache it yields provenance 'error-no-data', DataSourceBadge.tsx:71-72 prints "Couldn't load — showing nothing" (no retry), and ModuleListTable.tsx:65-66 then shows EmptyState "No records / Nothing to show yet for this module." because data is []. Empty ok-result and error differ only by the amber badge. Observation's lines 27-33 are actually 64-66. users inherits it via _data.ts fetchJson default [] fallback. RefreshErrorState exists (ds/RefreshErrorState.tsx) and uses router.refresh().
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -445,7 +446,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-USERS-06  ·  LOW  ·  confirmed  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle names the internal service ("from identity-service", page.tsx:15) and titles use "Identity — X" while the breadcrumb is a bare back link built with <a href> (full page reload, page.tsx:12).
 - **Verified evidence:** page.tsx:14-16 description="Users from identity-service." names an internal service; title "Identity — Users" (line 15); breadcrumb at lines 11-13 is a plain <a href="/identity"> (full reload) rather than next/link or PageHeader back prop. Same pattern in api-keys/breakglass pages. The observation's page.tsx:15/12 refs are approximately right (description line 16, anchor line 12).
 - **Files to change:** `apps/web/src/app/(app)/identity/users/page.tsx`
@@ -467,7 +468,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-WEBAUTHN-01  ·  HIGH  ·  confirmed  ·  theme ROLEGATE (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** No role check on an identity-administration route: identity/layout.tsx only checks that the module is enabled (layout.tsx:5) and the page calls the loader directly (page.tsx:7-8), so any signed-in tenant user reaches this list; DPDP-sensitive identity data depends entirely on the unseen backend.
 - **Verified evidence:** identity/layout.tsx:4-5 renders only <ModuleGate moduleKey="identity"> (ModuleGate.tsx:22-27 checks tenant module enablement only, no roles). webauthn/page.tsx:8 calls the loader directly with no role check. Contrast tenant-admin/layout.tsx:4-8 and hr/layout.tsx:44-46 which call requireAnyRole. Any signed-in user with the module enabled renders the list; backend identity-service is absent from the snapshot so server-side scoping is cannot-verify. Line refs in the observation (layout.tsx:5, page.tsx:7-8) are correct.
 - **Files to change:** `apps/web/src/app/(app)/identity/layout.tsx`, `apps/web/src/lib/auth/identityRoles.ts (new)`
@@ -485,6 +486,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 ### GAP-IDENTITY-WEBAUTHN-02  ·  HIGH  ·  confirmed  ·  theme WIRING (was OTHER)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1862 — PasskeyManager with confirm-gated remove, titled My passkeys; register shows not-available (backend 501), no rename
 - **First-pass claim:** Passkeys cannot be registered, renamed or removed here (ModuleListTable.tsx:36-56), and the list shows no owner, so it is unclear whether these are the viewer's own credentials or a tenant-wide list.
 - **Verified evidence:** webauthn/page.tsx:7-20 renders ModuleListPage read-only (ModuleListTable.tsx:57-90 no actions). Endpoint /api/v1/identity/webauthn/credentials (_data.ts:79) is unverifiable (identity-service absent); the mapper has no owner field (userId/userEmail not in key lists), so whether rows are the viewer's or tenant-wide is not shown. No other webauthn route exists (tenant-admin has no webauthn dir). Register/rename/remove needs browser WebAuthn ceremony (navigator.credentials) and endpoints not visible.
 - **Files to change:** `apps/web/src/app/(app)/identity/webauthn/page.tsx`, `apps/web/src/app/(app)/identity/webauthn/PasskeyManager.tsx (new)`, `apps/web/src/app/(app)/identity/_data.ts`
@@ -501,7 +503,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-WEBAUTHN-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** No last-used date or authenticator type: only id, name-like label, status and one date survive the mapper (_data.ts:33-70).
 - **Verified evidence:** _data.ts:33-70 mapRows retains only id/label/sublabel/status/meta; last-used, authenticator type/transports/createdAt (separately) are dropped and only one date (updatedAt else createdAt, lines 65-69) survives, unlabelled and raw. The wire shape of credentials is cannot-verify (identity-service absent). Theme DATEFMT partly right.
 - **Files to change:** `apps/web/src/app/(app)/identity/webauthn/page.tsx`, `apps/web/src/app/(app)/identity/_data.ts`, `apps/web/src/lib/formatters.ts`
@@ -517,7 +519,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-WEBAUTHN-04  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Detail" repeats "Status" whenever there is no description (sublabel falls back to status, _data.ts:55-64) and Meta prints the raw ISO createdAt/updatedAt string (_data.ts:65-69), e.g. 2026-09-28T09:14:22Z.
 - **Verified evidence:** _data.ts:55-64 sublabel = description ?? status ?? state ?? ... so when no description exists Detail equals Status (ModuleListTable.tsx:83-84 prints both). Meta (_data.ts:65-69) = code ?? currency ?? updatedAt ?? createdAt and is rendered raw at ModuleListTable.tsx:85, so an ISO string like 2026-09-28T09:14:22Z is shown untouched. Note updatedAt is preferred over createdAt and only one date is shown, unlabelled. No date formatting anywhere in the pipeline.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/identity/_data.ts`, `apps/web/src/lib/formatters.ts`
@@ -533,7 +535,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-WEBAUTHN-05  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** On failure the page shows the badge "Couldn't load — showing nothing" and then the EmptyState "No records" (ModuleListTable.tsx:27-33): no retry, and an empty result and an error look alike.
 - **Verified evidence:** ModuleListPage.tsx:28 maps source==='error' to ModuleListTable source 'error'; ModuleListTable.tsx:50-56 uses useSeededResource; with no cache it yields provenance 'error-no-data', DataSourceBadge.tsx:71-72 prints "Couldn't load — showing nothing" (no retry), and ModuleListTable.tsx:65-66 then shows EmptyState "No records / Nothing to show yet for this module." because data is []. Empty ok-result and error differ only by the amber badge. Observation's lines 27-33 are actually 64-66. webauthn inherits it via _data.ts fetchJson default [] fallback. RefreshErrorState exists (ds/RefreshErrorState.tsx) and uses router.refresh().
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -547,7 +549,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-WEBAUTHN-06  ·  LOW  ·  partly  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle names the internal service ("from identity-service", page.tsx:15) and titles use "Identity — X" while the breadcrumb is a bare back link built with <a href> (full page reload, page.tsx:12).
 - **Verified evidence:** Breadcrumb is a plain <a href="/identity"> (webauthn/page.tsx:12) and title is "Identity — WebAuthn" (line 15): true. But the subtitle is "WebAuthn credentials." (line 16); it does NOT name identity-service (only sessions/users do; the hub subtitle identity/page.tsx:7 does).
 - **Files to change:** `apps/web/src/app/(app)/identity/webauthn/page.tsx`
@@ -565,7 +567,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-API-KEYS-03  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** ID mapping tries `row.key` before name (_data.ts:35-43); if /api/v1/admin/api-keys returns a secret under `key` without `id`, its first 8 characters are printed in the ID column and cached offline by useSeededResource (ModuleListTable.tsx:21-26). Payload shape undeterminable (service absent).
 - **Service:** `identity-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/api-keys']`
 - **Question:** GET /v1/admin/api-keys must never return secret key material (only id, name, prefix, scopes, createdAt, lastUsedAt, status) and must include a stable id.

@@ -14,7 +14,7 @@ Counts: ACTION 4, REFUTED 1
 
 ### GAP-ESTABLISHMENT-HOME-02  ·  LOW  ·  partly  ·  theme DESIGN-SYSTEM (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx and not-found.tsx use Tailwind classes (bg-gray-200, animate-pulse) instead of the ds Skeleton/tokens, so the skeleton ignores dark mode; not-found.tsx has no back link. not-found is unreachable from this page (it only redirects) and only fires for unknown children of /establishment.
 - **Verified evidence:** establishment/loading.tsx:3-10 uses Tailwind bg-gray-200/bg-gray-100 animate-pulse without dark: variants (confirmed); not-found.tsx renders only ds EmptyState with no back link (confirmed, 10 lines). Also estab/loading.tsx uses bg-slate-* the same way. Reachability: establishment/page.tsx redirects, so its loading/not-found only appear for unknown children such as /establishment/foo (confirmed by page.tsx:4). 'Dead link' theme is wrong; this is design-system drift on unreachable-ish files.
 - **Files to change:** `apps/web/src/app/(app)/establishment/loading.tsx`, `apps/web/src/app/(app)/establishment/not-found.tsx`, `apps/web/src/app/(app)/estab/loading.tsx`
@@ -30,7 +30,7 @@ Counts: ACTION 4, REFUTED 1
 
 ### GAP-ESTABLISHMENT-HOME-03  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** A permanent alias is implemented as a runtime redirect() (page.tsx:4) — no permanent flag, so search/bookmarks keep the alias and every visit costs a round trip.
 - **Verified evidence:** establishment/page.tsx:4 uses redirect('/estab') which issues a 307 temporary redirect; permanent alias should use permanentRedirect from next/navigation or a permanent next.config redirect. No next.config file exists in the apps/web snapshot, so config-level alternative is unverified.
 - **Files to change:** `apps/web/src/app/(app)/establishment/page.tsx`, `apps/web/src/app/(app)/establishment/files/page.tsx`
@@ -51,7 +51,7 @@ Counts: ACTION 4, REFUTED 1
 
 ### GAP-ESTABLISHMENT-FILES-01  ·  MEDIUM  ·  partly  ·  theme NAVUX (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** Alias hides a naming mismatch: user-facing "Files" lives at /estab/list while /estab/files/[id] and /estab/files/new are the detail and create routes (estab/files/{[id],new}); breadcrumbs derived from the path would offer a dead /estab/files crumb (navRouteManifest.ts header comment).
 - **Verified evidence:** Naming mismatch is real: establishment/files/page.tsx:4 redirects to /estab/list while detail/create live at estab/files/[id] and estab/files/new (no estab/files/page.tsx). But the 'dead crumb' claim is refuted: navRouteManifest.ts header lists /estab/files as a grouping with no index page and LINKABLE_INTERMEDIATE_PATHS (only /estab, /estab/library, /estab/quarters for estab) excludes it, so AutoBreadcrumb renders it as plain text, not a link. Remaining issue: /estab/files as a URL is not reachable by design.
 - **Files to change:** `apps/web/src/app/(app)/estab/files/page.tsx (new, optional)`
@@ -65,7 +65,7 @@ Counts: ACTION 4, REFUTED 1
 
 ### GAP-ESTABLISHMENT-FILES-02  ·  LOW  ·  partly  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** Loading skeleton (Tailwind classes, loading.tsx) flashes before the redirect and does not resemble the file list.
 - **Verified evidence:** establishment/files/page.tsx is a synchronous server redirect('/estab/list'); it inherits establishment/loading.tsx (Tailwind gray animate-pulse blocks: header, 4 tiles, big block). On soft navigation the loading boundary can flash before the redirect; on a cold request the redirect happens before any HTML. Skeleton does not resemble a file list, and neither ds Skeleton nor dark variants are used. Impact is small.
 - **Files to change:** `apps/web/src/app/(app)/establishment/loading.tsx`, `next.config.js (redirects, if present in the deployed repo; not found in apps/web snapshot)`
