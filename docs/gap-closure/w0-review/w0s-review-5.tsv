@@ -1,0 +1,50 @@
+GAP-AI-COPILOT-04	CONFIRMED	loader returns meta.total; Turns card uses it; 'Showing the latest 50 turns of N' note at cap (copilot/page.tsx:19,61)
+GAP-CHANGE-HOME-02	CONFIRMED	NewChangeButton uses ds Modal (:65) with focus handling, overlay close guarded by busy
+GAP-WORKS-CONTRACTORS-DETAIL-05	CONFIRMED	starDisplay uses Math.floor (page.tsx:99); Rate card wrapped in canRate (:331); page test exists
+GAP-DASHBOARD-HOME-2-04	CONFIRMED	roles.length===0 -> sessionUnreadable branch with sign-in-again link (dashboard/page.tsx:18,67)
+GAP-LEGAL-OPINIONS-DETAIL-01	CONFIRMED	RaiseEOfficeNote uses EmployeePicker for both officers; initiatedBy defaults to self employee (:162); estab linkage/routes.ts:36-47 validates operator eligibility only if tenant has operators; server does not force initiatedBy==session user (actorId audited separately) - note only
+GAP-CRM-DEALS-03	CONFIRMED	stats moved into DealsTable on same seeded rows, '—' when errored, badge above StatGrid (DealsTable.tsx:108-164)
+GAP-INSPECTION-HOME-03	CONFIRMED	description now 'Plans, assignments, inspections and corrective actions.' (inspection/page.tsx:46)
+GAP-AI-CHAT-DETAIL-05	CONFIRMED	conversationSource==='error' -> RefreshErrorState (:51); transcript error -> '—' Messages/Tokens (:105,112)
+GAP-CITIZEN-PAYMENTS-06	PARTLY	Print receipt button added (PaymentPanel.tsx:150) but Application ID is still a hand-typed UUID input (:112-113, placeholder 00000000-...); no tracking-number resolution so acceptance 'tracking number resolves to application' unmet
+GAP-CDP-PROFILES-01	CONFIRMED	labelOf masks email/phone via maskEmail/maskPhone (profiles/page.tsx:36-39); CSV exports masked label; fallback typed short ref
+GAP-REVENUE-REFUNDS-DETAIL-DECIDE-03	CONFIRMED	decide/page.tsx fetches assessee+receipts via Promise.all (:149), shows name/receiptNo, '—' on failure; form dialog uses them
+GAP-LEGAL-OPINIONS-DETAIL-02	CONFIRMED	source==='error' && status!==404 -> RefreshErrorState (opinions/[id]/page.tsx:20); not-found only otherwise
+GAP-VISITOR-GUARD-03	CONFIRMED	phone masked server-side in visit-request/repo.ts:63 (maskPhone) and rendered via VisitorPhone/Masked (GuardConsole.tsx:346); visitorEmail still passed to client but server-side list masking covers phone; no role-gated reveal action built (not an acceptance point)
+GAP-APPROVALS-HOME-02	CONFIRMED	buildApprovalLink pure fn with closed route table; finance_bill -> /finance/expenditure/bills/x; unit test checks every path is a real route (approvalLink.test.ts)
+GAP-TENANT-ADMIN-ACTIVATION-04	CONFIRMED	ActivationView has bar Chart (:112) and DataTable (:118)
+GAP-ESTAB-QUARTERS-ALLOTMENTS-04	CONFIRMED	single RefreshErrorState on error with backHref; no DataSourceBadge left (allotments/page.tsx:22,37)
+GAP-PROCUREMENT-GRN-01	CONFIRMED	shared statusLabels.ts used by list and detail; isAwaitingInspection counts draft/under_inspection/...; card renamed 'Awaiting inspection'; StatusPill tone handled
+GAP-LEGAL-OPINIONS-NEW-01	CONFIRMED	SeekOpinionForm posts to /legal/opinions with question field, redirects to /legal/opinions/{id}; legal-service POST /v1/legal/opinions zod-parsed, role-gated, server nextOpinionNo, audit via outbox
+GAP-ESTAB-QUARTERS-ALLOTMENTS-01	CONFIRMED	queries.ts enriches quarterNo from estabQuarters map; table shows quarterNo, filterable
+GAP-DOMAINS-NEW-02	CONFIRMED	domains/schema.ts zod: GOV_HOST regex, type-vs-suffix superRefine, 'Other' removed; page uses safeParse (new/page.tsx:54). Note: client-side only - no server-side /api/v1/domains route in repo to share schema
+GAP-PROCUREMENT-ORDERS-01	CONFIRMED	OrdersTable computes stats from seeded rows, null on error-no-data, RefreshErrorState instead of EmptyState (:55,126-152)
+GAP-STOCK-DASHBOARD-02	CONFIRMED	errored -> '—' stat values, RefreshErrorState; mapStockDashboard returns null on missing fields (loaders.ts:5183-5202)
+GAP-DOCS-HOME-02	CONFIRMED	DocsChapterGrid client filter over title/description, used by docs/page.tsx:26
+GAP-CONTACT-HOME-03	PARTLY	security.txt route + 2-day ack SLA + private-report copy exist, but no disclosure-policy section (scope, safe harbour, CERT-In) in contact/page.tsx; also middleware.ts:11 PUBLIC list lacks /.well-known so anonymous GET /.well-known/security.txt gets 302 to login (acceptance 200 text/plain not met unless proxy fronts it)
+GAP-HELPDESK-TICKETS-05	CONFIRMED	HelpTip on Breach Risk header (TicketsTable.tsx:101), 'No prediction' placeholder (:135)
+GAP-RECOMMENDATIONS-NBA-02	CONFIRMED	dedicated NbaTable with zod-typed mapper and RefreshErrorState; no Accept/Dismiss or action column because predictive endpoint has none (documented in NbaTable.tsx:10); Subject column still subjectId
+GAP-CDP-EVENTS-02	CONFIRMED	CdpListTable on DataTable sortable/filterable with offset paging; columns Event/Category/Status/Updated
+GAP-CRM-PRODUCTS-04	PARTLY	stacked-card media query at <=640px added (ProductCatalogueEditor.tsx:276-282) but inputs keep minHeight:36 (:49), fix step 3 (>=44px touch height) not done
+GAP-WORKS-HOME-04	CONFIRMED	loading.tsx has five stat placeholders plus 8-tile skeleton grid
+GAP-CITIZEN-DOCUMENTS-02	CONFIRMED	DocumentPanel: configured probe disables button, real DigiLocker authorize/redirect (:59-80), consent attestation checkbox; citizen-service commands.ts:105-115 requires live persisted consent. Consent ref not shown in result panel (minor)
+GAP-DESIGNER-HOME-04	CONFIRMED	attention counts rejected or draft with latestTestStatus fail; loader maps it (designerLoader.ts:57) and citizen-service catalogue/queries.ts:55 supplies it
+GAP-CRM-ASSIGNMENT-DIRECTORY-01	CONFIRMED	OWNERSHIP_RESOURCE_SINGULAR map in lib/crm/assignment.ts:234 used by OwnershipDirectoryEditor.tsx:185; no replace(/s$/) remains
+GAP-PROCUREMENT-EMPANELMENT-01	CONFIRMED	EmpanelmentTable: errored -> '—' stats and RefreshErrorState, not EmptyState (:50-111)
+GAP-KNOWLEDGE-REPOSITORY-01	CONFIRMED	Circulars/Notifications counted via categorySegment, Published=approved (repository/page.tsx:32-34)
+GAP-ANALYTICS-ML-INSIGHTS-SUBSCRIPTIONS-03	CONFIRMED	AccuracyTrendChart: 0..1 scaling (heightPct), higherIsBetter/thresholds props, DS tokens, sr-only list, aria-hidden bars
+GAP-TENANT-ADMIN-SECURITY-01	CONFIRMED	StatCard href prop; tiles link to sessions/audit/mfa (security/page.tsx:27-29)
+GAP-TELEPHONY-LIST-05	CONFIRMED	list/page.tsx redirects to calls; hub legacy tile removed
+GAP-LEARNING-CALENDAR-01	CONFIRMED	getMyProfile drives employeeId; override only for privileged roles; name in header; 'No employee record linked' state (calendar/page.tsx:46-55,88)
+GAP-CRM-PRODUCTS-06	CONFIRMED	duplicateCode blocks save (ProductCatalogueEditor.tsx:157-166,219); currency select per row (:361-369)
+GAP-PROJECTS-FUND-RELEASES-02	CONFIRMED	dedicated validated PFMS input + separate reason; blockConfirm=!pfmsValid; body {pfmsRef, reason}; consumer.ts audit() persists reason. PFMS format only client-side regex (server pfmsRef optional string, validators.ts:42) - format unconfirmed
+GAP-TENANT-ADMIN-MFA-01	CONFIRMED	rowHref to /tenant-admin/users/{id} (MfaTable.tsx:75); subtitle reworded (page.tsx:39); no reset action added (optional)
+GAP-CONTACT-HOME-01	PARTLY	ContactForm with consent and server reference exists, but phone/address render only if NEXT_PUBLIC_CONTACT_PHONE/ADDRESS env set (contactDetails.ts:23-31), and middleware.ts:11 PUBLIC list lacks /contact and /api/contact so anonymous government visitors would be redirected to login (unless a proxy fronts them)
+GAP-THEMES-TOKENS-03	PARTLY	ThemeContrastPanel on tokens page, but publish dialog (ThemeActions.tsx:66-72) still has text-only confirmDescription: no changed-token old/new list, no AA fail warning/block; two acceptance points unmet
+GAP-REVENUE-ANALYTICS-05	CONFIRMED	formatRevenuePeriod(period, granularity) used for Period column (AnalyticsConsole.tsx:64)
+GAP-THEMES-TEMPLATES-03	CONFIRMED	ModuleListTable error-no-data -> RefreshErrorState, EmptyState only for live (:107-136)
+GAP-MEETING-MEETINGS-MEETINGID-07	PARTLY	VC link now target=_blank rel=noopener aria-label (MeetingConsole.tsx:348-350) but no in-page anchor nav or tabs for narrow screens (fix step 2 / acceptance 2 missing)
+GAP-PROJECTS-FUND-RELEASES-01	CONFIRMED	canDisburse via PROJECT_FUND_DISBURSE_ROLES gates button (page.tsx:19); dialog shows release no, project, formatted amount; server route requireRole(SCHEME_ROLES) + SoD 403 (commands.ts:51)
+GAP-PROCUREMENT-TENDERS-DETAIL-DOCUMENTS-02	CONFIRMED	server wrapper resolves tenderNo/title/status, ErrorState on failure, published banner (TenderDocumentsClient.tsx:212)
+GAP-CRM-PIPELINES-01	CONFIRMED	crm-service pipelines/routes.ts:64,89 returns 409 STAGE_IN_USE / PIPELINE_IN_USE with count, consumer race guard; UI delete text warns and surfaces server message (en.json:13512, PipelineEditor.tsx:250)
+GAP-OFFLINE-HOME-04	CONFIRMED	offline page uses getTranslations('offlinePage'); en and hi namespaces exist

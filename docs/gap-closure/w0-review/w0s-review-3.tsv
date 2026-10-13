@@ -1,0 +1,50 @@
+GAP-IDENTITY-API-KEYS-06	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-HELP-HOME-02	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-DOMAINS-NEW-04	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-CITIZEN-SERVICES-SERVICEKEY-APPLY-07	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-HELPDESK-SLAS-03	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-DEVELOPER-PORTAL-HOME-06	PARTLY	Hex/#fff removed, but emoji icons remain (developer-portal/page.tsx:142-143 StatCard icon=emoji); step 2 lucide swap not done, no dark-mode snapshot
+GAP-DESIGNER-DETAIL-B8-02	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-LEARNING-COURSES-DETAIL-02	PARTLY	Self-scoping + 403 NO_EMPLOYEE_LINK in learning/routes.ts:149-150,191-192 and IDOR tests exist, but no audit event for HR enrolling on behalf (no audit/emit anywhere in modules/learning); acceptance point missing
+GAP-PLUGINS-INSTALLED-05	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-WORKS-EXECUTION-ISSUES-03	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-REPORTS-KPI-02	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-WORKS-CONTRACTORS-01	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-LEGAL-HEARINGS-04	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-TENANT-ADMIN-BREAKGLASS-DETAIL-02	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-POLICY-ABAC-04	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-POLICY-BINDINGS-01	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-ANALYTICS-QUERIES-06	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-NOTIFICATIONS-COMPOSE-03	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-PROCUREMENT-GRN-DETAIL-03	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-MUNICIPAL-HOME-02	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-PROJECTS-BENEFICIARIES-04	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-JOURNEYS-BUILDER-02	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-REPORTS-LIST-NEW-03	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-CRM-DEALS-02	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-PROCUREMENT-ORDERS-DETAIL-03	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-WORKFLOW-INSTANCES-DETAIL-07	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-CDP-PROFILES-DETAIL-01	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-PROCUREMENT-TENDERS-NEW-05	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-HELPDESK-CATALOGUE-MY-REQUESTS-03	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-CRM-FORECAST-05	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-GRANTS-INSTALLMENTS-02	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-AI-HOME-02	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-PROCUREMENT-TENDERS-DETAIL-05	PARTLY	EMD shown (tenders/[id]/page.tsx:152-155) and NIT-missing banner (:126), but Publish is not disabled/confirm-gated: TenderLifecycleActions has no hasNit prop; acceptance 'Publish disabled with Attach NIT first' unmet
+GAP-DEVELOPER-PORTAL-HOME-03	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-INSTALL-SILOS-03	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-ESTAB-GUESTHOUSE-01	PARTLY	Check-in/check-out with ConfirmDialog added (BookingsTable.tsx:44-113) but no approve/reject, no role/approver gating, subtitle still says 'Room booking and approvals.' (guesthouse/page.tsx:32; fix step 5 unmet), checkout hard-codes chargesMinor:0 (BookingsTable.tsx:~50)
+GAP-IDENTITY-WEBAUTHN-01	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-KNOWLEDGE-LIST-03	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-INSTALL-STEPS-04	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-PROCUREMENT-TENDERS-02	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-APPROVALS-HOME-01	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-CRM-CONTACTS-DETAIL-01	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-TENANT-QUOTAS-06	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-ESTAB-APPROVAL-MATRIX-05	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-CRM-PIPELINE-01	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-HELPDESK-INTERNAL-NEW-04	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-TENANT-ADMIN-INSTALL-03	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-AUTH-LOGIN-01	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-IDENTITY-BREAKGLASS-06	CONFIRMED	fix steps/acceptance found in code on origin/main
+GAP-CRM-VOICE-OF-CUSTOMER-03	CONFIRMED	fix steps/acceptance found in code on origin/main

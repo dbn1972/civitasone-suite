@@ -1,0 +1,50 @@
+GAP-REPORTS-LIST-NEW-05	CONFIRMED	reports/list/new/loading.tsx form-shaped skeleton added; banner left as is (optional).
+GAP-CRM-OPPORTUNITIES-NEW-02	CONFIRMED	OpportunityForm.tsx:331 EntityPicker for Account, accountId in payload :202, ?accountId= prefill via NewOpportunityClient.tsx:21; account left optional (decision).
+GAP-LIBRARY-HOME-04	CONFIRMED	library/loading.tsx now list-row skeleton; page.tsx severity colours all var(--*) tokens (:28-40).
+GAP-TENANT-QUOTAS-02	PARTLY	tenant/_data.ts:126-130 emits "Near limit"/"Exceeded"/"OK" and StatusPill humanizes, but ds/StatusPill.tsx STATUS_MAP has no near limit/exceeded/ok keys so pill falls to default "info" blue (:508), not amber; no icon cue and no row highlight in ModuleListTable.tsx:66.
+GAP-WORKS-EXECUTION-ISSUES-NEW-05	PARTLY	Backend accepts attachmentKey (execution/validators.ts:37) and audits (consumer.ts:44) but route (routes.ts:168-172) does not check workId exists (202 then blind insert consumer.ts:28; no 404/422), and issues/new/page.tsx has no attachment field.
+GAP-TENANT-QUOTAS-01	PARTLY	mapQuotaRows (tenant/_data.ts:111-139) maps used/limit/percent with zod, shows "40 / 100" + "40%" and "—" when unknown; but no progress bar (fix step 2) and unit is dropped (schema :97-107 has no unit, so "40 / 100 GB" acceptance not met).
+GAP-PLATFORM-ADMIN-AUDIT-LOG-03	CONFIRMED	page.tsx:57-58 todayIST()/istDatePart; AuditLogTable.tsx:195 formatIndianDateTime; helpers + tests in formatters.
+GAP-PROJECTS-DASHBOARD-05	CONFIRMED	page.tsx:56,83 back + backHref="/projects"; dashboard/error.tsx RouteError backHref.
+GAP-TENANT-ADMIN-USAGE-03	CONFIRMED	usage/page.tsx:22 percent null for limit 0, excluded from tiles; UsageDisplay.tsx:101-124 "Unlimited" and no bar.
+GAP-TENANT-ADMIN-SESSIONS-DETAIL-05	PARTLY	sessions/[id]/page.tsx:93 IP masked via maskIp (no clear IP shown), but no reveal and no audited reveal/view event (acceptance "reveal audited" unmet; deliberate per comment :14); full userAgent still printed :106.
+GAP-TENANT-ADMIN-PLATFORM-CONFIG-05	CONFIRMED	emoji aria-hidden (:99,:137), Yes/No via StatusPill (:67); inline styles remain but acceptance met.
+GAP-CRM-QUOTATIONS-04	CONFIRMED	QuotationBuilder.tsx:651-666 buttons gated by selected.status; Accept via ConfirmDialog :719-734.
+GAP-DOCS-HOME-01	CONFIRMED	chapters.ts has service-designer, visitor, meeting, court, inspection before glossary; generateStaticParams in [slug]/page.tsx:12; docs.test.tsx covers.
+GAP-PLUGINS-REGISTRY-01	CONFIRMED	registry subtitle and plugins/page.tsx:25 note both "Catalogue of registered plugin definitions and versions".
+GAP-DASHBOARD-HOME-02	CONFIRMED	(marketing)/page.tsx:63-70 competitor price/training rows and "no contest" removed; indicative-capability disclaimer at :261. Residual unsourced SAP/Oracle capability claims remain but footnoted.
+GAP-CITIZEN-PORTAL-02	CONFIRMED	citizen/portal/page.tsx:57 RefreshErrorState with toHumanError, backHref /citizen.
+GAP-HELPDESK-CATALOGUE-05	CONFIRMED	catalogue/page.tsx:50 turnaround via formatMinutesDuration from max OLA target, column :101, exportable.
+GAP-CRM-PRODUCTS-02	CONFIRMED	ProductCatalogueEditor.tsx GST slab select, custom capped at 100% (:141), hsnSac field with 4-8 digit validation (:175) in payload (:188).
+GAP-DEVELOPER-PORTAL-HOME-05	CONFIRMED	developer-portal/loading.tsx uses div.wrap, grid g-4 of SkeletonCard, token colours.
+GAP-CRM-HOME-05	CONFIRMED	crm/not-found.tsx action Link to /crm.
+GAP-WORKS-CONTRACTORS-NEW-02	CONFIRMED	new/layout.tsx:17 requireAnyRole(CONTRACTOR_WRITE_ROLES); shared lib/works/roles.ts; page.tsx:98-100 subtitle + back.
+GAP-CRM-PIPELINE-02	CONFIRMED	KanbanBoard.tsx:103,137-156 pendingMove + ConfirmDialog (:414-454) before PATCH; probability sent only if accepted (:156,:186); mandatory-field/409 handling :200-216.
+GAP-PROCUREMENT-VENDORS-01	PARTLY	Subtitle fixed, Segmented status filter added, PO/RFQ pickers exclude/disable blacklisted, RFQ route 422 (rfq/routes.ts:36). But POST /v1/procurement/pos (po/routes.ts:38-42 -> commands.ts:9) returns 202 with no sync blacklist check; rejection only async in po/consumer.ts:178 (event+audit, no PO), so acceptance "POST PO with blacklisted vendorId returns 4xx" unmet; CreatePOForm.tsx:44 comment wrongly claims 422. not_empanelled not warned/disabled.
+GAP-CRM-DATA-QUALITY-05	CONFIRMED	data-quality/page.tsx:25 Matching rules link only when canManageRules (CRM_ADMIN_ROLES).
+GAP-CRM-HEALTH-ACCOUNTID-04	CONFIRMED	FollowUpModal.tsx:236 default subject uses accountName ?? thisAccount, no id.
+GAP-LEARNING-ASSESSMENTS-02	CONFIRMED	assessment/routes.ts:66-77 non-HR gets only published via visibleAssessmentsForRoles (domain.ts:137); page.tsx:20 also filters.
+GAP-APPROVALS-HOME-03	CONFIRMED	approvals/page.tsx:26,65-69 tiles null ("—") on failure, RefreshErrorState :74.
+GAP-GRANTS-SCHEMES-DETAIL-02	CONFIRMED	CloseSchemeButton.tsx ActionButton requireReason min 10, PATCH with {reason}, router.refresh; backend scheme/consumer.ts:106 audits reason.
+GAP-CITIZEN-GRIEVANCES-NEW-05	CONFIRMED	new/page.tsx uses t() for categories (:37-41) and validation (:56-68); en.json applicantNameLabel has no asterisk, required indicator via component.
+GAP-NOTIFICATIONS-COMPOSE-04	CONFIRMED	compose/page.tsx:100 recipientError per effective channel, canSend requires !recipientErr (:207), aria-invalid :315.
+GAP-TENANT-ADMIN-OPERATIONS-03	CONFIRMED	operations/page.tsx:45,90,116 notOnline = totalProcesses - onlineProcesses used for card, incident text and score.
+GAP-GRANTS-DISBURSEMENTS-DETAIL-08	CONFIRMED	detail page uses minor units with formatMoney (:42,:65), duplicate details fields removed, granteeName ?? null; ReleasesTable.tsx:76 formatMoney consistent.
+GAP-ESTAB-COMPLIANCE-05	CONFIRMED	ComplianceTable.tsx:20-25 segments All/Open/Overdue/Complied; counts only in heading (:59), not in segment labels (minor).
+GAP-DESIGNER-DETAIL-B7-01	WRONG	Both Validity & renewal editors still rendered and editable on B7: b7/page.tsx:172-175 RenewalPolicyBuilder still persists via phase3.patch (only a warning note added :150-171, not read-only/derived); onDesignPersisted (:98-109) swallows errors and OutputIssuanceBuilder.tsx:80 does not await so offline state never fires; acceptance (one editor, one PATCH path, failure -> offline) all unmet.
+GAP-DOMAINS-NEW-01	CONFIRMED	domains/page.tsx index added, new/page.tsx:78 pushes /domains and back="/domains"; no dead targets (page is honest placeholder, backend absent).
+GAP-TENANT-ADMIN-USERS-DETAIL-01	CONFIRMED	UserSecurityActions.tsx ConfirmDialog danger+requireReason (:114-171), sends {reason} JSON (:66); identity users/routes.ts:120-145 accepts reasonBody.
+GAP-ESTAB-MIGRATION-02	CONFIRMED	MigrationPanel.tsx no res.text() remaining; uses toHumanError (:123,:200).
+GAP-PROCUREMENT-TENDERS-DETAIL-DOCUMENTS-05	CONFIRMED	TenderDocumentsClient.tsx:14-30 DOC_TYPE_LABELS used for option and chip (:300), formatIndianDate (:306).
+GAP-LOYALTY-ACCRUALS-03	CONFIRMED	accruals page renders MembersTable with formatPoints (en-IN grouping, string/bigint safe).
+GAP-ESTAB-HOME-04	CONFIRMED	estab/page.tsx:62-74 roles on tiles, ModuleHub.tsx:65 filters by hasAnyRole; approval-matrix/handover pages requireAnyRole.
+GAP-INSPECTION-ASSIGNMENTS-03	CONFIRMED	AssignmentActions.tsx:62 todayIST() and min={todayIST()} :163.
+GAP-LOCATIONS-GEOFENCES-03	CONFIRMED	ModuleListTable.tsx:113-120 RefreshErrorState on error-no-data; geofences/page.tsx uses LoadErrorState.
+GAP-CITIZEN-PAYMENTS-03	CONFIRMED	citizen-service fee-payment/routes.ts:43-45 OFFICER_ROLES gate, consumer.ts:222 audits payment_offline_record; web payments/page.tsx:16 requireAnyRole(CITIZEN_OFFICER_ROLES).
+GAP-NOTIFICATIONS-DELIVERIES-DETAIL-03	CONFIRMED	DeliveryDetail.tsx friendlyFailure :55, raw detail in admin-only <details> :217, template id linked :212 (shows UUID not name, minor).
+GAP-TELEPHONY-CALLS-01	CONFIRMED	calls/page.tsx:131-170 destructures error/loading/refresh, showingCache requires cachedAt, ErrorState with retry when no data.
+GAP-AUTH-LOGIN-04	CONFIRMED	auth/login/page.tsx:24-28,44 LoginFallback with role=status "Loading sign-in…".
+GAP-PROCUREMENT-GRN-DETAIL-01	CONFIRMED	InspectGrnForm.tsx Accept/Reject via ActionButton with confirm dialogs (:80-108), Reject requireReason min 3, SOD_VIOLATION surfaced via thrown Error (:44-50).
+GAP-AUDIT-VIGILANCE-02	CONFIRMED	vigilance/page.tsx masks officer/charges server-side (:36-40) for all, audited reveal via POST /v1/audit/vigilance/:id/reveal (routes.ts:58, vigilance_reveal audit in queries.ts:103), exportable={canViewPII}; minor: web PII_ROLES (:17) lacks vigilance_admin which backend allows (fails closed).
+GAP-GRANTS-SCHEMES-DETAIL-APPLY-03	CONFIRMED	apply/page.tsx server component loads scheme, window check blocks closed/draft, ApplyForm.tsx:81-85 min/max checks, maxLength PURPOSE_MAX :202.
+GAP-WORKS-CONTRACTORS-DETAIL-02	CONFIRMED	contractors/[id]/page.tsx masks PAN/phone/email via server-rendered Masked, PAN audited reveal (works-service contractor/routes.ts:65 role-gated + reason audit), identifiers shown once, edit-toggle payload nulls PII for non-reveal roles (:418-430); email/phone have no reveal path (by design).
