@@ -414,6 +414,9 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
   // (actor/tenant/time from the token). 202: the consumer writes the audit row.
   app.post("/v1/admin/table-exports/audit", async (req, reply) => {
     const ctx = resolveContext(req);
+    // Staff only: a caller must hold at least one non-citizen role. A citizen
+    // has no staff table to export, so a citizen-only token is refused (403).
+    requireRole(ctx, ctx.roles.filter((r) => r !== "citizen"));
     const parsed = z.object({
       resource: z.string().regex(/^[a-z0-9][a-z0-9/_-]{0,99}$/),
       rowCount: z.number().int().min(0).max(100000),

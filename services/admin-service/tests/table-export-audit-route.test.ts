@@ -41,6 +41,12 @@ describe("POST /v1/admin/table-exports/audit", () => {
     }
   });
 
+  it("403 for a citizen-only token; nothing is published", async () => {
+    expect((await post(["citizen"], { resource: "a/b", rowCount: 1 })).statusCode).toBe(403);
+    expect((await post([], { resource: "a/b", rowCount: 1 })).statusCode).toBe(403);
+    expect(exportCalls()).toHaveLength(0);
+  });
+
   it("401 without auth; nothing is published", async () => {
     expect((await post(null, { resource: "a/b", rowCount: 1 })).statusCode).toBe(401);
     expect(exportCalls()).toHaveLength(0);
