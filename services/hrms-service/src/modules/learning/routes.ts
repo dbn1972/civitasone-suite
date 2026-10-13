@@ -214,7 +214,7 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
       const own = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
       enrolledOnBehalf = own?.id !== effectiveEmployeeId;
     }
-    await publishF3Write(ctx, "learning_routes__5", enrollmentId, { body: { ...((req.body as Record<string, unknown>) ?? {}), employeeId: effectiveEmployeeId, enrolledOnBehalf }, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    await publishF3Write(ctx, "learning_routes__5", enrollmentId, { body: { ...((req.body as Record<string, unknown>) ?? {}), employeeId: effectiveEmployeeId, enrolledOnBehalf }, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     // Deterministic post-insert values — match the consumer's insertEnrollment literals.
     return reply.code(201).send({ id: enrollmentId, status: "enrolled", progressPct: 0 });
   });

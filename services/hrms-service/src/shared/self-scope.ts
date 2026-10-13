@@ -29,18 +29,6 @@ const HR_ROLES = SELF_SCOPE_HR_ROLES;
  */
 export async function resolveOwnEmployeeIdIfBareEmployee(
   ctx: RequestContext,
-  req: FastifyRequest,
-  requested: string,
-  hrRoles?: readonly string[],
-): Promise<string | null>;
-export async function resolveOwnEmployeeIdIfBareEmployee(
-  ctx: RequestContext,
-  req: FastifyRequest,
-  requested: string | undefined,
-  hrRoles?: readonly string[],
-): Promise<string | undefined | null>;
-export async function resolveOwnEmployeeIdIfBareEmployee(
-  ctx: RequestContext,
   _req: FastifyRequest,
   requested: string | undefined,
   hrRoles: readonly string[] = HR_ROLES,

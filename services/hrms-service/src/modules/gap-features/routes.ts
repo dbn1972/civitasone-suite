@@ -182,7 +182,8 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); requireRole(ctx, ALL_ROLES);
     const q = z.object({ employeeId: z.string().uuid() }).parse(req.query);
     const employeeId = await resolveOwnEmployeeIdIfBareEmployee(ctx, req, q.employeeId);
-    if (employeeId === null) return reply.send({ data: [] });
+    // q.employeeId is a required uuid, so undefined cannot occur; == null also narrows the type.
+    if (employeeId == null) return reply.send({ data: [] });
     const rows = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
       return sql.unsafe(
