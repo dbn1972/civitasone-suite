@@ -476,7 +476,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B5-02  ·  HIGH  ·  partly  ·  theme MONEY
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f; W1 SF-12 re-confirmed on #2003)
 - **First-pass claim:** Money rule: the ₹ input is parsed with Number() then Math.round(rupees*100) into a JS number (not bigint paise) and any invalid or negative entry silently becomes 0, so a typo yields a ₹0 fee that still passes isFeeDesignReadyToAdvance for non-flat models (feeBuilderApi.ts:403-412; CLAUDE.md money rule).
 - **Verified evidence:** Core money defect confirmed. rupeesInputToPaise (feeBuilderApi.ts:403-407) does Number(input), returns 0 for NaN or negative, and returns Math.round(rupees*100) as a JS number. FeeBuilder.tsx:163 assigns it to baseAmountPaise, and persistFeeDesign sends it as `baseAmount` (feeBuilderApi.ts:349). CLAUDE.md rule 11 wants bigint minor units, and float parsing is used. A typo becomes 0 silently, and float rounding is off for inputs with more than 2 decimals (e.g. 1.005 gives 100). Mis-described part: it only applies to the flat model (the only user of the Amount input). isFeeDesignReadyToAdvance (feeBuilderModel.ts:65-71) is never called anywhere in apps/web/src, so the real Next gate is only the HOA check (b5/page.tsx:93,150). A flat model with a 0 amount therefore does advance, and only the 'Configure' step badge (FeeBuilder.tsx:178) stays unticked. Backend validation of baseAmount is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/feeBuilderApi.ts`, `apps/web/src/app/(app)/designer/_components/FeeBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/feeBuilderModel.ts`, `apps/web/src/app/(app)/designer/[id]/b5/page.tsx`
@@ -494,7 +494,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B5-03  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [ ] **Status** (REOPENED W1 SF-12 #2003: parser and waiver reason hold, but office overrides are still absent from versionDiffModel.ts, so a checker's diff does not show an office fee waiver (fix step 3))
 - **First-pass claim:** Office variant 'Fee (₹)' of 0 is allowed ('A free zone is legitimate') with no approval or audit prompt for a fee waiver, though it is a revenue decision (OfficeOverridesBuilder.tsx:93).
 - **Verified evidence:** OfficeOverridesBuilder.tsx:77-94: 'Fee (₹)' is a number input (min 0, step 0.01). onChange stores feeFromMinor = Math.round(Number(value)*100) (float, same weakness as B5-02), and displays feeFromMinor/100. The hint at :93 says 'A free zone is legitimate — enter 0 to charge nothing here.' No confirmation, reason or audit prompt appears. b5/page.tsx:195-199 persists via phase3.patch({officeOverrides}) to updateServiceDefinition. Publish-time review exists at service level (review/page.tsx), but versionDiffModel.ts only compares the top-level feeFromMinor (:31-41), not officeOverrides, so a checker's diff would not show a fee waiver for an office. Whether the backend audits the definition PATCH is cannot-verify (citizen-service absent).
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/OfficeOverridesBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/versionDiffModel.ts`, `apps/web/src/app/(app)/designer/_data/feeBuilderApi.ts`
@@ -831,7 +831,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-ENGINES-02  ·  HIGH  ·  partly  ·  theme VALIDATION
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [ ] **Status** (REOPENED W1 SF-12 #2003: validateEngineConfig/parsePercentToBps exist in engineBindingTypes.ts but are never called; EngineBindingBuilder still uses the silently clamping percentInputToBps (fix steps 2-3))
 - **First-pass claim:** Rebate/penalty percentages and exemption percentages are free numeric inputs feeding a tax computation with no range validation surfaced in the UI (EngineBindingBuilder.tsx:333-451).
 - **Verified evidence:** Inputs are not free: EngineBindingBuilder.tsx:369-374,420-425,442-446 have type=number min=0 max=100 and percentInputToBps (engineBindingTypes.ts:99-103) clamps to 0..10000 bps and coerces invalid to 0. So range is enforced silently, with no message, and days fields (:432,:454,:487) only have min=0 (Number(x)||0, no max, no integer check). No zod schema and no cross-field checks (e.g. rebate window vs penalty start, exemption total > 100). Amounts are handled as bps/integers, not float money.
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/EngineBindingBuilder.tsx`, `apps/web/src/app/_components/ds/designer/engineBindingTypes.ts`
@@ -846,7 +846,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-ENGINES-03  ·  MEDIUM  ·  partly  ·  theme COPY (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f; W1 SF-12 re-confirmed on #2003)
 - **First-pass claim:** Engine key is a raw dotted identifier ('revenue.assessment') in the empty-state copy and selector (EngineBindingBuilder.tsx:268).
 - **Verified evidence:** EngineBindingBuilder.tsx:268 empty-state message contains 'bind revenue.assessment' (raw key); :293 shows `{b.block} · {b.engineKey}` raw; selector (:227-231) keys by engineKey. Registry entries may carry a display name; not checked in the snapshot. Strings are also hard-coded English (no next-intl in this file).
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/EngineBindingBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/engineBindingApi.ts`
@@ -860,7 +860,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-ENGINES-04  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f; W1 SF-12 re-confirmed on #2003)
 - **First-pass claim:** Designer code carries three separate paise formatters (formatMoney in lib/formatters, formatPaise in sandboxTestModel.ts:72, formatPaiseInr in versionDiffModel.ts:22) with different fraction rules (whole rupees drop decimals in the diff view only), so the same fee reads differently on B5, test and review (EngineBindingBuilder/FeeBuilder use formatMoney).
 - **Verified evidence:** Three formatters: lib/formatters.ts:90 formatMoney (always 2dp); sandboxTestModel.ts:72 formatPaise (own toLocaleString, always 2dp, via minorToRupeesOrNull); versionDiffModel.ts:22 formatPaiseInr (amountMinor/100 float, drops decimals when whole rupees - '₹500' vs '₹500.00'). formatPaiseInr is used in the diff and in feeSummaryForPublish (:209) on the publish dialog. EngineBindingBuilder.tsx:547,553 and FeeBuilder.tsx:682,697 use formatMoney. Values are JS numbers, not bigint.
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/sandboxTestModel.ts`, `apps/web/src/app/(app)/designer/_data/versionDiffModel.ts`, `apps/web/src/lib/formatters.ts`
@@ -925,7 +925,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-REVIEW-04  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f; W1 SF-12 re-confirmed on #2003)
 - **First-pass claim:** Publish dialog copy shows the fee but not the HOA, SLA or approval lanes that will go live (feeSummaryForPublish only).
 - **Verified evidence:** review/page.tsx:183-192 ConfirmDialog description = name, version, feeSummaryForPublish (versionDiffModel.ts:205: fee model, from-amount, HOA if present) and 'Citizens will see this service once published'. So HOA is included when set; SLA and approval lanes are not. Approve has no reason field (reject uses requireReason). Maker!=checker is UI-derived (isChecker at :49) - server enforcement cannot be verified here; audit event emission is backend.
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/review/page.tsx`, `apps/web/src/app/(app)/designer/_data/versionDiffModel.ts`
@@ -976,7 +976,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-TEST-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 3c4fb6e5f; W1 SF-12 re-confirmed on #2003)
 - **First-pass claim:** Rail block status is not updated with the failing step, although BlockRail supports 'error' with error count (WizardShell.tsx BlockStatus).
 - **Verified evidence:** test/page.tsx passes wizard.blocks (from blockStatusForDef, never 'error'); steps state is local and never mapped to blocks. WizardShell BlockRail (ds/designer/WizardShell.tsx:13,29,71-90) supports status 'error' with errorCount, but nothing sets it. Failing steps do carry a link to block (TestRunPanel href).
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/test/page.tsx`, `apps/web/src/app/(app)/designer/_data/sandboxTestModel.ts`

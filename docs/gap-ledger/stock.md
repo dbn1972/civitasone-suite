@@ -488,6 +488,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 ### GAP-STOCK-LEDGER-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W1 note:** W1 SF-12 #2003 fixed the float Math.round(Number(x)*100) conversion (now rupeesInputToMinorNumber from lib/money, covered by money.sf12.test.ts). Still open: require a rate for receipts and reject 0 unless confirmed.
 - **First-pass claim:** Rate is optional and defaults to 0 (page.tsx:76-77): a zero-rate receipt is accepted and will distort weighted-average valuation; the ₹→paise conversion uses Math.round(Number(x)*100) on a float.
 - **Verified evidence:** page.tsx:77 rateMinor = Math.round(Number(rate||"0")*100): blank rate becomes 0 and is posted for receipts; float multiplication (e.g. 1.005*100=100.49999999999999). No decimal-string paise helper found under src/lib (only formatMoney/formatRupees).
 - **Files to change:** `apps/web/src/app/(app)/stock/ledger/new/page.tsx`, `apps/web/src/lib/formatters.ts`
