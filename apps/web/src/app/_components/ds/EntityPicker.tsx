@@ -51,6 +51,12 @@ export interface EntityPickerProps {
   debounceMs?: number;
   noResultsText?: string;
   searchingText?: string;
+  /**
+   * Shown (as an alert) when `search` rejects -- a failed fetch must never
+   * read as "No matches", which would tell the user the thing they want does
+   * not exist. Adapters signal failure by throwing; see lib/entityAdapters.
+   */
+  searchErrorText?: string;
   removeOptionAriaLabel?: (label: string) => string;
   /** Accessible name for standalone use (no ancestor Field, no visible label). Ignored when a Field label already provides one. */
   "aria-label"?: string;
@@ -115,6 +121,7 @@ export function EntityPicker({
   debounceMs = 300,
   noResultsText = "No matches",
   searchingText = "Searching…",
+  searchErrorText = "Couldn\u2019t load results. Please try again.",
   removeOptionAriaLabel = (label: string) => `Remove ${label}`,
   "aria-label": ariaLabel,
   id,
@@ -142,6 +149,7 @@ export function EntityPicker({
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [results, setResults] = useState<EntityOption[]>([]);
   const [activeIndex, setActiveIndex] = useState(-1);
 
@@ -194,6 +202,7 @@ export function EntityPicker({
   const runSearch = useCallback(
     (q: string) => {
       abortRef.current?.abort();
+      setFailed(false);
       if (q.trim().length < minQueryLength) {
         setResults([]);
         setLoading(false);
@@ -218,6 +227,7 @@ export function EntityPicker({
           if (controller.signal.aborted || (err instanceof DOMException && err.name === "AbortError")) return;
           setResults([]);
           setLoading(false);
+          setFailed(true);
         });
     },
     [search, minQueryLength],
@@ -310,7 +320,8 @@ export function EntityPicker({
   const displayValue = open ? query : (singleLabel ?? query);
   const activeOption = activeIndex >= 0 ? results[activeIndex] : undefined;
   const activeId = activeOption ? `${auxId}-option-${activeOption.id}` : undefined;
-  const showStatus = open && (loading || (query.trim().length >= minQueryLength && results.length === 0));
+  const showStatus =
+    open && (loading || failed || (query.trim().length >= minQueryLength && results.length === 0));
 
   return (
     <div ref={wrapRef} className={className} style={{ position: "relative", display: "grid", gap: 6, ...style }}>
@@ -378,15 +389,15 @@ export function EntityPicker({
 
       <span
         id={statusId}
-        role="status"
-        aria-live="polite"
+        role={showStatus && failed && !loading ? "alert" : "status"}
+        aria-live={showStatus && failed && !loading ? "assertive" : "polite"}
         style={
           showStatus
-            ? { fontSize: 12, color: "var(--mut, #64748b)" }
+            ? { fontSize: 12, color: failed && !loading ? "var(--bad, #b91c1c)" : "var(--mut, #64748b)" }
             : { position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0,0,0,0)" }
         }
       >
-        {showStatus ? (loading ? searchingText : noResultsText) : ""}
+        {showStatus ? (loading ? searchingText : failed ? searchErrorText : noResultsText) : ""}
       </span>
 
       {open && results.length > 0 && (

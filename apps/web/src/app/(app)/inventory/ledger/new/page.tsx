@@ -17,6 +17,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { ItemPicker } from "@/app/_components/ItemPicker";
+import { DirectoryPicker } from "@/app/_components/DirectoryPicker";
 import { resolveStockItemEntry } from "@/lib/entityAdapters/item";
 import type { PickerEntry } from "../../linkHelpers";
 
@@ -169,8 +170,8 @@ export default function NewStockEntryPage() {
               <input id="se-rate" type="number" min="0" step="0.01" value={rate} onChange={(e) => setRate(e.target.value)} style={inputStyle} />
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l" htmlFor="se-wh">Warehouse ID (optional)</label>
-              <input id="se-wh" value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} placeholder="UUID" style={inputStyle} />
+              <label className="l" htmlFor="se-wh">Warehouse (optional)</label>
+              <DirectoryPicker source="warehouse" id="se-wh" value={warehouseId || null} onChange={(v) => setWarehouseId(v ?? "")} />
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="se-notes">Notes</label>

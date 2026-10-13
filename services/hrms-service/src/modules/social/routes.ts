@@ -515,19 +515,20 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     // fixed alongside it since leaving this twin open would re-expose the
     // exact same data through an adjacent endpoint.
     requireRole(ctx, ALL_ROLES);
-    const today = new Date();
-    const mm = today.getMonth() + 1;
-    const dd = today.getDate();
 
+    // Same opt-in and same IST "today" as the /v1/hrms/social/feed query
+    // (GAP-HR-SOCIAL-FEED-01): an employee's birthday, department and
+    // designation are listed only when e.share_birthday = true (default
+    // false). This twin used to ignore the flag and the server timezone.
     const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT e.id, e.full_name, d.name AS department, ds.name AS designation
        FROM employee.hrms_employees e
        LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id
        LEFT JOIN employee.hrms_designations ds ON ds.id = e.designation_id AND ds.tenant_id = e.tenant_id
-       WHERE e.tenant_id = $1 AND e.status = 'confirmed'
-         AND EXTRACT(MONTH FROM e.date_of_birth) = $2
-         AND EXTRACT(DAY FROM e.date_of_birth) = $3`,
-      [ctx.tenantId, mm, dd],
+       WHERE e.tenant_id = $1 AND e.status = 'confirmed' AND e.share_birthday = true
+         AND EXTRACT(MONTH FROM (NOW() AT TIME ZONE 'Asia/Kolkata')::date) = EXTRACT(MONTH FROM e.date_of_birth)
+         AND EXTRACT(DAY FROM (NOW() AT TIME ZONE 'Asia/Kolkata')::date) = EXTRACT(DAY FROM e.date_of_birth)`,
+      [ctx.tenantId],
     ));
 
     return reply.send({

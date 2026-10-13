@@ -1,4 +1,5 @@
 import type { EntityOption } from "@/app/_components/ds";
+import { failStrict, type StrictOpt } from "./strict";
 
 type IdentityUserRow = { id: string; name: string; designation?: string };
 
@@ -17,15 +18,16 @@ function toOption(row: IdentityUserRow): EntityOption {
  * contract so the wizard gets a searchable picker instead of a plain
  * <select> with a silent raw-ID fallback on fetch failure.
  */
-async function fetchAll(signal?: AbortSignal): Promise<IdentityUserRow[]> {
+async function fetchAll(signal?: AbortSignal, opts?: StrictOpt): Promise<IdentityUserRow[]> {
   const res = await fetch("/api/proxy/v1/identity/users?limit=200", { signal });
+  failStrict(res, opts);
   if (!res.ok) return [];
   const body = (await res.json()) as { data?: IdentityUserRow[] } | IdentityUserRow[];
   return Array.isArray(body) ? body : (body.data ?? []);
 }
 
-export async function searchIdentityUsers(query: string, signal: AbortSignal): Promise<EntityOption[]> {
-  const rows = await fetchAll(signal);
+export async function searchIdentityUsers(query: string, signal: AbortSignal, opts?: StrictOpt): Promise<EntityOption[]> {
+  const rows = await fetchAll(signal, opts);
   const q = query.trim().toLowerCase();
   const filtered = q
     ? rows.filter((r) => r.name.toLowerCase().includes(q) || (r.designation ?? "").toLowerCase().includes(q))

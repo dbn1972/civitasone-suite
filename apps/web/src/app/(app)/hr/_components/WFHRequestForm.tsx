@@ -12,6 +12,7 @@ import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { useAsyncMutation } from "@/lib/useAsyncMutation";
 import { Button } from "../../../_components/ds";
+import { EmployeePicker } from "../../../_components/EmployeePicker";
 import { todayIST } from "@/lib/formatters";
 
 type CreatedRequest = { id: string };
@@ -136,6 +137,8 @@ export function WFHRequestForm({
   // rather than guessing forever if it doesn't show up in time.
   const asyncMutation = useAsyncMutation<CreatedRequest, WfhRequestsList>({
     mutate: async () => {
+      // The employee picker has no native `required`; refuse an empty pick here.
+      if (!employeeId) throw new UserFacingError(t("errorEmployeeRequired"));
       let res: Response;
       try {
         res = await fetch("/api/proxy/v1/hrms/wfh-requests", {
@@ -266,16 +269,7 @@ export function WFHRequestForm({
               ))}
             </select>
           ) : (
-            <input
-              id={idEmp}
-              style={inputStyle}
-              value={employeeId}
-              onChange={(e) => setEmployeeId(e.target.value)}
-              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-              pattern="[0-9a-fA-F-]{36}"
-              required
-              aria-required="true"
-            />
+            <EmployeePicker id={idEmp} value={employeeId || null} onChange={(id) => setEmployeeId(id ?? "")} />
           )}
         </div>
       )}

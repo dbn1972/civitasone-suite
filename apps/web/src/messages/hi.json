@@ -8306,6 +8306,7 @@
     "policyNote": "DoPT O.M. के अनुसार, पात्र संवर्गों के लिए प्रति सप्ताह <strong>{limit} दिन तक</strong> WFH की अनुमति है। इस सीमा से अधिक अनुरोधों के लिए DG/सचिव अनुमोदन आवश्यक है।",
     "labelEmployee": "कर्मचारी आईडी",
     "placeholderEmployee": "कर्मचारी चुनें…",
+    "errorEmployeeRequired": "जमा करने से पहले कर्मचारी चुनें।",
     "labelFromDate": "आरंभ तिथि",
     "labelToDate": "समाप्ति तिथि",
     "labelReason": "कारण / उद्देश्य",
@@ -8596,6 +8597,7 @@
     "policyNote": "DoPT स्टाफिंग दिशानिर्देशों के अनुसार शिफ्ट परिवर्तन के लिए पर्यवेक्षक की स्वीकृति आवश्यक है।",
     "labelEmployee": "कर्मचारी",
     "placeholderEmployee": "कर्मचारी चुनें…",
+    "errorEmployeeRequired": "जमा करने से पहले कर्मचारी चुनें।",
     "labelCurrentShift": "वर्तमान शिफ्ट",
     "labelRequestedShift": "अनुरोधित शिफ्ट",
     "placeholderShift": "शिफ्ट चुनें…",
@@ -8920,7 +8922,24 @@
     "searching": "खोज रहे हैं…",
     "noResults": "कोई मेल खाता कर्मचारी नहीं",
     "clear": "हटाएं",
-    "clearAriaLabel": "चयनित कर्मचारी हटाएं"
+    "clearAriaLabel": "चयनित कर्मचारी हटाएं",
+    "searchFailed": "कर्मचारी लोड नहीं हो सके। अपना कनेक्शन जाँचें और पुनः प्रयास करें।"
+  },
+  "directoryPicker": {
+    "placeholder": {
+      "user": "उपयोगकर्ता खोजने के लिए नाम टाइप करें…",
+      "department": "विभाग का नाम या कोड टाइप करें…",
+      "location": "स्थान का नाम या शहर टाइप करें…",
+      "warehouse": "गोदाम का नाम या कोड टाइप करें…"
+    },
+    "searching": "खोज रहे हैं…",
+    "searchFailed": "सूची लोड नहीं हो सकी। अपना कनेक्शन जाँचें और पुनः प्रयास करें।",
+    "noResults": {
+      "user": "कोई मेल खाता उपयोगकर्ता नहीं",
+      "department": "कोई मेल खाता विभाग नहीं",
+      "location": "कोई मेल खाता स्थान नहीं",
+      "warehouse": "कोई मेल खाता गोदाम नहीं"
+    }
   },
   "flexElectionApprovals": {
     "noneMessage": "अनुमोदन की प्रतीक्षा में कोई लचीला-लाभ चयन नहीं है।",

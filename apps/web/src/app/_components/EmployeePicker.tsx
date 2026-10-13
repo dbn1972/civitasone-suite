@@ -70,7 +70,7 @@ export function EmployeePicker({
 
   const search = useCallback(
     async (query: string, signal: AbortSignal) =>
-      remember(await (directory === "payroll" ? searchPayrollEmployees : searchEmployees)(query, signal)),
+      remember(await (directory === "payroll" ? searchPayrollEmployees : searchEmployees)(query, signal, { strict: true })),
     [remember, directory],
   );
   const resolve = useCallback(
@@ -92,6 +92,7 @@ export function EmployeePicker({
       placeholder={placeholder ?? t("placeholder")}
       searchingText={t("searching")}
       noResultsText={t("noResults")}
+      searchErrorText={t("searchFailed")}
       disabled={disabled}
       id={id}
       aria-label={ariaLabel}

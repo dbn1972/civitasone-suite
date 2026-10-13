@@ -1,4 +1,5 @@
 import type { EntityOption } from "@/app/_components/ds";
+import { failStrict, type StrictOpt } from "./strict";
 
 type LocationRow = { id: string; name: string; type?: string; city?: string; status?: string };
 
@@ -16,15 +17,16 @@ function toOption(row: LocationRow): EntityOption {
  * cost-centre adapters. Archived locations are never offered: an archived
  * location "cannot be selected for new records".
  */
-async function fetchAll(signal?: AbortSignal): Promise<LocationRow[]> {
+async function fetchAll(signal?: AbortSignal, opts?: StrictOpt): Promise<LocationRow[]> {
   const res = await fetch("/api/proxy/v1/locations?limit=500", signal ? { signal } : undefined);
+  failStrict(res, opts);
   if (!res.ok) return [];
   const body = (await res.json()) as { data?: LocationRow[] } | LocationRow[];
   return (Array.isArray(body) ? body : (body.data ?? [])).filter((r) => r.status !== "archived");
 }
 
-export async function searchLocations(query: string, signal: AbortSignal): Promise<EntityOption[]> {
-  const rows = await fetchAll(signal);
+export async function searchLocations(query: string, signal: AbortSignal, opts?: StrictOpt): Promise<EntityOption[]> {
+  const rows = await fetchAll(signal, opts);
   const q = query.trim().toLowerCase();
   const filtered = q ? rows.filter((r) => r.name.toLowerCase().includes(q) || (r.city ?? "").toLowerCase().includes(q)) : rows;
   return filtered.slice(0, 50).map(toOption);

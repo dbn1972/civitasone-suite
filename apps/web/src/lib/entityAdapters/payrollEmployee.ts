@@ -1,4 +1,5 @@
 import type { EntityOption } from "@/app/_components/ds";
+import { failStrict } from "./strict";
 
 /**
  * EntityPicker adapters for the PAYROLL employee lookup
@@ -31,10 +32,11 @@ async function rowsOf(res: Response): Promise<LookupRow[]> {
 export async function searchPayrollEmployees(
   query: string,
   signal: AbortSignal,
-  opts?: { onForbidden?: () => void },
+  opts?: { onForbidden?: () => void; strict?: boolean },
 ): Promise<EntityOption[]> {
   const res = await fetch(`/api/proxy/v1/payroll/employee-lookup?q=${encodeURIComponent(query)}&limit=20`, { signal });
   if (res.status === 403) opts?.onForbidden?.();
+  failStrict(res, opts);
   return (await rowsOf(res)).map(toOption);
 }
 
