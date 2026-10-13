@@ -62,7 +62,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-HOME-05  ·  LOW  ·  partly  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tiles link to /works/masters and /works/reports without any role gate; hub does not mirror the works_operator role used in contractor pages (contractors/[id]/page.tsx:58).
 - **Verified evidence:** apps/web/src/app/(app)/works/page.tsx:42-47 does gate the Quick Actions card with WORKS_ADMIN_ROLES, but the eight module tiles (:87-107), including /works/masters and /works/reports, are ungated; masters/page.tsx and its create form (apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx) do no role check (no getSessionRoles in masters or reports). WORKS_ADMIN_ROLES (works_admin, dao, do, super_admin, div_officer) omits works_operator and differs from PROPOSAL_WRITE_ROLES and CONTRACTOR_RATE_ROLES (apps/web/src/app/(app)/works/contractors/[id]/page.tsx:58-64), so role lists are duplicated and inconsistent. Server enforcement cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/works/page.tsx`, `apps/web/src/lib/auth/workRoles.ts`, `apps/web/src/app/(app)/works/masters/page.tsx`, `apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx`
@@ -104,7 +104,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Pending" counts only status "draft" (page.tsx:15-16) but the finalize button also accepts "submitted" (ApprovalFinalizeButton.tsx:17) — submitted records are never counted as pending.
 - **Verified evidence:** approvals/page.tsx:15-16 pendingAA/TS count only status==='draft'. ApprovalFinalizeButton.tsx:17 treats draft and submitted as finalizable. Records with status 'submitted' show a Finalize action yet are not counted as pending. Which statuses are 'pending' semantically is not defined in the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/works/approvals/page.tsx`, `apps/web/src/app/(app)/works/approvals/ApprovalFinalizeButton.tsx`
@@ -225,7 +225,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-AA-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9)
 - **First-pass claim:** Finalize offered to every role and for "submitted" as well as "draft" (ApprovalFinalizeButton.tsx:17,95); no role note, so users without DAO/DO rights meet a server error only after confirming.
 - **Verified evidence:** ApprovalFinalizeButton.tsx:17 FINALIZABLE_STATUSES = draft, submitted; button shown to any viewer (page.tsx:181 passes no role). It already has a ConfirmDialog (line ~140) with danger; description mentions irreversible. No role gate; server error only shown after confirm (fromResponse). lib/auth/roleGuard.ts and workRoles.ts exist but are not used here. Which roles the server permits (DAO/DO) cannot be verified. Allowing 'submitted' may be intentional.
 - **Files to change:** `apps/web/src/app/(app)/works/approvals/ApprovalFinalizeButton.tsx`, `apps/web/src/app/(app)/works/approvals/aa/[id]/page.tsx`, `apps/web/src/lib/auth/workRoles.ts`
@@ -458,7 +458,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-TS-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9)
 - **First-pass claim:** Finalize offered to every role and for "submitted" as well as "draft" (ApprovalFinalizeButton.tsx:17,95); no role note, so users without DAO/DO rights meet a server error only after confirming.
 - **Verified evidence:** apps/web/src/app/(app)/works/approvals/ApprovalFinalizeButton.tsx:17 FINALIZABLE_STATUSES = draft|submitted, so Finalize shows for both; ts/[id]/page.tsx:179 renders it with no role check. It does have a ConfirmDialog (:136) and shows server error via formError (:52-55), and the server rejection is real (can't verify roles: works-service absent). No role note in dialog. Also note the dialog text 'cannot be undone' is shown to everyone. Web has server-side getSessionRoles()/requireAnyRole in lib/auth/roleGuard.ts but no client hook and no works layout guard; which roles may finalize TS is not visible in the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/works/approvals/ts/[id]/page.tsx`, `apps/web/src/app/(app)/works/approvals/aa/[id]/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`, `apps/web/src/app/(app)/works/approvals/ApprovalFinalizeButton.tsx`
@@ -571,7 +571,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-WORKID-01  ·  HIGH  ·  confirmed  ·  theme CONTRACT-MISMATCH (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [ ] **Status** (W1 SF-15 re-check REOPENED the PROVISIONAL W0 tick: code is fixed (loaders.ts mapBillRow/getBillsForWork) but the acceptance loader/mapper test (billNumber RA-01 -> billNo/mode) does not exist)
 - **First-pass claim:** Field-name mismatch: page maps r.billNo, r.mode, r.stage (page.tsx:79-83) but the API row uses billNumber / billMode and has no stage (_data/loaders.ts:73,75); Bill No, Mode and Stage render "—" and BillingActions receives billNo "undefined" in dialog copy (page.tsx:183, BillingActions.tsx:242).
 - **Verified evidence:** billing/[workId]/page.tsx:10-20 declares BillRow with billNo/mode/stage, but the works Bill contract is billNumber/billMode/status with no stage (_data/types.ts:27-42; list loader maps billNumber->billNo at _data/loaders.ts:73, billMode at :75). page.tsx:79,80,83 read r.billNo/r.mode/r.stage so Bill No/Mode/Stage render undefined->'—' (String(undefined ?? '—')), and :183 passes b.billNo (undefined) into BillingActions, giving 'Bill undefined' in the row label, toast (BillingActions.tsx:~84) and dialog text (:259-261). Caveat: the detail endpoint /billing/{workId}/bills is not in the snapshot (works-service absent); assumed to return the same raw row as the list. The 'fix' text (ConfirmDialog/maker-checker) is unrelated to this defect.
 - **Files to change:** `apps/web/src/app/(app)/works/_data/loaders.ts`, `apps/web/src/app/(app)/works/billing/[workId]/page.tsx`, `apps/web/src/app/(app)/works/billing/[workId]/BillingActions.tsx`
@@ -589,7 +589,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-WORKID-02  ·  HIGH  ·  partly  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9)
 - **First-pass claim:** nextInSequence returns seq[0] for any status not in the sequence (BillingActions.tsx:31), so bills that are draft, submitted, submitted_ifms or finalized appear under "Finalize Bills" with a "→ So Finalized" button — including bills already sent to IFMS.
 - **Verified evidence:** BillingActions.tsx:29-34 nextInSequence returns seq[0] ('so_finalized') for any status not in BILL_SEQUENCE; actionableBills (:130-132) filters on non-null. Real raw statuses are draft|so..do_finalized|submitted (types.ts:18-25). So 'draft' correctly gets So Finalized as first step, but 'submitted' (already sent) also falls to seq[0] and is offered '-> So Finalized'. 'submitted_ifms' and 'finalized' are not raw statuses (they are display buckets from billBucket, _data/format.ts:30-35) but would behave the same if ever returned. do_finalized correctly returns null. Related: page.tsx:57-63 counts 'submitted_ifms'/'finalized' which never match raw values ('submitted'), so the Submitted stat is always 0.
 - **Files to change:** `apps/web/src/app/(app)/works/billing/[workId]/BillingActions.tsx`, `apps/web/src/app/(app)/works/billing/[workId]/page.tsx`, `apps/web/src/app/(app)/works/_data/format.ts`
@@ -625,7 +625,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-WORKID-04  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9)
 - **First-pass claim:** MB finalization needs a pasted UUID ("no list endpoint exists yet", BillingActions.tsx:176,207) and lets the user pick any Next Status, skipping stages.
 - **Verified evidence:** BillingActions.tsx:176 comment 'manual ID entry - no list endpoint exists yet'; input id billing-mb-id placeholder 'Paste full MB UUID' (:207) posts to /api/proxy/v1/works/billing/mb/${mbId}/finalize (:~93). The Next Status <select> (:~230) lists all of MB_SEQUENCE with default seq[0], so any step can be chosen and stages skipped; no client check of the MB's current status. Whether the backend rejects skipped transitions cannot be verified. No MB list loader exists in _data/loaders.ts.
 - **Files to change:** `apps/web/src/app/(app)/works/billing/[workId]/BillingActions.tsx`, `apps/web/src/app/(app)/works/billing/[workId]/page.tsx`, `apps/web/src/app/(app)/works/_data/loaders.ts`
@@ -1368,7 +1368,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-CONTRACTORS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9)
 - **First-pass claim:** Rated By shows the first 8 chars of a UUID (page.tsx:172); history rows have no comment/criteria so a rating cannot be justified or audited.
 - **Verified evidence:** apps/web/src/app/(app)/works/contractors/[id]/page.tsx:168-173 maps ratedBy: r.ratedBy?.slice(0, 8) ?? "—"; RatingHistoryRow (apps/web/src/app/(app)/works/contractors/[id]/page.tsx:28-33) and mapRatingHistory (lines 70-90) carry only id, rating, ratedAt, ratedBy - no comment, criteria or work reference, and the write path apps/web/src/app/(app)/works/contractors/[id]/ContractorRatingForm.tsx:46-52 sends only {rating}. Additional: mapRatingHistory falls back to Math.random() as row id (line 81). Whether the rating-history API returns a name/comment is cannot-verify (works-service is not in the snapshot (only services/hrms-service), so server behaviour is cannot-verify;).
 - **Files to change:** `apps/web/src/app/(app)/works/contractors/[id]/page.tsx`, `apps/web/src/app/(app)/works/contractors/[id]/ContractorRatingForm.tsx`, `services/works-service (not in snapshot)`
@@ -1385,7 +1385,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-CONTRACTORS-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9)
 - **First-pass claim:** Rating is one 1–5 star tap with a generic confirm and no reason (ContractorRatingForm.tsx:88-130); a contractor can be re-rated repeatedly with no visible cooldown or per-work link.
 - **Verified evidence:** apps/web/src/app/(app)/works/contractors/[id]/ContractorRatingForm.tsx:88-105 star buttons set selectedRating; Submit (110-114) opens ConfirmDialog (117-129) with only description `Rate this contractor N/5 stars?` - no requireReason (ConfirmDialog supports requireReason/reasonLabel/minReasonLength). handleConfirm (41-67) PATCHes {rating} only; nothing on the client prevents repeated re-rating (selectedRating reset at line 61; no cooldown, no per-work link). Whether the backend rejects/limits repeat ratings or emits an audit event is cannot-verify (works-service is not in the snapshot (only services/hrms-service), so server behaviour is cannot-verify;). Note: maker!=checker in the finding is not really applicable to a rating; a per-work link and reason are the meaningful controls.
 - **Files to change:** `apps/web/src/app/(app)/works/contractors/[id]/ContractorRatingForm.tsx`, `services/works-service (not in snapshot)`
@@ -1425,7 +1425,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-CONTRACTORS-NEW-01  ·  HIGH  ·  confirmed  ·  theme VALIDATION (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9)
 - **First-pass claim:** PAN, GSTIN, mobile and email are accepted with no client validation of format (page.tsx:102-148) — PAN 10 / GSTIN 15 chars only capped by maxLength — so malformed tax identifiers enter the contractor master and later bills/TDS.
 - **Verified evidence:** apps/web/src/app/(app)/works/contractors/new/page.tsx:110-161: pan input has only maxLength=10 and uppercase transform (handleChange 31-38), gst maxLength=15, phone maxLength=20 with inputMode numeric, email type=email (browser-validated only; form has no noValidate so it does get native email check). submit() (40-75) builds the body with no format checks. The sibling edit form has the same gap (apps/web/src/app/(app)/works/contractors/[id]/ContractorEditToggle.tsx:236-243). Server-side zod rules for create are cannot-verify (works-service is not in the snapshot (only services/hrms-service), so server behaviour is cannot-verify;); a comment in apps/web/src/app/(app)/works/contractors/[id]/ContractorEditToggle.tsx:224-235 says update uses pan .length(10) and email .email(), i.e. length-only for PAN, so malformed PAN/GSTIN likely pass.
 - **Files to change:** `apps/web/src/app/(app)/works/contractors/new/page.tsx`, `apps/web/src/app/(app)/works/contractors/[id]/ContractorEditToggle.tsx`, `apps/web/src/lib/validation/indianIds.ts (new)`, `services/works-service (not in snapshot)`
@@ -1602,7 +1602,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-WORKID-02  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9)
 - **First-pass claim:** Physical Completion and Work Closure act on the whole work with no role check and no precondition display (ExecutionActions.tsx:100-211); a clerk with module access sees both buttons whether or not the server would 403, and closure as "dropped" is permanent.
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/[workId]/ExecutionActions.tsx:84-195 always renders the Physical Completion and Work Closure cards; the file imports no role helper, and the server page apps/web/src/app/(app)/works/execution/[workId]/page.tsx never calls getSessionRoles (unlike apps/web/src/app/(app)/works/proposals/[id]/page.tsx:190 and apps/web/src/app/(app)/works/contractors/[id]/page.tsx:102). Both actions do open ConfirmDialog (:198-226; closure is danger and says 'cannot be undone'), but there is no precondition display (open issues, progress vs target). Closing as 'dropped' is offered in the same select (:178-180). Server 403 behaviour cannot be verified (works-service absent).
 - **Files to change:** `apps/web/src/app/(app)/works/execution/[workId]/page.tsx`, `apps/web/src/app/(app)/works/execution/[workId]/ExecutionActions.tsx`, `apps/web/src/lib/auth/workRoles.ts`
@@ -1693,7 +1693,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-ISSUES-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9)
 - **First-pass claim:** Closing an issue requires pasting its full UUID (IssueCloseForm.tsx:73-91) while the table only shows the first 8 characters (page.tsx:51) — a user cannot obtain the full id from this screen.
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/issues/page.tsx:51 shows shortId = issue.id.slice(0, 8); apps/web/src/app/(app)/works/execution/issues/IssueCloseForm.tsx:69-81 close form requires the full UUID typed/pasted (placeholder xxxxxxxx-xxxx-..., helper text 'Enter an issue UUID', lines 65-67); the full id is never displayed or copyable on the page (rows include id but DataTable columns omit it). Finding's line refs (73-91) are approximately right.
 - **Files to change:** `apps/web/src/app/(app)/works/execution/issues/page.tsx`, `apps/web/src/app/(app)/works/execution/issues/IssueCloseForm.tsx`, `apps/web/src/app/(app)/works/execution/issues/IssuesTable.tsx (new)`
@@ -2036,7 +2036,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-MASTERS-03  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9)
 - **First-pass claim:** Parent references (Work Type ID, Program ID) are raw UUID text boxes labelled "Paste Work Type UUID" (MasterCreateForm.tsx:53,73,83) and the table shows only an 8-character ID prefix (page.tsx:124), so a user cannot look the UUID up on this screen.
 - **Verified evidence:** apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx:53 (work-sub-types workTypeId), :73 (repair-types programId), :83 (scopes workTypeId) are required text inputs with 'Paste ... UUID' placeholders; apps/web/src/app/(app)/works/masters/page.tsx:124 shows String(item.id).slice(0,8) as the ID column and never shows parent. The UUID cannot be found on this screen (the ID column is truncated). Whether list responses include workTypeId/programId cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx`, `apps/web/src/app/(app)/works/masters/page.tsx`, `apps/web/src/app/_components/ds/EntityPicker.tsx (new)`
@@ -2054,7 +2054,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-MASTERS-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [ ] **Status** (W1 SF-15 re-check REOPENED the PROVISIONAL W0 tick: edit and deactivate exist but no test covers the deactivate ConfirmDialog sending active=false; no Unit column)
 - **First-pass claim:** Registry is create-only: no edit, deactivate or delete, and no parent/child display for Work Sub-Types, Scopes or Repair Types (page.tsx:67-72).
 - **Verified evidence:** apps/web/src/app/(app)/works/masters/page.tsx:67-72 columns are ID/Name/Code/Active only; apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx only POSTs (:264) and the row cannot be clicked (no rowHref, page.tsx:179-190). No edit/deactivate/delete UI exists, and parent/child columns are absent for sub-types, scopes and repair types. Whether PATCH/PUT/DELETE endpoints exist in works-service cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/works/masters/page.tsx`, `apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx`, `services/works-service (not in snapshot)`
@@ -2073,6 +2073,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 ### GAP-WORKS-MASTERS-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W1 SF-15 note:** the timer-driven 600/1500/3000ms refreshes were removed (#2011). After a 202 the form now shows the shared AcceptedNotice ("received, will appear shortly") with a manual Refresh; the row does NOT yet appear without a manual refresh and there is no pending row or duplicate-submit block, so this stays OPEN.
 - **W0 note:** partly fixed by #1867 — Replaced single refresh with fixed 600/1500/3000ms router.refresh polling. Remains: polling does not stop when row appears, no pending row/toast, no duplicate-submit block
 - **First-pass claim:** Create returns 202 and the row appears "shortly" — the list refreshes after a fixed 600 ms timeout, so a slow write leaves the new entry missing (MasterCreateForm.tsx:264-271).
 - **Verified evidence:** apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx:264-271: any non-202 is treated as error; on 202 the form shows 'Created. Changes will reflect shortly.' and does setTimeout(router.refresh, 600). 202 implies async (CQRS) write, so if the read model lags beyond 600 ms the list stays stale with no further refresh; users may re-create the entry.
@@ -2419,7 +2420,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-PROPOSALS-DETAIL-08  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9)
 - **First-pass claim:** Action buttons mix DS Button, a Tailwind-classed button (ProposalActions.tsx:57-63) and .btn links; layout is a flex row with no wrap rule (page.tsx:289-320).
 - **Verified evidence:** ProposalActions.tsx:57-63 is a raw <button> with Tailwind classes (the app uses ds Button/.btn); page.tsx:297 uses className='btn ghost' Link, :301 ds Button, :314 'btn secondary' Link. Footer flex row (page.tsx:289-296) has no flexWrap, and the Edit form <div> is rendered by ProposalEditToggle as a sibling inside the same flex row, so opening it lays the form out beside the buttons.
 - **Files to change:** `apps/web/src/app/(app)/works/proposals/[id]/ProposalActions.tsx`, `apps/web/src/app/(app)/works/proposals/[id]/page.tsx`, `apps/web/src/app/(app)/works/proposals/[id]/ProposalEditToggle.tsx`
@@ -2738,7 +2739,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-TENDERS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9)
 - **First-pass claim:** Award actions have no role gating and DAO / DO finalisation are two adjacent buttons available to anyone who sees the page (TenderActions.tsx:374-384); the dialog text "Ensure DAO approval is obtained" is the only control, and DO finalisation is not disabled until DAO has finalised.
 - **Verified evidence:** apps/web/src/app/(app)/works/tenders/[id]/TenderActions.tsx:374-385 renders 'DAO Finalize Award' and 'DO Finalize Award' side by side whenever awardId exists; no role check anywhere in the component (lib/auth/roleGuard.ts is server-only, uses next/headers) and DO is not disabled until DAO is done. ConfirmDialogs (388-409) have descriptive text only; ConfirmDialog supports requireReason (ds/ConfirmDialog.tsx) but it is not set. handleAwardFinalize (128-154) POSTs with no body. Server-side role/order enforcement cannot be verified (works-service absent).
 - **Files to change:** `apps/web/src/app/(app)/works/tenders/[id]/TenderActions.tsx`, `apps/web/src/app/(app)/works/tenders/[id]/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`
@@ -2809,7 +2810,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-TENDERS-DETAIL-06  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 W1 SF-15 re-confirmed against code and tests: closed by #1867, verified on main 9c5e9e9e9)
 - **First-pass claim:** Awarded count and awardId come from quotations having awardId (page.tsx:82,227); Create Award is a separate free-form form not tied to a selected quotation, so the accepted amount can differ from any quotation.
 - **Verified evidence:** apps/web/src/app/(app)/works/tenders/[id]/page.tsx:82 awardedCount and 227 awardId derive from quotations' awardId (first found). apps/web/src/app/(app)/works/tenders/[id]/TenderActions.tsx:80-117 Create Award posts workId, contractorName and a typed acceptedAmountMinor (93) with no tenderId or quotationId, and the form is shown whenever no quotation has awardId (275). Nothing forces the amount/contractor to match a quotation. Whether the backend links the award back to a quotation cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/works/tenders/[id]/TenderActions.tsx`, `apps/web/src/app/(app)/works/tenders/[id]/page.tsx`
