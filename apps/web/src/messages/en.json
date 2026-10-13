@@ -14935,5 +14935,12 @@
   },
   "idpExport": {
     "notRecorded": "Couldn't record this export in the audit trail, so no file was created. Try again."
+  },
+  "workflowApproveGate": {
+    "approveBlockedLoading": "Checking the required documents… Approve is unavailable until the check finishes.",
+    "approveBlockedError": "The document checklist could not be loaded, so Approve is unavailable. Use Retry beside the checklist.",
+    "approveBlockedMissing": "{count} mandatory document(s) missing, so Approve is unavailable. You can still Return or Reject.",
+    "serverMandatoryMissing": "This request still has mandatory documents missing, so it cannot be approved. Return it or wait for the documents.",
+    "serverCheckUnavailable": "The document check could not be completed just now. Please try again in a moment."
   }
 }

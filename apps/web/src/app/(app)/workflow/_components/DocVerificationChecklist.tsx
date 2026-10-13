@@ -28,6 +28,12 @@ function cacheKey(lane: string, serviceId: string | null | undefined, applicatio
   return `${lane}|${serviceId ?? ""}|${applicationId ?? ""}`;
 }
 
+/** Checklist state a parent can observe (see Props.onState). */
+export interface DocChecklistState {
+  status: "loading" | "error" | "ready";
+  missingMandatory: number;
+}
+
 interface Props {
   /** Workflow node key, e.g. "inspection" or "lane_inspection". */
   laneKey: string | null | undefined;
@@ -42,7 +48,7 @@ interface Props {
    * missing or the checklist could not be loaded. Fire-and-forget; the server
    * `/complete` remains the authority.
    */
-  onState?: (state: { status: "loading" | "error" | "ready"; missingMandatory: number }) => void;
+  onState?: (state: DocChecklistState) => void;
 }
 
 function normalizeLane(laneKey: string): string {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@/test-utils/intl-render";
 import { TaskActions } from "./TaskActions";
 
 const refreshMock = vi.fn();
@@ -61,5 +61,32 @@ describe("TaskActions — GAP-WORKFLOW-MY-TASKS-01/08", () => {
     await waitFor(() =>
       expect(screen.getAllByText(/claimed by another reviewer/i).length).toBeGreaterThan(0),
     );
+  });
+});
+
+describe("TaskActions approveBlockedReason — GAP-WORKFLOW-INSTANCES-DETAIL-02", () => {
+  beforeEach(() => { refreshMock.mockReset(); vi.restoreAllMocks(); });
+
+  it("renders Approve disabled with the visible reason; Return/Reject stay enabled", () => {
+    render(<TaskActions taskId="t1" status="pending" assigneeId={ME} currentUserId={ME} compact approveBlockedReason="2 documents missing" />);
+    const approve = screen.getByRole("button", { name: "Approve" });
+    expect(approve).toBeDisabled();
+    expect(screen.getByText("2 documents missing")).toBeInTheDocument();
+    expect(approve).toHaveAccessibleDescription("2 documents missing");
+    expect(screen.getByRole("button", { name: "Return" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Reject" })).toBeEnabled();
+  });
+
+  it("maps a 409 MANDATORY_DOCUMENTS_MISSING from the server to a plain message", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ code: "MANDATORY_DOCUMENTS_MISSING" }), { status: 409 }) as unknown as Response,
+    );
+    render(<TaskActions taskId="t1" status="pending" assigneeId={ME} currentUserId={ME} compact />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    // The confirm dialog's own Approve button is the last one in the document.
+    const confirm = screen.getAllByRole("button", { name: "Approve", hidden: true }).at(-1)!;
+    fireEvent.click(confirm);
+    expect(await screen.findByText(/mandatory documents missing, so it cannot be approved/)).toBeInTheDocument();
+    expect(refreshMock).not.toHaveBeenCalled();
   });
 });

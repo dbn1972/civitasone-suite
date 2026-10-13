@@ -23,6 +23,7 @@ import { evaluateDecisionTable } from "../decisions/domain.js";
 import * as decisionRepo from "../decisions/repo.js";
 import { appendCompletedNode } from "../compensation/executor.js";
 import type { TaskView } from "./schema.js";
+import { checkMandatoryDocs } from "./doc-gate.js";
 import type { InstanceRow } from "../instances/schema.js";
 
 const log = pino({ name: "workflow-tasks-consumer" });
@@ -51,6 +52,17 @@ export function registerTasksConsumers(queue: Queue): void {
   // Gap 3 — wrap with the consumer-side DLQ policy: transient failures retry,
   // a poison message is dead-lettered after WORKFLOW_DLQ_MAX_ATTEMPTS attempts.
   subscribeWithDlq<CompletePayload>(queue, COMMANDS.completeTask, async (msg) => {
+    // GAP-WORKFLOW-INSTANCES-DETAIL-02 — authoritative mandatory-document gate.
+    // The cross-service read happens BEFORE the transaction (never an HTTP call
+    // under the instance row lock); the refusal is audited inside it, atomically
+    // with markProcessed. A transient "unavailable" result throws so the DLQ
+    // policy retries rather than silently dropping or approving.
+    const docGate = (msg.payload.decision ?? "approve") === "approve"
+      ? await checkMandatoryDocs(msg.tenantId, msg.payload)
+      : ({ ok: true } as const);
+    if (!docGate.ok && docGate.reason === "unavailable") {
+      throw new Error("mandatory-document checklist unavailable; will retry");
+    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
@@ -81,6 +93,21 @@ export function registerTasksConsumers(queue: Queue): void {
           detail: { reason: "instance_not_active", instanceStatus: instance.status },
         });
         return;
+      }
+
+      if (!docGate.ok) {
+        await historyRepo.record(tx, {
+          tenantId: p.tenantId,
+          instanceId: p.instanceId,
+          taskId: p.id,
+          fromNode: p.nodeKey ?? instance?.currentNode ?? null,
+          toNode: null,
+          action: "blocked",
+          decision,
+          actorId: msg.actorId,
+          detail: { reason: "mandatory_documents_missing", missingMandatory: docGate.missingMandatory },
+        });
+        return; // do not mark complete, do not advance
       }
 
       // C2 — DURABLE SoD enforcement (the HTTP-handler pre-check is racy because
