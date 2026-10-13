@@ -56,8 +56,8 @@ export function BrandPreview({ config }: { config: BrandConfigView | null }) {
       <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            {config.logoUrl ? (
-              <img src={config.logoUrl} alt={`${config.appName} logo`} style={{ height: 32, maxWidth: 160, objectFit: "contain" }} />
+            {config.logoDataUrl || config.logoUrl ? (
+              <img src={config.logoDataUrl ?? config.logoUrl ?? ""} alt={`${config.appName} logo`} style={{ height: 32, maxWidth: 160, objectFit: "contain" }} />
             ) : (
               <span
                 aria-hidden="true"

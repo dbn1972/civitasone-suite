@@ -70,6 +70,8 @@ function projectBrandConfig(
 export type UpsertBrandConfigPayload = {
   projected: BrandConfigRow;
   isCreate: boolean;
+  /** Names of the fields this command changed - recorded in the audit event (never their values). */
+  changedFields?: string[];
 };
 
 export type ApplyBrandPresetPayload = {
@@ -118,7 +120,7 @@ export async function upsertBrandConfig(ctx: RequestContext, body: UpsertBrandBo
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { projected, isCreate } satisfies UpsertBrandConfigPayload,
+    payload: { projected, isCreate, changedFields: Object.keys(cleaned).sort() } satisfies UpsertBrandConfigPayload,
   });
 
   return { id, status: "accepted", correlationId: ctx.correlationId };

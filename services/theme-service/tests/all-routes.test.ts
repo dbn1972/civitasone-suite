@@ -118,15 +118,18 @@ vi.mock("../src/shared/db.js", () => {
     });
     return arr;
   };
+  const select = () => ({
+    from: () => createFromResult(),
+  });
   return {
     db: {
-      select: () => ({
-        from: () => createFromResult(),
-      }),
+      select,
       insert: () => ({ values: async () => undefined }),
       update: () => ({ set: () => ({ where: async () => undefined }) }),
+      // brand-repo.findByTenant now reads inside db.transaction() (RLS GUC), so tx exposes select too.
       transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({
         execute: async () => undefined,
+        select,
       }),
     },
     sqlClient: { end: () => undefined },

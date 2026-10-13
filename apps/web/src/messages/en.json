@@ -14942,5 +14942,16 @@
     "approveBlockedMissing": "{count} mandatory document(s) missing, so Approve is unavailable. You can still Return or Reject.",
     "serverMandatoryMissing": "This request still has mandatory documents missing, so it cannot be approved. Return it or wait for the documents.",
     "serverCheckUnavailable": "The document check could not be completed just now. Please try again in a moment."
+  },
+  "settingsBrandingLogo": {
+    "typeError": "Logo must be a PNG, JPEG or WebP image (SVG is not supported).",
+    "tooBig": "Logo must be 200KB or smaller.",
+    "readError": "Couldn't read that file. Please try another.",
+    "urlInvalid": "Enter an https:// image URL (or upload a file).",
+    "dropHint": "Drag & drop a logo here",
+    "formatHint": "PNG, JPEG or WebP, max 200KB",
+    "chooseFile": "Choose file",
+    "remove": "Remove logo",
+    "saveFailed": "Couldn't save your changes. Please try again."
   }
 }
