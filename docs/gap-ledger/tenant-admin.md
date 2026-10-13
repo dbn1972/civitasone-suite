@@ -766,7 +766,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-DOMAIN-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 closed by #1864; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: delete goes through ConfirmDialog with required reason)
 - **First-pass claim:** Delete removes the domain immediately — no ConfirmDialog, no audit reason — and the request is fire-and-forget; it is a destructive change to production login URLs (DomainClient.tsx:69-72).
 - **Verified evidence:** apps/web/src/app/(app)/tenant-admin/domain/DomainClient.tsx:69-72: handleDelete fires void fetch(DELETE /api/v1/admin/custom-domains/${id}) and immediately filters the row from state without checking the response or asking for confirmation; the trash button at line 116 calls it directly. ConfirmDialog with requireReason exists (_components/ds/ConfirmDialog.tsx:21-56) but is unused here. Also uses /api/v1/... rather than /api/proxy/v1/... (13 client fetches use this pattern vs 352 with /api/proxy); no Next route for it is in the snapshot, next.config is absent - cannot verify the gateway rewrite.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/domain/DomainClient.tsx`
@@ -785,7 +785,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-DOMAIN-02  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 closed by #1864; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: a failed POST adds no row (DomainClient.test covers it))
 - **First-pass claim:** When POST /custom-domains fails, the catch-all 'optimistic' branch still adds the domain locally as pending_verification with a client-made token; the user can then follow DNS instructions for a record the server never issued (DomainClient.tsx:50-58).
 - **Verified evidence:** DomainClient.tsx:37-62 handleAddDomain: on !res.ok (lines 49-58) it creates id=crypto.randomUUID(), token `civitasone-verify-<12 chars>` and appends the domain as pending_verification; the DNS modal (lines 151-183) then shows that client-generated token (line 161) as the TXT value. There is no .catch, so a thrown network error adds nothing but the modal is already closed and newDomain cleared (lines 60-61). Any non-2xx (400 invalid domain, 409 duplicate, 403) triggers the fake record. Also note the fetch targets /api/v1/... not the proxy, so unless a gateway rewrite exists (unverifiable) it would always 404 into this branch.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/domain/DomainClient.tsx`
@@ -804,7 +804,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-DOMAIN-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 closed by #1864; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: verify no longer flips the row before the server answers)
 - **First-pass claim:** handleVerify flips the row to 'verified' before the server answers and ignores the result; a failed verification looks successful (DomainClient.tsx:64-67).
 - **Verified evidence:** DomainClient.tsx:64-67: handleVerify calls void fetch(POST .../verify) and synchronously sets status 'verified' on the row; the response (which may be failed/pending DNS) is ignored, and there is no busy state. The status union in loaders.ts:4711 includes 'failed', which is never produced here.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/domain/DomainClient.tsx`
@@ -822,7 +822,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-DOMAIN-04  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-19: closed by #2014; earlier W0 tick #1864 re-confirmed against 9e34d2e4a: Remove button has aria-label; the Add and DNS modals were hand-rolled role=dialog with hard-coded colours and no focus trap, now ds/Modal (theme tokens, Escape, focus return))
 - **First-pass claim:** Delete button is icon-only (🗑️) with no aria-label; modals use hard-coded white background and hex colours so they break in dark mode (DomainClient.tsx:116,127-128,152-153).
 - **Verified evidence:** DomainClient.tsx:116 delete is <button className="btn btn-sm">🗑️</button> with no aria-label/title (the comment at lines 112-115 acknowledges it). Both modals set style background:'#fff' (lines 128 and 153) with inline hex text colours (#666 at 103/155, #f1f5f9 code block at 156, #dc2626 at 116), which override theme tokens in dark mode. Modals also lack focus trap/Escape handling that ConfirmDialog has (FOCUSABLE handling in _components/ds/ConfirmDialog.tsx). Not a 'fabricated' issue - the tag is wrong.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/domain/DomainClient.tsx`

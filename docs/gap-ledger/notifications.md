@@ -125,7 +125,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-CAMPAIGNS-04  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1871, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 closed by #1871; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: CampaignList uses ds Modal plus a discard ConfirmDialog with Keep editing)
 - **First-pass claim:** Custom dialog closes on backdrop mousedown and Escape and discards all typed recipients/budget without a dirty-form warning (CampaignList.tsx), and is not the DS ConfirmDialog; no focus trap or return-focus is visible in the code.
 - **Verified evidence:** CreateCampaignDialog (CampaignList.tsx:267-454) is a hand-rolled div.cd-overlay/cd-panel: onMouseDown on backdrop closes (273-275), document Escape closes (215-222), both discard state (form reset only on next open, 181-190) with no dirty check. role=dialog aria-modal present but no focus move, trap or return-focus code (contrast ds/ConfirmDialog.tsx:7-8,92-124, which has all of these). ConfirmDialog is not a form container, and no generic ds Modal exists in ds/ (listing checked).
 - **Files to change:** `apps/web/src/app/(app)/notifications/campaigns/_components/CampaignList.tsx`, `apps/web/src/app/_components/ds/Modal.tsx`, `apps/web/src/app/_components/ds/index.ts`

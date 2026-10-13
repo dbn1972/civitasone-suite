@@ -3145,7 +3145,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-NEW-01  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 closed by #1859; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: PHONE_RE/EMAIL_RE inline validation and the DPDP notice are present)
 - **First-pass claim:** Citizen phone and email are collected with no purpose or consent notice and no format check beyond the input type, although this is personal data under DPDP; the record is not linked to an existing CRM contact and no duplicate check is run (grievances/new/page.tsx:113-147).
 - **Verified evidence:** grievances/new/page.tsx:113-147: Phone is `type='tel' maxLength=32`, Email `type='email' maxLength=320`; no pattern, no purpose or consent text anywhere on the page, and body (lines 23-31) posts only the raw fields; no contact lookup or duplicate check code exists. Backend duplicate/contact linking is cannot-verify (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/new/page.tsx`
@@ -3178,7 +3178,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme CONFIG (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 closed by #1859; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: categories load from the tenant master with a fallback list)
 - **First-pass claim:** The nine categories are hard-coded in the page rather than loaded from the department's taxonomy, so they cannot be aligned to CPGRAMS categories or changed by an administrator (page.tsx:7-11).
 - **Verified evidence:** new/page.tsx:7-11 hard-codes nine category strings used in the select (lines 175-177). Nothing loads a taxonomy, and the string (not an id) is posted. Whether a category-master or CPGRAMS-category endpoint exists is cannot-verify (crm-service absent); no loader for it exists in app/_data/loaders.ts. Not a 'fabricated figure' - it is configuration hard-coding.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/new/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -3194,7 +3194,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-NEW-04  ·  LOW  ·  confirmed  ·  theme BUSINESS-RULE (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 closed by #1860; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: guidance text under Priority explains when Urgent applies)
 - **First-pass claim:** Any clerk can log a grievance directly as Urgent; there is no rule or note on when Urgent applies, and the detail page separately raises priority to urgent on First Appeal (page.tsx:197-200; grievances/[id]/GrievanceActions.tsx:82).
 - **Verified evidence:** new/page.tsx:197-200 offers Low/Normal/High/Urgent to every user with no help text. GrievanceActions.tsx:82 says first appeal 'escalates to urgent priority' (the server-side bump itself is cannot-verify). No role check exists in either file.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/new/page.tsx`
@@ -3210,7 +3210,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-NEW-05  ·  LOW  ·  partly  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-19: closed by #2014; earlier W0 tick #1860 re-confirmed against 9e34d2e4a: the unsaved-changes prompt on Cancel was a native window.confirm; it is now ds/ConfirmDialog (Escape and Keep editing both keep the form); browserFetch already sends x-device-id)
 - **First-pass claim:** Cancel is a plain link with no unsaved-changes prompt, and the form uses uncontrolled FormData with raw fetch to /api/proxy instead of the browserFetch used by sibling forms (page.tsx:22-38, 251).
 - **Verified evidence:** True: Cancel is `<a href='/crm/grievances' className='btn'>` (page.tsx:251) with no dirty-form guard; form reads values via FormData (line 22) and posts with raw fetch('/api/proxy/v1/crm/grievances') (34-38). Overstated: browserFetch is used by 8 files under crm but 10 files also use raw fetch to /api/proxy (incl. GrievanceActions.tsx and FollowUpModal.tsx), so raw fetch is common in the sibling grievance/health code, not a deviation. browserFetch (lib/api/browserClient.ts:21) adds x-device-id and trust headers, which the raw call omits. Cancel as plain <a> also forces a full page reload instead of client navigation.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/new/page.tsx`
@@ -3239,7 +3239,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-NEW-07  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 closed by #1860; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: description character counter (aria-live polite) present)
 - **First-pass claim:** Required marks use a decorative asterisk with no legend such as 'Fields marked * are required'; the description has a 5,000-character limit but no counter (page.tsx:93, 231).
 - **Verified evidence:** new/page.tsx:93, 160, 206: required marks are `<span aria-hidden='true'>*</span>` with the native `required` attribute doing the semantic work; there is no 'Fields marked * are required' legend. Description textarea has maxLength={5000} (line 231) and no live counter; the browser silently stops typing at the limit.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/new/page.tsx`
@@ -4110,7 +4110,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-03  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 closed by #1859; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: Close gated by CRM_OPPORTUNITY_CLOSE_ROLES; a won close needs a 10-character reason; the dialog is now ds/Modal)
 - **First-pass claim:** Close is offered on every open row to any CRM_ROLES user (crm_user included) with no role gate, and a Won close only needs a 1-character reason (CloseOpportunityDialog.tsx:67, crm/layout.tsx:5).
 - **Verified evidence:** List shows a Close button for every non-closed row (apps/web/src/app/_components/crm/OpportunityViews.tsx:283-289) with no role check; the layout admits crm_user (crm/layout.tsx:5). CloseOpportunityDialog reasonMin = outcome==='won'?1:10 (67), comment says backend mirrors this (server enforcement cannot be verified, crm-service absent).
 - **Files to change:** `apps/web/src/app/_components/crm/CloseOpportunityDialog.tsx`, `apps/web/src/app/_components/crm/OpportunityViews.tsx`, `apps/web/src/app/(app)/crm/opportunities/page.tsx`

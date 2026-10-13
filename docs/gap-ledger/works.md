@@ -2458,7 +2458,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-PROPOSALS-NEW-02  ·  HIGH  ·  partly  ·  theme MONEY
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 closed by #1867; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: rupeeStringToPaise string parsing; 0 and over-precise rejected)
 - **First-pass claim:** Estimated cost accepts 0 and any magnitude with no lakh/crore feedback; conversion uses Math.round(Number(x)*100) so values with many decimals or above 2^53 paise lose precision (page.tsx:61) — money should be parsed as a decimal string to paise, not through float.
 - **Verified evidence:** new/page.tsx:61 estimatedCostMinor=String(Math.round(Number(form.estimatedCost||'0')*100)); input type=number min=0 step=0.01 required (:151-162) so 0 is accepted and browsers reject >2 decimals (step) unless bypassed. >2^53 paise (~₹9e13) is unreachable in practice, so the float claim is theoretical, but float parsing violates CLAUDE.md paise rule and 1.005-style values can misround. No lakh/crore echo or zero-cost guard: true. Server zod validation cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/works/proposals/new/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -2474,7 +2474,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-PROPOSALS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme COPY (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 closed by #1867; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: copy says 'Create draft'; redirects to the created proposal)
 - **First-pass claim:** Header says "Submit a new work proposal for approval", button says "Submit" and the toast says "Work proposal submitted", but the record is created as a draft (proposals list has a Draft status, proposals/page.tsx:37,79); approval is a separate action on the detail page.
 - **Verified evidence:** new/page.tsx:91 subtitle 'Submit a new work proposal for approval.', :232 button 'Submit', :78 toast 'Work proposal submitted.', :77 message 'Created.'. Detail page has a separate 'DAO Finalize' action (ProposalActions.tsx:62) and list has Draft status (proposals/page.tsx:19-20), so creation yields a draft; backend creation status cannot be verified directly.
 - **Files to change:** `apps/web/src/app/(app)/works/proposals/new/page.tsx`
@@ -2507,7 +2507,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-PROPOSALS-NEW-05  ·  LOW  ·  confirmed  ·  theme NAVUX
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-19: closed by #2014; earlier W0 tick #1867 re-confirmed against 9e34d2e4a: the Cancel discard prompt was a native window.confirm; it is now ds/ConfirmDialog; beforeunload guard unchanged)
 - **First-pass claim:** No Cancel/back button inside the form and no unsaved-changes guard; only the header back link (page.tsx:89-94).
 - **Verified evidence:** new/page.tsx:87-94 PageHeader back link to /works/proposals is the only navigation; form (106-234) has only a Submit button, no Cancel, and no beforeunload / dirty-state guard.
 - **Files to change:** `apps/web/src/app/(app)/works/proposals/new/page.tsx`
