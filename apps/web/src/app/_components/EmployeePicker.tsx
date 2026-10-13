@@ -37,6 +37,9 @@ export interface EmployeePickerProps {
    * (GAP-PAYROLL-LOANS-01) -- use it on payroll screens.
    */
   directory?: "hrms" | "payroll";
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
+  inputRef?: React.Ref<HTMLInputElement>;
 }
 
 /**
@@ -57,6 +60,9 @@ export function EmployeePicker({
   "aria-label": ariaLabel,
   clearable = false,
   directory = "hrms",
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
+  inputRef,
 }: EmployeePickerProps) {
   const t = useTranslations("employeePicker");
   const knownRef = useRef<Map<string, EntityOption>>(
@@ -96,6 +102,9 @@ export function EmployeePicker({
       disabled={disabled}
       id={id}
       aria-label={ariaLabel}
+      aria-invalid={ariaInvalid}
+      aria-describedby={ariaDescribedBy}
+      inputRef={inputRef}
     />
   );
 

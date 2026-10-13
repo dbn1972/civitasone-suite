@@ -182,3 +182,19 @@ describe("NewGuesthouseBookingPage — GUESTHOUSE-NEW-01/02 (pickers)", () => {
     await waitFor(() => expect((screen.getByLabelText(/Guest name/) as HTMLInputElement).value).toBe("Asha Rao"));
   });
 });
+
+describe("NewGuesthouseBookingPage - guest picker accessibility (SF-06)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("the staff picker keeps its help text association and is not flagged invalid by default", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 })),
+    );
+    render(<NewGuesthouseBookingPage />);
+    const picker = await screen.findByRole("combobox", { name: /Guest employee ref/ });
+    expect(picker).toHaveAttribute("aria-describedby", "guestRef-help");
+    expect(picker).not.toHaveAttribute("aria-invalid", "true");
+  });
+});

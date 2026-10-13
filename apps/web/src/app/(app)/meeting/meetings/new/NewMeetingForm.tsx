@@ -416,6 +416,8 @@ export function NewMeetingForm() {
               <DirectoryPicker
                 source="user"
                 id="nm-chair"
+                aria-invalid={Boolean(errors.chairpersonId)}
+                aria-describedby={errors.chairpersonId ? "nm-chair-err" : "nm-chair-help"}
                 value={form.chairpersonId || null}
                 onChange={(v) => set("chairpersonId", v ?? "")}
               />
@@ -437,6 +439,8 @@ export function NewMeetingForm() {
               <DirectoryPicker
                 source="user"
                 id="nm-secretary"
+                aria-invalid={Boolean(errors.secretaryId)}
+                aria-describedby={errors.secretaryId ? "nm-secretary-err" : "nm-secretary-help"}
                 value={form.secretaryId || null}
                 onChange={(v) => set("secretaryId", v ?? "")}
               />
@@ -458,6 +462,8 @@ export function NewMeetingForm() {
               <DirectoryPicker
                 source="user"
                 id="nm-convener"
+                aria-invalid={Boolean(errors.convenerId)}
+                aria-describedby={errors.convenerId ? "nm-convener-err" : undefined}
                 value={form.convenerId || null}
                 onChange={(v) => set("convenerId", v ?? "")}
               />

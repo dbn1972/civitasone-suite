@@ -23,14 +23,27 @@ const VALID_UUID_2 = "22222222-2222-2222-2222-222222222222";
 // directory (SF-06) instead of raw UUID boxes: stub that one directory fetch
 // and choose people by name, exactly as a user would.
 let directory: Array<{ id: string; name: string }> = [];
+let fetchedUrls: string[] = [];
 function stubDirectory() {
+  fetchedUrls = [];
   directory = [
     { id: VALID_UUID_1, name: "Chair Person" },
     { id: VALID_UUID_2, name: "Secretary Person" },
   ];
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => new Response(JSON.stringify({ data: directory }), { status: 200 })),
+    vi.fn(async (input: RequestInfo | URL) => {
+      // The REAL tenant directory endpoint (identity-service
+      // GET /identity/users/directory, {id, displayName}) -- not the
+      // ADMIN-gated /identity/users list, which a normal user cannot read.
+      const url = String(input);
+      fetchedUrls.push(url);
+      if (!url.startsWith("/api/proxy/v1/identity/users/directory?q=")) return new Response("not found", { status: 404 });
+      return new Response(
+        JSON.stringify({ data: directory.map((d) => ({ id: d.id, displayName: d.name })) }),
+        { status: 200 },
+      );
+    }),
   );
 }
 
@@ -67,6 +80,20 @@ describe("NewMeetingForm", () => {
     expect(screen.getByText("Enter the chairperson's user ID.")).toBeInTheDocument();
     expect(screen.getByText("Enter the secretary's user ID.")).toBeInTheDocument();
     expect(createMeetingMock).not.toHaveBeenCalled();
+  });
+
+  it("loads people from the tenant directory endpoint and flags invalid pickers for assistive tech", async () => {
+    render(<NewMeetingForm />);
+    expect(screen.getByLabelText(/Chairperson/)).not.toHaveAttribute("aria-invalid", "true");
+    await pickUser(/Chairperson/, "Chair", "Chair Person");
+    expect(fetchedUrls.some((u) => u.startsWith("/api/proxy/v1/identity/users/directory?q=Chair"))).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Schedule meeting" }));
+    await screen.findByText("Enter the secretary's user ID.");
+    const secretary = screen.getByLabelText(/Secretary/);
+    expect(secretary).toHaveAttribute("aria-invalid", "true");
+    expect(secretary).toHaveAttribute("aria-describedby", "nm-secretary-err");
+    expect(document.getElementById("nm-secretary-err")).toBeInTheDocument();
   });
 
   it("rejects a chairperson id that isn't a UUID", async () => {

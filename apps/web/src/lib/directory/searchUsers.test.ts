@@ -31,6 +31,13 @@ describe("searchDirectoryUsers (client directory adapter)", () => {
     expect(String(spy.mock.calls[0]![0])).toContain("/api/proxy/v1/identity/users/directory?q=Asha");
   });
 
+  it("strict: an HTTP error or network failure THROWS (never reads as no results)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("nope", { status: 500 }));
+    await expect(searchDirectoryUsers("Asha", new AbortController().signal, { strict: true })).rejects.toThrow();
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("offline"));
+    await expect(searchDirectoryUsers("Asha", new AbortController().signal, { strict: true })).rejects.toThrow();
+  });
+
   it("fail-soft: an HTTP error yields []", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("nope", { status: 500 }));
     expect(await searchDirectoryUsers("Asha", new AbortController().signal)).toEqual([]);

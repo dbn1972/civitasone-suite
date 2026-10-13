@@ -6,7 +6,9 @@ import { DirectoryPicker, type DirectorySource } from "./DirectoryPicker";
 // directory by name, (b) hand back the id, and (c) show an error -- not
 // "No matches" -- when the directory fetch fails.
 const CASES: Array<[DirectorySource, string, unknown, string]> = [
-  ["user", "/api/proxy/v1/identity/users?limit=200", { data: [{ id: "u1", name: "Pia Officer", designation: "PIO" }] }, "Pia Officer"],
+  // The tenant-wide non-PII directory (identity-service /identity/users/directory),
+  // NOT the ADMIN-gated /identity/users list.
+  ["user", "/api/proxy/v1/identity/users/directory?q=Pia", { data: [{ id: "u1", displayName: "Pia Officer" }] }, "Pia Officer"],
   ["department", "/api/proxy/v1/hrms/departments", { data: [{ id: "d1", name: "Finance Dept", code: "FIN" }] }, "Finance Dept"],
   ["location", "/api/proxy/v1/locations?limit=500", { data: [{ id: "l1", name: "Main Gate Block", city: "Pune" }] }, "Main Gate Block"],
   ["warehouse", "/api/proxy/v1/inventory/warehouses?limit=200", { data: [{ id: "w1", name: "Central Store", code: "CS" }] }, "Central Store"],

@@ -1,4 +1,5 @@
 import type { EntityOption } from "@/app/_components/ds";
+import { failStrict, type StrictOpt } from "@/lib/entityAdapters/strict";
 
 /**
  * Client-safe user-directory adapter for EntityPicker
@@ -38,14 +39,22 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const MIN_QUERY = 2;
 const IDS_PER_REQUEST = 200;
 
-export async function searchDirectoryUsers(query: string, signal: AbortSignal): Promise<EntityOption[]> {
+export const DIRECTORY_MIN_QUERY = MIN_QUERY;
+
+/**
+ * `{ strict: true }` makes a non-ok response / network failure THROW (so
+ * EntityPicker shows its "could not load" alert) instead of degrading to [].
+ */
+export async function searchDirectoryUsers(query: string, signal: AbortSignal, opts?: StrictOpt): Promise<EntityOption[]> {
   const q = query.trim();
   if (q.length < MIN_QUERY) return [];
   try {
     const res = await fetch(`/api/proxy/v1/identity/users/directory?q=${encodeURIComponent(q)}`, { signal });
+    failStrict(res, opts);
     if (!res.ok) return [];
     return toOptions(await res.json());
-  } catch {
+  } catch (err) {
+    if (opts?.strict && !signal.aborted) throw err;
     return [];
   }
 }

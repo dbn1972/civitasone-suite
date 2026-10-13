@@ -62,6 +62,11 @@ export interface EntityPickerProps {
   "aria-label"?: string;
   /** Explicit id for the input; falls back to an ancestor Field's id, then an auto-generated one -- see Input's own doc comment. */
   id?: string;
+  /** Forwarded to the input so a form can flag/describe an invalid selection (no ancestor Field needed). */
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
+  /** Ref to the text input, e.g. for focus-first-error. */
+  inputRef?: React.Ref<HTMLInputElement>;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -125,6 +130,9 @@ export function EntityPicker({
   removeOptionAriaLabel = (label: string) => `Remove ${label}`,
   "aria-label": ariaLabel,
   id,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
+  inputRef,
   className,
   style,
 }: EntityPickerProps) {
@@ -368,8 +376,11 @@ export function EntityPicker({
 
       <Input
         id={id}
+        ref={inputRef}
         role="combobox"
         aria-label={ariaLabel}
+        aria-invalid={ariaInvalid}
+        aria-describedby={ariaDescribedBy}
         aria-expanded={open}
         aria-controls={listboxId}
         aria-activedescendant={activeId}
