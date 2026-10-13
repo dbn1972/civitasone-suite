@@ -365,7 +365,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-AUDIT-01  ·  HIGH  ·  confirmed  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-07: re-confirmed on main 9e34d2e4a, rolling 24h via countLast24h in audit/page.tsx; table timestamps now formatIndianDateTime (IST) by #2017; originally closed by #1864)
 - **First-pass claim:** 'Events (24h)' counts events whose UTC ISO date equals today's UTC date, not a rolling 24 hours and not IST; between 00:00–05:30 IST it shows the previous day's window (audit/page.tsx:12,17).
 - **Verified evidence:** audit/page.tsx:12 `today = new Date().toISOString().slice(0,10)` (UTC date) and :17 counts events whose `timestamp.slice(0,10) === today` under the label 'Events (24h)' (:34). This is a UTC calendar day, neither rolling 24h nor IST; between 00:00-05:30 IST the UTC date is still the previous day. It also assumes timestamps are UTC ISO strings (a +05:30 offset string would compare on IST date). Rendering of the table time uses formatIndianDate (lib/formatters.ts:2) without an explicit timeZone, so display depends on browser TZ.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/audit/page.tsx`, `apps/web/src/lib/formatters.ts`
