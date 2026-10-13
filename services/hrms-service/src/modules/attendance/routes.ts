@@ -258,12 +258,18 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     // reports; HR is unchanged.
     const scope = await resolveSelfOrReportsScopedEmployeeId(ctx, q.empId);
     if (isEmptyScope(scope)) return q.empId && q.month ? reply.send([]) : sendValidated(reply, AttendanceSummaryListSchema, []);
-    const allowed = Array.isArray(scope) ? new Set(scope) : scope ? new Set([scope]) : undefined;
+    const allowed = Array.isArray(scope) ? scope : scope ? [scope] : undefined;
+    // A scoped caller (manager / bare employee) may only ask for ids inside
+    // their scope; the scope helper ignores q.empId for a bare employee.
+    if (q.empId && allowed && !allowed.includes(q.empId)) {
+      return q.month ? reply.send([]) : sendValidated(reply, AttendanceSummaryListSchema, []);
+    }
     if (q.empId && q.month) {
       return reply.send(await queries.getAttendanceByEmpAndMonth(ctx.tenantId, q.empId, q.month));
     }
-    const list = await queries.listAttendance(ctx.tenantId, q.limit);
-    sendValidated(reply, AttendanceSummaryListSchema, allowed ? list.filter((r) => allowed.has(r.employeeId)) : list);
+    // Scope is pushed into the query (before the limit), not filtered after.
+    const list = await queries.listAttendance(ctx.tenantId, q.limit, q.empId ? [q.empId] : allowed);
+    sendValidated(reply, AttendanceSummaryListSchema, list);
   });
 
   app.get("/v1/hrms/attendance/checkin-log", async (req, reply) => {

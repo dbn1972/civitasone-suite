@@ -132,4 +132,17 @@ describe("GET /v1/hrms/attendance — manager scope", () => {
     const own = await get(`/v1/hrms/attendance?empId=${REPORT}&month=2026-11`, ["manager"], SUB.mgr);
     expect((own.json() as unknown[]).length).toBe(1);
   });
+  it("bare employee (no HR/manager role) is rejected 403 for any empId; the route-level empId guard is defence in depth", async () => {
+    for (const q of [`?empId=${OTHER}&month=2026-11`, `?empId=${OTHER}`, `?empId=${REPORT}&month=2026-11`, ""]) {
+      expect((await get(`/v1/hrms/attendance${q}`, ["employee"], SUB.report)).statusCode).toBe(403);
+    }
+  });
+  it("manager: empId outside scope (no month) gets nothing; scope is applied before the limit (limit=1, 3 tenant rows)", async () => {
+    expect((await get(`/v1/hrms/attendance?empId=${OTHER}`, ["manager"], SUB.mgr)).json()).toEqual([]);
+    const r = (await get(`/v1/hrms/attendance?limit=1`, ["manager"], SUB.mgr)).json() as Array<{ employeeId: string }>;
+    expect(r.length).toBe(1);
+    expect([MGR, REPORT]).toContain(r[0]!.employeeId);
+    const rr = (await get(`/v1/hrms/attendance?limit=1&empId=${REPORT}`, ["manager"], SUB.mgr)).json() as Array<{ employeeId: string }>;
+    expect(rr.map((x) => x.employeeId)).toEqual([REPORT]);
+  });
 });
