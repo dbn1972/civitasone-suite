@@ -14,7 +14,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-HOME-01  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** "+ New Project" is a create action rendered as an equal-weight navigation tile with the same 12-tile grid and no role gate (page.tsx:12); users without create rights will reach the form and only fail at POST /api/proxy/v1/projects (new/CreateProjectForm.tsx:82).
 - **Verified evidence:** projects/page.tsx:12 places '+ New Project' inside the same 12 links array as navigation tiles (ModuleHub -> LinkTiles); no permission field. CreateProjectForm.tsx:82 POSTs /api/proxy/v1/projects and only surfaces failure afterwards. Server enforcement unverifiable. Better home for the create action is the list page (already has a '+ New Project' button in PageHeader actions, list/page.tsx:43-47).
 - **Files to change:** `apps/web/src/app/(app)/projects/page.tsx`, `apps/web/src/app/_components/ModuleHub.tsx`, `apps/web/src/app/(app)/projects/new/page.tsx`
@@ -31,7 +31,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-HOME-03  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx paints a stat-grid + table skeleton for a page that has neither (loading.tsx:7-12), so the hub flashes a wrong layout on navigation.
 - **Verified evidence:** projects/loading.tsx:7-12 renders four stat blocks and a large table block, but the hub (page.tsx, ModuleHub) is a header plus a 3-column LinkTiles grid. It also applies as fallback to child routes without their own loading.tsx (fund-releases and milestones have their own; new and [id]/members etc. rely on it).
 - **Files to change:** `apps/web/src/app/(app)/projects/loading.tsx`
@@ -44,7 +44,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-HOME-04  ·  LOW  ·  confirmed  ·  theme COPY (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** RouteError renders "We couldn't open Projects page." — grammatically clipped because area "Projects page" is passed without an article (error.tsx:12, RouteError.tsx).
 - **Verified evidence:** projects/error.tsx:12 passes area='Projects page'; RouteError.tsx:65 renders 'We couldn't open {area}.' giving 'We couldn't open Projects page.' The same area is copy-pasted in dpr-tracking, escalations (and other) error.tsx files. RouteError deliberately renders no article, so callers must pass a clean noun phrase.
 - **Files to change:** `apps/web/src/app/(app)/projects/error.tsx`, `apps/web/src/app/(app)/projects/dpr-tracking/error.tsx`, `apps/web/src/app/(app)/projects/escalations/error.tsx`
@@ -65,7 +65,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** RefreshErrorState is unreachable: the null-project test (page.tsx:13) precedes the source==="error" test (page.tsx:28) and getProjectById falls back to null (loaders.ts:3483), so any outage shows “Project not found … may have been removed”.
 - **Verified evidence:** [id]/page.tsx:13 `if (!project)` returns 'Project Not Found' before :28 `source==='error'`; getProjectById falls back to null (loaders.ts:3482-3488) and fetchJson returns {data: empty, source:'error', status} (apiClient.ts:125-152), so every outage/401/5xx shows not-found; RefreshErrorState is unreachable. LoaderResult.status permits 404 detection.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/page.tsx`
@@ -80,7 +80,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** “Complete: <title>” is rendered for every viewer for each pending milestone (ProjectDetailActions.tsx:20,65-77) although the dialog says it triggers a fund release; no role gate, and the “maker-checker” label describes a single-user confirm with no second approver shown (:95). Any pending milestone can be completed out of sequence.
 - **Verified evidence:** ProjectDetailActions.tsx:20 filters status==='pending' and :65-77 renders a 'Complete: <title>' button for each with no role check; page.tsx:46 passes it to everyone. Dialog (:86-102) danger, requireReason, says 'maker-checker action that triggers a fund release'; onConfirm PATCHes milestones/{id}/complete once (:27-34), so it is one user's confirm with no second approver and no sequencing (any pending milestone). Whether the server enforces role, sequence, maker-checker or fund release cannot be verified (project-service absent).
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/ProjectDetailActions.tsx`, `apps/web/src/app/(app)/projects/[id]/page.tsx`, `project-service milestone complete route (not in snapshot)`
@@ -97,7 +97,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Header actions become an unbounded vertical stack of buttons, one per pending milestone (ProjectDetailActions.tsx:64-77), which pushes the page title layout on projects with many milestones.
 - **Verified evidence:** ProjectDetailActions.tsx:64-77 returns a flex column (gap 8) with one ghost Button per pending milestone inside the PageHeader actions slot; count is unbounded.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/ProjectDetailActions.tsx`, `apps/web/src/app/(app)/projects/[id]/ProjectDetailTables.tsx`
@@ -111,7 +111,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme OTHER (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Gantt derives each bar start from the previous milestone due date and assumes list order (ProjectGantt.tsx:39,57); progress is hard-coded 100/50/0 from status (:40), and “delayed” milestones plot as 0%. The same data is shown three times (table, chart, text table).
 - **Verified evidence:** ProjectGantt.tsx:39 and :57 set start to previous milestone dueDate (index order, not sorted) and project start for the first; :40 and :58 progress = 100 / 50 / 0 by status (delayed and pending 0). The data appears three times: MilestonesDetailTable (page.tsx:77), GanttChart, and the text DataTable in ProjectGantt (:73-82); the last is deliberate accessibility text alternative (comment :69-70). Start dates are derived approximations; does the API supply milestone start/progress? cannot verify.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/ProjectGantt.tsx`
@@ -125,7 +125,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-05  ·  MEDIUM  ·  partly  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** StatusPill maps no "in_progress", "delayed" or "on_hold" keys, so those render as neutral info blue (ds/StatusPill.tsx:6-38); dates print as dd/mm/yyyy from toLocaleDateString (lib/formatters.ts:2-7).
 - **Verified evidence:** StatusPill.tsx:5-39 has 'in progress' (space) but no 'in_progress', 'delayed', or 'on_hold', so milestone statuses in_progress/delayed (ProjectGantt.tsx:20-25) and project status delayed render as 'info' (line 53). Dates: page.tsx uses formatIndianDate (formatters.ts:2-7), which outputs dd/mm/yyyy by design (comment cites GFR/PFMS); not a defect, and no IST timeZone is set.
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/lib/formatters.ts`
@@ -139,6 +139,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 ### GAP-PROJECTS-DETAIL-06  ·  LOW  ·  confirmed  ·  theme OTHER (was DATEFMT)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1869 — 'Spent %' added; the Card of three <Link className='btn'> buttons is still there, no route-based Tabs / [id]/layout.tsx.
 - **First-pass claim:** Expenditure is shown beside Budget without a consumption percentage or comparison to Completion %; sub-page links are plain buttons rather than tabs (page.tsx:61-71).
 - **Verified evidence:** page.tsx:55-57 show Budget, Expenditure, Completion % as separate fields with no utilisation %; :60-71 sub-pages are three <Link className='btn'> buttons in a Card, while ds/Tabs.tsx exists. Theme DATEFMT is wrong.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/page.tsx`, `apps/web/src/app/_components/ds/Tabs.tsx`
@@ -159,7 +160,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-MEMBERS-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1934, verified on main 9c5e9e9e9)
 - **First-pass claim:** Members are identified and added only by raw UUID: the table prints userId (page.tsx:57) and the form asks the user to paste “User ID (UUID)” (AddMemberForm.tsx:54-60). Nobody can tell who a row is, or safely add the right officer.
 - **Verified evidence:** members/page.tsx:49 header 'User ID' and :57 prints m.userId in monospace; AddMemberForm.tsx:54-60 label 'User ID (UUID)' free-text input with UUID placeholder, only a non-empty check (:22). ProjectMemberRow (loaders.ts:5236-5242) carries only userId. No EntityPicker exists in apps/web/src (grep). A user-directory endpoint cannot be verified (services absent).
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/members/page.tsx`, `apps/web/src/app/(app)/projects/[id]/members/AddMemberForm.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/_components/ds/EntityPicker.tsx (new)`
@@ -175,7 +176,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-MEMBERS-02  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Add Member is rendered for every role and even when the list failed to load (page.tsx:32-34); there is no confirmation, and no way to remove or change the role of a member once added (no row actions in page.tsx:55-77).
 - **Verified evidence:** members/page.tsx:32-34 renders <Card title='Add Member'><AddMemberForm/></Card> unconditionally (also when errored, :31); AddMemberForm.tsx:20-49 posts immediately without ConfirmDialog; table rows (:55-77) have only userId/role/date, no actions column. No requireAnyRole/getSessionRoles used in projects pages (lib/auth/roleGuard.ts has requireAnyRole/getSessionRoles). Whether project-service enforces membership permissions or offers DELETE/PATCH member endpoints cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/members/page.tsx`, `apps/web/src/app/(app)/projects/[id]/members/AddMemberForm.tsx`, `apps/web/src/lib/auth/roleGuard.ts`
@@ -191,7 +192,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-MEMBERS-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** On error both DataSourceBadge and RefreshErrorState render (page.tsx:31,36-37) — duplicate messaging; sibling pages (risks/tasks) do the same.
 - **Verified evidence:** members/page.tsx:31 renders DataSourceBadge source='error' and :36-37 RefreshErrorState in the Team Members card, so both show; the Add Member form also stays. risks/page.tsx:44,52-53 and tasks/page.tsx:42,50-51 same. DataSourceBadge (DataSourceBadge.tsx) is only for the legacy pattern where a table still renders.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/members/page.tsx`, `apps/web/src/app/(app)/projects/[id]/risks/page.tsx`, `apps/web/src/app/(app)/projects/[id]/tasks/page.tsx`
@@ -204,7 +205,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-MEMBERS-04  ·  LOW  ·  partly  ·  theme STATUS (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Only project_manager and finance_officer get a tone; project_officer, engineer, viewer are indistinguishable grey (page.tsx:12-22); role label uses replace("_"," ") which only fixes the first underscore (page.tsx:70) versus the global regex used in the form (AddMemberForm.tsx:75).
 - **Verified evidence:** members/page.tsx:12-22 give tone only to project_manager and finance_officer; others grey (true). Line 70 uses .replace('_',' ') but every current role has a single underscore (AddMemberForm.tsx:10) so output is correct today; only inconsistent with the /_/g used at AddMemberForm.tsx:75. Role chip is hand-rolled inline span, not a shared component. Theme VALIDATION is wrong.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/members/page.tsx`
@@ -220,6 +221,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 ### GAP-PROJECTS-DETAIL-MEMBERS-05  ·  LOW  ·  partly  ·  theme DATEFMT
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1869 — formatIndianDate now used, but it echoes an unparseable value verbatim (not '—'), and the table is still a bare tbl-wrap (no DataTable / stacked mobile rows).
 - **First-pass claim:** Table uses a bare .tbl without a mobile card transform, and dates use toLocaleDateString("en-IN") (page.tsx:74) rather than the shared formatIndianDate.
 - **Verified evidence:** members/page.tsx:45-46 uses <div.tbl-wrap><table.tbl> (civitas-ds.css:132 gives horizontal scroll only, no card transform; DataTable has none either). Date at :74 uses toLocaleDateString('en-IN'), which yields the same dd/mm/yyyy as lib/formatters.ts:2-7 formatIndianDate; difference is helper consistency and that an invalid createdAt prints 'Invalid Date' instead of '—'. Neither helper sets timeZone IST, and neither prints 'dd Mon yyyy'.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/members/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -241,7 +243,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-RISKS-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Read-only register with no way to add, edit or close a risk anywhere in the projects route tree (page.tsx has no actions or links); the empty state says only “No risks have been identified”, so a project manager has no path to record one.
 - **Verified evidence:** risks/page.tsx has no actions on PageHeader (:39-43), no links, and the empty state (:55-59) only says none identified. grep finds no web route/form for creating risks (only loader GET at loaders.ts:5275). A backend create endpoint cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/risks/page.tsx`, `apps/web/src/app/(app)/projects/[id]/risks/AddRiskForm.tsx (new)`, `apps/web/src/app/_data/loaders.ts`
@@ -257,7 +259,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-RISKS-02  ·  MEDIUM  ·  partly  ·  theme OTHER (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Score bands are hard-coded (≥ 9 critical, ≥ 4 amber; page.tsx:11,26-35) and probability/impact are unconstrained strings, so the 1-5 matrix behind riskScore is invisible; “Critical” cannot be reconciled with the row data.
 - **Verified evidence:** Thresholds are hard-coded at risks/page.tsx:11 (>=9 critical) and :26-35 (>=9 red, >=4 amber); probability/impact are typed string (loaders.ts:5265-5266) and printed capitalized (:92-97). Nothing shows the scale; the score range and matrix behind riskScore cannot be verified (backend absent). It is not fabricated data, just undocumented presentation rules.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/risks/page.tsx`
@@ -271,7 +273,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-RISKS-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Duplicate error messaging: DataSourceBadge and RefreshErrorState both render (page.tsx:44,52-53); status “open” is styled red here but StatusPill treats “open” as good/green elsewhere (ds/StatusPill.tsx:14).
 - **Verified evidence:** Duplicate messaging at risks/page.tsx:44 and :52-53. Colour conflict: statusBg/statusColor (:14-25) paint 'open' red, while StatusPill.tsx:12 maps 'open' to good. Stat cards already show '—' when errored.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/risks/page.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -285,7 +287,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-RISKS-04  ·  LOW  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status and score meaning is colour-plus-text only inside hand-rolled inline-styled spans, not the shared StatusPill; table has no mobile card transform (page.tsx:61-120).
 - **Verified evidence:** risks/page.tsx:78-90 and :99-111 are inline-styled spans (score, status), status text is raw r.status (:110, lowercase); table :61-62 is a bare .tbl with only overflow scroll. Text is present so meaning is not colour-only.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/risks/page.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -299,7 +301,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-RISKS-05  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Loading uses the parent detail skeleton (no risks/loading.tsx), causing a layout jump.
 - **Verified evidence:** risks/ contains only page.tsx; [id]/loading.tsx:1-13 is the generic detail skeleton (Tailwind slate min-h-screen blocks) which is used for risks, tasks and members too. Also off the design system tokens.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/risks/loading.tsx`, `apps/web/src/app/(app)/projects/[id]/tasks/loading.tsx`, `apps/web/src/app/(app)/projects/[id]/members/loading.tsx`
@@ -319,7 +321,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-TASKS-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Empty state tells end users “Use the API to create tasks.” (page.tsx:56) and the page offers no add/edit control, so a project team cannot build a WBS from the UI; /projects/wbs repeats the dependency (“Create tasks in a project to see the WBS”).
 - **Verified evidence:** tasks/page.tsx:56 message 'Use the API to create tasks.'; no add/edit control on the page; wbs/page.tsx:33 says 'Create tasks in a project to see the WBS.' Backend create-task endpoint cannot be verified (copy implies one exists).
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/tasks/page.tsx`, `apps/web/src/app/(app)/projects/[id]/tasks/AddTaskForm.tsx (new)`, `apps/web/src/app/(app)/projects/wbs/page.tsx`
@@ -334,7 +336,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-TASKS-02  ·  MEDIUM  ·  partly  ·  theme OTHER (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status counts include both parents and sub-tasks (page.tsx:11-14) so totals double-count a parent and its children; only parentTaskId with one level of indent is rendered (:72).
 - **Verified evidence:** tasks/page.tsx:11-14 count all rows incl. sub-tasks; that counts each task once by its own status, so it is not literally a double count unless parent status is a roll-up (cannot verify). Rows are rendered in API order with a fixed 16px indent when parentTaskId is set (:72), not grouped under their parent and only one level. Theme VALIDATION is wrong.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/tasks/page.tsx`
@@ -347,7 +349,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-TASKS-03  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** “Back to Project” action duplicates the header back link (page.tsx:35-40); planned dates print as raw ISO strings (:121-125) and actual dates fetched (loaders.ts:5219-5220) are never shown.
 - **Verified evidence:** tasks/page.tsx:35 back prop and :36-40 'Back to Project' action link to the same URL; :121-125 print t.plannedStart/plannedEnd raw (ISO); actualStart/actualEnd exist in ProjectTaskRow (loaders.ts:5219-5220) but are not rendered. Theme is DATEFMT.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/tasks/page.tsx`
@@ -360,7 +362,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-TASKS-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Duplicate error messaging (DataSourceBadge plus RefreshErrorState; page.tsx:42,50-51). Table lacks the mobile card transform.
 - **Verified evidence:** Duplicate messaging at tasks/page.tsx:42 and :50-51; table :60-61 bare .tbl (scroll only).
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/tasks/page.tsx`
@@ -374,7 +376,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-TASKS-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Progress bar colour is amber unless exactly ≥ 100% and blocked tasks show progress in amber, ignoring status (page.tsx:107-112).
 - **Verified evidence:** tasks/page.tsx:107-112 bar colour good only if progressPct>=100 else warn regardless of status (blocked stays amber); width `${t.progressPct}%` is not clamped to 0-100.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/tasks/page.tsx`
@@ -393,7 +395,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-BENEFICIARIES-01  ·  HIGH  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** DPDP: beneficiary names, social category and disbursement are shown to every module user with no role gate or masking and can be exported in one click to CSV (BeneficiariesTable.tsx:46-54; page.tsx has no requireAnyRole).
 - **Verified evidence:** BeneficiariesTable.tsx:16-22 shows Name, District, Category, Disbursement columns and DataTable exportable (line 53) downloads CSV of all sorted rows (DataTable.tsx:274-290) with no audit/masking. page.tsx has no requireAnyRole; projects/layout.tsx only applies ModuleGate (tenant module flag). Server-side role scoping in the projects service cannot be verified (service absent). No Aadhaar/phone shown; category is sensitive social category.
 - **Files to change:** `apps/web/src/app/(app)/projects/beneficiaries/page.tsx`, `apps/web/src/app/(app)/projects/beneficiaries/BeneficiariesTable.tsx`, `apps/web/src/app/(app)/projects/beneficiaries/layout.tsx`
@@ -409,7 +411,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-BENEFICIARIES-02  ·  HIGH  ·  confirmed  ·  theme LOGIC (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tiles misreport verification: “Verified” and “Active” are the same count (page.tsx:23-24) and “Pending Verification” = pending + rejected (page.tsx:25), so rejected applicants look pending; the Verified column pill reads “Active”.
 - **Verified evidence:** page.tsx:14-16 active = verified==='active', pending, notVerified = rejected. Tiles: 'Active' (line 23) and 'Verified' (line 24) both use `active`; 'Pending Verification' = pending + notVerified (line 25) so rejected counts as pending. The table 'Verified' column uses cellType:'status' (BeneficiariesTable.tsx:23), and StatusPill humanizes value 'active' to 'Active' (StatusPill.tsx:61).
 - **Files to change:** `apps/web/src/app/(app)/projects/beneficiaries/page.tsx`, `apps/web/src/app/(app)/projects/beneficiaries/BeneficiariesTable.tsx`
@@ -425,7 +427,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-BENEFICIARIES-04  ·  MEDIUM  ·  partly  ·  theme LOADING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Loading is one bare .skeleton block (loading.tsx:4) with no header or stat placeholders; rows link nowhere so there is no beneficiary detail view.
 - **Verified evidence:** loading.tsx:3-5 is a single .skeleton block without header/stat placeholders: confirmed. DataTable in BeneficiariesTable.tsx:44-52 has no rowHref/onRowClick, and no beneficiary detail route exists under projects/beneficiaries (only page, table, loading, error): confirmed. Theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/(app)/projects/beneficiaries/loading.tsx`
@@ -438,7 +440,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-BENEFICIARIES-05  ·  LOW  ·  partly  ·  theme COPY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** The DataTable renders its own “No beneficiaries match the current filter.” but the empty card has no distinction between “none registered” and “filtered out” beyond copy.
 - **Verified evidence:** BeneficiariesTable.tsx:57-59 emptyMessage 'No beneficiaries match the current filter.' is only reachable when rows exist but filter matches none (page.tsx:32 renders a separate EmptyState 'No beneficiaries' when rows.length===0). So the distinction the finding wants already exists at page level; remaining issue is only that the DataTable empty title reads 'No beneficiaries' rather than 'No matches'. Theme I18N is wrong; strings are hardcoded English.
 - **Files to change:** `apps/web/src/app/(app)/projects/beneficiaries/BeneficiariesTable.tsx`
@@ -458,7 +460,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DASHBOARD-01  ·  HIGH  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Column titled “RAG Status” is bound to the lifecycle status field (DashboardProjectsTable.tsx:40; page.tsx:42 never maps rag into the row), so RAG is not shown at all on the RAG dashboard; StatusPill also renders "delayed" as neutral info blue (ds/StatusPill.tsx:6-38).
 - **Verified evidence:** dashboard/page.tsx:34-43 builds rows with status: p.status and no rag; DashboardProjectsTable.tsx:40 declares { key:'status', label:'RAG Status', cellType:'status' } so DataTable.tsx:127 renders StatusPill of the lifecycle status. /projects/list/page.tsx:22-24 shows ProjectSummary.rag (green/amber/red) exists. StatusPill.tsx:5-39 STATUS_MAP has no 'delayed','on_hold','in_progress' so they fall back to 'info' (line 53).
 - **Files to change:** `apps/web/src/app/(app)/projects/dashboard/page.tsx`, `apps/web/src/app/(app)/projects/dashboard/DashboardProjectsTable.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -476,7 +478,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DASHBOARD-02  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Outlay is rounded to whole crore with Math.round(totalOutlay / 1e9) (page.tsx:32): ₹0.4 Cr shows "₹0 Cr" and the paise-exact total is lost; the "(FY)" label has no fiscal-year parameter in the request (loaders.ts:3465).
 - **Verified evidence:** dashboard/page.tsx:31-32 outlayInCrores = Math.round(data.totalOutlay / 1e9) (comment says paise), rendered at :59 as ₹{n} Cr; 4,00,00,000 paise (₹0.4 Cr) -> '₹0 Cr'. Label 'Outlay (FY)' (:58) but loaders.ts:3464-3471 calls /api/v1/project/dashboard with no FY/query param, so FY is unsupported by the request (backend semantics cannot be verified; project-service absent). Math.round on a JS number also loses precision above 2^53 paise.
 - **Files to change:** `apps/web/src/app/(app)/projects/dashboard/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -491,7 +493,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DASHBOARD-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Projects" tile uses data.totalProjects from /dashboard while the table uses rows from /projects (page.tsx:54,34); the two can disagree and neither is reconciled or explained.
 - **Verified evidence:** page.tsx:54 tile uses data.totalProjects from getProjectsDashboard (/api/v1/project/dashboard) whereas the table rows (:34) come from getProjects (/api/v1/project/projects), fetched separately at :16-20. Nothing reconciles or caveats them; whether they can differ (e.g. archived/cancelled or pagination) cannot be verified because project-service is absent.
 - **Files to change:** `apps/web/src/app/(app)/projects/dashboard/page.tsx`
@@ -506,7 +508,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DASHBOARD-04  ·  LOW  ·  confirmed  ·  theme OTHER (was MONEY)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** onTrackPct is fetched (loaders.ts:3459) but never displayed; formatMoney is imported in page.tsx:11 and unused there.
 - **Verified evidence:** onTrackPct is in PROJECTS_DASHBOARD_EMPTY (loaders.ts:3457-3462) and the response schema but page.tsx never reads it; formatMoney is imported at page.tsx:11 and unused (formatMoney used only in DashboardProjectsTable.tsx:4). Theme MONEY is wrong; it is dead code / unused data.
 - **Files to change:** `apps/web/src/app/(app)/projects/dashboard/page.tsx`
@@ -520,7 +522,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DASHBOARD-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Error state has no backHref (page.tsx:71) although every sibling list page passes /projects.
 - **Verified evidence:** page.tsx:71 <RefreshErrorState error=... /> has no backHref, and PageHeader (:47-51) has no back prop; sibling delay-analysis/page.tsx:20,30 passes back='/projects' and backHref='/projects'. No dashboard/error.tsx exists either (dir has DashboardProjectsTable, loading, page only); the parent projects/error.tsx handles thrown errors.
 - **Files to change:** `apps/web/src/app/(app)/projects/dashboard/page.tsx`, `apps/web/src/app/(app)/projects/dashboard/error.tsx`
@@ -541,7 +543,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DELAY-ANALYSIS-01  ·  HIGH  ·  partly  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** A “RAG dashboard” with no red/amber/green: rag is compared to active/review/overdue (page.tsx:14-16) and rendered through StatusPill as “Active / Review / Overdue”; the semantics of “At Risk” = “review” are undocumented in the page, and the real RAG (green/amber/red) used by /projects/list is a different field.
 - **Verified evidence:** delay-analysis/page.tsx:14-16 counts r.rag==='active'|'review'|'overdue' (ProjectDelayRow.rag is a plain string, loaders.ts:5197) and DelayAnalysisTable.tsx:26 renders it with cellType 'status' -> StatusPill, which does colour these (active good/green, review warn/amber, overdue bad/red per StatusPill.tsx:6,18,28), so colour is RAG-like, but labels read Active/Review/Overdue. Tiles are labelled On Track/At Risk/Delayed. /projects/list uses green/amber/red (list/page.tsx:22-24), so the vocabulary is inconsistent; any other value (e.g. 'green') falls in no tile so Total may not equal the sum. What the delay-analysis endpoint (/api/v1/projects/delay-analysis) actually returns cannot be verified (backend absent).
 - **Files to change:** `apps/web/src/app/(app)/projects/delay-analysis/page.tsx`, `apps/web/src/app/(app)/projects/delay-analysis/DelayAnalysisTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -558,7 +560,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DELAY-ANALYSIS-02  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Project name is plain text with no link to /projects/[id] and there is no id in the row shape (DelayAnalysisTable.tsx:6-13), so a delayed project cannot be opened from here.
 - **Verified evidence:** DelayRow (DelayAnalysisTable.tsx:6-13) and ProjectDelayRow (loaders.ts:5191-5198) have only project (name) with no id; the DataTable at :45-57 passes no rowLinkPrefix/rowLinkKey (unlike dashboard/DashboardProjectsTable.tsx:48-49), so names are plain text.
 - **Files to change:** `apps/web/src/app/(app)/projects/delay-analysis/DelayAnalysisTable.tsx`, `apps/web/src/app/_data/loaders.ts`, `project-service delay-analysis route (not in snapshot)`
@@ -573,7 +575,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DELAY-ANALYSIS-04  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Loading is one bare .skeleton block (loading.tsx:4).
 - **Verified evidence:** delay-analysis/loading.tsx:1-7 renders one <div class='skeleton'> in .page-main.wrap; the page has PageHeader, 4-tile StatGrid and a table Card. Compare dashboard/loading.tsx (16 lines). error.tsx exists and is correct.
 - **Files to change:** `apps/web/src/app/(app)/projects/delay-analysis/loading.tsx`
@@ -593,7 +595,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DPR-TRACKING-01  ·  HIGH  ·  confirmed  ·  theme WORKFLOW (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1934, verified on main 9c5e9e9e9)
 - **First-pass claim:** No workflow: DPRs can only be viewed, never submitted, reviewed, approved or returned from the UI (no actions in page.tsx or DprTrackingTable.tsx), and “Returned” is really status “rejected” (page.tsx:16), which changes the meaning for a submitter.
 - **Verified evidence:** dpr-tracking/page.tsx:8-37 is a read-only server page; DprTrackingTable.tsx:46-58 is a DataTable with no action column or buttons. Only loader is getProjectDprs -> GET /api/v1/projects/dprs (loaders.ts:5168); no submit/review/approve/return call exists anywhere under projects/dpr-tracking. page.tsx:16 counts status==='rejected' under the label 'Returned' (StatCard line 25) while the row pill (StatusPill maps rejected->bad) will read 'Rejected', so tile and row disagree. Backend endpoints for DPR transitions cannot be seen (project-service absent).
 - **Files to change:** `apps/web/src/app/(app)/projects/dpr-tracking/page.tsx`, `apps/web/src/app/(app)/projects/dpr-tracking/DprTrackingTable.tsx`, `apps/web/src/app/(app)/projects/dpr-tracking/DprActions.tsx (new)`
@@ -612,7 +614,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DPR-TRACKING-03  ·  MEDIUM  ·  partly  ·  theme LINK/PII (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** DPR number is not linked to a project or document, and “Submitted By” is free text (possibly a named officer — DPDP-relevant) shown to every module user (DprTrackingTable.tsx:6-14).
 - **Verified evidence:** DprTrackingTable.tsx:6-14 row type has dprNo, projectTitle, submittedBy (plain string), no projectId, so DPR number and title are unlinked (no rowLinkPrefix at :46-58). Table is exportable (:53) so submittedBy goes into CSV and, via useSeededResource('projects.dprs') (:31), is also written to the offline cache on the device. Whether submittedBy is a named person is unknown (could be an agency); no <Masked> component exists in the repo (only a local MaskedInput in hr Step4). Access is only the module gate (projects/layout.tsx).
 - **Files to change:** `apps/web/src/app/(app)/projects/dpr-tracking/DprTrackingTable.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`, `apps/web/src/app/_data/loaders.ts`
@@ -629,7 +631,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DPR-TRACKING-04  ·  LOW  ·  partly  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Loading is a single bare .skeleton block (loading.tsx:4); submitted date prints as delivered string.
 - **Verified evidence:** loading.tsx:3-5 is one bare .skeleton div, while the page renders header, 4 stat cards and a card table (page.tsx:19-37). Submitted date is a raw string column (DprTrackingTable.tsx:24, no render/formatIndianDate); estimatedCost is also a raw string with '(₹ Cr)' in the label. Error boundary already uses RouteError with retry+back (error.tsx:7-13), so that part of the suggested fix is done; its area 'Projects page' gives clipped copy (see HOME-04).
 - **Files to change:** `apps/web/src/app/(app)/projects/dpr-tracking/loading.tsx`, `apps/web/src/app/(app)/projects/dpr-tracking/DprTrackingTable.tsx`
@@ -651,7 +653,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-ESCALATIONS-01  ·  HIGH  ·  confirmed  ·  theme COUNTS (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tile maths is wrong or mislabelled: “Critical” and “High” count all rows by severity including cleared ones, and “Resolved This Month” counts every cleared row with no month filter (page.tsx:13-16), so the queue can show resolved items as Critical and last year’s closures as “this month”.
 - **Verified evidence:** escalations/page.tsx:13-16: active = status!=='cleared'; critical = severity==='blocked' and high = severity==='overdue' with no status filter, so cleared rows still count as Critical/High; resolvedThisMonth = every status==='cleared' row with no date test (row type has only raisedDate, no cleared date: EscalationsTable.tsx:6-14 / loaders.ts:5119). Tile labels do not match severity values. i18n is not the issue (theme tag wrong).
 - **Files to change:** `apps/web/src/app/(app)/projects/escalations/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -667,7 +669,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-ESCALATIONS-02  ·  HIGH  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1934, verified on main 9c5e9e9e9)
 - **First-pass claim:** A queue with no actions: escalations cannot be acknowledged, reassigned or cleared from the UI (no controls in EscalationsTable.tsx), and “open” is painted green by StatusPill (ds/StatusPill.tsx:14) — an unresolved blocker looks healthy.
 - **Verified evidence:** EscalationsTable.tsx:20-28 has display-only columns; no action/ConfirmDialog. StatusPill.tsx:12 maps 'open' to 'good' (green), so an open escalation renders green; 'cleared' also good, so open vs cleared are visually identical. Changing the global map affects every module that uses status 'open'.
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/app/(app)/projects/escalations/EscalationsTable.tsx`, `apps/web/src/app/(app)/projects/escalations/EscalationActions.tsx (new)`
@@ -683,7 +685,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-ESCALATIONS-03  ·  MEDIUM  ·  partly  ·  theme NAVUX (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Severity vocabulary is borrowed from status words (blocked/overdue) rather than critical/high; rows show a raw escalationId and the project as text with no link (EscalationsTable.tsx:6-14).
 - **Verified evidence:** EscalationsTable.tsx:21-28 shows escalationId as first column and project as plain text; row type (:6-14) carries no projectId so no link is possible. Severity words: page.tsx:14-15 treats 'blocked' as Critical and 'overdue' as High, i.e. the API severity values are status-like (StatusPill.tsx:27,31 shows them red). Layer: needs backend to expose projectId and a real severity enum.
 - **Files to change:** `apps/web/src/app/(app)/projects/escalations/EscalationsTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -699,7 +701,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-ESCALATIONS-04  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Loading is a single bare .skeleton block (loading.tsx:4).
 - **Verified evidence:** escalations/loading.tsx:3-5 is one bare .skeleton div versus header + 4 tiles + table on the page (page.tsx:19-37). error.tsx already has RouteError with retry and back link, so the rest of the suggested fix exists.
 - **Files to change:** `apps/web/src/app/(app)/projects/escalations/loading.tsx`
@@ -719,7 +721,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-FUND-RELEASES-01  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Money-moving action for everyone: Disburse renders on every sanctioned row with no role gate and a single-user confirm (FundReleasesTable.tsx:44-51; FundReleasesActions.tsx:61-73); no second approver or amount recap in the dialog. Whether the server enforces role and audit cannot be checked (project-service absent).
 - **Verified evidence:** FundReleasesTable.tsx:43-51 renders <DisburseButton> for every row with status 'sanctioned' (DISBURSE_ELIGIBLE :13) with no role check; FundReleasesActions.tsx:61-73 is a single ConfirmDialog (requireReason) whose description (:64) does not show amount or project. PATCH /api/proxy/v1/projects/schemes/{id}/fund-releases/{rid}/disburse (:26-33); no second approver. Server enforcement/audit cannot be verified (project-service absent). A server-side role source exists (lib/auth/roleGuard.ts getSessionRoles) but is server-only, so the page must pass a boolean down.
 - **Files to change:** `apps/web/src/app/(app)/projects/fund-releases/page.tsx`, `apps/web/src/app/(app)/projects/fund-releases/FundReleasesTable.tsx`, `apps/web/src/app/(app)/projects/fund-releases/FundReleasesActions.tsx`
@@ -737,7 +739,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-FUND-RELEASES-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** One free-text field is both the reason and the PFMS reference: the dialog asks “PFMS reference / reason” and sends { pfmsRef: reason } (FundReleasesActions.tsx:31,66-67), so any sentence is stored as a PFMS reference and there is no format check or separate audit reason.
 - **Verified evidence:** FundReleasesActions.tsx:66-67 sets requireReason with label 'PFMS reference / reason'; :31 sends {pfmsRef: reason}. One string is both audit reason and PFMS ref, with no format validation (ConfirmDialog supports min/maxReasonLength only). Nothing in the client separates the two; whether the server audits is unverifiable.
 - **Files to change:** `apps/web/src/app/(app)/projects/fund-releases/FundReleasesActions.tsx`, `apps/web/src/app/_components/ds/ConfirmDialog.tsx`
@@ -769,6 +771,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 ### GAP-PROJECTS-FUND-RELEASES-04  ·  MEDIUM  ·  partly  ·  theme STATUS
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1869 — table pills now carry scoped tones (sanctioned warn, released/utilized good); remaining: 'utilized' shares released's colour, Released tile still counts status==='released' only (excludes utilized) and totals still use JS-number reduce on paise.
 - **First-pass claim:** StatusPill has no keys for released, sanctioned or utilized, so all three render identical neutral “info” blue (ds/StatusPill.tsx:6-38); tiles are exclusive status buckets, so a utilized release drops out of “Released”.
 - **Verified evidence:** StatusPill.tsx:5-38 has no 'released', 'sanctioned' or 'utilized' keys, so all fall to variant 'info' (:53). True. Tiles (page.tsx:14-16) filter by exclusive status equality, so if a release moves released->utilized it leaves the Released sum; whether 'utilized' is a status of the same record or a separate state is not verifiable (types package absent). Also sums use JS number reduce on paise.
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/app/(app)/projects/fund-releases/page.tsx`
@@ -783,7 +786,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-FUND-RELEASES-05  ·  MEDIUM  ·  confirmed  ·  theme NAVUX
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** No back link in PageHeader (page.tsx:22-25), no project link per row, and RefreshErrorState has no backHref (page.tsx:35); loading shows 3 stat blocks for 4 tiles.
 - **Verified evidence:** page.tsx:22-25 PageHeader has no back prop; :35 RefreshErrorState has no backHref; FundReleasesTable.tsx:23-24 projectName is plain text with no link. loading.tsx:7-10 renders 3 blocks (md:grid-cols-3) while page has 4 StatCards (:27-30). No error.tsx exists in fund-releases (or milestones/list) so it inherits projects/error.tsx.
 - **Files to change:** `apps/web/src/app/(app)/projects/fund-releases/page.tsx`, `apps/web/src/app/(app)/projects/fund-releases/FundReleasesTable.tsx`, `apps/web/src/app/(app)/projects/fund-releases/loading.tsx`
@@ -798,7 +801,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-FUND-RELEASES-06  ·  LOW  ·  partly  ·  theme EMPTY (was MONEY)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Empty list shows ₹0.00 sums rather than “—”; no success confirmation after disburse besides router.refresh (FundReleasesActions.tsx:39-41).
 - **Verified evidence:** page.tsx:27-30: when not errored and list is empty, tiles show formatMoney(0) = '₹0.00' (reduce over [] gives 0), which is a true zero, but the EmptyState below says none exist; on error tiles correctly show '—'. Post-disburse: FundReleasesActions.tsx:39-41 closes dialog and router.refresh() only; no success message.
 - **Files to change:** `apps/web/src/app/(app)/projects/fund-releases/page.tsx`, `apps/web/src/app/(app)/projects/fund-releases/FundReleasesActions.tsx`
@@ -819,7 +822,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-LIST-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch reads as good news: stat tiles show real zeros and the table shows “No projects yet” beside a small badge (page.tsx:20-24,54-57; ProjectsTable.tsx:37-43). /projects/dashboard nulls its tiles and renders RefreshErrorState for the same data.
 - **Verified evidence:** list/page.tsx:7-24 never checks source; on failure getProjects returns [] so tiles show 0 (:54-57) and ProjectsTable.tsx:37-43 renders DataSourceBadge 'Couldn't load — showing nothing' plus EmptyState 'No projects yet'. dashboard/page.tsx:70-72 by contrast renders RefreshErrorState when anyError. The cached fallback (useSeededResource) is fine and should be kept.
 - **Files to change:** `apps/web/src/app/(app)/projects/list/page.tsx`, `apps/web/src/app/(app)/projects/list/ProjectsTable.tsx`
@@ -834,7 +837,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-LIST-02  ·  MEDIUM  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** StatusPill has no mapping for delayed, on_hold or completed-adjacent RAG words, so a Delayed project renders in the neutral “info” blue rather than red (ds/StatusPill.tsx:6-38 vs list/ProjectsTable.tsx:19).
 - **Verified evidence:** StatusPill.tsx:5-38 has no 'delayed', 'on_hold' or 'on hold' key (also 'in_progress' with underscore misses 'in progress'), so they fall to 'info' (:53). ProjectsTable.tsx:19 renders lifecycle status via cellType 'status'. The lifecycle enum values (delayed, on_hold) are referenced in list/page.tsx:8-20 comments/code.
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -848,7 +851,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-LIST-03  ·  MEDIUM  ·  partly  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Completion % is passed as a pre-formatted string (page.tsx:33) so it cannot sort numerically, and the table has no sortable/filterable/pageSize flags — the full project list renders unpaginated (ProjectsTable.tsx:45).
 - **Verified evidence:** list/page.tsx:33 sends completionPct as a string like '12.5%'; ProjectsTable.tsx:45 DataTable has no sortable/filterable/pageSize props, so there is no sorting, filtering or pagination and all rows render. DataTable.compareValues (DataTable.tsx:169) uses localeCompare numeric:true, so a string sort would in fact order '9.0%' before '10.0%'; the 'cannot sort numerically' claim is overstated. Fetch is one unpaginated call (loaders.ts:3473), so server-side pagination needs a backend contract.
 - **Files to change:** `apps/web/src/app/(app)/projects/list/ProjectsTable.tsx`, `apps/web/src/app/(app)/projects/list/page.tsx`
@@ -863,7 +866,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-LIST-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tiles cover only active+delayed projects (page.tsx:20-24) while the table lists every status; a reviewer summing tiles will not reach the row count and nothing explains the scope.
 - **Verified evidence:** list/page.tsx:20-24 restricts tiles to status active|delayed and RAG green/amber/red, while rows (:26-35) include every status. The explanatory comment (:8-19) is in code only; the UI does not say so.
 - **Files to change:** `apps/web/src/app/(app)/projects/list/page.tsx`
@@ -876,7 +879,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-LIST-05  ·  LOW  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** The RAG value is fetched (page.tsx:22-24) but never shown per row; the last column is lifecycle status, not RAG.
 - **Verified evidence:** list/page.tsx:22-24 uses p.rag only to build tiles; the row mapping (:26-35) and ProjectRow (ProjectsTable.tsx:7-10) omit rag, and the last column (:19) is lifecycle status. So RAG is not visible per project. (The RAG value is used, not dead; it is just not shown per row.)
 - **Files to change:** `apps/web/src/app/(app)/projects/list/page.tsx`, `apps/web/src/app/(app)/projects/list/ProjectsTable.tsx`
@@ -898,7 +901,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-MILESTONES-01  ·  HIGH  ·  confirmed  ·  theme COPY (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle promises “Define milestones, track achievement, trigger payment release” (page.tsx:23) but the page can do none of these: it is a read-only list with no create, complete or release control; completion is only on /projects/[id] (ProjectDetailActions.tsx).
 - **Verified evidence:** milestones/page.tsx:23 subtitle 'Define milestones, track achievement, trigger payment release.' but MilestonesTable.tsx:9-24 is read-only with no actions. Only completion exists, on the project page: [id]/ProjectDetailActions.tsx:20-39 (POST .../milestones/{id}/complete, pending only). No create or payment-release control anywhere seen.
 - **Files to change:** `apps/web/src/app/(app)/projects/milestones/page.tsx`, `apps/web/src/app/(app)/projects/milestones/MilestonesTable.tsx`
@@ -914,7 +917,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-MILESTONES-02  ·  MEDIUM  ·  partly  ·  theme COUNTS (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tiles do not reconcile: in_progress milestones are counted in no tile (page.tsx:13-15), so Pending + Completed + Delayed < Total.
 - **Verified evidence:** milestones/page.tsx:13-15 counts only pending, completed and delayed; Total is milestones.length (:26). Any other status (e.g. in_progress as the observation says) is uncounted. The MilestoneSummary status enum lives in @civitasone/types, absent here, so in_progress existence is unverified; StatusPill has 'in progress' but not 'in_progress'.
 - **Files to change:** `apps/web/src/app/(app)/projects/milestones/page.tsx`
@@ -927,7 +930,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-MILESTONES-03  ·  MEDIUM  ·  partly  ·  theme NAVUX
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Rows carry no project id or link (MilestonesTable.tsx:15-16), so a delayed milestone cannot be opened; PageHeader has no back link and RefreshErrorState no backHref (page.tsx:21-36).
 - **Verified evidence:** MilestonesTable.tsx:15-16 columns are projectName and title only, no rowLinkPrefix; whether MilestoneSummary includes projectId cannot be seen (types absent). page.tsx:21-24 PageHeader has no back; :34 RefreshErrorState has no backHref. Fund-releases uses r.projectId from the sibling summary so a projectId likely exists but unverified.
 - **Files to change:** `apps/web/src/app/(app)/projects/milestones/page.tsx`, `apps/web/src/app/(app)/projects/milestones/MilestonesTable.tsx`
@@ -940,7 +943,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-MILESTONES-04  ·  LOW  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** StatusPill renders in_progress and delayed as neutral info (ds/StatusPill.tsx:6-38); loading shows 3 blocks for 4 tiles (loading.tsx:8-10).
 - **Verified evidence:** StatusPill.tsx has no 'in_progress' or 'delayed' key (delayed is missing; 'in progress' with space exists), so they render 'info'. milestones/loading.tsx:8-10 shows 3 blocks (Array length 3) under grid-cols-4 vs 4 StatCards at page.tsx:26-29.
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/app/(app)/projects/milestones/loading.tsx`
@@ -961,7 +964,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-NEW-01  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Form captures no scheme or department, yet the list and dashboard show Scheme and Agency/Dept columns (list/ProjectsTable.tsx:15-16); every project created here shows “—” in both and cannot be linked to a scheme from the UI (CreateProjectForm.tsx:72-79).
 - **Verified evidence:** CreateProjectForm.tsx fields are code, projectName, startDate, endDate, sanctionedRupees, dprCostRupees; body built at :72-79 has no scheme or department. list/page.tsx:30-31 defaults scheme and department to '—'. Whether POST /v1/projects accepts schemeId/department cannot be verified (project-service absent); getSchemes exists (loaders.ts:3509) for a picker.
 - **Files to change:** `apps/web/src/app/(app)/projects/new/CreateProjectForm.tsx`, `apps/web/src/app/(app)/projects/new/page.tsx`
@@ -976,7 +979,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-NEW-02  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was CAP)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Only the first validation error is shown as one paragraph; aria-invalid is set but no per-field message, no aria-describedby and no focus move (CreateProjectForm.tsx:25-52,199-212).
 - **Verified evidence:** CreateProjectForm.tsx:25-52 validate() returns on the first failing rule; the message renders once at :199-212 in one paragraph; inputs set aria-invalid (:119,135,161,176,192) but no aria-describedby, no per-field error text, and no focus move to the invalid input. Theme is form accessibility, not CAP.
 - **Files to change:** `apps/web/src/app/(app)/projects/new/CreateProjectForm.tsx`
@@ -992,7 +995,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-NEW-04  ·  LOW  ·  partly  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Amounts are typed as plain rupees with no lakh grouping or echo ("5000000"), and converted with floating Math.round(Number(x)*100) (:78-79); very large sanctions risk precision loss.
 - **Verified evidence:** CreateProjectForm.tsx:78-79 use Math.round(Number(x)*100) (float; 1.005 mis-rounds, contrary to lib/money.ts:1-9 guidance). Realistic precision loss at very large values is negligible (needs ~9e13 rupees), so 'large sanctions' overstated. Inputs are type=number with no lakh grouping or echo (:166-196). A safe helper already exists: rupeesToMinorString in lib/money.ts (rejects >2 decimals, returns string; rejects zero).
 - **Files to change:** `apps/web/src/app/(app)/projects/new/CreateProjectForm.tsx`, `apps/web/src/lib/money.ts`
@@ -1008,7 +1011,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-NEW-05  ·  LOW  ·  partly  ·  theme NAVUX (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Cancel and back both return to /projects/list, not the hub the user may have come from (new/page.tsx:10; CreateProjectForm.tsx:223).
 - **Verified evidence:** new/page.tsx:10 back='/projects/list'; CreateProjectForm.tsx:223 Cancel to /projects/list; success also pushes /projects/list (:92). This is a fixed parent target, not history-aware. Reasonable since the list is the natural parent and the hub links to /projects/list first; low impact.
 - **Files to change:** `apps/web/src/app/(app)/projects/new/page.tsx`, `apps/web/src/app/(app)/projects/new/CreateProjectForm.tsx`
@@ -1028,7 +1031,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-SCHEMES-01  ·  HIGH  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1953, verified on main 9c5e9e9e9)
 - **First-pass claim:** Two money units for the same scheme: the list returns whole rupees and is printed with formatRupees (SchemesTable.tsx:37-47; page.tsx:15-16, COMP-017), whereas the detail route returns minor-unit strings printed with formatMoney (schemes/[id]/page.tsx:80,103). The convention rests on comments; a wrong formatter is a silent 100x error (fund-releases list is paise as well).
 - **Verified evidence:** Same as DETAIL-01: schemes/page.tsx:15-16,36-37 and SchemesTable.tsx:37-47 use formatRupees; schemes/[id]/page.tsx:80,103 use formatMoney. Documented in comments (page.tsx:29-35, SchemesTable.tsx:24-36). Claim that fund-releases is paise: loaders.ts:3500 uses FundReleaseSummaryListSchema, not verifiable for units here (types package absent). Duplicate of DETAIL-01.
 - **Files to change:** `services/project-service (scheme list response)`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/projects/schemes/SchemesTable.tsx`, `apps/web/src/app/(app)/projects/schemes/page.tsx`
@@ -1044,7 +1047,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-SCHEMES-02  ·  MEDIUM  ·  confirmed  ·  theme NAVUX
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Scheme code is the first column but the row link is on Name (identifyingColumnKey; SchemesTable.tsx:65-68); no “Projects #” drill-through, and the PageHeader has no back link and RefreshErrorState no backHref (page.tsx:22-43).
 - **Verified evidence:** SchemesTable.tsx:16 schemeCode is column 0; :65-68 rowHref plus identifyingColumnKey='name' (deliberate UX-015). Projects # is displayed as a plain number (:48) with no link. schemes/page.tsx:22-25 PageHeader has no back prop; :42 RefreshErrorState has no backHref. Row-link on name is intentional, so that part is a design choice rather than a defect.
 - **Files to change:** `apps/web/src/app/(app)/projects/schemes/page.tsx`, `apps/web/src/app/(app)/projects/schemes/SchemesTable.tsx`
@@ -1059,7 +1062,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-SCHEMES-03  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Empty list shows ₹0.00 for both money tiles instead of “—” (page.tsx:15-16,36-37); loading.tsx omits stat placeholders so the page jumps (loading.tsx).
 - **Verified evidence:** schemes/page.tsx:15-16 reduce over [] gives 0 when not errored, so :36-37 render formatRupees(0) = '₹0.00' for an empty scheme list (only the errored branch shows '—'). schemes/loading.tsx:4-8 renders title bars and one h-80 block, no stat-card placeholders, and uses tailwind min-h-screen unlike sibling loading files.
 - **Files to change:** `apps/web/src/app/(app)/projects/schemes/page.tsx`, `apps/web/src/app/(app)/projects/schemes/loading.tsx`
@@ -1074,7 +1077,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-SCHEMES-04  ·  LOW  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** The subtitle promises “Physical & financial progress, beneficiaries” (page.tsx:24) but the table shows neither physical progress nor beneficiary counts (SchemesTable.tsx:15-49).
 - **Verified evidence:** schemes/page.tsx:24 subtitle 'Physical & financial progress, beneficiaries — scheme-wise.'; SchemesTable.tsx:16-49 columns are code, name, ministry, funding type, allocation, released, projects #, status: no physical progress or beneficiaries. Detail page does show beneficiaries (page.tsx:84-87). Whether SchemeSummary carries those fields cannot be seen (package absent).
 - **Files to change:** `apps/web/src/app/(app)/projects/schemes/page.tsx`
@@ -1094,7 +1097,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-SCHEMES-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1953, verified on main 9c5e9e9e9)
 - **First-pass claim:** Unit clash with the list: this page prints budget and released with formatMoney (paise, page.tsx:80,103) while /projects/schemes prints the same scheme’s allocation with formatRupees (rupees, SchemesTable.tsx:40-47). Correct only because of two comments (COMP-016/017); no shared type prevents a 100x display error.
 - **Verified evidence:** schemes/[id]/page.tsx:80,103 print scheme.totalOutlayMinor/releasedMinor via formatMoney (paise); schemes/SchemesTable.tsx:37-47 and schemes/page.tsx:15-16,36-37 print totalAllocation/releasedAmount via formatRupees (whole rupees, per COMP-017 comments). Both correct today; the unit split lives only in comments and in the loaders' zod schemas. SchemeSummary/SchemeDetail types live in packages/types, absent from snapshot, so field types cannot be checked.
 - **Files to change:** `services/project-service (scheme list response)`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/projects/schemes/SchemesTable.tsx`, `apps/web/src/app/(app)/projects/schemes/page.tsx`
@@ -1112,7 +1115,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-SCHEMES-DETAIL-02  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Utilized % is interpolated raw (`${scheme.utilisationPct}%`, page.tsx:81) with no rounding and start/end dates are printed as delivered ISO strings (page.tsx:105-107) while other pages use formatIndianDate.
 - **Verified evidence:** schemes/[id]/page.tsx:81 renders `${scheme.utilisationPct}%` with no rounding or null guard (type not visible; package absent); page.tsx:105,107 print scheme.startDate/endDate raw (ISO or '—'). formatIndianDate exists in lib/formatters.ts:2 and is used by projects/[id]/page.tsx:4. Note it outputs dd/mm/yyyy (2-digit month), not 'dd Mon yyyy'.
 - **Files to change:** `apps/web/src/app/(app)/projects/schemes/[id]/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -1127,7 +1130,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-SCHEMES-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme NAVUX (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Duplicate wayfinding: a hand-built breadcrumb plus PageHeader back link (page.tsx:61-76) and a different pattern from /projects/[id]; params is a Promise here (page.tsx:24-25) but a plain object in [id]/page.tsx:10, indicating inconsistent Next conventions.
 - **Verified evidence:** schemes/[id]/page.tsx:61-69 hand-built breadcrumb nav and :70-76 PageHeader with back='/projects/schemes' both render, so two wayfinding controls. params is `Promise<{id}>` with await at :24-25, while projects/[id]/page.tsx:10 uses plain `{ id: string }`; repo-wide 4 pages use Promise vs 107 plain (Next 14 convention per CLAUDE.md). Theme tag VALIDATION is wrong (no form here).
 - **Files to change:** `apps/web/src/app/(app)/projects/schemes/[id]/page.tsx`
@@ -1142,7 +1145,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-SCHEMES-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Linked project rows are not clickable and have no id (SchemeProjectRow has name, code, status, budget only; SchemeProjectsTable.tsx:11-16), so users cannot drill from a scheme to its projects; error state has no backHref (page.tsx:33).
 - **Verified evidence:** Linked project rows are not links: page.tsx:52-57 maps only name/code/status/budget and SchemeProjectsTable.tsx:11-16,34-40 has no id, rowHref or identifyingColumnKey (DataTable supports both, DataTable.tsx:56,68). Overstated on back link: error state at page.tsx:32 does have PageHeader back='/projects/schemes'; only RefreshErrorState at :33 lacks backHref. Whether scheme.projects[] items carry an id cannot be seen (SchemeDetail type in packages/types absent).
 - **Files to change:** `apps/web/src/app/(app)/projects/schemes/[id]/page.tsx`, `apps/web/src/app/(app)/projects/schemes/[id]/SchemeProjectsTable.tsx`
@@ -1160,6 +1163,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 ### GAP-PROJECTS-SCHEMES-DETAIL-05  ·  LOW  ·  partly  ·  theme PII
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1869 — loading.tsx rebuilt to header/4 stat/details/table shape; remaining: no recorded decision on nodal-officer visibility (page.tsx still prints scheme.nodalOfficer to all viewers).
 - **First-pass claim:** Nodal officer is a named person shown to all module users (DPDP low risk); loading is a single bare .skeleton block.
 - **Verified evidence:** page.tsx:96-97 shows scheme.nodalOfficer (a person name) to every viewer; no masking. It is an official's designation-level contact, low DPDP risk, so Masked/audit reveal is disproportionate. Loading is one `.skeleton` block (schemes/[id]/loading.tsx:1-7), true.
 - **Files to change:** `apps/web/src/app/(app)/projects/schemes/[id]/loading.tsx`
@@ -1181,6 +1185,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 ### GAP-PROJECTS-UTILIZATION-01  ·  HIGH  ·  confirmed  ·  theme FABRICATED
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1869 — fabricated Lucknow/Dehradun/... literals and typed tiles removed, page now shows a 'not available yet' EmptyState; remaining: no getProjectUtilization() loader or project-service aggregate endpoint, so the table/tiles are never populated from real data (rows is a hard-coded empty array).
 - **First-pass claim:** Fabricated data presented as live: the page never fetches; eight rows and every stat tile are hard-coded literals (page.tsx:4-19) — including projects in other states — so a Government user reads sample numbers as the department’s own fund position.
 - **Verified evidence:** utilization/page.tsx:4-13 hard-codes eight rows (Lucknow, Dehradun, Jaipur, Patna...) and :16-19 hard-codes the tile strings; no loader call; page is a non-async function. Linked from projects/page.tsx:16 as 'Fund utilization monitoring'. No utilization loader for projects exists in loaders.ts (only grants/finance UC ones), so backend availability is unverified.
 - **Files to change:** `apps/web/src/app/(app)/projects/utilization/page.tsx`, `apps/web/src/app/(app)/projects/utilization/UtilizationTable.tsx`, `apps/web/src/app/_data/loaders.ts`, `services/project-service (utilization endpoint)`
@@ -1197,7 +1202,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-UTILIZATION-02  ·  HIGH  ·  confirmed  ·  theme MONEY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tile totals are typed strings, not derived from the rows (page.tsx:16-19): they match today only by hand, and “Utilization %” 66% is an unweighted mean of row percentages (utilised ÷ released) while the label implies utilised ÷ allocated (47% on these rows).
 - **Verified evidence:** utilization/page.tsx:16-19 tiles are typed strings. Checked arithmetic: allocated sum 3359.00, utilised sum 1586.70 (matches), 1586.7/3359=47.2%; mean of row percentages (88,44,81,28,93,40,84,74)=66.5% shown as '66%'; utilised/released = 1586.7/1975 = 80%, so the described 'utilised over released' basis is not what the tile shows either. The 66% is an unweighted mean of row pcts and mismatches the label. Theme I18N is wrong.
 - **Files to change:** `apps/web/src/app/(app)/projects/utilization/page.tsx`
@@ -1213,7 +1218,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-UTILIZATION-03  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Values are ₹-crore strings with two decimals (UtilizationTable.tsx:6-11), a fourth unit convention alongside paise (fund releases, project budgets) and rupees (scheme list), so sorting is text-based.
 - **Verified evidence:** UtilizationTable.tsx:5-12 declares allocated/released/utilized/utilizationPct as strings; :21-24 headers '(₹ Cr)' with values like '345.00'; no cellType so DataTable cellValue returns String(value) (DataTable.tsx:141) and sorting on strings is textual, unless DataTable numeric-sorts (not checked). Unit is a third convention beside paise and rupees.
 - **Files to change:** `apps/web/src/app/(app)/projects/utilization/UtilizationTable.tsx`, `apps/web/src/lib/formatters.ts`
@@ -1229,7 +1234,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-UTILIZATION-04  ·  LOW  ·  partly  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx and error.tsx exist for a page that can never suspend or throw; there is no empty state (utilization/loading.tsx, error.tsx).
 - **Verified evidence:** utilization/loading.tsx and error.tsx exist (error.tsx uses shared RouteError with backHref /projects, fine). The page is currently static so neither can trigger, and it has no empty state, true. Once wired to the API (-01) both become relevant; loading.tsx is a bare .skeleton block.
 - **Files to change:** `apps/web/src/app/(app)/projects/utilization/loading.tsx`
@@ -1251,7 +1256,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-WBS-01  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** ARIA tree without tree behaviour: every parent has aria-expanded="true" and each item aria-selected={false}, but there is no toggle, no keyboard navigation and no roving tabindex (WbsTree.tsx:31-34,76), so screen-reader users are told about controls that do not exist.
 - **Verified evidence:** wbs/WbsTree.tsx:31-34 each <li role='treeitem'> has aria-selected={false} and aria-expanded=true for any node with children; :76 ul role='tree'. No buttons, no onKeyDown, no tabIndex, no collapse state anywhere in the file; tree is static. Also leaf-level role=treeitem items are not wrapped in role=group for children (children rendered as sibling <li>s).
 - **Files to change:** `apps/web/src/app/(app)/projects/wbs/WbsTree.tsx`
@@ -1266,7 +1271,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-WBS-02  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tiles do not reconcile: “Not Started” counts only pending/planned and “In Progress” two spellings (page.tsx:15-16); blocked, delayed or on-hold nodes (statuses used on the Tasks page) fall in no tile, and parents are counted with their children.
 - **Verified evidence:** wbs/page.tsx:15-16 In Progress matches 'in progress' or 'in_progress'; Not Started matches 'pending' or 'planned'. Any other status (e.g. 'blocked' which the tasks page uses at [id]/tasks/page.tsx:14) matches no tile; 'delayed'/'on hold' are not seen in the tasks page so that part is unverified. Total counts every node including parents (nodes.length at :13). Status vocabulary from /api/v1/projects/wbs cannot be checked (service absent).
 - **Files to change:** `apps/web/src/app/(app)/projects/wbs/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -1282,7 +1287,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-WBS-04  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** Empty state tells the user to “Create tasks in a project” although the tasks page offers no creation UI (tasks/page.tsx:56).
 - **Verified evidence:** wbs/page.tsx:33 message says 'Create tasks in a project to see the WBS.' with a View Projects button. The tasks page is at projects/[id]/tasks/page.tsx (not projects/tasks) and its own empty state (line ~56) says 'Use the API to create tasks.'; directory contains only page.tsx, no creation form or action. So the instruction cannot be followed in UI.
 - **Files to change:** `apps/web/src/app/(app)/projects/wbs/page.tsx`, `apps/web/src/app/(app)/projects/[id]/tasks/page.tsx`
@@ -1295,7 +1300,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-WBS-05  ·  LOW  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** StatusPill maps “in progress” but not “in_progress” or “planned” (ds/StatusPill.tsx:6-38), so the same state shows different colours; loading is one bare .skeleton block.
 - **Verified evidence:** ds/StatusPill.tsx:6-38 map has 'in progress' (warn) but not 'in_progress' or 'planned' or 'delayed'; lookup is status.toLowerCase() only (:53), so 'in_progress'/'planned' fall to 'info'. Label goes through humanizeStatus so text is fine. wbs/loading.tsx is a single .skeleton block.
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/app/(app)/projects/wbs/loading.tsx`

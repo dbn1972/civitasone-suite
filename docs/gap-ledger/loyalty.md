@@ -15,6 +15,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 ### GAP-LOYALTY-HOME-01  ·  MEDIUM  ·  confirmed  ·  theme LOADING
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1924 — hub shows real KPI counts ('—' on failure) and the skeleton matches; no retry affordance on the hub when stats fail.
 - **First-pass claim:** Hub has no data: no member/points/redemption counts, so an operator cannot tell whether the programme is healthy; the four-stat-card loading skeleton (loading.tsx:12-20) suggests stats were intended but never built.
 - **Verified evidence:** loyalty/page.tsx:12-16 renders only PageHeader + LinkTiles (5 static tiles); no data fetch. loading.tsx:12-20 shows a 4-card stat grid skeleton and a 96-high block, so the skeleton does not match the page shape. Whether a stats endpoint exists cannot be verified (loyalty-service absent).
 - **Files to change:** `apps/web/src/app/(app)/loyalty/page.tsx`, `apps/web/src/app/(app)/loyalty/_data.ts`, `apps/web/src/app/(app)/loyalty/loading.tsx`
@@ -32,7 +33,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Every tile renders the same generic folder emoji: TILE_ICONS has no Programs/Members/Accruals/Redemptions/Tiers entry and no href fallback matches (LinkTiles.tsx:103-154).
 - **Verified evidence:** apps/web/src/app/_components/LinkTiles.tsx:8-46 TILE_ICONS has no Programs, Members, Accruals, Redemptions or Tiers keys (only 'Training Programs'); tileIcon (52-59) falls back by href substring dashboard/employees/leave/payroll/procurement/orders, none match /loyalty/*, so all five tiles return the '📁' default at line 58.
 - **Files to change:** `apps/web/src/app/_components/LinkTiles.tsx`
@@ -47,7 +48,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-HOME-04  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Skeleton (loading.tsx:3-5) uses min-h-screen bg-slate-50 and pulse animations with no dark-mode variant, unlike the ds Skeleton components.
 - **Verified evidence:** apps/web/src/app/(app)/loyalty/loading.tsx:3-5 uses className 'min-h-screen bg-slate-50' on the wrapper, bg-white and border-slate-100 cards (13-14) and bg-gray-200 bars, all without dark: variants; ds SkeletonBar exists in app/_components/ds/Skeleton.tsx and is used by meeting/admin/loading.tsx. min-h-screen also nests a full-height block inside the app shell.
 - **Files to change:** `apps/web/src/app/(app)/loyalty/loading.tsx`
@@ -70,6 +71,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 ### GAP-LOYALTY-ACCRUALS-01  ·  HIGH  ·  confirmed  ·  theme WIRING (was MONEY)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1924 — points/lifetime now always visible via a zod-typed loader and the drill-down promise is removed; page still lists per-member enrolment positions, not points transactions (no tenant-wide accruals endpoint).
 - **First-pass claim:** Accruals page shows no accruals: it lists enrolments (loyalty/_data.ts:90) and points/balance is the LAST option of the meta chain, after code/currency/updatedAt/createdAt (loyalty/_data.ts:61-67), so any row with a timestamp never shows points or balance. The "accrual/balance drill-down" (accruals/page.tsx:16) has no drill-down route.
 - **Verified evidence:** apps/web/src/app/(app)/loyalty/_data.ts:91 getLoyaltyAccruals = moduleLoader('/api/v1/loyalty/enrolments') (same as members, line 90 in the read; file lines 88-92). mapRows meta chain (61-67) is code ?? currency ?? updatedAt ?? createdAt ?? points ?? balance, so any row with a string timestamp never surfaces points/balance. accruals/page.tsx:16 describes 'accrual/balance drill-down' but ls shows only loyalty/accruals/page.tsx; no drill-down route. Points are not money, so the paise/formatINR theme does not apply; loyalty-service is absent so real field names cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/loyalty/_data.ts`, `apps/web/src/app/(app)/loyalty/accruals/page.tsx`, `apps/web/src/app/_components/ModuleListTable.tsx (or new loyalty table component)`
@@ -88,6 +90,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 ### GAP-LOYALTY-ACCRUALS-02  ·  HIGH  ·  partly  ·  theme PII
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1924 — layout now role-gates /loyalty/* (LOYALTY_READ_ROLES -> PermissionDenied) and the loader is zod-parsed; no <Masked> component / PII masking (member ref is shown shortened only).
 - **First-pass claim:** Points transactions ("Points earning transactions and bonus rules", loyalty/page.tsx:8) have no loader at all; only /enrolments is called. Identified person rows are shown without masking (DPDP).
 - **Verified evidence:** True: only getLoyaltyAccruals -> /api/v1/loyalty/enrolments exists (_data.ts:91); there is no points-transaction loader and loyalty/page.tsx:8 promises 'Points earning transactions and bonus rules'. Not verifiable: whether enrolment rows carry personal data - the table (ModuleListTable.tsx:48-55) prints only id[0..8], name/label, sublabel, status, meta, and loyalty-service is not in the snapshot. Route protection is only ModuleGate moduleKey='loyalty' (loyalty/layout.tsx) - no role check. No masking component (<Masked>) exists in app/_components.
 - **Files to change:** `apps/web/src/app/(app)/loyalty/_data.ts`, `apps/web/src/app/(app)/loyalty/layout.tsx`, `apps/web/src/app/_components/Masked.tsx (new, if fields are confirmed PII)`
@@ -105,7 +108,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-ACCRUALS-03  ·  MEDIUM  ·  partly  ·  theme NUMFMT (was MONEY)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Where points print they are `${row.points} pts` / `bal ${row.balance}` raw numbers (loyalty/_data.ts:66-67): no lakh grouping, and no paise conversion should the service store monetary balances as paise (CLAUDE.md).
 - **Verified evidence:** _data.ts:66-67 renders `${row.points} pts` and `bal ${row.balance}` from raw numbers without grouping (accurate), and only when no code/currency/timestamp precedes them. However loyalty points are not rupee amounts; paise/formatMoney (lib/formatters.ts:90, minor-unit money) would apply only if balance is monetary, which cannot be verified (loyalty-service absent).
 - **Files to change:** `apps/web/src/app/(app)/loyalty/_data.ts`
@@ -129,7 +132,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-MEMBERS-01  ·  HIGH  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Description promises "tier status" but Detail is sublabel = description ?? status ?? state ?? category ?? tier (loyalty/_data.ts:51-59): whenever the enrolment carries a status, Detail just repeats the Status column and the tier is never reachable.
 - **Verified evidence:** _data.ts:51-59 sublabel = description ?? status ?? state ?? category ?? tier ?? programName ?? agentId ?? profileId; status column = status ?? state ?? lifecycle (60). When an enrolment has status/state, Detail duplicates Status, and tier is reached only if description, status, state and category are all absent. members/page.tsx:16 promises 'tier status'.
 - **Files to change:** `apps/web/src/app/(app)/loyalty/_data.ts`, `apps/web/src/app/(app)/loyalty/members/page.tsx`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -147,6 +150,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 ### GAP-LOYALTY-MEMBERS-02  ·  HIGH  ·  partly  ·  theme PII
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1924 — role gate (PermissionDenied) added and member ref shortened; no <Masked> reveal component and the offline cache still holds the full profileId.
 - **First-pass claim:** Members and Accruals both call GET /api/v1/loyalty/enrolments (loyalty/_data.ts:89-90): two pages, one dataset. Enrolments are personal data (DPDP) and are printed with no masking or role gate (ModuleListTable.tsx:50-53, layout.tsx:5).
 - **Verified evidence:** True: members and accruals both call /api/v1/loyalty/enrolments (_data.ts:90-91) and ModuleListTable.tsx:48-55 prints rows unmasked; loyalty/layout.tsx only applies ModuleGate (module enabled), no role check. Not verifiable: which fields the enrolment payload holds (id slice, name/label, status, meta only are rendered) - loyalty-service absent, so 'personal data printed' is plausible but unproven. Also the table caches rows in encrypted offline cache via useSeededResource (ModuleListTable.tsx:19).
 - **Files to change:** `apps/web/src/app/(app)/loyalty/layout.tsx`, `apps/web/src/app/(app)/loyalty/_data.ts`, `apps/web/src/app/_components/Masked.tsx (new)`
@@ -164,7 +168,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-MEMBERS-03  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Meta shows createdAt/updatedAt as raw ISO strings (2026-08-14T09:12:44Z) because those precede points/balance in the meta chain (loyalty/_data.ts:61-67); no formatting or time zone.
 - **Verified evidence:** _data.ts:61-67 meta = code ?? currency ?? updatedAt ?? createdAt ...; toText returns the ISO string unchanged (line 13), and ModuleListTable.tsx:54 prints row.meta as-is, so timestamps show raw (e.g. 2026-08-14T09:12:44Z). formatIndianDate exists in lib/formatters.ts:2 (dd/MM/yyyy en-IN, no explicit IST timezone).
 - **Files to change:** `apps/web/src/app/(app)/loyalty/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/lib/formatters.ts`
@@ -181,6 +185,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 ### GAP-LOYALTY-MEMBERS-04  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1924 — DataTable filter/sort + 25/page client paging and server limit/offset (?page=, 50/page) added; no next/prev pager or total in the UI and search is client-side only.
 - **First-pass claim:** No search, filter or pagination for what will be a large enrolment list; the whole response is rendered (ModuleListTable.tsx:63-80).
 - **Verified evidence:** ModuleListTable.tsx:48-55 maps all data rows with no search, filter, sort or pagination; loader is a single GET /api/v1/loyalty/enrolments with no query params (_data.ts:90). Server pagination support cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/loyalty/_data.ts`, `apps/web/src/app/(app)/loyalty/members/page.tsx`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -204,7 +209,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-PROGRAMS-01  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** ModuleListTable prints only the first 8 characters of the row id in a mono cell as the first column (ModuleListTable.tsx:50); for UUID-keyed programmes that is a meaningless fragment, and rows have no link (no /loyalty/programs/[id] route exists).
 - **Verified evidence:** ModuleListTable.tsx:50 renders row.id.slice(0,8) in a mono span as first column; mapRows id (_data.ts:24-33) is id ?? key ?? code ?? name..., so for UUIDs it is a fragment. Rows are not links; ls shows no loyalty/programs/[id] route.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -219,7 +224,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-PROGRAMS-02  ·  MEDIUM  ·  confirmed  ·  theme MISSINGFEATURE (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Read-only list although the home tile says "Create and manage loyalty programmes" (loyalty/page.tsx:6): there is no create/edit control anywhere under (app)/loyalty; status renders as raw lowercase text with no pill (ModuleListTable.tsx:53).
 - **Verified evidence:** loyalty/page.tsx:6 says 'Create and manage loyalty programmes'; programs/page.tsx renders ModuleListPage only; grep of loyalty tree finds no fetch method/mutation and no create/edit route (only page/_data/loading/error/layout). ModuleListTable.tsx:53 prints row.status raw; StatusPill exists in ds.
 - **Files to change:** `apps/web/src/app/(app)/loyalty/programs/page.tsx`, `apps/web/src/app/(app)/loyalty/programs/new/page.tsx (new)`, `apps/web/src/app/(app)/loyalty/page.tsx`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -244,7 +249,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-REDEMPTIONS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** A failed fetch renders the badge "Couldn't load - showing nothing" AND the calm EmptyState "No records / Nothing to show yet for this module." with no retry (ModuleListTable.tsx:33,35; ModuleListPage.tsx:28); a clerk can read it as "no redemptions" - risky for reward fulfilment.
 - **Verified evidence:** ModuleListTable.tsx:33 DataSourceBadge shows 'Couldn't load - showing nothing' for provenance error-no-data (DataSourceBadge.tsx:73-74) and line 34-35 renders EmptyState 'No records / Nothing to show yet for this module.' whenever data.length===0, with no source check and no retry. ModuleListPage.tsx:90 passes source. RefreshErrorState (ds) with router.refresh retry exists. Same shared table is used by ~64 pages.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -262,6 +267,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 ### GAP-LOYALTY-REDEMPTIONS-02  ·  MEDIUM  ·  confirmed  ·  theme MISSINGFEATURE (was DATEFMT)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1924 — dedicated table with Reward/Points/Status/Requested/Voided columns and an admin Void action (reason required); no fulfil/reject flow (loyalty-service has no such endpoint) and no Fulfilled column.
 - **First-pass claim:** Redemption history has no points-spent, reward, amount or fulfilment-date column, only generic Detail/Meta (ModuleListTable.tsx:40-44); pending/rejected redemptions cannot be actioned - no mutation code in the route tree.
 - **Verified evidence:** ModuleListTable.tsx:37-46 fixed generic columns ID/Name/Detail/Status/Meta; no points-spent, reward, or fulfilment date. Loyalty tree has no mutation code (no method: POST etc.), so pending redemptions cannot be approved/fulfilled. The DATEFMT tag is wrong. Backend endpoints for fulfil/reject cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/loyalty/_data.ts`, `apps/web/src/app/(app)/loyalty/redemptions/page.tsx`, `apps/web/src/app/(app)/loyalty/redemptions/RedemptionActions.tsx (new)`
@@ -279,7 +285,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-REDEMPTIONS-03  ·  LOW  ·  partly  ·  theme WIRING (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** label falls back through name/title/label/code/type/entityType/direction (loyalty/_data.ts:42-50), so a redemption with only a type shows a raw token.
 - **Verified evidence:** _data.ts:41-50 label = name ?? title ?? label ?? code ?? type ?? entityType ?? direction ?? id, so a redemption without name/title shows a raw type token or finally the full id. It is a data-mapping/labelling problem, not i18n; strings in the shared table are also hard-coded English (ModuleListTable.tsx:35-44) but that is not what the finding describes.
 - **Files to change:** `apps/web/src/app/(app)/loyalty/_data.ts`
@@ -302,7 +308,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-TIERS-01  ·  HIGH  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tiers page is the Programs list again: getLoyaltyTiers calls GET /api/v1/loyalty/programs (loyalty/_data.ts:92) and prints programme rows; no tier names, thresholds or benefits appear although the home tile promises "Tier definitions, thresholds, and benefits" (loyalty/page.tsx:10).
 - **Verified evidence:** _data.ts:92 getLoyaltyTiers = moduleLoader('/api/v1/loyalty/programs','loyalty.tiers'), i.e. identical endpoint to getLoyaltyPrograms (line 88); tiers/page.tsx feeds it to ModuleListPage, so programme rows appear. loyalty/page.tsx:10 promises 'Tier definitions, thresholds, and benefits'. A dedicated tiers endpoint or nested tiers in the programme payload cannot be verified (loyalty-service absent).
 - **Files to change:** `apps/web/src/app/(app)/loyalty/_data.ts`, `apps/web/src/app/(app)/loyalty/tiers/page.tsx`
@@ -318,7 +324,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-TIERS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Description "Tier definitions via programme configuration" (tiers/page.tsx:16) admits the data is indirect; nothing shows where tiers are configured and there is no edit control.
 - **Verified evidence:** tiers/page.tsx description 'Tier definitions via programme configuration.' and the page has no link to programs and no edit control; no mutation code in the loyalty tree.
 - **Files to change:** `apps/web/src/app/(app)/loyalty/tiers/page.tsx`
@@ -334,6 +340,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 ### GAP-LOYALTY-TIERS-03  ·  LOW  ·  confirmed  ·  theme UUID
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1924 — tier name is now the first column, but the Programme column still renders an 8-char UUID prefix; no status pill (tier defs carry no status).
 - **First-pass claim:** Same shared table: 8-char id fragment, raw status text, raw meta (ModuleListTable.tsx:50-53).
 - **Verified evidence:** Duplicate of PROGRAMS-01: ModuleListTable.tsx:50 id.slice(0,8), :53 raw status, :54 raw meta; tiers page uses the same table.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`

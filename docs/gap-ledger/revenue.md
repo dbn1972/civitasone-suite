@@ -28,7 +28,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-HOME-03  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Every tile falls through LinkTiles.tileIcon to the same "📁" glyph (_components/LinkTiles.tsx:53-61) — 15 indistinguishable tiles, and the tile order is flat (no grouping into Register / Billing / Approvals / Insight).
 - **Verified evidence:** LinkTiles.tsx:53-61 tileIcon looks up TILE_ICONS by title (none of the 15 revenue titles are keys) then href substrings (dashboard, employees, leave, payroll, procurement/orders) - none match /revenue/* - so all fall to '📁'. Tiles are ungrouped although LinkTiles supports a `section` field (65-76) and revenue/page.tsx sets none.
 - **Files to change:** `apps/web/src/app/(app)/revenue/revenue/page.tsx`, `apps/web/src/app/_components/LinkTiles.tsx`
@@ -43,7 +43,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-HOME-04  ·  LOW  ·  confirmed  ·  theme COPY (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Root error boundary passes area="page" so the message reads "We couldn't open page." ((app)/error.tsx:13; RouteError.tsx sentence template).
 - **Verified evidence:** (app)/error.tsx:13 passes area="page"; RouteError.tsx sentence template (~line 63) renders `We couldn't open {area?.trim() || "this page"}` -> 'We couldn't open page.'. revenue/ has no error.tsx at its root (only sub-routes), so /revenue home hits this boundary; it affects every (app) route without its own boundary.
 - **Files to change:** `apps/web/src/app/(app)/error.tsx`
@@ -65,7 +65,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ADJUSTMENTS-02  ·  MEDIUM  ·  partly  ·  theme MISSING-FEATURE (was UUID)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** No adjustment register: there is no list endpoint, so the officer cannot see what was moved or reverse it; success only prints a raw id "Adjustment applied (id …)" (AdjustmentCreateForm.tsx:112, page.tsx:158-164).
 - **Verified evidence:** apps/web/src/app/(app)/revenue/adjustments/page.tsx:158-164 states there is no list endpoint (only POST /v1/revenue/adjustments) and no maker-checker. Success message prints the raw id at AdjustmentCreateForm.tsx:283 (not :112). No reverse action. revenue-service is not in the snapshot, so a list/reverse endpoint cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/revenue/adjustments/AdjustmentCreateForm.tsx`, `apps/web/src/app/(app)/revenue/adjustments/page.tsx`, `revenue-service (GET /v1/revenue/adjustments, reversal)`
@@ -84,6 +84,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 ### GAP-REVENUE-ADJUSTMENTS-03  ·  MEDIUM  ·  partly  ·  theme MONEY
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1868 — source-demand breakdown (principal/rebate/penalty/interest/net) and net-demand cap wording shipped; remaining: decision on whether penalty/interest may be moved, and confirming the cap matches the backend rule (UI still caps at netMinor, not DCB outstanding).
 - **First-pass claim:** Amount cap is checked against the source demand netMinor, which includes penalty/interest, while the option label shows only "FY … — ₹… (status)" — the clerk cannot see which component is being moved (AdjustmentCreateForm.tsx:70-72,181).
 - **Verified evidence:** Option labels show 'FY {fy} — {formatMoney(netMinor)} ({status})' at AdjustmentCreateForm.tsx:322 and 353 (cited :70-72,181 are wrong); cap check compares BigInt(amount) to fromDemand.netMinor at l.238 and the error text calls it 'outstanding balance'. mapDemands (adjustments/page.tsx:51-67) drops principal/penalty/interest/rebate although the same endpoint returns them (DemandRow in assessees/[id]/AssesseeDetailTabs.tsx:9-19 has them). Whether netMinor includes penalty/interest, and whether it is net of payments (DCB balance = demand - collected), is cannot-verify without revenue-service; UI columns suggest Net Demand is principal-rebate+penalty+interest, i.e. NOT outstanding after receipts, so the 'outstanding balance' wording may be wrong.
 - **Files to change:** `apps/web/src/app/(app)/revenue/adjustments/page.tsx`, `apps/web/src/app/(app)/revenue/adjustments/AdjustmentCreateForm.tsx`, `revenue-service (movable-amount rule)`
@@ -99,7 +100,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ADJUSTMENTS-04  ·  LOW  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Picker is a full-page GET form; demand list fetch failure swaps the whole form for a bare badge with no retry (page.tsx:139-146).
 - **Verified evidence:** apps/web/src/app/(app)/revenue/adjustments/page.tsx:111 the assessee picker is a GET form (true). On demands fetch failure (l.150-153) only the 'Raise Adjustment' area is replaced with a Card containing a bare DataSourceBadge; the picker card stays, so 'swaps the whole form' is overstated. No retry control. If the assessee list fails, header badge only (l.107) and an empty select. error.tsx exists but only for thrown errors.
 - **Files to change:** `apps/web/src/app/(app)/revenue/adjustments/page.tsx`, `apps/web/src/app/_components/ds/RefreshErrorState.tsx`
@@ -121,7 +122,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ANALYTICS-01  ·  HIGH  ·  partly  ·  theme UUID (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Top Defaulters lists raw assessee UUIDs (column "Assessee ID") with no name, no link to the ledger and no DPDP role gate; a collections officer cannot act on a row without a lookup (AnalyticsConsole.tsx:96-105; types.ts DefaulterRow).
 - **Verified evidence:** apps/web/src/app/(app)/revenue/analytics/AnalyticsConsole.tsx:304-309 columns are Rank, 'Assessee ID' (raw UUID), Outstanding; DefaulterRow (types.ts:350-354) carries only rank, assesseeId, outstandingMinor. No rowLinkKey so no link to /revenue/assessees/<id>; filter placeholder 'Filter by assessee ID…' (l.313). The real defect is usability (raw UUID, no drill-down); a UUID alone is not PII. There is no role gate (no revenue/layout.tsx exists) but that is a broader point. Names would need backend enrichment or a join with /assessees (capped at 200).
 - **Files to change:** `apps/web/src/app/(app)/revenue/analytics/AnalyticsConsole.tsx`, `apps/web/src/app/(app)/revenue/analytics/types.ts`, `apps/web/src/app/(app)/revenue/analytics/page.tsx`, `revenue-service defaulters endpoint (add ownerName, identifierNo)`
@@ -137,7 +138,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ANALYTICS-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed fetch each tab shows a badge and then its reassuring EmptyState ("No defaulters", "No arrears aging data") as if the data were empty (AnalyticsConsole.tsx:59-70,78-87,96-105) — a silent all-clear.
 - **Verified evidence:** apps/web/src/app/(app)/revenue/analytics/AnalyticsConsole.tsx: Trends l.258-269, Aging l.283-286, Defaulters l.300-302 each render the amber badge (when source==='error') and then, because data defaulted to []/null, the EmptyState ('No trend data', 'No arrears aging data', 'No defaulters ... No assessees have an outstanding balance') as if genuinely empty. The Defaulters message is a false all-clear.
 - **Files to change:** `apps/web/src/app/(app)/revenue/analytics/AnalyticsConsole.tsx`, `apps/web/src/app/_components/ds/RefreshErrorState.tsx`
@@ -153,7 +154,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ANALYTICS-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Top Defaulter Outstanding uses defaulters[0] with no sort guarantee and shows "—" both when the list is empty and when the defaulters fetch failed (page.tsx:145,167-169).
 - **Verified evidence:** apps/web/src/app/(app)/revenue/analytics/page.tsx:145 topDefaulterOutstanding = defaulters[0]?.outstandingMinor; l.169 shows '—' when falsy, without consulting defaultersSource, so failed and empty look the same. mapDefaulters (l.71-86) preserves API order; the rank field exists but is not used to pick the top.
 - **Files to change:** `apps/web/src/app/(app)/revenue/analytics/page.tsx`
@@ -168,7 +169,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ANALYTICS-05  ·  LOW  ·  partly  ·  theme DATEFMT (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Efficiency uses formatBps ("81.93%") while trend rows print the same via a different path; Period is the raw "2026-04" string (page.tsx:59-63; AnalyticsConsole.tsx:41).
 - **Verified evidence:** The efficiency claim is wrong: the stat tile (page.tsx:163) and trend rows (AnalyticsConsole.tsx:249) both call the same formatBps, giving '81.93%'. True: Period is the raw string ('2026-04') in AnalyticsConsole.tsx:268 (cited page.tsx:59-63 is mapAging).
 - **Files to change:** `apps/web/src/app/(app)/revenue/analytics/AnalyticsConsole.tsx`, `apps/web/src/lib/formatters.ts`
@@ -188,7 +189,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ASSESSEES-01  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stats silently show 0 on a failed fetch (assessees defaults to [] and only the badge signals failure) — a false "0 registered assessees" (page.tsx:21-24,41-44).
 - **Verified evidence:** apps/web/src/app/(app)/revenue/assessees/page.tsx:8-15 falls back to []; tiles at l.34-37 read assessees.length/filters so failure shows 0 (the source is only used for a header badge l.30 and the table card l.43-45).
 - **Files to change:** `apps/web/src/app/(app)/revenue/assessees/page.tsx`, `apps/web/src/app/_components/ds/RefreshErrorState.tsx`
@@ -202,7 +203,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ASSESSEES-02  ·  MEDIUM  ·  partly  ·  theme LABEL (was CAP)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Type column prints the raw enum (property / water_connection) and status is derived client-side ("active"/"inactive") (AssesseesTable.tsx:19,26); the create form offers Trade and Other types that no StatCard or filter counts (AssesseeCreateForm.tsx:10-15).
 - **Verified evidence:** Confirmed: Type column shows the raw enum (AssesseesTable.tsx:78, no render), so 'water_connection'. Status is derived client-side from isActive (l.71) which is fine. Create form offers Trade and Other (AssesseeCreateForm.tsx:10-15) while tiles count only property and water_connection (page.tsx:21-22,36-37), so tiles do not sum to Registered. Not a pagination/cap matter.
 - **Files to change:** `apps/web/src/app/(app)/revenue/assessees/AssesseesTable.tsx`, `apps/web/src/app/(app)/revenue/assessees/AssesseeCreateForm.tsx`, `apps/web/src/app/(app)/revenue/assessees/page.tsx`, `apps/web/src/app/(app)/revenue/assessees/assesseeTypes.ts (new)`
@@ -242,7 +243,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ASSESSEES-DETAIL-01  ·  HIGH  ·  partly  ·  theme NAVIGATION (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** The ledger is read-only with no actions: generating a bill, recording a receipt, raising a refund or a plan each need a trip back to another lane and a re-pick of the same assessee from a 200-row select (page.tsx:99-147; other lanes' picker at bills/page.tsx:209-235).
 - **Verified evidence:** apps/web/src/app/(app)/revenue/assessees/[id]/page.tsx renders only stats, DCB card and read-only tabs (l.99-147): no action links. Not a dead route: sibling lanes accept ?assesseeId= (bills/page.tsx:257, receipts/page.tsx:232, refunds/page.tsx:175, instalments/page.tsx:176, adjustments/page.tsx:155, recovery, write-offs) so deep links are already supported. The picker at bills/page.tsx:~205-235 uses /assessees?limit=200 (l.116), so re-picking is required from a capped list.
 - **Files to change:** `apps/web/src/app/(app)/revenue/assessees/[id]/page.tsx`
@@ -257,6 +258,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 ### GAP-REVENUE-ASSESSEES-DETAIL-02  ·  MEDIUM  ·  partly  ·  theme PII
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1868 — revenue/layout.tsx now gates /revenue/* behind REVENUE_ROLES (PermissionDenied for no revenue role; fails open on unknown roles); remaining: backend ledger-view audit event and role/masking policy decision.
 - **First-pass claim:** DPDP: address, ward, contact are never shown here, but ownerName + identifier + full payment history render for any signed-in user with no role gate or masking (page.tsx:99-100,134-143).
 - **Verified evidence:** apps/web/src/app/(app)/revenue/assessees/[id]/page.tsx:99-100 shows ownerName, identifierNo, assesseeType and Ward in the header (ward IS shown, contrary to the note); address/contact are not rendered. Tabs show demands, bills and receipts (AssesseeDetailTabs.tsx:95-152). No role gate: there is no revenue/layout.tsx and no permission check on the page. Whether owner name and payment history are restricted data is a policy decision; municipal tax registers are often semi-public.
 - **Files to change:** `apps/web/src/app/(app)/revenue/assessees/[id]/page.tsx`, `apps/web/src/app/(app)/revenue/layout.tsx (new)`, `revenue-service / policy-service (RBAC + view audit)`
@@ -272,7 +274,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ASSESSEES-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Six independent fetches fold into one anyError badge that does not say which section failed; lists silently read 0 and the ledger tabs show "No … recorded" EmptyStates for failed sections (page.tsx:94,108-116; AssesseeDetailTabs.tsx:110,130,149,166).
 - **Verified evidence:** apps/web/src/app/(app)/revenue/assessees/[id]/page.tsx:87-94 folds six sources into anyError -> one generic badge (l.103). StatCards at l.115-117 use demandsResult.data.length etc., so failure shows 0. dcb null renders 'No demand-collection-balance entries yet.' (AssesseeDetailTabs.tsx:75) and Demands/Bills/Receipts/Instalment tabs show their EmptyStates (l.109-111,129-131,148-150,165-167) for failed sections. When the assessee itself fails, only the badge card shows (l.144-148).
 - **Files to change:** `apps/web/src/app/(app)/revenue/assessees/[id]/page.tsx`, `apps/web/src/app/(app)/revenue/assessees/[id]/AssesseeDetailTabs.tsx`, `apps/web/src/app/_components/ds/RefreshErrorState.tsx`
@@ -288,7 +290,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ASSESSEES-DETAIL-04  ·  LOW  ·  partly  ·  theme LABEL (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Receipts tab shows Reconciled as "Yes"/"No" plus a status pill with overlapping meaning (AssesseeDetailTabs.tsx:141-142).
 - **Verified evidence:** AssesseeDetailTabs.tsx:141-142 shows Reconciled Yes/No and a Status pill side by side. The meanings likely differ (bank reconciliation vs receipt lifecycle), so overlap is not proven; column label is ambiguous. Nothing is fabricated; the theme is wrong.
 - **Files to change:** `apps/web/src/app/(app)/revenue/assessees/[id]/AssesseeDetailTabs.tsx`
@@ -301,7 +303,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ASSESSEES-DETAIL-05  ·  LOW  ·  partly  ·  theme COPY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Fallback title is the literal "Assessee" when the record could not load (page.tsx:99).
 - **Verified evidence:** apps/web/src/app/(app)/revenue/assessees/[id]/page.tsx:99 title falls back to literal 'Assessee'. It only occurs when the assessee fetch errored (notFound() handles absent, l.83-85), and the body then shows just a badge. Cosmetic; not fabricated data.
 - **Files to change:** `apps/web/src/app/(app)/revenue/assessees/[id]/page.tsx`
@@ -321,7 +323,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ASSESSMENTS-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1934, verified on main 9c5e9e9e9)
 - **First-pass claim:** Approve/Reject remission buttons are always enabled on every row, including assessments with no pending remission or that the same officer requested; the code comment admits the UI never pre-disables them and relies on the server to reject (AssessmentsTable.tsx:337-340,363-380).
 - **Verified evidence:** AssessmentsTable.tsx:364-381 renders Approve/Reject Buttons with no `disabled` prop (Revise/Remit at 349,359 are disabled unless status==='active'); comment at 337-340 admits it. AssessmentRow (10-19) has no remission-status or requestedBy field, and no current-user id is passed in, so the UI has nothing to gate on today. Server-side maker!=checker is only asserted in dialog copy (~501); revenue-service is not in the snapshot so the server check is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/revenue/assessments/AssessmentsTable.tsx`, `apps/web/src/app/(app)/revenue/assessments/page.tsx`
@@ -339,7 +341,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ASSESSMENTS-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1934, verified on main 9c5e9e9e9)
 - **First-pass claim:** Raw UUID entry: Assessee ID and Rate Head ID are free-text UUID fields with no picker or lookup, so a clerk must copy 36-character ids between screens (AssessmentCreateForm.tsx:54-55,118,136); the table then prints only "3fa85f64…" so the officer cannot tell which taxpayer a row belongs to (AssessmentsTable.tsx:328).
 - **Verified evidence:** AssessmentCreateForm.tsx:54-55 validate only a UUID regex; inputs at 113-123 and 131-141 are plain text with UUID placeholders. AssessmentsTable.tsx:328 prints `assesseeId.slice(0,8)…` and the row has no owner name. No EntityPicker exists in the repo (Grep found none); SmartCombobox only takes string[]. Sibling pages already load `/api/v1/revenue/assessees?limit=200` (bills/page.tsx:116) and config/page.tsx:6 loads `/api/v1/revenue/rate-heads`, so the data for pickers exists.
 - **Files to change:** `apps/web/src/app/(app)/revenue/assessments/AssessmentCreateForm.tsx`, `apps/web/src/app/(app)/revenue/assessments/AssessmentsTable.tsx`, `apps/web/src/app/(app)/revenue/assessments/page.tsx`, `apps/web/src/app/(app)/revenue/_components/AssesseeSelect.tsx`
@@ -358,7 +360,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ASSESSMENTS-03  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Money conversion uses parseFloat/Math.round (AssessmentsTable.tsx:21-25, AssessmentCreateForm.tsx:18-22) instead of the string-based rupeesToMinorString (lib/money.ts:28) used elsewhere — accepts "1e5" and >2 decimals and can drift on large values; paise is meant to be exact bigint.
 - **Verified evidence:** Two local copies: AssessmentsTable.tsx:21-25 and AssessmentCreateForm.tsx:18-22 use parseFloat then Math.round(n*100); invalid/negative silently becomes "0". Validation (Form:57, Table:231) also uses parseFloat, so '1e5' and '12abc' pass, and '1.005' rounds to 100. Beyond 2^53 paise the float loses digits. Shared string-based rupeesToMinorString exists at apps/web/src/lib/money.ts:28 (rejects exponent, >2 decimals, zero, negatives) and is used in bbps/receipts. Same float pattern also in config/CreateRateSlabForm.tsx:23-38.
 - **Files to change:** `apps/web/src/app/(app)/revenue/assessments/AssessmentsTable.tsx`, `apps/web/src/app/(app)/revenue/assessments/AssessmentCreateForm.tsx`, `apps/web/src/app/(app)/revenue/config/CreateRateSlabForm.tsx`
@@ -376,7 +378,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ASSESSMENTS-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stats show 0 and an empty-looking table region on a failed fetch; only a badge marks the failure (page.tsx:21-24,41-44).
 - **Verified evidence:** page.tsx:18-22 derive counts from `data` which fetchJson defaults to [] on error, so StatCards (34-37) show 0/0/0/0; the only cues are the PageHeader badge (30) and DataSourceBadge inside the Card (8-9, only when list also empty). StatCard already renders '—' for null/undefined/NaN (ds/StatCard.tsx displayValue), so passing null on error is enough. RefreshErrorState exists at ds/RefreshErrorState.tsx (client wrapper with router.refresh()).
 - **Files to change:** `apps/web/src/app/(app)/revenue/assessments/page.tsx`
@@ -414,7 +416,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-BBPS-02  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1934, verified on main 9c5e9e9e9)
 - **First-pass claim:** Fire-and-forget: there is no status endpoint (page.tsx:19-22), so a fetch or payment can fail in the biller adapter with no signal to the officer; the only trail is "check Bills or Receipts later" (FetchBillForm.tsx:43-46, PayBillForm.tsx:85-89).
 - **Verified evidence:** bbps/page.tsx:14-21 explicitly states there is no status endpoint; FetchBillForm.tsx:43-47 and PayBillForm.tsx:85-89 only show a messageId acknowledgement. The page is a static server component with no data fetch. Backend (revenue-service adapter, message status) is not in the snapshot -> cannot verify whether a status/outbox read exists.
 - **Files to change:** `apps/web/src/app/(app)/revenue/bbps/page.tsx`, `apps/web/src/app/(app)/revenue/bbps/FetchBillForm.tsx`, `apps/web/src/app/(app)/revenue/bbps/PayBillForm.tsx`
@@ -448,7 +450,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-BBPS-04  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Channel list differs from Receipts (upi/netbanking/card here vs cheque/dd/pos there) and options show raw codes (PayBillForm.tsx:11,198-200).
 - **Verified evidence:** PayBillForm.tsx:11 CHANNELS = online, counter, upi, netbanking, card; receipts/RecordReceiptForm.tsx:12 = online, counter, cheque, dd, pos. Options render the raw code (PayBillForm.tsx:198-200; Receipts:203). Whether the server enums differ is not verifiable without revenue-service.
 - **Files to change:** `apps/web/src/app/(app)/revenue/bbps/PayBillForm.tsx`, `apps/web/src/app/(app)/revenue/receipts/RecordReceiptForm.tsx`, `apps/web/src/lib/revenue/channels.ts`
@@ -465,7 +467,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-BBPS-05  ·  LOW  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Pay Bill" / "Pay bill" wording implies money movement; the copy says "record a BBPS payment" in the subtitle and "dispatches money movement" in the dialog — inconsistent (page.tsx:14, PayBillForm.tsx:236-238).
 - **Verified evidence:** Subtitle bbps/page.tsx:10 says 'record a BBPS payment'; button/title 'Pay Bill' (PayBillForm.tsx:208,227-228) and dialog line 236-237 says 'dispatches money movement ... cannot be recalled'. The fields (bbpsTxnId 'from the biller') suggest a payment already made at the biller is being recorded, so wording is inconsistent about direction.
 - **Files to change:** `apps/web/src/app/(app)/revenue/bbps/page.tsx`, `apps/web/src/app/(app)/revenue/bbps/PayBillForm.tsx`
@@ -486,7 +488,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-BILLS-01  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Generate Bill lists every non-paid demand, including ones that already have an issued bill; nothing prevents a second POST for the same assessmentId, and the async result is only an acknowledgement (GenerateBillForm.tsx:28,55-66).
 - **Verified evidence:** GenerateBillForm.tsx:28 eligibleDemands = demands.filter(status!=='paid'); POST body is only assessmentId (57). BillRow (bills/page.tsx:27-34) has no demandId/assessmentId, so the client cannot tell which demands already have a bill; success text says 'submitted (id ...)' async (61-65). Server idempotency is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/revenue/bills/GenerateBillForm.tsx`, `apps/web/src/app/(app)/revenue/bills/page.tsx`
@@ -503,7 +505,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-BILLS-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** KPIs show 0 for Demands/Outstanding/Bills Issued on a fetch failure; only the badge differs (page.tsx:158-160,251-255).
 - **Verified evidence:** bills/page.tsx:157-160 computes overallSource; StatCards at 252-254 use demands.length / outstandingDemands / bills.length, which are 0 when fetchJson falls back to []. Only PageHeader badge (206) and DataSourceBadge inside cards (260-261, 278-279) mark failure. StatCard renders '—' for null.
 - **Files to change:** `apps/web/src/app/(app)/revenue/bills/page.tsx`
@@ -518,7 +520,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-BILLS-03  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status pills print raw server strings (status ?? "unknown") — including "unknown" — for demands and bills (page.tsx:88,109).
 - **Verified evidence:** bills/page.tsx:88 and :109 default a missing status to the string 'unknown'; the table renders it via cellType 'status' -> ds/StatusPill.tsx, whose map has no 'unknown' and falls back to a neutral pill, so users see raw lowercase server strings including 'unknown'.
 - **Files to change:** `apps/web/src/app/(app)/revenue/bills/page.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -533,6 +535,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 ### GAP-REVENUE-BILLS-04  ·  LOW  ·  partly  ·  theme NAVUX (was STATUS)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1868 — assessee option label now humanizes the enum on bills/page.tsx; remaining: shared AssesseeSelect not adopted (bills/receipts/refunds/recovery/write-offs/waivers/adjustments pickers are still inline GET-form selects, the latter six still print the raw assesseeType), no auto-submit.
 - **First-pass claim:** Picker is a GET form that reloads the full page; the assessee option label exposes the identifier and the raw enum (page.tsx:228-233).
 - **Verified evidence:** Picker is a GET <form> (bills/page.tsx:210-238) so View triggers a full server render; true. The option label `ownerName — identifierNo (assesseeType)` (230) intentionally includes the identifier to disambiguate namesakes; the raw enum assesseeType is the real blemish. Same pattern is copy-pasted in instalments, receipts, recovery pages.
 - **Files to change:** `apps/web/src/app/(app)/revenue/bills/page.tsx`, `apps/web/src/app/(app)/revenue/_components/AssesseeSelect.tsx`
@@ -555,7 +558,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-CONFIG-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Category on Create Rate Head is free text (input ref, not a select), so "property", "Property" and "property tax" can fork the taxonomy (CreateRateHeadForm.tsx:15,51-54,147).
 - **Verified evidence:** CreateRateHeadForm.tsx:15,34 category is a free-text input (146-156) validated only as non-empty (51); value trimmed and posted (72). RateConfigConsole.tsx:80 shows it as a plain column. Server-side category enum is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/revenue/config/CreateRateHeadForm.tsx`, `apps/web/src/app/(app)/revenue/config/types.ts`, `apps/web/src/app/(app)/revenue/config/RateConfigConsole.tsx`
@@ -570,7 +573,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-CONFIG-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Zero KPIs on failure: Rate Heads 0 / Active 0 with the only cue a badge inside the first tab; no PageHeader badge unlike sibling pages (page.tsx:84-98; RateConfigConsole.tsx:66-67).
 - **Verified evidence:** config/page.tsx:85-89 PageHeader has no `actions` badge (siblings pass DataSourceBadge). StatCards 92-95 use rateHeads.length etc., 0 on error. rateHeadsSource is only used to show DataSourceBadge inside the first tab when the list is empty (RateConfigConsole.tsx:66-67); slab/penalty/rebate errors only inside their tabs (107,173,215), and the Rebate result has no KPI.
 - **Files to change:** `apps/web/src/app/(app)/revenue/config/page.tsx`, `apps/web/src/app/(app)/revenue/config/RateConfigConsole.tsx`
@@ -586,6 +589,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 ### GAP-REVENUE-CONFIG-04  ·  MEDIUM  ·  partly  ·  theme MONEY
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1868 — CreateRateSlabForm now uses rupeesToMinorString/percentToBps (allowZero), validates bandTo>bandFrom, rejects unparsable bandTo, and the table header reads "Rate Value (₹ / %)"; remaining: no overlap/gap check against existing same-effective-date bands (no existing slabs are passed to the form).
 - **First-pass claim:** Slab rate unit changes with type (₹ for flat/band, % for ad_valorem) and is stored as paise or bps; the table prints "Rate Value" as ₹ or % in one column, and band gaps/overlaps are not validated client-side (CreateRateSlabForm.tsx:70-72; RateConfigConsole.tsx:133-137).
 - **Verified evidence:** Unit switching is handled: form labels 'Rate (%)' vs 'Rate (₹)' (CreateRateSlabForm.tsx:70-72) and the table picks formatBps vs formatMoney (RateConfigConsole.tsx:133-137), so the cell shows ₹ or % explicitly; types.ts documents paise/bps. Real defects: local converters use Number()*100 + Math.round (Slab form 23-38, float, not rupeesToMinorString/percentToBps from lib/money.ts); no validation that bandTo>bandFrom or that bands don't overlap/gap (only bandFrom required, 80-85; an unparsable bandTo is silently dropped at 128-129).
 - **Files to change:** `apps/web/src/app/(app)/revenue/config/CreateRateSlabForm.tsx`, `apps/web/src/app/(app)/revenue/config/RateConfigConsole.tsx`
@@ -603,7 +607,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-CONFIG-05  ·  LOW  ·  partly  ·  theme NAVUX
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Selecting a rate head navigates with router.push, reloading server data and resetting the scroll position; three tabs each repeat the selector (RateHeadSelector.tsx:35; RateConfigConsole.tsx:96,162,204).
 - **Verified evidence:** RateHeadSelector.tsx:35 uses router.push to /revenue/config?rateHeadId=..., re-running the server page fetches (page.tsx:69-74); the selector is repeated in three tabs (RateConfigConsole.tsx:96,162,204). The `active` tab lives in client useState (55) so it survives the navigation, contradicting an implied reset; scroll reset is default router.push behaviour but was not verified in a browser. The three selectors read the same selectedId so they are in sync.
 - **Files to change:** `apps/web/src/app/(app)/revenue/config/RateHeadSelector.tsx`, `apps/web/src/app/(app)/revenue/config/RateConfigConsole.tsx`
@@ -624,7 +628,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-INSTALMENTS-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** The create request carries only instalmentCount and startDate — no demand selection and no amount — and the confirmation never states what total is being split, so the officer commits an assessee to a schedule without seeing the arrears figure (CreateInstalmentPlanForm.tsx:69-76,185-186).
 - **Verified evidence:** CreateInstalmentPlanForm.tsx:69-76 posts {assesseeId, instalmentCount, startDate} only; ConfirmDialog (177-191, description 183-188) states count and raw ISO start date but no total, arrears, per-instalment amount, or assessee name. The page (instalments/page.tsx) does not fetch demands, so the form has no arrears figure. Demands endpoint /assessees/{id}/demands is used by bills/receipts pages. How the server chooses demands/total is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/revenue/instalments/page.tsx`, `apps/web/src/app/(app)/revenue/instalments/CreateInstalmentPlanForm.tsx`
@@ -641,7 +645,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-INSTALMENTS-02  ·  MEDIUM  ·  confirmed  ·  theme NAVUX (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Plan table has no schedule or per-instalment amount and no link to a plan detail; only totals (page.tsx:114-117).
 - **Verified evidence:** instalments/page.tsx:108-118 columns are totalMinor, instalmentCount, startDate, status only; InstalmentPlanRow (14-20) has no schedule or per-instalment fields and no row link or detail route exists (no instalments/[id]). Whether the API can return schedule lines is cannot-verify. Theme DEADROUTE is inaccurate: nothing links to a dead route, the detail view is missing.
 - **Files to change:** `apps/web/src/app/(app)/revenue/instalments/page.tsx`, `apps/web/src/app/(app)/revenue/instalments/[id]/page.tsx`
@@ -657,7 +661,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-INSTALMENTS-04  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Instalments column is right-unaligned plain number while Total Due is right-aligned (page.tsx:114-115).
 - **Verified evidence:** instalments/page.tsx:115 Instalments column has no `align`, while Total Due (114) is align:'right'; DataTable applies text-align from col.align (ds/DataTable.tsx:333) and 'num' class for right cells (380).
 - **Files to change:** `apps/web/src/app/(app)/revenue/instalments/page.tsx`
@@ -676,7 +680,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-RECEIPTS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Total Collected sums amountMinor over every receipt regardless of status (page.tsx:150-157), so cancelled/reversed/refunded receipts inflate the figure shown next to "Reconciled".
 - **Verified evidence:** receipts/page.tsx:150-156 reduces amountMinor over all receipts with no status filter (157 only counts 'reconciled'); shown as 'Total Collected' (228). Which statuses exist (cancelled/reversed) cannot be verified without revenue-service; ReceiptRow.status is an open string.
 - **Files to change:** `apps/web/src/app/(app)/revenue/receipts/page.tsx`
@@ -691,7 +695,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-RECEIPTS-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed fetch the KPI reads "₹0.00" (BigInt 0n formatted) instead of "—" (page.tsx:150-157,228); the badge is the only cue.
 - **Verified evidence:** receipts/page.tsx:150-156 reduce over [] returns 0n; line 228 passes formatMoney(0n) -> '₹0.00'. Failure cues: PageHeader badge (181) and DataSourceBadge in the table card (235-236) only. Note overallSource includes assessees/demands failures, so use receiptsResult.source for this KPI.
 - **Files to change:** `apps/web/src/app/(app)/revenue/receipts/page.tsx`
@@ -706,7 +710,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-RECEIPTS-04  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Channel select shows raw codes "dd" and "pos" (RecordReceiptForm.tsx:12,203); instrument/bank fields are shown for every channel, including online.
 - **Verified evidence:** RecordReceiptForm.tsx:12 CHANNELS includes 'dd' and 'pos'; options render raw codes (202-206). Instrument No. (236-246) and Bank Name (248-258) are rendered unconditionally for all channels including online/counter; body sends them if non-empty (99-100).
 - **Files to change:** `apps/web/src/app/(app)/revenue/receipts/RecordReceiptForm.tsx`, `apps/web/src/lib/revenue/channels.ts`
@@ -729,7 +733,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-RECOVERY-02  ·  MEDIUM  ·  confirmed  ·  theme NAVUX (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** No recovery register: no list endpoint, so referred assessees, status and outcome are invisible after the success line (page.tsx:111-120).
 - **Verified evidence:** recovery/page.tsx:113-119 renders only a paragraph saying no list endpoint exists (POST /v1/revenue/recovery-referrals only); the form (RecoveryReferralCreateForm.tsx:47-53) posts {assesseeId, reason} and shows a one-line success. No register exists in the UI. Theme DATEFMT is wrong. Backend absent -> endpoint cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/revenue/recovery/page.tsx`, `apps/web/src/app/(app)/revenue/recovery/RecoveryReferralCreateForm.tsx`
@@ -758,7 +762,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-RECOVERY-04  ·  LOW  ·  confirmed  ·  theme COPY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Page copy references "## BACKEND FOLLOW-UPS in this PR" — developer text shown to end users (page.tsx:116-118).
 - **Verified evidence:** recovery/page.tsx:113-119 shows '<strong>## BACKEND FOLLOW-UPS</strong> in this PR' and API path text to end users. Same developer text in refunds/page.tsx:184, adjustments/page.tsx:161, write-offs/page.tsx:118; assessments table has a code comment only. Theme I18N is not accurate (it is developer leakage).
 - **Files to change:** `apps/web/src/app/(app)/revenue/recovery/page.tsx`, `apps/web/src/app/(app)/revenue/refunds/page.tsx`, `apps/web/src/app/(app)/revenue/adjustments/page.tsx`, `apps/web/src/app/(app)/revenue/write-offs/page.tsx`
@@ -781,7 +785,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-REFUNDS-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Checker has no way to find a pending refund: there is no list endpoint, so decisions depend on the maker relaying a UUID which the checker pastes into a lookup form (page.tsx:178-188, RefundLookupForm.tsx:7-24). Approvals can silently stall.
 - **Verified evidence:** refunds/page.tsx:178-188 states revenue-service has no refund list endpoint (only POST /v1/revenue/refunds and PATCH .../decide plus GET by id) and offers RefundLookupForm (l.7-24), a UUID text input validated by regex that pushes to /revenue/refunds/<uuid>/decide. A checker has no discovery path. Backend list endpoint absence is stated by the page itself; revenue-service source not in snapshot so cannot verify independently.
 - **Files to change:** `services/revenue-service (list endpoint, not in snapshot)`, `apps/web/src/app/(app)/revenue/refunds/page.tsx`, `apps/web/src/app/(app)/revenue/refunds/RefundLookupForm.tsx`, `apps/web/src/app/(app)/revenue/refunds/PendingRefundsTable.tsx`
@@ -800,6 +804,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 ### GAP-REVENUE-REFUNDS-02  ·  MEDIUM  ·  partly  ·  theme VALIDATION
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1868 — receipts that already have a pending refund are disabled with "(refund pending)" in RefundCreateForm; remaining: already-approved/processed refunds are not flagged (only the pending list is loaded), partial-refund decision (POST still sends only receiptId+reason), server 409 on duplicates unverified.
 - **First-pass claim:** Refund is raised on a receipt with no amount field — full receipt amount only — and the select does not mark receipts already refunded or pending refund, so duplicate refunds can be raised (RefundCreateForm.tsx:74-80,122-125).
 - **Verified evidence:** RefundCreateForm.tsx posts only { receiptId, reason } (l.74-80), so full-receipt refund is the API contract as sent; there is no amount field. The receipt select (l.122-126) shows receiptNo, amount, channel and receipt status but nothing about existing/pending refunds, and refunds/page.tsx loads no refund list, so the UI cannot prevent duplicates. The submit button already has disabled/loading while busy (l.163). Whether the server rejects duplicate refunds is cannot-verify (revenue-service absent). Partial-amount refunds would need a backend contract change.
 - **Files to change:** `apps/web/src/app/(app)/revenue/refunds/RefundCreateForm.tsx`, `apps/web/src/app/(app)/revenue/refunds/page.tsx`, `services/revenue-service (refund uniqueness check)`
@@ -817,7 +822,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-REFUNDS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Page shows developer text "see ## BACKEND FOLLOW-UPS in this PR" to end users (page.tsx:182-185).
 - **Verified evidence:** refunds/page.tsx:178-188 renders 'see ## BACKEND FOLLOW-UPS in this PR' and endpoint names (POST /v1/revenue/refunds, PATCH ...) inside the Refund register card to end users.
 - **Files to change:** `apps/web/src/app/(app)/revenue/refunds/page.tsx`
@@ -833,7 +838,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-REFUNDS-04  ·  LOW  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Success message asks the maker to "Use the refund register lookup below" and prints a raw id (RefundCreateForm.tsx:83-87).
 - **Verified evidence:** RefundCreateForm.tsx:83-87 message reads 'Refund raised (id <uuid>), pending checker approval. Use the refund register lookup below to decide on it.' printing the raw id and pointing to the UUID lookup; also tells the maker to decide it, which maker-checker forbids.
 - **Files to change:** `apps/web/src/app/(app)/revenue/refunds/RefundCreateForm.tsx`
@@ -856,7 +861,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-REFUNDS-DETAIL-DECIDE-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** makerUserId is fetched and typed but never used: Approve stays enabled for the officer who raised the refund and the UI only warns in prose; the same-user rejection is left to a server response after an async submit (page.tsx:14,37; RefundDecideForm.tsx:24,47-51).
 - **Verified evidence:** RefundRecord.makerUserId is typed (decide/page.tsx:14) and mapped (page.tsx:37) but never read again. RefundDecideForm.tsx:24 sets canDecide = refund !== null only, so Approve/Reject (l.70-91) are enabled for the maker; the maker-checker rule appears only as prose in the dialog (l.111-113) and the post-submit message (l.49-51). No session user id is available client-side: roleGuard.ts has getSessionRoles/TenantId/Name but no user id, though the JWT sub is decoded. Theme DEADROUTE is wrong.
 - **Files to change:** `apps/web/src/lib/auth/roleGuard.ts`, `apps/web/src/app/(app)/revenue/refunds/[id]/decide/page.tsx`, `apps/web/src/app/(app)/revenue/refunds/[id]/decide/RefundDecideForm.tsx`
@@ -875,7 +880,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-REFUNDS-DETAIL-DECIDE-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Decision buttons ignore status: a refund already approved/rejected still shows live Approve/Reject (RefundDecideForm.tsx:24).
 - **Verified evidence:** RefundDecideForm.tsx:24 gates only on record presence. page.tsx:98 prints refund.status as raw text but the form never reads refund.status, so an approved/rejected refund still offers live Approve/Reject. After a successful decision (l.50-57) router.refresh() also leaves the buttons live. The actual status enum values live in revenue-service, absent from this snapshot.
 - **Files to change:** `apps/web/src/app/(app)/revenue/refunds/[id]/decide/RefundDecideForm.tsx`, `apps/web/src/app/(app)/revenue/refunds/[id]/decide/page.tsx`
@@ -894,7 +899,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-REFUNDS-DETAIL-DECIDE-03  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Assessee and Receipt are shown as raw 36-character UUIDs, and the dialog shortens the receipt to 8 characters, so the checker cannot verify the payer without another screen (page.tsx:79-87, RefundDecideForm.tsx:111-113).
 - **Verified evidence:** decide/page.tsx:88-94 renders receiptId and assesseeId in <dd className=mono> as raw UUIDs; RefundDecideForm.tsx:110 shows receiptId.slice(0,8) in the dialog. The existing GET /api/v1/revenue/assessees/{id} and /assessees/{id}/receipts endpoints (used by refunds/page.tsx:60 and assessees/[id]/page.tsx) could supply the owner name and receiptNo, but this page fetches neither. The ConfirmDialog with mandatory rejection reason already exists (form l.98-107), so the theme fix text partly already done.
 - **Files to change:** `apps/web/src/app/(app)/revenue/refunds/[id]/decide/page.tsx`, `apps/web/src/app/(app)/revenue/refunds/[id]/decide/RefundDecideForm.tsx`, `apps/web/src/app/(app)/revenue/refunds/types.ts`
@@ -911,7 +916,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-REFUNDS-DETAIL-DECIDE-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Not-found and server-error both produce the identical "Could not load refund" state with a generic badge (page.tsx:46-66); the route never calls notFound() (compare assessees/[id]/page.tsx:83).
 - **Verified evidence:** decide/page.tsx:53 sets loadFailed = source === 'error' || !refund and shows one paragraph plus DataSourceBadge for both a 404 and 5xx/network failure (l.55-70); notFound() is never called, unlike assessees/[id]/page.tsx:83 which does notFound() when source !== 'error'. LoaderResult from fetchJson already carries status (apiClient.ts:125,144), so a real 404 is distinguishable.
 - **Files to change:** `apps/web/src/app/(app)/revenue/refunds/[id]/decide/page.tsx`
@@ -936,7 +941,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-TRADE-LICENSES-01  ·  HIGH  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Fee is typed in paise ("Fee (paise)", digits only) and defaults to "0" — a clerk can issue a licence for ₹0 by accident, and a missing zero changes the fee 10× (page.tsx:161,220-222).
 - **Verified evidence:** trade-licenses/page.tsx:96 initialises feeMinor to '0'; l.220-222 renders label 'Fee (paise)' with a digits-only input; l.137 sends feeMinor.trim() || '0'. Validation (l.109-118) does not check fee, so a licence can be issued at 0 and the unit is minor units typed by hand. Other revenue forms (write-offs) already use rupeesToMinorString from @/lib/money with a rupee label.
 - **Files to change:** `apps/web/src/app/(app)/revenue/trade-licenses/page.tsx`
@@ -954,7 +959,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-TRADE-LICENSES-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle promises "renew, and cancel" but the page has no renew or cancel control; renewalCount is fetched and never shown (page.tsx:279,20).
 - **Verified evidence:** page.tsx:279 subtitle says 'Issue, renew, and cancel'; file header (l.4) says the same and revenue/page.tsx:20 hub tile repeats it. The page only has the create form and read-only table (l.35-74, 244-305); no renew or cancel control exists. renewalCount is typed (l.29) but never rendered. Whether the revenue-service exposes renew/cancel commands is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/revenue/trade-licenses/page.tsx`, `apps/web/src/app/(app)/revenue/page.tsx`
@@ -969,7 +974,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-TRADE-LICENSES-04  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** feeRupees truncates to whole rupees (Math.trunc), so a ₹2,500.50 fee shows "2500" under "Fee (₹)" — paise silently dropped (trade-licenses/feeRupees.ts:16).
 - **Verified evidence:** feeRupees.ts:14-16 returns Math.trunc(rupees).toString() where rupees = minorToRupeesOrNull(minor) = Number(minor)/100 (formatters.ts:150-155). 250050 displays '2500' under 'Fee (₹)' (page.tsx:44,66-67); paise are dropped, and Number() loses precision for very large values. formatMoney (formatters.ts:90) exists and keeps paise.
 - **Files to change:** `apps/web/src/app/(app)/revenue/trade-licenses/feeRupees.ts`, `apps/web/src/app/(app)/revenue/trade-licenses/page.tsx`
@@ -988,6 +993,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 ### GAP-REVENUE-TRADE-LICENSES-05  ·  MEDIUM  ·  confirmed  ·  theme TABLE (was DATEFMT)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1868 — status pills now have distinct tones and expiry renders via formatIndianDate; remaining: still a hand-rolled <table> with no sort, filter/search or paging (no ds/DataTable).
 - **First-pass claim:** Table is a plain <table> in a bare div: no sort, filter or paging, expiry printed as raw ISO (or "—") and status pills only distinguish good/warn/bad (page.tsx:40-70).
 - **Verified evidence:** page.tsx:35-74 is a hand-styled <table> inside overflow div with 9 fixed columns; no sort, filter, search or paging. Expiry is printed as l.expiryDate ?? '—' (raw ISO string, l.65). Status pill maps only active->good, pending->warn, everything else bad (l.59), so expired, cancelled, suspended look identical. ds/DataTable exists (used in tenant-admin/page.tsx). Note formatIndianDate (formatters.ts:2) outputs dd/mm/yyyy, not 'dd Mon yyyy'.
 - **Files to change:** `apps/web/src/app/(app)/revenue/trade-licenses/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -1004,7 +1010,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-TRADE-LICENSES-06  ·  LOW  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failure shows 0 in every KPI and a sentence with no retry action (page.tsx:245-262,297-303).
 - **Verified evidence:** page.tsx:271-273 and 284-287: on fetch failure loading=false and licenses=[], so the four StatCards show 0 (only the loading state shows '…'); the error is a single <p role=alert> at l.296-298 with no retry, though loadLicenses is available. Because this is a client component, ds/RefreshErrorState (router.refresh) would not re-run the useEffect fetch; use ds/ErrorState with onRetry={() => loadLicenses()}.
 - **Files to change:** `apps/web/src/app/(app)/revenue/trade-licenses/page.tsx`
@@ -1027,7 +1033,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-WAIVERS-01  ·  HIGH  ·  partly  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Money is typed in paise: "Amount (paise)" digits-only, placeholder "e.g. 50000 = ₹500" — the only revenue form that asks a clerk to enter minor units; a missed zero waives 10× the intended amount, and there is no cap against the demand's penalty/interest (page.tsx:39,124-127).
 - **Verified evidence:** waivers/page.tsx:124-127 label 'Amount (paise)' digits-only with placeholder 'e.g. 50000 = ₹500' (l.44 validation only checks digits); no upper bound or zero check (regex allows '0'). The claim that it is the only revenue form asking for minor units is wrong: trade-licenses/page.tsx:220 also does (write-offs and refunds use rupees). A cap against the demand penalty/interest cannot be built from this page since it loads no demand data; the assessees/{id}/demands endpoint exists but its penalty/interest fields were not verified.
 - **Files to change:** `apps/web/src/app/(app)/revenue/waivers/page.tsx`, `apps/web/src/lib/money.ts`
@@ -1045,7 +1051,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-WAIVERS-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Submits a financial remission with no confirmation step and no context: assessee and demand are raw UUID text inputs (no lookup, no name/FY echo), and the single click posts immediately (page.tsx:43-57,95-107).
 - **Verified evidence:** waivers/page.tsx:37-45 validate() only regex-checks two UUID text inputs (l.95-108); handleSubmit (l.50-75) posts straight to v1/revenue/waivers with no ConfirmDialog, no assessee name or FY echo, and no reason length rule. Compare write-offs/refunds, which use ds/ConfirmDialog. The page is a client component with no server loader, so no assessee/demand data is available.
 - **Files to change:** `apps/web/src/app/(app)/revenue/waivers/page.tsx`, `apps/web/src/app/(app)/revenue/waivers/WaiverForm.tsx`, `apps/web/src/app/(app)/revenue/waivers/page.server.tsx`
@@ -1064,6 +1070,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 ### GAP-REVENUE-WAIVERS-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1868 — waivers/[id]/decide route + WaiverDecideForm exist with maker!=checker and pending-status gating, and the hub tile text is now accurate; remaining: nothing in the UI links to or lists pending waivers (no pending list, lookup form or post-submit link), so a checker still needs the URL/id from the maker.
 - **First-pass claim:** Hub tile promises "Raise and decide penalty/interest waivers" but the tree has no waivers/[id]/decide route and no list endpoint — checker step is not reachable from the UI (revenue/page.tsx:22 vs revenue/waivers/ contents).
 - **Verified evidence:** revenue/page.tsx:22 tile: 'Raise and decide penalty/interest waivers (maker-checker)'. The revenue/waivers directory contains only page.tsx, loading.tsx and error.tsx; there is no waivers/[id]/decide route and the page has no lookup form (unlike refunds/write-offs). The comment at waivers/page.tsx:5 says no list endpoint yet. Whether revenue-service has a waiver decide endpoint is cannot-verify (service absent from snapshot).
 - **Files to change:** `apps/web/src/app/(app)/revenue/page.tsx`, `apps/web/src/app/(app)/revenue/waivers/[id]/decide/page.tsx`, `apps/web/src/app/(app)/revenue/waivers/[id]/decide/WaiverDecideForm.tsx`
@@ -1080,7 +1087,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-WAIVERS-04  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Waiver Type "Both (Penalty + Interest)" has no way to split the amount between components (page.tsx:112-115).
 - **Verified evidence:** waivers/page.tsx:112-115 offers penalty, interest and 'both' with a single amountMinor field (l.57-65 body); there is no per-component split and no way to record how the amount is apportioned. How the backend apportions a 'both' waiver is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/revenue/waivers/page.tsx`, `services/revenue-service (waiver command schema)`
@@ -1103,7 +1110,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-WRITE-OFFS-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Write-off amount is typed with no view of the assessee's outstanding arrears and no upper bound check (compare adjustments, which caps at the demand balance): the form posts { assesseeId, amountMinor, reason } for an irreversible balance reduction (WriteOffCreateForm.tsx:39-45,62-70).
 - **Verified evidence:** WriteOffCreateForm.tsx:158-170 validates amount only via rupeesToMinorString (>0, 2dp); no outstanding balance is fetched (write-offs/page.tsx loads only assessees, l.45-50) and no cap is applied, unlike adjustments/AdjustmentCreateForm.tsx:72 which caps at fromDemand.netMinor. POST body (l.116-120) is { assesseeId, amountMinor, reason }. A ConfirmDialog exists (l.292-310) but shows only the amount, with no assessee name or balance, and reason is entered in-form, not via the dialog.
 - **Files to change:** `apps/web/src/app/(app)/revenue/write-offs/page.tsx`, `apps/web/src/app/(app)/revenue/write-offs/WriteOffCreateForm.tsx`
@@ -1121,7 +1128,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-WRITE-OFFS-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Checkers cannot discover pending write-offs: no list endpoint; they must paste a UUID from the maker into the lookup form (page.tsx:110-124, WriteOffLookupForm.tsx:7-24).
 - **Verified evidence:** write-offs/page.tsx:114-122 says revenue-service exposes no write-off list endpoint and provides WriteOffLookupForm (UUID regex, push to /revenue/write-offs/<uuid>/decide). Checkers must get the UUID from the maker. Backend absence per the page's own text; revenue-service not in snapshot.
 - **Files to change:** `services/revenue-service (list endpoint)`, `apps/web/src/app/(app)/revenue/write-offs/page.tsx`, `apps/web/src/app/(app)/revenue/write-offs/WriteOffLookupForm.tsx`
@@ -1139,6 +1146,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 ### GAP-REVENUE-WRITE-OFFS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1868 — WriteOffCreateForm has an optional demand selector that posts demandId+financialYear and the decide page shows the FY; remaining: demand is optional (decision to require it + backend contract pending) and the amount cap is against the assessee DCB balance, not the chosen demand.
 - **First-pass claim:** Write-off is against the assessee, not a specific demand/FY, so the audit trail cannot say which year's demand was reduced (WriteOffCreateForm.tsx:62-70).
 - **Verified evidence:** WriteOffCreateForm.tsx:116-120 posts { assesseeId, amountMinor, reason } with no demandId or financialYear, and the page has no demand selector; the decide page's WriteOffRecord (decide/page.tsx:7-14) carries none either. Whether the backend can accept/record a demandId is cannot-verify.
 - **Files to change:** `services/revenue-service (write-off command schema)`, `apps/web/src/app/(app)/revenue/write-offs/WriteOffCreateForm.tsx`, `apps/web/src/app/(app)/revenue/write-offs/page.tsx`, `apps/web/src/app/(app)/revenue/write-offs/[id]/decide/page.tsx`
@@ -1155,7 +1163,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-WRITE-OFFS-04  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Developer text "see ## BACKEND FOLLOW-UPS in this PR" is shown to end users (page.tsx:115-120).
 - **Verified evidence:** write-offs/page.tsx:114-120 renders 'see ## BACKEND FOLLOW-UPS in this PR' plus raw endpoint names to end users.
 - **Files to change:** `apps/web/src/app/(app)/revenue/write-offs/page.tsx`
@@ -1178,7 +1186,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-WRITE-OFFS-DETAIL-DECIDE-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** makerUserId is fetched but never compared to the signed-in user: Approve is enabled for the maker of an irreversible balance reduction; enforcement is a post-submit server rejection (WriteOffDecideForm.tsx:24; page.tsx:10-12).
 - **Verified evidence:** WriteOffRecord.makerUserId is fetched (decide/page.tsx:13,35) and never compared; WriteOffDecideForm.tsx:24 canDecide = writeOff !== null only, so the maker can Approve/Reject; the rule is prose at form l.113-114 and the post-submit text (l.49-50). No session user id helper exists in roleGuard.ts (sub is decoded in JwtPayload but not exposed).
 - **Files to change:** `apps/web/src/lib/auth/roleGuard.ts`, `apps/web/src/app/(app)/revenue/write-offs/[id]/decide/page.tsx`, `apps/web/src/app/(app)/revenue/write-offs/[id]/decide/WriteOffDecideForm.tsx`
@@ -1197,7 +1205,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-WRITE-OFFS-DETAIL-DECIDE-02  ·  MEDIUM  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** The checker sees the write-off amount but not the assessee's outstanding arrears or which demand/FY it reduces, only a raw UUID (page.tsx:77-83).
 - **Verified evidence:** decide/page.tsx:83-88 shows amount and assessee UUID only. The write-off record mapped at l.29-36 has no demandId or FY, so which demand is reduced cannot be shown from this record; the assessee-level DCB summary (GET /assessees/{id}/dcb: totalDemand, totalCollected, balance, used in assessees/[id]/page.tsx:24) and assessee name (GET /assessees/{id}) are available but not fetched here.
 - **Files to change:** `apps/web/src/app/(app)/revenue/write-offs/[id]/decide/page.tsx`, `apps/web/src/app/(app)/revenue/write-offs/[id]/decide/WriteOffDecideForm.tsx`
@@ -1215,7 +1223,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-WRITE-OFFS-DETAIL-DECIDE-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Already-decided records still show live Approve/Reject (WriteOffDecideForm.tsx:24).
 - **Verified evidence:** WriteOffDecideForm.tsx:24 canDecide ignores writeOff.status although decide/page.tsx:92 displays it; approved/rejected write-offs keep live buttons, and after a successful submit router.refresh() (l.47) does not hide them. Status enum values are in revenue-service (absent), so the pending literal is unverified.
 - **Files to change:** `apps/web/src/app/(app)/revenue/write-offs/[id]/decide/WriteOffDecideForm.tsx`, `apps/web/src/app/(app)/revenue/write-offs/[id]/decide/page.tsx`
@@ -1232,7 +1240,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-WRITE-OFFS-DETAIL-DECIDE-04  ·  LOW  ·  confirmed  ·  theme FAILMASK (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1868, verified on main 9c5e9e9e9)
 - **First-pass claim:** Not-found and server-error share one fail-closed message and never call notFound() (page.tsx:51-64).
 - **Verified evidence:** decide/page.tsx:51 loadFailed = source==='error' || !writeOff; the one paragraph (l.63-68) plus DataSourceBadge covers 404 and server error alike; notFound() is never called. LoaderResult exposes status (apiClient.ts:144). Theme LOADING is wrong: loading.tsx exists; this is failure-masking.
 - **Files to change:** `apps/web/src/app/(app)/revenue/write-offs/[id]/decide/page.tsx`

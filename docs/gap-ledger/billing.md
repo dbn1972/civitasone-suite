@@ -14,7 +14,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Orphan duplicate route /billing/list renders the same getBillingPlans list under the same title 'Billing — Plans' (list/page.tsx:5-13) but is not linked from this hub (page.tsx:8-12).
 - **Verified evidence:** billing/list/page.tsx:4-13 calls getBillingPlans() and renders ModuleListPage titled 'Billing — Plans'; billing/page.tsx:8-14 links only plans, subscriptions, invoices, payments, gstn. navRouteManifest.ts:30-31 lists /billing and /billing/plans but not /billing/list; grep finds no other reference to billing/list in apps/ or packages/. Truly orphaned duplicate of plans/page.tsx.
 - **Files to change:** `apps/web/src/app/(app)/billing/list/page.tsx`, `apps/web/src/app/(app)/billing/list/loading.tsx`, `apps/web/src/app/_components/navRouteManifest.ts`
@@ -30,7 +30,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-HOME-03  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tile icons: LinkTiles has an emoji only for 'Payments'; Plans, Subscriptions, Invoices and GSTN Console fall through to the generic folder glyph (LinkTiles.tsx:5-58).
 - **Verified evidence:** LinkTiles.tsx:10-49 TILE_ICONS has 'Payments' (💳) only. tileIcon() (53-61) falls back on href substrings (dashboard/employees/leave/payroll/procurement/orders) and finally '📁'. '/billing/plans', 'Subscriptions', 'Invoices' and 'GSTN Console' match nothing so all render 📁. Line refs 5-58 in the observation are close (actual 10-61).
 - **Files to change:** `apps/web/src/app/_components/LinkTiles.tsx`
@@ -45,7 +45,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-HOME-04  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx draws four stat-card blocks and a 288px table block (loading.tsx:7-13) although the hub has neither, so content jumps on load.
 - **Verified evidence:** billing/loading.tsx:7-12 renders a 4-card grid (h-24) and an h-72 (288px) block; billing/page.tsx renders ModuleHub -> PageHeader + LinkTiles (g-3 tile grid) with no stat cards or table. Also loading uses min-h-screen bg-slate-50 wrapper, unlike the page's page-main.
 - **Files to change:** `apps/web/src/app/(app)/billing/loading.tsx`
@@ -59,7 +59,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-HOME-05  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Hub passes no help slug, unlike the sibling Catalogue hub (catalogue/page.tsx:15), so there is no 'How this works' link for GST e-invoice/GSTN concepts.
 - **Verified evidence:** billing/page.tsx:5-15 passes no help prop to ModuleHub (ModuleHub.tsx:13,25 supports it), whereas catalogue/page.tsx:15 passes help='catalogue'. But lib/helpContent.ts HELP_MODULES (slugs at lines 57-324) has finance, procurement, hr, payroll, estab, grants, projects, citizen, tenant-admin: no 'billing' AND no 'catalogue'. So the sibling's link itself 404s via help/[module]/page.tsx notFound(). Simply adding help='billing' would break.
 - **Files to change:** `apps/web/src/lib/helpContent.ts`, `apps/web/src/app/(app)/billing/page.tsx`
@@ -82,7 +82,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-GSTN-01  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Submit Return posts straight to GSTN on button press — no ConfirmDialog, no summary of what will be filed, no role check (SubmitReturnPanel.tsx:52-99). Invoice IRN actions on the sibling page do use a confirmation (invoices/[id]/InvoiceActions.tsx:140-177).
 - **Verified evidence:** SubmitReturnPanel.tsx form onSubmit -> handleSubmit (103-148) validates locally and immediately POSTs v1/billing/gstn/returns via browserJson (130); no ConfirmDialog, no summary. billing/layout.tsx only applies ModuleGate('billing'), no requireAnyRole; gstn/page.tsx has none. InvoiceActions.tsx:140-177 does use ConfirmDialog for IRN generate/cancel. Server-side role check cannot be verified (billing-service absent). Note: line refs in observation (52-99) are off; real 103-148.
 - **Files to change:** `apps/web/src/app/(app)/billing/gstn/SubmitReturnPanel.tsx`, `apps/web/src/app/(app)/billing/gstn/page.tsx`, `apps/web/src/app/(app)/billing/gstn/layout.tsx`
@@ -100,7 +100,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-GSTN-02  ·  HIGH  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tax totals must be typed as paise digits ('Total Taxable Value (paise)') (SubmitReturnPanel.tsx:34-38,164-171,183); a ₹1.25 crore taxable value is a 10-digit entry and a slip is a 100x filing error. The ₹ helper appears only after typing (SubmitReturnPanel.tsx:199-201).
 - **Verified evidence:** Labels 'Total Taxable Value (paise)' etc. (SubmitReturnPanel.tsx:215-218); input filtered to digits (230) and validated /^\d+$/ (111-114); the rupee rendering via formatMoney(f.value) appears only when there is a value (236-238), i.e. after typing. Value is sent as the raw paise string (135-139). A ₹1.25 crore value = 12500000000 (11 digits, observation said 10). Helper lib/money.ts rupeesToMinorString(input) (money.ts:28) already exists for rupee->paise strings.
 - **Files to change:** `apps/web/src/app/(app)/billing/gstn/SubmitReturnPanel.tsx`, `apps/web/src/lib/money.ts`
@@ -118,6 +118,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 ### GAP-BILLING-GSTN-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1873 — only a visible 'not checked against invoices' note was added; no prefill-from-invoices / variance reconciliation (needs backend return-preparation endpoint + finance sign-off).
 - **First-pass claim:** Return totals are hand-keyed, not derived from Billing invoices or the ledger, and nothing reconciles them; the filed figure can drift from invoices with no check (SubmitReturnPanel.tsx:32-38,102-114).
 - **Verified evidence:** handleSubmit (SubmitReturnPanel.tsx:103-148) posts only hand-typed values from local state (68-74); there is no fetch of invoice/ledger totals and no reconciliation or warning. Whether the backend cross-checks cannot be verified (billing-service absent).
 - **Files to change:** `apps/web/src/app/(app)/billing/gstn/SubmitReturnPanel.tsx`
@@ -133,7 +134,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-GSTN-04  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Panels unmount on tab switch (GstnConsole.tsx:19-21), so a half-typed return is lost, and the referenceId from a successful submit is not carried to the Return Status tab — users must copy the uuid by hand (SubmitReturnPanel.tsx:95-96; ReturnStatusPanel.tsx:40).
 - **Verified evidence:** GstnConsole.tsx:37-39 renders only the active panel, so switching tabs unmounts SubmitReturnPanel and loses its useState fields (68-74). On success only local `result` is set (142) showing Reference ID (261); ReturnStatusPanel has its own `ref` state (287) with no prop or shared state. Users must copy the id manually.
 - **Files to change:** `apps/web/src/app/(app)/billing/gstn/GstnConsole.tsx`, `apps/web/src/app/(app)/billing/gstn/SubmitReturnPanel.tsx`, `apps/web/src/app/(app)/billing/gstn/ReturnStatusPanel.tsx`
@@ -149,6 +150,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 ### GAP-BILLING-GSTN-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1873 — panel now honestly states it is a single-reference lookup; no filing-history list and no duplicate period/type warning (needs backend gstn_returns persistence).
 - **First-pass claim:** No filing history: status is looked up only by a raw reference id, there is no list of returns per GSTIN/period, so an officer cannot see what was already filed for 08/2026 before filing again.
 - **Verified evidence:** ReturnStatusPanel.tsx only calls GET v1/billing/gstn/returns/{ref}/status (311) for a typed reference; no list endpoint is used anywhere in gstn/*. A returns-list endpoint's existence cannot be verified (billing-service absent), so do not assume one.
 - **Files to change:** `apps/web/src/app/(app)/billing/gstn/ReturnStatusPanel.tsx`, `apps/web/src/app/(app)/billing/gstn/GstnConsole.tsx`
@@ -164,7 +166,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-GSTN-06  ·  LOW  ·  confirmed  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** GSTIN validated by regex only, no checksum-digit check (SubmitReturnPanel.tsx:26-28); Submit does not call Verify. Tab state is local, not deep-linkable (GstnConsole.tsx:11-13).
 - **Verified evidence:** GSTIN_RE at SubmitReturnPanel.tsx:63 (and VerifyGstinPanel.tsx:18) is structure-only; the last char is accepted as [0-9A-Z] with no mod-36 checksum. handleSubmit does not call the verify endpoint. Tab state is local useState in GstnConsole.tsx:31, not synced to the URL. Line refs in observation (26-28) are off.
 - **Files to change:** `apps/web/src/lib/gstin.ts`, `apps/web/src/app/(app)/billing/gstn/SubmitReturnPanel.tsx`, `apps/web/src/app/(app)/billing/gstn/VerifyGstinPanel.tsx`, `apps/web/src/app/(app)/billing/gstn/GstnConsole.tsx`
@@ -181,6 +183,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 ### GAP-BILLING-GSTN-07  ·  LOW  ·  confirmed  ·  theme STATUS
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1873 — Submit result now uses StatusPill and 'filed' is mapped, but 'filed' maps to 'warn' (shared RTI key in StatusPill.tsx) rather than 'good' as the acceptance requires.
 - **First-pass claim:** StatusPill maps neither 'filed', 'processing' nor 'suspended' (StatusPill.tsx:5-36), and the Submit result prints status as plain text while the Status tab uses a pill (SubmitReturnPanel.tsx:213 vs ReturnStatusPanel.tsx:97).
 - **Verified evidence:** StatusPill STATUS_MAP (StatusPill.tsx:5-39) contains none of filed, processing, suspended (also 'rejected' and 'submitted' exist). ReturnStatusPanel.tsx:363 uses <StatusPill>, so 'filed'/'processing' fall back to blue; SubmitReturnPanel.tsx:262 prints result.status as raw text.
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/app/(app)/billing/gstn/SubmitReturnPanel.tsx`
@@ -195,7 +198,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-GSTN-08  ·  LOW  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** The subtitle warns GSTN 'may be disabled in this environment' but the UI cannot detect it; the user learns only from a failed call (page.tsx:11).
 - **Verified evidence:** billing/gstn/page.tsx:9 subtitle contains 'GSTN may be disabled in this environment'; no code in gstn/* checks feature/environment status before showing the forms; failure shows only after submit (SubmitReturnPanel.tsx:143-144). No status/flag endpoint is referenced, and one cannot be verified as existing.
 - **Files to change:** `apps/web/src/app/(app)/billing/gstn/page.tsx`, `apps/web/src/app/(app)/billing/gstn/SubmitReturnPanel.tsx`
@@ -216,7 +219,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-INVOICES-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch reads as an empty ledger: on source 'error' the badge renders but rows stay [] so DataTable shows 'No invoices yet — No invoices have been generated for this tenant.' (page.tsx:39-60).
 - **Verified evidence:** invoices/page.tsx:29,38 fetches with fallback [] and on source==='error' renders only <DataSourceBadge source='error'> ('Couldn't load — showing nothing'), then DataTable (40-60) with rows=[] draws EmptyState 'No invoices yet / No invoices have been generated for this tenant' (DataTable.tsx:320). The two messages contradict and there is no retry. Nuance: the amber badge is shown, so it is not silent, but the empty-ledger claim is false.
 - **Files to change:** `apps/web/src/app/(app)/billing/invoices/page.tsx`
@@ -232,7 +235,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-INVOICES-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** The only identifier and link text is the raw invoice UUID (page.tsx:43,53-54); InvoiceRow has no human invoice number, so finance staff cannot quote or search a readable reference.
 - **Verified evidence:** invoices/page.tsx:42 column key 'id' labelled 'Invoice ID' and rowLinkKey='id' (51-52) so the link text is the raw uuid; InvoiceRow (5-16) has no invoiceNumber/number field. Backend (billing-service) not in snapshot so cannot confirm whether a number exists.
 - **Files to change:** `apps/web/src/app/(app)/billing/invoices/page.tsx`, `apps/web/src/app/(app)/billing/invoices/[id]/page.tsx`, `services/billing-service (invoice schema/DTO; not in snapshot)`
@@ -248,7 +251,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-INVOICES-03  ·  MEDIUM  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** StatusPill has no mapping for 'issued' or 'cancelled', so both fall to the neutral 'info' pill and look identical (StatusPill.tsx:5-36; page.tsx:44).
 - **Verified evidence:** invoices/page.tsx:44 cellType 'status' -> DataTable.tsx:127 StatusPill; StatusPill.tsx STATUS_MAP lacks 'issued' and 'cancelled' so both get variant 'info' and identical styling. Full invoice status enum not verifiable (billing-service absent).
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -262,7 +265,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-INVOICES-04  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Every amount is formatted as ₹ by formatMoney although InvoiceRow carries a currency field and plans can be created in USD/EUR/GBP (page.tsx:15; plans/new/NewPlanForm.tsx:10).
 - **Verified evidence:** page.tsx:12 InvoiceRow.currency exists but columns 45-47 use cellType 'amount' -> DataTable.tsx:128-133 formatMoney() which always prefixes '₹' (formatters.ts:90-139, no currency arg). NewPlanForm.tsx:9 allows INR/USD/EUR/GBP. Observation's line 15 is the end of the interface. Whether non-INR invoices occur in practice depends on backend.
 - **Files to change:** `apps/web/src/app/_components/ds/DataTable.tsx`, `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/billing/invoices/page.tsx`
@@ -279,7 +282,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-INVOICES-05  ·  LOW  ·  partly  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Period and Issued are printed raw (ISO timestamps, blank when null for drafts) — cellValue falls to String(value ?? '') (page.tsx:45,49; DataTable.tsx:127-142).
 - **Verified evidence:** invoices/page.tsx:43,48 'Period' (periodMonth) and 'Issued' (issuedAt) have no cellType; DataTable.tsx:125-140 cellValue returns String(row[key] ?? ''), so issuedAt prints as raw ISO and null prints blank (not '—'). periodMonth is probably 'YYYY-MM' rather than a full ISO timestamp (format not verifiable). formatIndianDate exists (formatters.ts:2-7) but has no timeZone and outputs dd/mm/yyyy; no DataTable date cellType.
 - **Files to change:** `apps/web/src/app/_components/ds/DataTable.tsx`, `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/billing/invoices/page.tsx`
@@ -302,7 +305,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-INVOICES-DETAIL-02  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Cancel dialog says the IRN must be cancelled within 24 hours per NIC rules, but canCancel only checks status === 'generated' and ignores ackDate (InvoiceActions.tsx:23-24,158-161); staff learn the window has closed only after a round-trip.
 - **Verified evidence:** InvoiceActions.tsx:24 canCancel = einvoice?.status === 'generated' (no time check); dialog copy at 168-170 says cancel 'must be done within 24 hours per NIC rules'. EInvoiceStatus (page.tsx:109-122) carries ackDate, unused for gating. Note dialog already has requireReason (line 411); ConfirmDialog fix in the theme text is already done. Line numbers in observation (23-24,158-161) are slightly off (actual 23-24, 166-170). Whether the backend also enforces the window cannot be seen (billing-service absent).
 - **Files to change:** `apps/web/src/app/(app)/billing/invoices/[id]/InvoiceActions.tsx`, `apps/web/src/lib/formatters.ts`
@@ -319,7 +322,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-INVOICES-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Outage on the invoice request is titled 'Invoice not found' with just the badge (page.tsx:88-96), so a transient failure reads as a deleted invoice and offers no retry.
 - **Verified evidence:** invoices/[id]/page.tsx:89-100: when invoice is null it renders PageHeader title 'Invoice not found' and, for invoiceSource==='error', only <DataSourceBadge source='error'> ('Couldn't load — showing nothing'); no retry. Worse, fetchJson marks every non-2xx (incl. a true 404) as source 'error' (apiClient.ts:141-144), so a real 404 also gets the badge instead of the EmptyState. LoaderResult already carries status/errorMessage (apiClient.ts:33-42) and hr/apar/[id]/page.tsx:97-121 shows the working pattern. Lines in observation (88-96) actually 89-100 (after offset).
 - **Files to change:** `apps/web/src/app/(app)/billing/invoices/[id]/page.tsx`
@@ -336,7 +339,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-INVOICES-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** E-invoice fetch cannot tell 404 from an outage (source deliberately ignored, page.tsx:76-83,98). On an outage einvoice is null, the EmptyState 'No e-invoice generated' shows and Generate stays enabled — risk of a duplicate IRN request while GSTN status is actually unknown.
 - **Verified evidence:** page.tsx:76-81 (getEInvoiceStatus) and 102 (`void einvoiceSource`) discard the source; the comment at 68-75 claims fetchJson cannot tell 404 from outage but LoaderResult.status exists (apiClient.ts:33-35). On outage einvoice=null so InvoiceActions.tsx:23 canGenerate=(!einvoice) is true, the 'No e-invoice generated' EmptyState (287-291) shows and Generate stays enabled. Whether the backend generate-irn endpoint is idempotent cannot be verified (billing-service absent). Line refs in observation (76-83,98) approx.
 - **Files to change:** `apps/web/src/app/(app)/billing/invoices/[id]/page.tsx`, `apps/web/src/app/(app)/billing/invoices/[id]/InvoiceActions.tsx`
@@ -354,7 +357,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-INVOICES-DETAIL-05  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** While status is 'pending' both buttons are disabled and the only guidance is a toast saying 'refresh shortly' (InvoiceActions.tsx:44-49); no polling or refresh control, so staff cannot see when the IRN lands.
 - **Verified evidence:** InvoiceActions.tsx:23-24: status 'pending' makes canGenerate and canCancel both false. Guidance is the success message set after submit (35-39 / 284-288, 'refresh shortly'), which exists only in that session; on a fresh visit to a pending invoice there is no message at all, and no polling/refresh control (router.refresh() only once after submit, line 289). Observation's line refs 44-49 are off.
 - **Files to change:** `apps/web/src/app/(app)/billing/invoices/[id]/InvoiceActions.tsx`, `apps/web/src/app/(app)/billing/invoices/[id]/page.tsx`
@@ -370,7 +373,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-INVOICES-DETAIL-06  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Approvals table prints raw requestedBy / decidedBy ids and a raw ISO decidedAt (page.tsx:167-172); issuedBy / cancelledBy fields do the same (page.tsx:133,136) — ids instead of names on a maker-checker trail.
 - **Verified evidence:** page.tsx:167-174 Approvals DataTable prints requestedBy, decidedBy, decidedAt with no cellType (DataTable cellValue falls to String(), DataTable.tsx:125-140); Details card prints issuedAt/paidAt/cancelledAt raw (134,136,137,138 region: lines 134-138) and issuedBy/cancelledBy ids (135,138). No user-name resolver exists in apps/web (grep). Observation's 133,136 are off by ~2. Backend field content (uuid vs name) cannot be verified.
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/_components/ds/DataTable.tsx`, `apps/web/src/app/(app)/billing/invoices/[id]/page.tsx`
@@ -387,7 +390,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-INVOICES-DETAIL-07  ·  LOW  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** StatusPill maps neither 'generated', 'cancelled', 'issued' nor 'filed', so e-invoice and invoice statuses use the neutral pill (StatusPill.tsx:5-36); the Status StatCard shows the raw lowercase enum string (page.tsx:112).
 - **Verified evidence:** ds/StatusPill.tsx:2-30 STATUS_MAP has no 'generated', 'cancelled', 'issued' or 'filed' (it has failed, pending, paid, draft, closed); unmapped falls to variant 'info' (line ~35). InvoiceActions.tsx:324 uses StatusPill for einvoice.status; DataTable items/approvals use cellType status. The Status StatCard is raw: page.tsx:121 value={invoice.status} (observation says 112) and the Status field line 131 is raw too. Invoice status enum itself cannot be verified (billing-service absent).
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/app/(app)/billing/invoices/[id]/page.tsx`
@@ -404,6 +407,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 ### GAP-BILLING-INVOICES-DETAIL-08  ·  LOW  ·  confirmed  ·  theme MONEY
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1873 — amounts now use formatMoneyIn(currency) and the breadcrumb is AutoBreadcrumb (client nav); breadcrumb AND PageHeader back='/billing/invoices' are both still rendered (two back affordances).
 - **First-pass claim:** Page renders its own breadcrumb <nav> with plain <a> tags (full reload) on top of the PageHeader back link (page.tsx:99-104,105-109); all amounts use ₹ regardless of invoice.currency shown in the subtitle.
 - **Verified evidence:** page.tsx:106-110 renders its own <nav> breadcrumb with plain <a> (full page loads) and 112-116 PageHeader back='/billing/invoices' (also an <a>-based Link inside PageHeader, but client nav). Amounts use formatMoney (lib/formatters.ts:90-139) which hard-codes '₹' with no currency param, while subtitle (line 114) shows invoice.currency. Observation's 99-109 are off; plans/[id] has same breadcrumb pattern. Whether invoices are ever non-INR cannot be verified in backend, but plans can be created in USD/EUR/GBP (NewPlanForm.tsx:9).
 - **Files to change:** `apps/web/src/app/(app)/billing/invoices/[id]/page.tsx`, `apps/web/src/lib/formatters.ts`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -419,7 +423,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-INVOICES-DETAIL-09  ·  LOW  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Signed QR payload is dumped as monospace text (InvoiceActions.tsx:88-92) instead of a scannable QR image.
 - **Verified evidence:** InvoiceActions.tsx:93-98 (observation 88-92) renders einvoice.signedQrCode as 11px mono wrapped text. The signed QR payload is a long JWT; no QR rendering exists. The web package.json is not in the snapshot so whether a QR library is installed cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/billing/invoices/[id]/InvoiceActions.tsx`
@@ -442,7 +446,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-LIST-01  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Route duplicates /billing/plans (same loader, same 'Billing — Plans' title) and is unreachable from the hub (list/page.tsx:5-13; billing/page.tsx:8-12); two URLs for one list splits bookmarks and analytics.
 - **Verified evidence:** list/page.tsx:4-13 identical loader (getBillingPlans) and title to plans/page.tsx:4-19; not linked from billing/page.tsx:8-14, sidebar, or navRouteManifest.ts (only /billing and /billing/plans at 30-31). Same as HOME-02.
 - **Files to change:** `apps/web/src/app/(app)/billing/list/page.tsx`, `apps/web/src/app/(app)/billing/list/loading.tsx`
@@ -457,7 +461,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-LIST-02  ·  MEDIUM  ·  confirmed  ·  theme COPY (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Description says 'Read-only list' while /billing/plans, the same data, offers '+ New Plan' (plans/page.tsx:11-18) — conflicting statements about the same list.
 - **Verified evidence:** list/page.tsx:9 says 'Read-only list loaded from the Billing service API.' while plans/page.tsx:10,14-16 says 'All billing plans. Create new plans or view details.' and adds '+ New Plan'. Both use the same data; note the plans page also has no row link to /billing/plans/[id] because ModuleListTable does not link rows (ModuleListTable.tsx:~48-58), so 'view details' is not actually delivered either.
 - **Files to change:** `apps/web/src/app/(app)/billing/list/page.tsx`, `apps/web/src/app/(app)/billing/plans/page.tsx`
@@ -471,7 +475,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-LIST-03  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W0 2026-10-13: obsolete — billing/list route and its loading.tsx deleted by #1873; /billing/list redirects to /billing/plans)
 - **First-pass claim:** loading.tsx draws four stat blocks and a table (list/loading.tsx:6-13) but the loaded page has no stat cards.
 - **Verified evidence:** list/loading.tsx:7-12 draws 4 stat cards (h-24) and h-80 table; list/page.tsx renders only ModuleListPage (PageHeader + Records card), no stat cards.
 - **Files to change:** `apps/web/src/app/(app)/billing/list/loading.tsx`
@@ -484,7 +488,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-LIST-04  ·  LOW  ·  confirmed  ·  theme LAYOUT (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W0 2026-10-13: obsolete — billing/list/page.tsx deleted by #1873; billing list pages no longer use ModuleListPage (bespoke DataTable pages inside page-main wrap))
 - **First-pass claim:** No page-main wrapper: unlike its siblings the list page renders ModuleListPage directly (list/page.tsx:8-13), so spacing differs from /billing/plans.
 - **Verified evidence:** list/page.tsx:6-12 returns <ModuleListPage> directly; ModuleListPage.tsx:20-30 returns a fragment (PageHeader + table) with no container, whereas plans/page.tsx:7 and payments/page.tsx:7 wrap in <div className='page-main'>. Not a dead route issue.
 - **Files to change:** `apps/web/src/app/(app)/billing/list/page.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -505,7 +509,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PAYMENTS-01  ·  HIGH  ·  confirmed  ·  theme MONEY (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** A payments page with no money: rows are reduced to id/label/sublabel/status/meta (loaders.ts:1656-1694; ModuleListTable.tsx:38-58) — no amount, mode, invoice or paid date, and no link to the invoice paid.
 - **Verified evidence:** payments/page.tsx:4-12 uses generic ModuleListPage; loaders.ts:1656-1694 mapModuleRows keeps only id, label (name/title/subject/label/code/...), sublabel (dept/category/type/vendor/description), status, meta (code/fileNo/contractNo/channel/month). getBillingPayments = moduleLoader (line ~1710). ModuleListTable.tsx (26-60) renders ID/Name/Detail/Status/Meta only. No amount, mode, invoice ref or paid date is mapped; rows without id or label are dropped (line 1667), so payments lacking name/code disappear silently. Actual payment API fields cannot be verified (billing-service absent).
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/billing/payments/page.tsx`, `new: apps/web/src/app/(app)/billing/payments/PaymentsTable.tsx`
@@ -523,7 +527,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PAYMENTS-03  ·  MEDIUM  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** When the code is used as label it is also emitted as Meta (loaders.ts:1679-1684), so the same reference prints twice per row; ID column shows a truncated raw uuid (ModuleListTable.tsx:44).
 - **Verified evidence:** loaders.ts:1670-1684: label = name ?? title ?? subject ?? label ?? code ...; meta = code ?? fileNo ... So code prints twice only when the payment has no name/title/subject/label (then label=code and meta=code); if a name exists meta is the code and no duplicate. ModuleListTable.tsx:50 shows row.id.slice(0,8) as raw uuid prefix in the ID column (obs cites line 44). Payment field shape unverified.
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -539,7 +543,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PAYMENTS-04  ·  LOW  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** No filter, sort or pagination on the generic table (ModuleListTable.tsx:36-60); failed payments and pending cheques cannot be isolated. Wrapper div has page-main without wrap (payments/page.tsx:9).
 - **Verified evidence:** ModuleListTable.tsx:26-60 has no filter, sort or pagination (plain <table>, all rows from useSeededResource); status printed as text (row.status, line 54) not StatusPill. payments/page.tsx:7 wrapper is 'page-main' without 'wrap' (observation says line 9). moduleLoader has no pagination/limit params so large ledgers render fully.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/billing/payments/page.tsx`
@@ -562,7 +566,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle promises 'view details' but rows are not links: ModuleListTable renders plain <td>s with no href (ModuleListTable.tsx:43-53), so /billing/plans/[id] is unreachable from the list.
 - **Verified evidence:** apps/web/src/app/_components/ModuleListTable.tsx:79-86 renders each row as plain <td>s (id slice, label, sublabel, status, meta) with no <a>/Link; apps/web/src/app/(app)/billing/plans/page.tsx:10 subtitle says 'or view details'. Route apps/web/src/app/(app)/billing/plans/[id]/page.tsx exists (getBillingPlanById) so it is reachable only by typing the URL.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`, `apps/web/src/app/(app)/billing/plans/page.tsx`
@@ -578,7 +582,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-02  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** A plans list with no price: mapModuleRows maps only name/description/status/code (loaders.ts:1662-1684); amount, interval and govt-exempt never reach the table, so plans cannot be compared or verified after creation.
 - **Verified evidence:** apps/web/src/app/_data/loaders.ts:1656-1694 mapModuleRows copies only label(name/title/code), sublabel(description..), status and meta(code); getBillingPlans (:1707) uses it via moduleLoader, so amount/priceMinor, currency, interval, govtExempt never reach the list. The detail page reads plan.amount/currency/interval, and create sends priceMinor: field names between create, list and detail are inconsistent and the billing payload is not verifiable here.
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/billing/plans/page.tsx`, `apps/web/src/app/(app)/billing/plans/PlansTable.tsx`
@@ -595,7 +599,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-03  ·  MEDIUM  ·  confirmed  ·  theme SILENT-DROP (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Rows without id or a name/title/code label are dropped silently (loaders.ts:1662-1671); a payload shape change turns the page into 'No records' rather than an error.
 - **Verified evidence:** apps/web/src/app/_data/loaders.ts:1671 `if (!id || !label) continue;` silently drops rows lacking id or any of name/title/subject/label/code/contractNo/fileNo. getArrayPayload null returns invalid_payload error (correct), but an array of unexpected shape maps to [] and the table shows 'No records' (ModuleListTable.tsx:65-66). moduleLoader has no responseSchema (:1696-1703).
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/_data/loaders.test.ts`
@@ -610,7 +614,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-04  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Raw uuid shown as the first 8 characters (ModuleListTable.tsx:44) — not a usable plan identifier; the human plan code is buried in the Meta column.
 - **Verified evidence:** apps/web/src/app/_components/ModuleListTable.tsx:81 renders `row.id.slice(0, 8)` in mono as the first column; the human code is only in the Meta column (mapModuleRows meta = code, apps/web/src/app/_data/loaders.ts:1680-ish). Accurate.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/billing/plans/PlansTable.tsx`
@@ -624,7 +628,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-05  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** '+ New Plan' is shown to every role (plans/page.tsx:16-18); no role check, so a non-admin finds out from a server error after filling the form.
 - **Verified evidence:** apps/web/src/app/(app)/billing/plans/page.tsx:14-16 renders the +New Plan link unconditionally; billing/layout.tsx only applies ModuleGate (entitlement), no role check. A role helper exists for server pages (lib/auth/roleGuard.ts getSessionRoles, used in hr/vigilance/page.tsx:44). Which roles may create plans, and whether the billing service enforces it, is not verifiable (service absent).
 - **Files to change:** `apps/web/src/app/(app)/billing/plans/page.tsx`, `apps/web/src/app/(app)/billing/plans/new/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`
@@ -640,7 +644,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-06  ·  LOW  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status printed as the raw lowercase enum, not a StatusPill (ModuleListTable.tsx:47); empty state has no 'Create the first plan' action.
 - **Verified evidence:** apps/web/src/app/_components/ModuleListTable.tsx:84 prints `row.status ?? '—'` as raw text; StatusPill exists (ds/StatusPill.tsx, STATUS_MAP has active/inactive/archived/draft). Empty state at :66 is generic 'No records / Nothing to show yet' with no action; the page passes the New Plan button only above the table.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/billing/plans/PlansTable.tsx`
@@ -662,7 +666,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-DETAIL-02  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Money printed raw as 'INR {amount}' with no paise→₹ conversion or lakh grouping (page.tsx:63,80), unlike invoices which use formatMoney; if the API returns paise the plan looks 100x too expensive.
 - **Verified evidence:** plans/[id]/page.tsx:45 and 61 print `${currency} ${amount}` where amount = String(plan.amount) (line 22): raw string, no formatMoney, no lakh grouping (observation's 63,80 are wrong). Also a field mismatch: NewPlanForm.tsx:70-77 POSTs priceMinor (paise) and never sends interval, but the detail reads plan.amount/plan.interval; if the API returns priceMinor the page shows '—'. API response shape for GET plan cannot be verified (billing-service absent).
 - **Files to change:** `apps/web/src/app/(app)/billing/plans/[id]/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -679,7 +683,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** A failed request produces plan=null and the page says 'Plan not found — removed or the ID is invalid' with no badge or retry (page.tsx:9-17); the DataSourceBadge is only reachable on the found path (page.tsx:45).
 - **Verified evidence:** plans/[id]/page.tsx:6,8-17: any null plan (fetch error or 404) renders EmptyState 'Plan not found ... removed or the ID is invalid' with no badge or retry; the DataSourceBadge at line 42 sits only on the found path (found path can't be error since data is null on error). getBillingPlanById (loaders.ts ~1712) returns LoaderResult with status, so 404 vs outage is distinguishable.
 - **Files to change:** `apps/web/src/app/(app)/billing/plans/[id]/page.tsx`
@@ -695,7 +699,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Missing fields are papered over: status defaults to 'active' and name to 'Unnamed Plan' (page.tsx:20,26), so an incomplete payload looks like a healthy active plan.
 - **Verified evidence:** plans/[id]/page.tsx:20 name defaults to 'Unnamed Plan' and :25 status defaults to 'active'; :23 currency defaults to 'INR'. A payload missing status therefore shows active and an INR amount. Raw status also printed unformatted (lines 47,63).
 - **Files to change:** `apps/web/src/app/(app)/billing/plans/[id]/page.tsx`
@@ -711,7 +715,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-DETAIL-05  ·  LOW  ·  confirmed  ·  theme LAYOUT (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Read-only: no edit, deactivate or 'subscriptions on this plan' link; breadcrumb <nav> uses plain <a> tags and duplicates the PageHeader back link (page.tsx:34-41,55-59). Created shows a sliced ISO date (page.tsx:29,66).
 - **Verified evidence:** plans/[id]/page.tsx has no actions (no PageHeader actions prop, no links to subscriptions); breadcrumb <nav> with plain <a> at 30-34 (observation 34-41) duplicates PageHeader back at 39; `createdAt.slice(0, 10)` at 48 shows ISO date yyyy-mm-dd (obs 29,66 off). No edit/deactivate endpoints are known from the web code, so 'edit' needs backend confirmation.
 - **Files to change:** `apps/web/src/app/(app)/billing/plans/[id]/page.tsx`, `apps/web/src/app/_components/AutoBreadcrumb.tsx`
@@ -735,6 +739,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 ### GAP-BILLING-PLANS-NEW-01  ·  HIGH  ·  confirmed  ·  theme MONEY
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1873 — the dead Billing Interval select was removed rather than persisted (billing-service createPlanBody has no interval field); acceptance (interval sent/shown on detail) not met, needs a backend decision.
 - **First-pass claim:** Billing Interval is a required-looking field but is never sent: the POST body carries name, code, priceMinor, currency and govtExempt only (NewPlanForm.tsx:83-92). Whatever the user picks is silently discarded.
 - **Verified evidence:** apps/web/src/app/(app)/billing/plans/new/NewPlanForm.tsx:18 holds `interval` state and :180-197 renders the Billing Interval select, but the POST body at :69-79 sends only name, code, priceMinor, currency, govtExempt. The chosen interval is discarded. The plan detail page ([id]/page.tsx) reads plan.interval, so the field is expected to exist server-side. Billing service is not in the snapshot, so whether POST /v1/billing/plans accepts `interval` cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/billing/plans/new/NewPlanForm.tsx`
@@ -751,7 +756,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-NEW-02  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Errors are one form-level line; the invalid input gets aria-invalid but no aria-describedby and no focus move (NewPlanForm.tsx:38-64,126,140,158), unlike the GSTN forms that link and focus each error.
 - **Verified evidence:** apps/web/src/app/(app)/billing/plans/new/NewPlanForm.tsx: validation failures set one message (:42-66 handlers) rendered in a single <p role=alert> at the bottom (:224-235); inputs only get aria-invalid (:116,:134,:158) and no aria-describedby/aria-errormessage, and there is no focus() call or ref. The form-level aria-describedby (:100) points at the message, but nothing moves focus. GSTN forms do link and focus errors (billing/gstn/VerifyGstinPanel.tsx:38,73; SubmitReturnPanel.tsx:81,121,143,190). Server fieldErrors from useFormError are ignored (only .message is used at :83). Line numbers in the finding are stale.
 - **Files to change:** `apps/web/src/app/(app)/billing/plans/new/NewPlanForm.tsx`, `apps/web/src/app/_components/ds/FormField.tsx`
@@ -768,7 +773,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-NEW-03  ·  MEDIUM  ·  partly  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Creating a priced plan has no confirmation and no reason/audit affordance; currency list includes USD/EUR/GBP for a Government-edition tenant while every invoice list amount is formatted ₹ (NewPlanForm.tsx:9-10).
 - **Verified evidence:** True: apps/web/src/app/(app)/billing/plans/new/NewPlanForm.tsx:9 `CURRENCIES = [INR,USD,EUR,GBP]` and the currency select (:161-176) is offered regardless of tenant edition; no ConfirmDialog or reason field; submit goes straight to POST (:69). Also the amount is converted with `Math.round(parseFloat(amount)*100)` (:56,:75), which is float math on money (CLAUDE.md rule 11) and can misround e.g. 1.005. Overstated: a client cannot emit the audit event (rule 8 says the service does it on mutation), so 'no audit affordance' is a server-side check I cannot see; and the claim that every invoice amount is formatted in rupees was not fully checked (invoices list uses totalMinor/currency strings, billing/invoices/page.tsx:8-14). formatMoney is INR-only, and the plan detail page prints raw currency-plus-amount text (plans/[id]/page.tsx).
 - **Files to change:** `apps/web/src/app/(app)/billing/plans/new/NewPlanForm.tsx`, `apps/web/src/lib/money.ts`, `apps/web/src/lib/money.test.ts`
@@ -786,7 +791,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme COPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Government exempt' defaults to checked with no help text (NewPlanForm.tsx:200-205); the tax consequence (GST-exempt billing?) is not stated, and a wrong default silently changes invoicing.
 - **Verified evidence:** apps/web/src/app/(app)/billing/plans/new/NewPlanForm.tsx:20 defaults `govtExempt` to true and :199-210 renders a bare 'Government exempt' checkbox with no help text or HelpTip; it is sent as-is (:77). What exemption does (GST exempt vs price exempt) is not stated anywhere on the page. Business meaning is a backend/product definition I cannot verify.
 - **Files to change:** `apps/web/src/app/(app)/billing/plans/new/NewPlanForm.tsx`
@@ -802,7 +807,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-NEW-05  ·  LOW  ·  partly  ·  theme CONSISTENCY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Uses fetch('/api/proxy/v1/billing/plans') (NewPlanForm.tsx:83) while sibling billing actions use browserJson('v1/billing/…'); hard-coded inline styles and tailwind classes (NewPlanForm.tsx:107-110) instead of the ds field components.
 - **Verified evidence:** True: apps/web/src/app/(app)/billing/plans/new/NewPlanForm.tsx:69 uses raw fetch('/api/proxy/v1/billing/plans') while sibling billing mutations use browserJson from @/lib/api/browserClient (billing/invoices/[id]/InvoiceActions.tsx:6,30; gstn/SubmitReturnPanel.tsx). This matters: browserFetch adds x-device-id and device trust headers (lib/api/browserClient.ts:20-33) that the raw fetch omits. Inline styles repeated on every control (:96,:113,:131...) and tailwind classes (:145 grid classes, :233 text-red-600) are real. Overstated: ds has no Input/Field/Select component (ls ds/), so 'instead of ds field components' cannot be done without creating one; Button is already the ds Button.
 - **Files to change:** `apps/web/src/app/(app)/billing/plans/new/NewPlanForm.tsx`, `apps/web/src/app/_components/ds/FormField.tsx`, `apps/web/src/app/_components/ds/index.ts`
@@ -818,7 +823,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-PLANS-NEW-06  ·  LOW  ·  partly  ·  theme VALIDATION (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Plan Code is free text with a lowercase placeholder but a case-insensitive pattern (NewPlanForm.tsx:14,147-153); uniqueness is discovered only from the server error.
 - **Verified evidence:** Real: placeholder 'e.g. standard_monthly' (:145), CODE_RE = /^[a-z0-9_-]+$/i (:10) and HTML pattern '[A-Za-z0-9_\-]+' (:152) accept upper case, so codes are case-insensitive on the client; nothing normalises case and uniqueness/case-collision rules are only discoverable from the server error (the response goes through formError.fromResponse which yields a generic message, :83). Mis-tagged: not fabricated data, it is a validation UX issue. Server-side uniqueness/case behaviour cannot be verified (billing service absent).
 - **Files to change:** `apps/web/src/app/(app)/billing/plans/new/NewPlanForm.tsx`
@@ -841,7 +846,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-SUBSCRIPTIONS-01  ·  HIGH  ·  confirmed  ·  theme DEADCODE (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W0 2026-10-13: obsolete — SubscriptionsTable.tsx (churnRisk column) deleted by #1873; subscription page is now a single-record view and the API carries no churn score)
 - **First-pass claim:** Churn Risk can never render: SubscriptionRow.churnRisk is declared (SubscriptionsTable.tsx:9-18) and read (line 68) but mapModuleRows builds rows from id/label/sublabel/status/meta only (loaders.ts:1685-1691), so every cell is '—' and the PredictionBadge path is dead code.
 - **Verified evidence:** apps/web/src/app/(app)/billing/subscriptions/SubscriptionsTable.tsx:26-33 declares churnRisk, :80-91 renders PredictionBadge when present; but the page feeds rows from getBillingSubscriptions = moduleLoader with mapModuleRows (apps/web/src/app/_data/loaders.ts:1656-1694,1708) which never sets churnRisk, so the cell is always '—'. Whether the billing/prediction service exposes churn data cannot be verified. Line refs in finding are stale.
 - **Files to change:** `apps/web/src/app/(app)/billing/subscriptions/SubscriptionsTable.tsx`, `apps/web/src/app/(app)/billing/subscriptions/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -857,7 +862,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-SUBSCRIPTIONS-02  ·  MEDIUM  ·  confirmed  ·  theme SILENT-DROP (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Rows lacking id or a name/title/code label are dropped silently by the mapper (loaders.ts:1662-1671); a subscription keyed only by tenantId/planId would vanish and the page would read 'No subscriptions'.
 - **Verified evidence:** apps/web/src/app/_data/loaders.ts:1671 drops rows with no id or no name/title/subject/label/code/contractNo/fileNo. Subscriptions likely carry tenantId/planId rather than a name (payload not verifiable), in which case every row is dropped and SubscriptionsTable.tsx:59-60 shows 'No subscriptions' rather than an error.
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/billing/subscriptions/SubscriptionsTable.tsx`
@@ -874,6 +879,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 ### GAP-BILLING-SUBSCRIPTIONS-03  ·  MEDIUM  ·  partly  ·  theme MISSING-DATA (was DEADROUTE)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1873 — page now shows the single subscription with plan link, status pill and formatted dates; amount/price still not shown and no status filter (single-record view).
 - **First-pass claim:** Subtitle says 'Active and past subscriptions' but there is no filter, sort or grouping and Status is the raw enum text (SubscriptionsTable.tsx:63); no plan, start/renewal date or amount, and no link to the plan or its invoices.
 - **Verified evidence:** apps/web/src/app/(app)/billing/subscriptions/page.tsx:9 subtitle 'Active and past subscriptions loaded from the Billing service.'; the table (SubscriptionsTable.tsx:62-96) has generic columns ID/Name/Detail/Status/Churn/Meta, status raw at :79, no plan, dates or amount, no filter/sort, no row links. Real, but 'dead link' tag is wrong (no link promised); the subtitle also leaks implementation wording. Which fields the API returns is not verifiable.
 - **Files to change:** `apps/web/src/app/(app)/billing/subscriptions/SubscriptionsTable.tsx`, `apps/web/src/app/(app)/billing/subscriptions/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -889,7 +895,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-SUBSCRIPTIONS-04  ·  LOW  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** ID is a truncated raw uuid (SubscriptionsTable.tsx:62); no page-level back link, unlike the invoice pages (page.tsx:11).
 - **Verified evidence:** apps/web/src/app/(app)/billing/subscriptions/SubscriptionsTable.tsx:76 shows row.id.slice(0,8); apps/web/src/app/(app)/billing/subscriptions/page.tsx:9 PageHeader has no back prop, whereas billing/invoices/page.tsx:36 sets back='/billing'. (plans list page has none either.)
 - **Files to change:** `apps/web/src/app/(app)/billing/subscriptions/SubscriptionsTable.tsx`, `apps/web/src/app/(app)/billing/subscriptions/page.tsx`
@@ -904,7 +910,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-SUBSCRIPTIONS-05  ·  LOW  ·  partly  ·  theme AI-EXPLAINABILITY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W0 2026-10-13: obsolete — SubscriptionsTable.tsx / churn PredictionBadge usage removed from billing by #1873 (no remaining caller in billing))
 - **First-pass claim:** Churn model output would be shown to a Government tenant without an audience note; PredictionBadge explainability factors are optional (SubscriptionsTable.tsx:11-15).
 - **Verified evidence:** PredictionBadge factors are optional (app/_components/ds/PredictionBadge.tsx:11-12 and SubscriptionsTable.tsx:27-31), and no audience/purpose note exists. Currently latent because churnRisk is never populated (see -01). Additional finding: the badge colours by model confidence, not risk (PredictionBadge.tsx getColorClasses), so 90%-churn/high-confidence renders green, which misleads. Policy on showing ML output in government tenants is a decision I cannot verify.
 - **Files to change:** `apps/web/src/app/(app)/billing/subscriptions/SubscriptionsTable.tsx`, `apps/web/src/app/_components/ds/PredictionBadge.tsx`

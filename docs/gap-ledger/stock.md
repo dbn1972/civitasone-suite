@@ -14,7 +14,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-HOME-01  ·  HIGH  ·  partly  ·  theme ROUTING (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1796, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stock list rows link to /stock/<id> (list/StockListClient.tsx:58-59 rowLinkPrefix="/stock/") but the segment has no [id] route — every row click resolves to stock/not-found.tsx (item detail exists only at inventory/[id]/page.tsx).
 - **Verified evidence:** list/StockListClient.tsx:58 rowLinkPrefix="/stock/" and DataTable builds `${prefix}${id}` (ds/DataTable.tsx:212). No app/(app)/stock/[id] exists; item detail is (app)/inventory/[id]/page.tsx, whose comment (REL-023) says next.config.mjs redirects /stock/:path* -> /inventory/:path*. next.config is absent from this snapshot so runtime behaviour cannot be confirmed: without the redirect the row goes to stock/not-found.tsx; with it, the row works (but so would every /stock/* page redirect).
 - **Files to change:** `apps/web/src/app/(app)/stock/list/StockListClient.tsx`
@@ -28,7 +28,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Hub omits New Item (/stock/items/new) and New Entry (/stock/ledger/new); both are reachable only from list/ledger toolbars (stock/page.tsx:9-11).
 - **Verified evidence:** stock/page.tsx:9-11 lists only Dashboard, Stock List, Stock Ledger. /stock/items/new and /stock/ledger/new exist (items/new/page.tsx, ledger/new/page.tsx) and are reachable from list toolbar (list/page.tsx '+ New Item') and dashboard '+ New'.
 - **Files to change:** `apps/web/src/app/(app)/stock/page.tsx`
@@ -42,7 +42,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-HOME-03  ·  MEDIUM  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Description promises 'GRN tracking' and 'inventory valuation' but no GRN route exists under stock/; GRNs surface only as a count pill on the dashboard (dashboard/page.tsx:43).
 - **Verified evidence:** stock/page.tsx:6 description says 'GRN tracking and inventory valuation'. No GRN route under (app)/stock; dashboard shows only a count pill (dashboard/page.tsx:43). GRN screens exist under (app)/procurement/grn. Valuation is shown as Stock Value stat (list/dashboard) and per-item totalValue, so valuation claim is roughly true.
 - **Files to change:** `apps/web/src/app/(app)/stock/page.tsx`
@@ -54,7 +54,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-HOME-04  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** LinkTiles icon map has only 'Dashboard' among these titles; 'Stock List' and 'Stock Ledger' fall back to the generic folder glyph (LinkTiles.tsx:52-61).
 - **Verified evidence:** LinkTiles.tsx TILE_ICONS (lines 10-49) has 'Dashboard' and 'Stock' but no 'Stock List' / 'Stock Ledger'; tileIcon() (54-61) falls to href checks (only 'dashboard' matches) then default 📁.
 - **Files to change:** `apps/web/src/app/_components/LinkTiles.tsx`
@@ -67,7 +67,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-HOME-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** No Help Centre slug passed to ModuleHub (help prop unset), unlike hubs that expose 'How this works'.
 - **Verified evidence:** stock/page.tsx passes no `help` to ModuleHub although ModuleHub/PageHeader support it (ModuleHub.tsx:13 -> PageHeader href /help/${help}). Whether a Help Centre article for stock exists cannot be confirmed here.
 - **Files to change:** `apps/web/src/app/(app)/stock/page.tsx`
@@ -86,7 +86,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-DASHBOARD-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Deltas '+120' and '+1.8%' are string literals (page.tsx:24-25) shown as up-trend chips regardless of data, including on error and at zero — fabricated trend signals on a financial figure.
 - **Verified evidence:** dashboard/page.tsx:24-25 pass literal delta="+120" and delta="+1.8%" with `up` to StatCard for SKUs and Stock Value; they are not derived from data, render on error and at zero. GetStockDashboard payload (loaders.ts:3865-3880) has no previous-period field to compute a delta from.
 - **Files to change:** `apps/web/src/app/(app)/stock/dashboard/page.tsx`
@@ -102,7 +102,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-DASHBOARD-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** On fetch failure the page shows a small amber badge and then real-looking zeros (SKUs 0, ₹0.00, Low Stock 0) because fetchJson returns STOCK_DASHBOARD_EMPTY (page.tsx:12, loaders.ts:3865-3891). The sibling list page shows '—' plus RefreshErrorState instead; a zero low-stock count on error can mask a stock-out.
 - **Verified evidence:** getStockDashboard -> fetchJson (apiClient.ts:111-170) returns STOCK_DASHBOARD_EMPTY (all 0, loaders.ts:3865-3870) with source:"error" on any failure. page.tsx:12 only shows DataSourceBadge (small amber pill) and still renders data.totalSKUs=0, formatMoney(0)=₹0.00, lowStockAlerts=0 (page.tsx:24-26). Sibling list/page.tsx computes null values -> '—' and renders <RefreshErrorState toHumanError("load",{area}) /> when errored. mapStockDashboard (loaders.ts:3872-3879) also coerces missing numeric fields to 0.
 - **Files to change:** `apps/web/src/app/(app)/stock/dashboard/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -120,7 +120,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-DASHBOARD-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Stock Movements' card is hard-wired to EmptyState — it never renders data (page.tsx:36) — and 'GRNs this month' shows a non-zero pill next to 'No recent GRNs' (page.tsx:43-45), contradicting itself.
 - **Verified evidence:** page.tsx:36 renders <EmptyState title="No recent movements"> unconditionally; no movements loader is called. page.tsx:43 shows pill {data.grnsThisMonth} beside an unconditional EmptyState 'No recent GRNs' (45). A getStockLedger loader exists (StockLedgerEntryListSchema imported at loaders.ts:314) that could feed movements; no GRN list source exists under stock/ (GRN UI is under (app)/procurement/grn).
 - **Files to change:** `apps/web/src/app/(app)/stock/dashboard/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -137,7 +137,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-DASHBOARD-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stock-outs StatCard is a static '—' (page.tsx:27): a KPI with no data source.
 - **Verified evidence:** page.tsx:27 <StatCard label="Stock-outs" value="—" /> is a literal; StockDashboard (loaders.ts:3865-3870) has no stock-out field. Items list has per-item qty from which a count could be derived client-side but only for the paged list.
 - **Files to change:** `apps/web/src/app/(app)/stock/dashboard/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -151,7 +151,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-DASHBOARD-05  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** '+ New' is ambiguous: it opens the ledger entry form, not a new item (page.tsx:19). Hub note promises 'low-stock alerts' but only a count is shown.
 - **Verified evidence:** page.tsx:19 '+ New' is <a href="/stock/ledger/new">, which is the stock-entry form, not a new item (new item is /stock/items/new). stock/page.tsx:9 hub note says 'Overview with low-stock alerts' but the dashboard only shows the count StatCard (page.tsx:26); no alert list or link to low-stock (inventory/low-stock exists).
 - **Files to change:** `apps/web/src/app/(app)/stock/dashboard/page.tsx`, `apps/web/src/app/(app)/stock/page.tsx`
@@ -166,7 +166,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-DASHBOARD-07  ·  LOW  ·  partly  ·  theme OTHER (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Export is print-to-PDF of the whole page (PrintExportButton.tsx header comment); no data export.
 - **Verified evidence:** Export is PrintExportButton -> window.print() (stock/_components/PrintExportButton.tsx header comment: stock-service exposes no export endpoint). True, but the dashboard holds only aggregate counts and value, no PII, so the PII theme does not apply; the gap is functional (no data export).
 - **Files to change:** `apps/web/src/app/(app)/stock/_components/PrintExportButton.tsx`
@@ -179,7 +179,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-DASHBOARD-08  ·  LOW  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Card links and buttons use plain <a href> (page.tsx:19,34) instead of next/link, forcing full page loads.
 - **Verified evidence:** page.tsx:19 (<a href="/stock/ledger/new" className="btn primary">) and page.tsx:34 (<a className="lnk" href="/stock/list">) are plain anchors; Link from next/link is not imported (list/page.tsx uses it).
 - **Files to change:** `apps/web/src/app/(app)/stock/dashboard/page.tsx`
@@ -199,6 +199,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 ### GAP-STOCK-ITEMS-NEW-01  ·  HIGH  ·  partly  ·  theme VALIDATION
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1916 — 202 vs 200/201 messages are distinct, but the list is still revalidated on a 60 s cache (getStockItems revalidateSeconds:60) so a 201 create is not shown immediately
 - **First-pass claim:** Create returns 200/202 (queue path) and the page immediately says 'Stock item created.' then redirects to /stock/list after 700 ms (page.tsx:108-114); the list loader revalidates for 60 s (loaders.ts:3891-3897) and the consumer applies the write asynchronously, so the new SKU commonly is not on the list the clerk lands on.
 - **Verified evidence:** submit() (page.tsx:107-114) treats res.ok||202 as success, sets 'Stock item created.', router.refresh(), pushes /stock/list after 700 ms. list loader getStockItems revalidates 60 s (loaders.ts:3891-3897). The stale-list part is verifiable; that the server applies the write asynchronously (queue consumer) cannot be verified - stock-service is not in the snapshot, though the code comment/202 handling implies it.
 - **Files to change:** `apps/web/src/app/(app)/stock/items/new/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -213,7 +214,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-ITEMS-NEW-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** When the category or UOM lookup fails, the clerk is asked to type a UUID (page.tsx:147-153, 163-168) — an id no clerk knows; the form is 'usable' only in name.
 - **Verified evidence:** On lookup failure page.tsx:60-61/78-79 set error text 'Enter the UUID manually' and lines 147-153/163-168 render a text input placeholder 'UUID of stock category'/'UUID of UOM'.
 - **Files to change:** `apps/web/src/app/(app)/stock/items/new/page.tsx`
@@ -226,7 +227,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-ITEMS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Item code is free text with no format hint, example or uniqueness check; duplicate codes surface only as a generic save error (page.tsx:141-144).
 - **Verified evidence:** Item code input (page.tsx:143) is required free text, no pattern, placeholder, or helper. Errors go through useFormError.fromResponse (line 109) which builds fieldErrors but the page only shows message; fieldErrors never displayed. Uniqueness enforcement is backend (not visible).
 - **Files to change:** `apps/web/src/app/(app)/stock/items/new/page.tsx`
@@ -243,6 +244,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 ### GAP-STOCK-ITEMS-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION (was I18N)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1916 — Math.trunc/silent clamp removed, negatives rejected and UOM symbol shown; fields are still step=1 and Math.round'd so fractional UOMs (2.5 kg) cannot be entered
 - **First-pass claim:** Reorder level/quantity are silently truncated with Math.trunc and clamped at 0 (page.tsx:102-103); the fields carry no unit label, and fractional units of measure (e.g. 2.5 kg) cannot be expressed.
 - **Verified evidence:** page.tsx:102-103 send Math.max(0, Math.trunc(Number(...))); inputs at 187/191 are step="1" with no unit; 'abc' becomes NaN -> Math.max(0,NaN)=NaN -> JSON null. Fractional UOMs (kg) cannot be expressed.
 - **Files to change:** `apps/web/src/app/(app)/stock/items/new/page.tsx`
@@ -258,6 +260,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 ### GAP-STOCK-ITEMS-NEW-05  ·  MEDIUM  ·  confirmed  ·  theme NAVUX
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1916 — Cancel link and beforeunload dirty guard added; guard does not cover in-app client navigation (Cancel/back link shows no confirm prompt)
 - **First-pass claim:** No Cancel button and no unsaved-changes guard; the only exit is the header back link (page.tsx:127-129, 201).
 - **Verified evidence:** Only PageHeader back="/stock/list" (line 128); form has a single submit button (line 201); no beforeunload/dirty guard.
 - **Files to change:** `apps/web/src/app/(app)/stock/items/new/page.tsx`
@@ -270,7 +273,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-ITEMS-NEW-06  ·  LOW  ·  confirmed  ·  theme TOKENS (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Banner colours are hard-coded hex (#fef2f2 / #ecfdf3) and inputs use an inline style object rather than tokens (page.tsx:22, 132).
 - **Verified evidence:** Banner uses #fef2f2/#ecfdf3 (line 132) and error text #b91c1c (149,165); inputStyle (22) uses var(--line) but literal padding/radius. Not a fabrication issue.
 - **Files to change:** `apps/web/src/app/(app)/stock/items/new/page.tsx`
@@ -284,7 +287,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-ITEMS-NEW-07  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Item type 'Fixed asset' overlaps the Assets module and 'Service' is not a stockable item; the options are not explained (page.tsx:180-182).
 - **Verified evidence:** Options at page.tsx:180-182 (Consumable, Fixed asset, Service) have no help text. Whether fixed_asset/service are accepted by backend cannot be verified (stock-service absent); the overlap with Assets is a product call.
 - **Files to change:** `apps/web/src/app/(app)/stock/items/new/page.tsx`
@@ -296,7 +299,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-ITEMS-NEW-08  ·  LOW  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Error text is not tied to fields with aria-describedby; invalid state is only in banner/inline paragraph (page.tsx:132, 149).
 - **Verified evidence:** Banner has role=alert/status (line 132) but inputs carry no aria-invalid/aria-describedby; lookup error <p role=alert> (149,165) is not linked to its input. formError.fieldErrors unused.
 - **Files to change:** `apps/web/src/app/(app)/stock/items/new/page.tsx`
@@ -368,6 +371,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 ### GAP-STOCK-LEDGER-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1789 — mapper now emits signedQuantity/direction from qtyIn/qtyOut, but StockLedgerClient.tsx:48 still derives the +/- sign from type==='issue'
 - **First-pass claim:** Qty sign logic: only type 'issue' gets '-' (StockLedgerClient.tsx:48); transfer-out and negative adjustments (qtyOut > 0) render as '+' — quantity direction is wrong for two of four entry types.
 - **Verified evidence:** StockLedgerClient.tsx:48 prefixes '-' only when type==='issue', else '+'. Mapper (apiMappers.ts:973) folds quantity = qtyIn>0 ? qtyIn : qtyOut and drops direction; type transfer/adjustment (lines 976-980) can be outbound, so those show '+'. Direction is lost at mapping.
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/stock/ledger/StockLedgerClient.tsx`
@@ -428,6 +432,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 ### GAP-STOCK-LEDGER-08  ·  LOW  ·  partly  ·  theme CAP
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1816 — getStockLedger now accepts limit/from/to, but ledger/page.tsx passes none, no cursor, and totals are still summed client-side over the returned page
 - **First-pass claim:** Ledger has no pagination parameters in the loader (loaders.ts:3907-3913); totals are computed client-side over the returned page only.
 - **Verified evidence:** loaders.ts:3907-3913 getStockLedger() calls /api/v1/stock/ledger with no limit/cursor/filter; totals (page.tsx:10-12) and table paging (DataTable pageSize=15, Client:69) are client-side over whatever the API returns. Whether the API caps results is not verifiable (stock-service absent).
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/stock/ledger/page.tsx`, `apps/web/src/app/(app)/stock/ledger/StockLedgerClient.tsx`
@@ -451,6 +456,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 ### GAP-STOCK-LEDGER-NEW-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1929 — the raw warehouse-UUID input was removed, but transfers are still not offered (single/no warehouse, no from/to pair; ENTRY_TYPES has receipt/issue/adjustment only)
 - **First-pass claim:** Transfer cannot be expressed: a single free-text 'Warehouse ID' is sent as toWarehouseId for every type except issue (fromWarehouseId) and never both (page.tsx:89-91), so a transfer has no source/destination pair. The field is a raw UUID with no picker (page.tsx:168-169).
 - **Verified evidence:** Single warehouseId state (page.tsx:40); postEntry lines 89-92 sets fromWarehouseId only for issue, else toWarehouseId; transfer never sends both. Input is placeholder 'UUID' (169). Header comment (6-8) shows the API accepts both fromWarehouseId and toWarehouseId.
 - **Files to change:** `apps/web/src/app/(app)/stock/ledger/new/page.tsx`
@@ -496,7 +502,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-NEW-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1929, verified on main 9c5e9e9e9)
 - **First-pass claim:** useFormError('stock item') is reused for entries (page.tsx:44), so load/save failures read 'We couldn't save your stock item' on an entry form.
 - **Verified evidence:** page.tsx:44 useFormError("stock item"); its messages use `area` (useFormError.ts:108) so load/save errors say stock item on the entry form.
 - **Files to change:** `apps/web/src/app/(app)/stock/ledger/new/page.tsx`
@@ -537,6 +543,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 ### GAP-STOCK-LEDGER-NEW-08  ·  LOW  ·  confirmed  ·  theme CAP
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1929 — items load now shows a Loading… state and Retry; still a plain <select> capped at limit=200 with no search, so items beyond 200 are unreachable
 - **First-pass claim:** Item select loads limit=200 (page.tsx:50) and is a plain dropdown without search; larger registers are silently truncated. Item list is loaded with no loading indicator.
 - **Verified evidence:** page.tsx:50 fetch items?limit=200; plain <select> (152); no loading state (only empty 'Select an item…'); more than 200 items silently missing.
 - **Files to change:** `apps/web/src/app/(app)/stock/ledger/new/page.tsx`
@@ -549,7 +556,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-NEW-09  ·  LOW  ·  confirmed  ·  theme TOKENS (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1929, verified on main 9c5e9e9e9)
 - **First-pass claim:** Banners use hard-coded hex backgrounds and inline style (page.tsx:127, 132).
 - **Verified evidence:** Banners use inline background #fef2f2/#ecfdf3 at page.tsx:129 and 132 (report said 127,132); inputStyle line 26.
 - **Files to change:** `apps/web/src/app/(app)/stock/ledger/new/page.tsx`
@@ -569,7 +576,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LIST-01  ·  HIGH  ·  partly  ·  theme WIRING (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1796, verified on main 9c5e9e9e9)
 - **First-pass claim:** Every row is a link to /stock/<id> (StockListClient.tsx:58-59), but no [id] page exists under stock/ — clicking an item lands on stock/not-found.tsx. The item detail that consumes getStockItemById() lives under a different segment (inventory/[id]/page.tsx:2,35), so the list links to the wrong prefix.
 - **Verified evidence:** True that stock/list rows link to /stock/<id> (StockListClient.tsx:58-59) and there is no stock/[id]/page.tsx; detail lives at inventory/[id]/page.tsx using getStockItemById. But its header comment (inventory/[id]/page.tsx:14-23) states next.config permanently redirects /stock/:path* -> /inventory/:path*, so the link would hop to inventory/[id], not stock/not-found. next.config is absent from this snapshot so the redirect (and whether /stock/list itself is unreachable dead code) cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/stock/list/StockListClient.tsx`
@@ -615,6 +622,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 ### GAP-STOCK-LIST-05  ·  MEDIUM  ·  partly  ·  theme CAP
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1816 — getStockItems accepts limit/offset, but list/page.tsx passes none and KPIs/Low-stock filter are still computed client-side over the returned page
 - **First-pass claim:** Segmented tablist filters only client-side over the first API page; page.tsx loads /api/v1/stock/items with no limit/cursor, so SKU count, value and Low Stock are computed over whatever page the API returns (page.tsx:13-15).
 - **Verified evidence:** loaders.ts:3891-3897 getStockItems() requests /api/v1/stock/items with no limit/cursor; page.tsx:13-15,31-34 compute SKU count, value, categories over the returned array and Client:36 filters client-side. API-side cap unverifiable.
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/stock/list/page.tsx`, `apps/web/src/app/(app)/stock/list/StockListClient.tsx`

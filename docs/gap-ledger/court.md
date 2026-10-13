@@ -14,7 +14,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-HOME-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Partial failure is silent: badge shows only when all three loaders return error, so a failed getCases() alone renders 'Total Cases 0' and 'Disposed 0' as facts (court/page.tsx:47-50).
 - **Verified evidence:** court/page.tsx:48-52 sets source='error' only when cases, pendency and analytics ALL fail. Loaders return empty defaults on error (loaders.ts:250-290), so if getCases alone fails, Total Cases renders 0 and Disposed 0 (:70,:82) with no badge. Total Cases also equals at most 100 (limit=100, loaders.ts:191), presented as fact.
 - **Files to change:** `apps/web/src/app/(app)/court/page.tsx`
@@ -31,7 +31,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Disposed' is derived from the case list rather than analytics.disposed, so the KPI can disagree with Clearance Rate (court/page.tsx:46 vs types.ts CaseAnalytics).
 - **Verified evidence:** court/page.tsx:48 computes disposed from all.data.filter(status==='disposed') over a list capped at limit=100 (loaders.ts:191), while analytics.disposed exists (types.ts:88-92) and drives clearanceRatePct. KPI can therefore disagree with Clearance Rate and undercount.
 - **Files to change:** `apps/web/src/app/(app)/court/page.tsx`
@@ -47,7 +47,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Pendency summary by status is fetched but only .total is used; the breakdown is never shown (court/page.tsx:41-44).
 - **Verified evidence:** getPendency returns summary[] {status,count} and total (types.ts:77-85, loaders.ts:250-270); page.tsx:76 uses only pendency.data.total. The breakdown is never rendered.
 - **Files to change:** `apps/web/src/app/(app)/court/page.tsx`
@@ -63,7 +63,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-HOME-05  ·  LOW  ·  confirmed  ·  theme ICONS-ERR (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tiles use emoji icons and Hearings/Daily Cause List share the same calendar glyph (court/page.tsx:9-35); the segment has no error.tsx at the root while hearings/orders do.
 - **Verified evidence:** court/page.tsx:8-39 CONSOLES use emoji icons; Daily Cause List (:18) and Hearings (:30) both use 📅. court/ has layout.tsx and loading.tsx but no error.tsx at root (hearings/ and orders/ have error.tsx; cases, cause-list, admin do not either). loading.tsx exists and is generic.
 - **Files to change:** `apps/web/src/app/(app)/court/page.tsx`, `apps/web/src/app/(app)/court/error.tsx (new)`
@@ -85,7 +85,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-ADMIN-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Preset buttons apply immediately with no confirmation: one click upserts case/court/order types for the whole tenant (AdminConfig.tsx:107-122).
 - **Verified evidence:** AdminConfig.tsx:113-122 Button onClick={() => void onApplyPreset(p)} calls applyPreset (client.ts:369, POST v1/court/config/presets/{preset}) immediately; no ConfirmDialog. Copy at :109-110 says presets upsert case, court and order types. Whether the endpoint audits or supports a reason is not verifiable (court-service absent).
 - **Files to change:** `apps/web/src/app/(app)/court/admin/AdminConfig.tsx`, `apps/web/src/app/(app)/court/_data/client.ts`
@@ -102,7 +102,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-ADMIN-02  ·  HIGH  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Retiring a value is a bare '✕' icon button with no confirm and no impact check; a retired case_type falls back to defaults or hides values in use (AdminConfig.tsx:315-325).
 - **Verified evidence:** AdminConfig.tsx:317-327: retire is a ghost Button '✕' with aria-label 'Retire {key}' and title, calling deactivateConfig immediately (:283-294); no confirm, no reason, no impact check: confirmed. When the last active value is retired the UI falls back to built-in defaults (:300-346, policy.ts:8), which is visible. Claim that in-use values are hidden cannot be verified (needs court-service validation behaviour).
 - **Files to change:** `apps/web/src/app/(app)/court/admin/AdminConfig.tsx`
@@ -118,7 +118,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-ADMIN-03  ·  MEDIUM  ·  partly  ·  theme LABELS (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Config values are shown as raw configKey tokens; labels are optional, so reviewers see snake_case (AdminConfig.tsx:296-345).
 - **Verified evidence:** Chips show `e.label ?? e.configKey` and always the mono configKey beside it (AdminConfig.tsx:315-316), so raw keys are shown deliberately as identifiers; label is optional in the add form (:356-362). Default pills use humanized-less raw keys (:340-342, StatusPill label={d}) which are snake_case. No next-intl use in court module.
 - **Files to change:** `apps/web/src/app/(app)/court/admin/AdminConfig.tsx`, `apps/web/src/app/(app)/court/_data/policy.ts`
@@ -133,7 +133,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-ADMIN-04  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Eight sequential-parallel fetches happen on the server for one page; any single failure flips the whole page to source=error although seven succeeded (admin/page.tsx:15-17).
 - **Verified evidence:** page.tsx:10-14 runs 8 getConfigNamespace calls with Promise.all (parallel, not sequential; 7 enum + sla_timer per policy.ts) and sets source='error' if any fails (:14). getConfigNamespace returns [] on failure, so entries from failed namespaces are silently empty and AdminConfig shows built-in defaults for them, which is misleading; the badge (:24) does appear though.
 - **Files to change:** `apps/web/src/app/(app)/court/admin/page.tsx`, `apps/web/src/app/(app)/court/admin/AdminConfig.tsx`
@@ -148,7 +148,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-ADMIN-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Case-type description says configured values 'fully replace' built-in defaults; there is no preview of the resulting list.
 - **Verified evidence:** policy.ts:45 case_type description says configured values fully replace built-in defaults (policy.ts:8 also). EnumEditor add() (AdminConfig.tsx:261-281) adds a single key with no preview of the resulting effective list; adding the first value to an unconfigured namespace silently drops all defaults.
 - **Files to change:** `apps/web/src/app/(app)/court/admin/AdminConfig.tsx`
@@ -169,7 +169,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CASES-01  ·  HIGH  ·  partly  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Whole registry is rendered from one unpaginated GET with no limit, filter or search — a court with thousands of matters loads every row on each request (court/cases/page.tsx:26, loaders.ts getCases).
 - **Verified evidence:** getCases (court/_data/loaders.ts:190-197) sends limit=100 always ('?limit=100'), so the claim of no limit is wrong; but the page (cases/page.tsx:24,37) has no pagination, filter, search or truncation notice, and the header shows data.length (max 100) as if it were the total. Server total/cursor not visible (court-service absent).
 - **Files to change:** `apps/web/src/app/(app)/court/_data/loaders.ts`, `apps/web/src/app/(app)/court/cases/page.tsx`, `apps/web/src/app/(app)/court/_data/types.ts`
@@ -185,7 +185,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CASES-02  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** SLA target is shown as a date only; overdue matters (target < today and not disposed) are not flagged (cases/page.tsx:80-90).
 - **Verified evidence:** cases/page.tsx:76 shows fmtDate(c.targetDisposalDate) only; no comparison with today and status !== 'disposed'. fmtDate (court/_data/format.ts:19) is a generic en-IN formatter without timeZone.
 - **Files to change:** `apps/web/src/app/(app)/court/cases/page.tsx`, `apps/web/src/app/(app)/court/_data/format.ts`
@@ -199,7 +199,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CASES-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Header count is bracketed 'All cases (0)' even in error state, mixing 'zero' with 'unknown' (cases/page.tsx:39).
 - **Verified evidence:** cases/page.tsx:37 title `All cases (${cases.data.length})` is evaluated even when source==='error' (data is [] fallback), so shows (0); error body at :39-43 is an EmptyState without retry (RefreshErrorState not used).
 - **Files to change:** `apps/web/src/app/(app)/court/cases/page.tsx`
@@ -214,6 +214,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 ### GAP-COURT-CASES-04  ·  LOW  ·  confirmed  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — Actions column header now has sr-only text; remaining: table uses class 'court-stack' which has no CSS rule anywhere (ds stack class is 'tbl--stack'), so rows do not stack at 375px and horizontal scroll remains; not moved to ds DataTable
 - **First-pass claim:** Table uses className tbl with inline overflowX scroll, no mobile card transform; final column header is empty (cases/page.tsx:52-59).
 - **Verified evidence:** cases/page.tsx:51-52 wraps a className='tbl' table in overflowX:auto; :60 has an empty <th style={labelStyle} /> for the Open case action; no mobile card transform (DataTable in ds has one).
 - **Files to change:** `apps/web/src/app/(app)/court/cases/page.tsx`
@@ -229,7 +230,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CASES-05  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Case column shows 'Untitled matter' fallback; there is no party name to help identify matters (cases/page.tsx:65).
 - **Verified evidence:** cases/page.tsx:67 shows c.title with 'Untitled matter' fallback and the CNR below (:68-72). CourtCase (types.ts:57-71) has no party fields, so party names are not in the list payload; adding them needs a list-payload change (cannot verify in court-service).
 - **Files to change:** `apps/web/src/app/(app)/court/cases/page.tsx`, `apps/web/src/app/(app)/court/_data/types.ts`
@@ -251,6 +252,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 ### GAP-COURT-CASES-CASEID-01  ·  HIGH  ·  partly  ·  theme CONFIRM
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — Adjourn/Outcome and Approve&issue/Send back/Recall in CaseConsole now use ds ConfirmDialog (recall/adjourn require reason); remaining: dialogs are re-implemented inside CaseConsole rather than one shared court/_components used by OrdersConsole/HearingsConsole, and 'Submit for approval' on the case page is still single-click
 - **First-pass claim:** Irreversible acts have no confirmation here: Approve & issue (DSC), Recall, Adjourn and Record outcome use inline forms in CaseConsole.tsx while the standalone /court/orders and /court/hearings consoles gate the same actions with ConfirmDialog (danger) — two UX contracts for one action (CaseConsole.tsx:486-854 vs OrdersConsole.tsx:586).
 - **Verified evidence:** Not 'no confirmation': CaseConsole uses a two-step inline pattern. Approve & issue opens a DSC panel with 'Confirm approve & issue' (CaseConsole.tsx:736,~756-790), Recall requires reason and 'Confirm recall' (:805-826, button disabled without reason), Adjourn requires reason and 'Confirm adjourn' (:500-525). Outcome (Held/Cancelled) has a Save button with no reason (:527-552). What is true is inconsistency with ConfirmDialog in OrdersConsole.tsx:584,743 and HearingsConsole.tsx:465,558. Lifecycle transition (:233-275) and Submit for approval (:715-728) are single click. Maker!=checker is enforced server-side (error text at ~:771).
 - **Files to change:** `apps/web/src/app/(app)/court/cases/[caseId]/CaseConsole.tsx`, `apps/web/src/app/(app)/court/orders/OrdersConsole.tsx`, `apps/web/src/app/(app)/court/hearings/HearingsConsole.tsx`
@@ -267,7 +269,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CASES-CASEID-02  ·  HIGH  ·  partly  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Certified-copy receipted amount is typed as raw paise (placeholder is copy.feeMinor) while the fee is displayed in rupees; a clerk entering '150' for ₹150 is rejected or mis-receipted (CertifiedCopiesPanel.tsx:350 vs :298).
 - **Verified evidence:** CertifiedCopiesPanel.tsx:346 label says 'Receipted amount (paise)' and placeholder is copy.feeMinor (:350) while fees are displayed in rupees via fmtPaise (:298), so units differ between display and input: confirmed. The unit is labelled, and the panel doc says a mismatch is rejected by the service (lines 10-11, 83), so clerks would get a rejection rather than a silent mis-receipt. Input is not validated as digits client-side (:257).
 - **Files to change:** `apps/web/src/app/(app)/court/cases/[caseId]/CertifiedCopiesPanel.tsx`
@@ -284,7 +286,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CASES-CASEID-03  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Money display uses a private fmtPaise without lakh grouping (₹150000.00 rather than ₹1,50,000.00) (CertifiedCopiesPanel.tsx:37-45).
 - **Verified evidence:** Private fmtPaise at CertifiedCopiesPanel.tsx:30-40 builds `₹${rupees}.${paise}` from BigInt with no digit grouping, so 15000000 renders ₹150000.00. Shared formatMoney (lib/formatters.ts:90) does Indian grouping and handles null with '—'.
 - **Files to change:** `apps/web/src/app/(app)/court/cases/[caseId]/CertifiedCopiesPanel.tsx`
@@ -300,6 +302,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 ### GAP-COURT-CASES-CASEID-04  ·  MEDIUM  ·  partly  ·  theme PII
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — advocateBarId rendered via ds Masked (last4) by default; remaining: no reveal control/audit event or role gate (no onReveal passed), party name still shown in the clear; policy decision pending
 - **First-pass claim:** Party names and advocate Bar IDs (DPDP personal data) are rendered in full to every court-module user; no masking or role check (CaseConsole.tsx:284-320, types.ts:CaseParty).
 - **Verified evidence:** PartiesPanel (CaseConsole.tsx:282-312) prints name, advocateName and advocateBarId in the clear; no Masked component or role check exists in web (grep). types.ts:45-46 notes PII is server-encrypted and the gateway returns decrypted values 'where permitted', so gating may be enforced server-side (not verifiable; court-service absent). The 'every court-module user' claim is unverified.
 - **Files to change:** `apps/web/src/app/(app)/court/cases/[caseId]/CaseConsole.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`
@@ -316,7 +319,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CASES-CASEID-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Lifecycle 'Apply transition' to Disposed/Reserved fires immediately; disposal is a terminal-like step (only 'appealed' follows) (CaseConsole.tsx:233-275, types.ts CASE_TRANSITIONS).
 - **Verified evidence:** LifecyclePanel (CaseConsole.tsx:199-275) calls transitionCase directly on 'Apply transition'; CASE_TRANSITIONS (types.ts:34-43) allows pending/part_heard/reserved -> disposed, and disposed only -> appealed. Reason is optional (:262 placeholder). Server still checks role and expectedVersion.
 - **Files to change:** `apps/web/src/app/(app)/court/cases/[caseId]/CaseConsole.tsx`
@@ -331,7 +334,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CASES-CASEID-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Six stacked cards in one 859-line console with no anchor nav or tabs.
 - **Verified evidence:** CaseConsole.tsx is 859 lines and renders Summary, Lifecycle, Parties, Hearings, Orders and CertifiedCopiesPanel as stacked Cards (:113-150); ds/Tabs.tsx exists but is not used. No anchor nav.
 - **Files to change:** `apps/web/src/app/(app)/court/cases/[caseId]/CaseConsole.tsx`
@@ -353,7 +356,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CAUSE-LIST-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Courts are inferred from the cases list (unique courtId) and displayed as an 8-char UUID prefix; a court with no registered case cannot get a cause list and users see raw ids (CauseListConsole.tsx courts useMemo + option label).
 - **Verified evidence:** CauseListConsole.tsx:52-58 derives courts from distinct cases' courtId (no court master endpoint used); option label (:124-129) is the first 28 chars of a sample CASE title plus courtId.slice(0,8), which is not a court name and can mislead. A court with no case cannot be selected.
 - **Files to change:** `apps/web/src/app/(app)/court/cause-list/CauseListConsole.tsx`, `apps/web/src/app/(app)/court/_data/loaders.ts`, `apps/web/src/app/_components/ds/EntityPicker.tsx (new)`
@@ -369,7 +372,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CAUSE-LIST-02  ·  HIGH  ·  partly  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Page cannot reopen an existing cause list: there is no GET for lists by court/date in client.ts; re-clicking Generate list POSTs again and may create duplicates or a second 202 envelope (CauseListConsole.tsx generate()).
 - **Verified evidence:** client.ts:90-95 only has fetchCauseListItems(id); there is no list/lookup by court and date (comment at CauseListConsole.tsx:28-34 says so). generate() (:65-81) posts each click; button disabled only while busy or without court/date (:140), and after success the button stays enabled. Whether the service dedupes is not verifiable (court-service absent), so duplicates are plausible, not proven. State (causeListId) is lost on reload.
 - **Files to change:** `apps/web/src/app/(app)/court/cause-list/CauseListConsole.tsx`, `apps/web/src/app/(app)/court/_data/client.ts`
@@ -386,6 +389,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 ### GAP-COURT-CAUSE-LIST-03  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — item number validated (integer >=1, duplicates blocked), slot/courtroom trimmed+uppercased and slot shown verbatim; remaining: slot/courtroom are still free-text inputs (no configured slot/courtroom namespaces or selects)
 - **First-pass claim:** Slot and courtroom are free text with no validation against config (hearing_purpose etc. have namespaces but slot/courtroom do not), so 'am 1' vs 'AM-1' will diverge (CauseListConsole.tsx AddItemForm).
 - **Verified evidence:** AddItemForm (CauseListConsole.tsx:287-300) slot and courtroom are free-text inputs; only non-empty is checked (:236). policy.ts ENUM_NAMESPACES has no slot or courtroom namespace. Table display humanize(it.slot) (:200) would turn 'AM-1' into 'AM 1'. Duplicate itemNumber not checked (:241).
 - **Files to change:** `apps/web/src/app/(app)/court/cause-list/CauseListConsole.tsx`, `apps/web/src/app/(app)/court/_data/policy.ts`
@@ -402,6 +406,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 ### GAP-COURT-CAUSE-LIST-04  ·  MEDIUM  ·  partly  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — Type and Stage columns added from the matched case; remaining: cases are still fetched with limit=100 and an item whose case is outside it falls back to 'Case' + id prefix (no getCase(id) resolve), no purpose column
 - **First-pass claim:** Listed-items table shows only CNR/id: no case title, purpose or parties for the bench (CauseListConsole.tsx items map).
 - **Verified evidence:** Table (CauseListConsole.tsx:187-204) does show case title and CNR via cases.find(x=>x.id===it.caseId), falling back to 'Case' and caseId.slice(0,8) if the case is not in the 100-row fetch (loaders.ts:191). Missing: hearing purpose, parties and stage. Items endpoint fields for purpose unknown (CauseListItem type not extended).
 - **Files to change:** `apps/web/src/app/(app)/court/cause-list/CauseListConsole.tsx`, `apps/web/src/app/(app)/court/_data/types.ts`
@@ -438,7 +443,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-HEARINGS-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Adjourning a hearing does not create the next one; the dialog copy admits the user must schedule it separately, so the case can be left with no future hearing (HearingsConsole.tsx:472-479).
 - **Verified evidence:** HearingsConsole.tsx:465-481 ConfirmDialog already exists and states adjourning does not create the next hearing; adjournHearing (client.ts:136-139) only PATCHes /hearings/:id/adjourn with reason+nextDate. No follow-up schedule call, so the case has an adjourned hearing with a nextDate but no scheduled hearing. Reason is already mandatory (validate). Finding's fix text (add ConfirmDialog/maker-checker) is off: the dialog exists; the gap is missing auto-schedule.
 - **Files to change:** `apps/web/src/app/(app)/court/hearings/HearingsConsole.tsx`, `apps/web/src/app/(app)/court/_data/client.ts`
@@ -457,6 +462,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 ### GAP-COURT-HEARINGS-02  ·  MEDIUM  ·  confirmed  ·  theme SCALE (was I18N)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — CaseSelector is now a searchable title/CNR/filing combobox with a 'first 100 cases' notice; remaining: still limited to the first 100 cases (no server-side search, case beyond the 100th unreachable from here) and options are mouse-only buttons (no arrow-key listbox navigation)
 - **First-pass claim:** Case selector option labels combine title, CNR and status in a single native select for the entire registry — no search on a long list (CaseSelector.tsx:62-78).
 - **Verified evidence:** CaseSelector.tsx:60-83 is a plain native <select> listing every case (title · CNR — humanised status). Loader getCases caps at limit=100 (loaders.ts:191), so beyond 100 cases some cannot be picked at all. No search/filter. Strings are hard-coded English (no next-intl). Status is text so not colour-only.
 - **Files to change:** `apps/web/src/app/(app)/court/_components/CaseSelector.tsx`, `apps/web/src/app/(app)/court/_data/loaders.ts`
@@ -473,7 +479,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-HEARINGS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** No flat hearings endpoint: a listing of 'today's hearings' cannot be built; page depends on ?caseId (CaseSelector.tsx header comment).
 - **Verified evidence:** CaseSelector.tsx:4-8 and HearingsConsole.tsx:5-7 state there is no flat 'all hearings' GET (hearing/routes.ts in court-service, not in snapshot); page.tsx:14-19 fetches hearings only when ?caseId is set. A daily hearings list cannot be built without a backend endpoint. Cause-list console partly covers the day view.
 - **Files to change:** `services/court-service (hearing routes, new GET /hearings?from&to&status)`, `apps/web/src/app/(app)/court/_data/loaders.ts`, `apps/web/src/app/(app)/court/hearings/page.tsx`
@@ -491,6 +497,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 ### GAP-COURT-HEARINGS-04  ·  LOW  ·  confirmed  ·  theme TABLE (was DATEFMT)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — fmtDate/fmtDateTime now force Asia/Kolkata; remaining: hearings still render as bordered div cards (HearingRow), no ds table, no sort
 - **First-pass claim:** Hearing rows are div cards, not a table, so date/status cannot be sorted or scanned (HearingsConsole.tsx:95-125).
 - **Verified evidence:** HearingsConsole.tsx:110-122 renders hearings as bordered div cards via HearingRow (:250-295); no table, no sort. Dates already use fmtDate/fmtDateTime (format.ts:4-24, en-IN dd Mon yyyy, browser TZ not forced to IST). Suggested fix 'use formatIndianDate' is partly moot; real gap is layout and no timeZone:'Asia/Kolkata'.
 - **Files to change:** `apps/web/src/app/(app)/court/hearings/HearingsConsole.tsx`, `apps/web/src/app/(app)/court/_data/format.ts`
@@ -508,6 +515,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 ### GAP-COURT-HEARINGS-05  ·  LOW  ·  partly  ·  theme COPY (was CAP)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — status uses a fixed label dictionary (hearingStatusLabel); remaining: benchId/bench label is still not shown on the hearing row
 - **First-pass claim:** Status vocabulary (scheduled/held/adjourned/cancelled) is humanised client-side; bench id is never shown.
 - **Verified evidence:** Status is humanised via humanize() (HearingsConsole.tsx:291, format.ts:27) - true. benchId exists on Hearing (types.ts:160) but is not rendered in HearingRow (:250-295) - true. The 'capped fetch / client filtering' fix text does not apply: no client filtering in this page; the cap is on getCases (limit=100).
 - **Files to change:** `apps/web/src/app/(app)/court/hearings/HearingsConsole.tsx`
@@ -529,7 +537,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-ORDERS-01  ·  HIGH  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Approve & issue is offered to every user including the order's own maker; self-approval is only rejected by the server after the DSC is pasted and confirmed (OrdersConsole.tsx:392-400, header copy :108).
 - **Verified evidence:** OrdersConsole.tsx:391-400 shows 'Approve & issue' for every pending_approval order regardless of viewer. CourtOrder has createdBy (types.ts:110) but page.tsx does not pass current user id, so the UI cannot hide it. Copy at :108-109 and :562-566 states self-approval is rejected; server error is surfaced (:520-530). The ConfirmDialog already exists, so the finding's suggested fix is partly done; the server enforces maker!=checker but only after DSC paste + confirm. Server rejection is source of truth; UI hint is UX only.
 - **Files to change:** `apps/web/src/app/(app)/court/orders/page.tsx`, `apps/web/src/app/(app)/court/orders/OrdersConsole.tsx`, `apps/web/src/lib/auth/roleGuard.ts`
@@ -547,6 +555,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 ### GAP-COURT-ORDERS-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1934 — server-side DSC verification (verifyOrderDsc, result shown, issue blocked until it verifies) plus structural blob validation; remaining: signing is still paste-a-PKCS#7-blob (no token/eSign DscSigner integration; integration choice is a pending decision)
 - **First-pass claim:** DSC signature is a free-text textarea for a PKCS7 blob; no token/signer integration or verification feedback — a judicial 'irreversible act' hinges on a paste (OrdersConsole.tsx:536-552).
 - **Verified evidence:** OrdersConsole.tsx:536-552 DSC is a plain textarea (placeholder '-----BEGIN PKCS7-----'), validated only as non-empty (:264-269); value goes to approveAndIssueOrder as dscSignature. No token/signer integration or client-side parse. Server verification behaviour cannot be verified (court-service absent).
 - **Files to change:** `apps/web/src/app/(app)/court/orders/OrdersConsole.tsx`, `apps/web/src/app/(app)/court/_data/client.ts`
@@ -562,7 +571,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-ORDERS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Order text renders in full inside the row; long judgments make the list unusable, and there is no preview/print of the issued order (OrdersConsole.tsx:355-365).
 - **Verified evidence:** OrdersConsole.tsx:355-359 renders order.orderText fully with whiteSpace:'pre-wrap', no clamp. No preview, print or PDF action for an issued order in this console.
 - **Files to change:** `apps/web/src/app/(app)/court/orders/OrdersConsole.tsx`
@@ -577,7 +586,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-ORDERS-04  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Send back has no confirm and Submit for approval fires immediately although it locks the draft (OrdersConsole.tsx:380-410).
 - **Verified evidence:** Submit for approval (OrdersConsole.tsx:379-391, doSubmit :338) fires immediately with no confirm - true. Send back is NOT unconfirmed: SendBackPanel (:600-650) is a two-step panel with an explicit 'Confirm send back' button, though remarks are optional and it uses no ConfirmDialog. 'Locks the draft' cannot be verified against the order domain (service absent) but the workflow comment says draft->pending_approval.
 - **Files to change:** `apps/web/src/app/(app)/court/orders/OrdersConsole.tsx`
@@ -592,7 +601,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-ORDERS-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Orders not linked to a hearing in the form although CourtOrder has hearingId (OrdersConsole.tsx:236-300, types.ts).
 - **Verified evidence:** client.ts:167-177 recordOrder accepts optional hearingId and CourtOrder has hearingId (types.ts:102), but DraftOrderForm (OrdersConsole.tsx ~150-300) has no hearing field and OrdersConsole has no hearingId reference at all; the row does not display it either.
 - **Files to change:** `apps/web/src/app/(app)/court/orders/OrdersConsole.tsx`, `apps/web/src/app/(app)/court/orders/page.tsx`

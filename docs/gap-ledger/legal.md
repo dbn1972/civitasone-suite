@@ -14,7 +14,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-HOME-02  ·  LOW  ·  confirmed  ·  theme NAVUX (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Hub has no 'New case' entry and no counts; the only path to New Case is Dashboard or Cases List (page.tsx:8-12).
 - **Verified evidence:** apps/web/src/app/(app)/legal/page.tsx:8-14 lists five links, all with static notes; no 'New case' entry and no counts. ModuleHub accepts `children` and `help` props (ModuleHub.tsx:16) so a counts strip is possible. Cases/new is reachable from dashboard and list.
 - **Files to change:** `apps/web/src/app/(app)/legal/page.tsx`
@@ -27,7 +27,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-HOME-03  ·  LOW  ·  partly  ·  theme NAVUX (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** legal/not-found.tsx offers no action or link back to Legal; loading.tsx is a dashboard-shaped skeleton with hard-coded slate colours (loading.tsx:3-15).
 - **Verified evidence:** Both sub-claims are true: apps/web/src/app/(app)/legal/not-found.tsx renders EmptyState with no `action` (EmptyState supports an action prop, ds/EmptyState.tsx:8), and apps/web/src/app/(app)/legal/loading.tsx:3-15 uses tailwind slate-50/slate-200, min-h-screen and max-w-7xl rather than the app's .wrap / tokens, giving a dark-mode/layout mismatch. Neither is fabricated data, so the FABRICATED tag is wrong, and it is not tied to /legal home page.tsx.
 - **Files to change:** `apps/web/src/app/(app)/legal/not-found.tsx`, `apps/web/src/app/(app)/legal/loading.tsx`
@@ -41,7 +41,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-HOME-04  ·  LOW  ·  confirmed  ·  theme NAVUX (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** No help slug on the hub, unlike locations/page.tsx (help='locations').
 - **Verified evidence:** apps/web/src/app/(app)/legal/page.tsx:5-7 passes no `help` prop to ModuleHub, while locations/page.tsx:8 passes help='locations' and ModuleHub forwards it to PageHeader (ModuleHub.tsx:16,25). Whether a 'legal' help topic exists is cannot-verify from this snapshot.
 - **Files to change:** `apps/web/src/app/(app)/legal/page.tsx`
@@ -62,6 +62,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 ### GAP-LEGAL-CASES-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1916 — button/dialog renamed 'Record affidavit filing' and no longer says upload; but affidavits still render as generic 'Court order' rows in the case Court orders table (page.tsx orderType fallback, no affidavit filter/Filings card) and there is still no file attachment/documents endpoint
 - **First-pass claim:** 'Upload Affidavit' uploads nothing: it records the text as a court order with orderType 'affidavit' via POST /cases/:id/orders (CaseActions.tsx:8-19,96-113), so affidavits show up in the Court orders list and compliance data, with no document attached.
 - **Verified evidence:** apps/web/src/app/(app)/legal/cases/[id]/CaseActions.tsx:329-348 posts to /api/proxy/v1/legal/cases/{id}/orders with orderType:'affidavit', summary, orderDate; the form (453-473) has no file input and its own amber note says 'no file-upload endpoint in legal-service'; the file header (254-259) admits it is a workaround. The detail page maps every order into 'Court orders' (page.tsx:74-79) and labels it 'Court order' since orderType is not shown. Whether it also enters compliance stats on /legal/court-orders cannot be verified (legal-service absent from snapshot); the list there keys on complianceRequired/status.
 - **Files to change:** `apps/web/src/app/(app)/legal/cases/[id]/CaseActions.tsx`, `apps/web/src/app/(app)/legal/cases/[id]/page.tsx`, `legal-service (not in snapshot): new case-documents endpoint`, `apps/web/src/app/_components/ds/FileUpload.tsx`
@@ -78,7 +79,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-CASES-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** getLegalCaseById returns null on any failure and the page calls notFound() (page.tsx:49-51): a service outage is shown as 'Case not found ... removed, transferred, or the ID is invalid'.
 - **Verified evidence:** apps/web/src/app/(app)/legal/cases/[id]/page.tsx:47-51: `const { data: caseData, source } = await getLegalCaseById(...)`; `if (!caseData) notFound()`. fetchJson (apps/web/src/app/_data/apiClient.ts:111-172) returns data:null with source:'error' plus status (404, 5xx, 401 or none on network failure), so outage -> not-found.tsx 'may have been removed, transferred, or the ID is invalid'. The later `source === 'error'` badge at :105 is unreachable when data is null.
 - **Files to change:** `apps/web/src/app/(app)/legal/cases/[id]/page.tsx`, `apps/web/src/app/(app)/legal/cases/[id]/not-found.tsx`
@@ -94,7 +95,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-CASES-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme NAV (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** not-found.tsx breadcrumb starts with 'Audit' linking /audit/dashboard (not-found.tsx:11), while the page's own crumbs start with Legal (page.tsx:91).
 - **Verified evidence:** apps/web/src/app/(app)/legal/cases/[id]/not-found.tsx:11 breadcrumb first crumb is Link '/audit/dashboard' 'Audit' (copy-paste); page.tsx:91 uses Legal -> /legal. Also page crumb 'Cases' goes to /legal/list in both. loading.tsx exists in the folder; the LOADING tag is not the issue.
 - **Files to change:** `apps/web/src/app/(app)/legal/cases/[id]/not-found.tsx`
@@ -107,7 +108,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-CASES-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme COPY (was STATUS)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Lifecycle is inferred: status maps to a stage index (page.tsx:17-33) and only 'Registered' gets a date; 'Raised date' in Details is filedDate while the timeline calls the first step 'Registered' (page.tsx:130,176).
 - **Verified evidence:** apps/web/src/app/(app)/legal/cases/[id]/page.tsx:25-38 stageIndex() maps status to a 4-step index (pending->1, appealed/stayed->2, disposed/settled->3, else 0); date shown only for step 0 (:196) using filedDate, while Details labels the same value 'Raised date' (:130) and the step is 'Registered' (:81). Stage is inferred, not from recorded events (hearings/orders exist and are not used). The StatusPill tone suggestion is not the issue.
 - **Files to change:** `apps/web/src/app/(app)/legal/cases/[id]/page.tsx`
@@ -123,6 +124,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 ### GAP-LEGAL-CASES-DETAIL-05  ·  MEDIUM  ·  partly  ·  theme A11Y (was OTHER)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1916 — affidavit/brief dialog now uses ds Modal (Tab trap + focus restore); remaining: no 'Counsel briefs' card on the case page (briefs still not listed after briefing counsel)
 - **First-pass claim:** Brief counsel / Upload Affidavit use a hand-rolled modal with Escape and initial focus but no focus trap or focus return (CaseActions.tsx:60-68,196-247); counsel briefs are not displayed anywhere on this page after creation.
 - **Verified evidence:** True: the hand-rolled overlay in apps/web/src/app/(app)/legal/cases/[id]/CaseActions.tsx:390-477 handles Escape and initial focus (294-302) but has no Tab trap and does not return focus to the trigger; ds ConfirmDialog already implements trap and restore (ds/ConfirmDialog.tsx:7-8, 92-126). Briefs: the page shows only advocateName as 'Counsel ref' (page.tsx:134-136), no brief list. Whether an API to list briefs by case exists cannot be verified (legal-service absent). Observation's line refs 60-68/196-247 are wrong.
 - **Files to change:** `apps/web/src/app/(app)/legal/cases/[id]/CaseActions.tsx`, `apps/web/src/app/_components/ds/ConfirmDialog.tsx (or new ds/Modal.tsx)`, `apps/web/src/app/(app)/legal/cases/[id]/page.tsx`
@@ -146,6 +148,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 ### GAP-LEGAL-CASES-NEW-01  ·  HIGH  ·  partly  ·  theme DATA (was OTHER)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1934 — case-type select (caseTypeId) added to the form and mapLegalCaseSummaries prefers the server type with caseNo fallback; list column is now 'Case type'/Writ & Criminal; remaining: the typed subject text is still not mapped or shown in the list ('Subject column shows the typed subject text' unmet)
 - **First-pass claim:** The form never sends a case type: the 'Subject' textarea is posted as subject (CreateCaseForm.tsx:40-47) while the list's Subject column and 'Adverse Risk' logic read type (list/LegalCasesTable.tsx:49,73), so cases created here show a blank/default subject and can never count as adverse risk.
 - **Verified evidence:** apps/web/src/app/(app)/legal/cases/new/CreateCaseForm.tsx:45-52 posts caseNo,title,court,subject,petitioner,counselRef - no type, as stated. But the list does not read a server 'type': mapLegalCaseSummaries (apps/web/src/app/_data/apiMappers.ts:667-711) derives type from the caseNo prefix (WP/WRIT -> writ, ARB -> arbitration, else other) and never 'criminal'. So the Subject column (apps/web/src/app/(app)/legal/list/LegalCasesTable.tsx:69) shows 'writ/arbitration/other', not the entered subject, and Adverse risk (:49, list/page.tsx:12) counts only WP/WRIT-numbered cases. A case numbered WP/... created here does count; the claim it 'can never count' is overstated. Detail page reads caseData.type (page.tsx:116) unmapped; API shape cannot be verified (service absent).
 - **Files to change:** `apps/web/src/app/(app)/legal/cases/new/CreateCaseForm.tsx`, `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/legal/list/LegalCasesTable.tsx`, `apps/web/src/app/(app)/legal/list/page.tsx`
@@ -163,6 +166,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 ### GAP-LEGAL-CASES-NEW-02  ·  MEDIUM  ·  partly  ·  theme FORM (was DATEFMT)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1916 — Respondent field added (sent via parties); remaining: Court is still a free-text input (no court master/normalisation; Courts/Fora still counts raw strings), no filing-date or department fields on the form
 - **First-pass claim:** Court is free text (CreateCaseForm.tsx:82): the 'High Court' filter and the Courts / Fora count depend on identical spelling; no court picker, no case-type, filing date or respondent fields although the detail page shows Respondent, Raised date and Department (cases/[id]/page.tsx:105-124).
 - **Verified evidence:** True: court is a free-text input (apps/web/src/app/(app)/legal/cases/new/CreateCaseForm.tsx:79-82 area, id 'court'), and form has no case-type, filing date, respondent or department fields; detail page shows Respondent/Raised date/Department (cases/[id]/page.tsx:120-139). Courts / Fora = new Set of exact court strings (list/page.tsx:10), so spelling variants inflate it. Correction: the 'High Court' filter is a case-insensitive substring match on 'high court' (LegalCasesTable.tsx:47), not identical spelling. Not a date-format issue.
 - **Files to change:** `apps/web/src/app/(app)/legal/cases/new/CreateCaseForm.tsx`, `apps/web/src/app/(app)/legal/list/page.tsx`, `legal-service create-case validators (not in snapshot)`
@@ -177,7 +181,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-CASES-NEW-04  ·  LOW  ·  confirmed  ·  theme DARKMODE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Inline styles force white field backgrounds (background:#fff, CreateCaseForm.tsx:79-100), which will not follow dark mode.
 - **Verified evidence:** apps/web/src/app/(app)/legal/cases/new/CreateCaseForm.tsx wraps every field in style={{background:'#fff', padding}} (lines ~75-95); the app has DarkModeToggle (app/_components/DarkModeToggle.tsx) so fields stay white on dark surfaces. Same pattern in court-orders/new/RecordOrderForm.tsx. Also hard-coded #fff banners elsewhere.
 - **Files to change:** `apps/web/src/app/(app)/legal/cases/new/CreateCaseForm.tsx`, `apps/web/src/app/(app)/legal/court-orders/new/RecordOrderForm.tsx`
@@ -199,7 +203,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-COURT-ORDERS-01  ·  HIGH  ·  confirmed  ·  theme STATUS (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Type' shows 'Issued' when complianceRequired else 'Stay' (CourtOrdersTable.tsx:48): every order without a compliance requirement is called a Stay regardless of what was recorded (judgment, interim, direction).
 - **Verified evidence:** apps/web/src/app/(app)/legal/court-orders/CourtOrdersTable.tsx:93 (obs said :48): Type cell is `r.complianceRequired ? 'Issued' : 'Stay'`. The record form offers order/judgment/interim/stay/direction (RecordOrderForm.tsx:226-230) but CourtOrderSummary (from @civitasone/types, not in snapshot) apparently carries no orderType; whether the API exposes it cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/legal/court-orders/CourtOrdersTable.tsx`, `legal-service court-orders list DTO (not in snapshot)`, `packages types CourtOrderSummary`
@@ -214,7 +218,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-COURT-ORDERS-02  ·  HIGH  ·  confirmed  ·  theme STATUS (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status 'appealed' is rendered as 'Under compliance' (CourtOrdersTable.tsx:22): an order under appeal reads as being complied with.
 - **Verified evidence:** apps/web/src/app/(app)/legal/court-orders/CourtOrdersTable.tsx:67 `if (o.status === 'appealed') return <span className='pill info'>Under compliance</span>`. An appealed order is not complied with; label is wrong. Note ordering: 'pending' with deadline passed shows Overdue before this.
 - **Files to change:** `apps/web/src/app/(app)/legal/court-orders/CourtOrdersTable.tsx`
@@ -229,7 +233,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-COURT-ORDERS-03  ·  MEDIUM  ·  partly  ·  theme DATEFMT (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Contempt Risk' counts pending orders with deadline <= today (page.tsx:17-19) — including a deadline that is today and not yet breached — and uses a UTC date (page.tsx:11); the row pill says 'Overdue' for the same condition.
 - **Verified evidence:** page.tsx:11 today = new Date().toISOString().slice(0,10) (UTC date); page.tsx:16-18 counts pending complianceRequired orders with complianceDeadline <= today; CourtOrdersTable.tsx:57-61 uses the same <= for isOverdue and shows 'Overdue' pill (:65) - so page and row agree, but a deadline that is today is called Overdue/contempt risk before the day ends. Between 00:00 and 05:30 IST the UTC date is yesterday, so items due today IST are under-counted (opposite direction to a naive reading). Not a dead link. Also stat cards show 0 on load error (source 'error' only adds a badge).
 - **Files to change:** `apps/web/src/app/(app)/legal/court-orders/page.tsx`, `apps/web/src/app/(app)/legal/court-orders/CourtOrdersTable.tsx`, `apps/web/src/lib/formatters.ts`
@@ -246,7 +250,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-COURT-ORDERS-04  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Contempt watch' is a disabled PlaceholderButton (page.tsx:29, PlaceholderButton.tsx); the banner promises linkage to Establishment files but nothing on the page links to one.
 - **Verified evidence:** apps/web/src/app/(app)/legal/court-orders/page.tsx:30 <PlaceholderButton label='Contempt watch'/> renders a disabled 'coming soon' control (_components/PlaceholderButton.tsx); banner (:22-24) says 'Linked to Establishment files for action' but no link to any estab route exists on the page; row link goes to the legal case only (Table :98). It is an honest placeholder, not fabricated data.
 - **Files to change:** `apps/web/src/app/(app)/legal/court-orders/page.tsx`, `apps/web/src/app/(app)/legal/court-orders/CourtOrdersTable.tsx`
@@ -260,7 +264,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-COURT-ORDERS-05  ·  LOW  ·  confirmed  ·  theme THEMING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Banner uses emoji and inline hex colours (page.tsx:23); this table lacks the provenance/cache behaviour of its siblings (CourtOrdersTable.tsx has no useSeededResource).
 - **Verified evidence:** apps/web/src/app/(app)/legal/court-orders/page.tsx:22-23 banner has emoji 📜 and inline hex colours (#f1f5f9, #cbd5e1, #334155), plus stat-card iconBg hex (:36-39). CourtOrdersTable.tsx takes plain props and does not use useSeededResource, unlike list/LegalCasesTable.tsx:36-41 which gets provenance/offline cache and DataSourceBadge. The page shows a separate DataSourceBadge only for source==='error'. Not fabricated data; theme tag is wrong.
 - **Files to change:** `apps/web/src/app/(app)/legal/court-orders/page.tsx`, `apps/web/src/app/(app)/legal/court-orders/CourtOrdersTable.tsx`
@@ -282,7 +286,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-COURT-ORDERS-NEW-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** A failed cases fetch is indistinguishable from an empty register: page.tsx:8 ignores source and RecordOrderForm shows 'No cases are available yet. Register a case' (RecordOrderForm.tsx:67-74), steering users to create duplicate cases during an outage.
 - **Verified evidence:** apps/web/src/app/(app)/legal/court-orders/new/page.tsx:5 (obs said :8) `const { data: cases } = await getLegalCases()` discards source; on failure cases=[] so RecordOrderForm.tsx:202-210 renders 'No cases are available yet. Register a case...' with a link to /legal/cases/new.
 - **Files to change:** `apps/web/src/app/(app)/legal/court-orders/new/page.tsx`, `apps/web/src/app/(app)/legal/court-orders/new/RecordOrderForm.tsx`
@@ -296,7 +300,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-COURT-ORDERS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Case select lists every case with a text label and defaults to the first one (RecordOrderForm.tsx:20,83-88): no search, and a hurried submit files the order against an unrelated case; the confirm dialog does not repeat which case is selected.
 - **Verified evidence:** apps/web/src/app/(app)/legal/court-orders/new/RecordOrderForm.tsx:155 useState(cases[0]?.id) preselects the first case; plain <select> of every case (:217-221, no search, and getLegalCases is unpaginated); ConfirmDialog description (:265-270) is generic and does not name the case, order type or date. Note the dialog is a single-user confirm, not maker-checker.
 - **Files to change:** `apps/web/src/app/(app)/legal/court-orders/new/RecordOrderForm.tsx`, `apps/web/src/app/(app)/legal/court-orders/new/page.tsx`
@@ -313,6 +317,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 ### GAP-LEGAL-COURT-ORDERS-NEW-04  ·  LOW  ·  confirmed  ·  theme ENTITYNAME (was OTHER)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1916 — inline #fff backgrounds removed from RecordOrderForm; remaining: Owning department (deptRef) is still a free-text input, no department picker/loader
 - **First-pass claim:** Owning department is free text (deptRef) with no picker, although the banner on the orders page says orders route to the owning department; inline #fff field backgrounds (RecordOrderForm.tsx:82-110).
 - **Verified evidence:** apps/web/src/app/(app)/legal/court-orders/new/RecordOrderForm.tsx:245-248 deptRef is a free-text input; every field wrapper uses inline background:'#fff' (lines 215-245). Banner claim about routing is on court-orders/page.tsx:23. No department picker loader located in the snapshot (verify hr department loader).
 - **Files to change:** `apps/web/src/app/(app)/legal/court-orders/new/RecordOrderForm.tsx`, `apps/web/src/app/(app)/legal/court-orders/new/page.tsx`
@@ -334,7 +339,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-DASHBOARD-01  ·  HIGH  ·  confirmed  ·  theme FABRICATED
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Disposal rate is computed as activeCases / (activeCases + opinionsDue) and labelled 'disposed' (page.tsx:60-62): it is the active share against pending opinions, not a disposal rate, and it falls back to a hard-coded 64% when activeCases is 0.
 - **Verified evidence:** apps/web/src/app/(app)/legal/dashboard/page.tsx:60-63 renders Math.round(activeCases/(activeCases+opinionsDue)*100) under the caption 'disposed', and the literal 64 when activeCases is 0. The formula has nothing to do with disposals, and 64 is a hard-coded literal.
 - **Files to change:** `apps/web/src/app/(app)/legal/dashboard/page.tsx`
@@ -352,7 +357,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-DASHBOARD-02  ·  HIGH  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Upcoming hearings' table is always given rows={[]} (page.tsx:46-53) while the line above says 'N hearings scheduled this week' (page.tsx:43): the dashboard never lists a hearing, and the 'Calendar →' link goes to the same table view.
 - **Verified evidence:** apps/web/src/app/(app)/legal/dashboard/page.tsx:45-53 passes rows={[]} to DataTable, so the 'Upcoming hearings' table never has data, while line 43 prints '{n} hearings scheduled this week'. The 'Calendar →' link (line 40) is a plain <a href='/legal/hearings'>, which is the same table view (no calendar exists; HearingsActions.tsx:43 has the same issue). getLegalHearings() exists in loaders.ts:4111 and could feed the table.
 - **Files to change:** `apps/web/src/app/(app)/legal/dashboard/page.tsx`
@@ -370,7 +375,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-DASHBOARD-03  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch reads as good news: badge only (page.tsx:29); stats fall back to zeros (loaders.ts:4085-4090) and the disposal card shows 64%.
 - **Verified evidence:** apps/web/src/app/(app)/legal/dashboard/page.tsx:29 only shows DataSourceBadge when source==='error'; the page still renders. Loader falls back to LEGAL_DASHBOARD_EMPTY zeros (apps/web/src/app/_data/loaders.ts:4085-4090) and fetchJson returns {data: empty, source:'error'} on every failure (apiClient.ts:119-166), so StatCards show 0 and the disposal card shows 64%.
 - **Files to change:** `apps/web/src/app/(app)/legal/dashboard/page.tsx`, `apps/web/src/app/(app)/legal/dashboard/CasesOverviewSeg.tsx`
@@ -387,7 +392,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-DASHBOARD-04  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Adverse Risk' is bound to data.opinionsDue (page.tsx:27) — a count of opinions due is presented as litigation risk.
 - **Verified evidence:** apps/web/src/app/(app)/legal/dashboard/page.tsx:27 StatCard label 'Adverse Risk' value={data.opinionsDue}. Opinions due is a workload count, not a litigation-risk measure. Same label on list/page.tsx:30 is derived differently (case type), so the two 'Adverse Risk' figures disagree.
 - **Files to change:** `apps/web/src/app/(app)/legal/dashboard/page.tsx`
@@ -403,7 +408,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-DASHBOARD-05  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Cases overview scope (All / High Court / Tribunals) only changes the bold label; the three numbers do not change (CasesOverviewSeg.tsx:14-23).
 - **Verified evidence:** apps/web/src/app/(app)/legal/dashboard/CasesOverviewSeg.tsx:17-27 holds scope in useState and only prints it in the bold span; activeCases, hearingsThisWeek, ordersPending props are the same for all three scopes. The segmented control is decorative. (Theme I18N is wrong; also its i18n suggestion is unrelated.)
 - **Files to change:** `apps/web/src/app/(app)/legal/dashboard/CasesOverviewSeg.tsx`, `apps/web/src/app/(app)/legal/dashboard/page.tsx`
@@ -426,7 +431,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-HEARINGS-01  ·  HIGH  ·  confirmed  ·  theme WIRING (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status pill maps 'completed' to a green 'Listed' and every unknown status to 'Listed' (HearingsTable.tsx:31-40): a hearing that has been heard is labelled as upcoming.
 - **Verified evidence:** apps/web/src/app/(app)/legal/hearings/HearingsTable.tsx:27-38 maps 'completed' to <span class='pill good'>Listed</span> and the default branch (incl. 'scheduled', unknown) to an info-colour 'Listed'. A heard hearing is therefore labelled Listed in green.
 - **Files to change:** `apps/web/src/app/(app)/legal/hearings/HearingsTable.tsx`
@@ -441,7 +446,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-HEARINGS-02  ·  HIGH  ·  confirmed  ·  theme NAVUX (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Only 'This week' and 'Today' filters exist and the default hides everything else (HearingsTable.tsx:34,68-72); past hearings and outcomes are unreachable here even though the hub tile promises 'Upcoming and past court hearings' (legal/page.tsx:10).
 - **Verified evidence:** apps/web/src/app/(app)/legal/hearings/HearingsTable.tsx:25 FILTERS=['This week','Today'], default 'This week' (line 101), filtering in useMemo lines 111-117 with date>=today; the unfiltered branch (return sorted) is unreachable. Past hearings/outcomes cannot be seen. legal/page.tsx:11 promises 'Upcoming and past court hearings'. Route /legal/hearings only.
 - **Files to change:** `apps/web/src/app/(app)/legal/hearings/HearingsTable.tsx`, `apps/web/src/app/(app)/legal/hearings/page.tsx`
@@ -459,7 +464,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-HEARINGS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Calendar view' links to /legal/hearings, the current page (HearingsActions.tsx:44); 'Sync cause list' performs a plain GET of the same endpoint and router.refresh(), not a sync, and reports success only in an sr-only region (HearingsActions.tsx:16-50).
 - **Verified evidence:** apps/web/src/app/(app)/legal/hearings/HearingsActions.tsx:43 <Link href='/legal/hearings'> is the current route. sync() (lines 22-39) does a GET to /api/proxy/v1/legal/hearings then router.refresh(); success text 'Cause list synced.' goes only to an sr-only role=status span (line 51), so sighted users get no feedback. The file's own comment (lines 11-15) admits there is no sync endpoint. Note the server loader uses revalidate 60s (loaders.ts:4112), so refresh may not show new data.
 - **Files to change:** `apps/web/src/app/(app)/legal/hearings/HearingsActions.tsx`
@@ -475,7 +480,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-HEARINGS-04  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'today', 'tomorrow' and 'weekEnd' come from new Date().toISOString() (UTC) (page.tsx:9-11, HearingsTable.tsx:74): between 00:00 and 05:30 IST the page treats yesterday as today, shifting 'Today' and the countdown.
 - **Verified evidence:** apps/web/src/app/(app)/legal/hearings/page.tsx:9-11 and HearingsTable.tsx:109,113 use new Date().toISOString().slice(0,10) (UTC date). Between 00:00 and 05:30 IST this is yesterday's date, so 'Today' filter, week window and daysRemaining base (line 135) shift. Observation cited HearingsTable.tsx:74; real lines are 109/113. Additionally formatIndianDate (lib/formatters.ts:2-7) has no timeZone option and outputs dd/mm/yyyy, not 'dd Mon yyyy'. On the client `today` is computed in the browser but on the server in server TZ.
 - **Files to change:** `apps/web/src/app/(app)/legal/hearings/page.tsx`, `apps/web/src/app/(app)/legal/hearings/HearingsTable.tsx`, `apps/web/src/lib/formatters.ts`
@@ -498,7 +503,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-LIST-01  ·  HIGH  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Adverse Risk' is any case whose type is 'writ' or 'criminal' (page.tsx:12, LegalCasesTable.tsx:49): a case category is presented as a risk assessment, and the same proxy drives the 'Adverse risk' filter.
 - **Verified evidence:** apps/web/src/app/(app)/legal/list/page.tsx:12 counts type==='writ'||'criminal' as adverseRisk (stat card line 30) and list/LegalCasesTable.tsx:49 applies the same predicate to the 'Adverse risk' filter. Case type (a category) is presented as a risk assessment.
 - **Files to change:** `apps/web/src/app/(app)/legal/list/page.tsx`, `apps/web/src/app/(app)/legal/list/LegalCasesTable.tsx`
@@ -514,7 +519,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-LIST-02  ·  MEDIUM  ·  confirmed  ·  theme DATA-DEFINITION (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Disposed (FY)' counts every disposed row with no financial-year date test (page.tsx:11); 'Active Cases' counts only status 'pending', so appealed and stayed matters vanish from the active count (page.tsx:9).
 - **Verified evidence:** apps/web/src/app/(app)/legal/list/page.tsx:9 active = status==='pending' only, while LegalCasesTable.tsx:20-31 also knows appealed, stayed, settled; appealed/stayed matters are live yet excluded. Line 11 disposed counts all 'disposed' rows although the card is labelled 'Disposed (FY)'; the case summary fields (disposal date) are in @civitasone/types, absent here, so an FY test cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/legal/list/page.tsx`
@@ -530,6 +535,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 ### GAP-LEGAL-LIST-03  ·  MEDIUM  ·  confirmed  ·  theme I18N (was OTHER)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1916 — case-type label map ('Writ Petition' etc.) and column relabelled 'Case type'; remaining: 'High Court' filter is still a free-text substring match on court (no courtType/forum enum), undocumented
 - **First-pass claim:** Subject column prints the raw type code (writ, criminal) (LegalCasesTable.tsx:73); 'High Court' filter is a substring match on free-text court names (LegalCasesTable.tsx:47).
 - **Verified evidence:** apps/web/src/app/(app)/legal/list/LegalCasesTable.tsx:70 Subject column has key 'type' with no render, so raw codes such as 'writ' print (observation said line 73). Line 48 'High Court' filter is court.toLowerCase().includes('high court'), a substring match on free text, missing e.g. 'HC of Odisha'.
 - **Files to change:** `apps/web/src/app/(app)/legal/list/LegalCasesTable.tsx`
@@ -552,7 +558,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-OPINIONS-01  ·  HIGH  ·  confirmed  ·  theme FABRICATED
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Avg TAT '6.2 d' with delta '-1d' is a hard-coded literal (page.tsx:31): a fabricated turnaround KPI is shown to legal officers and stays 6.2 d with zero opinions.
 - **Verified evidence:** apps/web/src/app/(app)/legal/opinions/page.tsx:31 hard-codes value='6.2 d' delta='-1d' up on the 'Avg TAT' StatCard; it is never computed and shows even with zero opinions.
 - **Files to change:** `apps/web/src/app/(app)/legal/opinions/page.tsx`
@@ -567,7 +573,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-OPINIONS-02  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** The table has no row link (OpinionsTable.tsx:60-72, unlike LegalCasesTable's rowLinkPrefix), so /legal/opinions/[id] is unreachable from the list.
 - **Verified evidence:** apps/web/src/app/(app)/legal/opinions/OpinionsTable.tsx:59-72 DataTable passes no rowHref, rowLinkKey or rowLinkPrefix (DataTable.tsx:56-59,211-212 only link when provided), unlike LegalCasesTable.tsx:75-76. Route opinions/[id]/page.tsx exists, so it is reachable only by typing the URL.
 - **Files to change:** `apps/web/src/app/(app)/legal/opinions/OpinionsTable.tsx`
@@ -580,7 +586,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-OPINIONS-03  ·  MEDIUM  ·  confirmed  ·  theme FABRICATED
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Precedents Tagged' is the count of status 'issued' (page.tsx:32) — there is no tagging in the data; 'Search precedents' is a disabled PlaceholderButton (page.tsx:22).
 - **Verified evidence:** apps/web/src/app/(app)/legal/opinions/page.tsx:32 'Precedents Tagged' = count of status 'issued'; no tagging field is read anywhere. Line 23 <PlaceholderButton label='Search precedents'/> is a disabled coming-soon button (PlaceholderButton.tsx), which is honest but non-functional. The table filter offers name filtering only.
 - **Files to change:** `apps/web/src/app/(app)/legal/opinions/page.tsx`
@@ -596,6 +602,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 ### GAP-LEGAL-OPINIONS-05  ·  LOW  ·  partly  ·  theme WIRING (was DATEFMT)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1916 — null advisorName now shows an 'Unassigned' pill; remaining: 'Sought by' (soughtBy) is never sent by the Seek Opinion form so the column shows '—', no person name populated
 - **First-pass claim:** Author defaults to 'Law Dept' when advisorName is null (OpinionsTable.tsx:67), presenting an unassigned opinion as assigned; 'Sought by' shows a raw requestedBy value which may be a user id.
 - **Verified evidence:** apps/web/src/app/(app)/legal/opinions/OpinionsTable.tsx:64 renders r.advisorName ?? 'Law Dept', so an unassigned opinion appears assigned (true). Line 63 prints raw requestedBy; whether it is a user id or a name cannot be verified (type in @civitasone/types absent). Theme DATEFMT is wrong; this is an assignment-state/data-mapping issue.
 - **Files to change:** `apps/web/src/app/(app)/legal/opinions/OpinionsTable.tsx`
@@ -618,7 +625,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-OPINIONS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1840, verified on main 9c5e9e9e9)
 - **First-pass claim:** eOffice card asks the user to type 'Initiating officer ID' and 'Forward to officer ID' as raw employee UUIDs, validated by regex (RaiseEOfficeNote.tsx UUID_RE, submit handler); there is no officer picker, so the action is unusable for a legal officer who does not know UUIDs.
 - **Verified evidence:** apps/web/src/app/_components/RaiseEOfficeNote.tsx:25 defines UUID_RE; submit() lines 102-103 reject non-UUID input; inputs at lines 175 and 179 are free text with placeholders 'employee UUID' / 'approver UUID'. No EntityPicker exists in apps/web or packages/ui-kit (grep empty). The component is shared by other modules (grants, hr, finance, procurement, contracts, assets), so all inherit the problem.
 - **Files to change:** `apps/web/src/app/_components/RaiseEOfficeNote.tsx`, `apps/web/src/app/_components/EntityPicker.tsx`
@@ -635,7 +642,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-OPINIONS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch shows 'Opinion not found ... removed or the ID is invalid' (page.tsx:19-28) because getLegalOpinionById defaults to null (loaders.ts:4145-4150); an outage reads as deletion.
 - **Verified evidence:** apps/web/src/app/(app)/legal/opinions/[id]/page.tsx:16-28 branches only on !opinion. getLegalOpinionById (apps/web/src/app/_data/loaders.ts:4145-4150) uses empty=null, and fetchJson returns {data:null, source:'error', status} for any failure (apiClient.ts:119-166, including 401, 5xx, network), so an outage renders 'Opinion not found ... removed or the ID is invalid'. LoaderResult carries `status`, so 404 could be told apart.
 - **Files to change:** `apps/web/src/app/(app)/legal/opinions/[id]/page.tsx`
@@ -651,7 +658,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-OPINIONS-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Detail reads counselName/soughtBy while the list reads advisorName/requestedBy (opinions/OpinionsTable.tsx:11-12), and Status appears three times (header pill, stat card, detail row) (page.tsx:60,71); Question text is legal advice shown without a privilege/confidentiality marker.
 - **Verified evidence:** Detail reads counselName/counsel_name and soughtBy/sought_by (page.tsx:34-35) while the list reads advisorName/requestedBy (opinions/OpinionsTable.tsx:11-12); the detail's field() has no fallback to the list's names. Which set the API returns cannot be verified because LegalOpinionSummary lives in @civitasone/types (absent) and the detail loader is an untyped Record. If the API uses the list names, the detail shows '—' for Counsel/Sought By. Status is rendered three times: header pill line 53, stat card line 60, detail row line 71 (true). No privilege/confidentiality marker near the Question field (line 72-77) (true).
 - **Files to change:** `apps/web/src/app/(app)/legal/opinions/[id]/page.tsx`
@@ -669,7 +676,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-OPINIONS-DETAIL-05  ·  LOW  ·  confirmed  ·  theme NAVUX
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916 and #1804, verified on main 9c5e9e9e9)
 - **First-pass claim:** Breadcrumbs are plain <a> (full page reload) rather than Link (page.tsx:46-48); eFile classification defaults to 'confidential' inside RaiseEOfficeNote without showing it to the user.
 - **Verified evidence:** apps/web/src/app/(app)/legal/opinions/[id]/page.tsx:22-23 and 42-43 use <a href> for breadcrumbs (full reload; no next/link) in both branches. RaiseEOfficeNote.tsx:60 defaults classification to 'confidential' and it is sent in the payload (line 108) with no UI showing or letting the user change it. PageHeader already has back='/legal/opinions'.
 - **Files to change:** `apps/web/src/app/(app)/legal/opinions/[id]/page.tsx`, `apps/web/src/app/_components/RaiseEOfficeNote.tsx`
@@ -691,7 +698,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-OPINIONS-NEW-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** The request is stored as an outbound legal notice (direction 'sent') because no opinions create endpoint exists (SeekOpinionForm.tsx:9-13,31-36): it never appears in the Legal Opinions repository, so the requester is redirected to a list that does not contain what was just submitted.
 - **Verified evidence:** opinions/new/SeekOpinionForm.tsx:9-13 comment and lines 31-37: POST /api/proxy/v1/legal/notices with direction 'sent'; on success router.push('/legal/opinions'), whose list is from GET /api/v1/legal/opinions (loaders.ts:4136), a different resource. So the submitted request does not appear. Whether the legal-service has or lacks an opinions create endpoint cannot be verified (service not in snapshot; only hrms-service).
 - **Files to change:** `apps/web/src/app/(app)/legal/opinions/new/SeekOpinionForm.tsx`, `apps/web/src/app/(app)/legal/opinions/new/page.tsx`
@@ -708,7 +715,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-OPINIONS-NEW-02  ·  MEDIUM  ·  partly  ·  theme ID-GEN (was CAP)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Reference no is generated client-side as OPN/<year>/<random 100-999> when blank (SeekOpinionForm.tsx:30), not a server sequence: collisions are possible and it does not follow the OPN/2026/NNN series in the repository.
 - **Verified evidence:** SeekOpinionForm.tsx:30 does generate OPN/<year>/<100-999> with Math.random when blank, a client-side value sent as noticeNo. Collision and non-series claims are true. The theme CAP (pagination cap) is wrong; and it is a notice number, not an opinion number, since the form posts to notices (uniqueness enforcement in the service cannot be verified).
 - **Files to change:** `apps/web/src/app/(app)/legal/opinions/new/SeekOpinionForm.tsx`
@@ -724,7 +731,7 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 
 ### GAP-LEGAL-OPINIONS-NEW-04  ·  LOW  ·  partly  ·  theme COPY (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** The banner exposes an implementation detail ('legal notice ... closest available command') to end users (page.tsx:16-17); the confirm dialog says the request 'cannot be withdrawn' though no withdraw endpoint was read.
 - **Verified evidence:** apps/web/src/app/(app)/legal/opinions/new/page.tsx:16-17 banner does expose 'legal notice ... closest available command' to end users (true). The confirm dialog (SeekOpinionForm.tsx:96) states the request 'cannot be withdrawn'; no withdraw call exists in the web code, but backend cannot be verified. The dialog is a plain confirm and the comment calls it 'maker-checker', which it is not (no reason field, same user).
 - **Files to change:** `apps/web/src/app/(app)/legal/opinions/new/page.tsx`, `apps/web/src/app/(app)/legal/opinions/new/SeekOpinionForm.tsx`
