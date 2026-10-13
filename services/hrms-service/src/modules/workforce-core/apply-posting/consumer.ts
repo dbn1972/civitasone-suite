@@ -25,6 +25,7 @@ import { enqueue, markProcessed } from "../../../shared/outbox.js";
 import { COMMANDS } from "../../../topics.js";
 import { HttpError } from "../../../shared/context.js";
 import { applyPostingTx } from "./apply.js";
+import { isAllowedProducer } from "./producer.js";
 
 const AUDIT = "audit.event.record";
 
@@ -48,7 +49,44 @@ export function registerApplyPostingConsumer(queue: Queue): void {
       orderNumber: string;
       chargeType?: string;
       approvedBy?: string | null;
+      producer?: string;
     };
+
+    // ST-M01-15 — producer ACL (scoped service credential for the
+    // SmartTransfer→HRMS command path; spec §14, D-ST-10 APPROVED, D-ST-19).
+    // Only the frozen contract owner (smarttransfer-service) and the
+    // hrms-service in-service HTTP affordance may drive a posting write. A
+    // command from ANY other producer (payroll, a rogue leave consumer, a
+    // mis-wired future service) is refused with an AUDITED record in its own
+    // transaction — never the guarded write, never a leaked reason (house rule
+    // 6). The write path (markProcessed + occupancy/ledger/employee/service
+    // book + audit) is NOT entered. A redelivery of a refused command stays
+    // refused (deterministic on producer), so it is safe to let the queue drop
+    // it without marking it processed.
+    if (!isAllowedProducer(p.producer)) {
+      await db.transaction(async (tx) => {
+        await enqueue(tx, {
+          topic: AUDIT,
+          eventType: AUDIT,
+          tenantId: msg.tenantId,
+          actorId: msg.actorId,
+          correlationId: msg.correlationId,
+          payload: {
+            service: "hrms",
+            action: "apply_posting",
+            resourceType: "posting",
+            resourceId: p.orderId,
+            outcome: "failure",
+            metadata: {
+              employeeId: p.employeeId,
+              postId: p.postId,
+              reason: "PRODUCER_NOT_AUTHORISED",
+            },
+          },
+        });
+      });
+      return;
+    }
 
     try {
       await db.transaction(async (tx) => {
@@ -154,6 +192,13 @@ export function registerApplyPostingConsumer(queue: Queue): void {
                 employeeId: p.employeeId,
                 postId: p.postId,
                 reason: err.code,
+                // ST-M01-10: the refusal's structured params (e.g. the blocking
+                // hold's id/type/window for EMPLOYEE_ON_HOLD) ride the audit so
+                // the refusal is explainable without re-querying — a
+                // CommandRefusal code + params recorded via audit (hrms has no
+                // command_results table on main; D-20 is adopted by the
+                // smarttransfer-service, not here).
+                ...(err.details ? { params: err.details } : {}),
               },
             },
           });

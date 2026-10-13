@@ -16,6 +16,7 @@ import { schema as nachReturnModule } from "../modules/nach-return/schema.js";
 import { schema as dscConfigModule } from "../modules/dsc-config/schema.js";
 import { schema as disbursementTransfersModule } from "../modules/disbursement-transfers/schema.js";
 import { schema as taxProofsModule } from "../modules/tax-proofs/schema.js";
+import { schema as postingHistoryModule } from "../modules/posting-history/schema.js";
 import { outboxSchema }               from "./outbox.js";
 
 const SCHEMA = {
@@ -29,6 +30,7 @@ const SCHEMA = {
   ...dscConfigModule,
   ...disbursementTransfersModule,
   ...taxProofsModule,
+  ...postingHistoryModule,
   ...outboxSchema,
 };
 
