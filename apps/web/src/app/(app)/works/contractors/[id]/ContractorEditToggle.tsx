@@ -3,7 +3,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
-import { Button } from "@/app/_components/ds";
+import { AcceptedNotice, Button } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
+import { acceptedCopy } from "@/lib/acceptedCopy";
 import { CONTRACTOR_WRITE_ROLES } from "@/lib/works/roles";
 import { validateContractorIds, type IndianIdFieldErrors } from "@/lib/validation/indianIds";
 
@@ -88,8 +90,7 @@ function ContractorEditForm({
   const formError = useFormError("contractor");
   // The post-save close is deferred so the success message is visible; cancel it
   // if the form unmounts first (otherwise it fires setState after teardown).
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current); }, []);
+  const accepted = useAcceptedWrite();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -149,12 +150,9 @@ function ContractorEditForm({
         setMsg({ text: resolved.message, ok: false });
         return;
       }
-      setMsg({ text: "Contractor updated.", ok: true });
-      closeTimer.current = setTimeout(() => {
-        closeTimer.current = null;
-        router.refresh();
-        onClose();
-      }, 800);
+      // 202: the update is queued, not applied. Say "submitted" and let the user continue once they have read it.
+      setMsg({ text: "Update submitted.", ok: true });
+      void accepted.accept();
     } catch (caught) {
       setMsg({
         text: formError.fromException("save", caught).message,
@@ -194,6 +192,11 @@ function ContractorEditForm({
             {msg.ok ? "✅" : "⚠️"} {msg.text}
           </p>
         )}
+        <AcceptedNotice
+          {...accepted.noticeProps}
+          onRefresh={() => { router.refresh(); onClose(); }}
+          labels={{ refresh: acceptedCopy().continue }}
+        />
 
         <div
           style={{

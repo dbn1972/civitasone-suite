@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, ConfirmDialog, Select } from "@/app/_components/ds";
+import { Button, ConfirmDialog, Select, AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { loadGrantCandidates, requestOperatorChange, type GrantCandidate, type PlatformRole } from "@/lib/admin/operatorActions";
 
 type Candidates = { state: "loading" } | { state: "error" } | { state: "ready"; list: GrantCandidate[] };
@@ -13,7 +13,7 @@ type Candidates = { state: "loading" } | { state: "error" } | { state: "ready"; 
  */
 export function OperatorGrantButton({ onSent }: { onSent: () => void }) {
   const t = useTranslations("adminOperators");
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   const [open, setOpen] = useState(false);
   const [cands, setCands] = useState<Candidates>({ state: "loading" });
   const [userId, setUserId] = useState("");
@@ -46,11 +46,12 @@ export function OperatorGrantButton({ onSent }: { onSent: () => void }) {
     setUserId("");
     setNotice(true);
     onSent();
-    window.setTimeout(() => router.refresh(), 1200);
+    void accepted.accept();
   }
 
   return (
     <div style={{ marginBottom: 10 }}>
+      <AcceptedNotice {...accepted.noticeProps} />
       <Button size="sm" onClick={() => { setError(undefined); setNotice(false); setSearch(""); setUserId(""); setOpen(true); }}>{t("grantButton")}</Button>
       {notice && <p role="status" style={{ fontSize: 13, margin: "8px 0 0" }}>{t("sent")}</p>}
       <ConfirmDialog

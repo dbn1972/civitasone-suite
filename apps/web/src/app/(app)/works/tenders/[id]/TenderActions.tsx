@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { ConfirmDialog, useToast, Card, Button, EntityPicker } from "@/app/_components/ds";
+import { ConfirmDialog, useToast, Card, Button, EntityPicker, AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { searchContractors, resolveContractors } from "@/lib/entityAdapters/contractor";
@@ -45,7 +45,7 @@ export function TenderActions({
   canDoFinalize = false,
   quotations = [],
 }: TenderActionsProps) {
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   const { toast } = useToast();
 
   // ── Add Quotation ──────────────────────────────────────────────────────────
@@ -104,7 +104,7 @@ export function TenderActions({
       setQuotedAmountRs("");
       setQuotedPercentage("");
       setQuotOpen(false);
-      setTimeout(() => router.refresh(), 600);
+      void accepted.accept();
     } catch (caught) {
       setQuotError(quotFormError.fromException("save", caught).message);
     } finally {
@@ -201,7 +201,7 @@ export function TenderActions({
       }
       toast.success("Work award submitted. It will be recorded once processed.");
       setAwardOpen(false);
-      setTimeout(() => router.refresh(), 600);
+      void accepted.accept();
     } catch (caught) {
       setAwardError(awardFormError.fromException("save", caught).message);
     } finally {
@@ -263,7 +263,7 @@ export function TenderActions({
       }
       toast.success(`Award ${level.toUpperCase()} finalization submitted. It will show as finalized once processed.`);
       setDialogOpen(false);
-      setTimeout(() => router.refresh(), 600);
+      void accepted.accept();
     } catch (caught) {
       setDialogError(finalizeFormError.fromException("save", caught).message);
     } finally {
@@ -275,6 +275,7 @@ export function TenderActions({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <AcceptedNotice {...accepted.noticeProps} />
       {/* ── Add Quotation ─────────────────────────────────────────────────── */}
       <Card title="Add Quotation">
         {!quotOpen ? (

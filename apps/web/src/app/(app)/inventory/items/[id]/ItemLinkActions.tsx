@@ -2,12 +2,12 @@
 
 import { UserFacingError } from "@/lib/userFacingError";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ActionButton, Button, useToast } from "@/app/_components/ds";
+import { ActionButton, Button, useToast, AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { ItemPicker } from "@/app/_components/ItemPicker";
 import { useFormError } from "@/lib/useFormError";
-import { deleteItemLink, postItemLink, LINK_REFRESH_DELAY_MS } from "../../linkApi";
+import { deleteItemLink, postItemLink } from "../../linkApi";
 import type { ItemLinkRow, LinkSuggestion, PickerEntry } from "../../linkHelpers";
 
 /**
@@ -19,15 +19,15 @@ export function ItemLinkActions({
   inventoryItemId, link, suggestion,
 }: { inventoryItemId: string; link: ItemLinkRow | null; suggestion: LinkSuggestion | null }) {
   const t = useTranslations("inventoryLink");
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   const { toast } = useToast();
   const formError = useFormError("item link");
   const [picked, setPicked] = useState<PickerEntry | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
 
-  function refreshSoon() {
-    setTimeout(() => router.refresh(), LINK_REFRESH_DELAY_MS);
+  function markAccepted() {
+    void accepted.accept();
   }
 
   async function submitLink(stockItemId: string, source: "manual" | "suggested") {
@@ -41,7 +41,7 @@ export function ItemLinkActions({
       }
       toast.success(t("detail.linkQueued"));
       setPicked(null);
-      refreshSoon();
+      markAccepted();
     } catch (caught) {
       setMessage(formError.fromException("save", caught).message);
     } finally {
@@ -65,7 +65,7 @@ export function ItemLinkActions({
         onConfirm={() => removeLink(link.id)}
         onSuccess={() => {
           toast.success(t("detail.unlinkQueued"));
-          refreshSoon();
+          markAccepted();
         }}
       />
     );
@@ -73,6 +73,7 @@ export function ItemLinkActions({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <AcceptedNotice {...accepted.noticeProps} />
       {suggestion ? (
         <div role="group" aria-label={t("detail.suggestionTitle")} style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 12 }}>
           <strong>{t("detail.suggestionTitle")}</strong>

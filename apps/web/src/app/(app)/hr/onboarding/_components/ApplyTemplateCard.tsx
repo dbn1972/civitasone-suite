@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
-import { Button } from "../../../../_components/ds";
+import { Button, AcceptedNotice } from "../../../../_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 
 type TemplateOption = { id: string; name: string; stepCount: number; isDefault: boolean };
 
@@ -16,7 +16,7 @@ type TemplateOption = { id: string; name: string; stepCount: number; isDefault: 
  */
 export function ApplyTemplateCard({ employeeId, hasTasks }: { employeeId: string; hasTasks: boolean }) {
   const t = useTranslations("onboardingTemplate");
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   const formError = useFormError("onboarding template");
   const selectId = useId();
   const [templates, setTemplates] = useState<TemplateOption[] | null>(null);
@@ -49,7 +49,7 @@ export function ApplyTemplateCard({ employeeId, hasTasks }: { employeeId: string
       const body = (await res.json()) as { stepCount?: number };
       setNotice(t("applied", { count: body.stepCount ?? 0 }));
       // Async write (queue) -- refresh shortly so the new tasks actually show.
-      setTimeout(() => router.refresh(), 1000);
+      void accepted.accept();
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
     } finally {
@@ -59,6 +59,7 @@ export function ApplyTemplateCard({ employeeId, hasTasks }: { employeeId: string
 
   return (
     <div style={{ marginTop: 16, textAlign: "left", maxWidth: 420, marginInline: "auto" }}>
+      <AcceptedNotice {...accepted.noticeProps} />
       <h3 style={{ fontSize: 14, margin: "0 0 4px" }}>{hasTasks ? t("titleTopUp") : t("title")}</h3>
       <p style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: "0 0 8px" }}>{hasTasks ? t("hintTopUp") : t("hint")}</p>
       {loadFailed ? (

@@ -13,17 +13,18 @@
  * joinee's own page.
  */
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { OnboardingChecklist, type ChecklistStep } from "./OnboardingChecklist";
 import { useFormError } from "@/lib/useFormError";
+import { AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 
 interface ChecklistWithActionsProps {
   steps: ChecklistStep[];
 }
 
 export function ChecklistWithActions({ steps: initialSteps }: ChecklistWithActionsProps) {
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   const [steps, setSteps] = useState(initialSteps);
   const [error, setError] = useState<string | null>(null);
   const formError = useFormError("onboarding checklist");
@@ -51,7 +52,7 @@ export function ChecklistWithActions({ steps: initialSteps }: ChecklistWithActio
       // response -- refresh shortly after so the server-rendered progress
       // bar / overdue counts on this page pick up the real committed state
       // rather than only ever showing the optimistic local view.
-      setTimeout(() => router.refresh(), 1000);
+      void accepted.accept();
     } catch (caught) {
       setSteps(previous);
       setError(formError.fromException("save", caught).message);
@@ -60,6 +61,7 @@ export function ChecklistWithActions({ steps: initialSteps }: ChecklistWithActio
 
   return (
     <div>
+      <AcceptedNotice {...accepted.noticeProps} />
       <OnboardingChecklist steps={steps} onComplete={(id) => void handleComplete(id)} />
       {error && (
         <p role="alert" style={{ margin: "10px 0 0", fontSize: 12, color: "var(--bad, #dc2626)", fontWeight: 500 }}>

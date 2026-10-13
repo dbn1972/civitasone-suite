@@ -22,6 +22,3 @@ export function deleteItemLink(linkId: string): Promise<Response> {
     headers: { "x-idempotency-key": idempotencyKey() },
   });
 }
-
-/** The service applies a queued command a moment later; refresh after this delay so the new state shows. */
-export const LINK_REFRESH_DELAY_MS = 900;

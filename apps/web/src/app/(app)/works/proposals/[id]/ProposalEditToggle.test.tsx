@@ -127,7 +127,7 @@ describe("ProposalEditToggle — DETAIL-03 exact money (bigint paise)", () => {
     fireEvent.change(screen.getByLabelText(/Estimated Cost/i), { target: { value: "8650000.75" } });
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
-    await screen.findByText(/Proposal updated\./i);
+    await screen.findByText(/Update submitted\./i);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
     expect(body.estimatedCostMinor).toBe("865000075");

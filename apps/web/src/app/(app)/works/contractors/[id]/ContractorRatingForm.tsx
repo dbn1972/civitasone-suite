@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useToast } from "@/app/_components/ds/Toast";
-import { ConfirmDialog, Button } from "@/app/_components/ds";
+import { ConfirmDialog, Button, AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
 
 interface ContractorRatingFormProps {
@@ -32,7 +32,7 @@ export function ContractorRatingForm({
   lastRatedBy,
   viewerId,
 }: ContractorRatingFormProps) {
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   const { toast } = useToast();
   const [selectedRating, setSelectedRating] = useState<number>(0);
   const [hoverRating, setHoverRating] = useState<number>(0);
@@ -84,7 +84,7 @@ export function ContractorRatingForm({
       setDialogOpen(false);
       toast.success("Rating submitted.");
       setSelectedRating(0);
-      setTimeout(() => router.refresh(), 600);
+      void accepted.accept();
     } catch (caught) {
       setErrorMessage(formError.fromException("save", caught).message);
     } finally {
@@ -103,6 +103,7 @@ export function ContractorRatingForm({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <AcceptedNotice {...accepted.noticeProps} />
       <p style={{ margin: 0, color: "var(--muted)", fontSize: 14 }}>
         Current:{" "}
         {currentRating > 0

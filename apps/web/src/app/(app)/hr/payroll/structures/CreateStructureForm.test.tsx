@@ -8,7 +8,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: refreshMock }),
 }));
 
-import { CreateStructureForm, CREATE_REFRESH_DELAY_MS } from "./CreateStructureForm";
+import { CreateStructureForm } from "./CreateStructureForm";
 
 // UX-017: CreateStructureForm now reads its copy through next-intl
 // (useTranslations("createStructureForm")), so every render needs a real
@@ -68,15 +68,15 @@ describe("CreateStructureForm", () => {
   });
 });
 
-// GAP-PAYROLL-STRUCTURES-05: creation is async (202 + consumer): refresh once more after it settles.
-describe("CreateStructureForm delayed refresh", () => {
+// GAP-PAYROLL-STRUCTURES-05 / SF-15: creation is async (202 + consumer): honest accepted notice, no timer-driven refresh.
+describe("CreateStructureForm accepted state", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     refreshMock.mockReset();
   });
   afterEach(() => vi.useRealTimers());
 
-  it("refreshes immediately and once more after CREATE_REFRESH_DELAY_MS", async () => {
+  it("refreshes once immediately, shows the accepted notice, and only refreshes again when the user asks", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "s1", status: "accepted" }), { status: 202 }));
     renderForm();
     fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Level 10" } });
@@ -86,7 +86,10 @@ describe("CreateStructureForm delayed refresh", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     fireEvent.click(screen.getByText("Create structure"));
     await vi.waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
-    await vi.advanceTimersByTimeAsync(CREATE_REFRESH_DELAY_MS + 50);
+    await vi.waitFor(() => expect(document.querySelector('[data-accepted-phase="accepted"]')).not.toBeNull());
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Refresh now" }));
     expect(refreshMock).toHaveBeenCalledTimes(2);
   });
 
@@ -102,7 +105,7 @@ describe("CreateStructureForm delayed refresh", () => {
     fireEvent.click(screen.getByText("Create structure"));
     await vi.waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
     unmount();
-    await vi.advanceTimersByTimeAsync(CREATE_REFRESH_DELAY_MS + 50);
+    await vi.advanceTimersByTimeAsync(10_000);
     expect(refreshMock).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, ConfirmDialog } from "@/app/_components/ds";
+import { Button, ConfirmDialog, AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import {
   availableChanges, otherRole, requestOperatorChange, type OperatorChangeKind, type PendingRequestRef,
 } from "@/lib/admin/operatorActions";
@@ -21,7 +21,7 @@ export interface OperatorActionRow {
  */
 export function OperatorRowActions({ row, viewerId, onSent }: { row: OperatorActionRow; viewerId: string | null; onSent: () => void }) {
   const t = useTranslations("adminOperators");
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   const [kind, setKind] = useState<OperatorChangeKind | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -44,11 +44,12 @@ export function OperatorRowActions({ row, viewerId, onSent }: { row: OperatorAct
     setKind(null);
     onSent();
     // The directory shows the pending badge once the worker has recorded the request.
-    window.setTimeout(() => router.refresh(), 1200);
+    void accepted.accept();
   }
 
   return (
     <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
+      <AcceptedNotice {...accepted.noticeProps} />
       {kinds.map((k) => (
         <Button key={k} variant="ghost" size="sm" aria-label={t("actionAria", { action: label(k), name: row.name })}
           onClick={() => { setError(undefined); setKind(k); }}>

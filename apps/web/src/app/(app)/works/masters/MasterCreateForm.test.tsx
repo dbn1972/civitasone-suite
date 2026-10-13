@@ -110,28 +110,31 @@ describe("MasterCreateForm — GAP-WORKS-MASTERS-03 parent picker (no raw UUID)"
   });
 });
 
-describe("MasterCreateForm — GAP-WORKS-MASTERS-05 post-create polling", () => {
-  it("refreshes repeatedly after a 202 until the retry schedule is exhausted", async () => {
-    vi.useFakeTimers();
-    const refresh = vi.fn();
-    // Re-mock useRouter for this test to capture refresh calls.
-    const nav = await import("next/navigation");
-    vi.spyOn(nav, "useRouter").mockReturnValue({ refresh } as never);
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 202 }));
+describe("MasterCreateForm — GAP-WORKS-MASTERS-05 / SF-15 post-create accepted state", () => {
+  it("after a 202 shows the accepted notice and refreshes only when the user asks (no timer-driven refreshes)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const refresh = vi.fn();
+      // Re-mock useRouter for this test to capture refresh calls.
+      const nav = await import("next/navigation");
+      vi.spyOn(nav, "useRouter").mockReturnValue({ refresh } as never);
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 202 }));
 
-    render(<MasterCreateForm masterType="work-types" />);
-    fireEvent.click(screen.getByRole("button", { name: "+ Add Work Types" }));
-    fireEvent.change(screen.getByLabelText(/^Name/i), { target: { value: "Roads" } });
-    fireEvent.change(screen.getByLabelText(/^Code/i), { target: { value: "RD" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+      render(<MasterCreateForm masterType="work-types" />);
+      fireEvent.click(screen.getByRole("button", { name: "+ Add Work Types" }));
+      fireEvent.change(screen.getByLabelText(/^Name/i), { target: { value: "Roads" } });
+      fireEvent.change(screen.getByLabelText(/^Code/i), { target: { value: "RD" } });
+      fireEvent.click(screen.getByRole("button", { name: "Create" }));
 
-    // Let the submit promise settle, then advance the polling timers.
-    await vi.waitFor(() => {}, { timeout: 50 });
-    await vi.advanceTimersByTimeAsync(600 + 1500 + 3000 + 10);
-    expect(refresh.mock.calls.length).toBeGreaterThanOrEqual(3);
-
-    vi.useRealTimers();
-    vi.restoreAllMocks();
+      await waitFor(() => expect(document.querySelector('[data-accepted-phase="accepted"]')).not.toBeNull());
+      await vi.advanceTimersByTimeAsync(600 + 1500 + 3000 + 10);
+      const before = refresh.mock.calls.length;
+      fireEvent.click(screen.getByRole("button", { name: "Refresh now" }));
+      expect(refresh.mock.calls.length).toBe(before + 1);
+    } finally {
+      vi.useRealTimers();
+      vi.restoreAllMocks();
+    }
   });
 });
 
