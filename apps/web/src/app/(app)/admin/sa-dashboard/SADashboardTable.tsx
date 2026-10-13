@@ -33,7 +33,7 @@ export function SADashboardTable({ dashboard, source = "api" }: { dashboard: Row
       filterable
       filterPlaceholder="Search KPIs…"
       pageSize={15}
-      exportable
+      exportable exportAudit="admin/sa-dashboard"
       exportFilename="sa-dashboard-kpis"
       emptyIcon="📊"
       emptyTitle={failed ? "Couldn't load metrics" : "No metrics"}

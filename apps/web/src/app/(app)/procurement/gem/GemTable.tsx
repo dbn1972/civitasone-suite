@@ -163,7 +163,7 @@ export function GemTable({
             filterable
             filterPlaceholder="Search order ID, item, supplier…"
             pageSize={15}
-            exportable
+            exportable exportAudit="procurement/gem"
             exportFilename="gem-orders"
             columns={[
               { key: "orderId", label: "GeM Order ID" },

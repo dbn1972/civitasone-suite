@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { Button } from "../../../../_components/ds";
+import { downloadCsvFile } from "@/lib/export/csvExport";
 
 type Row = Record<string, string> & { lineNo: number };
 
@@ -117,13 +118,7 @@ export function ImportForm() {
       "lineNo,fullName,message",
       ...errorRows.map((r) => [r.lineNo, `"${r.fullName.replace(/"/g, '""')}"`, `"${r.message.replace(/"/g, '""')}"`].join(",")),
     ];
-    const blob = new Blob([csvLines.join("\n")], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "import-errors.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsvFile("import-errors.csv", csvLines.join("\n"));
   }
 
   async function loadCodeMap(path: string): Promise<Map<string, string>> {

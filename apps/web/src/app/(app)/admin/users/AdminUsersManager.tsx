@@ -9,6 +9,7 @@ import { toHumanError } from "@/lib/messages";
 import { toCsv } from "@/lib/csv";
 import { summarizeUsers } from "./usersSummary";
 import { applyStatusDelta, directoryHref, pageWindow, statusRefusalMessage, type DirectoryState } from "./usersDirectory";
+import { downloadCsvFile } from "@/lib/export/csvExport";
 
 type Row = AdminUserSummary & Record<string, unknown>;
 
@@ -353,13 +354,7 @@ export function AdminUsersManager({
       ["Name", "Email", "Employee Code", "Status", "MFA Enabled"],
       ...filtered.map((u) => [u.name, u.email, u.empCode ?? "", u.status, u.mfaEnabled ? "yes" : "no"]),
     ]);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "users-export.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsvFile("users-export.csv", csv);
     setExportOpen(false);
   }
 

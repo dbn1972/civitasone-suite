@@ -53,7 +53,7 @@ export function BillsTable({ bills, source = "api" }: { bills: Bill[]; source?: 
         filterable
         filterPlaceholder={t("filterPlaceholder")}
         pageSize={15}
-        exportable
+        exportable exportAudit="finance/expenditure/bills"
         emptyIcon="🧾"
         emptyTitle={t("emptyTitle")}
         emptyMessage={t("emptyMessage")}

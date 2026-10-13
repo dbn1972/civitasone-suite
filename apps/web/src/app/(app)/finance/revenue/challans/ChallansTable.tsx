@@ -18,7 +18,7 @@ export function ChallansTable({ challans, source = "api" }: { challans: FinanceC
           (UX-002's pattern; the page used to render a second, independent
           badge from the raw `source` prop — removed). */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
-      <DataTable<Row> columns={[{ key: "challanNo", label: "Challan No" },{ key: "depositor", label: "Depositor" },{ key: "receiptHead", label: "Receipt Head" },{ key: "amountMinor", label: "Amount", align: "right", cellType: "amount" },{ key: "createdAt", label: "Date", cellType: "date" },{ key: "status", label: "Status", cellType: "status" }]} rows={rows} rowLinkKey="id" rowLinkPrefix="/finance/revenue/challans/" sortable filterable filterPlaceholder="Search challans…" pageSize={15} exportable exportFilename="challan-register" emptyIcon="📄" emptyTitle="No challans" emptyMessage="No government challans found." />
+      <DataTable<Row> columns={[{ key: "challanNo", label: "Challan No" },{ key: "depositor", label: "Depositor" },{ key: "receiptHead", label: "Receipt Head" },{ key: "amountMinor", label: "Amount", align: "right", cellType: "amount" },{ key: "createdAt", label: "Date", cellType: "date" },{ key: "status", label: "Status", cellType: "status" }]} rows={rows} rowLinkKey="id" rowLinkPrefix="/finance/revenue/challans/" sortable filterable filterPlaceholder="Search challans…" pageSize={15} exportable exportAudit="finance/revenue/challans" exportFilename="challan-register" emptyIcon="📄" emptyTitle="No challans" emptyMessage="No government challans found." />
     </>
   );
 }

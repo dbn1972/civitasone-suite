@@ -147,7 +147,7 @@ export default async function IndentsPage({
               filterable
               filterPlaceholder="Filter by indent no, department, requester…"
               pageSize={10}
-              exportable
+              exportable exportAudit="procurement/indents"
               columns={[
                 { key: "indentNo", label: "Indent No" },
                 { key: "requestedBy", label: "Requested By" },

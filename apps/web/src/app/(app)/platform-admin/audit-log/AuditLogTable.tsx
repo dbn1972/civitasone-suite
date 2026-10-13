@@ -3,6 +3,8 @@
 import { Fragment, useMemo, useState } from "react";
 import { Button } from "@/app/_components/ds";
 import { formatIndianDateTime, istDatePart } from "@/lib/formatters";
+import { runAuditedCsvExport } from "@/lib/export/csvExport";
+import { useTableExportGuard } from "@/lib/export/useTableExportGuard";
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
 export type PlatformAuditEvent = {
@@ -34,19 +36,12 @@ function csvCell(value: unknown): string {
   return `"${s.replace(/"/g, '""')}"`;
 }
 
-function exportCsv(events: PlatformAuditEvent[]) {
+function buildCsv(events: PlatformAuditEvent[]): string {
   const headers = ["Timestamp", "Actor", "Role", "IP", "Action Type", "Action", "Target", "Outcome"];
   const rows = events.map((e) => [
     e.timestamp, e.actor, e.actorRole, e.ipAddress ?? "", e.actionType, e.action, e.targetEntity, e.outcome,
   ]);
-  const csv = [headers, ...rows].map((r) => r.map(csvCell).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  return [headers, ...rows].map((r) => r.map(csvCell).join(",")).join("\n");
 }
 
 function Diff({ before, after }: { before?: Record<string, unknown>; after?: Record<string, unknown> }) {
@@ -112,6 +107,20 @@ export function AuditLogTable({ events, canExport = true }: { events: PlatformAu
   const safePage = Math.min(page, totalPages - 1);
   const pageRows = filtered.slice(safePage * PAGE_SIZE, (safePage + 1) * PAGE_SIZE);
 
+  // W1 SF-08: audit first (fail-closed), then build and download the file.
+  const exportGuard = useTableExportGuard("platform-admin/audit-log");
+  const [exportError, setExportError] = useState<string | null>(null);
+  async function exportCsv(events: PlatformAuditEvent[]) {
+    setExportError(null);
+    const verdict = await runAuditedCsvExport({
+      guard: exportGuard,
+      rowCount: events.length,
+      filename: `audit-log-${new Date().toISOString().slice(0, 10)}.csv`,
+      build: () => buildCsv(events),
+    });
+    if (!verdict.ok) setExportError(verdict.message);
+  }
+
   const inpSty: React.CSSProperties = { padding: "7px 10px", borderRadius: 7, border: "1px solid var(--line)", fontSize: 12.5, fontFamily: "inherit", color: "var(--ink)", background: "var(--bg)", minWidth: 0 };
   const selSty: React.CSSProperties = { ...inpSty, paddingInlineEnd: 28 };
 
@@ -120,11 +129,12 @@ export function AuditLogTable({ events, canExport = true }: { events: PlatformAu
       <div className="card-h">
         <h3 id="platform-audit-heading">Platform audit log</h3>
         {canExport && (
-          <Button variant="ghost" size="sm" onClick={() => exportCsv(filtered)}>
+          <Button variant="ghost" size="sm" onClick={() => void exportCsv(filtered)}>
             Export current filtered view ({filtered.length})
           </Button>
         )}
       </div>
+      {exportError && <p role="alert" style={{ color: "var(--danger, #b42318)", fontSize: 13, margin: "6px 16px" }}>{exportError}</p>}
 
       {/* Filters */}
       <div style={{ padding: "12px 16px", display: "flex", flexWrap: "wrap", gap: 10, borderBottom: "1px solid var(--line)" }}>

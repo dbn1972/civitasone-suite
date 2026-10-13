@@ -60,7 +60,7 @@ export function VigilanceTable({ rows, source, canViewPII = false }: { rows: Vig
         filterable
         filterPlaceholder="Search vigilance cases..."
         pageSize={15}
-        exportable={canViewPII}
+        exportable={canViewPII} exportAudit="audit/vigilance"
         exportFilename="vigilance-cases"
       />
     </>

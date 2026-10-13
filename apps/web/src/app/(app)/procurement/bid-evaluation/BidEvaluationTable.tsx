@@ -116,7 +116,7 @@ export function BidEvaluationTable({ evaluations, source = "api" }: { evaluation
             filterable
             filterPlaceholder="Search tender, bidder…"
             pageSize={15}
-            exportable
+            exportable exportAudit="procurement/bid-evaluation"
             exportFilename="bid-evaluations"
             columns={[
               {

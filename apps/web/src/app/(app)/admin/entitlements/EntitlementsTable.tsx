@@ -51,7 +51,7 @@ export function EntitlementsTable({ entitlements, source = "api", unavailable = 
             { key: "status", label: "Status", cellType: "status" },
           ]}
           rows={raw.map(toEntitlementRow)}
-          sortable filterable filterPlaceholder="Search entitlements…" pageSize={15} exportable exportFilename="entitlements"
+          sortable filterable filterPlaceholder="Search entitlements…" pageSize={15} exportable exportAudit="admin/entitlements" exportFilename="entitlements"
           emptyIcon="🔑" emptyTitle="No entitlements" emptyMessage="No entitlements configured."
         />
       )}

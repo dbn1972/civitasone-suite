@@ -10,6 +10,7 @@ import {
 } from "@/lib/api/browserClient";
 import { parseContactCsv, IMPORT_COLUMNS } from "@/lib/crm/contactImport";
 import { duplicateCheck, type DuplicateCandidate } from "@/lib/crm/dataQuality";
+import { downloadCsvFile } from "@/lib/export/csvExport";
 
 const HEADER_LINE = IMPORT_COLUMNS.join(",");
 const TEMPLATE =
@@ -107,13 +108,8 @@ export default function ImportContactsPage() {
   const hasRows = preview.length > 0;
 
   function downloadTemplate() {
-    const blob = new Blob([`${TEMPLATE}\n`], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "contacts-import-template.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsvFile("contacts-import-template.csv", `${TEMPLATE}
+`);
   }
 
   function setCsvText(next: string) {
@@ -145,13 +141,8 @@ export default function ImportContactsPage() {
 
   /** GAP-CRM-CONTACTS-IMPORT-04: let the user download the rejected rows as CSV. */
   function downloadRejected() {
-    const blob = new Blob([`${rejectedToCsv(rejected)}\n`], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "contacts-import-rejected.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsvFile("contacts-import-rejected.csv", `${rejectedToCsv(rejected)}
+`);
   }
 
   /**
@@ -160,13 +151,8 @@ export default function ImportContactsPage() {
    * rejects above — these are rows that were well-formed but not inserted.
    */
   function downloadServerRejected(rows: Array<{ batch: number; row: number; reason: string }>) {
-    const blob = new Blob([`${serverRejectedToCsv(rows)}\n`], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "contacts-import-server-rejected.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsvFile("contacts-import-server-rejected.csv", `${serverRejectedToCsv(rows)}
+`);
   }
 
   /**

@@ -63,7 +63,7 @@ export function EmployeesTable({ employees, source = "api", canCreate = false }:
         // disagreeing paginations and a search box that silently couldn't
         // find anyone outside the current page. The page above now does
         // real server-side search (?q=) and is the only pagination level.
-        exportable
+        exportable exportAudit="hr/employees"
         emptyIcon={isErrorEmpty ? "⚠️" : "👥"}
         emptyTitle={isErrorEmpty ? t("emptyErrorTitle") : t("emptyTitle")}
         emptyMessage={isErrorEmpty ? t("emptyErrorMessage") : t("emptyMessage")}

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { AuditLogTable } from "./AuditLogTable";
 import type { PlatformAuditEvent } from "./AuditLogTable";
 
@@ -44,7 +44,8 @@ describe("AuditLogTable", () => {
 
   // GAP-PLATFORM-ADMIN-AUDIT-LOG-05: CSV export must neutralise formula
   // injection — a cell starting with = + - @ is prefixed with a single quote.
-  it("escapes CSV formula-injection in the export", () => {
+  it("escapes CSV formula-injection in the export", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true }) as Response));
     let captured = "";
     const createObjectURL = vi.fn(() => "blob:fake");
     const revokeObjectURL = vi.fn();
@@ -63,11 +64,22 @@ describe("AuditLogTable", () => {
     render(<AuditLogTable events={[ev({ id: "e1", actor: "=cmd|calc", action: "+danger" })]} canExport />);
     fireEvent.click(screen.getByRole("button", { name: /export current filtered view/i }));
 
-    expect(createObjectURL).toHaveBeenCalled();
+    await waitFor(() => expect(createObjectURL).toHaveBeenCalled());
     expect(clickSpy).toHaveBeenCalled();
     // Dangerous cells are prefixed with a single quote inside the quoted field.
     expect(captured).toContain(`"'=cmd|calc"`);
     expect(captured).toContain(`"'+danger"`);
+  });
+
+  // W1 SF-08: the audit record is written BEFORE the file; a failed audit blocks it.
+  it("builds no file and shows an alert when the export audit fails", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 500 }) as Response));
+    const createObjectURL = vi.fn(() => "blob:fake");
+    (URL as unknown as { createObjectURL: unknown }).createObjectURL = createObjectURL;
+    render(<AuditLogTable events={[ev({ id: "e1" })]} canExport />);
+    fireEvent.click(screen.getByRole("button", { name: /export current filtered view/i }));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(createObjectURL).not.toHaveBeenCalled();
   });
 
   // GAP-PLATFORM-ADMIN-AUDIT-LOG-05/02: the export button is hidden for a

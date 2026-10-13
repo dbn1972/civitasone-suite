@@ -41,7 +41,7 @@ export function DepositsTable({ deposits, source = "api" }: { deposits: Deposit[
         filterable
         filterPlaceholder="Search deposits…"
         pageSize={15}
-        exportable
+        exportable exportAudit="finance/treasury/deposits"
         exportFilename="deposits-register"
         emptyIcon="🏧"
         emptyTitle="No deposits"

@@ -6,6 +6,7 @@ import { useState } from "react";
 import { useFormError } from "@/lib/useFormError";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { Button, ConfirmDialog } from "@/app/_components/ds";
+import { downloadCsvFile } from "@/lib/export/csvExport";
 
 /**
  * The active list filters, forwarded to the export so it respects the current
@@ -76,13 +77,7 @@ export function ContactToolbar({ canExport = false, exportQuery = {}, initialSea
       const res = await browserFetch(`v1/crm/contacts/export${qs ? `?${qs}` : ""}`);
       if (!res.ok) throw new Error(await errorMessageFromResponse(res));
       const csv = await res.text();
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `contacts-${new Date().toISOString().slice(0, 10)}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadCsvFile(`contacts-${new Date().toISOString().slice(0, 10)}.csv`, csv);
       setExportOpen(false);
       setMessage(tExport("contactsDone"));
     } catch (e) {

@@ -88,7 +88,7 @@ function RegisterTable({ rows }: { rows: BillRowLike[] }) {
       filterable
       filterPlaceholder="Search bills..."
       pageSize={15}
-      exportable
+      exportable exportAudit="works/billing"
       exportFilename="works-billing"
       emptyIcon="💰"
       emptyTitle="No bills found"

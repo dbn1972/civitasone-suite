@@ -9,6 +9,8 @@ import { EmptyState } from "./EmptyState";
 import { StatusPill } from "./StatusPill";
 import { formatMoney, formatRupees, formatIndianDate, formatPercent, formatPeriod, formatMoneyIn } from "@/lib/formatters";
 import { minorToDecimalString } from "@/lib/money";
+import { downloadCsvFile, tableExportGuard, TABLE_EXPORT_NOT_RECORDED, type ExportGuard } from "@/lib/export/csvExport";
+import { useSessionIdentity } from "@/lib/auth/useSessionIdentity";
 
 /**
  * DataTable is a "use client" component rendered from ~80+ call sites across
@@ -179,8 +181,29 @@ interface DataTableProps<T extends Record<string, unknown>> {
   emptyMessage?: string;
   /** Guided empty state: a call-to-action (e.g. an "Add your first bill" link/button). */
   emptyAction?: ReactNode;
-  /** Opt-in: show a "Download CSV" button in the toolbar. */
+  /**
+   * W1 SF-08 -- CSV export is DEFAULT-DENY. The "Download CSV" button renders only
+   * when ALL of these hold:
+   *  1. `exportable` is true. Pass the caller's export PERMISSION here
+   *     (e.g. `exportable={canExport}`); omitted/false means no button.
+   *  2. an AUDIT hook is supplied: `exportAudit` (server-safe resource key, works
+   *     from a Server Component) or `exportGuard` (client-only function).
+   *  3. when `exportRoles` is given, the signed-in user holds one of them
+   *     (display gate only -- the services re-check every read).
+   * The audit is awaited BEFORE the file is built and is fail-closed. `onExport`
+   * alone no longer enables export.
+   */
   exportable?: boolean;
+  /**
+   * Server-safe (plain string) audit hook: the resource key recorded with every
+   * export (lower-case path slug, e.g. "finance/treasury/cheques"). DataTable
+   * posts it to admin-service (POST /v1/admin/table-exports/audit) before
+   * building the file; a failed audit blocks the download. Ignored when a custom
+   * `exportGuard` is supplied (use that for a resource-specific audit route).
+   */
+  exportAudit?: string;
+  /** Server-safe: roles allowed to see the export button (see `exportable`). */
+  exportRoles?: readonly string[];
   /** Filename for CSV export (without extension). */
   exportFilename?: string;
   /**
@@ -386,6 +409,20 @@ function compareValues(a: unknown, b: unknown): number {
   return String(a).localeCompare(String(b), undefined, { numeric: true });
 }
 
+/**
+ * Renders its children only when `roles` is absent or the signed-in user holds
+ * one of them. The session fetch lives in this child so a table that does not
+ * pass `exportRoles` never triggers it. Display gate only; services re-check.
+ */
+function ExportRoleGate({ roles, children }: { roles?: readonly string[]; children: ReactNode }) {
+  if (!roles) return <>{children}</>;
+  return <ExportRoleCheck roles={roles}>{children}</ExportRoleCheck>;
+}
+function ExportRoleCheck({ roles, children }: { roles: readonly string[]; children: ReactNode }) {
+  const who = useSessionIdentity();
+  return who.roles.some((r) => roles.includes(r)) ? <>{children}</> : null;
+}
+
 export function DataTable<T extends Record<string, unknown>>({
   columns,
   rows,
@@ -404,9 +441,11 @@ export function DataTable<T extends Record<string, unknown>>({
   emptyMessage = "There are no items to display yet.",
   emptyAction,
   exportable = false,
+  exportAudit,
+  exportRoles,
   exportFilename = "export",
   onExport,
-  exportGuard,
+  exportGuard: customExportGuard,
   exportConfirm,
   exportNotice,
   caption,
@@ -429,6 +468,10 @@ export function DataTable<T extends Record<string, unknown>>({
   const [sortKey, setSortKey] = useState<(keyof T & string) | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [filter, setFilter] = useState("");
+  const tExport = useSafeTranslations("tableExport", { notRecorded: TABLE_EXPORT_NOT_RECORDED });
+  // W1 SF-08: default-deny. No permission flag or no audit hook => no Export button.
+  const exportGuard: ExportGuard | undefined = customExportGuard ?? (exportAudit ? tableExportGuard(exportAudit, tExport("notRecorded")) : undefined);
+  const exportEnabled = exportable && !!exportGuard;
   const [exportConfirmOpen, setExportConfirmOpen] = useState(false);
   const [exportBusy, setExportBusy] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -534,18 +577,20 @@ export function DataTable<T extends Record<string, unknown>>({
   }
 
   async function downloadCsv() {
-    if (exportGuard) {
+    if (!exportGuard) return; // default-deny: never build a file without an audit hook
+    {
       setExportBusy(true);
       setExportError(null);
       let verdict: Awaited<ReturnType<typeof exportGuard>>;
       try {
         verdict = await exportGuard({ rowCount: sorted.length, filter });
       } catch {
-        verdict = { ok: false, message: "This export could not be recorded, so no file was created. Try again." };
+        verdict = { ok: false, message: tExport("notRecorded") };
       }
       setExportBusy(false);
       if (!verdict.ok) {
-        setExportError(verdict.message);
+        // The shared default message is translated here; a guard's own custom message is shown as-is.
+        setExportError(verdict.message === TABLE_EXPORT_NOT_RECORDED ? tExport("notRecorded") : verdict.message);
         return;
       }
     }
@@ -563,18 +608,12 @@ export function DataTable<T extends Record<string, unknown>>({
       }).join(",")
     );
     const csv = [header, ...csvRows].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${exportFilename}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadCsvFile(`${exportFilename}.csv`, csv);
   }
 
   return (
     <div>
-      {(filterable || exportable) && (
+      {(filterable || exportEnabled) && (
         <div className="dt-toolbar" style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {filterable && (
             <div className="dt-filter" style={{ flex: 1 }}>
@@ -591,12 +630,14 @@ export function DataTable<T extends Record<string, unknown>>({
               />
             </div>
           )}
-          {exportable && sorted.length > 0 && (
-            <Button variant="ghost" size="sm" disabled={exportBusy} title={exportNotice} onClick={exportConfirm ? () => setExportConfirmOpen(true) : () => void downloadCsv()} style={{ whiteSpace: "nowrap" }}>
-              ⬇ CSV
-            </Button>
+          {exportEnabled && sorted.length > 0 && (
+            <ExportRoleGate roles={exportRoles}>
+              <Button variant="ghost" size="sm" disabled={exportBusy} title={exportNotice} onClick={exportConfirm ? () => setExportConfirmOpen(true) : () => void downloadCsv()} style={{ whiteSpace: "nowrap" }}>
+                ⬇ CSV
+              </Button>
+            </ExportRoleGate>
           )}
-          {exportable && sorted.length > 0 && exportNotice && (
+          {exportEnabled && sorted.length > 0 && exportNotice && (
             <span className="dt-export-notice" role="note" style={{ fontSize: 12, color: "var(--muted)", whiteSpace: "normal" }}>
               {exportNotice}
             </span>

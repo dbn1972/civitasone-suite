@@ -34,7 +34,7 @@ export function TenantsTable({ tenants, source = "api" }: { tenants: Row[]; sour
           { key: "createdDate", label: "Created", render: (r) => (r.createdDate ? formatIndianDate(String(r.createdDate)) : "—") },
           { key: "status", label: "Status", render: (r) => (r.status == null || r.status === "" ? "—" : <StatusPill status={String(r.status)} variant={tenantStatusTone(r.status)} />) },
         ]}
-        rows={rows} rowLinkKey="id" rowLinkPrefix="/admin/tenants/" sortable filterable filterPlaceholder="Search tenants…" pageSize={15} exportable exportFilename="tenants" emptyIcon="🏢"
+        rows={rows} rowLinkKey="id" rowLinkPrefix="/admin/tenants/" sortable filterable filterPlaceholder="Search tenants…" pageSize={15} exportable exportAudit="admin/tenants" exportFilename="tenants" emptyIcon="🏢"
         emptyTitle={loadFailed ? "Couldn't load tenants" : "No tenants"}
         emptyMessage={loadFailed ? "The tenant directory could not be loaded. Refresh the page to try again." : "No tenants registered."}
       />

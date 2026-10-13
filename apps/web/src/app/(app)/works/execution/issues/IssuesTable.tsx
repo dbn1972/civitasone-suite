@@ -92,7 +92,7 @@ export function IssuesTable({ rows, canClose }: { rows: IssuesTableRow[]; canClo
         filterable
         filterPlaceholder="Search issues..."
         pageSize={20}
-        exportable
+        exportable exportAudit="works/execution/issues"
         exportFilename="works-issues"
         rowLinkKey="workId"
         rowLinkPrefix="/works/execution/"

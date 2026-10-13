@@ -229,7 +229,7 @@ export default async function WorksReportsPage({ searchParams }: PageProps) {
               filterable
               filterPlaceholder="Search works…"
               sortable
-              exportable
+              exportable exportAudit="works/reports"
               exportFilename="works-register"
               caption={
                 registerMaybeTruncated

@@ -37,7 +37,7 @@ export function BoqTable({ items, source }: { items: Record<string, unknown>[]; 
         filterable
         filterPlaceholder="Search BoQ items..."
         pageSize={15}
-        exportable
+        exportable exportAudit="works/boq"
         exportFilename="works-boq"
         emptyIcon="📐"
         emptyTitle="No BoQ items found"

@@ -110,7 +110,7 @@ export default async function FieldVisitsPage() {
           columns={columns}
           rows={rows}
           sortable
-          exportable={canSeeLocation}
+          exportable={canSeeLocation} exportAudit="field/visits"
           exportFilename="field-visits"
           emptyIcon="📍"
           emptyTitle="No visits yet"

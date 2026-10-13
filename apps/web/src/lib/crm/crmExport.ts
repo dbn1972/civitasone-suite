@@ -7,6 +7,7 @@
  * endpoint through the BFF proxy and streams the returned CSV to a file download
  * — replacing the old client-side DataTable Blob, which could never be audited.
  */
+import { downloadCsvFile } from "@/lib/export/csvExport";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 /** A download that was triggered, with the row count the server reported (if any). */
@@ -34,14 +35,8 @@ export async function downloadServerCsv(
   if (!res.ok) throw new Error(await errorMessageFromResponse(res, undefined, "export"));
 
   const csv = await res.text();
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
   const stamp = new Date().toISOString().slice(0, 10);
   const filename = `${filenameBase}-${stamp}.csv`;
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadCsvFile(filename, csv);
   return { filename };
 }

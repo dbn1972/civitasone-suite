@@ -53,7 +53,7 @@ export function CagTable({ rows, source }: { rows: CagParaSummary[]; source: "ap
         filterable
         filterPlaceholder="Search CAG paras..."
         pageSize={15}
-        exportable
+        exportable exportAudit="audit/cag"
         exportFilename="cag-paras"
       />
     </>

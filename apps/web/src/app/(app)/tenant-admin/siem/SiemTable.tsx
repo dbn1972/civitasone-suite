@@ -8,23 +8,6 @@ import { formatIndianDateTime } from "@/lib/formatters";
 import type { SiemAlert } from "@/app/_data/loaders";
 import { severityTone, severityRank, isCriticalSeverity, statusTone } from "./siemHelpers";
 
-/**
- * GAP-TENANT-ADMIN-SIEM-04: record a CSV export as a fire-and-forget audit
- * beacon (same pattern as IdpTable). The alert title/source carry the incident
- * title + category (not personal data per the admin-service security-incident
- * store), so no field masking is required here; the egress itself is still
- * worth recording. A failed beacon must never block the user's own download.
- */
-function recordExport(info: { rowCount: number; filter: string }): void {
-  void fetch("/api/proxy/v1/admin/siem/alerts/export-audit", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ rowCount: info.rowCount, filtered: info.filter.trim().length > 0 }),
-  }).catch(() => {
-    /* audit is best-effort; a failed beacon must not block the export */
-  });
-}
-
 export function SiemTable({ alerts, source }: { alerts: SiemAlert[]; source: "api" | "error" }) {
   const { data, provenance, offline, cachedAt } = useSeededResource("admin.siem.alerts", alerts, source, (d) => d.length === 0);
 
@@ -65,7 +48,7 @@ export function SiemTable({ alerts, source }: { alerts: SiemAlert[]; source: "ap
         pageSize={15}
         exportable
         exportFilename="siem-alerts"
-        onExport={recordExport}
+        exportAudit="tenant-admin/siem"
         exportNotice="Exports are recorded in the audit log."
       />
     </>

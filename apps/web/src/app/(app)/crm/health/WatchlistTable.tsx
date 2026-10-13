@@ -158,7 +158,7 @@ export function WatchlistTable({ entries }: { entries: NamedAccountHealthEntry[]
       sortable
       filterable
       filterPlaceholder={t("filterPlaceholder")}
-      exportable
+      exportable exportAudit="crm/health"
       exportFilename="account-health-watchlist"
       emptyIcon="💚"
       emptyTitle={t("emptyTitle")}

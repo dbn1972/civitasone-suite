@@ -61,7 +61,7 @@ export function EditionsTable({
             filterable
             filterPlaceholder="Search editions…"
             pageSize={15}
-            exportable
+            exportable exportAudit="admin/editions"
             exportFilename="editions"
             emptyIcon="📦"
             emptyTitle="No editions"

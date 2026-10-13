@@ -139,7 +139,7 @@ export default async function Page({ searchParams }: { searchParams: { bucket?: 
             filterable
             filterPlaceholder="Filter tickets…"
             pageSize={15}
-            exportable={canExport}
+            exportable={canExport} exportAudit="helpdesk/slas"
             exportFilename={canExport ? `sla-${bucket}-tickets` : undefined}
           />
         )}

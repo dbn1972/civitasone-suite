@@ -91,7 +91,7 @@ export default async function ControlTowerPage() {
           ]}
           rows={regionRows}
           sortable
-          exportable
+          exportable exportAudit="crm/control-tower"
           exportFilename="control-tower-regions"
           emptyIcon="🗺️"
           emptyTitle="No regional pipeline"

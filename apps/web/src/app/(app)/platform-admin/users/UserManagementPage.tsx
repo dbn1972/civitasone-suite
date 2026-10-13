@@ -8,6 +8,7 @@ import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { errorMessageFromResponse } from "@/lib/api/browserClient";
 import { maskEmail } from "@/app/_components/ds/Masked";
+import { downloadCsvFile } from "@/lib/export/csvExport";
 
 /* ─── Types ──────────────────────────────────────────────────────────── */
 type PlatformUser = {
@@ -85,13 +86,7 @@ export function buildCsv(users: PlatformUser[]): string {
 }
 
 function downloadCsv(users: PlatformUser[]) {
-  const blob = new Blob([buildCsv(users)], { type: "text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `users-${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
+  downloadCsvFile(`users-${new Date().toISOString().slice(0, 10)}.csv`, buildCsv(users));
 }
 
 const PAGE_SIZE = 15;

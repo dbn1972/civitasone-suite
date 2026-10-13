@@ -36,7 +36,7 @@ export function DataWarehouseTable({ rows, source = "api" }: { rows: AnalyticsDa
         filterable
         filterPlaceholder="Search datasets…"
         pageSize={15}
-        exportable
+        exportable exportAudit="analytics/data-warehouse"
         exportFilename="analytics-datasets"
         emptyIcon="🗄️"
         emptyTitle="No datasets"

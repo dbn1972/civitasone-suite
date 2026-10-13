@@ -142,7 +142,7 @@ export function EmdBgTable({ emdEntries, pbgEntries, emdSource = "api", pbgSourc
               filterable
               filterPlaceholder="Search vendor, bank, type…"
               pageSize={15}
-              exportable
+              exportable exportAudit="procurement/emd-bg"
               exportFilename="emd-bank-guarantees"
               columns={[
                 { key: "vendor", label: "Vendor" },

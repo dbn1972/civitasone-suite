@@ -14951,6 +14951,9 @@
   "idpExport": {
     "notRecorded": "Couldn't record this export in the audit trail, so no file was created. Try again."
   },
+  "tableExport": {
+    "notRecorded": "Couldn't record this export in the audit trail, so no file was created. Try again."
+  },
   "workflowApproveGate": {
     "approveBlockedLoading": "Checking the required documents… Approve is unavailable until the check finishes.",
     "approveBlockedError": "The document checklist could not be loaded, so Approve is unavailable. Use Retry beside the checklist.",

@@ -9,6 +9,8 @@ import { useTranslations } from "next-intl";
 import type { TransferRow } from "./TransferOrderCard";
 import { TransferOrderCard } from "./TransferOrderCard";
 import { Button } from "@/app/_components/ds";
+import { runAuditedCsvExport } from "@/lib/export/csvExport";
+import { useTableExportGuard } from "@/lib/export/useTableExportGuard";
 
 interface Props {
   transfers: TransferRow[];
@@ -60,7 +62,22 @@ export function TransferListFilters({ transfers }: Props) {
     });
   }, [transfers, query, deptFilter, fromDate, toDate, statusFilter]);
 
-  const exportCsv = useCallback(() => {
+  const exportGuard = useTableExportGuard("hr/transfer");
+  const [exportError, setExportError] = useState<string | null>(null);
+  // W1 SF-08: transfer orders name employees; audit first (fail-closed), then build the file.
+  const exportCsv = useCallback(async () => {
+    setExportError(null);
+    const verdict = await runAuditedCsvExport({
+      guard: exportGuard,
+      rowCount: filtered.length,
+      filename: `transfers-${new Date().toISOString().split("T")[0]}.csv`,
+      build: buildCsv,
+    });
+    if (!verdict.ok) setExportError(verdict.message);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- tr/statusText are stable per render for a given locale
+  }, [filtered, tr, exportGuard]);
+
+  const buildCsv = (): string => {
     const headers = [tr("csvEmployee"), tr("csvFromOffice"), tr("csvToOffice"), tr("csvOrderNo"), tr("csvOrderDate"), tr("csvEffectiveDate"), tr("csvRelievedDate"), tr("csvJoinedDate"), tr("csvStatus")];
     const rows = filtered.map((t) => [
       t.employee ?? t.employeeId ?? "",
@@ -73,14 +90,8 @@ export function TransferListFilters({ transfers }: Props) {
       t.joinedDate    ?? "",
       statusText(t.status),
     ]);
-    const csv = [headers, ...rows].map((r) => r.map(csvCell).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href = url; a.download = `transfers-${new Date().toISOString().split("T")[0]}.csv`;
-    a.click(); URL.revokeObjectURL(url);
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- tr/statusText are stable per render for a given locale
-  }, [filtered, tr]);
+    return [headers, ...rows].map((r) => r.map(csvCell).join(",")).join("\n");
+  };
 
   // GAP-HR-TRANSFER-07: the status dropdown used to render the raw enum
   // value verbatim (e.g. "order_issued") while the cards showed a humanised
@@ -146,6 +157,7 @@ export function TransferListFilters({ transfers }: Props) {
           {tr("exportBtn")}
         </Button>
       </div>
+      {exportError && <p role="alert" style={{ color: "var(--danger, #b42318)", fontSize: 13, margin: "0 0 8px" }}>{exportError}</p>}
 
       {/* Result count */}
       <p style={{ fontSize: "0.8125rem", color: "var(--ink3)", margin: "0 0 12px" }}>
