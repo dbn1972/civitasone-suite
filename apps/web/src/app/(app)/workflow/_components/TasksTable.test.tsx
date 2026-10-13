@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "@/test-utils/intl-render";
 import { TasksTable } from "./TasksTable";
 import type { WorkflowTask } from "../_data/workflowTypes";
 

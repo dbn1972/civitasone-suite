@@ -11,6 +11,7 @@ import * as instanceRepo from "../instances/repo.js";
 import * as delegationRepo from "../delegations/repo.js";
 import * as historyRepo from "../history/repo.js";
 import type { TaskView } from "./schema.js";
+import { checkMandatoryDocs } from "./doc-gate.js";
 
 /** YYYY-MM-DD in UTC, used to bound active-delegation validity. */
 function today(): string {
@@ -123,6 +124,36 @@ export async function completeTask(
         eq(tasks.completedBy, ctx.actorId),
       )));
     sodOverride = (instance?.createdBy === ctx.actorId) || priorByActor.length > 0;
+  }
+
+  // GAP-WORKFLOW-INSTANCES-DETAIL-02 — an APPROVAL of an application-bound
+  // officer task is refused while the lane checklist has missing mandatory
+  // documents (or cannot be read: fail closed). Reject/return are not gated.
+  // The refusal is audited in the append-only transition history. The consumer
+  // re-checks (authoritative for a command that bypassed this route).
+  if (decision === "approve") {
+    const gate = await checkMandatoryDocs(ctx.tenantId, existing);
+    if (!gate.ok) {
+      await db.transaction(async (tx) => {
+        await historyRepo.record(tx, {
+          tenantId: ctx.tenantId,
+          instanceId: existing.instanceId,
+          taskId,
+          fromNode: existing.nodeKey ?? null,
+          toNode: null,
+          action: "blocked",
+          decision,
+          actorId: ctx.actorId,
+          detail: gate.reason === "missing"
+            ? { reason: "mandatory_documents_missing", missingMandatory: gate.missingMandatory }
+            : { reason: "document_check_unavailable" },
+        });
+      });
+      if (gate.reason === "missing") {
+        throw new HttpError(409, "MANDATORY_DOCUMENTS_MISSING", "mandatory documents are missing; the task cannot be approved");
+      }
+      throw new HttpError(503, "DOCUMENT_CHECK_UNAVAILABLE", "the mandatory-document checklist could not be verified; try again");
+    }
   }
 
   const projected: TaskView = { ...existing, status: "completed", decision, version: existing.version + 1 };

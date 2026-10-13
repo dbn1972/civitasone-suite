@@ -4,7 +4,8 @@
  * Client task-inbox table. Renders StatusPill + per-row maker-checker actions
  * (claim/approve/return/reject) and a deep-linkable status filter (URL ?status=).
  */
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { DataTable, StatusPill, UserRef } from "@/app/_components/ds";
@@ -13,7 +14,7 @@ import { titleCase } from "../_data/workflowTypes";
 import { formatIndianDate } from "@/lib/formatters";
 import { StatusFilter } from "./StatusFilter";
 import { TaskActions } from "./TaskActions";
-import { DocVerificationChecklist } from "./DocVerificationChecklist";
+import { DocVerificationChecklist, type DocChecklistState } from "./DocVerificationChecklist";
 
 type Row = WorkflowTask & Record<string, unknown>;
 
@@ -43,6 +44,50 @@ function urgencyKey(r: WorkflowTask): number {
     if (Number.isFinite(c)) return c;
   }
   return Number.MAX_SAFE_INTEGER;
+}
+
+/** FN-26 predicate: an application-bound officer task shows a lane checklist. */
+function hasDocChecklist(r: WorkflowTask): boolean {
+  return Boolean(r.nodeKey && r.refId && (r.refType ?? "").toLowerCase().includes("application"));
+}
+
+/**
+ * GAP-WORKFLOW-INSTANCES-DETAIL-02 — one row's actions + checklist. Owns the
+ * checklist state so Approve is disabled (with a visible reason) while the
+ * checklist is loading, failed to load, or has missing mandatory documents.
+ * Starts in "loading" for gated rows so Approve is never briefly enabled.
+ */
+function TaskRowActions({ task, currentUserId }: { task: WorkflowTask; currentUserId: string | null }) {
+  const t = useTranslations("workflowApproveGate");
+  const gated = hasDocChecklist(task);
+  const [docState, setDocState] = useState<DocChecklistState>({ status: "loading", missingMandatory: 0 });
+  let blocked: string | null = null;
+  if (gated) {
+    if (docState.status === "loading") blocked = t("approveBlockedLoading");
+    else if (docState.status === "error") blocked = t("approveBlockedError");
+    else if (docState.missingMandatory > 0) blocked = t("approveBlockedMissing", { count: docState.missingMandatory });
+  }
+  return (
+    <div style={{ display: "grid", gap: 4, justifyItems: "end" }}>
+      <TaskActions
+        taskId={task.id}
+        status={task.status}
+        assigneeId={task.assigneeId}
+        currentUserId={currentUserId}
+        compact
+        approveBlockedReason={blocked}
+      />
+      {/* FN-26 — lane-scoped mandatory document checklist for officers. */}
+      {gated ? (
+        <DocVerificationChecklist
+          laneKey={task.nodeKey}
+          applicationId={task.refId}
+          compact
+          onState={setDocState}
+        />
+      ) : null}
+    </div>
+  );
 }
 
 interface TasksTableProps {
@@ -176,19 +221,7 @@ export function TasksTable({ tasks, showInstance = true, currentUserId = null, s
             label: "Actions",
             align: "right",
             sortable: false,
-            render: (r) => (
-              <div style={{ display: "grid", gap: 4, justifyItems: "end" }}>
-                <TaskActions taskId={r.id} status={r.status} assigneeId={r.assigneeId} currentUserId={currentUserId} compact />
-                {/* FN-26 — lane-scoped mandatory document checklist for officers. */}
-                {r.nodeKey && r.refId && (r.refType ?? "").toLowerCase().includes("application") ? (
-                  <DocVerificationChecklist
-                    laneKey={r.nodeKey}
-                    applicationId={r.refId}
-                    compact
-                  />
-                ) : null}
-              </div>
-            ),
+            render: (r) => <TaskRowActions task={r} currentUserId={currentUserId} />,
           },
         ]}
       />
