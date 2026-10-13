@@ -3,7 +3,6 @@
  */
 
 import type { TestRunStep, TestStepStatus } from "@/app/_components/ds/designer";
-import { formatMoney, minorToRupeesOrNull } from "@/lib/formatters";
 
 export const DEFAULT_SANDBOX_STEPS: TestRunStep[] = [
   { id: "form", label: "Intake form validates", status: "pending" },
@@ -67,23 +66,6 @@ export function resolveThreePartError(input: {
     why: "The sandbox could not complete this check.",
     next: "Open the linked block and fix the configuration.",
   };
-}
-
-export function formatPaise(amountMinor: number | null | undefined, currency = "INR"): string {
-  // UX-018: amountMinor is non-nullable by type (DemandLineArtifact/JournalPreviewArtifact
-  // both default it to 0 in parseDemandLines/parseJournalPreview), but this helper is
-  // exported and could be called directly with an unchecked API value — guard anyway
-  // rather than let a future caller silently show "₹NaN" or a fabricated "₹0.00".
-  // GAP-DESIGNER-DETAIL-ENGINES-04: delegate the INR path to the shared formatMoney
-  // so B5, test, and review all render the same fee identically (always 2dp).
-  if (currency === "INR") return formatMoney(amountMinor);
-  const rupees = minorToRupeesOrNull(amountMinor);
-  if (rupees === null) return "—";
-  const formatted = rupees.toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-  return `${formatted} ${currency}`;
 }
 
 export function parseDemandLines(artifacts?: Record<string, unknown> | null): DemandLineArtifact[] {

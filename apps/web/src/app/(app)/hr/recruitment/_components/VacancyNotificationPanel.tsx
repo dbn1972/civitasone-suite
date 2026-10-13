@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { ConfirmDialog, ErrorState, useConfirmAction, Button } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
-import { rupeesToMinorString } from "@/lib/money";
+import { minorToRupeesInput, rupeesToMinorString } from "@/lib/money";
 import { formatIndianDateTime } from "@/lib/formatters";
 
 /**
@@ -39,12 +39,8 @@ type DateRow = { key: string; label: string; value: string };
 const QUEUED_RELOAD_MS = 1200;
 const MAX_DOCS = 50;
 
-/** paise string -> "1234.50" rupees, exact (no float). */
-export function paiseToRupeesInput(paise: string | null): string {
-  if (!paise || !/^\d+$/.test(paise)) return "";
-  const p = paise.padStart(3, "0");
-  return `${p.slice(0, -2)}.${p.slice(-2)}`;
-}
+/** paise string -> "1234.50" rupees, exact (no float). Shared helper: lib/money minorToRupeesInput. */
+export const paiseToRupeesInput = (paise: string | null): string => minorToRupeesInput(paise);
 
 /** A datetime-local value ("YYYY-MM-DDTHH:mm[:ss]") interpreted as IST (+05:30), as an ISO instant, or null. */
 export function istInputToIso(v: string): string | null {

@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { rupeesInputToMinorNumber } from "@/lib/money";
 import { useUnsavedChangesGuard } from "@/lib/useUnsavedChangesGuard";
 
 type Item = { id: string; name: string; code?: string };
@@ -109,7 +110,7 @@ export default function NewStockEntryPage() {
     setIsError(false);
     try {
       // Rate is entered in rupees; the API takes integer paise.
-      const rateMinor = form.rate === "" ? 0 : Math.round(Number(form.rate) * 100);
+      const rateMinor = rupeesInputToMinorNumber(form.rate);
       const res = await fetch("/api/proxy/v1/stock/entries", {
         method: "POST",
         headers: { "content-type": "application/json" },

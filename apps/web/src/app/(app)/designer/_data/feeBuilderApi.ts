@@ -11,6 +11,7 @@ import type {
   SlabRowUi,
 } from "@/app/_components/ds/designer/feeTypes";
 import { toHumanError } from "@/lib/messages";
+import { minorToRupeesInput, rupeesInputToMinorNumber, rupeesToMinorString } from "@/lib/money";
 
 interface ApiExemption {
   id: string;
@@ -401,9 +402,7 @@ export async function persistFeeDesign(
 }
 
 export function rupeesInputToPaise(input: string): number {
-  const rupees = Number(input);
-  if (!Number.isFinite(rupees) || rupees < 0) return 0;
-  return Math.round(rupees * 100);
+  return rupeesInputToMinorNumber(input);
 }
 
 /**
@@ -433,10 +432,9 @@ export function parseRupeesToPaise(input: string): RupeesParseResult {
   if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
     return { ok: false, error: "Enter a valid amount in rupees (up to 2 decimal places)." };
   }
-  const [whole, fraction = ""] = trimmed.split(".");
-  const paiseFraction = (fraction + "00").slice(0, 2);
-  // Integer arithmetic only — no float rounding.
-  const paise = Number(whole) * 100 + Number(paiseFraction);
+  // String-based parse (lib/money) -- no float or Number()*100 arithmetic.
+  const minor = rupeesToMinorString(trimmed, { allowZero: true });
+  const paise = minor === null ? NaN : Number(minor);
   if (!Number.isSafeInteger(paise)) {
     return { ok: false, error: "Amount is too large." };
   }
@@ -445,7 +443,7 @@ export function parseRupeesToPaise(input: string): RupeesParseResult {
 
 export function paiseToRupeesInput(paise: number): string {
   if (paise <= 0) return "";
-  return (paise / 100).toFixed(2).replace(/\.?0+$/, "");
+  return minorToRupeesInput(Math.round(paise)).replace(/\.?0+$/, "");
 }
 
 export function buildSampleSubjectFields(
