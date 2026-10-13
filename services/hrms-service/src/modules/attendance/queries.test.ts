@@ -4,8 +4,9 @@
  * 8)`) and hard-code hoursWorked to `undefined` even though inTime/outTime
  * are already loaded on every row.
  *
- * Pattern: mock ./repo.js (listByTenant), ../employee/repo.js (listByTenant,
- * findDepartmentsByIds) and ../../shared/infra.js (cache.listOrLoad bypasses
+ * Pattern: mock ./repo.js (listByTenant), ../employee/repo.js (findManyByIds,
+ * findDepartmentsByIds -- GAP-HR-SF-17a: names are now one batched lookup of
+ * this page's ids via shared/batch-resolve.ts, not a 500-row window) and ../../shared/infra.js (cache.listOrLoad bypasses
  * straight to the loader) -- no real DB, mirroring employee/queries.test.ts's
  * existing mocking convention in this service.
  */
@@ -16,10 +17,10 @@ vi.mock("./repo.js", () => ({
   listByTenant: (...args: unknown[]) => repoListByTenantMock(...args),
 }));
 
-const employeeListByTenantMock = vi.fn();
+const employeeFindManyByIdsMock = vi.fn();
 const findDepartmentsByIdsMock = vi.fn();
 vi.mock("../employee/repo.js", () => ({
-  listByTenant: (...args: unknown[]) => employeeListByTenantMock(...args),
+  findManyByIds: (...args: unknown[]) => employeeFindManyByIdsMock(...args),
   findDepartmentsByIds: (...args: unknown[]) => findDepartmentsByIdsMock(...args),
 }));
 
@@ -56,9 +57,9 @@ const DEPARTMENTS = [
 
 beforeEach(() => {
   repoListByTenantMock.mockReset();
-  employeeListByTenantMock.mockReset();
+  employeeFindManyByIdsMock.mockReset();
   findDepartmentsByIdsMock.mockReset();
-  employeeListByTenantMock.mockResolvedValue(EMPLOYEES);
+  employeeFindManyByIdsMock.mockImplementation(async (_t: string, ids: string[]) => EMPLOYEES.filter((e) => ids.includes(e.id)));
   findDepartmentsByIdsMock.mockResolvedValue(DEPARTMENTS);
 });
 
