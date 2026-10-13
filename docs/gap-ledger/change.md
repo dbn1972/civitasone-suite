@@ -334,7 +334,8 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-HOME-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W1 SF-20: closed by #2005)
+- **W1 SF-20 note:** admin-service change routes all use requireRole(CHANGE_ROLES = TENANT_ADMIN_ROLES); change/layout.tsx now redirects every other role, so the page and its actions only render for permitted roles.
 - **First-pass claim:** Raise change (NewChangeButton.tsx:73) and every lifecycle action render for all signed-in users; there is no client role check, so requesters without permission meet a 403 after filling the dialog. Roles undeterminable (admin-service absent).
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['POST /v1/admin/change/requests', 'POST /v1/admin/change/requests/:id/*']`
 - **Question:** Which roles may create and transition change requests, and is 403 returned with a stable error code?
