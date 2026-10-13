@@ -1920,8 +1920,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-RECORD-PROGRESS-01  ·  HIGH  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-- **W0 note:** partly fixed by #1867 — Work EntityPicker + scope select + scopesError state done, UUID input removed. Remains: Retry button calls setWorkId(w=>`${w}`) which is a same-value no-op so the scopes effect never re-runs (Retry does not refetch)
+- [x] **Status** (W1 follow-up: closed by #2002, verified on main d341ad6f1)
 - **First-pass claim:** No workId → the form asks the clerk to paste a scope UUID (page.tsx:186-197); the hint says "enter a scope ID manually" but there is nowhere in the app that lists scope ids, and the preload failure is silently swallowed (page.tsx:90-93).
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/record-progress/page.tsx:189-197 renders a free-text scope UUID input (placeholder is a sample UUID) whenever scopes.length==0; hint at :201-205. Scopes preload only runs when ?workId= is present (:70-100), so the primary entry point (+ Record progress on apps/web/src/app/(app)/works/execution/page.tsx:31-37, no workId) always lands on the UUID box. Preload failure is swallowed by design (catch at :90-93, comment :79-82) so the user gets 'No scopes found' even on an outage. Overstated only in that the dropdown (:172-187) is used when arriving from a work page and preload succeeds. No page shows a work_scope.id (work detail apps/web/src/app/(app)/works/execution/[workId]/page.tsx:135-141 shows label/target/dates only), so the manual fallback is unusable.
 - **Files to change:** `apps/web/src/app/(app)/works/execution/record-progress/page.tsx`, `apps/web/src/app/_components/ds/EntityPicker.tsx (new)`, `apps/web/src/app/_components/ds/index.ts`

@@ -224,8 +224,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-MARKETPLACE-01  ·  HIGH  ·  confirmed  ·  theme MISSINGFEATURE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-- **W0-10 note:** review found the W0 tick partly — UI added (MarketplaceTable.tsx, MarketplaceInstallButton in PluginActions.tsx:127-160, canManage gate) but: confirm dialog has no required reason (PluginActions.tsx:151-159, no requireReason; acceptance asks reason-required), and the endpoint it calls (plugin-service marketplace/routes.ts:21-26) only publishes "plugin.marketplace.install" with no subscriber anywhere in services/ - install never happens, so acceptance "installed plugin appears under /plugins/installed" cannot hold and user sees a false success
+- [x] **Status** (W1 follow-up: closed by #2002, verified on main d341ad6f1)
 - **First-pass claim:** Marketplace is described as "Discover and install plugins" (home tile) but the page has no Install action: PluginActions is only mounted on /plugins/installed (installed/page.tsx:58), so a user must find the plugin again there and it may not be listed until provisioned.
 - **Verified evidence:** marketplace/page.tsx:12-18 uses ModuleListPage only; PluginActions is imported solely by PluginsTable (used in installed/page.tsx). plugins/page.tsx describes Marketplace as 'Discover and install plugins'. Install is POST /api/proxy/v1/plugins/install with {pluginId, reason} (PluginActions.tsx:20-21). Marketplace rows use ids from /api/v1/plugins/marketplace; whether those ids match the install endpoint's pluginId cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/plugins/marketplace/page.tsx`, `apps/web/src/app/(app)/plugins/MarketplaceTable.tsx`, `apps/web/src/app/(app)/plugins/PluginActions.tsx`

@@ -1,14 +1,14 @@
 # W0-08: recount after Wave 0 reconciliation
 
-Total: **697 open**, 3950 closed, 4 blocked or obsolete.
+Total: **689 open**, 3958 closed, 4 blocked or obsolete.
 
-Priority queue: 30 open, 189 closed (14 entries ticked by W0-07 to match closed module items).
+Priority queue: 29 open, 190 closed (1 entries ticked by W0-07 to match closed module items).
 
 | Module | Open | Closed | Blocked/obsolete |
 |---|---|---|---|
-| tenant-admin | 57 | 138 | 0 |
-| procurement | 46 | 170 | 0 |
-| works | 46 | 154 | 0 |
+| tenant-admin | 56 | 139 | 0 |
+| works | 45 | 155 | 0 |
+| procurement | 44 | 172 | 0 |
 | estab | 32 | 131 | 0 |
 | analytics | 30 | 49 | 0 |
 | locations | 30 | 6 | 0 |
@@ -27,8 +27,8 @@ Priority queue: 30 open, 189 closed (14 entries ticked by W0-07 to match closed 
 | grants | 12 | 74 | 0 |
 | cdp | 11 | 24 | 0 |
 | court | 11 | 25 | 0 |
-| workflow | 11 | 33 | 0 |
 | themes | 10 | 21 | 0 |
+| workflow | 10 | 34 | 0 |
 | field | 9 | 17 | 0 |
 | loyalty | 9 | 11 | 0 |
 | recommendations | 9 | 11 | 0 |
@@ -47,23 +47,22 @@ Priority queue: 30 open, 189 closed (14 entries ticked by W0-07 to match closed 
 | change | 4 | 19 | 0 |
 | contact | 4 | 2 | 0 |
 | inspection | 4 | 19 | 0 |
-| settings | 4 | 3 | 0 |
 | contracts | 3 | 20 | 0 |
 | documents | 3 | 18 | 0 |
 | policy | 3 | 21 | 0 |
 | pricing | 3 | 4 | 0 |
+| settings | 3 | 4 | 0 |
 | domains | 2 | 4 | 0 |
 | help | 2 | 7 | 0 |
 | identity | 2 | 32 | 0 |
 | metadata | 2 | 21 | 0 |
-| plugins | 2 | 20 | 0 |
 | reports | 2 | 36 | 0 |
 | dashboard | 1 | 10 | 0 |
 | developer-portal | 1 | 5 | 0 |
 | fleet | 1 | 8 | 0 |
 | library | 1 | 4 | 0 |
 | offline | 1 | 4 | 0 |
-| setup | 1 | 6 | 0 |
+| plugins | 1 | 21 | 0 |
 | admin | 0 | 164 | 0 |
 | approvals | 0 | 8 | 0 |
 | assets | 0 | 151 | 0 |
@@ -75,3 +74,4 @@ Priority queue: 30 open, 189 closed (14 entries ticked by W0-07 to match closed 
 | payroll | 0 | 259 | 0 |
 | recruitment | 0 | 85 | 0 |
 | sandbox | 0 | 5 | 0 |
+| setup | 0 | 7 | 0 |

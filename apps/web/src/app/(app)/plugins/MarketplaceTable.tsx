@@ -13,6 +13,7 @@
 
 import { DataTable } from "../../_components/ds";
 import { MarketplaceInstallButton } from "./PluginActions";
+import { MarketplaceReviewButton } from "./MarketplaceReview";
 import type { PluginCatalogRow } from "./_data";
 
 export function MarketplaceTable({
@@ -36,12 +37,15 @@ export function MarketplaceTable({
     sortable: false,
     align: "right",
     render: (row) => (
-      <MarketplaceInstallButton
-        listingId={row.id}
-        name={row.name}
-        installed={row.status ? ["installed", "enabled", "active"].includes(String(row.status).toLowerCase()) : false}
-        canManage={canManage}
-      />
+      <span style={{ display: "inline-flex", gap: 8, alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" }}>
+        <MarketplaceReviewButton listingId={row.id} name={row.name} canManage={canManage} />
+        <MarketplaceInstallButton
+          listingId={row.id}
+          name={row.name}
+          installed={row.status ? ["installed", "enabled", "active"].includes(String(row.status).toLowerCase()) : false}
+          canManage={canManage}
+        />
+      </span>
     ),
   });
 

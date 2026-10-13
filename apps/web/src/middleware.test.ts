@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { readdirSync, existsSync } from "node:fs";
+import { join } from "node:path";
 import { NextRequest } from "next/server";
 import { middleware } from "./middleware";
 
@@ -45,6 +47,52 @@ describe("middleware public contact + well-known access", () => {
     const res = middleware(anonReq("/finance/vouchers"));
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toContain("/auth/login");
+  });
+});
+
+// Follow-up to W0 defect 3: the rest of the marketing site (/, /pricing, /docs,
+// /docs/api, /docs/<slug>, /sandbox) had the same problem as /contact. The route
+// list below is read from app/(marketing) itself, so a new marketing page that is
+// not made public fails this test instead of silently redirecting visitors to login.
+function marketingRoutes(): string[] {
+  const root = join(__dirname, "app", "(marketing)");
+  const out: string[] = [];
+  const walk = (dir: string, url: string) => {
+    if (existsSync(join(dir, "page.tsx")) || existsSync(join(dir, "route.ts"))) out.push(url || "/");
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (!e.isDirectory()) continue;
+      const seg = /^\[.+\]$/.test(e.name) ? "sample-slug" : e.name;
+      walk(join(dir, e.name), `${url}/${seg}`);
+    }
+  };
+  walk(root, "");
+  return out;
+}
+
+describe("middleware public marketing site", () => {
+  const routes = marketingRoutes();
+
+  it("found the marketing routes (guards the walker itself)", () => {
+    expect(routes).toEqual(expect.arrayContaining(["/", "/pricing", "/docs", "/docs/api", "/docs/sample-slug", "/contact", "/sandbox"]));
+  });
+
+  it.each(routes)("lets an anonymous visitor reach %s without a redirect", (path) => {
+    const res = middleware(anonReq(path));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("still redirects private paths, including ones that only share a prefix with a public path", () => {
+    for (const path of ["/finance/vouchers", "/dashboard", "/documents", "/docsx", "/pricingx", "/pricing-admin"]) {
+      const res = middleware(anonReq(path));
+      expect(res.status, path).toBe(307);
+      expect(res.headers.get("location"), path).toContain("/auth/login");
+    }
+  });
+
+  it("does not treat '/' as a prefix: a deep private path stays private", () => {
+    const res = middleware(anonReq("/hr/employees"));
+    expect(res.status).toBe(307);
   });
 });
 

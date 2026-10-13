@@ -12,6 +12,15 @@ import { defaultLoginPath, isDevLoginEnabled } from "@/lib/auth/env";
 // /.well-known/security.txt (RFC 9116) are meant for anonymous visitors and
 // researchers; the matcher below runs on every non-static path, so anything
 // absent from this list is redirected to login.
+//
+// Marketing site (app/(marketing)): every page under that route group is for
+// anonymous visitors, so each is listed here and middleware.test.ts walks the
+// route group to fail if a new one is added without being made public. "/" can
+// only be matched exactly (a "/" prefix would make everything public), and
+// "/pricing" and "/docs" are matched on a path-segment boundary so an unrelated
+// route that merely starts with the same letters stays private.
+const PUBLIC_EXACT = ["/"];
+const PUBLIC_SEGMENT = ["/pricing", "/docs"];
 const PUBLIC = ["/auth", "/api/auth", "/api/careers", "/careers", "/verify", "/_next", "/favicon.ico", "/sw.js", "/api/metrics", "/sandbox", "/api/sandbox", "/contact", "/api/contact", "/.well-known"];
 
 // M2: decode JWT payload and check exp claim — does not verify signature
@@ -100,6 +109,14 @@ function buildNextResponse(req: NextRequest): NextResponse {
   return response;
 }
 
+function isPublicPath(pathname: string): boolean {
+  return (
+    PUBLIC_EXACT.includes(pathname) ||
+    PUBLIC_SEGMENT.some((p) => pathname === p || pathname.startsWith(`${p}/`)) ||
+    PUBLIC.some((p) => pathname.startsWith(p))
+  );
+}
+
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
@@ -107,7 +124,7 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(new URL("/auth/login", req.url));
   }
 
-  if (PUBLIC.some((p) => pathname.startsWith(p))) return buildNextResponse(req);
+  if (isPublicPath(pathname)) return buildNextResponse(req);
 
   const token = req.cookies.get(COOKIE.ACCESS)?.value;
   if (!token || isTokenExpired(token)) {

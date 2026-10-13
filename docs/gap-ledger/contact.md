@@ -16,6 +16,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0-10 note:** review found the W0 tick partly — ContactForm with consent and server reference exists, but phone/address render only if NEXT_PUBLIC_CONTACT_PHONE/ADDRESS env set (contactDetails.ts:23-31), and middleware.ts:11 PUBLIC list lacks /contact and /api/contact so anonymous government visitors would be redirected to login (unless a proxy fronts them)
+- **W1 note (2026-10-13):** #1997 added /contact and /api/contact to the middleware PUBLIC list (verified on main d341ad6f1). Still open: phone and address render only when NEXT_PUBLIC_CONTACT_PHONE/ADDRESS are set (business content decision).
 - **First-pass claim:** Government buyers get only mailto links — no form, phone, postal address or response-time commitment (page.tsx:8-24); a departmental user without a configured mail client (typical on shared or kiosk PCs) has no way to make contact, and the page hands out the same address twice.
 - **Verified evidence:** contact/page.tsx:8-24 define three channels, each rendered as an mailto anchor (:41-46); no form, phone, postal address or response-time statement. hello@civitasone.app appears twice (:12,:17). Whether a public contact API exists is cannot-verify.
 - **Files to change:** `apps/web/src/app/(marketing)/contact/page.tsx`
@@ -48,6 +49,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0-10 note:** review found the W0 tick partly — security.txt route + 2-day ack SLA + private-report copy exist, but no disclosure-policy section (scope, safe harbour, CERT-In) in contact/page.tsx; also middleware.ts:11 PUBLIC list lacks /.well-known so anonymous GET /.well-known/security.txt gets 302 to login (acceptance 200 text/plain not met unless proxy fronts it)
+- **W1 note (2026-10-13):** #1997 added /.well-known to the middleware PUBLIC list (verified on main d341ad6f1). Still open: no disclosure-policy section (scope, safe harbour, CERT-In) on the contact page.
 - **First-pass claim:** Security card says 'Please do not open a public issue' (page.tsx:21), assuming a public issue tracker a Government reader does not see; no disclosure policy, PGP key, security.txt or acknowledgement SLA is offered.
 - **Verified evidence:** contact/page.tsx:21 says 'Please do not open a public issue'. Overstated: the footer links to a public GitHub (layout.tsx:76), so a public tracker is plausibly visible. Real: no disclosure policy, PGP key, acknowledgement SLA or /.well-known/security.txt exists (no public/ dir or route handler found in apps/web).
 - **Files to change:** `apps/web/src/app/(marketing)/contact/page.tsx`, `apps/web/public/.well-known/security.txt (new) or app/.well-known/security.txt/route.ts (new)`

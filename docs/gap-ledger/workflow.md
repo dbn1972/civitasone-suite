@@ -353,8 +353,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-INSTANCES-DETAIL-02  ·  HIGH  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-- **W0-10 note:** review found the W0 tick partly — DocVerificationChecklist now has onState callback, visible error+Retry chip, '(n) mandatory missing' chip (DocVerificationChecklist.tsx:45,106-129,155). But the gating is not wired: TasksTable.tsx:184-188 does not pass onState and TaskActions.tsx has no approveDisabledReason/disabled logic, so Approve is still enabled with checklist missing/error; no evidence /complete rejects missing mandatory docs. Core acceptance (Approve disabled) unmet
+- [x] **Status** (W1 follow-up: closed by #2002, verified on main d341ad6f1)
 - **First-pass claim:** Mandatory-document checklist fails silently: DocVerificationChecklist returns null on error/empty in compact mode (DocVerificationChecklist.tsx:75-80), which is the mode TasksTable always uses (TasksTable.tsx:116-124), and Approve is never disabled by missing mandatory docs — an officer can approve with the checklist absent or "missing".
 - **Verified evidence:** DocVerificationChecklist.tsx:74-78 returns null on error in compact mode (79-83 also null while loading; 84 null on empty). TasksTable.tsx:118-124 always passes compact, and only when refType contains 'application' with nodeKey+refId. Approve (TaskActions.tsx:248-263) has no disabled/guard tied to the checklist. Any server-side enforcement is cannot-verify (no workflow-service). Fix text in the finding (notFound mapping) does not apply here.
 - **Files to change:** `apps/web/src/app/(app)/workflow/_components/DocVerificationChecklist.tsx`, `apps/web/src/app/(app)/workflow/_components/TasksTable.tsx`, `apps/web/src/app/(app)/workflow/_components/TaskActions.tsx`

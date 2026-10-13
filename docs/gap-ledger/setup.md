@@ -46,8 +46,7 @@ Counts: ACTION 7
 
 ### GAP-SETUP-HOME-03  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-- **W0-10 note:** review found the W0 tick partly — progress.ts:92-110 requires modulesConfirmedAt/modulesConfirmed in tenant settings, but nothing in repo writes that flag (grep: only progress.ts and its test), so the 'modules' step can never reach complete; branches step still completes at >=1 location (copy reworded to head office)
+- [x] **Status** (W1 follow-up: closed by #2002, verified on main d341ad6f1)
 - **First-pass claim:** Completion signals are weak or inconsistent: 'modules' is complete when tenant-settings returns any row (progress.ts:91-94), not when a module choice was made; 'branches' completes at ≥1 location but 'people' needs >1 user (progress.ts:72-89), so a single head-office record counts as 'add your branch offices'.
 - **Verified evidence:** apps/web/src/app/(app)/setup/progress.ts:72-74 branches complete at >=1 location (true); :84-89 people needs >1 user (true); :91-94 modules = listStatus of getTenantSettings, i.e. any row from /api/v1/admin/tenant/modules (loaders.ts:803, mapTenantSettings returns null when zero rows, so an empty list is probably treated as a load failure -> 'unknown' rather than todo; not verified in apiClient). 'Any row' is not proof the admin chose modules. Descriptions are accurate; a single head-office record counting as 'add your branch offices' is by design per the copy ('head office first').
 - **Files to change:** `apps/web/src/app/(app)/setup/progress.ts`
