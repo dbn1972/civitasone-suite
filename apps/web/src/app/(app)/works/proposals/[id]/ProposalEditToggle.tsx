@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { paiseToRupeeString, rupeeStringToPaise } from "@/lib/formatters";
 import { PROPOSAL_WRITE_ROLES } from "@/lib/auth/workRoles";
 import { useFormError } from "@/lib/useFormError";
-import { Button } from "@/app/_components/ds";
+import { AcceptedNotice, Button } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
+import { acceptedCopy } from "@/lib/acceptedCopy";
 
 interface ProposalData {
   id: string;
@@ -72,6 +74,7 @@ function ProposalEditForm({
 }) {
   const formId = useId();
   const router = useRouter();
+  const accepted = useAcceptedWrite();
 
   // GAP-WORKS-PROPOSALS-DETAIL-03: money is bigint paise. The old prefill ran
   // the stored paise through Math.round(minor/100), so opening and saving a
@@ -137,11 +140,9 @@ function ProposalEditForm({
         setMsg({ text: resolved.message, ok: false });
         return;
       }
-      setMsg({ text: "Proposal updated.", ok: true });
-      setTimeout(() => {
-        router.refresh();
-        onClose();
-      }, 800);
+      // 202: the update is queued, not applied. Say "submitted" and let the user continue once they have read it.
+      setMsg({ text: "Update submitted.", ok: true });
+      void accepted.accept();
     } catch (caught) {
       setMsg({
         text: formError.fromException("save", caught).message,
@@ -181,6 +182,11 @@ function ProposalEditForm({
             {msg.ok ? "✅" : "⚠️"} {msg.text}
           </p>
         )}
+        <AcceptedNotice
+          {...accepted.noticeProps}
+          onRefresh={() => { router.refresh(); onClose(); }}
+          labels={{ refresh: acceptedCopy().continue }}
+        />
 
         <div style={fieldWrap}>
           <label htmlFor={`${formId}-desc`} style={labelStyle}>

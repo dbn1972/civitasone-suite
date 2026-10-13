@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { ConfirmDialog, useToast, Button } from "@/app/_components/ds";
+import { ConfirmDialog, useToast, Button, AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { PROPOSAL_WRITE_ROLES } from "@/lib/auth/workRoles";
 import { useFormError } from "@/lib/useFormError";
 
@@ -14,7 +14,7 @@ interface ProposalActionsProps {
 }
 
 export function ProposalActions({ id, status, roles }: ProposalActionsProps) {
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -44,7 +44,7 @@ export function ProposalActions({ id, status, roles }: ProposalActionsProps) {
       // server-confirmed status once the consumer has processed it.
       toast.success("Proposal submitted for DAO finalization. It will show as finalized once processed.");
       setOpen(false);
-      setTimeout(() => router.refresh(), 600);
+      void accepted.accept();
     } catch (caught) {
       setErrorMessage(formError.fromException("save", caught).message);
     } finally {
@@ -54,6 +54,7 @@ export function ProposalActions({ id, status, roles }: ProposalActionsProps) {
 
   return (
     <>
+      <AcceptedNotice {...accepted.noticeProps} />
       <Button
         type="button"
         variant="primary"

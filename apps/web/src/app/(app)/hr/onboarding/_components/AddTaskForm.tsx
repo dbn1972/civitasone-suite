@@ -13,16 +13,17 @@
  * its own.
  */
 
-import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { useFormError } from "@/lib/useFormError";
+import { AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 
 interface AddTaskFormProps {
   employeeId: string;
 }
 
 export function AddTaskForm({ employeeId }: AddTaskFormProps) {
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   const [title, setTitle] = useState("");
   const [dueByDay, setDueByDay] = useState("7");
   const [submitting, setSubmitting] = useState(false);
@@ -50,7 +51,7 @@ export function AddTaskForm({ employeeId }: AddTaskFormProps) {
       setSuccess(true);
       // Async write (F3 queue, same as every other mutation in this module)
       // -- refresh shortly after so the new task actually shows up.
-      setTimeout(() => router.refresh(), 1000);
+      void accepted.accept();
     } catch (caught) {
       setLocalError(formError.fromException("save", caught).message);
     } finally {
@@ -63,6 +64,7 @@ export function AddTaskForm({ employeeId }: AddTaskFormProps) {
 
   return (
     <form onSubmit={(e) => void handleSubmit(e)} style={{ marginTop: 16, textAlign: "left", maxWidth: 360, marginInline: "auto" }}>
+      <AcceptedNotice {...accepted.noticeProps} />
       <div style={{ marginBottom: 10 }}>
         <label htmlFor="add-task-title" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--body, #334155)", marginBottom: 4 }}>
           Task title

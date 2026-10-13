@@ -10,10 +10,11 @@
  * authority on every guard (state, role, creator/inquiry-officer
  * ownership); this only avoids offering buttons that would be refused.
  */
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog, AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { humanizeStatus } from "@/lib/formatters";
 import {
@@ -111,13 +112,12 @@ export function CaseActions({
 }) {
   const t = useTranslations("disciplinaryActions");
   const router = useRouter();
+  const accepted = useAcceptedWrite();
   const [active, setActive] = useState<CaseActionKey | null>(null);
   const [values, setValues] = useState<Values>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   const proceeding = normalizeProceeding(proceedingType);
   if (!proceeding) return null;
@@ -155,7 +155,8 @@ export function CaseActions({
       setActive(null);
       setNotice(t("submitted"));
       router.refresh();
-      timer.current = setTimeout(() => router.refresh(), 2000);
+      // 202: the consumer applies the transition later; the immediate refresh shows whatever is committed so far.
+      void accepted.accept();
     } catch {
       setError(t("errNetwork"));
     } finally {
@@ -187,6 +188,7 @@ export function CaseActions({
 
   return (
     <Card title={t("heading")} padding>
+      <AcceptedNotice {...accepted.noticeProps} />
       {notice && <p role="status" style={{ margin: "0 0 10px", fontSize: 13, color: "var(--good, #166534)" }}>{notice}</p>}
       {actions.length === 0 ? (
         <p style={{ margin: 0, fontSize: 13, color: "var(--mut)" }}>{t("noneAvailable")}</p>

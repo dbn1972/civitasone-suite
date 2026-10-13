@@ -14953,5 +14953,17 @@
     "chooseFile": "Choose file",
     "remove": "Remove logo",
     "saveFailed": "Couldn't save your changes. Please try again."
+  },
+  "asyncAccepted": {
+    "submitting": "Submitting…",
+    "accepted": "Received. Your change is being applied and will appear shortly.",
+    "pending": "Received. Updating…",
+    "refresh": "Refresh now",
+    "refreshedHint": "Refreshed. If you do not see the change yet, it is still being applied. Try again in a moment.",
+    "confirmed": "Done. The change is now showing.",
+    "timedOut": "Still processing. Your change was received but is not showing yet. Refresh to check again.",
+    "failed": "Could not submit. Nothing was changed.",
+    "dismiss": "Dismiss",
+    "continue": "Continue"
   }
 }

@@ -24,6 +24,13 @@
  *      becomes "timed_out" instead of polling forever — callers render a
  *      "still processing, refresh to check" message for that phase.
  *
+ * Optional `poll`: when a resource has NO readable status/GET to confirm
+ * against, omit `poll`/`isDone`. The phase then settles at "accepted" - the
+ * honest "received, will update shortly" state (rendered by the ds
+ * `AcceptedNotice`, with a manual refresh) - and never claims success. See
+ * `lib/useAcceptedWrite.ts` for the page-facing wrapper and the shared 202
+ * convention (SF-15).
+ *
  * There is no platform-wide "command status" API to ask instead, and
  * building one is out of scope here — this works with what already exists
  * (the resource's own GET). Shared, reusable infra: not a one-off for a
@@ -37,6 +44,7 @@ export type AsyncMutationPhase =
   | "idle"
   | "submitting"
   | "pending"
+  | "accepted"
   | "confirmed"
   | "timed_out"
   | "error";
@@ -55,12 +63,12 @@ export type UseAsyncMutationOptions<TMutateResult, TPollResult> = {
    * attempts run out. A rejection here just counts as "not visible yet" for
    * this attempt — it does not abort the whole flow.
    */
-  poll: (mutateResult: TMutateResult, attempt: number) => Promise<TPollResult>;
+  poll?: (mutateResult: TMutateResult, attempt: number) => Promise<TPollResult>;
   /**
    * Inspect one poll response and say whether the expected change is now
    * visible in the read model.
    */
-  isDone: (pollResult: TPollResult, mutateResult: TMutateResult) => boolean;
+  isDone?: (pollResult: TPollResult, mutateResult: TMutateResult) => boolean;
   /** Fires once, the first time `isDone()` returns true. */
   onConfirmed?: (pollResult: TPollResult, mutateResult: TMutateResult) => void;
   /** Fires once, if attempts run out before `isDone()` ever returns true. */
@@ -88,6 +96,12 @@ export type UseAsyncMutationResult<TMutateResult, TPollResult> = {
   pollResult: TPollResult | null;
   /** Runs the mutation, then polls for confirmation. No-op while already busy. */
   run: () => Promise<void>;
+  /**
+   * For callers that already performed the write themselves (their own fetch /
+   * server action) and received the 202: enters the same accepted -> polling /
+   * "accepted" flow without running `mutate`. No-op while already busy.
+   */
+  accept: (mutateResult?: TMutateResult) => Promise<void>;
   /** Back to "idle", clearing attempt/error/results (e.g. to let the user retry). */
   reset: () => void;
 };
@@ -140,6 +154,59 @@ export function useAsyncMutation<TMutateResult, TPollResult>(
     setPollResult(null);
   }, []);
 
+  // Shared by run() (after its POST) and accept() (caller already did the POST).
+  const settle = useCallback(async (mutated: TMutateResult, generation: number) => {
+    const isCurrent = () => mountedRef.current && generationRef.current === generation;
+    if (!isCurrent()) return;
+    setMutateResult(mutated);
+    const poll = optionsRef.current.poll;
+    const isDoneFn = optionsRef.current.isDone;
+    if (!poll || !isDoneFn) {
+      // No readable status to confirm against: say only what is true - the
+      // write was accepted and will be applied. Never claim it is done.
+      setPhase("accepted");
+      runningRef.current = false;
+      return;
+    }
+    setPhase("pending");
+
+    const maxAttempts = optionsRef.current.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+    const initialDelayMs = optionsRef.current.initialDelayMs ?? DEFAULT_INITIAL_DELAY_MS;
+    const backoffFactor = optionsRef.current.backoffFactor ?? DEFAULT_BACKOFF_FACTOR;
+
+    for (let i = 0; i < maxAttempts; i++) {
+      const waitMs = initialDelayMs * Math.pow(backoffFactor, i);
+      await delay(waitMs);
+      if (!isCurrent()) return;
+
+      setAttempt(i + 1);
+
+      let polled: TPollResult | undefined;
+      let done = false;
+      try {
+        polled = await poll(mutated, i + 1);
+        done = isDoneFn(polled, mutated);
+      } catch {
+        done = false; // transient poll failure: just consumes this attempt
+      }
+
+      if (!isCurrent()) return;
+
+      if (done && polled !== undefined) {
+        setPollResult(polled);
+        setPhase("confirmed");
+        optionsRef.current.onConfirmed?.(polled, mutated);
+        runningRef.current = false;
+        return;
+      }
+    }
+
+    if (!isCurrent()) return;
+    setPhase("timed_out");
+    optionsRef.current.onTimeout?.(mutated);
+    runningRef.current = false;
+  }, []);
+
   const run = useCallback(async () => {
     if (runningRef.current) return; // ignore overlapping submits
     runningRef.current = true;
@@ -163,46 +230,18 @@ export function useAsyncMutation<TMutateResult, TPollResult>(
       return;
     }
 
-    if (!isCurrent()) return;
-    setMutateResult(mutated);
-    setPhase("pending");
+    await settle(mutated, generation);
+  }, [settle]);
 
-    const maxAttempts = optionsRef.current.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
-    const initialDelayMs = optionsRef.current.initialDelayMs ?? DEFAULT_INITIAL_DELAY_MS;
-    const backoffFactor = optionsRef.current.backoffFactor ?? DEFAULT_BACKOFF_FACTOR;
-
-    for (let i = 0; i < maxAttempts; i++) {
-      const waitMs = initialDelayMs * Math.pow(backoffFactor, i);
-      await delay(waitMs);
-      if (!isCurrent()) return;
-
-      setAttempt(i + 1);
-
-      let polled: TPollResult | undefined;
-      let done = false;
-      try {
-        polled = await optionsRef.current.poll(mutated, i + 1);
-        done = optionsRef.current.isDone(polled, mutated);
-      } catch {
-        done = false; // transient poll failure: just consumes this attempt
-      }
-
-      if (!isCurrent()) return;
-
-      if (done && polled !== undefined) {
-        setPollResult(polled);
-        setPhase("confirmed");
-        optionsRef.current.onConfirmed?.(polled, mutated);
-        runningRef.current = false;
-        return;
-      }
-    }
-
-    if (!isCurrent()) return;
-    setPhase("timed_out");
-    optionsRef.current.onTimeout?.(mutated);
-    runningRef.current = false;
-  }, []);
+  const accept = useCallback(async (acceptedResult?: TMutateResult) => {
+    if (runningRef.current) return;
+    runningRef.current = true;
+    const generation = ++generationRef.current;
+    setError(null);
+    setPollResult(null);
+    setAttempt(0);
+    await settle(acceptedResult as TMutateResult, generation);
+  }, [settle]);
 
   return {
     phase,
@@ -212,6 +251,7 @@ export function useAsyncMutation<TMutateResult, TPollResult>(
     mutateResult,
     pollResult,
     run,
+    accept,
     reset,
   };
 }

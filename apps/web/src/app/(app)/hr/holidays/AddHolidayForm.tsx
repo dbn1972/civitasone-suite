@@ -4,7 +4,8 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
-import { Button } from "../../../_components/ds";
+import { Button, AcceptedNotice } from "../../../_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 
 const inputStyle: React.CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
@@ -30,6 +31,7 @@ export function AddHolidayForm({ year }: Props) {
   const [message, setMessage] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const router = useRouter();
+  const accepted = useAcceptedWrite();
   const nameRef = useRef<HTMLInputElement>(null);
   const formError = useFormError("holiday");
 
@@ -77,7 +79,7 @@ export function AddHolidayForm({ year }: Props) {
       setFields(INITIAL);
       setOpen(false);
       router.refresh();
-      setTimeout(() => router.refresh(), 1500);
+      void accepted.accept();
     } catch (caught) {
       setMessage({ tone: "bad", text: formError.fromException("save", caught).message });
     } finally {
@@ -87,6 +89,7 @@ export function AddHolidayForm({ year }: Props) {
 
   return (
     <div className="card" style={{ marginBottom: 0 }}>
+      <AcceptedNotice {...accepted.noticeProps} />
       <div className="card-h" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h3>{t("addHoliday")}</h3>
         <Button

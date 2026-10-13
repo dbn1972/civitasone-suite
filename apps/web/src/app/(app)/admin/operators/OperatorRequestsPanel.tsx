@@ -1,8 +1,8 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
+import { AcceptedNotice, Button, Card, ConfirmDialog } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import {
   canCancel, canDecide, decideOperatorRequest, loadPendingRequests, type OperatorDecision, type OperatorRequest,
 } from "@/lib/admin/operatorActions";
@@ -21,7 +21,6 @@ export function OperatorRequestsPanel({
 }: { viewerId: string | null; viewerRoles: readonly string[]; tick: number }) {
   const t = useTranslations("adminOperators");
   const fmt = useFormatter();
-  const router = useRouter();
   const [view, setView] = useState<View>({ state: "loading" });
   const [acting, setActing] = useState<{ req: OperatorRequest; decision: OperatorDecision } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -35,17 +34,32 @@ export function OperatorRequestsPanel({
 
   useEffect(() => { setView({ state: "loading" }); void load(); }, [load, tick]);
 
+  // The decision is accepted (202) and a worker applies it. Poll the pending-requests read until the decided request
+  // has left the list (bounded); if it has not within the budget the notice says "still processing" with a Refresh.
+  const accepted = useAcceptedWrite<string, OperatorRequest[]>({
+    poll: async () => {
+      const r = await loadPendingRequests();
+      if (!r.ok) throw new Error("pending requests unavailable");
+      return r.requests;
+    },
+    isDone: (pending, requestId) => !pending.some((p) => p.id === requestId),
+    onConfirmed: () => { void load(); },
+    initialDelayMs: 1000,
+    maxAttempts: 6,
+  });
+
   async function confirm(note: string | undefined) {
     if (!acting) return;
     setBusy(true);
     setError(undefined);
-    const r = await decideOperatorRequest(acting.req.id, acting.decision, note);
+    const decidedId = acting.req.id;
+    const r = await decideOperatorRequest(decidedId, acting.decision, note);
     setBusy(false);
     if (!r.ok) { setError(t(`error.${r.code}`)); return; }
     setNotice(acting.decision === "cancel" ? t("cancelled") : t("decided"));
     setActing(null);
-    // The change is applied by a worker moments after the 202: refresh the list and the directory a little later.
-    window.setTimeout(() => { void load(); router.refresh(); }, 1200);
+    // Applied by a worker after the 202: poll for the request to leave the list, then refresh the directory too.
+    void accepted.accept(decidedId);
   }
 
   const kindLabel = (k: string) => (k === "suspend" || k === "reactivate" || k === "role_change" || k === "grant" ? t(`kind.${k}`) : t("kind.unknown"));
@@ -55,6 +69,7 @@ export function OperatorRequestsPanel({
     <Card title={t("title")}>
       <p style={{ margin: "0 0 10px", fontSize: 13, color: "var(--mut)" }}>{t("subtitle")}</p>
       {notice && <p role="status" style={{ margin: "0 0 10px", fontSize: 13 }}>{notice}</p>}
+      <AcceptedNotice {...accepted.noticeProps} />
       {view.state === "loading" && <p role="status" aria-busy="true">{t("loading")}</p>}
       {view.state === "error" && (
         <div role="alert">

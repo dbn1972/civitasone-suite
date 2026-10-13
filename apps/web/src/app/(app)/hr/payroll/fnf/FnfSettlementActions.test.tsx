@@ -119,25 +119,18 @@ describe("FnfSettlementActions (GAP-PAYROLL-FNF-01)", () => {
     expect(refreshMock).not.toHaveBeenCalled();
   });
 
-  it("the delayed follow-up refresh fires while mounted, and is cancelled on unmount (no leak into the next page/test)", async () => {
+  it("SF-15: a queued submit shows the honest accepted notice with a manual refresh and never refreshes on a timer", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     browserFetchMock.mockResolvedValue(ok());
-    const first = renderActions({ status: "computed" });
+    renderActions({ status: "computed" });
     fireEvent.click(screen.getByRole("button", { name: /submit the settlement/i }));
     fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
-    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
-    vi.advanceTimersByTime(2500);
-    expect(refreshMock).toHaveBeenCalledTimes(2);
-    first.unmount();
-
-    refreshMock.mockReset();
-    const second = renderActions({ status: "computed" });
-    fireEvent.click(screen.getByRole("button", { name: /submit the settlement/i }));
-    fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
-    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
-    second.unmount();
-    vi.advanceTimersByTime(5000);
-    expect(refreshMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1)); // the one immediate refresh
+    await waitFor(() => expect(document.querySelector('[data-accepted-phase="accepted"]')).not.toBeNull());
+    vi.advanceTimersByTime(10_000);
+    expect(refreshMock).toHaveBeenCalledTimes(1); // no timer-driven follow-up
+    fireEvent.click(screen.getByRole("button", { name: "Refresh now" }));
+    expect(refreshMock).toHaveBeenCalledTimes(2); // refreshes only when the user asks
   });
 
   it("renders nothing for a status with no next step", () => {
