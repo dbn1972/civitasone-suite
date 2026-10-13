@@ -14,7 +14,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-HOME-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch reads as an empty gate: on source "error" only the DataSourceBadge is added (page.tsx:45) while StatGrid still renders real zeros from the empty fallback (page.tsx:46-50, loaders.ts:101-113). A guard supervisor sees "Awaiting Approval 0 / Expected Today 0" during an outage.
 - **Verified evidence:** visitor/page.tsx:37,45 adds DataSourceBadge on error, but lines 46-50 still pass pending.data.length / expectedToday / approved.data.length formatted as '0' (getVisitRequests returns [] on error, loaders.ts:101-113). StatCard would show '—' if given undefined (ds/StatCard.tsx:20-24). Also errors are combined so one failed status hides which count is unreliable.
 - **Files to change:** `apps/web/src/app/(app)/visitor/page.tsx`
@@ -28,7 +28,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Expected Today" uses isToday() with the server-process clock (format.ts:24-34, page.tsx:36) — a UTC Node host shifts the day boundary by 5h30m versus IST, mis-counting evening/early-morning visits.
 - **Verified evidence:** format.ts:24-34 isToday compares getFullYear/Month/Date of `new Date(iso)` and `new Date()` in the server process timezone; visitor/page.tsx:36 and guard/page.tsx:15 use it. On a UTC host the day rolls at 05:30 IST. fmtTime/fmtDateTime (format.ts:3-21) also omit `timeZone`, so SSR vs browser render can differ. lib/formatters.ts formatIndianDate also has no explicit timeZone. Deployment TZ setting not verified.
 - **Files to change:** `apps/web/src/app/(app)/visitor/_data/format.ts`, `apps/web/src/lib/formatters.ts`
@@ -43,7 +43,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-HOME-04  ·  MEDIUM  ·  partly  ·  theme LABEL (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Approved (all)" counts every approved request ever returned (page.tsx:49) — includes past visits; the label gives no time scope and the fetch has no date filter.
 - **Verified evidence:** visitor/page.tsx:49 counts approved.data.length from getVisitRequests('approved') (loaders.ts:101-113, only a status filter). The label already says 'Approved (all)', so scope is stated; the real issue is that the metric mixes past and future visits and never expires (no 'completed' status in VisitRequestStatus, types.ts), and page size caps in the API are unknown, so the count may be truncated.
 - **Files to change:** `apps/web/src/app/(app)/visitor/page.tsx`, `apps/web/src/app/(app)/visitor/_data/loaders.ts`
@@ -58,7 +58,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-HOME-05  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Console icons are emoji glyphs (🛂 ✅ ⚙️) with hard-coded English copy — no next-intl keys (page.tsx:9-25); loading.tsx is one unlabelled block that does not mirror the stat grid + tiles layout (loading.tsx:1-3).
 - **Verified evidence:** Hard-coded English confirmed at visitor/page.tsx:9-28,43-49 and no next-intl in the visitor tree. Emoji glyphs (page.tsx:12,18,24) are aria-hidden, and StatCard's icon prop is a string across the DS, so they follow the design-system convention. loading.tsx is a single `.skeleton` block (so it does not mirror stat grid + 3 tiles) but it does carry aria-label='Loading…' (not unlabelled; aria-label on a plain div is not announced though). Same loading file pattern in guard/admin/host.
 - **Files to change:** `apps/web/src/app/(app)/visitor/page.tsx`, `apps/web/src/app/(app)/visitor/loading.tsx`, `apps/web/src/app/(app)/visitor/guard/loading.tsx`, `apps/web/src/app/(app)/visitor/admin/loading.tsx`, `apps/web/src/app/(app)/visitor/host/loading.tsx`
@@ -81,7 +81,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-ADMIN-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** A preset is one click with no confirmation (AdminConfig.tsx:120-126) yet "upserts the policies below" — retention, erasure SLA, auto-approval and anti-passback for the whole tenant are overwritten at once; DPDP retention (retention.pii_days, up to 1825 in the hospital preset) can change without a review step.
 - **Verified evidence:** admin/AdminConfig.tsx:120-126 renders one plain `btn ghost` per preset whose onClick calls onApplyPreset -> applyPreset (client.ts:117-119, POST v1/visitor/config/presets/{preset}) immediately; text at lines 117-119 says presets 'upsert the policies below'. policy.ts:55-58 notes the hospital preset sets retention.pii_days to 1825. No confirm, diff or reason. Server-side audit/versioning cannot be verified (visitor-service absent).
 - **Files to change:** `apps/web/src/app/(app)/visitor/admin/AdminConfig.tsx`, `apps/web/src/app/(app)/visitor/_data/client.ts`, `apps/web/src/app/(app)/visitor/_data/policy.ts`
@@ -97,7 +97,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-ADMIN-03  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Boolean toggles save immediately on click (AdminConfig.tsx:159-166) and the button label shows the current state ("On"/"Off") rather than the action, so Auto-approve VIP flips with no confirmation and an ambiguous label.
 - **Verified evidence:** AdminConfig.tsx:159-166: the toggle is a `btn primary/ghost` whose onClick calls save(field, encodeBooleanValue(!current)) directly; its text shows current state ('On'/'Off'), and busy shows '…'. Applies to Auto-approve VIP/contractors/delegations (policy.ts:185-212) and Anti-passback (policy.ts:163-170), so security-relevant flags flip with one tap. setConfig (client.ts:94-108) sends no reason.
 - **Files to change:** `apps/web/src/app/(app)/visitor/admin/AdminConfig.tsx`, `apps/web/src/app/(app)/visitor/_data/client.ts`
@@ -114,7 +114,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-ADMIN-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Number drafts are keyed and never cleared after a preset/reload (AdminConfig.tsx:53,172), so after "Apply preset" an edited field keeps showing the pre-preset typed value while the pill says the new version.
 - **Verified evidence:** AdminConfig.tsx:53 keeps drafts keyed by namespace::configKey; line 172 reads `drafts[k] ?? String(currentNum)` and 195-198 writes drafts on change. onApplyPreset (96-109) and reload (61-71) never clear drafts, so a field the user edited before applying a preset keeps the typed value while the pill (186) shows the new version; Save stays enabled if draftNum differs from the new value.
 - **Files to change:** `apps/web/src/app/(app)/visitor/admin/AdminConfig.tsx`
@@ -129,7 +129,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-ADMIN-05  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Degraded state hides partial failure: the "Showing default policy" EmptyState needs initialSource==="error" AND zero entries (AdminConfig.tsx:129); if only one namespace fails, defaults render with "Default" pills as if they were live values (admin/page.tsx:14-17).
 - **Verified evidence:** Real: AdminConfig.tsx:129 shows the 'Showing default policy' EmptyState only when initialSource==='error' AND entries.length===0; admin/page.tsx:15-16 merges both namespaces and sets one combined `source`. With one namespace failing, entries are non-empty, fields fall back to defaults (`Default` pill, lines 156/186). Overstated: page.tsx:26 does render DataSourceBadge ('Couldn't load — showing nothing') on any failure, so it is not fully hidden, but the wording is wrong (defaults are shown) and it does not say which group. Worse: Save on a defaulted field sends no expectedVersion (line 85), so it may overwrite a live value that failed to load (server behaviour unverified).
 - **Files to change:** `apps/web/src/app/(app)/visitor/admin/page.tsx`, `apps/web/src/app/(app)/visitor/admin/AdminConfig.tsx`
@@ -145,7 +145,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-ADMIN-06  ·  LOW  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Min/max bounds are client-only — policy.ts:23-31 states the service accepts arbitrary JSON per key; reload() hard-codes "visitor_policy" instead of POLICY_NS (AdminConfig.tsx:63); optimistic-lock conflicts (expectedVersion) surface only as a generic save error.
 - **Verified evidence:** policy.ts:24-35 documents that bounds are UX-only and that the service accepts arbitrary JSON per key (server validation cannot be verified; visitor-service absent). AdminConfig.tsx:64 hard-codes 'visitor_policy', but POLICY_NS === 'visitor_policy' (policy.ts:11), so it is currently correct, only drift-prone (POLICY_NS not imported at line 8-13). save() passes expectedVersion (line 85) but client.ts:31-32 throws the same generic readError('save') for any non-2xx, so a version conflict is shown as a generic save error and the page is not reloaded.
 - **Files to change:** `apps/web/src/app/(app)/visitor/admin/AdminConfig.tsx`, `apps/web/src/app/(app)/visitor/_data/client.ts`, `apps/web/src/app/(app)/visitor/_data/policy.ts`
@@ -169,7 +169,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-GUARD-02  ·  HIGH  ·  partly  ·  theme WIRING (was ROLEGATE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Gate terminal ID" is a hand-typed UUID with no gate list, no persistence and no validation (GuardConsole.tsx:175-183); verify/check-in/check-out all send it, and check-out silently sends "" when it is blank (GuardConsole.tsx:145) so a guard's first tap can fail with a generic save error.
 - **Verified evidence:** GuardConsole.tsx:177-185 is a free-text 'Gate terminal ID' input (placeholder 'Gate UUID for this terminal'), state at line 56 with no persistence and no list; onVerify (111-114) only checks non-empty, no UUID validation. Check-in uses gateId.trim() (132), check-out `gateId.trim() || ""` (145) so a blank gate is sent. Correction: when check-out fails, onCheckOut sets rosterError (148) but rosterState stays 'ok', and rosterError is only rendered under rosterState==='error' (307-317), so the failure is silently swallowed, not shown as a generic save error. Whether a gates-list endpoint exists is unknown.
 - **Files to change:** `apps/web/src/app/(app)/visitor/guard/GuardConsole.tsx`, `apps/web/src/app/(app)/visitor/_data/client.ts`, `apps/web/src/app/(app)/visitor/_data/loaders.ts`
@@ -186,7 +186,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-GUARD-03  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** DPDP: visitor phone numbers are printed in full to every viewer in the Expected today table (GuardConsole.tsx:286); no masking or role gate, and the roster fetch also carries contactNumber (types.ts:49) unused.
 - **Verified evidence:** GuardConsole.tsx:286 prints v.visitorPhone in full to every viewer; guard/page.tsx passes complete VisitRequest objects (including visitorEmail, hostEmployeeId) into the client component, so all PII is serialised to the browser regardless of display. types.ts documents that PII 'arrives already decrypted'. RosterEntry.contactNumber is mapped (loaders.ts:76) but never rendered. There is no shared <Masked> component; only a local maskPhone in (app)/telephony/calls/page.tsx:37. Reveal audit/role gating are server-side and cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/visitor/guard/GuardConsole.tsx`, `apps/web/src/app/(app)/visitor/guard/page.tsx`, `apps/web/src/lib/mask.ts (new)`, `apps/web/src/app/_components/Masked.tsx (new)`
@@ -202,7 +202,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-GUARD-04  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Overstay threshold is hard-coded to 8 hours (GuardConsole.tsx:28) while the admin screen governs check_in.overstay_grace_minutes and overstay_escalation_hours (policy.ts:118-141) — the two never meet, so configured policy has no effect on the flag.
 - **Verified evidence:** GuardConsole.tsx:28 `const OVERSTAY_HOURS = 8` drives the Overstays stat (101-103) and per-row flag (337-338). Admin fields check_in.overstay_grace_minutes and check_in.overstay_escalation_hours exist at policy.ts:118-145 and are never read by the guard page (guard/page.tsx loads only locations and approved requests). Binding is not trivial: grace is 'after expected checkout' and RosterEntry (types.ts) has no expected-checkout/validUntil field.
 - **Files to change:** `apps/web/src/app/(app)/visitor/guard/GuardConsole.tsx`, `apps/web/src/app/(app)/visitor/guard/page.tsx`, `apps/web/src/app/(app)/visitor/_data/types.ts`, `services/visitor-service (roster response)`
@@ -219,7 +219,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-GUARD-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Expected today is not scoped to the selected Location (page.tsx:15; GuardConsole.tsx:255) — a guard at one site sees every site's approved visitors; day boundary uses the server clock (format.ts:24-34).
 - **Verified evidence:** guard/page.tsx:9-15 calls getVisitRequests('approved') with no location filter and filters only by isToday (line 15); GuardConsole.tsx:190,258 shows expectedToday.length and the table for all sites even though locationId state (55) selects a site and VisitRequest.locationId exists (types.ts). isToday (format.ts:24-34) uses `new Date()` in the server process timezone. Whether the API supports a locationId query parameter is not verifiable.
 - **Files to change:** `apps/web/src/app/(app)/visitor/guard/GuardConsole.tsx`, `apps/web/src/app/(app)/visitor/guard/page.tsx`, `apps/web/src/app/(app)/visitor/_data/format.ts`
@@ -236,6 +236,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 ### GAP-VISITOR-GUARD-07  ·  LOW  ·  partly  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — tables now use the DS tbl-wrap class; no data-label/stacked-card variant below 640px, and the session-only Verified card is unchanged
 - **First-pass claim:** Tables use bare className="tbl" with overflow-x scroll (GuardConsole.tsx:271,324) — no mobile row transform; "Verified (session)" is component state and resets on reload (GuardConsole.tsx:64).
 - **Verified evidence:** Tables use className="tbl" wrapped in `<div style={{overflowX:'auto'}}>` (GuardConsole.tsx:270-271, 323-324): horizontal scroll, no responsive row transform (the DS .tbl-wrap class exists at civitas-ds.css:132 but is not used). 'Verified (session)' is useState (line 64) and resets on reload, but the label already says '(session)', so it is not misleading, just low value; there is no count endpoint verified.
 - **Files to change:** `apps/web/src/app/(app)/visitor/guard/GuardConsole.tsx`
@@ -256,7 +257,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-HOST-02  ·  HIGH  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** DPDP: visitor phone and free-text purpose are printed in full for every request (HostPortal.tsx:125-131); no masking, retention hint or role gate on the visitor PII shown to whoever opens the page.
 - **Verified evidence:** HostPortal.tsx:125 prints r.visitorPhone in full and :132 / :182 print r.purpose in the approval cards and the Expected-today table; no masking or retention hint. Overstated: this is the host's approval queue where seeing the visitor's contact is a business need, the page has no CSV export, and no shared <Masked> exists in ds (only page-local maskPhone in telephony/calls/page.tsx:37 and MaskedInput in hr Step4). Whether the API scopes rows or roles is cannot-verify (visitor service absent from snapshot).
 - **Files to change:** `apps/web/src/app/(app)/visitor/host/HostPortal.tsx`, `apps/web/src/app/_components/ds/Masked.tsx`, `apps/web/src/app/_components/ds/index.ts`
@@ -272,7 +273,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-HOST-03  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Expected today" claims "Your approved visitors" but is the tenant-wide approved list filtered only by day (host/page.tsx:15-16; HostPortal.tsx:166) with a server-clock isToday (format.ts:24-34).
 - **Verified evidence:** host/page.tsx:10-15 loads getVisitRequests('approved') (loaders.ts:101-113 builds /api/v1/visitor/visit-requests?status=approved with no host/employee param) and filters only by isToday. isToday (format.ts:24-34) uses new Date() in the Node server runtime, so the day boundary follows server TZ, not IST. Copy at HostPortal.tsx:166 (line ~202 in file) says 'Your approved visitors'. Whether the API itself scopes to the caller is cannot-verify (visitor service absent); client sends no host filter and VisitRequest.hostEmployeeId is available.
 - **Files to change:** `apps/web/src/app/(app)/visitor/host/page.tsx`, `apps/web/src/app/(app)/visitor/_data/format.ts`, `apps/web/src/app/(app)/visitor/_data/loaders.ts`
@@ -287,7 +288,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-HOST-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Requests show no location or pass type although the model carries locationId/passType (types.ts:30-32), and multi-site tenants cannot tell which premises a visitor is coming to; hostEmployeeId is never displayed.
 - **Verified evidence:** types.ts:28-30 defines hostEmployeeId, locationId, passType; HostPortal.tsx renders none of them (cards :156-186, table :204-224 show name, phone, category, purpose, time, ref, zone only). getVisitorLocations() exists in loaders.ts:116 to resolve names.
 - **Files to change:** `apps/web/src/app/(app)/visitor/host/page.tsx`, `apps/web/src/app/(app)/visitor/host/HostPortal.tsx`
@@ -303,7 +304,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-HOST-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Restricted-zone approvals only warn that a second approver follows (HostPortal.tsx:138-142); permittedAreas (which zones) is never listed, so the host approves blind.
 - **Verified evidence:** HostPortal.tsx:173-177 (file lines 138-142 in numbering of the observation) shows a generic warning when permittedAreas.length>0; the array (types.ts:33, string[]) is never rendered, and the table only shows 'Restricted'.
 - **Files to change:** `apps/web/src/app/(app)/visitor/host/HostPortal.tsx`
@@ -317,7 +318,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-HOST-06  ·  LOW  ·  partly  ·  theme FEEDBACK (was NAVUX)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Toast persists until reload (no timeout, HostPortal.tsx:96-100); background refresh failure after an action is swallowed (HostPortal.tsx:54-60); request cards and tables are inline-styled with bare "tbl" and no mobile transform (HostPortal.tsx:169).
 - **Verified evidence:** Confirmed: toast (HostPortal.tsx:132-136 in file, setToast at :107/:110) is never cleared; refresh() catch (:94-97) swallows background failure by design (comment :83-88); the table is `className='tbl'` inside overflowX:auto (:204-205), cards fully inline styled - no mobile card transform. Not true: PageHeader already gets back='/visitor' (page.tsx:21-26), so the suggested back link is present. A ds/Toast.tsx exists.
 - **Files to change:** `apps/web/src/app/(app)/visitor/host/HostPortal.tsx`

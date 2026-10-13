@@ -14,7 +14,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-HOME-01  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Hub carries no signal: six static tiles with no counts, so a clerk cannot see failed deliveries or experiments awaiting approval without opening each page (page.tsx); the tile order puts the niche "A/B Experiments" first and the everyday Inbox second.
 - **Verified evidence:** notifications/page.tsx:5-16 is a ModuleHub with six static links and no counts; ModuleHub supports a children slot (ModuleHub.tsx:26). Tile order puts experiments first (:9), Inbox second. No failed-delivery or awaiting-approval numbers are fetched. A count endpoint for failures is not confirmed in the snapshot (deliveries list exists at /notifications/deliveries).
 - **Files to change:** `apps/web/src/app/(app)/notifications/page.tsx`
@@ -30,7 +30,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-HOME-02  ·  MEDIUM  ·  partly  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx is a tailwind block with min-h-screen and bg-slate-50 (loading.tsx) that fights the app shell background and is reused by every child route without its own loading file (campaigns/, compose/ have their own; hub inherits this) — it also ignores dark mode.
 - **Verified evidence:** notifications/loading.tsx:3 uses min-h-screen bg-slate-50 with bg-slate-200 blocks and no dark variant (dark mode is a .dark class, civitas-ds.css:317). True, but it is not unique to the hub or inherited by children: list, compose, and campaigns/[id]/deliveries/[id] each have their own loading.tsx, and the ones checked (list/loading.tsx, compose/loading.tsx) copy the same min-h-screen/bg-slate-50 pattern. The hub shows a 72-unit table block though it is tiles only.
 - **Files to change:** `apps/web/src/app/(app)/notifications/loading.tsx`, `apps/web/src/app/(app)/notifications/list/loading.tsx`, `apps/web/src/app/(app)/notifications/compose/loading.tsx`, `apps/web/src/app/_components/RouteSkeleton.tsx (new, shared)`
@@ -45,7 +45,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-HOME-03  ·  LOW  ·  confirmed  ·  theme NAVUX (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** not-found.tsx renders an EmptyState with no action (not-found.tsx), leaving the user on a dead end inside the module.
 - **Verified evidence:** notifications/not-found.tsx:5-8 renders EmptyState with title and message only; EmptyState accepts an action prop (ds/EmptyState.tsx:8,40) and other pages pass one (templates/[id]/page.tsx:243).
 - **Files to change:** `apps/web/src/app/(app)/notifications/not-found.tsx`
@@ -57,7 +57,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-HOME-04  ·  LOW  ·  confirmed  ·  theme NAVUX (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Settings (/tenant-admin/notifications) is linked from the Inbox page header (list/page.tsx) but not from the hub, so channel/provider configuration is undiscoverable from the module home.
 - **Verified evidence:** list/page.tsx:77 links /tenant-admin/notifications as 'Settings'; the hub page.tsx:8-15 has no such tile. tenant-admin/page.tsx also links it.
 - **Files to change:** `apps/web/src/app/(app)/notifications/page.tsx`
@@ -77,7 +77,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-CAMPAIGNS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Error state contradicts itself: DataSourceBadge says "Couldn't load — showing nothing" (DataSourceBadge.tsx) while the card body says "Campaigns could not be loaded. Showing saved information." (CampaignList.tsx) under a title of "—"; the list never falls back to cached data, so the second sentence is false (the same UX-002 defect the badge comment documents).
 - **Verified evidence:** CampaignList.tsx:65 shows DataSourceBadge 'Couldn't load - showing nothing' and line 77 EmptyState title '-' message 'Campaigns could not be loaded. Showing saved information.'; getCampaigns (campaigns.ts:253-263) has no cache, so the second sentence is false. Same contradiction the DataSourceBadge doc (DataSourceBadge.tsx:53-58, UX-002) describes. The create dialog repeats it at CampaignList.tsx:332 ('Templates could not be loaded - showing saved information').
 - **Files to change:** `apps/web/src/app/(app)/notifications/campaigns/_components/CampaignList.tsx`
@@ -93,7 +93,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-CAMPAIGNS-02  ·  HIGH  ·  partly  ·  theme VALIDATION (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle says campaigns are planned "against an audience segment" but the create form makes Recipients (free-text list of raw emails/phones) mandatory and the segment optional (CampaignList.tsx): a segment does not replace recipients, so a citizen-scale campaign requires pasting contacts by hand into a textarea — personal data typed into an unbounded field with no consent or opt-out check visible.
 - **Verified evidence:** Confirmed client-side: CampaignList.tsx:240-241 canSubmit requires recipientList.length>0 (comment at CampaignList/campaigns.ts:177 says backend requires >=1) while segment is optional (400); recipients is an unbounded textarea (346-356) with no maxLength, no email/phone validation, no consent/opt-out text. Page subtitle (campaigns/page.tsx:11) says 'against an audience segment'. Overstated: whether the backend expands a segment in addition to recipients cannot be verified (notification-service and v1/segments absent), so 'a segment does not replace recipients' is inferred from the required-recipient rule only.
 - **Files to change:** `apps/web/src/app/(app)/notifications/campaigns/_components/CampaignList.tsx`, `apps/web/src/lib/notifications/campaigns.ts`, `apps/web/src/app/(app)/notifications/campaigns/page.tsx`
@@ -110,7 +110,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-CAMPAIGNS-03  ·  MEDIUM  ·  confirmed  ·  theme NAVUX
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** The ROI column contains no ROI: the list contract has none (comment at CampaignList.tsx), so every row shows a "View metrics" link under the header "ROI"; the same URL is linked three times per row (name, View metrics, Open — ), tripling tab stops.
 - **Verified evidence:** CampaignList.tsx:93 header 'ROI'; cell at 110-114 is always a 'View metrics' link because the list contract has no ROI (comment 35-36). The same href /notifications/campaigns/${c.id} appears three times per row: name link (103), View metrics (111), Open button (116).
 - **Files to change:** `apps/web/src/app/(app)/notifications/campaigns/_components/CampaignList.tsx`
@@ -125,7 +125,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-CAMPAIGNS-04  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Custom dialog closes on backdrop mousedown and Escape and discards all typed recipients/budget without a dirty-form warning (CampaignList.tsx), and is not the DS ConfirmDialog; no focus trap or return-focus is visible in the code.
 - **Verified evidence:** CreateCampaignDialog (CampaignList.tsx:267-454) is a hand-rolled div.cd-overlay/cd-panel: onMouseDown on backdrop closes (273-275), document Escape closes (215-222), both discard state (form reset only on next open, 181-190) with no dirty check. role=dialog aria-modal present but no focus move, trap or return-focus code (contrast ds/ConfirmDialog.tsx:7-8,92-124, which has all of these). ConfirmDialog is not a form container, and no generic ds Modal exists in ds/ (listing checked).
 - **Files to change:** `apps/web/src/app/(app)/notifications/campaigns/_components/CampaignList.tsx`, `apps/web/src/app/_components/ds/Modal.tsx`, `apps/web/src/app/_components/ds/index.ts`
@@ -140,7 +140,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-CAMPAIGNS-05  ·  LOW  ·  partly  ·  theme PAGINATION (was MONEY)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Fetch is capped at 50 (getCampaigns limit=50, campaigns.ts) with no pager; cancelled/sent campaigns are mixed with drafts and there is no status filter; budgets are rendered with formatMoney (paise → ₹ lakh grouping) correctly.
 - **Verified evidence:** getCampaigns(limit=50, offset=0) (campaigns.ts:253) and CampaignList.tsx:45 calls it with defaults, no pager; the API's `total` is captured (unwrapTotal) but never displayed. No status filter/sort in the table (86-123); mixed statuses. Budget uses formatMoney(c.budgetMinor) (line 109) on paise strings - correct, and create uses rupeesToMinorString - so the MONEY theme is a non-issue (positive finding). Severity low is appropriate.
 - **Files to change:** `apps/web/src/app/(app)/notifications/campaigns/_components/CampaignList.tsx`, `apps/web/src/lib/notifications/campaigns.ts`
@@ -162,7 +162,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Error state contradicts itself on both cards: badge "Couldn't load — showing nothing" next to "Campaign could not be loaded. Showing saved information." under an em-dash title (CampaignDetail.tsx); nothing saved is shown, and a 404 for an unknown campaign id is indistinguishable from a failed load.
 - **Verified evidence:** CampaignDetail.tsx:107 shows DataSourceBadge source='error' ('Couldn't load - showing nothing', DataSourceBadge.tsx:71/75) while line 126 shows EmptyState title '-' with 'Campaign could not be loaded. Showing saved information.' Nothing is cached (getCampaign in lib/notifications/campaigns.ts:265-275 is a plain browserFetch). Same contradiction for metrics at lines 184/192. getCampaign returns source 'error' for every !res.ok including 404 (campaigns.ts:268), so an unknown id equals a failed load. (page.tsx is a thin server wrapper; client component holds logic.)
 - **Files to change:** `apps/web/src/app/(app)/notifications/campaigns/_components/CampaignDetail.tsx`, `apps/web/src/lib/notifications/campaigns.ts`
@@ -177,7 +177,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Scheduled at goes through formatIndianDate (CampaignDetail.tsx; formatters.ts) which returns dd/mm/yyyy with no time, so a scheduled send at 10:00 vs 23:00 is indistinguishable — for the one field where the hour matters.
 - **Verified evidence:** CampaignDetail.tsx:154 uses formatIndianDate(campaign.scheduledAt); lib/formatters.ts:2-7 uses toLocaleDateString en-IN with day/month/year only - no time, no explicit IST timeZone. A datetime-local value is submitted in CampaignList.tsx:257 as an ISO instant, so the hour is lost on display. Only formatIndianDate exists in formatters.ts; lib/admin/sftpIngestion.ts:280 has a local formatDateTime.
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/notifications/campaigns/_components/CampaignDetail.tsx`
@@ -191,7 +191,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme STATE (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Send and Cancel are disabled, not hidden, with no explanation (CampaignDetail.tsx, canSend/canCancel ); canCancel is true while status is "sending" so a half-sent campaign can be cancelled with the copy "will not be sent", and the dialog cancel label is "Keep editing" though nothing is editable.
 - **Verified evidence:** Send/Cancel are always rendered when the campaign loaded and only disabled (CampaignDetail.tsx:162-174) with canSend = draft|scheduled (98) and canCancel = anything except cancelled/sent (99), so 'sending' is cancellable - TRUE. Dialog copy line 221 'will not be sent' and cancelLabel 'Keep editing' (224) for both dialogs - TRUE. No explanation of disabled state - TRUE. Corrections: the actions are already behind ConfirmDialog (214-231); the suggested theme fix (ConfirmDialog) is present but has no requireReason, and no audit/maker-checker is visible client-side (backend cannot-verify).
 - **Files to change:** `apps/web/src/app/(app)/notifications/campaigns/_components/CampaignDetail.tsx`
@@ -208,7 +208,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme UX-COPY (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Audience segment prints the raw segment id (CampaignDetail.tsx) rather than the name loaded for the create dialog from v1/segments; metrics show "0" placeholders before a first send with ROI "—", which reads as failure rather than "not started".
 - **Verified evidence:** CampaignDetail.tsx:150 prints campaign.audienceSegmentId raw; names are available via getCampaignSegments() (campaigns.ts:301, GET v1/segments) already used by the create dialog (CampaignList.tsx:199-205). Metrics render numeric zeros (lines 202-206) and ROI '-' (209) for an unsent campaign - not distinguished from a failed/zero result; no 'not started' state when status is draft/scheduled.
 - **Files to change:** `apps/web/src/app/(app)/notifications/campaigns/_components/CampaignDetail.tsx`
@@ -230,7 +230,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-COMPOSE-02  ·  HIGH  ·  partly  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** The template select lists every row of GET /notification/templates including superseded versions (page.tsx sets no status filter; Template.status is loaded), so retired wording can be sent to citizens; the option label shows the raw enum "(in_app)".
 - **Verified evidence:** compose/page.tsx:62-74 loads /notification/templates and stores the list unfiltered; Template.status is declared (24) but never used; options (163-167) list `{t.name} ({t.channel})` so the raw enum 'in_app' shows. Templates page proves the same endpoint returns superseded rows (templates/page.tsx:21-23,57,70 uses supersededBy/status 'superseded'). Whether the send endpoint rejects superseded templates is cannot-verify (notification-service absent), so 'retired wording can be sent' is likely but unproven.
 - **Files to change:** `apps/web/src/app/(app)/notifications/compose/page.tsx`
@@ -245,7 +245,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-COMPOSE-03  ·  MEDIUM  ·  partly  ·  theme VALIDATION (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** No required-variable handling or preview: templates contain {{placeholders}} (see templates detail) but the form sends only templateId + recipient (page.tsx), so the placeholders cannot be filled and the user cannot see what will be sent.
 - **Verified evidence:** Client fact confirmed: send() body is only {templateId, recipient, channel?} (compose/page.tsx:99-100); the side card shows name/channel/subject only (221-227), no body or placeholders, and no variable inputs. Whether the send API accepts a variables/payload object cannot be verified (service absent), so the fix needs backend confirmation. Theme 'FABRICATED' is wrong - no fabricated data.
 - **Files to change:** `apps/web/src/app/(app)/notifications/compose/page.tsx`
@@ -261,7 +261,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-COMPOSE-04  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Recipient is one unvalidated text field ("email address, phone number, or user handle", page.tsx) not checked against the chosen channel; a phone in an email send is accepted client-side and fails asynchronously in Deliveries.
 - **Verified evidence:** Recipient input (compose/page.tsx:176-186) is type=text, only trimmed non-empty (87) with placeholder 'email address, phone number, or user handle'; channel is independent (196-206) and defaults to the template's, so no email/phone-vs-channel check exists client-side. Failure is asynchronous (page says so, 216-219). Server-side validation cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/notifications/compose/page.tsx`, `apps/web/src/lib/form-validation.ts`
@@ -277,7 +277,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-COMPOSE-05  ·  LOW  ·  confirmed  ·  theme UX-COPY (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** User copy exposes transport detail: "The service accepts the request (HTTP 202)" (page.tsx); the confirm sentence prints the raw channel value ("over in_app"), and the template select stays selected after a successful send while the recipient is cleared, inviting an accidental repeat.
 - **Verified evidence:** Copy 'The service accepts the request (HTTP 202)' at compose/page.tsx:218; ConfirmDialog description prints `over ${channel}` with the raw value (237, e.g. in_app); after success only setRecipient('') (113) - templateId and channel persist, so an immediate second submit needs only a new recipient (not an exact duplicate). The confirmation itself exists.
 - **Files to change:** `apps/web/src/app/(app)/notifications/compose/page.tsx`
@@ -300,7 +300,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-DELIVERIES-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Recipient email/phone printed unmasked on every row (deliveries/page.tsx, column :105) — a delivery log is a complete list of who was contacted and where; no DPDP masking or role gate.
 - **Verified evidence:** deliveries/page.tsx:51-59 maps d.recipient straight into the DataTable column (line 105) - no masking; filter box (114) also searches full recipients; list data is additionally persisted in the offline cache (useOfflineResource, lib/sync/resource.ts). No role gate.
 - **Files to change:** `apps/web/src/app/(app)/notifications/deliveries/page.tsx`, `apps/web/src/lib/pii.ts`, `apps/web/src/app/_components/ds/Masked.tsx`
@@ -316,7 +316,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-DELIVERIES-02  ·  MEDIUM  ·  confirmed  ·  theme STATS (was NAVUX)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stats use exact matches on delivered/failed/pending (page.tsx) but StatusBadge also knows sent, queued and bounced (StatusBadge.tsx); those rows count in Total only, and bounced deliveries — resendable in the detail page — appear in no tile and no tab (TABS = All/Failed/Pending).
 - **Verified evidence:** deliveries/page.tsx:42-44 count exact 'delivered'/'failed'/'pending'; StatusBadge.tsx:15-20 also defines sent, queued, bounced. TABS (31) = All/Failed/Pending with exact matches (61-66), so bounced/queued/sent appear only in Total/All. Detail page treats bounced as resendable (DD page.tsx:126).
 - **Files to change:** `apps/web/src/app/(app)/notifications/deliveries/page.tsx`
@@ -330,7 +330,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-DELIVERIES-04  ·  MEDIUM  ·  confirmed  ·  theme LOADING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Counts describe the loaded page only (no limit/offset param in useOfflineResource path) and zeros render during loading, identical to an empty log.
 - **Verified evidence:** useOfflineResource(path '/notification/deliveries') has no limit/offset (deliveries/page.tsx:34-38) so stats reflect whatever the API returns by default; initialData [] means tiles read '0' while loading (81-84 use deliveries.length) and, when error, tiles still show 0 while ErrorState renders (93). The card's empty state does distinguish loading, but the tiles do not.
 - **Files to change:** `apps/web/src/app/(app)/notifications/deliveries/page.tsx`
@@ -345,7 +345,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-DELIVERIES-05  ·  LOW  ·  confirmed  ·  theme NAVUX (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Header has no actions (no Send, no link to Templates) and back goes to /notifications/list rather than the module hub; "Delivered At" is "—" for failed and pending rows with no failure reason column, so causes need a click per row.
 - **Verified evidence:** deliveries/page.tsx:70-74 PageHeader has back='/notifications/list' (the notifications inbox list, not the hub /notifications) and no `actions`; columns (103-110) have no failure-reason column and Delivered At is '-' for non-delivered rows (57). Theme DEADROUTE inaccurate: no dead link, just wrong/missing navigation.
 - **Files to change:** `apps/web/src/app/(app)/notifications/deliveries/page.tsx`
@@ -368,7 +368,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-DELIVERIES-DETAIL-01  ·  HIGH  ·  partly  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Resend" is a brand-new POST /notification/send carrying only templateId + recipient + channel (ResendAction.tsx): template variables and original payload are not re-sent, so an OTP, sanction or payslip notice can go out with blank placeholders, and the original row stays "failed" while a duplicate appears. Shown to any user who can open the page, with no role check (page.tsx).
 - **Verified evidence:** ResendAction.tsx:218-222 posts only {templateId, recipient, channel?} to /notification/send; the original row is unchanged (copy at 235-236 says so) and a new delivery is created - TRUE. The 'blank placeholders' consequence depends on whether the template needs variables and whether the API can accept them: cannot-verify (notification-service absent; Delivery type in page.tsx:20-35 has no payload/variables field). The action is behind ActionButton/ConfirmDialog (ResendAction:230-240) but page.tsx:135-142 shows it to anyone who opens the page when status is failed|bounced; no role/permission check exists in the page (no hasPermission helper found in web src). Server enforcement cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/notifications/deliveries/[id]/ResendAction.tsx`, `apps/web/src/app/(app)/notifications/deliveries/[id]/page.tsx`
@@ -386,7 +386,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-DELIVERIES-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Recipient phone/email shown in full in the Delivery card and again in the confirm dialog (page.tsx, ResendAction.tsx) — no masking or role gate for DPDP personal data.
 - **Verified evidence:** DD page.tsx:149 renders delivery.recipient in full; ResendAction.tsx:235 prints it again in the confirm dialog. No masking helper or role gate exists in ds or this module; the only masking precedent is a local maskPhone in telephony/calls/page.tsx:36-41. Recipients are also stored unmasked in the offline cache by useOfflineResource on the list page.
 - **Files to change:** `apps/web/src/app/(app)/notifications/deliveries/[id]/page.tsx`, `apps/web/src/app/(app)/notifications/deliveries/[id]/ResendAction.tsx`, `apps/web/src/app/_components/ds/Masked.tsx`, `apps/web/src/lib/pii.ts`
@@ -402,7 +402,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-DELIVERIES-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failure reason and Detail print the provider/backend error string verbatim (page.tsx), which may carry gateway internals; Template ID and Delivery ID are raw UUIDs (page.tsx) with no link to the template.
 - **Verified evidence:** DD page.tsx:162-163 print delivery.error and errorDetail verbatim (visible to any viewer, whether 'failed' or 'bounced'); 158-159 show raw Delivery ID and Template ID in mono with no link. A templates detail route exists under notifications/templates (dir present) but is not linked. Content of provider errors cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/notifications/deliveries/[id]/page.tsx`
@@ -416,7 +416,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-DELIVERIES-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Attempts is retryCount ?? 0 (page.tsx) while the list column is attemptCount (deliveries/page.tsx): different field and possibly off-by-one; failed row shows "0" attempts when retryCount is absent.
 - **Verified evidence:** Detail page.tsx:151 shows `delivery.retryCount ?? 0`; list (deliveries/page.tsx:16,56,107) uses `attemptCount` from NotificationDelivery (@civitasone/types, absent from snapshot). Detail type declares retryCount only (31). So two different field names is TRUE; 'off-by-one' and which the backend returns are cannot-verify. The '?? 0' fallback fabricating 0 attempts is real. Theme FAILMASK acceptable (fabricated zero).
 - **Files to change:** `apps/web/src/app/(app)/notifications/deliveries/[id]/page.tsx`
@@ -431,7 +431,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-DELIVERIES-DETAIL-05  ·  MEDIUM  ·  partly  ·  theme ERRORS (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Errors other than 404 are collapsed to one fixed sentence (page.tsx); the resolved message from useFormError is stored but never rendered, and the not-found check compares a magic string "not_found" against the same error state (page.tsx), so a server message equal to that string would misroute.
 - **Verified evidence:** DD page.tsx:65-69 sets error 'not_found' on 404; other failures store formError.fromResponse(...).message (72) or fromException (77) in `error`, but render (100-124) only tests truthiness/equality and shows a fixed sentence 'There was a problem loading this delivery. Please try again.' (110) - stored message never displayed. Magic string compare at 100/107/109 could misroute only if a catalogued message equals 'not_found' (unlikely; messages come from lib/messages). Try again button is provided (115). Low real impact; theme DEADROUTE is wrong.
 - **Files to change:** `apps/web/src/app/(app)/notifications/deliveries/[id]/page.tsx`
@@ -444,7 +444,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-DELIVERIES-DETAIL-06  ·  LOW  ·  confirmed  ·  theme DATEFMT (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** formatIndianDate drops the time (formatters.ts): Sent at / Next retry at / Created at cannot tell a 10:01 attempt from a 10:41 retry; the resend result is only announced in a live region and an inline line, with no link to the new delivery.
 - **Verified evidence:** DD page.tsx:152-154 format Sent/Next retry/Created with formatIndianDate (formatters.ts:2-7, date only). ResendAction onSuccess (241-244) sets a text result and calls onResent -> load() which reloads the same delivery; the new delivery id is not known/linked (send returns 202, response body unused at 218-226). Theme DEADROUTE is wrong - no dead route.
 - **Files to change:** `apps/web/src/app/(app)/notifications/deliveries/[id]/page.tsx`, `apps/web/src/app/(app)/notifications/deliveries/[id]/ResendAction.tsx`, `apps/web/src/lib/formatters.ts`
@@ -467,7 +467,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-EXPERIMENTS-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch reads as an empty program: loader returns [] on error (loaders.ts), the badge is shown (page.tsx) but stats print 0 and the table prints "No experiments — Create an A/B or multivariate experiment…" (page.tsx), inviting the user to create a duplicate.
 - **Verified evidence:** experiments/page.tsx:11-13 uses data from getNotificationExperiments(); loaders.ts:3100 fetchJson falls back to [] with source 'error' (apiClient.ts:119-172). page.tsx:30 renders only DataSourceBadge on error, then :32-33 print data.length/awaiting (0) and :36-49 DataTable shows emptyTitle 'No experiments / Create an A/B...' as if none exist.
 - **Files to change:** `apps/web/src/app/(app)/notifications/experiments/page.tsx`
@@ -484,7 +484,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-EXPERIMENTS-03  ·  MEDIUM  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status column uses cellType "status" (StatusPill, colour + text) and pending_approval/running/concluded are missing from STATUS_MAP so all render in the neutral info colour (StatusPill.tsx map); statusLabel() ("Awaiting winner approval") exists but is only used in the footnote (page.tsx), so the table and legend use different wording, and other notification pages use the WCAG StatusBadge instead.
 - **Verified evidence:** Table column uses cellType 'status' (page.tsx:39) -> DataTable.tsx:127 StatusPill. StatusPill.tsx STATUS_MAP (lines 5-39) has no pending_approval/running/concluded, so they fall to 'info' (line 53); label is humanizeStatus (e.g. 'Pending Approval') not statusLabel() 'Awaiting winner approval' (experiments.ts:7-20, used only in footnote page.tsx:52). Notifications module's other pages use StatusBadge (notifications/_components/StatusBadge.tsx), which also lacks these keys.
 - **Files to change:** `apps/web/src/app/(app)/notifications/_components/StatusBadge.tsx`, `apps/web/src/app/(app)/notifications/experiments/page.tsx`, `apps/web/src/app/(app)/notifications/experiments/experiments.ts`
@@ -500,7 +500,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-EXPERIMENTS-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Winner variant" prints the raw winnerVariantId (page.tsx), an opaque id with no variant name or lift metric, so approvers cannot see what won or by how much.
 - **Verified evidence:** page.tsx:19 maps winner to e.winnerVariantId ?? '—' and prints it in column 'Winner variant' (:40). No variant name or lift is loaded. The NotificationExperiment type/zod schema (@civitasone/types, notificationExperimentListSchema) is not in the snapshot, so whether the API returns variant names or lift is cannot-verify for the field level.
 - **Files to change:** `apps/web/src/app/(app)/notifications/experiments/page.tsx`, `packages/types (NotificationExperiment + zod schema)`
@@ -517,6 +517,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 ### GAP-NOTIFICATIONS-EXPERIMENTS-05  ·  LOW  ·  partly  ·  theme LOADING (was PII)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1871 — loading.tsx is now an animated skeleton but still uses the Tailwind min-h-screen bg-slate-50 wrapper rather than the shared RouteSkeleton; page strings still hard-coded English
 - **First-pass claim:** loading.tsx is only <p>Loading experiments…</p> (loading.tsx), inconsistent with the skeleton pattern of siblings; hard-coded English, no next-intl keys; CSV export offered with no role or PII consideration (winner ids only, low risk).
 - **Verified evidence:** experiments/loading.tsx is a single <p>Loading experiments…</p> in .page-main (true; siblings use pulse skeletons, though those are min-h-screen/bg-slate-50 blocks themselves). All strings in page.tsx are hard-coded English (no useTranslations). DataTable exportable (page.tsx:44) downloads CSV of name/status/winner id only - no PII, so the PII theme is wrong and risk is negligible.
 - **Files to change:** `apps/web/src/app/(app)/notifications/experiments/loading.tsx`
@@ -537,7 +538,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-LIST-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Recipient (email address or phone number) is printed verbatim for every row (list/page.tsx, column) with no masking or role gate — DPDP personal data for every notified person, visible to whoever opens the inbox; whether the endpoint is scoped to the caller is not verifiable (backend absent).
 - **Verified evidence:** list/page.tsx:55 maps recipient: n.recipient and :117 prints it verbatim in a DataTable column; no masking or role check. Data comes from GET /notification/notifications; whether the service scopes it to the caller is cannot-verify (service absent). No shared <Masked> was found for tables (grep hits only in admin/integrations and hr Step4).
 - **Files to change:** `apps/web/src/app/(app)/notifications/list/page.tsx`, `apps/web/src/app/_components/Masked.tsx (new or reuse)`, `apps/web/src/lib/formatters.ts`
@@ -553,7 +554,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-LIST-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was NAVUX)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Unread" tab is r.status !== "read" (page.tsx) so failed and queued events count as unread; and StatCards use exact-match statuses (sent/failed/read) so queued/pending/delivered events appear in Total but in no other tile.
 - **Verified evidence:** list/page.tsx:63 Unread = r.status !== 'read', so failed/queued/sent all count as unread. Stats at :42-44 use exact matches sent/failed/read; Total (:88) is length, so queued/pending/delivered appear only in Total. StatusBadge knows delivered/pending/queued/bounced states.
 - **Files to change:** `apps/web/src/app/(app)/notifications/list/page.tsx`
@@ -568,7 +569,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-LIST-03  ·  MEDIUM  ·  confirmed  ·  theme CAP (was FAILMASK)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Counts are derived client-side from whatever the single fetch returned (no limit/offset in the request), so Total/Sent/Failed describe one page of results, not the inbox; loading also renders the same zeros as an empty inbox.
 - **Verified evidence:** list/page.tsx:34-38 fetches '/notification/notifications' with no limit/offset; counts at :42-44,88 are computed from that response only; DataTable pageSize 15 is client paging. While loading, notifications=[] (initialData) so tiles show 0 (:88-91). Server pagination support is cannot-verify (service absent).
 - **Files to change:** `apps/web/src/app/(app)/notifications/list/page.tsx`
@@ -583,7 +584,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-LIST-04  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Provenance is shown as a plain amber sentence (page.tsx), not the DataSourceBadge used by sibling pages; a cache note and an ErrorState can coexist for different fetches and the page never says which data is stale.
 - **Verified evidence:** list/page.tsx:46-49,82-86 renders provenance as an amber <p> with hard-coded #92400e; DataSourceBadge (with a provenance prop accepting useOfflineResource output) exists but within notifications only experiments/page.tsx uses it. There is only a single fetch on this page, so the claim that a cache note and ErrorState can be for different fetches is wrong; they can coexist for the same fetch.
 - **Files to change:** `apps/web/src/app/(app)/notifications/list/page.tsx`, `apps/web/src/app/(app)/notifications/templates/page.tsx`
@@ -596,7 +597,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-LIST-05  ·  LOW  ·  confirmed  ·  theme NAVUX (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Rows are not clickable (no rowHref) though deliveries and templates are; header actions are plain <a href> (page.tsx) causing full reloads instead of client navigation; dates show dd/mm/yyyy without time for events that are minutes old.
 - **Verified evidence:** No rowHref on DataTable (list/page.tsx:113-127) whereas templates/page.tsx:123 and deliveries/page.tsx:112 have one. Header actions are <a href> (:75-78) causing full reload. Dates use formatIndianDate (date only, :58). No inbox detail route exists under notifications/list, so row links would need to target deliveries or a new detail page.
 - **Files to change:** `apps/web/src/app/(app)/notifications/list/page.tsx`
@@ -617,7 +618,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-TEMPLATES-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** The module promises "Message templates and versions" (notifications/page.tsx) but no route creates, edits or activates a template; the compose page tells the user templates "are managed in the notification service" (compose/page.tsx). Template content is read-only and unmanageable from the app, so wording changes need engineering.
 - **Verified evidence:** Notifications dir contains no create/edit/activate routes (templates/ has page and [id] only); both pages are read-only; compose/page.tsx:150 says 'Templates are managed in the notification service.' Whether the service exposes POST/PUT template endpoints is cannot-verify (service absent).
 - **Files to change:** `apps/web/src/app/(app)/notifications/templates/new/page.tsx (new)`, `apps/web/src/app/(app)/notifications/templates/[id]/page.tsx`, `apps/web/src/app/(app)/notifications/templates/page.tsx`
@@ -633,7 +634,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-TEMPLATES-02  ·  MEDIUM  ·  partly  ·  theme OTHER (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Every version of every template is a row: a superseded v2 appears next to its active v3 with the same Name (page.tsx), and the list has no grouping or "latest only" default, so "Active" and "Total" double-count logical templates.
 - **Verified evidence:** templates/page.tsx maps every returned row (:64-71) with no grouping; Total (:94) counts all rows, Active (:56) counts status==='active' (one per logical template, so Active does not double count) and Superseded counts the rest. Whether the API returns all versions in the list is cannot-verify. Theme VALIDATION is wrong.
 - **Files to change:** `apps/web/src/app/(app)/notifications/templates/page.tsx`
@@ -647,7 +648,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-TEMPLATES-03  ·  MEDIUM  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subject shows raw placeholders such as {{period}} and "—" for sms/in-app; channel is a lowercased key with underscores replaced (page.tsx) rather than a label.
 - **Verified evidence:** Subject is printed as stored (:68, includes {{period}}) and '—' when null; channel is t.channel.replace(/_/g,' ') (:67), not lowercased by the code but shown as raw key like 'in app'/'sms'. Placeholders are legitimate template content, so only the channel label is a real gap. Theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/(app)/notifications/templates/page.tsx`, `apps/web/src/app/(app)/notifications/templates/[id]/page.tsx`, `apps/web/src/app/(app)/notifications/list/page.tsx`
@@ -660,7 +661,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-TEMPLATES-04  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Counts reflect one unpaginated fetch (path has no limit/offset, page.tsx) and read as zeros while loading; the cache note is plain text, not a DataSourceBadge.
 - **Verified evidence:** Fetch '/notification/templates' at :48-51 has no limit/offset; stats at :94-96 read 0 while loading (initialData []); cache note :88-92 is plain amber text (hard-coded #92400e). Server pagination support is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/notifications/templates/page.tsx`
@@ -676,7 +677,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-TEMPLATES-05  ·  LOW  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Header action Send notification is a plain <a href> (page.tsx) not preselecting a template; no page-level role gate on who may send.
 - **Verified evidence:** templates/page.tsx:86 uses <a className='btn primary' href='/notifications/compose'> with no template context (nothing to preselect at list level) and no role guard anywhere in the page. Server-side enforcement on /notification/send is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/notifications/templates/page.tsx`
@@ -697,7 +698,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-TEMPLATES-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Send with this template" is a bare link to /notifications/compose (page.tsx); compose reads no query string and starts with an empty template select (compose/page.tsx), so the button loses the very context it names and the user must find the template again in a list that includes superseded versions.
 - **Verified evidence:** templates/[id]/page.tsx:269 is <a href='/notifications/compose'> with no query; compose/page.tsx has no useSearchParams/searchParams (grep empty) and initialises templateId to '' (:352). Compose loads and lists all templates including superseded (no filter).
 - **Files to change:** `apps/web/src/app/(app)/notifications/templates/[id]/page.tsx`, `apps/web/src/app/(app)/notifications/compose/page.tsx`
@@ -713,7 +714,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-TEMPLATES-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Send CTA stays on a superseded template: latest.supersededBy only changes the pill (page.tsx), not the action, so users can be sent from a retired version with no warning.
 - **Verified evidence:** Page.tsx:269 CTA is unconditional; supersededBy affects only the StatusBadge (:274, :258). Also versions[0] is assumed latest, so the CTA could point at retired version. Compose does not filter superseded either.
 - **Files to change:** `apps/web/src/app/(app)/notifications/templates/[id]/page.tsx`
@@ -729,7 +730,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-TEMPLATES-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme OTHER (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Version history lists channel, subject and status only (page.tsx) — no date, author or diff — and includes the current version as a row, so "history" cannot answer who changed the wording or when; the single-version test (history.length <= 1) therefore fires only for a template with exactly one row.
 - **Verified evidence:** History table (:290-299) columns are version/channel/subject/status; TemplateView (:149-158) has no date, author or body diff fields, so adding them needs API fields (cannot-verify in absent service). The current version is included as a row (history built from all versions, :256) and the history.length <= 1 test (:287) is therefore consistent - it fires only for a single-version template, which is correct rather than a bug. Theme DATEFMT is wrong (no dates rendered).
 - **Files to change:** `apps/web/src/app/(app)/notifications/templates/[id]/page.tsx`, `notification service versions endpoint`
@@ -743,7 +744,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-TEMPLATES-DETAIL-05  ·  LOW  ·  partly  ·  theme DARKMODE (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Body is shown as raw text with {{placeholders}} in a <pre> (page.tsx) using a hard-coded #f8fafc fallback background (ignores dark mode); errors reduce to one fixed sentence and the resolved message is unused.
 - **Verified evidence:** <pre> at :280 uses background var(--bg-soft, #f8fafc); --bg-soft is not defined in civitas-ds.css, so the light fallback is always used and ignores .dark. Row label colour #667085 also hard-coded. Error branch sets error message from formError (:206,211) but :241-242 show fixed strings and never render it. Raw placeholders in <pre> is intentional. Theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/(app)/notifications/templates/[id]/page.tsx`

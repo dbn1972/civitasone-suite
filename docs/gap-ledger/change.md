@@ -14,7 +14,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Raise dialog is a hand-rolled fixed overlay: no focus trap or focus return, only Escape closes it (NewChangeButton.tsx:28-34,75-76); not the DS ConfirmDialog.
 - **Verified evidence:** NewChangeButton.tsx:75-76 renders a hand-rolled position:fixed overlay with role=dialog aria-modal; the only key handling is Escape (:27-34). No initial focus move, no Tab trap, no focus return to the '+ Raise change' button, no overlay-click close. ds/ConfirmDialog has all of that but is confirmation-specific (has reason field, not a general form modal).
 - **Files to change:** `apps/web/src/app/_components/ds/ (new Modal/Dialog extracted from ConfirmDialog)`, `apps/web/src/app/(app)/change/NewChangeButton.tsx`, `apps/web/src/app/_components/ds/ConfirmDialog.tsx`
@@ -29,7 +29,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme NAVUX
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Awaiting CAB is a count only — no filter/tab to show just the submitted queue that a CAB member must work (page.tsx:22-26).
 - **Verified evidence:** page.tsx:24 computes awaitingCab count and :49 shows it in a non-link StatCard; the DataTable (:63-79) has only free-text filter, no status filter, so the CAB queue cannot be isolated. Row status text is present, so text filter 'submitted' works but is not discoverable.
 - **Files to change:** `apps/web/src/app/(app)/change/page.tsx`
@@ -45,7 +45,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-HOME-04  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Emergency-type changes are indistinguishable in list styling beyond a status cell; no expedited path is described although type 'emergency' exists (NewChangeButton.tsx:7).
 - **Verified evidence:** page.tsx:66-67 render Type and Risk through StatusPill (cellType 'status'); ds/StatusPill.tsx STATUS_MAP has no emergency/normal/standard/low/medium/high keys, so all fall to the neutral 'info' variant: emergency and high-risk look the same as standard/low. NewChangeButton.tsx:7 offers 'emergency' and ChangeActions has no expedited path or copy; whether the backend has a distinct emergency flow is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/change/page.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/app/(app)/change/NewChangeButton.tsx`
@@ -60,7 +60,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-HOME-05  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx uses Tailwind gray-100/200 and a p-6 wrapper (loading.tsx:1-14), inconsistent with the DS Skeleton used elsewhere and light-only.
 - **Verified evidence:** change/loading.tsx:1-14 (and identical comms/loading.tsx) use Tailwind h-8/bg-gray-200/bg-gray-100/p-6 classes and animate-pulse, hard-coded light colours; the DS provides SkeletonCard/SkeletonTable/SkeletonBar (ds/Skeleton.tsx, exported from ds/index.ts:42) using CSS variables, and contracts/loading.tsx uses var(--panel)/var(--line). Whether Tailwind utilities are even compiled for the (app) group was not verified.
 - **Files to change:** `apps/web/src/app/(app)/change/loading.tsx`, `apps/web/src/app/(app)/change/comms/loading.tsx`
@@ -74,7 +74,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-HOME-06  ·  LOW  ·  confirmed  ·  theme VALIDATION (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Loader maps unknown/malformed rows with defaults (status 'draft', type 'normal') so a backend shape change would silently show every change as draft (_data/loaders.ts:34-39).
 - **Verified evidence:** loaders.ts:34-35,39 mapChange defaults type to 'normal', risk to 'medium', status to 'draft' via str(v,fallback); id defaults to '' (:32). No schema validation of the payload (asArray/asObj casts only). A shape change (e.g. status renamed) would make every row 'draft', and the detail page would then offer draft actions (ChangeActions.tsx:59-70).
 - **Files to change:** `apps/web/src/app/(app)/change/_data/loaders.ts`, `apps/web/src/app/(app)/change/_data/types.ts`
@@ -96,7 +96,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-DETAIL-01  ·  HIGH  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Approve (CAB), Reject, Complete and 'Mark rolled back' fire immediately on click with no ConfirmDialog (ChangeActions.tsx:29-31,78-79,115-116) — irreversible governance transitions (approval releases to production; rollback is terminal) on a single click, unlike contracts/[id] and cdp/steward which confirm.
 - **Verified evidence:** Confirmed no confirmation: ChangeActions.tsx:49-51 btn() calls run(fn) directly on click; Approve (:78), Reject (:79), Complete (:115) and Mark rolled back (:116) all fire immediately (lines 29-31 cited earlier are just state hooks). Same for Submit/Schedule/Start. Overstated: Approve only moves submitted->approved (scheduling and start are separate steps :86-106), it does not release to production; rolled_back is treated terminal at :121. Contracts do confirm (BondActions/MilestoneActions use ds ActionButton). Server-side maker-checker/audit are cannot-verify (service absent), UI hint :81 claims them.
 - **Files to change:** `apps/web/src/app/(app)/change/[id]/ChangeActions.tsx`
@@ -115,7 +115,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-DETAIL-02  ·  HIGH  ·  partly  ·  theme AUDIT (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Approve sends a hard-coded note 'Approved via console' (ChangeActions.tsx:78) and Reject posts an empty reason if the field is left blank (line 79) — the audit trail records boilerplate instead of the CAB member's rationale; no client validation that reason is non-empty.
 - **Verified evidence:** Approve posts the literal { note: 'Approved via console' } (ChangeActions.tsx:78) so the audit note (rendered page.tsx:89) is boilerplate. Reject posts { reason } from the shared 'Rejection reason' input (:75-79) with no client check that it is non-empty (button never disabled). Whether the backend rejects an empty reason is cannot-verify. The single reason input sits beside Approve so the approver cannot record a rationale.
 - **Files to change:** `apps/web/src/app/(app)/change/[id]/ChangeActions.tsx`
@@ -131,7 +131,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme UUID (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Requested by / Approved by / Actor print 8-char UUID prefixes (page.tsx:41-42,88), so CAB cannot tell who raised or approved a change; maker-checker (approver ≠ requester) is unverifiable on screen.
 - **Verified evidence:** page.tsx:41 (requestedBy.slice(0,8)), :42 (approvedBy.slice(0,8)) and :88 (audit actorId.slice(0,8)), and header :31 prints c.id.slice(0,8). No name resolution exists on this page; no user-directory helper found in web loaders (cannot-verify whether an endpoint exists).
 - **Files to change:** `apps/web/src/app/(app)/change/[id]/page.tsx`, `apps/web/src/app/(app)/change/_data/loaders.ts`, `apps/web/src/app/_components/ds/ (new UserRef component)`
@@ -147,7 +147,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Release window shows dates only (formatIndianDate) though windows are datetime-local inputs (ChangeActions.tsx:90-94), so a 22:00–02:00 window reads as same-day start/end.
 - **Verified evidence:** page.tsx:44-46 renders windowStart/windowEnd via formatIndianDate, which returns dd/MM/yyyy only (formatters.ts:2-7). ChangeActions.tsx:90,94 collect datetime-local and :96-99 send new Date(x).toISOString(). Also: an empty picker gives new Date('') and toISOString() throws RangeError, swallowed by run() into the generic error.
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/change/[id]/page.tsx`, `apps/web/src/app/(app)/change/[id]/ChangeActions.tsx`, `apps/web/src/app/(app)/change/page.tsx`
@@ -162,7 +162,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme ERRMSG (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failure of any action shows one generic message (ChangeActions.tsx:12-17); a freeze-overlap or maker-checker rejection is not distinguished from a network error, though the hint text names both rules.
 - **Verified evidence:** ChangeActions.tsx:15-18 changeActionError() returns one catalogued 'save' message; post() (:20-26) throws it on any !res.ok without reading status/body, and run() (:45) replaces any exception with it. Hints at :81 and :101 tell users about maker-checker and freeze rules, but their violation is indistinguishable from a network failure. NewChangeButton.tsx:56 already uses useFormError.fromResponse. Whether the admin service returns typed { code, message } bodies is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/change/[id]/ChangeActions.tsx`, `apps/web/src/lib/useFormError.ts`
@@ -186,7 +186,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-CALENDAR-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Despite the name, no calendar exists — two flat tables (page.tsx:41-77); overlap between a booked window and a freeze, which blocks scheduling (ChangeActions.tsx:101), cannot be seen here.
 - **Verified evidence:** change/calendar/page.tsx:36-77 renders two <table className='tbl'> (windows, freezes) sorted by start; no month/week grid and no overlap indicator. Overlap blocking is enforced server-side, message only at change/[id]/ChangeActions.tsx:101 (finding said :101, correct). Users cannot see conflicts before scheduling.
 - **Files to change:** `apps/web/src/app/(app)/change/calendar/page.tsx`, `apps/web/src/app/(app)/change/calendar/ReleaseCalendar.tsx (new)`
@@ -203,7 +203,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-CALENDAR-02  ·  HIGH  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** On error the stat cards render 0 for 'Scheduled releases' and 'Change freezes' (page.tsx:28-29, values from empty arrays) while the change home renders '—'; a broken feed reads as 'no freezes', which could lead to scheduling during a freeze.
 - **Verified evidence:** On error, stat cards get scheduled.length / freezes.length from empty arrays (page.tsx:28-29) and show 0, whereas change home uses errored ? '—' (change/page.tsx:48-51). Mitigations the finding omits: DataSourceBadge (l.26) and RefreshErrorState replaces both tables when errored (l.32-34). Also one failing loader marks both as errored though the other data is fine.
 - **Files to change:** `apps/web/src/app/(app)/change/calendar/page.tsx`
@@ -218,7 +218,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-CALENDAR-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Freeze list has no create/edit/delete control; the page claims 'active change freezes' but lists all freezes including past ones with no status or filter (page.tsx:19-21).
 - **Verified evidence:** Page has no create/edit/delete UI for freezes; the only freeze loader is a list GET (_data/loaders.ts:89-101 -> /api/v1/admin/change/freezes) and no freeze mutation exists in change/. Subtitle (page.tsx:25) says 'active change freezes' but l.19-21 sorts and lists all freezes with no status or past/active filter. Freeze create/update endpoints cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/change/calendar/page.tsx`, `apps/web/src/app/(app)/change/_data/loaders.ts`
@@ -234,7 +234,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-CALENDAR-04  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Windows and freezes print dates only (formatIndianDate), dropping the time of day of a release window (page.tsx:52-55).
 - **Verified evidence:** Windows and freezes use formatIndianDate (page.tsx:49-50,69-70), which is date-only (lib/formatters.ts:2-7) while windows are booked with datetime-local (ChangeActions.tsx). Two windows on the same day look identical and a freeze end time is lost.
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/change/calendar/page.tsx`
@@ -249,7 +249,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-CALENDAR-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tables are bare <table className='tbl'> markup, not DataTable — no sort/filter/mobile card transform (page.tsx:41,63).
 - **Verified evidence:** Both tables are raw <table className='tbl' style width 100%> (page.tsx:41,63) without the .tbl-wrap scroll container and without sort/filter/pagination that ds DataTable provides. Other change pages use ds components.
 - **Files to change:** `apps/web/src/app/(app)/change/calendar/page.tsx`
@@ -270,7 +270,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-COMMS-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Page is titled 'published … broadcasts' but shows only local data: it lists completed changes with releaseNotes and never queries the notification service, so a failed broadcast still appears as 'Published' (page.tsx:12-15,25).
 - **Verified evidence:** comms/page.tsx:12-14 filters getChangeRequests() to status==='completed' && releaseNotes; :25 labels the count 'Published releases' and :20 says 'broadcasts published'. The page never calls the notification service, and ChangeRequest (loaders.ts:30-52) has no broadcast/delivery field, so 'Published' just means 'completed with notes'. Whether the backend actually broadcasts on completion is cannot-verify (admin change service absent from snapshot).
 - **Files to change:** `apps/web/src/app/(app)/change/comms/page.tsx`, `apps/web/src/app/(app)/change/_data/loaders.ts`, `apps/web/src/app/(app)/change/_data/types.ts`
@@ -286,7 +286,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-COMMS-02  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Loads the entire change-request list (no limit or paging) and filters client-side, then renders every release as a full card with no pagination or search (page.tsx:8-15,37).
 - **Verified evidence:** loaders.ts:66-74 getChangeRequests() calls /api/v1/admin/change/requests with no limit/offset/status params; comms/page.tsx:12-14 filters status/releaseNotes in memory and :37 maps every result to a full card. No paging, search or count of total. Whether the endpoint supports paging/filter params is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/change/comms/page.tsx`, `apps/web/src/app/(app)/change/_data/loaders.ts`
@@ -302,7 +302,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-COMMS-03  ·  MEDIUM  ·  partly  ·  theme OTHER (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Date shown is pirAt (post-implementation review time) rather than the broadcast time; no audience or channel is displayed.
 - **Verified evidence:** Real: comms/page.tsx:14 sorts and :41 displays pirAt ?? updatedAt (PIR time, not broadcast time), and no audience/channel is shown; ChangeRequest has no such fields (loaders.ts:30-52). Overstated fix: formatIndianDate (formatters.ts:2) outputs dd/MM/yyyy via toLocaleDateString and has no time or 'dd Mon yyyy' form; there is no formatIndianDateTime helper.
 - **Files to change:** `apps/web/src/app/(app)/change/comms/page.tsx`, `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/change/_data/types.ts`
@@ -317,7 +317,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-COMMS-04  ·  LOW  ·  confirmed  ·  theme LAYOUT (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Release-note text is pre-wrap plain text; no length clamp, so a long note pushes all others off-screen.
 - **Verified evidence:** comms/page.tsx:44 renders releaseNotes with whiteSpace pre-wrap and no clamp/max-height. Note: input in ChangeActions.tsx:113 is a single-line <input>, but backend length limit is cannot-verify, so long notes are possible.
 - **Files to change:** `apps/web/src/app/(app)/change/comms/page.tsx`

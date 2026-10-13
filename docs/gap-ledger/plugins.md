@@ -14,7 +14,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Segment loading.tsx paints three stat blocks and a table skeleton (loading.tsx:20-38) although the hub is tiles-only, so content jumps; the tile grid is three columns for four tiles (ModuleHub.tsx:26-34).
 - **Verified evidence:** plugins/loading.tsx:24-37 renders three stat cards (g-4) plus a five-row table skeleton though the hub page.tsx is tiles only; that loading file is segment-wide so sub-pages (installed) use it correctly. ModuleHub.tsx:27 renders LinkTiles columns 'three' (LinkTiles.tsx:64 g-3) for the 4 plugin tiles, leaving an orphan tile.
 - **Files to change:** `apps/web/src/app/(app)/plugins/loading.tsx`, `apps/web/src/app/_components/ModuleHub.tsx`, `apps/web/src/app/(app)/plugins/page.tsx`
@@ -29,7 +29,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-HOME-03  ·  LOW  ·  partly  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Hub subtitle lists "Installed plugins, marketplace catalogue, hooks and registry" but Installed and Registry are two different endpoints for near-identical concepts (installed/page.tsx:15 vs registry/page.tsx:8).
 - **Verified evidence:** Subtitle at plugins/page.tsx:7. Installed uses getPlugins -> /api/v1/plugins/items (loaders.ts:754-759); Registry uses getPluginRegistry -> /api/v1/plugins (_data.ts:89). Two endpoints are real; whether they overlap in meaning is cannot-verify (plugin-service absent).
 - **Files to change:** `apps/web/src/app/(app)/plugins/page.tsx`, `apps/web/src/app/(app)/plugins/registry/page.tsx`
@@ -42,7 +42,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-HOME-04  ·  LOW  ·  confirmed  ·  theme NAVUX
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Sub-pages use a lucide ArrowLeft back link and a Breadcrumb aria-label on a <nav> that contains a single link (installed/page.tsx:32-34).
 - **Verified evidence:** installed/page.tsx (~line 32-34), hooks/page.tsx and registry/page.tsx wrap a lucide ArrowLeft plus one <a href='/plugins'> in <nav aria-label='Breadcrumb'>; a one-item breadcrumb is not a breadcrumb, and notifications pages use PageHeader back prop instead. Also plain <a>, not next/link.
 - **Files to change:** `apps/web/src/app/(app)/plugins/installed/page.tsx`, `apps/web/src/app/(app)/plugins/hooks/page.tsx`, `apps/web/src/app/(app)/plugins/registry/page.tsx`, `apps/web/src/app/(app)/plugins/marketplace/page.tsx`
@@ -62,7 +62,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-HOOKS-01  ·  HIGH  ·  partly  ·  theme MISSINGFEATURE (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Hooks run tenant code on business events, yet the page is a read-only generic list with no enabled/disabled control, owner plugin or failure count; there is no way to see which plugin owns a hook (mapRows keeps only label/sublabel/status/meta, _data.ts:52-64).
 - **Verified evidence:** hooks/page.tsx:12-18 renders the generic ModuleListPage (read-only, no controls). mapRows (_data.ts:68-74) keeps only id/label/sublabel/status/meta so any owner-plugin, enabled or failure fields are dropped. Theme DEADROUTE is wrong: the route exists and works. Whether /api/v1/plugins/hooks returns owner/failure fields cannot be verified (plugin-service not in snapshot).
 - **Files to change:** `apps/web/src/app/(app)/plugins/hooks/page.tsx`, `apps/web/src/app/(app)/plugins/_data.ts`, `apps/web/src/app/(app)/plugins/HooksTable.tsx`
@@ -80,7 +80,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-HOOKS-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Generic five-column table for every plugin list: ID is a truncated UUID, Status prints the raw string with no pill, Meta prints raw ISO timestamps or codes (ModuleListTable.tsx:46-52) — no plugin-specific columns (version, publisher, scope).
 - **Verified evidence:** ModuleListTable.tsx:40-44 hardcodes headers ID/Name/Detail/Status/Meta; ID is row.id.slice(0,8) in a mono span (line 50); status printed raw via `row.status ?? "—"` (line 53) with no StatusPill; meta printed raw (line 54, from _data.ts:61-67: code/currency/updatedAt/createdAt). No version/publisher/scope columns. Shared by all four plugin list pages via ModuleListPage.
 - **Files to change:** `apps/web/src/app/(app)/plugins/PluginCatalogTable.tsx`, `apps/web/src/app/(app)/plugins/_data.ts`, `apps/web/src/app/(app)/plugins/hooks/page.tsx`
@@ -96,7 +96,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-HOOKS-03  ·  MEDIUM  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** mapRows treats a non-array object as one row (extractRows returns [payload], _data.ts:19-26), so an error-shaped JSON body becomes a bogus record with id "row-1" instead of an error state.
 - **Verified evidence:** _data.ts:18-26 extractRows returns [payload] for a bare object (line 25) and mapRows falls back to id `row-${index+1}` (line 41). But fetchJson (_data/apiClient.ts:119-172) already returns source:'error' with empty data for non-2xx, 401 and missing base URL, so an error body on a failed HTTP status never reaches mapRows. The bogus row appears only if the gateway returns HTTP 200 with an error-shaped object.
 - **Files to change:** `apps/web/src/app/(app)/plugins/_data.ts`
@@ -112,7 +112,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-HOOKS-04  ·  LOW  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** No filter, sort or pagination on this list (ModuleListTable.tsx), unlike Installed which uses DataTable sortable/filterable.
 - **Verified evidence:** ModuleListTable.tsx:49-58 renders a plain <table> over every row: no filter, sort or pagination. PluginsTable.tsx:24-27 (Installed) uses DataTable sortable+filterable, but with no pageSize either. Loaders (_data.ts:88-91) pass no limit/page params; whether plugin-service paginates cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/plugins/PluginCatalogTable.tsx`, `apps/web/src/app/(app)/plugins/_data.ts`
@@ -136,7 +136,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-INSTALLED-01  ·  HIGH  ·  confirmed  ·  theme LOGIC (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Install button is rendered on every row, including plugins that are already Enabled (PluginActions.tsx:47-58), next to Disable; there is no "installed" state distinct from enabled/disabled, so the list is labelled Installed but offers Install.
 - **Verified evidence:** PluginActions.tsx:43-54 always renders an 'Install' ActionButton for every row, then Disable if enabled (55-66) or Enable (67-78). No installed/available state exists; PluginRow carries only id/name/status. Data comes from /api/v1/plugins/items so every row is already tenant-provisioned; Install on an Enabled row is meaningless and offers re-provisioning with data access (confirmDescription line 48). Theme I18N is wrong.
 - **Files to change:** `apps/web/src/app/(app)/plugins/PluginActions.tsx`, `apps/web/src/app/(app)/plugins/PluginsTable.tsx`
@@ -153,7 +153,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-INSTALLED-02  ·  HIGH  ·  partly  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Plugin-wide impact without a gate or dependency check: Disable "immediately removes this feature for all tenant users" (PluginActions.tsx:66) yet the only safeguard is a free-text reason; no role check in page.tsx or PluginsTable.tsx, and no confirmation of dependent workflows.
 - **Verified evidence:** No role check in installed/page.tsx or PluginsTable.tsx; app/(app)/plugins has no layout.tsx, so only the tenant-level ModuleGate applies elsewhere and none here. The confirm dialog does exist: PluginActions.tsx:61-64 confirmDescription warns 'immediately removes this feature for all tenant users', with requireReason (line 63) via ActionButton. Other modules use requireAnyRole (lib/auth/roleGuard.ts, e.g. crm/document-types/layout.tsx:14). No dependent-workflow check is possible client side. Server enforcement in plugin-service cannot be verified (absent).
 - **Files to change:** `apps/web/src/app/(app)/plugins/layout.tsx`, `apps/web/src/app/(app)/plugins/installed/page.tsx`, `apps/web/src/app/(app)/plugins/PluginActions.tsx`
@@ -170,7 +170,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-INSTALLED-03  ·  MEDIUM  ·  partly  ·  theme ERRORS (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Error text leaks the raw response body: `throw new Error((await res.text()) || ...)` (PluginActions.tsx:37) surfaces whatever the gateway returns to the confirm dialog.
 - **Verified evidence:** PluginActions.tsx:34 `throw new Error((await res.text()) || ...)` does surface the raw proxy response body into the ActionButton dialog error. The dialog itself already exists with mandatory reason (requireReason). Maker-checker/audit are not applicable client-side. Does /api/proxy return sanitized bodies? proxy route not opened; body may be JSON error text shown verbatim.
 - **Files to change:** `apps/web/src/app/(app)/plugins/PluginActions.tsx`
@@ -185,7 +185,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-INSTALLED-04  ·  MEDIUM  ·  confirmed  ·  theme STATUS (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** A row with no id gets all three buttons disabled with no explanation (PluginActions.tsx:41,45-77) and the status cell treats any non-"enabled" string ("pending", "error") as Disabled (PluginsTable.tsx:14-17).
 - **Verified evidence:** PluginActions.tsx:39 `disabled = !plugin.id` disables all three buttons with no tooltip/explanation (run() would throw at line 16 anyway). PluginsTable.tsx:17-19 StatusCell shows 'Enabled' only for exact 'enabled', everything else (pending, error, suspended) as 'Disabled' with the grey pill; installed/page.tsx stat 'Disabled' = total - enabled inherits this.
 - **Files to change:** `apps/web/src/app/(app)/plugins/PluginsTable.tsx`, `apps/web/src/app/(app)/plugins/PluginActions.tsx`, `apps/web/src/app/(app)/plugins/installed/page.tsx`
@@ -202,7 +202,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-INSTALLED-05  ·  MEDIUM  ·  partly  ·  theme RESPONSIVE (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status pill relies on text but Enable/Disable/Install are three same-weight buttons per row; on phones the actions column overflows since DataTable columns are right-aligned inline-flex (PluginActions.tsx:44).
 - **Verified evidence:** Buttons are wrapped in `inline-flex; gap:8; justify-content:flex-end` (PluginActions.tsx:42) inside a right-aligned DataTable column (PluginsTable.tsx:35); no flex-wrap, so three buttons (Install/Enable/Disable-Install) may overflow on narrow screens; DataTable wraps in .tbl-wrap (scroll) so overflow is horizontal scroll not clipping. Status pill has a text label (PluginsTable.tsx:19). 'Same weight' is partly wrong: Install is ghost, Enable primary, Disable danger. Theme PII is wrong. Not rendered-tested.
 - **Files to change:** `apps/web/src/app/(app)/plugins/PluginActions.tsx`
@@ -224,7 +224,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-MARKETPLACE-01  ·  HIGH  ·  confirmed  ·  theme MISSINGFEATURE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Marketplace is described as "Discover and install plugins" (home tile) but the page has no Install action: PluginActions is only mounted on /plugins/installed (installed/page.tsx:58), so a user must find the plugin again there and it may not be listed until provisioned.
 - **Verified evidence:** marketplace/page.tsx:12-18 uses ModuleListPage only; PluginActions is imported solely by PluginsTable (used in installed/page.tsx). plugins/page.tsx describes Marketplace as 'Discover and install plugins'. Install is POST /api/proxy/v1/plugins/install with {pluginId, reason} (PluginActions.tsx:20-21). Marketplace rows use ids from /api/v1/plugins/marketplace; whether those ids match the install endpoint's pluginId cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/plugins/marketplace/page.tsx`, `apps/web/src/app/(app)/plugins/MarketplaceTable.tsx`, `apps/web/src/app/(app)/plugins/PluginActions.tsx`
@@ -241,7 +241,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-MARKETPLACE-02  ·  MEDIUM  ·  confirmed  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle "Marketplace listings from plugin-service." names an internal service to end users (marketplace/page.tsx:15).
 - **Verified evidence:** marketplace/page.tsx:15 description="Marketplace listings from plugin-service." is rendered as the PageHeader subtitle to end users. Same pattern likely in other ModuleListPage callers.
 - **Files to change:** `apps/web/src/app/(app)/plugins/marketplace/page.tsx`
@@ -255,7 +255,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-MARKETPLACE-03  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Generic five-column table for every plugin list: ID is a truncated UUID, Status prints the raw string with no pill, Meta prints raw ISO timestamps or codes (ModuleListTable.tsx:46-52) — no plugin-specific columns (version, publisher, scope).
 - **Verified evidence:** ModuleListTable.tsx:40-44 hardcodes headers ID/Name/Detail/Status/Meta; ID is row.id.slice(0,8) in a mono span (line 50); status printed raw via `row.status ?? "—"` (line 53) with no StatusPill; meta printed raw (line 54, from _data.ts:61-67: code/currency/updatedAt/createdAt). No version/publisher/scope columns. Shared by all four plugin list pages via ModuleListPage.
 - **Files to change:** `apps/web/src/app/(app)/plugins/PluginCatalogTable.tsx`, `apps/web/src/app/(app)/plugins/_data.ts`, `apps/web/src/app/(app)/plugins/marketplace/page.tsx`
@@ -271,7 +271,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-MARKETPLACE-04  ·  MEDIUM  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** mapRows treats a non-array object as one row (extractRows returns [payload], _data.ts:19-26), so an error-shaped JSON body becomes a bogus record with id "row-1" instead of an error state.
 - **Verified evidence:** _data.ts:18-26 extractRows returns [payload] for a bare object (line 25) and mapRows falls back to id `row-${index+1}` (line 41). But fetchJson (_data/apiClient.ts:119-172) already returns source:'error' with empty data for non-2xx, 401 and missing base URL, so an error body on a failed HTTP status never reaches mapRows. The bogus row appears only if the gateway returns HTTP 200 with an error-shaped object.
 - **Files to change:** `apps/web/src/app/(app)/plugins/_data.ts`
@@ -288,7 +288,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-MARKETPLACE-05  ·  LOW  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** No filter, sort or pagination on this list (ModuleListTable.tsx), unlike Installed which uses DataTable sortable/filterable.
 - **Verified evidence:** ModuleListTable.tsx:49-58 renders a plain <table> over every row: no filter, sort or pagination. PluginsTable.tsx:24-27 (Installed) uses DataTable sortable+filterable, but with no pageSize either. Loaders (_data.ts:88-91) pass no limit/page params; whether plugin-service paginates cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/plugins/PluginCatalogTable.tsx`, `apps/web/src/app/(app)/plugins/_data.ts`
@@ -312,7 +312,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-REGISTRY-01  ·  MEDIUM  ·  partly  ·  theme COPY (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Installed plugin registry." (registry/page.tsx:15) duplicates the Installed screen: Installed reads /api/v1/plugins/items (_data.ts:90 vs loaders.ts:755) while Registry reads /api/v1/plugins, with different columns and no actions — two entry points for the same idea, and the home tile calls it "Registered plugin catalogue".
 - **Verified evidence:** registry/page.tsx:15 description 'Installed plugin registry.' while getPluginRegistry reads /api/v1/plugins (_data.ts:89) and Installed reads /api/v1/plugins/items (loaders.ts getPlugins, /api/v1/plugins/items). Home tile says 'Registered plugin catalogue' (plugins/page.tsx). Different endpoints and no actions on Registry, so copy overlaps with Installed; whether the data differs cannot be verified (plugin-service absent). Theme VALIDATION is wrong (no form).
 - **Files to change:** `apps/web/src/app/(app)/plugins/registry/page.tsx`, `apps/web/src/app/(app)/plugins/page.tsx`
@@ -327,7 +327,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-REGISTRY-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** Generic five-column table for every plugin list: ID is a truncated UUID, Status prints the raw string with no pill, Meta prints raw ISO timestamps or codes (ModuleListTable.tsx:46-52) — no plugin-specific columns (version, publisher, scope).
 - **Verified evidence:** ModuleListTable.tsx:40-44 hardcodes headers ID/Name/Detail/Status/Meta; ID is row.id.slice(0,8) in a mono span (line 50); status printed raw via `row.status ?? "—"` (line 53) with no StatusPill; meta printed raw (line 54, from _data.ts:61-67: code/currency/updatedAt/createdAt). No version/publisher/scope columns. Shared by all four plugin list pages via ModuleListPage.
 - **Files to change:** `apps/web/src/app/(app)/plugins/PluginCatalogTable.tsx`, `apps/web/src/app/(app)/plugins/_data.ts`, `apps/web/src/app/(app)/plugins/registry/page.tsx`
@@ -343,7 +343,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-REGISTRY-03  ·  MEDIUM  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** mapRows treats a non-array object as one row (extractRows returns [payload], _data.ts:19-26), so an error-shaped JSON body becomes a bogus record with id "row-1" instead of an error state.
 - **Verified evidence:** _data.ts:18-26 extractRows returns [payload] for a bare object (line 25) and mapRows falls back to id `row-${index+1}` (line 41). But fetchJson (_data/apiClient.ts:119-172) already returns source:'error' with empty data for non-2xx, 401 and missing base URL, so an error body on a failed HTTP status never reaches mapRows. The bogus row appears only if the gateway returns HTTP 200 with an error-shaped object.
 - **Files to change:** `apps/web/src/app/(app)/plugins/_data.ts`
@@ -360,7 +360,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-REGISTRY-04  ·  LOW  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1928, verified on main 9c5e9e9e9)
 - **First-pass claim:** No filter, sort or pagination on this list (ModuleListTable.tsx), unlike Installed which uses DataTable sortable/filterable.
 - **Verified evidence:** ModuleListTable.tsx:49-58 renders a plain <table> over every row: no filter, sort or pagination. PluginsTable.tsx:24-27 (Installed) uses DataTable sortable+filterable, but with no pageSize either. Loaders (_data.ts:88-91) pass no limit/page params; whether plugin-service paginates cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/plugins/PluginCatalogTable.tsx`, `apps/web/src/app/(app)/plugins/_data.ts`

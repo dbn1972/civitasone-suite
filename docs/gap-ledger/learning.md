@@ -14,7 +14,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-HOME-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Enrolled / In Progress / Completed / Overdue" are tenant-wide counts: getLmsDashboard() is called with no employeeId (page.tsx:12) and the endpoint aggregates every enrolment in the tenant (learning/routes.ts:199-215). They sit next to My Learning links and read as personal progress.
 - **Verified evidence:** learning/page.tsx:12 calls getLmsDashboard() with no employeeId; endpoint (learning/routes.ts:199-215) scopes to employee only if ?employeeId is given, else counts every enrolment in tenant (countEnrollmentsByStatus). Cards labelled Enrolled/In Progress/Completed/Overdue and all link to My Learning (page.tsx:47-58 in file numbering). Any employee sees tenant totals; also employeeId param unscoped server-side.
 - **Files to change:** `apps/web/src/app/(app)/learning/page.tsx`, `services/hrms-service/src/modules/learning/routes.ts`
@@ -30,7 +30,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-HOME-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** All four stat cards link to /learning/my-learning, which renders "Select an employee" unless ?employeeId=<uuid> is typed (my-learning/page.tsx:11-16): the primary path from home to the user’s own progress dead-ends.
 - **Verified evidence:** All four StatCards wrap Link to /learning/my-learning without employeeId (learning/page.tsx:47-58); my-learning/page.tsx:11-16 shows 'Select an employee' EmptyState unless ?employeeId present.
 - **Files to change:** `apps/web/src/app/(app)/learning/my-learning/page.tsx`, `apps/web/src/app/(app)/learning/page.tsx`, `apps/web/src/app/(app)/learning/_data.ts`
@@ -45,7 +45,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-HOME-03  ·  MEDIUM  ·  partly  ·  theme ROLEGATE (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Catalogue lists every course including drafts: listCourses filters only tenant and search (learning/repo.ts:22-31), but the page copy says "published courses" (page.tsx:72).
 - **Verified evidence:** Catalogue includes drafts because listCourses has no status filter (repo.ts:22-31); home table shows Status column and copy says 'No courses published yet' / 'Published courses...' (learning/page.tsx:72,78 in file numbering). Copy accuracy is the issue, not i18n; theme I18N wrong.
 - **Files to change:** `apps/web/src/app/(app)/learning/page.tsx`, `services/hrms-service/src/modules/learning/repo.ts`
@@ -59,7 +59,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-HOME-04  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** No role/module gating in the web tree (no learning/layout.tsx); a tenant with Learning disabled still serves these routes, unlike knowledge/layout.tsx which uses ModuleGate.
 - **Verified evidence:** No learning/layout.tsx exists (ls of learning/: only _data.ts, loading.tsx, page.tsx and subfolders) whereas knowledge/layout.tsx wraps ModuleGate; hr/layout.tsx:46 uses moduleKey 'hrms'. Sidebar hides learning links via moduleKey 'hrms' (Sidebar.tsx:76-78) but direct URLs still serve. Backend hrms-service still enforces roles; module entitlement at API not verified.
 - **Files to change:** `apps/web/src/app/(app)/learning/layout.tsx`
@@ -73,7 +73,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-HOME-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tile "values" are sentences ("Sessions & nominations") rendered in the large StatCard value slot (page.tsx:61-64); no counts on those tiles.
 - **Verified evidence:** Navigation tiles use StatCard value='Sessions & nominations' etc. (learning/page.tsx:61-64 -> lines 210-213), sentences in the big value slot; no counts.
 - **Files to change:** `apps/web/src/app/(app)/learning/page.tsx`
@@ -86,7 +86,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-HOME-06  ·  LOW  ·  partly  ·  theme STYLE (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx uses hard-coded tailwind gray-100/200 blocks (loading.tsx:4-9), not DS skeletons.
 - **Verified evidence:** learning/loading.tsx:4-9 uses Tailwind bg-gray-100/200 animate-pulse blocks. True, but other loading files may follow same pattern; whether a DS skeleton exists was not found in ds/index.ts export list viewed. Not a fabricated-data issue; theme FABRICATED wrong.
 - **Files to change:** `apps/web/src/app/(app)/learning/loading.tsx`
@@ -106,7 +106,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-ASSESSMENTS-01  ·  HIGH  ·  partly  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** The page promises "assessments you can attempt" and "Take & verify" on home, but no row action or attempt route exists in apps/web (learning/ has no attempt page); the server endpoints for attempts (assessment/routes.ts:180,227) are unused, so the list is a dead end.
 - **Verified evidence:** apps/web/src/app/(app)/learning/assessments/page.tsx:20 copy says 'assessments you can attempt' and the empty state at :29 says the same; rows (:11-14, DataTable :31-44) have no action/link and no attempt route exists under learning/ (dirs: assessments, calendar, competency, courses, my-learning, training-plans). Backend endpoints POST /v1/hrms/assessments/:id/attempts (routes.ts:180) and submit (:227) exist. 'Take & verify' on home not checked.
 - **Files to change:** `apps/web/src/app/(app)/learning/assessments/page.tsx`, `(new) apps/web/src/app/(app)/learning/assessments/[id]/page.tsx`, `(new) apps/web/src/app/(app)/learning/assessments/[id]/AttemptClient.tsx`, `apps/web/src/app/(app)/learning/_data.ts`
@@ -122,7 +122,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-ASSESSMENTS-02  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Every assessment status is returned to every role: listAssessments filters only tenant (assessment/repo.ts:51-54) and the route allows ALL_ROLES (assessment/routes.ts:66-70), so draft and pending_approval assessments appear under "Published assessments" (page.tsx:20).
 - **Verified evidence:** services/hrms-service/src/modules/assessment/repo.ts listAssessments filters only tenantId (limit 100); routes.ts:66-70 allows ALL_ROLES (includes employee); apps/web/src/app/(app)/learning/assessments/page.tsx:9-14 maps all statuses with no filter, headline says 'Published assessments' (:20). Status column shows it, so it is not hidden but wrong for learners.
 - **Files to change:** `services/hrms-service/src/modules/assessment/repo.ts`, `services/hrms-service/src/modules/assessment/routes.ts`, `apps/web/src/app/(app)/learning/assessments/page.tsx`
@@ -151,7 +151,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-ASSESSMENTS-04  ·  LOW  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Passing score prints a bare number (page.tsx:12) — no % or marks unit; attempts used by the signed-in employee are not shown against Max attempts.
 - **Verified evidence:** apps/web/src/app/(app)/learning/assessments/page.tsx:12 passing: `${a.passingScore}` prints bare value (string type, _data.ts:71); no attempts-used data is fetched anywhere on the page. Unit (percent vs marks) is unknown; attempt counts would need a per-employee endpoint (only POST attempts and GET attempts/:id seen).
 - **Files to change:** `apps/web/src/app/(app)/learning/assessments/page.tsx`
@@ -171,7 +171,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-ASSESSMENTS-VERIFY-01  ·  HIGH  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Verification discloses employeeId and assessmentId (raw UUIDs) to any authenticated user holding a token (page.tsx:51-52; assessment/routes.ts:288-296) — no masking or role limit (DPDP); no rate limit is visible in the route, only a 8–64 character token length.
 - **Verified evidence:** apps/web/src/app/(app)/learning/assessments/verify/page.tsx:51-52 prints cert.employeeId and cert.assessmentId; routes.ts:277-292 returns them for any caller with ALL_ROLES (includes employee, routes.ts:20). Token length 8-64 only (:280). repo.getCertificateByToken(token) takes no tenantId (:281), so a token resolves across tenants. Rate limiting is not visible in the route (may exist globally, cannot-verify). The IDs are UUIDs, not names, so the PII severity is moderate, but they link a person to a certificate.
 - **Files to change:** `services/hrms-service/src/modules/assessment/routes.ts`, `services/hrms-service/src/modules/assessment/repo.ts`, `apps/web/src/app/(app)/learning/assessments/verify/page.tsx`
@@ -188,7 +188,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-ASSESSMENTS-VERIFY-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** A malformed token (400) and a service outage are indistinguishable: both set source "error" and show only the "Couldn't load — showing nothing" badge (page.tsx:29; assessment/routes.ts:281). 404 is the only path that says "Certificate not found".
 - **Verified evidence:** apps/web/src/app/(app)/learning/assessments/verify/page.tsx:29 shows DataSourceBadge for any source 'error'; 404 is also an error in fetchJson (apiClient.ts:144 returns status and errorCode), yet the page's 'Certificate not found' branch (:31-33) only runs when source!=='error', i.e. it appears unreachable on a real 404 (loader returns error, not api null). So a genuine 404 and 400/outage all show the badge.
 - **Files to change:** `apps/web/src/app/(app)/learning/assessments/verify/page.tsx`
@@ -220,7 +220,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-ASSESSMENTS-VERIFY-04  ·  LOW  ·  partly  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Dates use new Date().toLocaleDateString("en-IN") (page.tsx:45-46) → "14/9/2026", inconsistent with formatIndianDate ("14 Sep 2026") used in knowledge pages; status shown raw ("active").
 - **Verified evidence:** apps/web/src/app/(app)/learning/assessments/verify/page.tsx:45-46 use toLocaleDateString('en-IN') giving 'd/M/yyyy' (e.g. 14/9/2026) with no timezone; status shown raw (:42). But formatIndianDate (lib/formatters.ts:2-7) outputs 2-digit dd/MM/yyyy ('14/09/2026'), not '14 Sep 2026' as the finding says. Inconsistency is real, the example is wrong.
 - **Files to change:** `apps/web/src/app/(app)/learning/assessments/verify/page.tsx`
@@ -234,7 +234,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-ASSESSMENTS-VERIFY-05  ·  LOW  ·  partly  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** No loading.tsx for this segment (ls); the form is a plain GET so there is no pending indicator.
 - **Verified evidence:** ls of apps/web/src/app/(app)/learning/assessments/verify shows only page.tsx (no loading.tsx), confirmed. However the parent assessments/loading.tsx exists and Next.js loading boundaries apply to nested segments, so a fallback does show on navigation; the form is a GET so the page re-renders with the parent skeleton. Impact is minor.
 - **Files to change:** `apps/web/src/app/(app)/learning/assessments/verify/loading.tsx`
@@ -254,7 +254,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-CALENDAR-01  ·  HIGH  ·  partly  ·  theme WIRING (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Employee is selected by typing ?employeeId=<uuid> (calendar/page.tsx:18,58-63); no session-derived "me", and no employee picker or name display (DPDP-safe self view).
 - **Verified evidence:** calendar/page.tsx:18 reads employeeId from ?employeeId, :58-63 shows 'Select an employee' EmptyState telling user to append a uuid; no name shown. But overstated as a leak: GET /v1/hrms/nominations (training/routes.ts:82-89) self-scopes bare 'employee' callers via resolveOwnEmployeeIdIfBareEmployee (routes.ts:37-44) so a typed foreign id returns the caller's own rows (or []) - mislabelled but not exposed. HR/manager can query any id. No CSV export exists on this page; <Masked> does not exist in the codebase, so the 'fix' text is generic.
 - **Files to change:** `apps/web/src/app/(app)/learning/calendar/page.tsx`, `apps/web/src/app/(app)/learning/_data.ts`
@@ -273,7 +273,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-CALENDAR-02  ·  MEDIUM  ·  partly  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Named "Training Calendar" but renders two tables; dates are raw API strings joined with "→" (page.tsx:27,41), no month/week view, and past sessions (completed) are mixed with upcoming ones.
 - **Verified evidence:** Title 'Training Calendar' but page renders two DataTables (calendar/page.tsx:72,94); no month/week view. Dates are raw API strings: programme window joins startDate/endDate with ' → ' (:27), nomination 'when' likewise (:41), unformatted. Programmes are not split into upcoming/past; status column (upcoming/ongoing/completed/cancelled from training/queries.ts mapTrainingStatus) is the only cue. Note formatIndianDate (apps/web/src/lib/formatters.ts:2) exists but outputs dd/mm/yyyy, not 'dd Mon yyyy', and there is no formatIndianDateTime.
 - **Files to change:** `apps/web/src/app/(app)/learning/calendar/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -289,7 +289,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-CALENDAR-03  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle explains nomination approval (approver ≠ nominator, waitlisting) but the page has no nominate, approve or withdraw action; POST /nominations (training/routes.ts:91-101) is unused here.
 - **Verified evidence:** Subtitle (calendar/page.tsx:52) describes maker-checker nomination approval and waitlisting, but the page has no nominate/approve/withdraw control and calls only getTrainingPrograms and getMyNominations (:20,36); POST /v1/hrms/nominations exists (training/routes.ts:91-100, self-scoped for non-HR) and is unused by web. Approval endpoint not seen in this file.
 - **Files to change:** `apps/web/src/app/(app)/learning/calendar/page.tsx`, `apps/web/src/app/(app)/learning/_data.ts`
@@ -304,7 +304,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-CALENDAR-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Nominations failure has no retry: badge + EmptyState only (page.tsx:64-68), unlike the programmes card which uses RefreshErrorState.
 - **Verified evidence:** Nominations failure branch (calendar/page.tsx:64-68) renders DataSourceBadge plus a static EmptyState 'Could not load nominations' with no retry, whereas programmes card (:89-90) uses RefreshErrorState. Note: the error EmptyState is at least distinct from the empty state, so it is not masked as empty.
 - **Files to change:** `apps/web/src/app/(app)/learning/calendar/page.tsx`
@@ -318,7 +318,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-CALENDAR-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Capacity shown as "28 / 30" text with no full/waitlist cue or progress; "— " when maxCapacity is absent (page.tsx:29).
 - **Verified evidence:** seats string is `${enrolledCount ?? 0} / ${maxCapacity ?? '—'}` (calendar/page.tsx:29): plain text, no full/waitlist cue, no bar. Also enrolledCount is nomination count from countNominationsByTraining (training/queries.ts:15), not approved seats, so 'enrolled' label is loose. ds ProgressBar exists.
 - **Files to change:** `apps/web/src/app/(app)/learning/calendar/page.tsx`
@@ -333,7 +333,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-CALENDAR-06  ·  LOW  ·  partly  ·  theme PAGINATION (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** training-programs is listed for every ALL_ROLES caller with a fixed limit (training/routes.ts:66-70); no date range filter, so the list grows unboundedly.
 - **Verified evidence:** training-programs is ALL_ROLES (training/routes.ts:66-68) and takes listQuerySchema limit (:69); web calls it with no limit or date filter (_data.ts:11-16), so default limit applies and results are capped, not unbounded; cache keyed per limit (queries.ts:13). No date-range/upcoming filter exists in the endpoint. Old theme DATEFMT is wrong.
 - **Files to change:** `services/hrms-service/src/modules/training/routes.ts`, `services/hrms-service/src/modules/training/queries.ts`, `apps/web/src/app/(app)/learning/_data.ts`
@@ -355,7 +355,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COMPETENCY-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Competency" columns print raw UUIDs (competency/page.tsx:29,36) — the level table is unreadable for HR and a manager; names live at GET /competency/competencies (competency/routes.ts:74) but are never joined.
 - **Verified evidence:** HeldRow.competencyId and GapRow.competencyId are rendered directly in the 'Competency' columns (competency/page.tsx:29,36 in file numbering; cols at lines 176,196). GET /v1/hrms/competency/competencies (competency/routes.ts:74-78, ALL_ROLES) returns names but web has no loader for it (_data.ts).
 - **Files to change:** `apps/web/src/app/(app)/learning/_data.ts`, `apps/web/src/app/(app)/learning/competency/page.tsx`
@@ -371,7 +371,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COMPETENCY-02  ·  HIGH  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Employee and role are typed into the URL (?employeeId=<uuid>&roleCode=<ROLE>) (page.tsx:11-12); there is no picker, no name display for whose profile is on screen, and a missing roleCode silently hides the gap analysis card.
 - **Verified evidence:** employeeId/roleCode come from query string (competency/page.tsx:11-12) and page shows 'Select an employee' with 'Append ?employeeId=<uuid>&roleCode=<ROLE>' (:18). No picker, no employee name shown. Gap card is guarded by `roleCode &&` (:72) so absent roleCode hides the card silently. Server side: profile/gap-analysis apply assertEmployeeReadable (competency/routes.ts:20-28,115,127), so bare employees only read own record. No EntityPicker exists in the repo.
 - **Files to change:** `apps/web/src/app/(app)/learning/competency/page.tsx`, `apps/web/src/app/(app)/learning/_data.ts`
@@ -387,7 +387,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COMPETENCY-03  ·  MEDIUM  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Level is shown as "L3" inside a status pill and "Source" as another status pill (page.tsx:63-64), so neutral facts get status semantics; there is no level definition.
 - **Verified evidence:** Level ('L3') and source cellType 'status' (competency/page.tsx:63-64 in file numbering; columns lines 177-178) render through StatusPill (DataTable.tsx:127), giving neutral facts status colouring. No level definitions are fetched.
 - **Files to change:** `apps/web/src/app/(app)/learning/competency/page.tsx`
@@ -401,7 +401,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COMPETENCY-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stat cards (Met, Gaps, Readiness) appear only when a role analysis exists; on gap-analysis error they vanish with no indication, while the held card can still render (page.tsx:33,45,75).
 - **Verified evidence:** StatGrid renders only when `analysis` non-null (competency/page.tsx:45 in file numbering). On gap.source==='error' data is null so stats vanish while the Gap analysis card shows RefreshErrorState (:76), so an error is indicated in the gap card but stats disappear without their own cue; held card independent. Overstated: there is a visible error in the gap card.
 - **Files to change:** `apps/web/src/app/(app)/learning/competency/page.tsx`
@@ -414,7 +414,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COMPETENCY-05  ·  LOW  ·  confirmed  ·  theme COPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Gap page says "No requirements or all met" for two different situations (page.tsx:78); Readiness % has no bar or threshold.
 - **Verified evidence:** EmptyState title 'No requirements or all met' (competency/page.tsx:78 in file numbering) conflates two cases; analysis.requiredCount distinguishes them. Readiness shows `${readinessPct}%` in a StatCard with no bar/threshold (:75).
 - **Files to change:** `apps/web/src/app/(app)/learning/competency/page.tsx`
@@ -435,7 +435,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COURSES-01  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Draft and retired courses are listed to every role: listCourses has no status filter (learning/repo.ts:22-31) while the page says "published courses" (page.tsx:22,33). The Status column exposes it, but non-published rows still link to a detail page.
 - **Verified evidence:** repo.listCourses (learning/repo.ts:22-31) filters only tenant and search; GET /learning/courses (routes.ts:34-39) allows ALL_ROLES with no status filter, so draft/retired courses reach employees. Page copy says 'published courses' (courses/page.tsx:22,33 in file numbering ~ lines 115,126), Status column shown, and rows link to detail (rowLinkPrefix). Detail endpoint also serves drafts to all roles (routes.ts:41-53) though enrol requires published (:129).
 - **Files to change:** `services/hrms-service/src/modules/learning/routes.ts`, `services/hrms-service/src/modules/learning/repo.ts`, `apps/web/src/app/(app)/learning/courses/page.tsx`
@@ -450,7 +450,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COURSES-02  ·  MEDIUM  ·  partly  ·  theme SEARCH (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Two search mechanisms, neither visible together: server ?q= (page.tsx:10) has no input, the DataTable filter is client-side over the first 100 rows (repo.ts:22 limit 100; no pager note).
 - **Verified evidence:** Server ?q= is read (courses/page.tsx:10 -> getCourses(q), _data.ts:22-28) but there is no input that sets it; the DataTable filterable search (page.tsx ~142) is client-side over rows fetched with repo limit 100 (repo.ts:22), with no pager note or count-vs-total. Not a dead route as theme claims.
 - **Files to change:** `apps/web/src/app/(app)/learning/courses/page.tsx`
@@ -465,7 +465,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COURSES-03  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Credit hours arrive as a string and print "12.0 hrs" (page.tsx:15); category has no pill or grouping.
 - **Verified evidence:** creditHours is a string in Course type (_data.ts:20) and printed `${c.creditHours} hrs` (courses/page.tsx:15) producing '12.0 hrs' (also in learning/page.tsx). Category is plain text. Precision claim depends on DB numeric string; not verified.
 - **Files to change:** `apps/web/src/app/(app)/learning/courses/page.tsx`, `apps/web/src/app/(app)/learning/page.tsx`
@@ -478,7 +478,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COURSES-04  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** No enrolment state per course (already enrolled / prerequisites unmet) in the catalogue, though enrol is enforced server-side (learning/routes.ts:122-142).
 - **Verified evidence:** Catalogue rows (courses/page.tsx:8-16) have no enrolment/prerequisite state; getMyLearning exists (_data.ts:44) but is not used; enrol checks happen server-side only (routes.ts:122-142).
 - **Files to change:** `apps/web/src/app/(app)/learning/courses/page.tsx`, `apps/web/src/app/(app)/learning/_data.ts`
@@ -499,7 +499,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COURSES-DETAIL-01  ·  HIGH  ·  defect  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Enrol Now" is a native HTML form POST straight to /api/v1/hrms/learning/courses/{id}/enroll with a hidden employeeId (page.tsx:46-49): urlencoded (the route expects JSON), bypassing the /api/proxy auth path; apps/web has no /api/v1 route handler (only proxy, auth, notification, metrics…) and the rewrite config is not in the snapshot (undeterminable). The result is at best a raw JSON page.
 - **Service:** `hrms-service`  ·  **Endpoint(s):** `['POST /v1/hrms/learning/courses/{id}/enroll']`
 - **Question:** See evidence.
@@ -511,7 +511,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COURSES-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Enrolment takes employeeId from the body with only a role check (learning/routes.ts:122-127; ALL_ROLES). Combined with an employeeId typed in the URL, any employee can enrol any colleague.
 - **Verified evidence:** Enrol route POST /v1/hrms/learning/courses/:id/enroll (learning/routes.ts:122-154) uses ALL_ROLES and takes employeeId from enrollBody (validators.ts:32) with no self-scope, unlike nominations (training/routes.ts:57-63). Creates enrolment for any employeeId in the tenant. Web supports it by hidden input from ?employeeId (courses/[id]/page.tsx:47). Same lack of scoping on GET /learning/my-learning (routes.ts:188-193) and POST lessons/:id/progress (:156).
 - **Files to change:** `services/hrms-service/src/modules/learning/routes.ts`, `apps/web/src/app/(app)/learning/courses/[id]/page.tsx`
@@ -529,7 +529,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COURSES-DETAIL-03  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** The course cannot be consumed: lessons are listed without links and no lesson-player or progress route exists in learning/ (POST /learning/lessons/:id/progress is never called from web), so “Enrol to start learning” has no next step.
 - **Verified evidence:** Lesson table (courses/[id]/page.tsx:79-88) has no links; no lesson player route exists (learning/ has assessments, calendar, competency, courses, my-learning, training-plans only) and grep finds no web call to /learning/lessons/:id/progress. The enrol form posts to /api/v1/hrms/learning/courses/:id/enroll (:46); no post-enrol redirect visible. contentUri is in the Lesson type (_data.ts:30) but never displayed. my-learning has resumeLessonId with no destination route.
 - **Files to change:** `apps/web/src/app/(app)/learning/courses/[id]/lessons/[lessonId]/page.tsx`, `apps/web/src/app/(app)/learning/courses/[id]/page.tsx`, `apps/web/src/app/(app)/learning/my-learning/page.tsx`, `apps/web/src/app/(app)/learning/_data.ts`
@@ -546,7 +546,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COURSES-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** A failed fetch is shown as "Course not found" (page.tsx:15-21); prerequisites are printed as raw course UUIDs (page.tsx:67) and the fallback button links to ?employeeId= with an empty value (page.tsx:51).
 - **Verified evidence:** `!course || source === 'error'` maps fetch error to 'Course not found' EmptyState (courses/[id]/page.tsx:15-21); real 404 and 5xx are indistinguishable. Prerequisites printed as raw ids (`{p}` :67; API returns prerequisite uuids, routes.ts:47-52). Fallback button links to `?employeeId=` (empty) at :51, labelled 'Enrol (add ?employeeId=...)'.
 - **Files to change:** `apps/web/src/app/(app)/learning/courses/[id]/page.tsx`, `apps/web/src/app/(app)/learning/_data.ts`
@@ -562,7 +562,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COURSES-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Enrol on an unmet prerequisite returns 409 PREREQUISITES_NOT_MET (learning/routes.ts:130-137) but the UI has no pre-check or message.
 - **Verified evidence:** Server returns 409 {code:'PREREQUISITES_NOT_MET', missing} (learning/routes.ts:137-139). Web enrol is a native HTML form POST to the API URL (courses/[id]/page.tsx:46) with no client handling, no pre-check and no message, so the user lands on a raw JSON/error response. Whether the /api/v1 proxy accepts urlencoded bodies is cannot-verify (enrollBody expects JSON; only leave/routes adds a content-type parser).
 - **Files to change:** `apps/web/src/app/(app)/learning/courses/[id]/page.tsx`, `apps/web/src/app/(app)/learning/courses/[id]/EnrolButton.tsx`
@@ -578,7 +578,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COURSES-DETAIL-06  ·  LOW  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** moduleId is read via an unsafe cast because the Lesson type omits it (page.tsx:31; _data.ts:30); lesson contentUri is never shown.
 - **Verified evidence:** Lesson type (_data.ts:30) lacks moduleId; page casts `(l as unknown as {moduleId?:string})` (courses/[id]/page.tsx:31). Backend lessons rows include moduleId (listLessonsByCourse returns table rows). contentUri is typed but never rendered.
 - **Files to change:** `apps/web/src/app/(app)/learning/_data.ts`, `apps/web/src/app/(app)/learning/courses/[id]/page.tsx`
@@ -600,7 +600,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-MY-LEARNING-01  ·  HIGH  ·  confirmed  ·  theme IDOR (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** IDOR: GET /learning/my-learning?employeeId= only requires an ALL_ROLES role (learning/routes.ts:188-193), so any employee can read any colleague’s course enrolments and progress by changing the UUID (DPDP). Contrast training/routes.ts:22-60 which forces bare employees onto their own record.
 - **Verified evidence:** services/hrms-service/src/modules/learning/routes.ts:188-193: GET /v1/hrms/learning/my-learning does requireRole(ctx, ALL_ROLES) then repo.listMyEnrollments(ctx.tenantId, employeeId) with the client-supplied uuid (repo.ts:162-174, filtered only by tenant+employeeId); no comparison to the caller. training/routes.ts:22-38 (resolveOwnEmployeeIdIfBareEmployee via resolveEmployeeForActor) does force bare employees onto their own record, learning does not. Same gap on GET /learning/dashboard (employeeId optional, tenant-wide counts for every role) and web page.tsx:9,20 passes the URL param straight through.
 - **Files to change:** `services/hrms-service/src/modules/learning/routes.ts`, `services/hrms-service/src/shared/self-scope.ts (new, extract helper)`, `services/hrms-service/src/modules/training/routes.ts`, `services/hrms-service/src/modules/learning/__tests__/my-learning.idor.test.ts (new)`
@@ -620,7 +620,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-MY-LEARNING-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** "My Learning" is not "mine": the employee is chosen by typing ?employeeId=<uuid> into the URL (page.tsx:9-17); a signed-in employee has no way to know their own hrms_employees id and the landing tiles link here without it.
 - **Verified evidence:** apps/web/src/app/(app)/learning/my-learning/page.tsx:9-17 reads searchParams.employeeId only; without it the page shows EmptyState 'Append ?employeeId=<uuid>'. Home tiles (apps/web/src/app/(app)/learning/page.tsx:47-56) and Sidebar.tsx:77 link to /learning/my-learning with no id. A loader for the caller's own record exists: getMyProfile() in apps/web/src/app/_data/loaders.ts:~1150 (GET /api/v1/hrms/me/profile) returns id (assumed hrms_employees id; confirm against me/profile handler).
 - **Files to change:** `apps/web/src/app/(app)/learning/my-learning/page.tsx`, `apps/web/src/app/(app)/learning/_data.ts`, `services/hrms-service/src/modules/learning/routes.ts`
@@ -638,7 +638,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-MY-LEARNING-03  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle promises a "resume point" but resumeLessonId is never used and no Resume action exists (page.tsx:14,28).
 - **Verified evidence:** resumeLessonId is declared on MyEnrollment (apps/web/src/app/(app)/learning/_data.ts:42) and returned by the API (learning/repo.ts:167) but page.tsx builds Row without it (lines 21-24) and renders no action; subtitle at page.tsx:14 and :28 promises a 'resume point'. No per-lesson route exists (learning/courses/[id]/page.tsx lists lessons in a DataTable with no link).
 - **Files to change:** `apps/web/src/app/(app)/learning/my-learning/page.tsx`, `apps/web/src/app/(app)/learning/courses/[id]/page.tsx`, `apps/web/src/app/(app)/learning/_data.ts`
@@ -654,7 +654,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-MY-LEARNING-04  ·  LOW  ·  confirmed  ·  theme UX (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Progress is plain text "65%" without a bar or overdue cue although overdue counts are on the home page (page.tsx:23).
 - **Verified evidence:** apps/web/src/app/(app)/learning/my-learning/page.tsx:23 sets progress: `${e.progressPct}%` as text; DataTable column is a plain right-aligned string. ds/ProgressBar.tsx exists (value 0-100). 'Overdue' on the home page is a heuristic in learning/repo.ts:197-211 (enrolled/in_progress and not updated for 30 days), not a due date; MyEnrollment carries no due/updatedAt field, so a per-row overdue cue needs a field.
 - **Files to change:** `apps/web/src/app/(app)/learning/my-learning/page.tsx`, `apps/web/src/app/(app)/learning/_data.ts`, `services/hrms-service/src/modules/learning/routes.ts`
@@ -693,7 +693,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-TRAINING-PLANS-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Plans are a dead end: rows have no link and there is no /learning/training-plans/[id] page although getTrainingPlanDetail and the API return items (course, target date, mandatory) (_data.ts:130-142; learning/routes.ts:277-285).
 - **Verified evidence:** apps/web/src/app/(app)/learning/training-plans/page.tsx:92-104 DataTable has no rowHref/rowLinkKey; directory has only page.tsx and loading.tsx (no [id]). getTrainingPlanDetail exists but is unused (apps/web/src/app/(app)/learning/_data.ts:130-142); API GET /v1/hrms/learning/training-plans/:id (learning/routes.ts ~277-285) returns plan + items {id, courseId, trainingId, targetDate, mandatory} (courseId/trainingId are ids, so course titles need getCourses/getTrainingPrograms lookup).
 - **Files to change:** `apps/web/src/app/(app)/learning/training-plans/page.tsx`, `apps/web/src/app/(app)/learning/training-plans/[id]/page.tsx (new)`, `apps/web/src/app/(app)/learning/training-plans/[id]/loading.tsx (new)`
@@ -710,7 +710,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-TRAINING-PLANS-02  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Empty state tells HR admins they can create plans, but there is no create action or route and the page does no role check (page.tsx:35-39; POST /training-plans is HR_ROLES, learning/routes.ts:263-266).
 - **Verified evidence:** Empty-state message at apps/web/src/app/(app)/learning/training-plans/page.tsx:86-90 says HR admins can create plans; page has no create button/route and no role check. Backend POST /v1/hrms/learning/training-plans requires HR_ROLES (learning/routes.ts:263-266) and accepts title, planYear, departmentId?, roleCode?. Session roles helper exists: getSessionRoles in @/lib/auth/roleGuard (used in hr/disciplinary/page.tsx:5,42).
 - **Files to change:** `apps/web/src/app/(app)/learning/training-plans/page.tsx`, `apps/web/src/app/(app)/learning/training-plans/new/page.tsx (new)`, `apps/web/src/app/(app)/learning/training-plans/new/CreatePlanForm.tsx (new)`
@@ -727,7 +727,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-TRAINING-PLANS-03  ·  MEDIUM  ·  confirmed  ·  theme ENTITYNAME (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Scope loses information: a department plan prints only the word "Department" (page.tsx:14) — departmentId is neither resolved to a name nor shown.
 - **Verified evidence:** apps/web/src/app/(app)/learning/training-plans/page.tsx:65 (obs said 14): scope = p.roleCode ?? (p.departmentId ? 'Department' : 'All'); departmentId is never resolved or shown; a plan with both roleCode and departmentId shows only the role.
 - **Files to change:** `apps/web/src/app/(app)/learning/training-plans/page.tsx`, `apps/web/src/app/(app)/learning/_data.ts`
@@ -743,7 +743,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-TRAINING-PLANS-04  ·  LOW  ·  partly  ·  theme COPY (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Plan year prints as a bare number ("2026") for a fiscal-year (April–March) plan; there is no dates/owner/enrolment progress column.
 - **Verified evidence:** planYear is printed via String(p.planYear) (apps/web/src/app/(app)/learning/training-plans/page.tsx:64). The TrainingPlan type has no dates/owner (_data.ts:119-122), and API validates planYear as int 2020-2100 only; nothing states it is an April-March fiscal year, so the 'FY' label is an assumption. Enrolment progress per plan is not in the list payload. Not a date-format issue.
 - **Files to change:** `apps/web/src/app/(app)/learning/training-plans/page.tsx`, `apps/web/src/lib/fiscalYear.ts`
@@ -757,7 +757,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-TRAINING-PLANS-05  ·  LOW  ·  partly  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** listTrainingPlans has no pagination or year filter surfaced in the UI; ALL_ROLES can read every plan.
 - **Verified evidence:** repo.listTrainingPlans(tenantId, limit=100) orders by planYear and hard-caps at 100 (learning/repo.ts:258-265); route (learning/routes.ts:257-261) exposes no limit/offset/year params and returns a bare array with no total. The web DataTable filters/pages client-side (pageSize 15, filterable) over that capped array. ALL_ROLES read is by design (plans are not personal data) - not a defect.
 - **Files to change:** `services/hrms-service/src/modules/learning/routes.ts`, `services/hrms-service/src/modules/learning/repo.ts`, `apps/web/src/app/(app)/learning/_data.ts`, `apps/web/src/app/(app)/learning/training-plans/page.tsx`

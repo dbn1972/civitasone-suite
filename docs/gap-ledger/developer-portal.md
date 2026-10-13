@@ -14,7 +14,7 @@ Counts: ACTION 6
 
 ### GAP-DEVELOPER-PORTAL-HOME-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** On fetch failure the badge appears but 'API keys issued 0 / Active keys 0' still render as facts; the same happens for a real zero (page.tsx source==='error' block + StatCard values).
 - **Verified evidence:** apps/web/src/app/(app)/developer-portal/page.tsx:79-104 getAPIKeys() returns [] on failure; error only renders <DataSourceBadge> (:93-97) and StatCards still show totalKeys/activeKeys = 0 (:100-101). Recent-keys card is hidden on 0 (:151), so page reads as a real empty tenant. RefreshErrorState exists (_components/ds/RefreshErrorState.tsx).
 - **Files to change:** `apps/web/src/app/(app)/developer-portal/page.tsx`
@@ -30,7 +30,7 @@ Counts: ACTION 6
 
 ### GAP-DEVELOPER-PORTAL-HOME-02  ·  HIGH  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** Roadmap contradicts shipped surfaces: 'API Reference' and 'Sandbox & Test Tenant' are tagged Planned while /docs/api and /sandbox exist in the marketing group (page.tsx CAPABILITIES vs (marketing)/docs/api/page.tsx).
 - **Verified evidence:** apps/web/src/app/(app)/developer-portal/page.tsx:30-37 API Reference status 'planned', and :54-61 Sandbox 'planned'. Marketing routes exist: apps/web/src/app/(marketing)/docs/api/page.tsx (API Reference, links openapi.yaml) and apps/web/src/app/(marketing)/sandbox/page.tsx (demo data, no sign-up). But the sandbox page is a public demo, not the 'isolated test tenant with disposable credentials' described in the card, so Sandbox may legitimately be planned; API Reference is only a curated static page, not the 'auto-published per-release' reference described. Also /docs/api/openapi.yaml was not found in the repo snapshot.
 - **Files to change:** `apps/web/src/app/(app)/developer-portal/page.tsx`
@@ -46,7 +46,7 @@ Counts: ACTION 6
 
 ### GAP-DEVELOPER-PORTAL-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme FABRICATED
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Capabilities available' and 'On the roadmap' KPIs are counts of a hard-coded array, presented like live metrics; 'preview' items count as roadmap (page.tsx availableCount/plannedCount).
 - **Verified evidence:** apps/web/src/app/(app)/developer-portal/page.tsx:83-84 availableCount/plannedCount derive from the hard-coded CAPABILITIES array and render as StatCards (:102-103) alongside live key counts. plannedCount = status !== 'active', so 'preview' items (Webhooks, Diagnostics) count as roadmap: 5 of 6.
 - **Files to change:** `apps/web/src/app/(app)/developer-portal/page.tsx`
@@ -60,7 +60,7 @@ Counts: ACTION 6
 
 ### GAP-DEVELOPER-PORTAL-HOME-04  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** Key list exposes keyPrefix for every user who can open the page; there is no role gate (no layout) although the management page is under tenant-admin (page.tsx recent-keys card).
 - **Verified evidence:** apps/web/src/app/(app)/developer-portal has no layout.tsx (only error/loading/not-found/page); tenant-admin/layout.tsx uses requireAnyRole(['tenant_admin','platform_admin','super_admin']). The developer page shows keyName + keyPrefix (:175-177) to any authenticated user with the module. keyPrefix is a non-secret prefix (secret not shown) but still credential metadata. Whether /api/v1/admin/api-keys rejects non-admins is not verifiable (admin service absent).
 - **Files to change:** `apps/web/src/app/(app)/developer-portal/layout.tsx`, `apps/web/src/app/(app)/developer-portal/page.tsx`
@@ -76,7 +76,7 @@ Counts: ACTION 6
 
 ### GAP-DEVELOPER-PORTAL-HOME-05  ·  MEDIUM  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx renders a full-screen slate shell with its own max-w-7xl wrapper while the page uses className 'wrap' — layout jumps on load (loading.tsx vs page.tsx).
 - **Verified evidence:** apps/web/src/app/(app)/developer-portal/loading.tsx:2-3 uses tailwind 'min-h-screen bg-slate-50 p-6 md:p-8' + 'max-w-7xl'; page uses <div className='wrap'> with PageHeader and .grid g-4. Loader is a different shell and dark-mode-incompatible slate colours.
 - **Files to change:** `apps/web/src/app/(app)/developer-portal/loading.tsx`
@@ -90,7 +90,7 @@ Counts: ACTION 6
 
 ### GAP-DEVELOPER-PORTAL-HOME-06  ·  LOW  ·  partly  ·  theme THEME (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** Emoji icons and hard-coded #hex icon backgrounds (#f1f5f9, #ecfdf3, #eef2ff, #fffaeb) ignore dark mode (page.tsx StatCard iconBg).
 - **Verified evidence:** apps/web/src/app/(app)/developer-portal/page.tsx:100-103 iconBg hex values and :126 li background '#fff' are hard-coded; emoji icons in CAPABILITIES. Dark-mode effect not run here. StatCard prop iconBg accepts a string; token alternative not checked.
 - **Files to change:** `apps/web/src/app/(app)/developer-portal/page.tsx`

@@ -14,7 +14,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Bindings tile promises "break-glass" (page.tsx:11) but no break-glass control exists on /policy/bindings; break-glass lives under tenant-admin/breakglass.
 - **Verified evidence:** policy/page.tsx:10 tile note says 'User ↔ role bindings and break-glass' but policy/bindings contains only BindingCreateForm.tsx, loading.tsx and page.tsx; grep for 'break' in that folder returns nothing. Break-glass exists at (app)/tenant-admin/breakglass (page.tsx, BreakglassActions, BreakglassTable).
 - **Files to change:** `apps/web/src/app/(app)/policy/page.tsx`
@@ -29,7 +29,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Loading state is a bare paragraph "Loading policy…" (loading.tsx:3-5) inside .page-main, unlike plugins which ships a shimmer skeleton; no error.tsx so a thrown loader error falls to the app-level boundary.
 - **Verified evidence:** policy/loading.tsx:3-5 is a bare <p>Loading policy…</p>; sub-routes each have their own bare loading.tsx (e.g. evaluate/loading.tsx returns only <p>). plugins/loading.tsx uses shimmer bars, and ds/Skeleton.tsx exports SkeletonCard/SkeletonTable. No error.tsx under policy/; (app)/error.tsx and procurement/error.tsx exist, so errors fall to the app-level boundary.
 - **Files to change:** `apps/web/src/app/(app)/policy/loading.tsx`, `apps/web/src/app/(app)/policy/evaluate/loading.tsx`, `apps/web/src/app/(app)/policy/abac/loading.tsx`, `apps/web/src/app/(app)/policy/bindings/loading.tsx`, `apps/web/src/app/(app)/policy/role-features/loading.tsx`, `apps/web/src/app/(app)/policy/error.tsx`
@@ -44,7 +44,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-HOME-04  ·  LOW  ·  partly  ·  theme COPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** First tile leaves the module for /tenant-admin/roles (page.tsx:9) with no marker that it is a different section.
 - **Verified evidence:** policy/page.tsx:9 links to /tenant-admin/roles with note 'Role catalogue and permission grids (existing)'. ModuleHub/LinkTiles only take href,label,note, so there is no section marker; the '(existing)' wording is internal build jargon shown to users.
 - **Files to change:** `apps/web/src/app/(app)/policy/page.tsx`, `apps/web/src/app/_components/ModuleHub.tsx`
@@ -66,7 +66,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-ABAC-01  ·  HIGH  ·  confirmed  ·  theme MISSING-DATA (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Rules are shown without their conditions: the type carries expression.predicates (_data.ts:24-30) but the table renders only action, resourceType and effect (page.tsx:44-63), so an admin cannot tell what a deny rule actually matches.
 - **Verified evidence:** apps/web/src/app/(app)/policy/_data.ts:20-25 AbacRuleRow.expression has predicates?: unknown[]; apps/web/src/app/(app)/policy/abac/page.tsx:39-58 table columns are Action, Resource, Effect, Role, Enabled, Id and never render predicates. Shape of predicates is unknown (typed unknown[]), so backend schema is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/policy/abac/page.tsx`, `apps/web/src/app/(app)/policy/_data.ts`
@@ -82,7 +82,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-ABAC-02  ·  HIGH  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Allow and deny render identically: StatusPill has no "allow"/"deny" entry so both fall back to the blue "info" pill (StatusPill.tsx:52-53); the only cue is the word, in a page whose purpose is spotting deny rules.
 - **Verified evidence:** apps/web/src/app/_components/ds/StatusPill.tsx:6-49 STATUS_MAP has no 'allow', 'deny' (or 'revoked') keys; line 53 falls back to 'info', so both Effect values render as the same blue pill (apps/web/src/app/(app)/policy/abac/page.tsx:55). Label is humanized text so the words differ, but no colour/icon distinction.
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/app/(app)/policy/abac/page.tsx`
@@ -97,7 +97,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-ABAC-03  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Role and Id columns print raw UUIDs in <code> (page.tsx:63-64): role names are not resolved although /platform-admin/roles has them.
 - **Verified evidence:** apps/web/src/app/(app)/policy/abac/page.tsx:56 `<code>{r.roleId}</code>` and :58 `<code>{r.id}</code>` print raw UUIDs. Role names are available from getAdminRoles() (loaders.ts, /api/policy/roles) which platform-admin/roles uses.
 - **Files to change:** `apps/web/src/app/(app)/policy/abac/page.tsx`, `apps/web/src/app/(app)/policy/_data.ts`
@@ -112,7 +112,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-ABAC-04  ·  MEDIUM  ·  partly  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle exposes an API path to end users ("loaded from /api/v1/policy/abac/rules", page.tsx:22); no create/edit/enable control, so "Enabled" cannot be changed anywhere in the UI.
 - **Verified evidence:** Subtitle at apps/web/src/app/(app)/policy/abac/page.tsx:18 does expose '/api/v1/policy/abac/rules' (confirmed copy issue). The page is read-only (no create/edit/toggle), so 'Enabled' cannot be changed in UI (confirmed) - but that is missing scope, not a wiring bug; policy write endpoints are cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/policy/abac/page.tsx`
@@ -126,7 +126,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-ABAC-05  ·  LOW  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Wrapper carries aria-label="ABAC rules" on a plain div with no role (page.tsx:18), which screen readers ignore; table container is role="region" with its own label (page.tsx:41).
 - **Verified evidence:** apps/web/src/app/(app)/policy/abac/page.tsx:15 puts aria-label on a generic div (no role) which AT ignores/axe flags; table region has its own label at :38.
 - **Files to change:** `apps/web/src/app/(app)/policy/abac/page.tsx`, `apps/web/src/app/(app)/policy/bindings/page.tsx`
@@ -147,7 +147,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-BINDINGS-01  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Privilege grant with no confirmation, no reason and no audit reference: submitting two UUIDs immediately POSTs (BindingCreateForm.tsx:17-40) and answers "Accepted (202)" — a role can be bound to any user id, including the requester's own.
 - **Verified evidence:** apps/web/src/app/(app)/policy/bindings/BindingCreateForm.tsx:14-32 onSubmit POSTs {userId,roleId} to /api/proxy/v1/policy/bindings straight away; success message 'Accepted (202)' or 'Accepted — id ...' (apps/web/src/app/(app)/policy/bindings/BindingCreateForm.tsx:31). No ConfirmDialog, no reason, no self-grant check, no audit ref, page has no role gate (bindings/page.tsx). Server-side checks (SoD, self-grant, audit) are cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/policy/bindings/BindingCreateForm.tsx`, `apps/web/src/app/(app)/policy/bindings/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`
@@ -165,7 +165,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-BINDINGS-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Users must paste raw UUIDs for both user and role (BindingCreateForm.tsx:47-63) and the list prints the same UUIDs in <code> (page.tsx:60-61); no names, no lookup, and the pattern [0-9a-fA-F-]{36} accepts non-UUID strings such as 36 hyphens.
 - **Verified evidence:** apps/web/src/app/(app)/policy/bindings/BindingCreateForm.tsx:46-64 two free-text UUID inputs with pattern="[0-9a-fA-F-]{36}", which accepts 36 hyphens; list prints userId/roleId/id in <code> (apps/web/src/app/(app)/policy/bindings/page.tsx:56-59). No EntityPicker exists in ds (verified listing).
 - **Files to change:** `apps/web/src/app/(app)/policy/bindings/BindingCreateForm.tsx`, `apps/web/src/app/(app)/policy/bindings/page.tsx`, `apps/web/src/app/_components/ds/EntityPicker.tsx`
@@ -182,7 +182,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-BINDINGS-04  ·  MEDIUM  ·  partly  ·  theme STATE (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** After a successful create the list is not refreshed (no router.refresh in BindingCreateForm.tsx:31-38), and the form is cleared, so the new binding does not appear and the admin cannot tell it worked beyond the message.
 - **Verified evidence:** Confirmed: BindingCreateForm.tsx:30-35 clears fields, never calls router.refresh(); page is force-dynamic but has revalidateSeconds 30 in getPolicyBindings so the list will not show the new row immediately. Message 'Accepted' is shown, so it is not silent. 202 implies async processing, so the row may legitimately not exist yet. Theme DEADROUTE incorrect.
 - **Files to change:** `apps/web/src/app/(app)/policy/bindings/BindingCreateForm.tsx`
@@ -197,7 +197,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-BINDINGS-05  ·  MEDIUM  ·  partly  ·  theme STATUS (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** No revoke action exists although the table and stat card show a Revoked status; "revoked" has no StatusPill mapping so it renders as blue "info" (StatusPill.tsx:52-53). Forms use bare <label><span> markup and an unstyled submit button.
 - **Verified evidence:** True: no revoke control; page shows Revoked stat (apps/web/src/app/(app)/policy/bindings/page.tsx:12,23) and 'revoked' is not in STATUS_MAP so falls to info (apps/web/src/app/_components/ds/StatusPill.tsx:53). True: form uses bare <label><span> and a plain <button> (BindingCreateForm.tsx:44-73). Theme PII is wrong. Revoke endpoint is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/policy/bindings/page.tsx`, `apps/web/src/app/(app)/policy/bindings/BindingCreateForm.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -220,7 +220,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-EVALUATE-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Cannot evaluate anyone but yourself: the principal comes from the JWT and only permissionKey + resource are sent (EvaluateForm.tsx:26-27,55), so an admin cannot check why a user was denied — the page named "Evaluate Permission" under Policy admin answers only "what can I do".
 - **Verified evidence:** EvaluateForm.tsx:52 posts only {permissionKey, resource}; header comment (l.16) states principal is derived server-side from the JWT. No user/role picker exists, so the page tests only the caller's own permissions. Whether policy-service accepts a subject/principal override cannot be seen (services/ holds only hrms-service).
 - **Files to change:** `apps/web/src/app/(app)/policy/evaluate/EvaluateForm.tsx`, `apps/web/src/app/(app)/policy/evaluate/page.tsx`
@@ -238,7 +238,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-EVALUATE-02  ·  MEDIUM  ·  partly  ·  theme UX (was UUID)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Result is raw: decision string, free-text reason and matchedRuleId UUID (EvaluateForm.tsx:105-118); no allow/deny colouring and no link to the matched rule on /policy/abac.
 - **Verified evidence:** Result panel is EvaluateForm.tsx:100-114 (obs said 105-118). It prints decision, reason and matchedRuleId in <code> as plain text: no allow/deny styling and no link. /policy/abac (abac/page.tsx) lists rules with id in <code> but has no row anchors or ?rule= handling, so a link needs an anchor added there too.
 - **Files to change:** `apps/web/src/app/(app)/policy/evaluate/EvaluateForm.tsx`, `apps/web/src/app/(app)/policy/abac/page.tsx`
@@ -255,7 +255,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-EVALUATE-03  ·  MEDIUM  ·  confirmed  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Server failures use formError.fromResponse(res, "save") (EvaluateForm.tsx:62) so a failed evaluation says it could not save; the subtitle exposes the endpoint path (page.tsx:15).
 - **Verified evidence:** EvaluateForm.tsx:56 (obs said 62) calls formError.fromResponse(res,"save") and :64 fromException("save"); useFormError.ts:106-108 uses that kind unless the code maps to another, and messages.ts renders "We couldn't save your policy evaluation." for a read-only evaluate call. page.tsx:11 (obs said 15) subtitle literally says "Run a decision against /api/v1/policy/evaluate (RBAC + ABAC)." Same exposed-path subtitle exists on abac and role-features pages.
 - **Files to change:** `apps/web/src/app/(app)/policy/evaluate/EvaluateForm.tsx`, `apps/web/src/app/(app)/policy/evaluate/page.tsx`, `apps/web/src/app/(app)/policy/abac/page.tsx`, `apps/web/src/app/(app)/policy/role-features/page.tsx`, `apps/web/src/lib/messages.ts`
@@ -270,7 +270,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-EVALUATE-04  ·  MEDIUM  ·  partly  ·  theme A11Y (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Result panel is only role="status"; the previous result is cleared on submit (EvaluateForm.tsx:33) so re-runs blink; textarea and input lack helper text for the key format service.resource.action beyond the placeholder.
 - **Verified evidence:** setResult(null) is at EvaluateForm.tsx:30 (obs said 33), so the prior result vanishes on each run; the result div (l.101) has role="status" aria-live="polite" which is adequate. The key input (l.72-78) has only a placeholder 'service.resource.action' and no helper text; the textarea has no example. Theme FABRICATED is wrong - nothing is fabricated.
 - **Files to change:** `apps/web/src/app/(app)/policy/evaluate/EvaluateForm.tsx`
@@ -293,7 +293,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-ROLE-FEATURES-01  ·  HIGH  ·  confirmed  ·  theme MISSING-ACTION (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Grant-only: the form always sends granted: true (RoleFeatureGrantForm.tsx:22) and the table has no action column, so a "revoked" row (page.tsx:61-63) can be produced by nobody in the UI, and a wrongly granted feature cannot be undone here.
 - **Verified evidence:** RoleFeatureGrantForm.tsx:22 hard-codes granted:true; the table (page.tsx:46-64) has columns Role, Feature, Granted, Id and no action column. Rows with granted=false only arise from other clients. Whether the API supports PATCH/DELETE for a grant is not visible (no policy-service in snapshot).
 - **Files to change:** `apps/web/src/app/(app)/policy/role-features/page.tsx`, `apps/web/src/app/(app)/policy/role-features/RoleFeatureGrantForm.tsx`, `apps/web/src/app/(app)/policy/role-features/GrantRowActions.tsx (new)`
@@ -311,7 +311,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-ROLE-FEATURES-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Pre-filled defaults are live values: role "finance_clerk" and feature "finance.dashboard" (RoleFeatureGrantForm.tsx:9-10), so pressing Grant feature immediately grants finance visibility with no confirmation, reason or audit reference.
 - **Verified evidence:** RoleFeatureGrantForm.tsx:8-9 (obs said 9-10) initial state roleName='finance_clerk', featureKey='finance.dashboard'; submit (l.14-23) posts immediately with no ConfirmDialog. No reason field is sent; audit emission is server-side and cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/policy/role-features/RoleFeatureGrantForm.tsx`
@@ -328,7 +328,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-ROLE-FEATURES-03  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Free-text role and feature keys (maxLength 100/200) with no validation against the role catalogue or known features, so a typo creates a dangling grant; the list shows the raw key in <code> (page.tsx:60).
 - **Verified evidence:** RoleFeatureGrantForm.tsx:42,46 are plain text inputs with maxLength 100/200 and only `required`; list shows g.featureKey in <code> (page.tsx:57, obs said 60). No lookup of the role catalogue. Roles exist at /tenant-admin/roles; a feature-key catalogue endpoint is not visible in web code or snapshot.
 - **Files to change:** `apps/web/src/app/(app)/policy/role-features/RoleFeatureGrantForm.tsx`, `apps/web/src/app/(app)/policy/role-features/page.tsx`, `apps/web/src/app/(app)/policy/_data.ts`
@@ -345,7 +345,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-ROLE-FEATURES-04  ·  MEDIUM  ·  partly  ·  theme WIRING (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** List is not refreshed after a successful grant (no router.refresh, RoleFeatureGrantForm.tsx:24-31), and form fields are not cleared, so an accidental double-click submits twice.
 - **Verified evidence:** True: no router.refresh() after success (l.29-31) and fields are kept, and the success message is 'Accepted (202)', implying async processing so the list may lag. Overstated: submit button is disabled while status==='pending' (l.48), so a double-click in flight is blocked; a repeat only occurs after completion.
 - **Files to change:** `apps/web/src/app/(app)/policy/role-features/RoleFeatureGrantForm.tsx`
@@ -362,7 +362,7 @@ Counts: ACTION 21, BACKEND-VERIFY 3
 
 ### GAP-POLICY-ROLE-FEATURES-05  ·  LOW  ·  partly  ·  theme LABELS (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Roles stat counts distinct roleName strings (page.tsx:15) and the page mixes "granted"/"revoked" wording with the Enabled/Active pill vocabulary used on ABAC.
 - **Verified evidence:** page.tsx:13 (obs said 15) counts distinct roleName strings - accurate but labelled 'Roles' rather than 'Roles with grants'. Table pill uses StatusPill status active/inactive with label granted/revoked (l.59) whereas abac/page.tsx:63 uses the default humanised Active/Inactive: wording differs but is a minor consistency issue, not i18n.
 - **Files to change:** `apps/web/src/app/(app)/policy/role-features/page.tsx`, `apps/web/src/app/(app)/policy/abac/page.tsx`

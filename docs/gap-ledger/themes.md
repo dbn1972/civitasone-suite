@@ -14,7 +14,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Four overlapping branding surfaces on one hub — Tokens, Templates, Branding, Brand preset — plus /settings/branding (page.tsx:10-14); the notes ('Branding packs and logos' vs 'Active brand and presets') do not tell a user which one changes what tenants see.
 - **Verified evidence:** themes/page.tsx:10-14 lists five ModuleHub links with notes 'Colour and scalar design tokens', 'Theme templates', 'Branding packs and logos', 'Active brand and presets', 'Tenant settings branding editor'. themes/branding and themes/brand are read-only ModuleListPage lists (themes/branding/page.tsx, themes/brand/page.tsx); the only editor is /settings/branding (settings/branding/page.tsx, a Brand Editor that PUT/GETs /api/proxy/v1/themes/brand) and the only publish action is on /themes/tokens (ThemeActions.tsx:56-70). Notes never say which is read-only vs which changes what tenants see.
 - **Files to change:** `apps/web/src/app/(app)/themes/page.tsx`
@@ -30,7 +30,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Generic skeleton in loading.tsx (four stats and a block) does not match a five-tile hub; not-found has no way back (not-found.tsx:5-8).
 - **Verified evidence:** themes/loading.tsx:3-13 renders a slate full-screen wrapper (min-h-screen bg-slate-50), a breadcrumb bar, title bar, 4 stat blocks and a 288px block; the hub (page.tsx) is a PageHeader + five LinkTiles in 3 columns inside .page-main, so shape and wrapper differ. not-found.tsx:5-8 renders EmptyState with title/message only and passes no `action`, so no way back. error.tsx already uses RouteError with retry and backHref='/themes', so that part of the suggested fix is already done.
 - **Files to change:** `apps/web/src/app/(app)/themes/loading.tsx`, `apps/web/src/app/(app)/themes/not-found.tsx`
@@ -45,7 +45,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-HOME-04  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Hard-coded English strings rather than next-intl (page.tsx:7-14); 'Settings branding' reads as a page name, not a task.
 - **Verified evidence:** Hard-coded English confirmed: title, description and all five labels/notes are literals at themes/page.tsx:6-14, and the themes tree has no next-intl usage (other routes such as (app)/crm/page.tsx:70 use getTranslations). 'Settings branding' (line 14) reads as a page name. Nothing is fabricated (no sample figures), so the FABRICATED tag is wrong.
 - **Files to change:** `apps/web/src/app/(app)/themes/page.tsx`, `apps/web/messages/en.json (or the repo's existing next-intl message catalogue; path not verified)`
@@ -68,7 +68,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-BRAND-01  ·  HIGH  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1934, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle says 'Active brand configuration' but there is no preview or colour/logo value and no control to activate a preset; a status of 'active' is just text, so the active brand is only inferable by reading the Status column (themes/_data.ts:60).
 - **Verified evidence:** themes/_data.ts:60 status = status ?? state ?? lifecycle and :51-59 sublabel; ModuleListTable has no colour/logo preview or activate control (columns :39-45). Status is plain text at ModuleListTable.tsx:54. Brand payload fields for colours/logo not visible (theme-service absent).
 - **Files to change:** `apps/web/src/app/(app)/themes/_data.ts`, `apps/web/src/app/(app)/themes/brand/page.tsx`, `apps/web/src/app/(app)/settings/branding/page.tsx`
@@ -84,7 +84,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-BRAND-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** sublabel falls back to status (themes/_data.ts:51-59), so a row with no description repeats its status in Detail and Status; Meta prints the raw ISO updatedAt (_data.ts:61-67) instead of a tenant-locale date (CLAUDE.md timestamps rule).
 - **Verified evidence:** themes/_data.ts:51-59 sublabel chain includes status/state (:53-54) so no-description rows duplicate status in Detail and Status (:60); meta chain (:61-67) uses toText(row.updatedAt) raw ISO string, rendered unformatted at ModuleListTable.tsx:55.
 - **Files to change:** `apps/web/src/app/(app)/themes/_data.ts`
@@ -101,6 +101,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 ### GAP-THEMES-BRAND-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — UUID ids are still shortened to 8 characters (full id kept in a title; slug ids shown whole); the ID column is not removed or hidden
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** ModuleListTable.tsx:50 renders <span className="mono">{row.id.slice(0, 8)}</span> (file lines 37-55 hold the table). Ids come from mapper fallback chain (id/key/code/... then `row-N`), so long keys/UUIDs sharing a prefix display identically; <tr key={row.id}> at :47 would also duplicate if real ids collide.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -117,7 +118,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-BRAND-04  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed fetch the badge says 'Couldn't load — showing nothing' but the card body reads 'No records / Nothing to show yet' (ModuleListTable.tsx:33-35), which looks like a genuinely empty tenant; no retry (ModuleListPage.tsx:28 collapses cache/fallback into 'api'/'error').
 - **Verified evidence:** ModuleListTable.tsx:50-51 renders DataSourceBadge with provenance from useSeededResource; DataSourceBadge.tsx:71 prints "Couldn't load — showing nothing" for provenance 'error-no-data', while ModuleListTable.tsx:34-35 (data.length===0) renders EmptyState 'No records / Nothing to show yet for this module.' in the same card, so a failure looks like an empty list. No retry action. Correction to observation: ModuleListPage.tsx:28 only maps LoaderSource ('api'|'error', apiClient.ts:6) to the same two values; the cache fallback is handled in useSeededResource (resource.ts:208-213, 'cached' provenance), not collapsed at :28. RefreshErrorState exists at app/_components/ds/RefreshErrorState.tsx (props error,onBack,backHref,helpHref).
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -135,7 +136,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-BRAND-06  ·  LOW  ·  confirmed  ·  theme OTHER (was CAP)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Table has no search, sort or pagination and status is unstyled text (ModuleListTable.tsx:37-55), unlike the DS DataTable used on the tokens page.
 - **Verified evidence:** ModuleListTable.tsx:36-55 renders a plain <table className="tbl"> with no search, sort or pagination and status as plain text ({row.status ?? "—"} at :54). themes/ThemeTokenTable.tsx:38 uses DS <DataTable> (app/_components/ds/DataTable.tsx:172, has filterable/exportable). The loader fetches with no page/limit params (tenant/_data.ts:77-83), so 'server-side pagination' would need backend contract; the supplied fix text about 'client-side filtering of a capped fetch' does not match this code (no client filtering exists).
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -153,7 +154,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-BRAND-07  ·  LOW  ·  partly  ·  theme COPY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Title 'Themes — Brand' is hard-coded English (page.tsx:15) and the subtitle names the internal service: "Active brand configuration and presets.".
 - **Verified evidence:** page.tsx:15 title 'Themes — Brand' hard-coded (no getTranslations). Subtitle 'Active brand configuration and presets.' (:16) does NOT name an internal service, so that part of the observation is wrong (branding page does; see BRANDING-07). Fabrication theme tag is wrong.
 - **Files to change:** `apps/web/src/app/(app)/themes/brand/page.tsx`, `apps/web/messages/en.json`
@@ -173,7 +174,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-BRANDING-01  ·  MEDIUM  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Hub note promises 'Branding packs and logos' (themes/page.tsx:12) but no logo or asset is shown; Meta prints the raw ISO updatedAt (themes/_data.ts:61-67).
 - **Verified evidence:** themes/page.tsx:12 note 'Branding packs and logos'; ModuleListTable shows no logo/asset, and meta prints raw ISO updatedAt (themes/_data.ts:64, ModuleListTable.tsx:55). Payload has no verified logo field.
 - **Files to change:** `apps/web/src/app/(app)/themes/_data.ts`, `apps/web/src/app/(app)/themes/page.tsx`
@@ -188,7 +189,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-BRANDING-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Three overlapping surfaces edit branding: /themes/brand, /themes/branding and /settings/branding (themes/page.tsx:12-14); this route is list-only with no edit or publish action.
 - **Verified evidence:** themes/page.tsx:12-14 lists Branding, Brand preset and Settings branding as three links; /themes/branding and /themes/brand are read-only ModuleListPage lists (no actions) while editing lives at app/(app)/settings/branding/page.tsx.
 - **Files to change:** `apps/web/src/app/(app)/themes/page.tsx`, `apps/web/src/app/(app)/themes/brand/page.tsx`, `apps/web/src/app/(app)/themes/branding/page.tsx`
@@ -206,6 +207,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 ### GAP-THEMES-BRANDING-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — UUID ids are still shortened to 8 characters (full id kept in a title; slug ids shown whole); the ID column is not removed or hidden
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** ModuleListTable.tsx:50 renders <span className="mono">{row.id.slice(0, 8)}</span> (file lines 37-55 hold the table). Ids come from mapper fallback chain (id/key/code/... then `row-N`), so long keys/UUIDs sharing a prefix display identically; <tr key={row.id}> at :47 would also duplicate if real ids collide.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -222,7 +224,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-BRANDING-04  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed fetch the badge says 'Couldn't load — showing nothing' but the card body reads 'No records / Nothing to show yet' (ModuleListTable.tsx:33-35), which looks like a genuinely empty tenant; no retry (ModuleListPage.tsx:28 collapses cache/fallback into 'api'/'error').
 - **Verified evidence:** ModuleListTable.tsx:50-51 renders DataSourceBadge with provenance from useSeededResource; DataSourceBadge.tsx:71 prints "Couldn't load — showing nothing" for provenance 'error-no-data', while ModuleListTable.tsx:34-35 (data.length===0) renders EmptyState 'No records / Nothing to show yet for this module.' in the same card, so a failure looks like an empty list. No retry action. Correction to observation: ModuleListPage.tsx:28 only maps LoaderSource ('api'|'error', apiClient.ts:6) to the same two values; the cache fallback is handled in useSeededResource (resource.ts:208-213, 'cached' provenance), not collapsed at :28. RefreshErrorState exists at app/_components/ds/RefreshErrorState.tsx (props error,onBack,backHref,helpHref).
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -240,7 +242,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-BRANDING-06  ·  LOW  ·  confirmed  ·  theme OTHER (was CAP)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Table has no search, sort or pagination and status is unstyled text (ModuleListTable.tsx:37-55), unlike the DS DataTable used on the tokens page.
 - **Verified evidence:** ModuleListTable.tsx:36-55 renders a plain <table className="tbl"> with no search, sort or pagination and status as plain text ({row.status ?? "—"} at :54). themes/ThemeTokenTable.tsx:38 uses DS <DataTable> (app/_components/ds/DataTable.tsx:172, has filterable/exportable). The loader fetches with no page/limit params (tenant/_data.ts:77-83), so 'server-side pagination' would need backend contract; the supplied fix text about 'client-side filtering of a capped fetch' does not match this code (no client filtering exists).
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -258,7 +260,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-BRANDING-07  ·  LOW  ·  confirmed  ·  theme COPY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Title 'Themes — Branding' is hard-coded English (page.tsx:15) and the subtitle names the internal service: "Branding packs from theme-service.".
 - **Verified evidence:** page.tsx:15 hard-coded English title; page.tsx:16 subtitle 'Branding packs from theme-service.' names an internal service (clerk-facing jargon). Fabrication theme tag is wrong.
 - **Files to change:** `apps/web/src/app/(app)/themes/branding/page.tsx`, `apps/web/messages/en.json`
@@ -296,6 +298,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 ### GAP-THEMES-TEMPLATES-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — UUID ids are still shortened to 8 characters (full id kept in a title; slug ids shown whole); the ID column is not removed or hidden
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** _components/ModuleListTable.tsx:50 renders `row.id.slice(0, 8)`. Because themes/_data.ts:32-41 falls back to key/code/name (and even `row-N`) when id is absent, the 'ID' may be a truncated name; UUIDs share 8-char prefixes rarely but names/codes do. This shared table is used by every ModuleListPage consumer, not just Themes.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -310,7 +313,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-TEMPLATES-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed fetch the badge says 'Couldn't load — showing nothing' but the card body reads 'No records / Nothing to show yet' (ModuleListTable.tsx:33-35), which looks like a genuinely empty tenant; no retry (ModuleListPage.tsx:28 collapses cache/fallback into 'api'/'error').
 - **Verified evidence:** On source 'error' ModuleListPage.tsx:28 passes source='error' to ModuleListTable; useSeededResource (lib/sync/resource.ts:215-256) has no cache so provenance is 'error-no-data', the DataSourceBadge (ModuleListTable.tsx:33) says 'Couldn't load — showing nothing', but lines 34-35 still render EmptyState 'No records / Nothing to show yet for this module.' with no retry. (ModuleListPage only maps 'error'->'error', everything else->'api'; there is no cache/fallback collapse there, so that sub-claim is loose.) RefreshErrorState exists (ds/RefreshErrorState.tsx) and works in client components.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -325,7 +328,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-TEMPLATES-05  ·  LOW  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Table has no search, sort or pagination and status is unstyled text (ModuleListTable.tsx:37-55), unlike the DS DataTable used on the tokens page.
 - **Verified evidence:** ModuleListTable.tsx:37-55 is a bare `<table className="tbl">` inside `.tbl-wrap` with five fixed columns, no filter/sort/pagination, and status rendered as plain text (`{row.status ?? "—"}`, line 54). ds/DataTable.tsx supports sortable, filterable, pageSize and is used by ThemeTokenTable. No client-side cap exists in the loader (moduleLoader in _data.ts:79-86 does not add limit params); whether theme-service paginates cannot be verified.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -341,7 +344,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-TEMPLATES-06  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Title 'Themes — Templates' is hard-coded English (page.tsx:15) and the subtitle names the internal service: "Theme templates from theme-service.".
 - **Verified evidence:** Hard-coded English title 'Themes — Templates' and subtitle 'Theme templates from theme-service.' at templates/page.tsx:15-16 confirmed (same leak in branding/page.tsx: 'Branding packs from theme-service.'). Not fabricated data, so tag is I18N. Caveat: ModuleListPage.tsx:16-28 derives the offline cacheKey from slugify(title), so translating the title would change/split the per-user cache key.
 - **Files to change:** `apps/web/src/app/(app)/themes/templates/page.tsx`, `apps/web/src/app/(app)/themes/branding/page.tsx`, `apps/web/src/app/(app)/themes/brand/page.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -364,7 +367,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-TOKENS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed load the badge appears but stats are real zeros and the palette shows 'No theme tokens … Publish a theme revision to seed the palette' (page.tsx:23,26-28; ThemeTokenTable.tsx:29-33) with Publish still enabled: the page nudges the user to publish a tenant-wide theme on top of a token set it could not read.
 - **Verified evidence:** tokens/page.tsx:23 shows DataSourceBadge on error, but lines 26-28 pass numeric total/colourTokens/scalarTokens (all 0 from the empty fallback; StatCard shows '—' only for null/undefined/NaN, ds/StatCard.tsx:20-24). ThemeTokenTable.tsx:27-34 shows EmptyState 'No theme tokens ... Publish a theme revision to seed the palette' whenever rows are empty, and ThemeActions.tsx:29,56-58 keeps Publish enabled (canPublish depends only on the name). Publish does require a reason via the confirm dialog, which mitigates but does not remove the misleading nudge.
 - **Files to change:** `apps/web/src/app/(app)/themes/tokens/page.tsx`, `apps/web/src/app/(app)/themes/ThemeTokenTable.tsx`, `apps/web/src/app/(app)/themes/ThemeActions.tsx`
@@ -380,7 +383,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-TOKENS-03  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** No preview, diff or contrast check before publishing: the confirmation explains consequence but never shows which tokens change or whether brand.primary on surface.canvas meets WCAG contrast.
 - **Verified evidence:** ThemeActions.tsx:56-70 wraps Publish in ActionButton with confirmTitle, consequence text, requireReason and reasonLabel (so a reason dialog does exist), but the POST at lines 19-23 sends only {name, reason}; the page never shows which tokens change vs the live theme, nor a contrast check. lib/contrast.ts exports contrast(hexA, hexB) (line 24) that is not used here. Maker!=checker enforcement and the audit event are server-side and cannot be verified (theme-service absent); what /v1/themes/publish publishes (a server-held draft?) is unknown.
 - **Files to change:** `apps/web/src/app/(app)/themes/ThemeActions.tsx`, `apps/web/src/app/(app)/themes/tokens/page.tsx`, `apps/web/src/lib/contrast.ts`
@@ -397,7 +400,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-TOKENS-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Colour test is only 3- or 6-digit hex (page.tsx:9; ThemeTokenTable.tsx:9): rgb(), hsl() and 8-digit hex values are counted as scalar tokens and get no swatch.
 - **Verified evidence:** tokens/page.tsx:9 and ThemeTokenTable.tsx:9 each declare the same HEX = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/. rgb()/hsl()/8-digit (#rrggbbaa) and 4-digit hex values fail the test, so they are counted as scalar tokens in the stats (page.tsx:15-16) and rendered as plain text without a swatch (ThemeTokenTable.tsx:35-58). Duplicated regex can drift.
 - **Files to change:** `apps/web/src/app/(app)/themes/tokens/page.tsx`, `apps/web/src/app/(app)/themes/ThemeTokenTable.tsx`, `apps/web/src/lib/colour.ts (new)`
@@ -412,7 +415,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-TOKENS-05  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Page uses PageShell with Tailwind slate wrappers (PageShell.tsx:19-21) and emoji stat icons, while sibling theme routes use PageHeader; ThemeActions hard-codes hex fallbacks and inline styles (ThemeActions.tsx:38-52), so the branding admin page is off-theme in dark mode.
 - **Verified evidence:** Confirmed: tokens/page.tsx uses PageShell (_components/PageShell.tsx:16,19,25,26) with hard-coded Tailwind classes (bg-slate-50, text-slate-900/600, no dark: variants) and emoji stat icons (page.tsx:26-28), whereas templates/brand/branding use ModuleListPage -> PageHeader. Overstated: ThemeActions.tsx:38-49 uses var(--ink2, #475569)/var(--line, #e2e8f0), so hex values are only fallbacks and follow the theme when the vars exist; the inline styles are style debt, not a dark-mode break. Emoji icons are the DS StatCard convention (icon: string), so only the PageShell wrapper is a real dark-mode risk (cannot run the app to see the rendered result).
 - **Files to change:** `apps/web/src/app/(app)/themes/tokens/page.tsx`, `apps/web/src/app/(app)/themes/ThemeActions.tsx`
@@ -427,7 +430,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-TOKENS-06  ·  LOW  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** getThemeTokenRows in themes/_data.ts:88 is dead code: this page reads getThemeTokens from _data/loaders.ts:761-766 instead, so two loaders exist for one endpoint.
 - **Verified evidence:** _data.ts:88 `getThemeTokenRows = moduleLoader('/api/v1/themes/tokens','themes.tokens')` has no importer (repo-wide grep finds only its definition). tokens/page.tsx:4,12 imports getThemeTokens from _data/loaders.ts:761-766, which hits the same /api/v1/themes/tokens with the same telemetryKey and maps to ThemeTokenSummary.
 - **Files to change:** `apps/web/src/app/(app)/themes/_data.ts`
@@ -440,7 +443,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-TOKENS-07  ·  LOW  ·  partly  ·  theme FEEDBACK (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Success line 'Theme revision “…” published.' is aria-live but disappears on router.refresh with no link to the published revision or history (ThemeActions.tsx:25-26,72-74); the revision name defaults to the same 'Published tenant theme' every time.
 - **Verified evidence:** ThemeActions.tsx:25 sets status 'Theme revision “…” published.' in a <p role=status aria-live=polite> (72-74). router.refresh() at line 26 re-renders server components but preserves client state, so the message most likely stays until navigation (observation's 'disappears' is probably wrong; not runtime-tested). True: no link to the published revision/history, no revision id returned or shown, and `name` defaults to 'Published tenant theme' each mount (line 15) and is not reset. No revisions/history route exists under themes/ (only brand, branding, templates, tokens), so a history link needs a new route/endpoint. Also line 24 throws `res.text()` raw, which can surface server text to the user.
 - **Files to change:** `apps/web/src/app/(app)/themes/ThemeActions.tsx`

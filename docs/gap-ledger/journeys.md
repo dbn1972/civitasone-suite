@@ -14,7 +14,7 @@ Counts: ACTION 12, BACKEND-VERIFY 4
 
 ### GAP-JOURNEYS-HOME-01  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tiles promise more than the sub-pages deliver: "Design and activate" (Builder) and "drop-off analysis, and conversions" (Analytics) both land on the same generic ID/Name/Detail/Status/Meta list (builder/page.tsx, analytics/page.tsx, ModuleListTable.tsx).
 - **Verified evidence:** journeys/page.tsx:6,9 tile copy 'Design and activate multi-step customer journeys' and 'drop-off analysis, and conversions' link to builder and analytics pages, which are the same generic ModuleListTable lists (builder/page.tsx, analytics/page.tsx; analytics reuses the executions endpoint, _data.ts:91).
 - **Files to change:** `apps/web/src/app/(app)/journeys/page.tsx`
@@ -28,7 +28,7 @@ Counts: ACTION 12, BACKEND-VERIFY 4
 
 ### GAP-JOURNEYS-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tile counts/status absent — nothing on the hub says how many journeys are running (page.tsx:6-11).
 - **Verified evidence:** journeys/page.tsx:12-18 is a synchronous component with static NavTile array (l.5-10) and no data fetch; LinkTiles gets no counts. Loaders exist (getJourneyActive etc.) that could supply counts.
 - **Files to change:** `apps/web/src/app/(app)/journeys/page.tsx`, `apps/web/src/app/(app)/journeys/_data.ts`
@@ -58,7 +58,7 @@ Counts: ACTION 12, BACKEND-VERIFY 4
 
 ### GAP-JOURNEYS-HOME-04  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx skeleton (four KPI cards + table) does not match the loaded hub (JourneysLoading).
 - **Verified evidence:** journeys/loading.tsx renders 4 KPI cards and a h-96 table block with min-h-screen wrapper; the hub (page.tsx) is only a heading plus a four-tile grid, and sub-pages are tables. The single loading.tsx covers all journeys routes. Minor.
 - **Files to change:** `apps/web/src/app/(app)/journeys/loading.tsx`
@@ -78,7 +78,7 @@ Counts: ACTION 12, BACKEND-VERIFY 4
 
 ### GAP-JOURNEYS-ACTIVE-01  ·  MEDIUM  ·  partly  ·  theme WIRING (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Rows are executions with no journey name, enrolled citizen/contact or current step — Name comes from name/title/label/code/type keys (_data.ts:38-46), so a row may read as a bare id; "Monitor running journeys" has no pause/stop control.
 - **Verified evidence:** active/page.tsx passes rows from getJourneyActive (/api/v1/journeys/executions, _data.ts:89) through mapRows: label = name/title/label/code/type/entityType/direction else id (_data.ts:42-50), so a row can read as a bare id; no journey name, contact or step field is mapped. The 'no pause/stop control' claim is true: ModuleListTable.tsx has no actions column and no journeys route has mutating UI. Theme I18N is wrong. Execution payload field names cannot be verified (journey-service absent).
 - **Files to change:** `apps/web/src/app/(app)/journeys/_data.ts`, `apps/web/src/app/(app)/journeys/active/page.tsx`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -95,7 +95,7 @@ Counts: ACTION 12, BACKEND-VERIFY 4
 
 ### GAP-JOURNEYS-ACTIVE-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Generic table: ID is row.id.slice(0, 8) (ModuleListTable.tsx:44) and Detail/Status/Meta are guessed from whichever of ~10 keys exist (_data.ts:36-53), so columns mean different things per row and status is unstyled plain text (ModuleListTable.tsx:47).
 - **Verified evidence:** active/page.tsx renders shared ModuleListPage -> ModuleListTable.tsx: ID is row.id.slice(0,8) in a mono span (l.50), Detail = row.sublabel, Status = row.status raw text with no StatusPill (l.53), Meta = row.meta (l.54). mapRows in journeys/_data.ts:28-77 picks fields from ~10 candidate keys with fallbacks (sublabel falls back to status, so Detail can duplicate Status; meta may be code, currency, timestamp or points), so column meaning varies per row. Timestamps in meta are unformatted ISO.
 - **Files to change:** `apps/web/src/app/(app)/journeys/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/journeys/active/page.tsx`
@@ -119,7 +119,7 @@ Counts: ACTION 12, BACKEND-VERIFY 4
 
 ### GAP-JOURNEYS-ANALYTICS-01  ·  HIGH  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Analytics is not analytics: getJourneyAnalytics and getJourneyActive both fetch /api/v1/journeys/executions (_data.ts:83,85) and render the identical table; there is no drop-off, conversion or funnel metric or chart despite the subtitle (analytics/page.tsx:16-19).
 - **Verified evidence:** journeys/_data.ts:89 and :91: getJourneyActive and getJourneyAnalytics both call /api/v1/journeys/executions; analytics/page.tsx:14-19 renders the same ModuleListPage with copy 'Execution outcomes for drop-off and conversion analysis.' No chart, funnel, count or conversion computation exists. Whether journey-service exposes an analytics endpoint cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/journeys/analytics/page.tsx`, `apps/web/src/app/(app)/journeys/_data.ts`
@@ -136,7 +136,7 @@ Counts: ACTION 12, BACKEND-VERIFY 4
 
 ### GAP-JOURNEYS-ANALYTICS-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Generic table: ID is row.id.slice(0, 8) (ModuleListTable.tsx:44) and Detail/Status/Meta are guessed from whichever of ~10 keys exist (_data.ts:36-53), so columns mean different things per row and status is unstyled plain text (ModuleListTable.tsx:47).
 - **Verified evidence:** analytics/page.tsx renders shared ModuleListPage -> ModuleListTable.tsx: ID is row.id.slice(0,8) in a mono span (l.50), Detail = row.sublabel, Status = row.status raw text with no StatusPill (l.53), Meta = row.meta (l.54). mapRows in journeys/_data.ts:28-77 picks fields from ~10 candidate keys with fallbacks (sublabel falls back to status, so Detail can duplicate Status; meta may be code, currency, timestamp or points), so column meaning varies per row. Timestamps in meta are unformatted ISO.
 - **Files to change:** `apps/web/src/app/(app)/journeys/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/journeys/analytics/page.tsx`
@@ -160,7 +160,7 @@ Counts: ACTION 12, BACKEND-VERIFY 4
 
 ### GAP-JOURNEYS-BUILDER-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Journey Builder — Design and activate multi-step customer journeys" (home tile) is a read-only list: no canvas, no create/edit/activate/pause control exists anywhere in the journeys route tree (builder/page.tsx:8-21).
 - **Verified evidence:** builder/page.tsx:8-21 is a read-only ModuleListPage over GET /api/v1/journeys (_data.ts:88). The journeys tree contains only page.tsx, active, analytics, builder, templates pages plus layout/loading/error; grep of the folder finds no forms, create/edit/activate/pause controls or canvas. Home tile (journeys/page.tsx:6) promises 'Design and activate'. Backend write endpoints cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/journeys/page.tsx`, `apps/web/src/app/(app)/journeys/builder/page.tsx`
@@ -177,7 +177,7 @@ Counts: ACTION 12, BACKEND-VERIFY 4
 
 ### GAP-JOURNEYS-BUILDER-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Generic table: ID is row.id.slice(0, 8) (ModuleListTable.tsx:44) and Detail/Status/Meta are guessed from whichever of ~10 keys exist (_data.ts:36-53), so columns mean different things per row and status is unstyled plain text (ModuleListTable.tsx:47).
 - **Verified evidence:** builder/page.tsx renders shared ModuleListPage -> ModuleListTable.tsx: ID is row.id.slice(0,8) in a mono span (l.50), Detail = row.sublabel, Status = row.status raw text with no StatusPill (l.53), Meta = row.meta (l.54). mapRows in journeys/_data.ts:28-77 picks fields from ~10 candidate keys with fallbacks (sublabel falls back to status, so Detail can duplicate Status; meta may be code, currency, timestamp or points), so column meaning varies per row. Timestamps in meta are unformatted ISO.
 - **Files to change:** `apps/web/src/app/(app)/journeys/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/journeys/builder/page.tsx`
@@ -201,7 +201,7 @@ Counts: ACTION 12, BACKEND-VERIFY 4
 
 ### GAP-JOURNEYS-TEMPLATES-01  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Templates are backed by the /journeys/triggers endpoint (_data.ts:84): trigger rules are not reusable journey blueprints, and the home tile promises "Reusable journey templates for common scenarios" — the copy admits the reinterpretation only on this page (templates/page.tsx:17).
 - **Verified evidence:** _data.ts:90 getJourneyTemplates fetches /api/v1/journeys/triggers; templates/page.tsx:16 describes 'Reusable trigger rules used as journey templates'; home tile (journeys/page.tsx:8) says 'Reusable journey templates for common scenarios'. Triggers are rules, not blueprints; whether journey-service has a templates endpoint cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/journeys/page.tsx`, `apps/web/src/app/(app)/journeys/templates/page.tsx`, `apps/web/src/app/(app)/journeys/_data.ts`
@@ -216,7 +216,7 @@ Counts: ACTION 12, BACKEND-VERIFY 4
 
 ### GAP-JOURNEYS-TEMPLATES-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** Generic table: ID is row.id.slice(0, 8) (ModuleListTable.tsx:44) and Detail/Status/Meta are guessed from whichever of ~10 keys exist (_data.ts:36-53), so columns mean different things per row and status is unstyled plain text (ModuleListTable.tsx:47).
 - **Verified evidence:** templates/page.tsx renders shared ModuleListPage -> ModuleListTable.tsx: ID is row.id.slice(0,8) in a mono span (l.50), Detail = row.sublabel, Status = row.status raw text with no StatusPill (l.53), Meta = row.meta (l.54). mapRows in journeys/_data.ts:28-77 picks fields from ~10 candidate keys with fallbacks (sublabel falls back to status, so Detail can duplicate Status; meta may be code, currency, timestamp or points), so column meaning varies per row. Timestamps in meta are unformatted ISO.
 - **Files to change:** `apps/web/src/app/(app)/journeys/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/journeys/templates/page.tsx`

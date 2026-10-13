@@ -50,7 +50,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-GEOFENCES-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1961, verified on main 9c5e9e9e9)
 - **First-pass claim:** Generic table: every row is flattened to ID/Name/Detail/Status/Meta by a field-guessing mapper (_data.ts:28-76), so the Geofence records are shown without their defining attributes; the ID column prints the first 8 characters of a raw id (ModuleListTable.tsx:50).
 - **Verified evidence:** locations/_data.ts:28-76 mapRows guesses id/label/sublabel/status/meta from fixed key names and drops every other field; ModuleListTable.tsx:40-54 renders columns ID/Name/Detail/Status/Meta and prints row.id.slice(0,8) at :50. So Geofence records show no defining attributes.
 - **Files to change:** `apps/web/src/app/(app)/locations/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/locations/geofences/page.tsx`
@@ -68,6 +68,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 ### GAP-LOCATIONS-GEOFENCES-02  ·  MEDIUM  ·  partly  ·  theme OTHER (was DEADROUTE)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1961 — table now has sort/filter/pagination; copy still does not say the register is read-only and there is no manage UI
 - **First-pass claim:** Read-only list with no filter, search, pagination, create, edit or archive: ModuleListTable maps every returned row into the DOM (ModuleListTable.tsx:47-57); the subtitle promises definitions to manage but the route offers no action.
 - **Verified evidence:** Read-only list confirmed: page.tsx passes rows to ModuleListPage/ModuleListTable, which has no search, filter, pagination or actions and maps all rows (ModuleListTable.tsx:48-56). Overstated: the description is 'Geofence definitions from location-service' (page.tsx:16), it does not promise management. The hub note (locations/page.tsx) makes no action promise either. No create/edit/archive UI exists for this entity in the tree.
 - **Files to change:** `apps/web/src/app/(app)/locations/geofences/page.tsx`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -83,7 +84,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-GEOFENCES-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862 (ModuleListTable) and #1961 (page), verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed load stacks the 'showing nothing' badge on the generic 'No records / Nothing to show yet' EmptyState (ModuleListTable.tsx:33-35), which reads as an empty register; no retry.
 - **Verified evidence:** locations/_data.ts fetchJson falls back to [] and page passes source; ModuleListTable.tsx:33 renders DataSourceBadge ('Couldn't load — showing nothing', DataSourceBadge.tsx:72) and, when data is empty, EmptyState 'No records / Nothing to show yet' at :34-35 (useSeededResource resolves provenance error-no-data only when no cache). Both appear together; no retry control. RefreshErrorState exists at app/_components/ds/RefreshErrorState.tsx.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -100,6 +101,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 ### GAP-LOCATIONS-GEOFENCES-05  ·  MEDIUM  ·  partly  ·  theme WIRING
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1961 — typed Shape/Radius columns added; MonitoringMap.recordHref still sends geofence markers to /locations?geofence=<id> and hub note unchanged
 - **First-pass claim:** A geofence list shows no geometry, radius or linked location, and the hub promises 'Geofence definitions and checks' (locations/page.tsx:11) but there is no check action; the mapper drops those fields entirely.
 - **Verified evidence:** Table shows only mapped generic fields (_data.ts:28-76 has no geometry/radius/locationId keys), so no geometry, radius or linked location appears. Hub note 'Geofence definitions and checks' is at locations/page.tsx:12-13 (line 11 in the review is off); no check action exists on the geofence page. Additionally MonitoringMap.recordHref sends geofence markers to /locations?geofence=<id> (MonitoringMap.tsx:56-57), which the hub ignores. The real geofence API field names are not visible here.
 - **Files to change:** `apps/web/src/app/(app)/locations/_data.ts`, `apps/web/src/app/(app)/locations/page.tsx`, `apps/web/src/app/(app)/locations/geofences/page.tsx`, `apps/web/src/app/(app)/locations/maps/_components/MonitoringMap.tsx`
@@ -118,6 +120,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 ### GAP-LOCATIONS-GEOFENCES-06  ·  LOW  ·  partly  ·  theme COPY (was WIRING)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1961 — PageHeader back link done; title still "Locations — Geofences" and subtitle still says "from location-service"
 - **First-pass claim:** Title pattern 'Locations — X' with em dash and the service name in the description ('from location-service') differs from the hub tile wording (locations/page.tsx:10-13); page uses a raw <a href> back link rather than the PageHeader back prop (page.tsx:14-16).
 - **Verified evidence:** Confirmed in page.tsx: title 'Locations — X' with em dash, description 'X from location-service' (names the backend), and a raw <a href="/locations"> inside a hand-written nav.back (page.tsx:12-14) instead of PageHeader back prop (ModuleListPage renders PageHeader without back). Line refs to locations/page.tsx:10-13 are correct for the hub tile wording, which also names 'location-service' only on the first tile. Raw <a> triggers a full page load, not client navigation.
 - **Files to change:** `apps/web/src/app/(app)/locations/geofences/page.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -139,7 +142,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-INFRASTRUCTURE-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1961, verified on main 9c5e9e9e9)
 - **First-pass claim:** Generic table: every row is flattened to ID/Name/Detail/Status/Meta by a field-guessing mapper (_data.ts:28-76), so the Infrastructure asset records are shown without their defining attributes; the ID column prints the first 8 characters of a raw id (ModuleListTable.tsx:50).
 - **Verified evidence:** locations/_data.ts:28-76 mapRows guesses id/label/sublabel/status/meta from fixed key names and drops every other field; ModuleListTable.tsx:40-54 renders columns ID/Name/Detail/Status/Meta and prints row.id.slice(0,8) at :50. So Infrastructure asset records show no defining attributes.
 - **Files to change:** `apps/web/src/app/(app)/locations/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/locations/infrastructure/page.tsx`
@@ -157,6 +160,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 ### GAP-LOCATIONS-INFRASTRUCTURE-02  ·  MEDIUM  ·  partly  ·  theme OTHER (was DEADROUTE)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1961 — table now has sort/filter/pagination; copy still does not say the register is read-only and there is no manage UI
 - **First-pass claim:** Read-only list with no filter, search, pagination, create, edit or archive: ModuleListTable maps every returned row into the DOM (ModuleListTable.tsx:47-57); the subtitle promises definitions to manage but the route offers no action.
 - **Verified evidence:** Read-only list confirmed: page.tsx passes rows to ModuleListPage/ModuleListTable, which has no search, filter, pagination or actions and maps all rows (ModuleListTable.tsx:48-56). Overstated: the description is 'Infrastructure assets from location-service' (page.tsx:16), it does not promise management. The hub note (locations/page.tsx) makes no action promise either. No create/edit/archive UI exists for this entity in the tree.
 - **Files to change:** `apps/web/src/app/(app)/locations/infrastructure/page.tsx`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -172,7 +176,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-INFRASTRUCTURE-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862 (ModuleListTable) and #1961 (page), verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed load stacks the 'showing nothing' badge on the generic 'No records / Nothing to show yet' EmptyState (ModuleListTable.tsx:33-35), which reads as an empty register; no retry.
 - **Verified evidence:** locations/_data.ts fetchJson falls back to [] and page passes source; ModuleListTable.tsx:33 renders DataSourceBadge ('Couldn't load — showing nothing', DataSourceBadge.tsx:72) and, when data is empty, EmptyState 'No records / Nothing to show yet' at :34-35 (useSeededResource resolves provenance error-no-data only when no cache). Both appear together; no retry control. RefreshErrorState exists at app/_components/ds/RefreshErrorState.tsx.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -189,6 +193,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 ### GAP-LOCATIONS-INFRASTRUCTURE-05  ·  LOW  ·  partly  ·  theme COPY (was WIRING)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1961 — PageHeader back link done; title still "Locations — ..." and subtitle still says "from location-service"
 - **First-pass claim:** Title pattern 'Locations — X' with em dash and the service name in the description ('from location-service') differs from the hub tile wording (locations/page.tsx:10-13); page uses a raw <a href> back link rather than the PageHeader back prop (page.tsx:14-16).
 - **Verified evidence:** Confirmed in page.tsx: title 'Locations — X' with em dash, description 'X from location-service' (names the backend), and a raw <a href="/locations"> inside a hand-written nav.back (page.tsx:12-14) instead of PageHeader back prop (ModuleListPage renders PageHeader without back). Line refs to locations/page.tsx:10-13 are correct for the hub tile wording, which also names 'location-service' only on the first tile. Raw <a> triggers a full page load, not client navigation.
 - **Files to change:** `apps/web/src/app/(app)/locations/infrastructure/page.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -226,7 +231,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-JURISDICTIONS-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1961, verified on main 9c5e9e9e9)
 - **First-pass claim:** Generic table: every row is flattened to ID/Name/Detail/Status/Meta by a field-guessing mapper (_data.ts:28-76), so the Jurisdiction records are shown without their defining attributes; the ID column prints the first 8 characters of a raw id (ModuleListTable.tsx:50).
 - **Verified evidence:** locations/_data.ts:28-76 mapRows guesses id/label/sublabel/status/meta from fixed key names and drops every other field; ModuleListTable.tsx:40-54 renders columns ID/Name/Detail/Status/Meta and prints row.id.slice(0,8) at :50. So Jurisdiction records show no defining attributes.
 - **Files to change:** `apps/web/src/app/(app)/locations/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/locations/jurisdictions/page.tsx`
@@ -244,6 +249,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 ### GAP-LOCATIONS-JURISDICTIONS-02  ·  MEDIUM  ·  partly  ·  theme OTHER (was DEADROUTE)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1961 — table now has sort/filter/pagination; copy still does not say the register is read-only and there is no manage UI
 - **First-pass claim:** Read-only list with no filter, search, pagination, create, edit or archive: ModuleListTable maps every returned row into the DOM (ModuleListTable.tsx:47-57); the subtitle promises definitions to manage but the route offers no action.
 - **Verified evidence:** Read-only list confirmed: page.tsx passes rows to ModuleListPage/ModuleListTable, which has no search, filter, pagination or actions and maps all rows (ModuleListTable.tsx:48-56). Overstated: the description is 'Jurisdiction records from location-service' (page.tsx:16), it does not promise management. The hub note (locations/page.tsx) makes no action promise either. No create/edit/archive UI exists for this entity in the tree.
 - **Files to change:** `apps/web/src/app/(app)/locations/jurisdictions/page.tsx`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -259,7 +265,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 
 ### GAP-LOCATIONS-JURISDICTIONS-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862 (ModuleListTable) and #1961 (page), verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed load stacks the 'showing nothing' badge on the generic 'No records / Nothing to show yet' EmptyState (ModuleListTable.tsx:33-35), which reads as an empty register; no retry.
 - **Verified evidence:** locations/_data.ts fetchJson falls back to [] and page passes source; ModuleListTable.tsx:33 renders DataSourceBadge ('Couldn't load — showing nothing', DataSourceBadge.tsx:72) and, when data is empty, EmptyState 'No records / Nothing to show yet' at :34-35 (useSeededResource resolves provenance error-no-data only when no cache). Both appear together; no retry control. RefreshErrorState exists at app/_components/ds/RefreshErrorState.tsx.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -276,6 +282,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 ### GAP-LOCATIONS-JURISDICTIONS-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1961 — typed mapper with Level/Office/Unit columns added; no parent or LGD code column and hub note unchanged
 - **First-pass claim:** The hub describes 'Administrative jurisdiction boundaries' (locations/page.tsx:12) but the table shows no boundary, level, parent or LGD code, only whichever of code/updatedAt the mapper picks as Meta.
 - **Verified evidence:** Hub note 'Administrative jurisdiction boundaries' is locations/page.tsx:12. _data.ts:28-76 maps only name/description/status/code-or-updatedAt, so no level, parent, boundary or LGD code column exists. Real API fields not visible here.
 - **Files to change:** `apps/web/src/app/(app)/locations/_data.ts`, `apps/web/src/app/(app)/locations/jurisdictions/page.tsx`
@@ -292,6 +299,7 @@ Counts: ACTION 28, BACKEND-VERIFY 8
 ### GAP-LOCATIONS-JURISDICTIONS-06  ·  LOW  ·  partly  ·  theme COPY (was WIRING)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1961 — PageHeader back link done; title still "Locations — Jurisdictions" and subtitle still says "from location-service"
 - **First-pass claim:** Title pattern 'Locations — X' with em dash and the service name in the description ('from location-service') differs from the hub tile wording (locations/page.tsx:10-13); page uses a raw <a href> back link rather than the PageHeader back prop (page.tsx:14-16).
 - **Verified evidence:** Confirmed in page.tsx: title 'Locations — X' with em dash, description 'X from location-service' (names the backend), and a raw <a href="/locations"> inside a hand-written nav.back (page.tsx:12-14) instead of PageHeader back prop (ModuleListPage renders PageHeader without back). Line refs to locations/page.tsx:10-13 are correct for the hub tile wording, which also names 'location-service' only on the first tile. Raw <a> triggers a full page load, not client navigation.
 - **Files to change:** `apps/web/src/app/(app)/locations/jurisdictions/page.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`

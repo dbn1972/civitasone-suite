@@ -14,7 +14,7 @@ Counts: ACTION 5
 
 ### GAP-LIBRARY-HOME-01  ·  HIGH  ·  confirmed  ·  theme NAVUX
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** The /library route is not a library module: it is an audit-issue catalogue titled 'Issue Library' whose back link goes to /admin (page.tsx:154-158). Users looking for a document or book library land on engineering findings, and the sidebar has no 'library' entry (data-active mapped to audit, the nearest group, as no NAV id fits).
 - **Verified evidence:** library/page.tsx:154-158 renders PageHeader title 'Issue Library' with back='/admin'; ISSUE_LIBRARY (l.54-119) is a static list of UX/a11y/security findings. The real document/book library is /estab/library (navRouteManifest.ts:50). Sidebar.tsx has no '/library' entry (grep empty). The 'data-active mapped to audit' claim could not be found in code.
 - **Files to change:** `apps/web/src/app/(app)/library/page.tsx`, `apps/web/src/app/_components/navRouteManifest.ts`
@@ -31,7 +31,7 @@ Counts: ACTION 5
 
 ### GAP-LIBRARY-HOME-02  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** No segment layout: unlike legal/layout.tsx there is no requireAnyRole or ModuleGate for /library, so role and module-visibility rules do not apply to this route (only the parent (app)/layout.tsx runs).
 - **Verified evidence:** Confirmed: no library/layout.tsx exists (dir has only page.tsx, loading.tsx), so no requireAnyRole/ModuleGate as in legal/layout.tsx:7-9; only (app)/layout.tsx applies. Impact is overstated: the page is a hard-coded static list with no API call or tenant data, so nothing sensitive is exposed.
 - **Files to change:** `apps/web/src/app/(app)/library/layout.tsx`
@@ -47,6 +47,7 @@ Counts: ACTION 5
 ### GAP-LIBRARY-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1925 — gated to PLATFORM_ADMIN_ROLES, but the catalogue still lives in the tenant app UI; not moved to developer docs
 - **First-pass claim:** Tenant-facing page lists internal engineering gaps in plain terms (for example 'Missing CSRF protection on state-changing APIs', page.tsx:82); the page says it is the same for every tenant and maintained by developers (page.tsx:161-163), so it belongs in developer docs, not the product UI.
 - **Verified evidence:** library/page.tsx:82 has 'Missing CSRF protection on state-changing APIs' and l.160-163 states it is the same for every tenant and maintained by developers. It is dev-facing content shown in the tenant product UI.
 - **Files to change:** `apps/web/src/app/(app)/library/page.tsx`, `docs/`
@@ -62,7 +63,7 @@ Counts: ACTION 5
 
 ### GAP-LIBRARY-HOME-04  ·  LOW  ·  partly  ·  theme LOADING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** library/loading.tsx renders a six-tile card grid that never shows (the page has no async work) and does not match the list layout; severity colours mix token pairs with literals #2563eb/#eff6ff/#6b7280 (page.tsx:27,33-34).
 - **Verified evidence:** library/loading.tsx renders header skeleton plus six SkeletonCard in grid g-3, while page.tsx is a client component over static data (no fetch), so the skeleton only flashes during route chunk load; it does not resemble the list layout. Hard-coded colours are real but at lines 27,29 (#2563eb,#6b7280) and 35,37 (#eff6ff,#f9fafb), not only 27,33-34; critical/high/low already use var(--bad/--warn/--good). Theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/(app)/library/loading.tsx`, `apps/web/src/app/(app)/library/page.tsx`
@@ -77,7 +78,7 @@ Counts: ACTION 5
 
 ### GAP-LIBRARY-HOME-05  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** Codes W1–W7 and I1 are shown raw with no legend, and strings are hard-coded English rather than next-intl keys (page.tsx:54-118).
 - **Verified evidence:** library/page.tsx:54-118 defines codes W1-W7 and I1 shown in a monospace chip (l.240-251) with no legend; all titles/remediation/labels ('Search issues', 'No issues match your filters.') are English literals. next-intl is used elsewhere (182 files use useTranslations) but not here.
 - **Files to change:** `apps/web/src/app/(app)/library/page.tsx`

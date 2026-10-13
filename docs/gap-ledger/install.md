@@ -26,7 +26,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-HOME-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch reads as a fresh tenant: source 'error' shows only the small badge, then total===0 renders the 'No installation steps found' EmptyState and invites Stage 3 activation with no retry (page.tsx:47-59).
 - **Verified evidence:** install/page.tsx:48 shows the DataSourceBadge on error; getInstallSteps returns [] on error so total===0 (:50) and the EmptyState 'No installation steps found' plus activation panel render (:50-58). No retry. (Line numbers in the observation were shifted by ~4.)
 - **Files to change:** `apps/web/src/app/(app)/install/page.tsx`
@@ -42,7 +42,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-HOME-03  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Run / Retry / Skip and Stage 3 activation (tenant provisioning mutations, PATCH via proxy) are shown to every viewer with no role gate and no client-side audit context; optional steps skip with no confirmation (InstallStepActions.tsx:39-46).
 - **Verified evidence:** InstallStepActions.tsx:29 sends PATCH /api/proxy/v1/install/steps/{id}/run|skip|retry to every viewer; page.tsx:141-148 renders it for all non-completed steps; no requireAnyRole in any install file and no install layout. Skip confirm exists only when isRequired (:40-45); optional steps skip immediately (:44). Client sends no reason/audit context. Server RBAC and audit cannot be verified (install-service absent).
 - **Files to change:** `apps/web/src/app/(app)/install/layout.tsx`, `apps/web/src/app/(app)/install/InstallStepActions.tsx`, `apps/web/src/app/(app)/install/page.tsx`
@@ -59,7 +59,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-HOME-04  ·  MEDIUM  ·  confirmed  ·  theme STATEMACHINE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Run and Retry are both enabled for every non-completed step, including Retry on a never-run pending step and Run on a failed one; there is no per-status logic (InstallStepActions.tsx:60-82).
 - **Verified evidence:** InstallStepActions.tsx:53-79 all three buttons use only disabled={busy||done}; status prop is accepted (:9) but unused. page.tsx:141 renders actions for any status !== completed (pending, in_progress, failed, skipped), so Retry shows on pending and Run on failed.
 - **Files to change:** `apps/web/src/app/(app)/install/InstallStepActions.tsx`
@@ -72,7 +72,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-HOME-05  ·  MEDIUM  ·  confirmed  ·  theme ERRORMSG (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** PATCH errors show raw (await res.text()) in a small red line; no busy indicator besides aria-busy (InstallStepActions.tsx:30-32,86).
 - **Verified evidence:** InstallStepActions.tsx:30 throws new Error(await res.text()) and :83-85 prints it in a text-xs red <p>; body may be JSON/HTML. Busy state is only aria-busy (:57); no spinner or label change.
 - **Files to change:** `apps/web/src/app/(app)/install/InstallStepActions.tsx`
@@ -87,7 +87,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-HOME-06  ·  MEDIUM  ·  confirmed  ·  theme DSDRIFT (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Page is styled with Tailwind slate/indigo utility classes and hard-coded StatCard iconBg hex instead of DS tokens; StatCard value 'Complete' is derived from required steps only while progress % counts all steps, so the two can disagree (page.tsx:30-36,62-66).
 - **Verified evidence:** page.tsx Tailwind slate/indigo throughout (:60-75, 188-230) and iconBg hex at :64,:71,:77. Status card :63-66 uses allRequiredComplete (required only) while progress (:36,:94-190) counts all steps; e.g. all required done, optional pending gives 'Complete' and 80%. It also ignores failed optional steps.
 - **Files to change:** `apps/web/src/app/(app)/install/page.tsx`
@@ -101,7 +101,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-HOME-07  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Domain Pack panel fetch errors are swallowed and replaced by the static municipal catalogue (domainPackApi.ts fetchDomainPacksForInstall), so an outage looks like a healthy list with only one pack.
 - **Verified evidence:** Same root cause as DOMAIN-PACKS-02: domainPackApi.ts:84,88 swallow errors and return the static catalogue; embedded panel is rendered on /install at page.tsx:57,151,164.
 - **Files to change:** `apps/web/src/app/(app)/install/domainPackApi.ts`, `apps/web/src/app/(app)/install/DomainPackActivatePanel.tsx`
@@ -114,7 +114,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-HOME-08  ·  LOW  ·  confirmed  ·  theme NAV (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Footer uses plain <a href> (full page load) instead of next/link, and 'Domain Packs (Stage 3)' is jargon for tenant admins (page.tsx:169-173).
 - **Verified evidence:** page.tsx:169-173 uses plain <a href='/install/console'> and <a href='/install/domain-packs'> (full reload), label 'Domain Packs (Stage 3)'; the same label is in console/page.tsx:12-14. domain-packs/page.tsx:51-55 also uses <a>.
 - **Files to change:** `apps/web/src/app/(app)/install/page.tsx`, `apps/web/src/app/(app)/install/domain-packs/page.tsx`, `apps/web/src/app/(app)/install/console/page.tsx`
@@ -134,7 +134,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-CONSOLE-01  ·  MEDIUM  ·  confirmed  ·  theme STATUS (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Hub has no live context: no current stage, failed-step count or last-run time, so an installer must open each list to learn the state (console/page.tsx:5-24).
 - **Verified evidence:** install/console/page.tsx:5-22 is a static ModuleHub with 6 links and no children; no fetch. ModuleHub accepts children (ModuleHub.tsx) so a status strip is possible. Data source: getInstallSteps (_data/loaders.ts:4343) gives steps with status/completedAt.
 - **Files to change:** `apps/web/src/app/(app)/install/console/page.tsx`
@@ -150,7 +150,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-CONSOLE-02  ·  MEDIUM  ·  defect  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Jargon tiles ('Silo provisions', 'Module resolution catalogue', 'Atomic install steps') with no explanation; help slug 'install' link target not verified in this snapshot (page.tsx:8).
 - **Service:** `apps/web`  ·  **Endpoint(s):** `['GET /help/install (apps/web help route)']`
 - **Question:** The help slug 'install' passed to PageHeader must resolve to a help module.
@@ -162,7 +162,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-CONSOLE-03  ·  LOW  ·  partly  ·  theme COPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Wizard, Stages and Steps overlap (all show install steps/stages); the hub does not say which to use for what (page.tsx:11-20).
 - **Verified evidence:** console/page.tsx:10-19 lists Installer wizard ('Guided install steps'), Stages ('Install stages and progress'), Steps ('Atomic install steps'); the notes hint at differences but do not say when to use which. Overlap of data on the /install/stages and /install/steps pages was not read here; the wizard (install/page.tsx) itself is steps with actions.
 - **Files to change:** `apps/web/src/app/(app)/install/console/page.tsx`
@@ -175,7 +175,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-CONSOLE-04  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Segment loading.tsx (stat blocks) does not match this stat-less hub, so the skeleton jumps on load (install/loading.tsx).
 - **Verified evidence:** install/loading.tsx (segment-wide, applies to /install/console) draws a title bar, 4 stat blocks and a 72px body using Tailwind slate + min-h-screen; console renders a PageHeader and tile grid only. Also hard-coded slate colours, no dark mode.
 - **Files to change:** `apps/web/src/app/(app)/install/loading.tsx`, `apps/web/src/app/(app)/install/console/loading.tsx`
@@ -196,7 +196,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-DOMAIN-PACKS-01  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Activation (imports service drafts into the catalogue) is available to any viewer; there is no role gate, and success is only 'accepted' (202) with no status polling or link to the queued job (DomainPackActivatePanel.tsx doActivate; domainPackApi.ts).
 - **Verified evidence:** install/domain-packs/page.tsx:40-59 has no role check and there is no install/layout.tsx (ls install); requireAnyRole exists (lib/auth/roleGuard.ts) and is used in crm layouts. DomainPackActivatePanel.doActivate (:59-76) POSTs /api/proxy/v1/install/stages/3/domain-pack/activate (domainPackApi.ts:96); the proxy route has no role code. Result shows 'Activation accepted... queued' (:177-179) with no status polling or link to a job. Server-side enforcement in install-service cannot be verified (service absent).
 - **Files to change:** `apps/web/src/app/(app)/install/layout.tsx`, `apps/web/src/app/(app)/install/DomainPackActivatePanel.tsx`, `apps/web/src/app/(app)/install/domainPackApi.ts`
@@ -213,7 +213,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-DOMAIN-PACKS-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** List fetch failure is silently swallowed: fetchDomainPacksForInstall returns the static catalogue on any error, so an outage looks like a working single-pack library (domainPackApi.ts:fetchDomainPacksForInstall).
 - **Verified evidence:** domainPackApi.ts:81-90 fetchDomainPacksForInstall returns mergeDomainPackCatalog([]) on !res.ok (:84) and in catch (:88); the panel (:43-49) cannot tell failure from success, so it shows the static municipal pack only.
 - **Files to change:** `apps/web/src/app/(app)/install/domainPackApi.ts`, `apps/web/src/app/(app)/install/DomainPackActivatePanel.tsx`
@@ -229,7 +229,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-DOMAIN-PACKS-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Pack outcomes are hard-coded in the client (domainPackCatalog.ts) and override the API's packKeys for the municipal pack, so server-side changes to the pack never show; summary is also static.
 - **Verified evidence:** domainPackCatalog.ts:22-53 hard-codes MUNICIPAL_DOMAIN_PACK with 3 outcomes; domainPackApi.ts:58 forces summary from catalog and :60-61 uses catalog.outcomes ahead of the API's packKeys; the activate call sends selected.outcomes packKeys (Panel :64-67), so server changes to the pack's packKeys are ignored in both display and request. Static outcomes copy at Panel :99-103,246-252.
 - **Files to change:** `apps/web/src/app/(app)/install/domainPackApi.ts`, `apps/web/src/app/(app)/install/DomainPackActivatePanel.tsx`, `apps/web/src/app/(app)/install/domainPackCatalog.ts`
@@ -247,6 +247,7 @@ Counts: ACTION 37
 ### GAP-INSTALL-DOMAIN-PACKS-04  ·  MEDIUM  ·  partly  ·  theme DSDRIFT (was FABRICATED)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — breadcrumb replaced with Link; DomainPackActivatePanel and domain-packs page still use Tailwind indigo/slate classes instead of DS tokens
 - **First-pass claim:** Panel is Tailwind-styled (indigo/slate) with hard-coded colours, breadcrumb is hand-rolled with '←' text; 'Activated' button is disabled with no way to re-run or view result after reload (DomainPackActivatePanel.tsx).
 - **Verified evidence:** Tailwind indigo/slate classes are real (Panel :78-89,201; page.tsx:51-55 hand-rolled breadcrumb with '←' text and plain <a>). Overstated on 'Activated' disabled: that is React state only (Panel :36,202,206); after reload result is null, so the button is enabled again and a second activation is possible; no view of the prior result exists. Theme not FABRICATED.
 - **Files to change:** `apps/web/src/app/(app)/install/DomainPackActivatePanel.tsx`, `apps/web/src/app/(app)/install/domain-packs/page.tsx`
@@ -262,7 +263,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-DOMAIN-PACKS-05  ·  LOW  ·  confirmed  ·  theme COPY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Copy exposes internal references ('DoD §13(f)', pack keys 'pack:trade-license') to end users (DomainPackActivatePanel.tsx).
 - **Verified evidence:** Panel :103 shows '(DoD §13(f))', :100 raw key municipal-in-v1, :158 and :272 show pack keys like pack:trade-license in mono text, :179 shows 'Pack <key> queued'; catalog.ts header also cites DoD. Strings hard-coded.
 - **Files to change:** `apps/web/src/app/(app)/install/DomainPackActivatePanel.tsx`, `apps/web/src/app/(app)/install/domainPackCatalog.ts`
@@ -284,6 +285,7 @@ Counts: ACTION 37
 ### GAP-INSTALL-MODULES-01  ·  HIGH  ·  partly  ·  theme FORMAT (was MONEY)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — meta dates are now formatted (metaKind) but a UUID id is still shown as an 8-character fragment in ModuleListTable (full id only in the title)
 - **First-pass claim:** Generic ID/Name/Detail/Status/Meta columns come from a heuristic mapper (_data.ts:26-79): ID is a raw id truncated to 8 chars and Meta prints whatever of code|currency|updatedAt|createdAt exists, i.e. a raw ISO timestamp, not a formatted date (ModuleListTable.tsx:56-62).
 - **Verified evidence:** No money is involved: _data.ts mapRows (lines 26-79) builds ModuleRowSummary generically; ModuleListTable.tsx:50 prints row.id.slice(0, 8) in a mono span and :54 prints row.meta verbatim. meta = code ?? currency ?? updatedAt ?? createdAt (_data.ts:57-63), so it is a raw ISO string only when the row has no code/currency; points/balance are printed as 'N pts'/'bal N' without formatting. The MONEY tag/fix is wrong; the real issues are an 8-char id fragment and an unformatted timestamp.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/install/_data.ts`, `apps/web/src/lib/formatters.ts`
@@ -300,7 +302,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-MODULES-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch shows a badge inside the card and the 'Nothing to show yet' EmptyState together, with no retry action, so an outage reads as 'no records' (ModuleListTable.tsx:31-41).
 - **Verified evidence:** apps/web/src/app/(app)/install/modules/page.tsx:7 passes source into ModuleListPage which forwards 'error' to ModuleListTable (ModuleListPage.tsx:28). ModuleListTable.tsx:33 renders DataSourceBadge (provenance error-no-data gives 'Couldn't load — showing nothing', DataSourceBadge.tsx:71) and, when data is empty, :34-35 also renders EmptyState 'No records / Nothing to show yet for this module.' There is no retry action. RefreshErrorState exists at ds/RefreshErrorState.tsx and is unused here.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -317,7 +319,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-MODULES-03  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status is plain text (no StatusPill) and there is no search, sort, pagination or mobile card transform on the .tbl (ModuleListTable.tsx:43-66).
 - **Verified evidence:** ModuleListTable.tsx:37-58 renders a bare <table className='tbl'> from data.map with no DataTable, search, sort or pagination; status at :53 is plain text {row.status ?? '—'} with no StatusPill (StatusPill exists at ds/StatusPill.tsx). No client-side filtering of a capped fetch exists (the install loaders in _data.ts pass no limit), so the 'stop client-side filtering' fix text does not apply.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -334,7 +336,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-MODULES-04  ·  MEDIUM  ·  partly  ·  theme CONTENT (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Module resolution catalogue' rows show only id/label/status/meta: no dependency, edition or entitlement column, so resolution cannot be reviewed (ModuleListTable.tsx:44-55).
 - **Verified evidence:** ModuleListTable.tsx:40-44 has only ID/Name/Detail/Status/Meta columns, so no dependency/edition/entitlement columns exist. True, but the loader (_data.ts:87) is a generic mapper over /api/v1/install/modules and the install-service response shape is not in this snapshot (only hrms-service is present), so it cannot be confirmed that such fields exist. The I18N tag/fix (next-intl) does not describe this observation; the i18n claim is a separate systemic point.
 - **Files to change:** `apps/web/src/app/(app)/install/modules/page.tsx`, `apps/web/src/app/(app)/install/_data.ts`, `packages/types (ModuleRowSummary or new InstallModuleRow)`
@@ -352,7 +354,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-MODULES-05  ·  LOW  ·  partly  ·  theme NAV (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Only a back link (no module breadcrumb Home / Install / page); page title uses an em-dash prefix 'Install — …' instead of a breadcrumb trail (page.tsx).
 - **Verified evidence:** apps/web/src/app/(app)/install/modules/page.tsx:9-11 renders a single back link to /install/console inside <nav aria-label='Breadcrumb'> and title 'Install — ...' (line 15). But the AppShell already renders a global AutoBreadcrumb in the TopBar (ds/AppShell.tsx:30, used by (app)/layout.tsx:72), so a trail exists; tenant-admin/users/page.tsx:18-22 documents removing duplicate back affordances for that reason. The local nav is a back link mislabelled as Breadcrumb; the 'wiring' theme is wrong.
 - **Files to change:** `apps/web/src/app/(app)/install/modules/page.tsx`, `apps/web/src/app/_components/AutoBreadcrumb.tsx`
@@ -376,6 +378,7 @@ Counts: ACTION 37
 ### GAP-INSTALL-SILOS-01  ·  HIGH  ·  partly  ·  theme FORMAT (was MONEY)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — meta dates are now formatted (metaKind) but a UUID id is still shown as an 8-character fragment in ModuleListTable (full id only in the title)
 - **First-pass claim:** Generic ID/Name/Detail/Status/Meta columns come from a heuristic mapper (_data.ts:26-79): ID is a raw id truncated to 8 chars and Meta prints whatever of code|currency|updatedAt|createdAt exists, i.e. a raw ISO timestamp, not a formatted date (ModuleListTable.tsx:56-62).
 - **Verified evidence:** No money is involved: _data.ts mapRows (lines 26-79) builds ModuleRowSummary generically; ModuleListTable.tsx:50 prints row.id.slice(0, 8) in a mono span and :54 prints row.meta verbatim. meta = code ?? currency ?? updatedAt ?? createdAt (_data.ts:57-63), so it is a raw ISO string only when the row has no code/currency; points/balance are printed as 'N pts'/'bal N' without formatting. The MONEY tag/fix is wrong; the real issues are an 8-char id fragment and an unformatted timestamp.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/install/_data.ts`, `apps/web/src/lib/formatters.ts`
@@ -392,7 +395,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-SILOS-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch shows a badge inside the card and the 'Nothing to show yet' EmptyState together, with no retry action, so an outage reads as 'no records' (ModuleListTable.tsx:31-41).
 - **Verified evidence:** apps/web/src/app/(app)/install/silos/page.tsx:7 passes source into ModuleListPage which forwards 'error' to ModuleListTable (ModuleListPage.tsx:28). ModuleListTable.tsx:33 renders DataSourceBadge (provenance error-no-data gives 'Couldn't load — showing nothing', DataSourceBadge.tsx:71) and, when data is empty, :34-35 also renders EmptyState 'No records / Nothing to show yet for this module.' There is no retry action. RefreshErrorState exists at ds/RefreshErrorState.tsx and is unused here.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -409,7 +412,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-SILOS-03  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status is plain text (no StatusPill) and there is no search, sort, pagination or mobile card transform on the .tbl (ModuleListTable.tsx:43-66).
 - **Verified evidence:** ModuleListTable.tsx:37-58 renders a bare <table className='tbl'> from data.map with no DataTable, search, sort or pagination; status at :53 is plain text {row.status ?? '—'} with no StatusPill (StatusPill exists at ds/StatusPill.tsx). No client-side filtering of a capped fetch exists (the install loaders in _data.ts pass no limit), so the 'stop client-side filtering' fix text does not apply.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -426,7 +429,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-SILOS-04  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Silo provision records are shown with the generic mapper's heuristics (name/title/label/code, description/status) — infrastructure identifiers or error text in these fields would be displayed unfiltered to any viewer; no role gate (_data.ts:44-79, silos/page.tsx).
 - **Verified evidence:** silos/page.tsx has no role check, and mapRows (_data.ts:44-63) shows name/title/label/code as label and description/status as detail verbatim (ModuleListTable.tsx:51-53). The mapper does not read errorMessage or infra fields, so error text is only shown if the API puts it into description/status. Whether the route is role-restricted is decided by the (app) layout / gateway and install-service, neither verifiable here (only hrms-service in snapshot). Exposure to any viewer is therefore plausible but unproven.
 - **Files to change:** `apps/web/src/app/(app)/install/silos/page.tsx`, `apps/web/src/app/(app)/install/_data.ts`
@@ -442,7 +445,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-SILOS-05  ·  LOW  ·  partly  ·  theme NAV (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Only a back link (no module breadcrumb Home / Install / page); page title uses an em-dash prefix 'Install — …' instead of a breadcrumb trail (page.tsx).
 - **Verified evidence:** apps/web/src/app/(app)/install/silos/page.tsx:9-11 renders a single back link to /install/console inside <nav aria-label='Breadcrumb'> and title 'Install — ...' (line 15). But the AppShell already renders a global AutoBreadcrumb in the TopBar (ds/AppShell.tsx:30, used by (app)/layout.tsx:72), so a trail exists; tenant-admin/users/page.tsx:18-22 documents removing duplicate back affordances for that reason. The local nav is a back link mislabelled as Breadcrumb; the 'wiring' theme is wrong.
 - **Files to change:** `apps/web/src/app/(app)/install/silos/page.tsx`, `apps/web/src/app/_components/AutoBreadcrumb.tsx`
@@ -466,6 +469,7 @@ Counts: ACTION 37
 ### GAP-INSTALL-STAGES-01  ·  HIGH  ·  partly  ·  theme FORMAT (was MONEY)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — meta dates are now formatted (metaKind) but a UUID id is still shown as an 8-character fragment in ModuleListTable (full id only in the title)
 - **First-pass claim:** Generic ID/Name/Detail/Status/Meta columns come from a heuristic mapper (_data.ts:26-79): ID is a raw id truncated to 8 chars and Meta prints whatever of code|currency|updatedAt|createdAt exists, i.e. a raw ISO timestamp, not a formatted date (ModuleListTable.tsx:56-62).
 - **Verified evidence:** No money is involved: _data.ts mapRows (lines 26-79) builds ModuleRowSummary generically; ModuleListTable.tsx:50 prints row.id.slice(0, 8) in a mono span and :54 prints row.meta verbatim. meta = code ?? currency ?? updatedAt ?? createdAt (_data.ts:57-63), so it is a raw ISO string only when the row has no code/currency; points/balance are printed as 'N pts'/'bal N' without formatting. The MONEY tag/fix is wrong; the real issues are an 8-char id fragment and an unformatted timestamp.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/install/_data.ts`, `apps/web/src/lib/formatters.ts`
@@ -482,7 +486,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-STAGES-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch shows a badge inside the card and the 'Nothing to show yet' EmptyState together, with no retry action, so an outage reads as 'no records' (ModuleListTable.tsx:31-41).
 - **Verified evidence:** apps/web/src/app/(app)/install/stages/page.tsx:7 passes source into ModuleListPage which forwards 'error' to ModuleListTable (ModuleListPage.tsx:28). ModuleListTable.tsx:33 renders DataSourceBadge (provenance error-no-data gives 'Couldn't load — showing nothing', DataSourceBadge.tsx:71) and, when data is empty, :34-35 also renders EmptyState 'No records / Nothing to show yet for this module.' There is no retry action. RefreshErrorState exists at ds/RefreshErrorState.tsx and is unused here.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -499,7 +503,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-STAGES-03  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status is plain text (no StatusPill) and there is no search, sort, pagination or mobile card transform on the .tbl (ModuleListTable.tsx:43-66).
 - **Verified evidence:** ModuleListTable.tsx:37-58 renders a bare <table className='tbl'> from data.map with no DataTable, search, sort or pagination; status at :53 is plain text {row.status ?? '—'} with no StatusPill (StatusPill exists at ds/StatusPill.tsx). No client-side filtering of a capped fetch exists (the install loaders in _data.ts pass no limit), so the 'stop client-side filtering' fix text does not apply.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -516,7 +520,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-STAGES-04  ·  MEDIUM  ·  partly  ·  theme MISSING (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stages and Steps are read-only lists, yet Stage 3 has an action elsewhere; the stage list offers no Run/Retry and no progress per stage (stages/page.tsx, ModuleListTable.tsx).
 - **Verified evidence:** stages/page.tsx:20-22 already renders a link 'Open Domain Pack activation (Stage 3)' to /install/domain-packs (route exists), so nothing is dead. The list is read-only and has no Run/Retry or per-stage progress; run/skip/retry actions live only on the wizard (install/page.tsx via InstallStepActions.tsx:29, operating on steps, not stages). The stage API exposes no known progress field in this snapshot.
 - **Files to change:** `apps/web/src/app/(app)/install/stages/page.tsx`, `apps/web/src/app/(app)/install/_data.ts`
@@ -533,7 +537,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-STAGES-05  ·  LOW  ·  partly  ·  theme NAV (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Only a back link (no module breadcrumb Home / Install / page); page title uses an em-dash prefix 'Install — …' instead of a breadcrumb trail (page.tsx).
 - **Verified evidence:** apps/web/src/app/(app)/install/stages/page.tsx:9-11 renders a single back link to /install/console inside <nav aria-label='Breadcrumb'> and title 'Install — ...' (line 15). But the AppShell already renders a global AutoBreadcrumb in the TopBar (ds/AppShell.tsx:30, used by (app)/layout.tsx:72), so a trail exists; tenant-admin/users/page.tsx:18-22 documents removing duplicate back affordances for that reason. The local nav is a back link mislabelled as Breadcrumb; the 'wiring' theme is wrong.
 - **Files to change:** `apps/web/src/app/(app)/install/stages/page.tsx`, `apps/web/src/app/_components/AutoBreadcrumb.tsx`
@@ -557,6 +561,7 @@ Counts: ACTION 37
 ### GAP-INSTALL-STEPS-01  ·  HIGH  ·  partly  ·  theme FORMAT (was MONEY)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — meta dates are now formatted (metaKind) but a UUID id is still shown as an 8-character fragment in ModuleListTable (full id only in the title)
 - **First-pass claim:** Generic ID/Name/Detail/Status/Meta columns come from a heuristic mapper (_data.ts:26-79): ID is a raw id truncated to 8 chars and Meta prints whatever of code|currency|updatedAt|createdAt exists, i.e. a raw ISO timestamp, not a formatted date (ModuleListTable.tsx:56-62).
 - **Verified evidence:** No money is involved: _data.ts mapRows (lines 26-79) builds ModuleRowSummary generically; ModuleListTable.tsx:50 prints row.id.slice(0, 8) in a mono span and :54 prints row.meta verbatim. meta = code ?? currency ?? updatedAt ?? createdAt (_data.ts:57-63), so it is a raw ISO string only when the row has no code/currency; points/balance are printed as 'N pts'/'bal N' without formatting. The MONEY tag/fix is wrong; the real issues are an 8-char id fragment and an unformatted timestamp.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/install/_data.ts`, `apps/web/src/lib/formatters.ts`
@@ -573,7 +578,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-STEPS-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1862, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch shows a badge inside the card and the 'Nothing to show yet' EmptyState together, with no retry action, so an outage reads as 'no records' (ModuleListTable.tsx:31-41).
 - **Verified evidence:** apps/web/src/app/(app)/install/steps/page.tsx:7 passes source into ModuleListPage which forwards 'error' to ModuleListTable (ModuleListPage.tsx:28). ModuleListTable.tsx:33 renders DataSourceBadge (provenance error-no-data gives 'Couldn't load — showing nothing', DataSourceBadge.tsx:71) and, when data is empty, :34-35 also renders EmptyState 'No records / Nothing to show yet for this module.' There is no retry action. RefreshErrorState exists at ds/RefreshErrorState.tsx and is unused here.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -590,7 +595,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-STEPS-03  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status is plain text (no StatusPill) and there is no search, sort, pagination or mobile card transform on the .tbl (ModuleListTable.tsx:43-66).
 - **Verified evidence:** ModuleListTable.tsx:37-58 renders a bare <table className='tbl'> from data.map with no DataTable, search, sort or pagination; status at :53 is plain text {row.status ?? '—'} with no StatusPill (StatusPill exists at ds/StatusPill.tsx). No client-side filtering of a capped fetch exists (the install loaders in _data.ts pass no limit), so the 'stop client-side filtering' fix text does not apply.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -607,7 +612,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-STEPS-04  ·  MEDIUM  ·  confirmed  ·  theme MISSING (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Duplicates the wizard's step list but read-only and without isRequired/stepNo/errorMessage: a failed step shows only the word 'failed' and cannot be retried here (steps/page.tsx, ModuleListTable.tsx:44-55).
 - **Verified evidence:** steps/page.tsx uses the generic ModuleListPage (ModuleListTable.tsx:40-44), showing only id/name/detail/status/meta. The wizard (install/page.tsx:114-146) shows stepNo, isRequired, errorMessage (line 136-138) and InstallStepActions (run/skip/retry, InstallStepActions.tsx:25-31). So /install/steps is a lossy read-only duplicate; a failed step shows only the status word, and no link to the wizard.
 - **Files to change:** `apps/web/src/app/(app)/install/steps/page.tsx`, `apps/web/src/app/(app)/install/_data.ts`
@@ -624,7 +629,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-STEPS-05  ·  LOW  ·  partly  ·  theme NAV (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Only a back link (no module breadcrumb Home / Install / page); page title uses an em-dash prefix 'Install — …' instead of a breadcrumb trail (page.tsx).
 - **Verified evidence:** apps/web/src/app/(app)/install/steps/page.tsx:9-11 renders a single back link to /install/console inside <nav aria-label='Breadcrumb'> and title 'Install — ...' (line 15). But the AppShell already renders a global AutoBreadcrumb in the TopBar (ds/AppShell.tsx:30, used by (app)/layout.tsx:72), so a trail exists; tenant-admin/users/page.tsx:18-22 documents removing duplicate back affordances for that reason. The local nav is a back link mislabelled as Breadcrumb; the 'wiring' theme is wrong.
 - **Files to change:** `apps/web/src/app/(app)/install/steps/page.tsx`, `apps/web/src/app/_components/AutoBreadcrumb.tsx`

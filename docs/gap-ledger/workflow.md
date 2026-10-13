@@ -14,7 +14,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-HOME-02  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Workflow is not in the sidebar (ds/Sidebar.tsx has no /workflow entry); it is reachable only from the dashboard "My approvals" button (dashboard/page.tsx:47), RoleCommandCenter and GlobalSearch (GlobalSearch.tsx:69). The mockup nav has no matching id, so data-active is set to "designer" (nearest Citizen-services item).
 - **Verified evidence:** Same as GAP-WORKFLOW-DEFINITIONS-05: Sidebar.tsx has no /workflow item; entry points dashboard/page.tsx:47, RoleCommandCenter.tsx:110, GlobalSearch.tsx:69. Mockup data-active claim is cannot-verify.
 - **Files to change:** `apps/web/src/app/_components/ds/Sidebar.tsx`
@@ -31,7 +31,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme DATAINTEGRITY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** "In progress" here counts active+pending+running (page.tsx:13-17) but the Instances page "Active" counts active+running only (list/page.tsx:14-19) — the same population is two different numbers a click apart.
 - **Verified evidence:** workflow/page.tsx:13-16 'In progress' = active+pending+running; list/page.tsx:14-16 'Active' = active+running (pending omitted). Both from getAnalyticsSummary instancesByStatus.
 - **Files to change:** `apps/web/src/app/(app)/workflow/page.tsx`, `apps/web/src/app/(app)/workflow/list/page.tsx`, `apps/web/src/app/(app)/workflow/_data/workflowTypes.ts`
@@ -45,7 +45,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-HOME-05  ·  LOW  ·  partly  ·  theme STYLE (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx and the cards use Tailwind slate utilities and emoji icons (loading.tsx:1-22; page.tsx:34-44) instead of DS tokens, so dark mode shows light placeholders; tiles give 4 items in a "three" column grid (page.tsx:87).
 - **Verified evidence:** Confirmed: workflow/loading.tsx uses slate-200 utilities (4 stats, 2 cards, 3 tiles); page.tsx:34-44 uses emoji icons in StatCard (a pattern used app-wide, so not specific to this route); LinkTiles columns='three' (page.tsx:87) with 4 tiles (:89-92) renders g-3 => 3+1 orphan. Dark-mode effect of slate-200 is cannot-verify (no tailwind config in snapshot). Not a 'fabricated data' issue.
 - **Files to change:** `apps/web/src/app/(app)/workflow/loading.tsx`, `apps/web/src/app/(app)/workflow/page.tsx`
@@ -67,7 +67,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DEFINITIONS-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Dead-end authoring: the page tells users to "Clone a template … then customise the approval steps" (definitions/page.tsx:99-116) and the empty state says "Start from a template below", but there is no Clone, New or Open-in-designer control anywhere on the page; template rows are not links (no rowLinkKey) — the promised workflow cannot be started here.
 - **Verified evidence:** definitions/page.tsx:98-115: Templates card text says 'Clone a template ...' (:101-103) and empty state (:77) says 'Start from a template below', but the templates DataTable (:104-112) has no rowLinkKey/rowHref/actions; nothing on the page links to /workflow/designer or any clone action. The definitions table does link rows (:88-89).
 - **Files to change:** `apps/web/src/app/(app)/workflow/definitions/page.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -83,7 +83,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DEFINITIONS-03  ·  MEDIUM  ·  partly  ·  theme COPY (was STATUS)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Naming drift: route "Definitions", hub tile "Definitions — Process definitions, versions and graphs" (workflow/page.tsx:90), header "Approval Workflows"; status raw values (deployed, active, draft) shown as-is via StatusPill with no vocabulary.
 - **Verified evidence:** Naming drift is real: PageHeader title 'Approval Workflows' (definitions/page.tsx:56), hub tile 'Definitions' (workflow/page.tsx:91), breadcrumb 'Definitions' (detail pages). Overstated on status: DataTable cellType 'status' (DataTable.tsx:127) renders StatusPill, which humanizes (StatusPill.tsx bug-fix note) rather than showing raw text; but 'deployed' is absent from STATUS_MAP so it falls to neutral 'info' tone while 'active' is green.
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/app/(app)/workflow/definitions/page.tsx`, `apps/web/src/app/(app)/workflow/page.tsx`
@@ -99,6 +99,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 ### GAP-WORKFLOW-DEFINITIONS-04  ·  MEDIUM  ·  partly  ·  theme NAVUX
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — local Breadcrumbs removed from most pages but workflow/my-tasks/page.tsx still imports it and workflow/_components/Breadcrumbs.tsx still exists
 - **First-pass claim:** No Breadcrumbs component here, unlike the sibling Instances/My-tasks/detail pages that render Breadcrumbs (list/page.tsx:24); the page also wraps in page-main with a different container (definitions/page.tsx:54).
 - **Verified evidence:** True that definitions/page.tsx renders no local <Breadcrumbs> while list/detail pages do. But AppShell.tsx:30 renders a global <AutoBreadcrumb/> in the TopBar for every route and workflow/ is in LINKABLE_INTERMEDIATE_PATHS (navRouteManifest.ts:128); tenant-admin/users/page.tsx:18-22 documents removing page-local crumbs as redundant. So the sibling pages are the outliers (duplicate crumbs). 'page-main' is used in ~719 files and has no rule in civitas-ds.css, so the 'different container' claim is not a real difference.
 - **Files to change:** `apps/web/src/app/(app)/workflow/list/page.tsx`, `apps/web/src/app/(app)/workflow/definitions/[id]/page.tsx`, `apps/web/src/app/(app)/workflow/instances/[id]/page.tsx`, `apps/web/src/app/(app)/workflow/_components/Breadcrumbs.tsx`
@@ -112,7 +113,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DEFINITIONS-05  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Workflow is not in the sidebar (ds/Sidebar.tsx has no /workflow entry); it is reachable only from the dashboard "My approvals" button (dashboard/page.tsx:47), RoleCommandCenter and GlobalSearch (GlobalSearch.tsx:69). The mockup nav has no matching id, so data-active is set to "designer" (nearest Citizen-services item).
 - **Verified evidence:** Confirmed: ds/Sidebar.tsx NAV (lines 47-143) has no /workflow item; entry points are dashboard/page.tsx:47, dashboard/RoleCommandCenter.tsx:110 and GlobalSearch.tsx:69. workflow/layout.tsx already gates via ModuleGate moduleKey='workflow'. The 'mockup data-active=designer' part refers to the HTML mockups outside apps/web and is cannot-verify here.
 - **Files to change:** `apps/web/src/app/_components/ds/Sidebar.tsx`
@@ -128,7 +129,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DEFINITIONS-06  ·  LOW  ·  partly  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** No loading.tsx for this segment — the hub skeleton (4 stats, 2 cards, 3 tiles) flashes before a 3-stat + table page; Templates "Steps" column is left-aligned numeric.
 - **Verified evidence:** Not accurate that there is no loading.tsx: workflow/definitions/loading.tsx exists (title, subtitle, 4 stat blocks in grid-cols-4, one h-80 block) using Tailwind slate-200. It mismatches the page (3 StatCards + 2 cards) and the hub loading.tsx (workflow/loading.tsx: 4 stats, 2 cards, 3 tiles) only applies to the hub. True: 'Steps' column (page.tsx:108) has no align:'right' (DataTable supports align at DataTable.tsx:43) and steps may be undefined.
 - **Files to change:** `apps/web/src/app/(app)/workflow/definitions/loading.tsx`, `apps/web/src/app/(app)/workflow/definitions/page.tsx`
@@ -149,7 +150,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DEFINITIONS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Read-only dead end: no Edit, Clone, Activate/Deactivate or "Open in Designer" action and no link to instances of this definition (definitions/[id]/page.tsx:43-54), even though a Designer exists at /workflow/designer; status can be seen but never changed from the UI.
 - **Verified evidence:** definitions/[id]/page.tsx:43-53 PageHeader actions contain only StatusPill and DataSourceBadge; no link to /workflow/designer, no instances link (list/page.tsx has no definition filter), no activate/deactivate. designer/page.tsx ignores any definition id (DesignerCanvas.tsx:94 discards definitions). The service designer persists via designer/_data/workflowBuilderApi.ts:58-88 (/v1/workflow/designer/definitions) but activate/clone endpoints are not visible in this snapshot.
 - **Files to change:** `apps/web/src/app/(app)/workflow/definitions/[id]/page.tsx`, `apps/web/src/app/(app)/workflow/designer/page.tsx`, `apps/web/src/app/(app)/workflow/designer/_components/DesignerCanvas.tsx`
@@ -166,7 +167,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DEFINITIONS-DETAIL-02  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Definition not found" is unreachable: getJson turns every non-2xx (including 404) and every unmappable body into source "error" (workflowData.ts:75-78; mapper returns null), so page.tsx:10-33 always takes the "Could not load definition" copy for a bad id.
 - **Verified evidence:** workflowData.ts:75-78 returns source:'error' for any !res.ok (status kept in result.status) and for mapper null; mapDefinition returns null for a non-record. page.tsx:10-23 only treats source==='error' as load failure, so the 'Definition not found' copy (source!=='error' with null def) can never occur. The result's `status` field (WorkflowResult) is available but unused.
 - **Files to change:** `apps/web/src/app/(app)/workflow/definitions/[id]/page.tsx`, `apps/web/src/app/(app)/workflow/not-found.tsx`
@@ -181,7 +182,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DEFINITIONS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme INPUTVALIDATION (was UUID)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** params.id is interpolated raw into the upstream path (workflowData.ts:137-139, `/v1/workflow/definitions/${id}`) with no UUID validation or encoding; a crafted segment can address a different gateway path.
 - **Verified evidence:** workflowData.ts:137-139 interpolates `/v1/workflow/definitions/${id}` unvalidated and getJson (:69-71) prepends base and forwards the user's Bearer token. Next decodes params.id, so an id such as 'x/../../v1/other' (via %2F) is normalized by fetch to a different gateway path. Impact limited to same gateway with the user's own token (read-only GET), but it is unvalidated path injection. Same pattern likely in getInstance/task getters (not checked).
 - **Files to change:** `apps/web/src/app/(app)/workflow/_data/workflowData.ts`, `apps/web/src/app/(app)/workflow/definitions/[id]/page.tsx`
@@ -196,7 +197,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DEFINITIONS-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Raw internals shown to users: nodeKey codes (so_review), role codes (section_officer) and SLA as minutes (SLA 2880m) in DefinitionGraph.tsx; no human duration or role display name.
 - **Verified evidence:** DefinitionGraph.tsx:143 prints n.roleRef raw, :145 prints `SLA {n.slaMinutes}m`, :150 prints n.nodeKey in mono. formatDuration exists in workflowTypes (exported via workflowData.ts:43) and is used on the hub. No role display-name lookup is used.
 - **Files to change:** `apps/web/src/app/(app)/workflow/_components/DefinitionGraph.tsx`
@@ -230,7 +231,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DESIGNER-01  ·  HIGH  ·  confirmed  ·  theme WIRING (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Nothing can be saved, opened or published: definitionId and definitionName are set up but never read (DesignerCanvas.tsx:102-103), the fetched `definitions` prop is discarded as `_definitions` (DesignerCanvas.tsx:94) and there is no Save/Open/Export control. Refreshing loses the model; the persistence API exists only in the separate service designer (designer/_data/workflowBuilderApi.ts:58-88).
 - **Verified evidence:** DesignerCanvas.tsx:94 destructures `definitions: _definitions` and never uses it; :102-103 definitionId/definitionName are state with no setter used; the toolbar (:292-304) has only Validate and a count; no save, open, export. page.tsx:7 fetches getDesignerDefinitions but nothing renders it. Persistence exists elsewhere: designer/_data/workflowBuilderApi.ts:58-88 (loadWorkflowDesign/persistWorkflowDesign against /api/proxy/v1/workflow/designer/definitions). Not a PII issue.
 - **Files to change:** `apps/web/src/app/(app)/workflow/designer/_components/DesignerCanvas.tsx`, `apps/web/src/app/(app)/workflow/designer/page.tsx`, `apps/web/src/app/(app)/workflow/designer/_data/designerData.ts`
@@ -246,7 +247,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DESIGNER-03  ·  HIGH  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Keyboard-inaccessible authoring: palette items are drag-only (BpmnPalette.tsx:7-10,24-30 — draggable buttons with onDragStart, no onClick) and connections require pointer dragging between handles; WCAG 2.1.1 fails for the route's main task.
 - **Verified evidence:** BpmnPalette.tsx:23-30: buttons are draggable with onDragStart only, no onClick/onKeyDown; canvas add path is only onDrop (DesignerCanvas.tsx:125-147). Edge creation uses reactflow onConnect from handle drag with no keyboard alternative. WCAG 2.1.1 failure for authoring.
 - **Files to change:** `apps/web/src/app/(app)/workflow/designer/_components/BpmnPalette.tsx`, `apps/web/src/app/(app)/workflow/designer/_components/DesignerCanvas.tsx`, `apps/web/src/app/(app)/workflow/designer/_components/PropertyPanel.tsx`
@@ -262,7 +263,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DESIGNER-04  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Validate" is client-only (DesignerCanvas.tsx:172-254) and covers four rules; it ignores tasks with no incoming/outgoing flow, missing assignee roles and empty gateway conditions, and the backend ValidationResult type (designerData.ts:48-56) is never called. Before any click the panel already says "No issues found" (ValidationIndicators.tsx:14-35) — false assurance.
 - **Verified evidence:** DesignerCanvas.tsx:172-254 implements 4 checks (missing start, missing end, gateway without outgoing, dangling edges) + end reachability; no checks for task in/out, assignee, gateway conditions. designerData.ts:48-56 defines ValidationResult but no function calls a validate endpoint. ValidationIndicators.tsx:75-97 shows green 'No issues found' whenever violations is empty, including before any validation. Note 'dangling edge' is not reachable in practice (reactflow removes edges).
 - **Files to change:** `apps/web/src/app/(app)/workflow/designer/_components/DesignerCanvas.tsx`, `apps/web/src/app/(app)/workflow/designer/_components/ValidationIndicators.tsx`
@@ -277,7 +278,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DESIGNER-05  ·  MEDIUM  ·  partly  ·  theme RESPONSIVE (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Layout is fixed three columns (w-56 + flex-1 + w-72, DesignerCanvas.tsx:262-335) with Tailwind slate/white utilities, not tokens: at tablet/phone widths the canvas is squeezed to nothing and dark mode leaves white panels. The "/ 500 elements" limit is displayed but never enforced (DesignerCanvas.tsx:256,302).
 - **Verified evidence:** Layout: DesignerCanvas.tsx:262 flex gap-3 with BpmnPalette w-56 (BpmnPalette.tsx:14) and right column w-72 (:309), no breakpoints; all panels use slate/white utilities (also PropertyPanel, ValidationIndicators) - tailwind config is not in the snapshot so dark-mode mapping is cannot-verify, but bg-white is hard-coded. '/ 500 elements' at :256,302 is display only; onDrop (:125-147) and onConnect never check the limit. Not a PII item.
 - **Files to change:** `apps/web/src/app/(app)/workflow/designer/_components/DesignerCanvas.tsx`, `apps/web/src/app/(app)/workflow/designer/_components/BpmnPalette.tsx`, `apps/web/src/app/(app)/workflow/designer/_components/PropertyPanel.tsx`, `apps/web/src/app/(app)/workflow/designer/_components/ValidationIndicators.tsx`
@@ -292,7 +293,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DESIGNER-06  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Assignee Role and Condition Expression are free text ("e.g. finance_officer", "e.g. amount > 100000", PropertyPanel.tsx) with no role picker or expression check — a typo produces a definition no one can be assigned; no undo/redo and no unsaved-changes guard.
 - **Verified evidence:** PropertyPanel.tsx:125-136 Assignee Role is a text input (placeholder 'e.g. finance_officer', maxLength 100) and :~145-155 Condition Expression is free text (placeholder 'e.g. amount > 100000'); no validation. DesignerCanvas has no undo/redo history and no unsaved guard. The service designer already fetches positions via fetchTenantPositions (designer/_data/workflowBuilderApi.ts:90).
 - **Files to change:** `apps/web/src/app/(app)/workflow/designer/_components/PropertyPanel.tsx`, `apps/web/src/app/(app)/workflow/designer/_components/DesignerCanvas.tsx`
@@ -309,7 +310,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DESIGNER-07  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Workflow is not in the sidebar (ds/Sidebar.tsx has no /workflow entry); it is reachable only from the dashboard "My approvals" button (dashboard/page.tsx:47), RoleCommandCenter and GlobalSearch (GlobalSearch.tsx:69). The mockup nav has no matching id, so data-active is set to "designer" (nearest Citizen-services item).
 - **Verified evidence:** Same as GAP-WORKFLOW-DEFINITIONS-05: Sidebar.tsx has no /workflow item (verified); routes reached from dashboard/page.tsx:47, RoleCommandCenter.tsx:110, GlobalSearch.tsx:69. Mockup data-active claim is cannot-verify.
 - **Files to change:** `apps/web/src/app/_components/ds/Sidebar.tsx`
@@ -333,7 +334,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-INSTANCES-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Audit readability: the transition history — the "immutable" maker-checker record — identifies the actor only as the first 8 characters of a UUID ("8f2d41ab…", HistoryTimeline.tsx:53) and the assignee the same (TasksTable.tsx:90); nobody can tell who approved without a database lookup.
 - **Verified evidence:** HistoryTimeline.tsx:53 renders `actor <span class=mono>{t.actorId.slice(0,8)}…</span>`; TasksTable.tsx:90 does the same for assigneeId. WorkflowTransition (workflowTypes.ts:~75) and mapper (workflowData.ts:240-249) carry only actorId, no name. Whether the history API can return an actor name is cannot-verify (workflow-service not in snapshot).
 - **Files to change:** `apps/web/src/app/(app)/workflow/_components/HistoryTimeline.tsx`, `apps/web/src/app/(app)/workflow/_components/TasksTable.tsx`, `apps/web/src/app/(app)/workflow/_data/workflowData.ts`, `apps/web/src/app/(app)/workflow/_data/workflowTypes.ts`, `apps/web/src/lib/directory/resolveUsers.ts (new)`
@@ -351,7 +352,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-INSTANCES-DETAIL-02  ·  HIGH  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Mandatory-document checklist fails silently: DocVerificationChecklist returns null on error/empty in compact mode (DocVerificationChecklist.tsx:75-80), which is the mode TasksTable always uses (TasksTable.tsx:116-124), and Approve is never disabled by missing mandatory docs — an officer can approve with the checklist absent or "missing".
 - **Verified evidence:** DocVerificationChecklist.tsx:74-78 returns null on error in compact mode (79-83 also null while loading; 84 null on empty). TasksTable.tsx:118-124 always passes compact, and only when refType contains 'application' with nodeKey+refId. Approve (TaskActions.tsx:248-263) has no disabled/guard tied to the checklist. Any server-side enforcement is cannot-verify (no workflow-service). Fix text in the finding (notFound mapping) does not apply here.
 - **Files to change:** `apps/web/src/app/(app)/workflow/_components/DocVerificationChecklist.tsx`, `apps/web/src/app/(app)/workflow/_components/TasksTable.tsx`, `apps/web/src/app/(app)/workflow/_components/TaskActions.tsx`
@@ -370,7 +371,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-INSTANCES-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Current step ignores instance.currentNode (workflowTypes.ts:60) and derives it from the newest history row (page.tsx:52-55): if the history fetch fails the card reads "—" although the instance has a step; stats also print real zeros for Open tasks / Transitions when their fetches errored (page.tsx:82-88).
 - **Verified evidence:** instances/[id]/page.tsx:52-55 derives currentStep from newest history row's toNode, '—' if history empty/failed; WorkflowInstanceDetail.currentNode is mapped (workflowData.ts:206) but unused. Lines 84-85 pass openTasks.length and history.length directly, so errored fetches (tasksSource/historySource==='error', data []) print 0. StatCard (ds/StatCard.tsx:21 displayValue) already renders null/undefined/NaN as '—'. The Open tasks and history cards below do show RefreshErrorState (100-102,118-119), so only the stats mislead.
 - **Files to change:** `apps/web/src/app/(app)/workflow/instances/[id]/page.tsx`
@@ -385,7 +386,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-INSTANCES-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** After Approve/Return/Reject the row is refreshed away (router.refresh) and the "Task approved." live-region and banner live inside the row component that unmounts (TaskActions.tsx:52-66,111-160) — the outcome announcement is lost to screen readers and sighted users alike.
 - **Verified evidence:** TaskActions.tsx:205-207 keeps the toast state (useToast 175-194) and the aria-live node (301-302) inside the row component; approve/return/reject onSuccess (259-262, 277-280, 296-299) call announce() then router.refresh(). The page filters to pending tasks (instances/[id]/page.tsx:51, my-tasks fetches status=pending) so the decided row unmounts with its live region/banner; announcement is at best racy. Claim leaves the row so its toast survives. Theme is a11y/feedback, not date format. A global ToastProvider exists ((app)/layout.tsx:70, ds/Toast.tsx useToast).
 - **Files to change:** `apps/web/src/app/(app)/workflow/_components/TaskActions.tsx`
@@ -401,6 +402,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 ### GAP-WORKFLOW-INSTANCES-DETAIL-05  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W0 note:** partly fixed by #1923 — TaskActions now maps maker-checker failures to a specific message; no isMaker check hides or disables Approve in the UI
 - **First-pass claim:** Failure of a decision shows only "We couldn't save your task…" (TaskActions.tsx:31-34); a maker-checker denial (same user as maker) is indistinguishable from a network error, and Approve is offered to the maker in the first place.
 - **Verified evidence:** TaskActions.tsx:160-172 postJson throws taskActionError() for any non-2xx, discarding status (403/409 vs 5xx/network), shown by ActionButton (useConfirmAction catch). True. Approve is offered whenever status pending (248-263) with no knowledge of the current user or maker; the description only says maker-checker applies (253). Whether the backend enforces maker!=checker is cannot-verify (workflow-service absent); the task payload has no makerId (workflowTypes WorkflowTask).
 - **Files to change:** `apps/web/src/app/(app)/workflow/_components/TaskActions.tsx`, `apps/web/src/app/(app)/workflow/_data/workflowTypes.ts`, `apps/web/src/app/(app)/workflow/_data/workflowData.ts`
@@ -417,7 +419,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-INSTANCES-DETAIL-06  ·  MEDIUM  ·  confirmed  ·  theme INPUT-VALIDATION (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Instance not found" (page.tsx:37-49) is unreachable: getInstanceById maps every non-2xx incl. 404 to source "error" (workflowData.ts:75-78, comment at 214-217); params.id is interpolated raw into the upstream URL (workflowData.ts:222).
 - **Verified evidence:** getJson (workflowData.ts:75) maps any !res.ok, including 404, to {data:null, source:'error'}; getInstanceById (218-227, comment 212-217) does no differentiation. page.tsx:27-49 therefore only ever hits the error branch except if the mapper returns null-> also 'error'; the 'Instance not found' text (40,44) is unreachable. params.id is interpolated raw into the URL at workflowData.ts:222 (also 231-236, 304); Next decodes %2F/'?' so `../` or query injection into the gateway path is possible (gateway auth still applies). 'DEADROUTE' is a mislabel: this is dead branch/input validation.
 - **Files to change:** `apps/web/src/app/(app)/workflow/_data/workflowData.ts`, `apps/web/src/app/(app)/workflow/instances/[id]/page.tsx`, `apps/web/src/app/(app)/workflow/not-found.tsx`
@@ -433,7 +435,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-INSTANCES-DETAIL-07  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** refId is printed raw and not linked to the source record (page.tsx:90-98); no cancel/suspend control exists although the list counts "Cancelled" instances; DocVerificationChecklist calls /verification-lane while its docstring says /documents/checklist (DocVerificationChecklist.tsx:3-6,52).
 - **Verified evidence:** page.tsx:89-96 prints refType and raw refId as plain text, unlinked (true). No cancel/suspend control exists anywhere in workflow components (true; only TaskActions). InstancesTable/list counts cancelled from analytics (list/page.tsx:18-20). DocVerificationChecklist docstring (line 5) says /v1/citizen/documents/checklist but fetch at line 53 uses .../verification-lane (true). Whether a cancel API exists is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/workflow/instances/[id]/page.tsx`, `apps/web/src/app/(app)/workflow/_components/DocVerificationChecklist.tsx`, `apps/web/src/lib/workflow/refLink.ts (new)`
@@ -455,7 +457,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-LIST-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Headline stats and table come from two different fetches and analytics failure is invisible: `{ data: analytics }` discards the source (list/page.tsx:9-12), so a failed analytics call shows Active/Completed/Cancelled = 0 above a full table, and Total falls back to rows.length (list/page.tsx:33) — capped at limit=200 (workflowData.ts:181-192), so Total and Completed can disagree for large tenants.
 - **Verified evidence:** list/page.tsx:9-12 destructures `{ data: analytics }` dropping source; on failure getAnalyticsSummary returns EMPTY_ANALYTICS (workflowData.ts:317-326) so active/completed/cancelled render 0 (34-36). Total = `analytics.totalInstances || instances.length` (33) so zero analytics falls back to rows, which are capped by limit=200 (workflowData.ts:183). StatCard supports null -> '—'.
 - **Files to change:** `apps/web/src/app/(app)/workflow/list/page.tsx`
@@ -472,7 +474,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-LIST-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Error is a warning-icon EmptyState with no Try again (list/page.tsx:41-49) — the pattern UX-001 replaced elsewhere with RefreshErrorState; stats stay real zeros.
 - **Verified evidence:** list/page.tsx:41-49 uses EmptyState icon ⚠️ with no retry when source==='error'; RefreshErrorState is available in ds and already used in instances/[id]/page.tsx:102. Stats stay zeros (34-36).
 - **Files to change:** `apps/web/src/app/(app)/workflow/list/page.tsx`, `apps/web/src/app/(app)/workflow/my-tasks/page.tsx`
@@ -486,7 +488,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-LIST-03  ·  MEDIUM  ·  partly  ·  theme DATA-GAP (was UUID)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** List mapper keeps only id, name, status, version (workflowData.ts:171-180) — definition, current step, subject (refType/refId) and dates that the detail mapper reads (workflowData.ts:194-212) never reach the list, so users cannot tell what an instance is about, how old it is, or where it is stuck; name silently falls back to the raw UUID.
 - **Verified evidence:** mapInstance (workflowData.ts:171-179) keeps id,name,status,version only, whereas mapInstanceDetail (194-211) also reads definitionName, refType, refId, currentNode, createdAt, updatedAt. name falls back to the raw id (175). True, but whether the LIST endpoint returns those fields is cannot-verify (workflow-service absent); the mapper simply discards them if present.
 - **Files to change:** `apps/web/src/app/(app)/workflow/_data/workflowTypes.ts`, `apps/web/src/app/(app)/workflow/_data/workflowData.ts`, `apps/web/src/app/(app)/workflow/_components/InstancesTable.tsx`
@@ -503,7 +505,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-LIST-04  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** ID column prints the first 8 chars of a UUID with an ellipsis (InstancesTable.tsx:67) — not copyable, not unique-safe, not a business reference.
 - **Verified evidence:** InstancesTable.tsx:67 renders `{r.id.slice(0, 8)}…` in mono, sortable:false. Truncated, not copyable. Row href to detail exists (rowHref).
 - **Files to change:** `apps/web/src/app/(app)/workflow/_components/InstancesTable.tsx`
@@ -517,7 +519,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-LIST-05  ·  MEDIUM  ·  partly  ·  theme NAV (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Workflow is not in the sidebar (ds/Sidebar.tsx has no /workflow entry); it is reachable only from the dashboard "My approvals" button (dashboard/page.tsx:47), RoleCommandCenter and GlobalSearch (GlobalSearch.tsx:69). The mockup nav has no matching id, so data-active is set to "designer" (nearest Citizen-services item).
 - **Verified evidence:** ds/Sidebar.tsx has no /workflow entry (grep: none; 'Service Designer' /designer at line 97). Entry points confirmed: dashboard/page.tsx:47, RoleCommandCenter.tsx:110, GlobalSearch.tsx:69. The layout is ModuleGate moduleKey 'workflow' (workflow/layout.tsx). The 'data-active=designer' claim concerns the HTML mockup in the redesign repo and was not verified in app code.
 - **Files to change:** `apps/web/src/app/_components/ds/Sidebar.tsx`
@@ -532,7 +534,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-LIST-06  ·  LOW  ·  partly  ·  theme OTHER (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Suspense fallback={null} leaves the card blank while useSearchParams resolves (list/page.tsx:52-54); no "Start instance" action or CSV export though the definitions table offers export.
 - **Verified evidence:** Suspense fallback={null} at list/page.tsx:55 (obs said 52-54) - but InstancesTable is a client component using useSearchParams, so blank flash is real yet brief. No Start-instance action or export in list; definitions table export not checked beyond the claim. theme PII is wrong.
 - **Files to change:** `apps/web/src/app/(app)/workflow/list/page.tsx`, `apps/web/src/app/(app)/workflow/_components/InstancesTable.tsx`
@@ -552,7 +554,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-MY-TASKS-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Approvers act blind: the row shows Subject as a title-cased refType ("Leave Request") only (TasksTable.tsx:80-84); refId, requester, amount and dates are never displayed, and the Instance link is an 8-char UUID fragment (TasksTable.tsx:100-104) — a user must open each instance to learn what is being approved.
 - **Verified evidence:** TasksTable.tsx:79-83 Subject = titleCase(refType) only; refId, requester, amount, dates not in WorkflowTask (workflowTypes) nor rendered; Instance column (95-108) shows `instanceId.slice(0,8)…` as a plain <a>. Whether the API supplies requester/amount/due is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/workflow/_components/TasksTable.tsx`, `apps/web/src/app/(app)/workflow/_data/workflowTypes.ts`, `apps/web/src/app/(app)/workflow/_data/workflowData.ts`
@@ -569,7 +571,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-MY-TASKS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Claimed" counts any assigneeId (my-tasks/page.tsx:16), not tasks claimed by me, and "Open tasks" equals "Pending" because the fetch is already status=pending (my-tasks/page.tsx:11-14) — two of four stats are redundant, and the StatusFilter can only ever offer All/Pending.
 - **Verified evidence:** my-tasks/page.tsx:76 fetches status=pending; pending (78) and Open tasks (93) are both tasks.length effectively (filter is redundant). Claimed = tasks with any assigneeId (80), not mine (no current user id compared). StatusFilter options derive from tasks' statuses (TasksTable.tsx:30-34) so only All/Pending appear.
 - **Files to change:** `apps/web/src/app/(app)/workflow/my-tasks/page.tsx`, `apps/web/src/app/(app)/workflow/_components/TasksTable.tsx`
@@ -584,7 +586,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-MY-TASKS-04  ·  MEDIUM  ·  confirmed  ·  theme PAGINATION (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Inbox silently truncates at limit=200 (workflowData.ts:281-283) with no pager cue; all four stats are computed from that slice, so counts stop being true beyond 200 open tasks.
 - **Verified evidence:** getTasks (workflowData.ts:281-283) hard-codes limit=200 and no offset/total; all stats in my-tasks/page.tsx:78-80 compute from the slice; DataTable paginates client-side only (pageSize 15). No truncation notice. Theme DEADROUTE wrong. Whether the API returns a total/next cursor is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/workflow/_data/workflowData.ts`, `apps/web/src/app/(app)/workflow/my-tasks/page.tsx`
@@ -598,7 +600,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-MY-TASKS-05  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** No urgency signal: nodes carry slaMinutes (workflowTypes.ts:27) and analytics tracks breaches, but the inbox has no due/age/SLA column or default sort, and the error state is a warning EmptyState with stats at real zeros (my-tasks/page.tsx:38-45) — an outage reads as inbox zero.
 - **Verified evidence:** Error state is EmptyState ⚠️ with no retry (my-tasks/page.tsx:101-108) and stats print zeros (93-96): true, an outage looks like zeros though the table area says 'Could not load'. WorkflowNode.slaMinutes exists (workflowTypes.ts, node type) but WorkflowTask has no dueAt/slaMinutes, so SLA column needs API support (cannot-verify). No default sort set on DataTable.
 - **Files to change:** `apps/web/src/app/(app)/workflow/my-tasks/page.tsx`, `apps/web/src/app/(app)/workflow/_data/workflowTypes.ts`, `apps/web/src/app/(app)/workflow/_components/TasksTable.tsx`
@@ -613,7 +615,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-MY-TASKS-06  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Mandatory-document checklist is fetched per row from the browser (N+1, TasksTable.tsx:118-126) and is invisible on error in compact mode (DocVerificationChecklist.tsx:75-80); Approve is never blocked by "missing" documents.
 - **Verified evidence:** TasksTable.tsx:118-124 mounts a DocVerificationChecklist per qualifying row; each runs its own useEffect fetch (DocVerificationChecklist.tsx:41-71) from the browser: N requests per page (up to 200 rows mounted since DataTable pages client-side only render 15, so N<=15 per page). Compact error/loading/empty return null (74-84). Approve unguarded (TaskActions.tsx). Overlaps INSTANCES-DETAIL-02.
 - **Files to change:** `apps/web/src/app/(app)/workflow/_components/DocVerificationChecklist.tsx`, `apps/web/src/app/(app)/workflow/_components/TasksTable.tsx`
@@ -629,7 +631,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-MY-TASKS-07  ·  MEDIUM  ·  partly  ·  theme NAV (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Workflow is not in the sidebar (ds/Sidebar.tsx has no /workflow entry); it is reachable only from the dashboard "My approvals" button (dashboard/page.tsx:47), RoleCommandCenter and GlobalSearch (GlobalSearch.tsx:69). The mockup nav has no matching id, so data-active is set to "designer" (nearest Citizen-services item).
 - **Verified evidence:** Same as LIST-05: ds/Sidebar.tsx lacks /workflow; entry points at dashboard/page.tsx:47, RoleCommandCenter.tsx:110, GlobalSearch.tsx:69 confirmed. data-active=designer mockup mapping not verifiable in app code. Duplicate of GAP-WORKFLOW-LIST-05.
 - **Files to change:** `apps/web/src/app/_components/ds/Sidebar.tsx`
@@ -642,7 +644,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-MY-TASKS-08  ·  LOW  ·  partly  ·  theme UX (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Up to four full-size confirm dialogs per row (Claim included) for a reversible-in-effect claim; the "Task approved." live region unmounts with the refreshed row (TaskActions.tsx:52-66); Actions column is a wrapping button cluster with no mobile treatment (TasksTable.tsx:107-127).
 - **Verified evidence:** Every action goes through ActionButton with a ConfirmDialog, incl. Claim (TaskActions.tsx:230-247): up to four dialogs (Claim, Approve, Return, Reject) per row, true. Live region unmounts with the row (see DETAIL-04) but Claim keeps the row. Actions cell is inline-flex wrap (229) inside grid (TasksTable.tsx:115); no responsive handling in DataTable usage (not verified in DataTable). 'Reversible' claim is unverified: description says claimed tasks leave others' inboxes and no unclaim exists in the UI.
 - **Files to change:** `apps/web/src/app/(app)/workflow/_components/TaskActions.tsx`, `apps/web/src/app/(app)/workflow/_components/TasksTable.tsx`

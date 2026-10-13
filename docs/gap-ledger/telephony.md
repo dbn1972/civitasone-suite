@@ -14,7 +14,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-HOME-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Telephony has no entry in the sidebar (ds/Sidebar.tsx lists no /telephony item; only navRouteManifest.ts:122 and GlobalSearch.tsx:76 know the route), so a call-centre agent can reach the module only via search or a typed URL. This kit has no Telephony NAV id: data-active is set to 'helpdesk', the nearest Citizen-services parent.
 - **Verified evidence:** ds/Sidebar.tsx has no /telephony item (Citizen Services group lists helpdesk, catalogue, citizen, designer at :91-97); '/telephony' appears only in navRouteManifest.ts:122 and GlobalSearch.tsx:76. The 'data-active helpdesk' remark concerns the redesign kit HTML and is cannot-verify here.
 - **Files to change:** `apps/web/src/app/_components/ds/Sidebar.tsx`, `apps/web/src/app/_components/navRouteManifest.ts`
@@ -29,7 +29,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-HOME-02  ·  MEDIUM  ·  partly  ·  theme OTHER (was UUID)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Fourth tile 'Call Log (legacy)' ships in production navigation and duplicates 'Call Log' (page.tsx:12); the legacy view is the generic ModuleListPage with raw IDs.
 - **Verified evidence:** telephony/page.tsx:12 does list 'Call Log (legacy)' -> /telephony/list, which is the generic ModuleListPage. It is a duplicate tile, but the raw-ID issue is in ModuleListTable (id.slice(0,8)); theme UUID is secondary.
 - **Files to change:** `apps/web/src/app/(app)/telephony/page.tsx`
@@ -44,7 +44,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** No live-status or SLA summary on the hub although the module is described as a live call centre; agents must open Call Log to see whether anything is queued.
 - **Verified evidence:** Hub is a static ModuleHub with four links and no data (page.tsx:4-16); no queued/ringing/SLA summary. The data exists via /v1/telephony/calls (calls/page.tsx computes live and slaMet).
 - **Files to change:** `apps/web/src/app/(app)/telephony/page.tsx`, `apps/web/src/app/(app)/telephony/calls/page.tsx`
@@ -60,7 +60,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-HOME-04  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** All four tiles use the generic folder glyph: none of their titles appear in the TILE_ICONS map (LinkTiles.tsx:52-61).
 - **Verified evidence:** LinkTiles.tileIcon (LinkTiles.tsx:52-61) looks up TILE_ICONS[title] then href substrings; 'Call Log', 'Agent Queue', 'Dispositions', 'Call Log (legacy)' are not keys and hrefs match none, so all get the folder glyph.
 - **Files to change:** `apps/web/src/app/_components/LinkTiles.tsx`
@@ -79,7 +79,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-AGENTS-01  ·  HIGH  ·  confirmed  ·  theme LOADING (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Load/failed states are misreported: useOfflineResource initialises source to "cache" (resource.ts:66), so cacheNote is truthy at first paint and the 'Loading …' fallback (agents/page.tsx:71) never shows; if the first fetch fails with no cache the page says 'Showing saved data.' over an empty table (agents/page.tsx:59-62, resource.ts:115-120). The hook's error value is not destructured.
 - **Verified evidence:** resource.ts:66 useState<ResourceSource>('cache'); agents/page.tsx:59-62 cacheNote is truthy when source==='cache' so it renders from first paint and `cacheNote ?? (loading ? ...)` (line 71) never reaches 'Loading agents...'. On failure with no cache resource.ts:115-120 sets error but source stays 'cache'; page (line 49) does not destructure `error`, so it says 'Showing saved data.' over an empty table with KPIs 0.
 - **Files to change:** `apps/web/src/app/(app)/telephony/agents/page.tsx`, `apps/web/src/lib/sync/resource.ts`
@@ -97,7 +97,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-AGENTS-02  ·  HIGH  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Presence colours are wrong: PRESENCE maps to 'good'/'warn'/'mut' (agents/page.tsx:22-27) but StatusPill looks the value up in a table of status words (ds/StatusPill.tsx:5-42) that has no such keys, so available, busy and offline all render as neutral 'info'; only wrap_up ('review') gets the warn colour by coincidence. The one signal this board exists for is unreadable.
 - **Verified evidence:** agents/page.tsx:22-27 PRESENCE values 'good','warn','review','mut'; StatusPill.tsx:5-42 STATUS_MAP has no keys 'good','warn','mut' (variants, not statuses), so lookups fall to 'info' (line ~58). 'review' is a key (warn). So available/busy/offline all render info; wrap_up warn.
 - **Files to change:** `apps/web/src/app/(app)/telephony/agents/page.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -112,7 +112,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-AGENTS-03  ·  MEDIUM  ·  confirmed  ·  theme LIVE (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle promises 'Live' presence but the hook fetches once on mount and on online/sync events only (resource.ts:134-150); there is no polling or push, so routing decisions may use minutes-old presence with no 'as of' timestamp.
 - **Verified evidence:** Subtitle 'Live agent presence' (agents/page.tsx:69) but resource.ts:74-152 fetches on mount and on tick (online/sync message) only; no interval or SSE, no 'as of' time on live data (cachedAt is null after live fetch, resource.ts:113).
 - **Files to change:** `apps/web/src/app/(app)/telephony/agents/page.tsx`, `apps/web/src/lib/sync/resource.ts`
@@ -129,7 +129,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-AGENTS-04  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Queue column shows queueId.slice(0,8) — a truncated UUID, not a queue name (agents/page.tsx:45); userId is fetched but not shown.
 - **Verified evidence:** agents/page.tsx:45 renders r.queueId.slice(0,8) or 'Unassigned'. AgentRow carries userId (line 15) but no queue name; no queues endpoint or page is visible in the snapshot (telephony has agents, calls, dispositions, list only).
 - **Files to change:** `apps/web/src/app/(app)/telephony/agents/page.tsx`
@@ -158,7 +158,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-AGENTS-06  ·  LOW  ·  confirmed  ·  theme STYLE (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Breadcrumb is a plain <nav class='back'> with an <a href='/telephony'> full-page link and lucide icon rather than AutoBreadcrumb / next/link (agents/page.tsx:66-68). Status-line colour #92400e is hard-coded (agents/page.tsx:70).
 - **Verified evidence:** agents/page.tsx:66-68 custom <nav class='back'> with lucide ArrowLeft and plain <a href='/telephony'> (full reload, not next/link); :70 hard-coded color #92400e. AutoBreadcrumb.tsx exists in app/_components; PageHeader accepts `back` (used in inventory/[id]/page.tsx).
 - **Files to change:** `apps/web/src/app/(app)/telephony/agents/page.tsx`
@@ -179,7 +179,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-CALLS-01  ·  HIGH  ·  confirmed  ·  theme LOADING (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Load/failed states are misreported: useOfflineResource initialises source to "cache" (resource.ts:66), so cacheNote is truthy at first paint and the 'Loading …' fallback (calls/page.tsx:111) never shows; if the first fetch fails with no cache the page says 'Showing saved data.' over an empty table (calls/page.tsx:99-102, resource.ts:115-120). The hook's error value is not destructured.
 - **Verified evidence:** Same defect as AGENTS-01: calls/page.tsx:86 (hook, error not destructured), :99-102 cacheNote truthy from initial source='cache' (resource.ts:66), :110-111 'Loading calls...' unreachable; on failed first fetch with no cache resource.ts:115-120 leaves 'Showing saved data.' over empty table and 0 KPIs / 100% SLA.
 - **Files to change:** `apps/web/src/app/(app)/telephony/calls/page.tsx`, `apps/web/src/lib/sync/resource.ts`
@@ -196,7 +196,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-CALLS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** SLA Answered defaults to 100% when no call has an SLA result (calls/page.tsx:97): an empty or unscored log reads as a perfect score.
 - **Verified evidence:** calls/page.tsx:95-97 slaPct = slaScored>0 ? round(met/scored*100) : 100; also shows 100% while loading/error since calls is [].
 - **Files to change:** `apps/web/src/app/(app)/telephony/calls/page.tsx`
@@ -211,7 +211,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-CALLS-03  ·  MEDIUM  ·  partly  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status pills mostly render neutral: 'queued', 'ringing', 'answered' and 'abandoned' are not keys in StatusPill's map (ds/StatusPill.tsx:5-42), so an abandoned call is the same blue as a ringing one; only 'completed' is green (calls/page.tsx:64).
 - **Verified evidence:** StatusPill STATUS_MAP (StatusPill.tsx:5-42) lacks queued, ringing, answered -> info; completed -> good (confirmed). 'abandoned' is not shown as a status in code; the page treats it as a boolean `abandoned` (calls/page.tsx:31,94) and no evidence a status value 'abandoned' exists. Direction pill uses 'info'/'review' (line 61) fine.
 - **Files to change:** `apps/web/src/app/(app)/telephony/calls/page.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -227,7 +227,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-CALLS-04  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** DPDP: caller numbers are shown with the last four digits to every telephony user (calls/page.tsx:37-43, 63); no role gate or reveal-with-audit for the full number, and the callee number, agent, recording flag and linkedRefId are fetched but never shown — the 'Linked' column names a type but cannot open the ticket.
 - **Verified evidence:** maskPhone (calls/page.tsx:37-43) masks all but last 4 digits, used at :63; comment (lines 5-7) says API also masks - so masking exists and is deliberate, but there is no role-gated reveal with audit. calleeNumber, agentId, hasRecording, linkedRefId are typed (17-30) but no column renders them; 'Linked' (line 78-82) prints only the type, no link. Whether last-4 exposure satisfies DPDP is a policy decision; no shared <Masked> component exists (grep finds only integration secret strings).
 - **Files to change:** `apps/web/src/app/(app)/telephony/calls/page.tsx`, `apps/web/src/app/_components/Masked.tsx`
@@ -242,7 +242,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-CALLS-05  ·  MEDIUM  ·  partly  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Counts (Total, Answered, Abandoned, SLA %) are computed client-side over whatever list the API returns, with no date range, queue filter or pagination parameter in the request (calls/page.tsx:86-97); the numbers are not 'today' or 'this month'.
 - **Verified evidence:** calls/page.tsx:86-90 requests /v1/telephony/calls with no params; stats at :92-97 are client-side counts over the returned list (label 'Total Calls' not scoped). The API's default window/cap is unverifiable (service absent).
 - **Files to change:** `apps/web/src/app/(app)/telephony/calls/page.tsx`, `apps/web/src/lib/sync/resource.ts`
@@ -258,7 +258,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-CALLS-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Wait/Talk print raw seconds ('184s'), not mm:ss (calls/page.tsx:53-55); 'abandoned' calls have neither.
 - **Verified evidence:** calls/page.tsx:53-55 secs() returns `${v}s` (e.g. '184s'); null -> '-' so abandoned calls (null wait/talk from API, assumed) show '-'. No duration formatter exists in lib/formatters.ts.
 - **Files to change:** `apps/web/src/app/(app)/telephony/calls/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -272,7 +272,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-CALLS-07  ·  LOW  ·  confirmed  ·  theme STYLE (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Five StatCards in a four-column StatGrid; hard-coded #92400e status colour and plain <a href='/telephony'> breadcrumb (calls/page.tsx:106-108, 111).
 - **Verified evidence:** calls/page.tsx:114-120 renders five StatCards inside StatGrid, which is `grid g-4` (ds/StatGrid.tsx:5), so the fifth wraps onto its own row; :106-108 plain <a href='/telephony'> with lucide icon; :110 color #92400e.
 - **Files to change:** `apps/web/src/app/(app)/telephony/calls/page.tsx`, `apps/web/src/app/_components/ds/StatGrid.tsx`
@@ -295,7 +295,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-DISPOSITIONS-01  ·  HIGH  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Load/failed states are misreported: useOfflineResource initialises source to "cache" (resource.ts:66), so cacheNote is truthy at first paint and the 'Loading …' fallback (dispositions/page.tsx:84) never shows; if the first fetch fails with no cache the page says 'Showing saved data.' over an empty table (dispositions/page.tsx:72-75, resource.ts:115-120). The hook's error value is not destructured.
 - **Verified evidence:** resource.ts:66 useState<ResourceSource>('cache'); dispositions/page.tsx:71-75 cacheNote is truthy when source==='cache', so the '{cacheNote ?? (loading ? ...)}' at :84 never reaches 'Loading'. On first fetch failure with no cache the hook sets error (resource.ts:115-120) but source stays 'cache', so 'Showing saved data.' shows over an empty table. page.tsx:62 does not destructure error.
 - **Files to change:** `apps/web/src/app/(app)/telephony/dispositions/page.tsx`, `apps/web/src/lib/sync/resource.ts`, `apps/web/src/app/(app)/telephony/calls/page.tsx`
@@ -314,7 +314,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-DISPOSITIONS-02  ·  MEDIUM  ·  partly  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle says 'share of resolved calls' but the denominator is every completed call that has a disposition (dispositions/page.tsx:35-38, 82); 'Resolved' is also a row in the same table, so the copy is circular.
 - **Verified evidence:** PageHeader subtitle at page.tsx:81 says 'share of resolved calls'. aggregate() (:33-43) divides by completed calls with a disposition, not by resolved calls; 'Resolved' is itself a disposition row. Copy is wrong, line refs slightly off (subtitle is :81).
 - **Files to change:** `apps/web/src/app/(app)/telephony/dispositions/page.tsx`
@@ -328,7 +328,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-DISPOSITIONS-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Totals disagree with the Call Log: 'Completed' counts only completed calls that carry a disposition (dispositions/page.tsx:35), while Call Log 'Answered' counts answered + completed (calls/page.tsx:92); completed calls with no wrap-up code vanish silently instead of appearing as 'No disposition'.
 - **Verified evidence:** dispositions/page.tsx:35 filters status==='completed' && disposition; calls/page.tsx:92 'answered' counts answered||completed. Completed calls with null disposition are dropped, so totals differ from Call Log and gaps are invisible.
 - **Files to change:** `apps/web/src/app/(app)/telephony/dispositions/page.tsx`
@@ -344,7 +344,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-DISPOSITIONS-04  ·  MEDIUM  ·  partly  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Aggregation is client-side over the full call list (same request as Call Log, no date or queue filter, dispositions/page.tsx:61-66); percentages describe an unspecified window and may not sum to 100 because of per-row rounding (dispositions/page.tsx:41).
 - **Verified evidence:** Page calls the same '/v1/telephony/calls' as Call Log with no params (page.tsx:63-66) and aggregates in aggregate(); no date/queue filter. Rounding per row (:41 Math.round) can make shares not sum to 100. Whether the API caps/paginates the list is cannot-verify (telephony-service absent from web snapshot).
 - **Files to change:** `apps/web/src/app/(app)/telephony/dispositions/page.tsx`, `apps/web/src/lib/sync/resource.ts`
@@ -360,7 +360,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-DISPOSITIONS-05  ·  LOW  ·  partly  ·  theme COPY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Only 'resolved' and 'escalated' are hard-coded as headline cards (dispositions/page.tsx:68-69); any other or tenant-defined wrap-up code is visible only in the table. Codes are humanised by replacing '_' only, no title case.
 - **Verified evidence:** Cards for 'resolved' and 'escalated' are hard-coded (page.tsx:68-69), other codes appear only in the table; humanised only via replace(/_/g,' ') at :49. Not fabricated data: values derive from the API. Theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/(app)/telephony/dispositions/page.tsx`
@@ -374,7 +374,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-DISPOSITIONS-06  ·  LOW  ·  partly  ·  theme A11Y (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Table is sortable but not filterable, unlike its siblings; ProgressBar has no role or label of its own (ds/ProgressBar.tsx:6-12), relying on an adjacent sr-only span.
 - **Verified evidence:** DataTable is called with sortable but not filterable (page.tsx:104; DataTable supports opt-in filterable, DataTable.tsx:72). ProgressBar (ds/ProgressBar.tsx:6-12) renders a div with no role/aria; page adds an adjacent sr-only span. No PII is shown, so theme PII is wrong.
 - **Files to change:** `apps/web/src/app/(app)/telephony/dispositions/page.tsx`, `apps/web/src/app/_components/ds/ProgressBar.tsx`
@@ -395,7 +395,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-LIST-01  ·  HIGH  ·  confirmed  ·  theme WIRING (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** The generic mapper requires a name/title/subject/label/code/contractNo/fileNo on each row and skips the rest (loaders.ts:1661-1671, 1821); the call payload used by /telephony/calls has none of those fields (calls/page.tsx:21-38), so this page shows 'No records' even when the call log is full.
 - **Verified evidence:** getTelephonyCalls = moduleLoader -> mapModuleRows (loaders.ts:1701, 1821). mapModuleRows (~:1661-1671) drops rows without id AND one of name/title/subject/label/code/contractNo/fileNo. Call rows (calls/page.tsx:21-38) carry none of these, so every row is skipped and an empty list is returned as a successful 'No records'. Theme should be WIRING not I18N.
 - **Files to change:** `apps/web/src/app/(app)/telephony/list/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -410,7 +410,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-LIST-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Generic ID/Name/Detail/Status/Meta columns say nothing about a call; ID is the first 8 characters of a UUID (ModuleListTable.tsx:50) — a raw id shown to users.
 - **Verified evidence:** ModuleListTable.tsx:50 renders row.id.slice(0,8) in a mono span and headers are generic ID/Name/Detail/Status/Meta (:37-46).
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/telephony/list/page.tsx`
@@ -425,7 +425,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-LIST-03  ·  MEDIUM  ·  confirmed  ·  theme COPY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Title 'Telephony — Call' and description 'loaded from the Telephony service API' expose implementation wording (list/page.tsx:8-9); DataSourceBadge's own header says user copy must avoid 'API' wording (DataSourceBadge.tsx:55-61).
 - **Verified evidence:** list/page.tsx:8-9 title 'Telephony — Call', description 'Read-only list loaded from the Telephony service API.' DataSourceBadge.tsx:55-61 states the no-'API' wording rule. Strings are hard-coded English.
 - **Files to change:** `apps/web/src/app/(app)/telephony/list/page.tsx`
@@ -438,7 +438,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-LIST-05  ·  LOW  ·  confirmed  ·  theme OTHER (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Duplicate of Call Log listed as 'Call Log (legacy)' in production navigation (telephony/page.tsx:12); candidate for removal or redirect to /telephony/calls.
 - **Verified evidence:** telephony/page.tsx:12 links 'Call Log (legacy)' to /telephony/list, which duplicates /telephony/calls and renders empty (LIST-01). Theme VALIDATION is wrong.
 - **Files to change:** `apps/web/src/app/(app)/telephony/list/page.tsx`, `apps/web/src/app/(app)/telephony/page.tsx`

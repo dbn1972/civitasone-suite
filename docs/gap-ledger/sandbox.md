@@ -14,7 +14,7 @@ Counts: ACTION 5
 
 ### GAP-SANDBOX-HOME-01  ·  HIGH  ·  confirmed  ·  theme AUTH (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** The "no sign-up required" page is unreachable while signed out: /sandbox is not in the middleware PUBLIC list, so anonymous visitors are redirected to /auth/login?next=/sandbox before it renders (middleware.ts:11,97-104).
 - **Verified evidence:** apps/web/src/middleware.ts:11 PUBLIC lists /auth, /api/auth, /api/careers, /careers, /_next, /favicon.ico, /sw.js, /api/metrics; '/sandbox' is absent. With no access cookie, :99-104 redirects to defaultLoginPath() with ?next=/sandbox. (The marketing home and pricing are also not in PUBLIC, so the whole (marketing) group is behind login, unless another mechanism serves them; not checked.) The observation's :97-104 is right.
 - **Files to change:** `apps/web/src/middleware.ts`
@@ -31,7 +31,7 @@ Counts: ACTION 5
 
 ### GAP-SANDBOX-HOME-02  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** All seven "Enter as {role}" cards link to the same /dashboard; the role id is never used, so nothing differs by persona, and (app)/layout.tsx:56-57 sends an unauthenticated visitor to login anyway (page.tsx:79).
 - **Verified evidence:** apps/web/src/app/(marketing)/sandbox/page.tsx:79 every card uses href={`/dashboard`}; role.id is defined (:12 etc.) but unused. apps/web/src/app/(app)/layout.tsx `if (!token) redirect("/auth/login")` (about line 57) sends an anonymous visitor to login. No sandbox session route exists (grep for sandbox in app/ finds only marketing and unrelated files).
 - **Files to change:** `apps/web/src/app/(marketing)/sandbox/page.tsx`, `apps/web/src/app/api/sandbox/enter/route.ts (new)`, `apps/web/src/middleware.ts`
@@ -50,7 +50,7 @@ Counts: ACTION 5
 
 ### GAP-SANDBOX-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** The role emoji are plain text in a div with no aria-hidden, so screen readers announce e.g. "office building" before each card; headings jump from h1 to h3 (page.tsx:82-83).
 - **Verified evidence:** apps/web/src/app/(marketing)/sandbox/page.tsx:82 `<div className="text-4xl">{role.icon}</div>` has no aria-hidden; the page has h1 at :63 and the cards' titles are h3 (:83) with no h2 between. Both statements true.
 - **Files to change:** `apps/web/src/app/(marketing)/sandbox/page.tsx`
@@ -65,7 +65,7 @@ Counts: ACTION 5
 
 ### GAP-SANDBOX-HOME-04  ·  LOW  ·  partly  ·  theme COPY (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Resets daily" (hero) and "Refreshed every 24 hours" (footer) describe the same thing in two ways; no time or timezone (page.tsx:67,91-93).
 - **Verified evidence:** apps/web/src/app/(marketing)/sandbox/page.tsx:67 says 'Resets daily.' and :96 says 'Refreshed every 24 hours.'; both true, redundant, neither states a time/zone. It is copy only, not a date-format issue, so theme DATEFMT is a stretch. Whether the reset actually runs and when is not visible in this snapshot.
 - **Files to change:** `apps/web/src/app/(marketing)/sandbox/page.tsx`
@@ -78,7 +78,7 @@ Counts: ACTION 5
 
 ### GAP-SANDBOX-HOME-05  ·  LOW  ·  partly  ·  theme THEMING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1925, verified on main 9c5e9e9e9)
 - **First-pass claim:** Page uses Tailwind utility classes and hard-coded grays (bg-white, text-gray-*) instead of the DS tokens used inside the app, so dark mode and tenant theming do not apply (page.tsx:57-97).
 - **Verified evidence:** apps/web/src/app/(marketing)/sandbox/page.tsx uses Tailwind utilities with fixed grays/white/amber (:56-96), true. But this is a public marketing page under the (marketing) layout, not in-app; the DS tokens (var(--ink) etc.) live in the app shell CSS. Dark mode and tenant theming are not required for an anonymous marketing page unless the marketing layout supports them (layout.tsx not verified for theming). Theme FABRICATED is wrong (no sample figures).
 - **Files to change:** `apps/web/src/app/(marketing)/sandbox/page.tsx`, `apps/web/src/app/(marketing)/layout.tsx`
