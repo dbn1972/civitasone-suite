@@ -32,6 +32,22 @@ describe("middleware public sandbox access", () => {
   });
 });
 
+// W0 defect 3: /contact, /api/contact and /.well-known/* must be reachable
+// anonymously (the matcher covers them, and no proxy in infra/ exempts them).
+describe("middleware public contact + well-known access", () => {
+  it.each(["/contact", "/api/contact", "/.well-known/security.txt"])("lets an anonymous request to %s through", (path) => {
+    const res = middleware(anonReq(path));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("still redirects an anonymous visitor on a private path", () => {
+    const res = middleware(anonReq("/finance/vouchers"));
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/auth/login");
+  });
+});
+
 // GAP2-SHELL-CSP-01: style-src / style-src-elem keep 'unsafe-inline' because
 // ~28 components render inline <style> elements without a nonce. Inline style
 // ATTRIBUTES are pinned via style-src-attr. Keywords MUST be single-quoted.

@@ -2,12 +2,17 @@
 
 import { lifecycleOf, type PluginLifecycle } from "./pluginLifecycle";
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ActionButton } from "../../_components/ds";
 
 // Re-exported for existing client/test consumers; server code imports ./pluginLifecycle directly.
 export { lifecycleOf };
 export type { PluginLifecycle };
+
+const INSTALL_POLL_MS = 3000;
+const INSTALL_MAX_POLLS = 20;
 
 type Plugin = { id?: string; name: string; status: string };
 
@@ -136,26 +141,71 @@ export function MarketplaceInstallButton({
   canManage?: boolean;
 }) {
   const router = useRouter();
-  if (!canManage) return null;
-  if (installed) return <span className="muted">Installed</span>;
-  if (!listingId) return <span className="muted">—</span>;
+  const t = useTranslations("pluginMarketplace");
+  // "idle" -> (202 accepted) "requested" -> (status poll sees the plugin) "installed".
+  // The 202 only means the install was queued, so the UI never claims "Installed" until
+  // the service reports it; after MAX_POLLS without a result it says it is still pending.
+  const [phase, setPhase] = useState<"idle" | "requested" | "installed" | "pending">("idle");
 
-  async function install(): Promise<void> {
+  useEffect(() => {
+    if (phase !== "requested" || !listingId) return;
+    let polls = 0;
+    let cancelled = false;
+    const timer = setInterval(async () => {
+      polls += 1;
+      try {
+        const res = await fetch(`/api/proxy/v1/plugins/marketplace/${listingId}/install-status`, { credentials: "same-origin" });
+        if (res.ok) {
+          const body = (await res.json()) as { data?: { status?: string } };
+          if (!cancelled && body.data?.status === "installed") {
+            clearInterval(timer);
+            setPhase("installed");
+            router.refresh();
+            return;
+          }
+        }
+      } catch {
+        /* transient: keep polling until the cap */
+      }
+      if (!cancelled && polls >= INSTALL_MAX_POLLS) {
+        clearInterval(timer);
+        setPhase("pending");
+      }
+    }, INSTALL_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [phase, listingId, router]);
+
+  if (!canManage) return null;
+  if (installed || phase === "installed") return <span className="muted">{t("installed")}</span>;
+  if (!listingId) return <span className="muted">—</span>;
+  if (phase === "requested") return <span className="muted" role="status">{t("requested")}. {t("requestedNote")}</span>;
+  if (phase === "pending") return <span className="muted" role="status">{t("requested")}. {t("stillPending")}</span>;
+
+  async function install(reason?: string): Promise<void> {
     const res = await fetch(`/api/proxy/v1/plugins/marketplace/${listingId}/install`, {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: (reason ?? "").trim() }),
     });
     if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
-    router.refresh();
+    setPhase("requested");
   }
 
   return (
     <ActionButton
-      label="Install"
+      label={t("install")}
       className="btn primary"
-      confirmTitle={`Install “${name}”?`}
-      confirmDescription="Installing provisions this plugin for the entire tenant and may grant it access to tenant data."
-      confirmLabel="Install"
-      onConfirm={() => install()}
+      confirmTitle={t("confirmTitle", { name })}
+      confirmDescription={t("confirmDescription")}
+      confirmLabel={t("confirmLabel")}
+      requireReason
+      minReasonLength={3}
+      maxReasonLength={500}
+      reasonLabel={t("reasonLabel")}
+      onConfirm={(reason) => install(reason)}
     />
   );
 }

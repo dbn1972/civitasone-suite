@@ -46,7 +46,7 @@ export function registerTokenConsumers(rawQueue: Queue): void {
   queue.subscribe<UpsertBrandConfigPayload>(COMMANDS.upsertBrandConfig, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const { projected, isCreate } = msg.payload;
+      const { projected, isCreate, changedFields } = msg.payload;
       if (isCreate) {
         await brandRepo.insert(tx, projected);
       } else {
@@ -57,7 +57,7 @@ export function registerTokenConsumers(rawQueue: Queue): void {
         tx,
         msg,
         EVENTS.brandConfigUpserted,
-        { tenantId: projected.tenantId, version: projected.version },
+        { tenantId: projected.tenantId, version: projected.version, changedFields: changedFields ?? [] },
         "upsert",
         projected.tenantId,
         "brand",

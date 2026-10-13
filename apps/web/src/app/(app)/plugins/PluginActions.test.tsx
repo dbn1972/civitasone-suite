@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 
 const mockRefresh = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -7,6 +7,13 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { PluginActions, MarketplaceInstallButton, lifecycleOf } from "./PluginActions";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+import hiMessages from "@/messages/hi.json";
+const withIntl = (ui: React.ReactElement, locale: "en" | "hi" = "en") => (
+  <NextIntlClientProvider locale={locale} messages={locale === "en" ? enMessages : hiMessages}>{ui}</NextIntlClientProvider>
+);
+
 
 describe("PluginActions — GAP-PLUGINS-INSTALLED-01 (one primary action per lifecycle)", () => {
   beforeEach(() => mockRefresh.mockClear());
@@ -66,21 +73,86 @@ describe("lifecycleOf", () => {
 });
 
 describe("MarketplaceInstallButton — GAP-PLUGINS-MARKETPLACE-01", () => {
-  beforeEach(() => mockRefresh.mockClear());
+  beforeEach(() => { mockRefresh.mockClear(); vi.restoreAllMocks(); });
 
   it("renders an Install control for an uninstalled listing when canManage", () => {
-    render(<MarketplaceInstallButton listingId="m1" name="Billing" canManage />);
+    render(withIntl(<MarketplaceInstallButton listingId="m1" name="Billing" canManage />));
     expect(screen.getByRole("button", { name: "Install" })).toBeInTheDocument();
   });
 
   it("shows Installed (no button) for an already-installed listing", () => {
-    render(<MarketplaceInstallButton listingId="m1" name="Billing" installed canManage />);
+    render(withIntl(<MarketplaceInstallButton listingId="m1" name="Billing" installed canManage />));
     expect(screen.queryByRole("button", { name: "Install" })).not.toBeInTheDocument();
     expect(screen.getByText("Installed")).toBeInTheDocument();
   });
 
   it("renders nothing for a non-manager", () => {
-    const { container } = render(<MarketplaceInstallButton listingId="m1" name="Billing" canManage={false} />);
+    const { container } = render(withIntl(<MarketplaceInstallButton listingId="m1" name="Billing" canManage={false} />));
     expect(container).toBeEmptyDOMElement();
+  });
+
+  function openDialog() {
+    fireEvent.click(screen.getByRole("button", { name: "Install" }));
+    return screen.getByRole("button", { name: "Request install" });
+  }
+
+  it("the confirm dialog requires a reason before Request install is enabled", () => {
+    render(withIntl(<MarketplaceInstallButton listingId="m1" name="Billing" canManage />));
+    const confirm = openDialog();
+    expect(confirm).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Needed for Q3 rollout" } });
+    expect(confirm).toBeEnabled();
+  });
+
+  it("sends the reason, then says 'Install requested' (never 'Installed') on 202", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 202 }));
+    render(withIntl(<MarketplaceInstallButton listingId="m1" name="Billing" canManage />));
+    const confirm = openDialog();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Needed for Q3 rollout" } });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/Install requested/));
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/proxy/v1/plugins/marketplace/m1/install",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ reason: "Needed for Q3 rollout" }) }),
+    );
+    expect(screen.queryByText(/^Installed$/)).not.toBeInTheDocument();
+  });
+
+  it("polls install-status and flips to Installed only once the service reports it", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const statuses = ["install_requested", "installed"];
+      vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+        if (String(url).endsWith("/install-status")) return new Response(JSON.stringify({ data: { status: statuses.shift() ?? "installed" } }), { status: 200 });
+        return new Response("{}", { status: 202 });
+      });
+      render(withIntl(<MarketplaceInstallButton listingId="m1" name="Billing" canManage />));
+      const confirm = openDialog();
+      fireEvent.change(screen.getByRole("textbox"), { target: { value: "Needed for Q3 rollout" } });
+      fireEvent.click(confirm);
+      await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/Install requested/));
+      await act(async () => { await vi.advanceTimersByTimeAsync(3100); });
+      expect(screen.getByRole("status")).toHaveTextContent(/Install requested/);
+      await act(async () => { await vi.advanceTimersByTimeAsync(3100); });
+      await waitFor(() => expect(screen.getByText("Installed")).toBeInTheDocument());
+      expect(mockRefresh).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a failed request shows an error in the dialog and does not claim a requested install", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ code: "FORBIDDEN" }), { status: 403, headers: { "content-type": "application/json" } }));
+    render(withIntl(<MarketplaceInstallButton listingId="m1" name="Billing" canManage />));
+    const confirm = openDialog();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "Needed for Q3 rollout" } });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("renders Hindi copy under the hi locale", () => {
+    render(withIntl(<MarketplaceInstallButton listingId="m1" name="Billing" canManage />, "hi"));
+    expect(screen.getByRole("button", { name: "इंस्टॉल करें" })).toBeInTheDocument();
   });
 });

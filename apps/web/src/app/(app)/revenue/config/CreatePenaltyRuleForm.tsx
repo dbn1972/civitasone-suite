@@ -4,6 +4,7 @@ import { useId, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { percentToBps as sharedPercentToBps } from "@/lib/money";
 import type { AcceptedResponse, InterestType, RoundingMode } from "./types";
 
 interface CreatePenaltyRuleFormProps {
@@ -22,13 +23,10 @@ const ROUNDING_MODES: { value: RoundingMode; label: string }[] = [
   { value: "ceil", label: "Ceiling" },
 ];
 
-/** Percent (as typed by the clerk) -> basis-points integer, 1..10000 per the API contract. */
+/** Percent (as typed by the clerk) -> basis-points integer, 1..10000 per the API contract (string parse, no float). */
 function percentToBps(input: string): number | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-  const n = Number(trimmed);
-  if (!Number.isFinite(n) || n < 0.01 || n > 100) return null;
-  return Math.round(n * 100);
+  const bps = sharedPercentToBps(input);
+  return bps === null || bps < 1 || bps > 10000 ? null : bps;
 }
 
 function toInt(input: string): number | null {

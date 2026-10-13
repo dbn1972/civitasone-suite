@@ -5587,6 +5587,9 @@
   },
   "procurement": {
     "title": "Procurement",
+    "poForm": {
+      "vendorBlacklisted": "This vendor is blacklisted and cannot be used on a purchase order. Choose a different vendor."
+    },
     "gfr": {
       "band": {
         "LS": { "name": "Local Shopping", "note": "Spot purchase up to ₹5,000 without tender" },
@@ -14909,5 +14912,46 @@
     "windowNotePartial": "{base}: {shown} of {total} total — older or additional changes beyond this window are not shown.",
     "windowNoteCapped": "{base}: first {limit} shown — there may be more pending changes beyond this window.",
     "windowNoteShown": "{base}: {shown} shown."
+  },
+  "tenantModulesConfirm": {
+    "title": "Confirm module selection",
+    "help": "Happy with the modules enabled above? Confirm your selection to complete the \"modules\" step of office setup.",
+    "doneHelp": "Your module selection is confirmed. You can still change modules above at any time.",
+    "confirm": "Confirm modules",
+    "confirmed": "Confirmed",
+    "saving": "Saving…",
+    "success": "Module selection confirmed."
+  },
+  "pluginMarketplace": {
+    "install": "Install",
+    "installed": "Installed",
+    "requested": "Install requested",
+    "requestedNote": "The install is running in the background and is not complete yet. This updates when it finishes.",
+    "stillPending": "Still installing. Check back shortly.",
+    "confirmTitle": "Install “{name}”?",
+    "confirmDescription": "Installing provisions this plugin for the entire tenant and may grant it access to tenant data. The install runs in the background after you confirm.",
+    "confirmLabel": "Request install",
+    "reasonLabel": "Reason for installing (recorded in the audit log)"
+  },
+  "idpExport": {
+    "notRecorded": "Couldn't record this export in the audit trail, so no file was created. Try again."
+  },
+  "workflowApproveGate": {
+    "approveBlockedLoading": "Checking the required documents… Approve is unavailable until the check finishes.",
+    "approveBlockedError": "The document checklist could not be loaded, so Approve is unavailable. Use Retry beside the checklist.",
+    "approveBlockedMissing": "{count} mandatory document(s) missing, so Approve is unavailable. You can still Return or Reject.",
+    "serverMandatoryMissing": "This request still has mandatory documents missing, so it cannot be approved. Return it or wait for the documents.",
+    "serverCheckUnavailable": "The document check could not be completed just now. Please try again in a moment."
+  },
+  "settingsBrandingLogo": {
+    "typeError": "Logo must be a PNG, JPEG or WebP image (SVG is not supported).",
+    "tooBig": "Logo must be 200KB or smaller.",
+    "readError": "Couldn't read that file. Please try another.",
+    "urlInvalid": "Enter an https:// image URL (or upload a file).",
+    "dropHint": "Drag & drop a logo here",
+    "formatHint": "PNG, JPEG or WebP, max 200KB",
+    "chooseFile": "Choose file",
+    "remove": "Remove logo",
+    "saveFailed": "Couldn't save your changes. Please try again."
   }
 }

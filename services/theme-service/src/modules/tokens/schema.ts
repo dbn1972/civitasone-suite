@@ -35,6 +35,7 @@ export const brandConfig = themeSchema.table("brand_config", {
   appName:         text("app_name").notNull().default("CivitasOne"),
   tagline:         text("tagline"),
   logoUrl:         text("logo_url"),
+  logoDataUrl:     text("logo_data_url"),
   logoDarkUrl:     text("logo_dark_url"),
   faviconUrl:      text("favicon_url"),
   loginBgUrl:      text("login_bg_url"),

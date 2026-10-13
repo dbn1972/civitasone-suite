@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+// The page reads its logo copy via next-intl; the helper wraps render in the real en messages.
+import { render, screen, fireEvent, waitFor } from "@/test-utils/intl-render";
 
 import BrandingPage from "./page";
 import { resetSessionIdentityCache } from "@/lib/auth/useSessionIdentity";
@@ -22,6 +23,7 @@ const FULL_BRAND_CONFIG = {
   appName: "CivitasOne",
   tagline: null,
   logoUrl: null,
+  logoDataUrl: null,
   logoDarkUrl: null,
   faviconUrl: null,
   loginBgUrl: null,
@@ -239,7 +241,88 @@ describe("BrandingPage", () => {
     const fileInput = document.getElementById("branding-logo-file") as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: [exe] } });
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/must be a PNG or SVG/i));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/PNG, JPEG or WebP/i));
+  });
+
+  it("rejects an SVG logo (no server-side sanitiser) with a clear message", async () => {
+    mockFetchOk({ appName: "Test Gov Portal" }, []);
+    render(<BrandingPage />);
+    await waitFor(() => expect(screen.getByDisplayValue("Test Gov Portal")).toBeInTheDocument());
+
+    const svg = new File(["<svg xmlns=\"http://www.w3.org/2000/svg\"/>"], "logo.svg", { type: "image/svg+xml" });
+    const fileInput = document.getElementById("branding-logo-file") as HTMLInputElement;
+    expect(fileInput.accept).toBe("image/png,image/jpeg,image/webp");
+    fireEvent.change(fileInput, { target: { files: [svg] } });
+
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/SVG is not supported/i));
+  });
+
+  it("uploads a 150KB PNG into logoDataUrl (not logoUrl) and PUTs it", async () => {
+    mockFetchOk({ appName: "Test Gov Portal" }, []);
+    render(<BrandingPage />);
+    await waitFor(() => expect(screen.getByDisplayValue("Test Gov Portal")).toBeInTheDocument());
+
+    const png = new File([new Uint8Array(150 * 1024)], "logo.png", { type: "image/png" });
+    fireEvent.change(document.getElementById("branding-logo-file") as HTMLInputElement, { target: { files: [png] } });
+    await waitFor(() => expect(screen.getByAltText("Logo preview")).toBeInTheDocument());
+
+    const putSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "b1", status: "accepted" }), { status: 202 }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save branding/i }));
+
+    await waitFor(() => expect(putSpy).toHaveBeenCalled());
+    const body = JSON.parse((putSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.logoDataUrl).toMatch(/^data:image\/png;base64,/);
+    expect(body.logoUrl).toBeNull();
+  });
+
+  it("shows the server's validation message when it rejects the logo (clear 400)", async () => {
+    mockFetchOk({ appName: "Test Gov Portal" }, []);
+    render(<BrandingPage />);
+    await waitFor(() => expect(screen.getByDisplayValue("Test Gov Portal")).toBeInTheDocument());
+
+    const png = new File([new Uint8Array(1024)], "logo.png", { type: "image/png" });
+    fireEvent.change(document.getElementById("branding-logo-file") as HTMLInputElement, { target: { files: [png] } });
+    await waitFor(() => expect(screen.getByAltText("Logo preview")).toBeInTheDocument());
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: "VALIDATION_FAILED",
+          message: "invalid request",
+          fieldErrors: [{ field: "logoDataUrl", message: "Logo file content does not match its declared image type." }],
+        }),
+        { status: 400 },
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save branding/i }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(/does not match its declared image type/i),
+    );
+    expect(screen.queryByRole("button", { name: /✓ saved/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the generic message, not the raw body message, on a 500", async () => {
+    mockFetchOk({ appName: "Test Gov Portal" }, []);
+    render(<BrandingPage />);
+    await waitFor(() => expect(screen.getByDisplayValue("Test Gov Portal")).toBeInTheDocument());
+
+    const png = new File([new Uint8Array(1024)], "logo.png", { type: "image/png" });
+    fireEvent.change(document.getElementById("branding-logo-file") as HTMLInputElement, { target: { files: [png] } });
+    await waitFor(() => expect(screen.getByAltText("Logo preview")).toBeInTheDocument());
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ message: "ECONNREFUSED pg-internal:5432 stack trace" }), { status: 500 }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save branding/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(screen.getByRole("alert")).not.toHaveTextContent(/ECONNREFUSED|stack trace/i);
   });
 
   it("rejects a non-https logo URL (GAP-SETTINGS-BRANDING-04)", async () => {

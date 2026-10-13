@@ -15,6 +15,7 @@
  */
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ActionButton, useToastOptional } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { UserFacingError } from "@/lib/userFacingError";
@@ -31,7 +32,7 @@ function taskActionError(): string {
   return `${human.what} ${human.next}`;
 }
 
-async function postJson(url: string, body?: unknown): Promise<void> {
+async function postJson(url: string, body?: unknown, codeMessages?: Record<string, string>): Promise<void> {
   const res = await fetch(url, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -49,7 +50,7 @@ async function postJson(url: string, body?: unknown): Promise<void> {
   } catch {
     /* non-JSON body — fall through to the generic message */
   }
-  throw new UserFacingError(messageForCode(code, res.status));
+  throw new UserFacingError((code && codeMessages?.[code]) || messageForCode(code, res.status));
 }
 
 /** Plain-language message for a known task-action failure code. */
@@ -121,10 +122,18 @@ export interface TaskActionsProps {
   currentUserId?: string | null;
   /** Compact rendering for table rows (omits the long descriptions). */
   compact?: boolean;
+  /**
+   * GAP-WORKFLOW-INSTANCES-DETAIL-02 — when set, Approve is rendered disabled
+   * with this visible reason (checklist loading / errored / mandatory docs
+   * missing). Return and Reject are unaffected. The server `/complete` is still
+   * the authority (409 MANDATORY_DOCUMENTS_MISSING).
+   */
+  approveBlockedReason?: string | null;
 }
 
-export function TaskActions({ taskId, status, assigneeId = null, currentUserId = null, compact = false }: TaskActionsProps) {
+export function TaskActions({ taskId, status, assigneeId = null, currentUserId = null, compact = false, approveBlockedReason = null }: TaskActionsProps) {
   const router = useRouter();
+  const tGate = useTranslations("workflowApproveGate");
   const { announce, node, banner } = useToast();
   const isPending = (status ?? "").toLowerCase() === "pending";
   const [claiming, setClaiming] = useState(false);
@@ -144,12 +153,16 @@ export function TaskActions({ taskId, status, assigneeId = null, currentUserId =
 
   const complete = useCallback(
     async (decision: "approve" | "reject" | "return", reason?: string) => {
-      await postJson(`/api/proxy/v1/workflow/tasks/${taskId}/complete`, {
-        decision,
-        ...(reason ? { reason } : {}),
-      });
+      await postJson(
+        `/api/proxy/v1/workflow/tasks/${taskId}/complete`,
+        { decision, ...(reason ? { reason } : {}) },
+        {
+          MANDATORY_DOCUMENTS_MISSING: tGate("serverMandatoryMissing"),
+          DOCUMENT_CHECK_UNAVAILABLE: tGate("serverCheckUnavailable"),
+        },
+      );
     },
-    [taskId],
+    [taskId, tGate],
   );
 
   if (!isPending) {
@@ -200,6 +213,27 @@ export function TaskActions({ taskId, status, assigneeId = null, currentUserId =
       )}
       {canDecide && (
         <>
+          {approveBlockedReason ? (
+            <>
+              <button
+                type="button"
+                className="btn primary sm"
+                disabled
+                aria-disabled="true"
+                aria-describedby={`approve-blocked-${taskId}`}
+              >
+                Approve
+              </button>
+              <span
+                id={`approve-blocked-${taskId}`}
+                role="status"
+                className="pill warn np"
+                style={{ fontSize: 11, whiteSpace: "normal" }}
+              >
+                {approveBlockedReason}
+              </span>
+            </>
+          ) : (
           <ActionButton
             label="Approve"
             className="btn primary sm"
@@ -216,6 +250,7 @@ export function TaskActions({ taskId, status, assigneeId = null, currentUserId =
               router.refresh();
             }}
           />
+          )}
           <ActionButton
             label="Return"
             className="btn ghost sm"
