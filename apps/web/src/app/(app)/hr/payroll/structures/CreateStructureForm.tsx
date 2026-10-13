@@ -12,8 +12,6 @@ import { Button, Card, ConfirmDialog, AcceptedNotice } from "../../../../_compon
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { browserJson } from "@/lib/api/browserClient";
 
-/** one delayed follow-up refresh after the 202 (GAP-PAYROLL-STRUCTURES-05) */
-
 type AcceptedResponse = { id: string; status: string; correlationId?: string };
 
 export function CreateStructureForm() {

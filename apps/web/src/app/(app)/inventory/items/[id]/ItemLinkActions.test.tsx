@@ -75,5 +75,9 @@ describe("ItemLinkActions: removing a link", () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Link removal submitted."));
     expect(fetchMock.mock.calls[0][0]).toBe("/api/proxy/v1/inventory/item-links/l1");
     expect(fetchMock.mock.calls[0][1].method).toBe("DELETE");
+    await waitFor(() => expect(document.querySelector('[data-accepted-phase="accepted"]')).not.toBeNull());
+    expect(refresh).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh now" }));
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });
