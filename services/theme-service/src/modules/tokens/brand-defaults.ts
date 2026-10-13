@@ -9,6 +9,7 @@ export const DEFAULTS: Omit<
   appName: "CivitasOne",
   tagline: null,
   logoUrl: null,
+  logoDataUrl: null,
   logoDarkUrl: null,
   faviconUrl: null,
   loginBgUrl: null,

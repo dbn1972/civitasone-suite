@@ -14406,5 +14406,16 @@
     "windowNotePartial": "{base}: कुल {total} में से {shown} — इस अवधि से पुराने या अतिरिक्त बदलाव नहीं दिखाए गए हैं।",
     "windowNoteCapped": "{base}: पहले {limit} दिखाए गए — इस अवधि से परे और लंबित बदलाव हो सकते हैं।",
     "windowNoteShown": "{base}: {shown} दिखाए गए।"
+  },
+  "settingsBrandingLogo": {
+    "typeError": "लोगो PNG, JPEG या WebP छवि होना चाहिए (SVG समर्थित नहीं है)।",
+    "tooBig": "लोगो 200KB या उससे छोटा होना चाहिए।",
+    "readError": "वह फ़ाइल पढ़ी नहीं जा सकी। कृपया दूसरी फ़ाइल चुनें।",
+    "urlInvalid": "https:// से शुरू होने वाला छवि URL दर्ज करें (या फ़ाइल अपलोड करें)।",
+    "dropHint": "लोगो यहाँ खींचकर छोड़ें",
+    "formatHint": "PNG, JPEG या WebP, अधिकतम 200KB",
+    "chooseFile": "फ़ाइल चुनें",
+    "remove": "लोगो हटाएँ",
+    "saveFailed": "आपके बदलाव सहेजे नहीं जा सके। कृपया पुनः प्रयास करें।"
   }
 }

@@ -101,6 +101,7 @@ export const getThemeBrand = moduleLoader("/api/v1/themes/brand", "themes.brand"
 export interface BrandConfigView {
   appName: string;
   logoUrl: string | null;
+  logoDataUrl: string | null;
   colorPrimary: string;
   colorSecondary: string;
   colorAccent: string;
@@ -133,6 +134,7 @@ function mapBrandConfig(payload: unknown): BrandConfigView | null {
   return {
     appName: toText(src.appName) ?? "CivitasOne",
     logoUrl: toText(src.logoUrl) ?? null,
+    logoDataUrl: toText(src.logoDataUrl) ?? null,
     colorPrimary: hex(src.colorPrimary, "#1e40af"),
     colorSecondary: hex(src.colorSecondary, "#64748b"),
     colorAccent: hex(src.colorAccent, "#f59e0b"),

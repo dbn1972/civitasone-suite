@@ -14909,5 +14909,16 @@
     "windowNotePartial": "{base}: {shown} of {total} total — older or additional changes beyond this window are not shown.",
     "windowNoteCapped": "{base}: first {limit} shown — there may be more pending changes beyond this window.",
     "windowNoteShown": "{base}: {shown} shown."
+  },
+  "settingsBrandingLogo": {
+    "typeError": "Logo must be a PNG, JPEG or WebP image (SVG is not supported).",
+    "tooBig": "Logo must be 200KB or smaller.",
+    "readError": "Couldn't read that file. Please try another.",
+    "urlInvalid": "Enter an https:// image URL (or upload a file).",
+    "dropHint": "Drag & drop a logo here",
+    "formatHint": "PNG, JPEG or WebP, max 200KB",
+    "chooseFile": "Choose file",
+    "remove": "Remove logo",
+    "saveFailed": "Couldn't save your changes. Please try again."
   }
 }

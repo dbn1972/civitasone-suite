@@ -17,6 +17,7 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import {
   readableForeground,
   contrastRatio,
@@ -32,9 +33,28 @@ import { ConfirmDialog } from "@/app/_components/ds";
 const BRANDING_ADMIN_ROLES = ["theme_admin", "super_admin", "tenant_admin"];
 
 // Logo upload constraints (GAP-SETTINGS-BRANDING-04). Module scope so the
-// handler's useCallback deps stay stable.
+// handler's useCallback deps stay stable. These mirror theme-service's
+// authoritative server-side check (tokens/validators.ts logoDataUrlSchema):
+// raster only, decoded size <= 200KB. SVG is not accepted - the backend has no
+// SVG sanitiser - and the server re-validates every upload regardless of this
+// client-side pre-check.
 const MAX_LOGO_BYTES = 200 * 1024;
-const ALLOWED_LOGO_TYPES = ["image/png", "image/svg+xml"];
+const ALLOWED_LOGO_TYPES = ["image/png", "image/jpeg", "image/webp"];
+
+/** The server's own validation message from a non-2xx response, if it sent one. */
+async function serverErrorMessage(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.json()) as {
+      message?: unknown;
+      fieldErrors?: Array<{ message?: unknown }>;
+    };
+    const first = body.fieldErrors?.[0]?.message;
+    const msg = typeof first === "string" && first ? first : body.message;
+    return typeof msg === "string" && msg ? msg.slice(0, 300) : null;
+  } catch {
+    return null;
+  }
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -42,6 +62,7 @@ type BrandConfig = {
   appName: string;
   tagline: string | null;
   logoUrl: string | null;
+  logoDataUrl: string | null;
   logoDarkUrl: string | null;
   faviconUrl: string | null;
   loginBgUrl: string | null;
@@ -174,8 +195,8 @@ function LivePreview({ config }: { config: BrandConfig }) {
           borderColor: config.colorBorder,
         }}
       >
-        {config.logoUrl ? (
-          <img src={config.logoUrl} alt="Logo" className="h-8 w-auto" />
+        {config.logoDataUrl || config.logoUrl ? (
+          <img src={config.logoDataUrl ?? config.logoUrl ?? ""} alt="Logo" className="h-8 w-auto" />
         ) : (
           <div className="h-8 w-8 rounded bg-white/20" />
         )}
@@ -326,6 +347,7 @@ export default function BrandingPage() {
     appName: "CivitasOne",
     tagline: null,
     logoUrl: null,
+    logoDataUrl: null,
     logoDarkUrl: null,
     faviconUrl: null,
     loginBgUrl: null,
@@ -358,6 +380,7 @@ export default function BrandingPage() {
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [confirmingSave, setConfirmingSave] = useState(false);
+  const t = useTranslations("settingsBrandingLogo");
   const [logoError, setLogoError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -434,13 +457,13 @@ export default function BrandingPage() {
     return () => controller.abort();
   }, []);
 
-  const updateColor = useCallback((key: keyof BrandConfig, value: string) => {
+  const updateColor = useCallback((key: keyof BrandConfig, value: string | null) => {
     setConfig((prev) => {
       const next = { ...prev, [key]: value };
       // Keep the primary foreground readable for ANY chosen primary; the one
       // persisted pair must meet WCAG AA. (GAP-SETTINGS-BRANDING-01)
       if (key === "colorPrimary") {
-        next.colorPrimaryFg = readableForeground(value);
+        next.colorPrimaryFg = readableForeground(value ?? "");
       }
       return next;
     });
@@ -462,54 +485,59 @@ export default function BrandingPage() {
   }, []);
 
   // Logo handling (GAP-SETTINGS-BRANDING-04).
-  // Accept only PNG/SVG up to 200KB. We read the file to a data: URL, which
-  // the app CSP already permits (img-src 'self' data: blob:) — an arbitrary
-  // external https URL would be blocked in the browser and also leaks viewer
-  // IPs, so the free-text URL box is validated separately below and is an
-  // advanced fallback only. SVG can carry script; the backend sanitises /
-  // restricts on upload, and in-browser an <img src=data:svg> cannot run
-  // script, so the preview is safe.
+  // Accept PNG/JPEG/WebP up to 200KB. The file is read into a data: URL (the
+  // app CSP already permits img-src data:) and sent as `logoDataUrl`; `logoUrl`
+  // is reserved for external https URLs. SVG is refused: it can carry script
+  // and theme-service has no SVG sanitiser. This is only a fast pre-check -
+  // theme-service re-validates mime, magic bytes and decoded size on save and
+  // its message is shown if it rejects the upload.
   const handleLogoFile = useCallback((file: File | null | undefined) => {
     if (!file) return;
     setLogoError(null);
     if (!ALLOWED_LOGO_TYPES.includes(file.type)) {
-      setLogoError("Logo must be a PNG or SVG image.");
+      setLogoError(t("typeError"));
       return;
     }
     if (file.size > MAX_LOGO_BYTES) {
-      setLogoError("Logo must be 200KB or smaller.");
+      setLogoError(t("tooBig"));
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
       const result = typeof reader.result === "string" ? reader.result : null;
       if (!result) {
-        setLogoError("Couldn't read that file. Please try another.");
+        setLogoError(t("readError"));
         return;
       }
-      updateColor("logoUrl", result);
+      updateColor("logoDataUrl", result);
     };
-    reader.onerror = () => setLogoError("Couldn't read that file. Please try another.");
+    reader.onerror = () => setLogoError(t("readError"));
     reader.readAsDataURL(file);
-  }, [updateColor]);
+  }, [updateColor, t]);
 
   const setLogoUrlFromText = useCallback((raw: string) => {
     setLogoError(null);
     const value = raw.trim();
     if (value === "") {
-      updateColor("logoUrl", "");
+      // Only the external URL: an uploaded logo is removed via "Remove logo".
+      updateColor("logoUrl", null);
       return;
     }
-    // Allow only https:// or data: image URLs. http/javascript/other schemes
-    // are rejected: they either leak viewer IPs, break under the CSP, or are
-    // an injection vector.
-    const isHttps = /^https:\/\//i.test(value);
-    const isDataImage = /^data:image\/(png|svg\+xml);/i.test(value);
-    if (!isHttps && !isDataImage) {
-      setLogoError("Enter an https:// image URL (or upload a file).");
+    // Allow only https:// URLs. http/javascript/other schemes are rejected:
+    // they either leak viewer IPs, break under the CSP, or are an injection
+    // vector. Uploaded files travel in logoDataUrl, not here.
+    if (!/^https:\/\//i.test(value)) {
+      setLogoError(t("urlInvalid"));
       return;
     }
     updateColor("logoUrl", value);
+    updateColor("logoDataUrl", null);
+  }, [updateColor, t]);
+
+  const removeLogo = useCallback(() => {
+    setLogoError(null);
+    updateColor("logoUrl", null);
+    updateColor("logoDataUrl", null);
   }, [updateColor]);
 
   const handleSave = useCallback(async () => {
@@ -527,16 +555,19 @@ export default function BrandingPage() {
       // nothing. A tenant admin had no way to know their branding never
       // stuck.
       if (!res.ok) {
-        throw new Error("branding_save_failed");
+        // Show the server's validation message (e.g. an oversize or SVG logo)
+        // rather than a generic failure the admin cannot act on.
+        setSaveError((await serverErrorMessage(res)) ?? t("saveFailed"));
+        return;
       }
       setSaved(true);
       setDirty(false);
     } catch {
-      setSaveError("Couldn't save your changes. Please try again.");
+      setSaveError(t("saveFailed"));
     } finally {
       setSaving(false);
     }
-  }, [config]);
+  }, [config, t]);
 
   // Contrast checks for the pairs a tenant can actually make unreadable.
   // Text-on-Background / Text-on-Surface / Primary-on-PrimaryFg below AA are
@@ -702,24 +733,33 @@ export default function BrandingPage() {
             }}
             className="border-2 border-dashed rounded-xl p-4 text-center hover:border-blue-400 transition-colors"
           >
-            {config.logoUrl ? (
-              <img src={config.logoUrl} alt="Logo preview" className="h-12 mx-auto" />
+            {config.logoDataUrl || config.logoUrl ? (
+              <img src={config.logoDataUrl ?? config.logoUrl ?? ""} alt="Logo preview" className="h-12 mx-auto" />
             ) : (
               <div>
-                <p className="text-sm text-gray-500">Drag &amp; drop a logo here</p>
-                <p className="text-xs text-gray-500 mt-1">PNG or SVG, max 200KB</p>
+                <p className="text-sm text-gray-500">{t("dropHint")}</p>
+                <p className="text-xs text-gray-500 mt-1">{t("formatHint")}</p>
               </div>
             )}
             <label
               htmlFor="branding-logo-file"
               className="mt-3 inline-block cursor-pointer rounded-lg border px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
             >
-              Choose file
+              {t("chooseFile")}
             </label>
+            {canEdit && (config.logoDataUrl || config.logoUrl) && (
+              <button
+                type="button"
+                onClick={removeLogo}
+                className="mt-3 ms-2 inline-block rounded-lg border px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                {t("remove")}
+              </button>
+            )}
             <input
               id="branding-logo-file"
               type="file"
-              accept="image/png,image/svg+xml"
+              accept="image/png,image/jpeg,image/webp"
               disabled={!canEdit}
               onChange={(e) => handleLogoFile(e.target.files?.[0])}
               className="sr-only"
