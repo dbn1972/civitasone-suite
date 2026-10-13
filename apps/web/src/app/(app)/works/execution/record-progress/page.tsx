@@ -54,6 +54,9 @@ function RecordProgressForm() {
   const [cumulativeByScope, setCumulativeByScope] = useState<Map<string, number>>(new Map());
   const [scopesLoading, setScopesLoading] = useState(false);
   const [scopesError, setScopesError] = useState(false);
+  // Bumped by Retry: setting workId to its own value is a no-op, so the scopes
+  // effect needs a distinct dependency to re-run (W0 defect 2).
+  const [reloadKey, setReloadKey] = useState(0);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -133,7 +136,7 @@ function RecordProgressForm() {
       }
     })();
     return () => { active = false; };
-  }, [workId, unitByScopeId]);
+  }, [workId, unitByScopeId, reloadKey]);
 
   const selectedScope = useMemo(() => scopes.find((s) => s.id === form.workScopeId) ?? null, [scopes, form.workScopeId]);
   const currentCumulative = form.workScopeId ? cumulativeByScope.get(form.workScopeId) ?? 0 : 0;
@@ -256,7 +259,7 @@ function RecordProgressForm() {
           ) : scopesError ? (
             <p role="alert" style={{ fontSize: 12, color: "#b42318", marginTop: -8 }}>
               Couldn&apos;t load this work&apos;s scopes.{" "}
-              <button type="button" className="btn ghost sm" onClick={() => setWorkId((w) => (w ? `${w}` : w))}>
+              <button type="button" className="btn ghost sm" onClick={() => setReloadKey((k) => k + 1)}>
                 Retry
               </button>
             </p>
