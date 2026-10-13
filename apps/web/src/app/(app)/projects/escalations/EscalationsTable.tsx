@@ -120,7 +120,7 @@ export function EscalationsTable({ rows, source = "api", canAct = false }: { row
         filterable
         filterPlaceholder="Filter escalations…"
         pageSize={15}
-        exportable
+        exportable exportAudit="projects/escalations"
         exportFilename="project-escalations"
         emptyIcon="🚨"
         emptyTitle="No escalations"

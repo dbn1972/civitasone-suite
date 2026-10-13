@@ -78,6 +78,8 @@ describe("DevicesTable", () => {
     fireEvent.click(screen.getByText("⬇ CSV"));
     expect(String(fetchSpy.mock.calls[0]![0])).toBe("/api/proxy/v1/hrms/devices/export-audit");
     expect(JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string)).toEqual({ rowCount: 1, filtered: false });
+    await waitFor(() => expect(blobs.length).toBe(1));
+    await waitFor(() => expect(blobs.length).toBe(1));
     const csv = await new Promise<string>((resolve) => { const fr = new FileReader(); fr.onload = () => resolve(String(fr.result)); fr.readAsText(blobs[0] as Blob); });
     expect(csv).not.toContain("secret-row-id");
     expect(csv).not.toContain("Actions");
@@ -116,6 +118,8 @@ describe("DevicesTable", () => {
     (URL.createObjectURL as unknown as ReturnType<typeof vi.fn>).mockImplementation((b: Blob) => { blobs.push(b); return "blob:mock"; });
     render(<DevicesTable items={[dev({ id: "dev-ip", lastIp: "203.0.113.9" })]} />);
     fireEvent.click(screen.getByText("⬇ CSV"));
+    await waitFor(() => expect(blobs.length).toBe(1));
+    await waitFor(() => expect(blobs.length).toBe(1));
     const csv = await new Promise<string>((resolve) => { const fr = new FileReader(); fr.onload = () => resolve(String(fr.result)); fr.readAsText(blobs[0] as Blob); });
     expect(csv).toContain("203.0.113.x");
     expect(csv).not.toContain("203.0.113.9");

@@ -91,7 +91,7 @@ export default async function Page() {
             filterable
             filterPlaceholder="Filter breaches…"
             pageSize={15}
-            exportable
+            exportable exportAudit="helpdesk/catalogue/breaches"
             exportFilename="sla-breach-report"
           />
         )}

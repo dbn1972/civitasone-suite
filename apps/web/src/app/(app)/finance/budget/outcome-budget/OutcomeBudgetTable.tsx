@@ -74,7 +74,7 @@ export function OutcomeBudgetTable({ outcomes, source = "api" }: { outcomes: Row
         filterable
         filterPlaceholder="Search outcomes…"
         pageSize={15}
-        exportable
+        exportable exportAudit="finance/budget/outcome-budget"
         exportFilename="outcome-budget"
         emptyIcon="🎯"
         emptyTitle="No outcomes"

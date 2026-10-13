@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, ConfirmDialog, Modal, Field, Input } from "../../../../_components/ds";
+import { AcceptedNotice, Button, ConfirmDialog, Modal, Field, Input } from "../../../../_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { formatMoney } from "@/lib/formatters";
 import { postWithErrorCode } from "../_lib/postWithErrorCode";
 import {
@@ -40,13 +41,7 @@ export function FnfSettlementActions({ row, viewer }: { row: FnfActionRow; viewe
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentDate, setPaymentDate] = useState("");
   const formId = useId();
-  // The delayed follow-up refresh must not outlive the component: a timer
-  // left running after unmount would call router.refresh() on whatever page
-  // (or test) is current two seconds later.
-  const followUpRefresh = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => {
-    if (followUpRefresh.current) clearTimeout(followUpRefresh.current);
-  }, []);
+  const accepted = useAcceptedWrite();
 
   const { actions, selfExcluded } = fnfAvailability(row, viewer);
   const confirmAction = pending && pending !== "disburse" ? pending : null;
@@ -78,12 +73,8 @@ export function FnfSettlementActions({ row, viewer }: { row: FnfActionRow; viewe
       setMessage(t(`${KEY[action]}Queued`, { name: row.name }));
       setPending(null);
       router.refresh();
-      // The write lands asynchronously; refresh once more so the new status shows up.
-      if (followUpRefresh.current) clearTimeout(followUpRefresh.current);
-      followUpRefresh.current = setTimeout(() => {
-        followUpRefresh.current = null;
-        router.refresh();
-      }, 2000);
+      // The write lands asynchronously (202): say so, with a manual refresh, instead of guessing a delay.
+      void accepted.accept();
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
@@ -100,6 +91,7 @@ export function FnfSettlementActions({ row, viewer }: { row: FnfActionRow; viewe
 
   return (
     <div style={{ padding: "0 18px 14px" }}>
+      <AcceptedNotice {...accepted.noticeProps} />
       {message && (
         <p role="status" aria-live="polite" className="pill good" style={{ width: "fit-content", margin: "0 0 10px" }}>{message}</p>
       )}

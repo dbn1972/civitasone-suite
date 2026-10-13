@@ -32,7 +32,7 @@ export function TDSReturnsTable({ returns, source = "api" }: { returns: Row[]; s
         filterable
         filterPlaceholder="Search TDS deductions…"
         pageSize={15}
-        exportable
+        exportable exportAudit="finance/statutory/tds-returns"
         exportFilename="tds-deductions"
         emptyIcon="📑"
         emptyTitle="No TDS deductions"

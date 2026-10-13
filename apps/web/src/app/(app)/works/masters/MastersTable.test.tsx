@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 vi.mock("@/app/_components/ds", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/app/_components/ds")>();
@@ -8,6 +8,9 @@ vi.mock("@/app/_components/ds", async (importOriginal) => {
     useToast: () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }),
   };
 });
+
+const refresh = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 
 import { MastersTable } from "./MastersTable";
 
@@ -153,5 +156,27 @@ describe("MastersTable — GAP2-WORKS-MASTERS-09 truncation notice", () => {
       <MastersTable masterType="authorities" items={rows} failed={false} canManage={false} parentOptions={[]} />,
     );
     expect(screen.queryByText(/showing the first/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("MastersTable: SF-15 accepted notice after an edit", () => {
+  it("keeps the accepted notice after the edit form closes, and refreshes only on request", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 202 }));
+    render(
+      <MastersTable
+        masterType="work-types"
+        items={[{ id: "wt-9", version: 4, name: "Roads", code: "RD", active: true }]}
+        failed={false}
+        canManage
+        parentOptions={[]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Edit$/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(document.querySelector('[data-accepted-phase="accepted"]')).not.toBeNull());
+    expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
+    expect(refresh).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /Refresh now/i }));
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });

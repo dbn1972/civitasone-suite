@@ -47,7 +47,7 @@ export function TenantModulesTable({ tenantId, modules, source = "api" }: { tena
         filterable
         filterPlaceholder="Search modules…"
         pageSize={15}
-        exportable
+        exportable exportAudit="admin/tenants/id"
         exportFilename="tenant-modules"
         emptyIcon="📦"
         emptyTitle="No modules"

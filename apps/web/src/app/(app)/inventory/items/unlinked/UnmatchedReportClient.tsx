@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Card, DataTable, EmptyState, RefreshErrorState, useToast } from "@/app/_components/ds";
+import { Button, Card, DataTable, EmptyState, RefreshErrorState, useToast, AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { toHumanError } from "@/lib/messages";
 import { useFormError } from "@/lib/useFormError";
-import { postItemLink, LINK_REFRESH_DELAY_MS } from "../../linkApi";
+import { postItemLink } from "../../linkApi";
 import { hasNoRows, type LinkSuggestionRow, type UnmatchedReport } from "../../linkHelpers";
 
 /** Suggested exact matches (with a Confirm button per pair) and the two one-sided lists. */
@@ -15,7 +15,7 @@ export function UnmatchedReportClient({
   report, suggestions,
 }: { report: UnmatchedReport; suggestions: LinkSuggestionRow[] | null }) {
   const t = useTranslations("inventoryLink");
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   const { toast } = useToast();
   const formError = useFormError("item link");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -31,7 +31,7 @@ export function UnmatchedReportClient({
         return;
       }
       toast.success(t("report.confirmed"));
-      setTimeout(() => router.refresh(), LINK_REFRESH_DELAY_MS);
+      void accepted.accept();
     } catch (caught) {
       setMessage(formError.fromException("save", caught).message);
     } finally {
@@ -56,6 +56,7 @@ export function UnmatchedReportClient({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18, marginTop: 18 }}>
+      <AcceptedNotice {...accepted.noticeProps} />
       {report.truncated ? <p role="status" style={{ margin: 0, fontSize: "0.875rem" }}>{t("report.truncated")}</p> : null}
       {!report.stockAvailable ? <p role="status" style={{ margin: 0, fontSize: "0.875rem", color: "#92400e" }}>{t("report.stockUnavailable")}</p> : null}
       <div role="status" aria-live="polite">

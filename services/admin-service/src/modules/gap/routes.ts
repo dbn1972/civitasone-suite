@@ -25,6 +25,7 @@ import * as userExportCommands from "../user-export/commands.js";
 import * as securityExportCommands from "../security-export/commands.js";
 import * as mfaExportCommands from "../mfa-export/commands.js";
 import * as idpExportCommands from "../idp-export/commands.js";
+import * as tableExportCommands from "../table-export/commands.js";
 import * as tenantsRepo from "../tenants/repo.js";
 // Mirrors the web ADMIN_USERS_LIST_LIMIT: the browser can only ever export the rows it loaded.
 const USER_EXPORT_MAX_ROWS = 200;
@@ -403,6 +404,26 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     }).safeParse(req.body);
     if (!parsed.success) throw new HttpError(400, "VALIDATION_FAILED", "body must be { rowCount: number (0-10000), filter?: string | null }");
     return sendAccepted(reply, acceptedResponseSchema, await idpExportCommands.recordIdpExport(ctx, parsed.data.rowCount, (parsed.data.filter ?? "").trim().length > 0));
+  });
+
+  // ─── W1 SF-08: generic audit record for a DataTable CSV export ───
+  // Screens with no resource-specific export-audit route POST here before the
+  // file is built (fail-closed DataTable exportGuard). Any authenticated user:
+  // the web gates the Export button by permission, and the services still
+  // authorize every data read, so this route only ever WRITES an audit record
+  // (actor/tenant/time from the token). 202: the consumer writes the audit row.
+  app.post("/v1/admin/table-exports/audit", async (req, reply) => {
+    const ctx = resolveContext(req);
+    // Staff only: a caller must hold at least one non-citizen role. A citizen
+    // has no staff table to export, so a citizen-only token is refused (403).
+    requireRole(ctx, ctx.roles.filter((r) => r !== "citizen"));
+    const parsed = z.object({
+      resource: z.string().regex(/^[a-z0-9][a-z0-9/_-]{0,99}$/),
+      rowCount: z.number().int().min(0).max(100000),
+      filtered: z.boolean().optional().default(false),
+    }).safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, "VALIDATION_FAILED", "body must be { resource: slug, rowCount: number (0-100000), filtered?: boolean }");
+    return sendAccepted(reply, acceptedResponseSchema, await tableExportCommands.recordTableExport(ctx, parsed.data.resource, parsed.data.rowCount, parsed.data.filtered === true));
   });
 
   // ─── Tenant configuration — real, read from admin-service's own

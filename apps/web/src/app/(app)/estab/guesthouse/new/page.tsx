@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button, PageHeader } from "@/app/_components/ds";
+import { EmployeePicker } from "@/app/_components/EmployeePicker";
 import { useFormError } from "@/lib/useFormError";
 import { istLocalToUtcIso } from "./istLocal";
 
@@ -305,16 +306,19 @@ export default function NewGuesthouseBookingPage() {
                   ))}
                 </select>
               ) : (
-                <input
+                <EmployeePicker
                   id="guestRef"
-                  type="text"
-                  ref={setRef("guestRef")}
-                  value={guestRef}
-                  onChange={(e) => setGuestRef(e.target.value)}
-                  placeholder={staff.length > 0 ? "Employee UUID, if the guest is staff" : "Employee UUID, if staff (directory loading)"}
+                  inputRef={setRef("guestRef")}
                   aria-invalid={fieldErrors.guestRef ? true : undefined}
                   aria-describedby={fieldErrors.guestRef ? "guestRef-error guestRef-help" : "guestRef-help"}
-                  style={inputStyle}
+                  value={guestRef || null}
+                  clearable
+                  placeholder="Search staff, if the guest is staff"
+                  onChange={(empId, option) => {
+                    setGuestRef(empId ?? "");
+                    // Auto-fill guestName from the picked staff member if currently empty.
+                    if (option && !guestName.trim()) setGuestName(option.label.replace(/\s*\([^)]*\)$/, ""));
+                  }}
                 />
               )}
               <span id="guestRef-help" className="sub" style={{ fontSize: 12 }}>

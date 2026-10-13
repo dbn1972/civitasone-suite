@@ -47,7 +47,7 @@ export function InvestigationTable({ rows, source, canViewDetail = false }: { ro
       filterable
       filterPlaceholder="Search investigations..."
       pageSize={15}
-      exportable={canViewDetail}
+      exportable={canViewDetail} exportAudit="audit/investigation"
       exportFilename="investigations"
     />
     </>

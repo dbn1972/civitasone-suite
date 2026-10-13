@@ -146,7 +146,7 @@ export function ProposalsView({
           filterable
           filterPlaceholder="Search proposals..."
           pageSize={15}
-          exportable
+          exportable exportAudit="works/proposals"
           exportFilename="work-proposals"
           emptyIcon="📋"
           emptyTitle="No proposals found"

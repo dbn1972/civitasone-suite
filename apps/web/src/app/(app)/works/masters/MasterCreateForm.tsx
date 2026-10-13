@@ -3,9 +3,10 @@
 import { UserFacingError } from "@/lib/userFacingError";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useToast, Button, EntityPicker, type EntityOption } from "@/app/_components/ds";
+import { AcceptedNotice, useToast, Button, EntityPicker, type EntityOption } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { humanizeMaster, PARENT_FIELD } from "./masterTypes";
 import type { MasterItem, ParentOption } from "./MastersTable";
 
@@ -181,11 +182,6 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 600,
 };
 
-// On create, the write is a 202 CQRS command: the read model may lag. Poll
-// router.refresh() a few times until the row shows up (GAP-WORKS-MASTERS-05)
-// instead of a single fixed 600ms refresh that leaves a slow write invisible.
-const REFRESH_DELAYS_MS = [600, 1500, 3000];
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function MasterCreateForm({
@@ -212,6 +208,7 @@ export function MasterCreateForm({
   canWrite?: boolean;
 }) {
   const router = useRouter();
+  const accepted = useAcceptedWrite();
   const { toast } = useToast();
 
   const isEdit = Boolean(editItem);
@@ -254,14 +251,6 @@ export function MasterCreateForm({
 
   function setValue(key: string, value: string | boolean) {
     setForm((f) => ({ ...f, [key]: value }));
-  }
-
-  function pollRefresh(index = 0) {
-    if (index >= REFRESH_DELAYS_MS.length) return;
-    setTimeout(() => {
-      router.refresh();
-      pollRefresh(index + 1);
-    }, REFRESH_DELAYS_MS[index]);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -319,7 +308,9 @@ export function MasterCreateForm({
       toast.success(isEdit ? "Saved. Changes will reflect shortly." : "Created. Changes will reflect shortly.");
       handleClose();
       onCreated?.();
-      pollRefresh();
+      // On create the write is a 202 CQRS command and the read model may lag (GAP-WORKS-MASTERS-05): show the honest
+      // accepted state with a manual refresh instead of guessing with timed refreshes.
+      void accepted.accept();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -332,13 +323,17 @@ export function MasterCreateForm({
     // GAP-WORKS-HOME-05: a read-only role gets no create control at all.
     if (!canWrite) return null;
     return (
-      <Button
-        variant="primary"
-        onClick={() => setOpen(true)}
-        style={{ minHeight: 38, marginBottom: 4 }}
-      >
-        + Add {typeLabel}
-      </Button>
+      <>
+        <Button
+          variant="primary"
+          onClick={() => setOpen(true)}
+          style={{ minHeight: 38, marginBottom: 4 }}
+        >
+          + Add {typeLabel}
+        </Button>
+        {/* The form closes on submit; the accepted notice outlives it. */}
+        <AcceptedNotice {...accepted.noticeProps} />
+      </>
     );
   }
 

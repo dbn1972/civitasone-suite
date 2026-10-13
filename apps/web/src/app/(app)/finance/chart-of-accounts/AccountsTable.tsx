@@ -167,7 +167,7 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
           identifyingColumnKey="name"
           pageSize={20}
           sortable
-          exportable
+          exportable exportAudit="finance/chart-of-accounts"
           exportFilename="chart-of-accounts"
         />
       )}

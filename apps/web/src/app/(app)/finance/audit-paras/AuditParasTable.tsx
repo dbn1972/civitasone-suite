@@ -65,7 +65,7 @@ export function AuditParasTable({ paras, source = "api", canRespond = false }: {
           filterable
           filterPlaceholder="Search audit paras…"
           pageSize={15}
-          exportable
+          exportable exportAudit="finance/audit-paras"
           exportFilename="audit-paras"
           emptyIcon="📋"
           emptyTitle="No audit paras"

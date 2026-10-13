@@ -119,7 +119,7 @@ export default async function CampaignRoiPage({ params }: { params: { id: string
           ]}
           rows={rows}
           sortable
-          exportable
+          exportable exportAudit="crm/campaigns/id"
           exportFilename={`crm-campaign-${campaign.campaignId}-roi`}
           exportNotice="Exports leave the system; handle spend and revenue figures per policy."
           emptyIcon="🗓️"

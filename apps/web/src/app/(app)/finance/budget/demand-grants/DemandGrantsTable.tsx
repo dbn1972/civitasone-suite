@@ -30,7 +30,7 @@ export function DemandGrantsTable({ grants, source = "api" }: { grants: Row[]; s
         filterable
         filterPlaceholder="Search demands…"
         pageSize={15}
-        exportable
+        exportable exportAudit="finance/budget/demand-grants"
         exportFilename="demand-grants"
         emptyIcon="🏛️"
         emptyTitle="No demands"

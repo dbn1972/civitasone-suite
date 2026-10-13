@@ -7216,6 +7216,7 @@
     "policyNote": "Per DoPT O.M., WFH is permitted for eligible cadres up to <strong>{limit} days per week</strong>. Requests beyond this limit require DG/Secretary approval.",
     "labelEmployee": "Employee ID",
     "placeholderEmployee": "Select employee…",
+    "errorEmployeeRequired": "Choose an employee before submitting.",
     "labelFromDate": "From Date",
     "labelToDate": "To Date",
     "labelReason": "Reason / Purpose",
@@ -9359,6 +9360,7 @@
     "policyNote": "Shift changes require supervisor approval per DoPT staffing guidelines.",
     "labelEmployee": "Employee",
     "placeholderEmployee": "Select employee…",
+    "errorEmployeeRequired": "Choose an employee before submitting.",
     "labelCurrentShift": "Current Shift",
     "labelRequestedShift": "Requested Shift",
     "placeholderShift": "Select shift…",
@@ -9423,7 +9425,24 @@
     "searching": "Searching…",
     "noResults": "No matching employees",
     "clear": "Clear",
-    "clearAriaLabel": "Clear selected employee"
+    "clearAriaLabel": "Clear selected employee",
+    "searchFailed": "Could not load employees. Check your connection and try again."
+  },
+  "directoryPicker": {
+    "placeholder": {
+      "user": "Type a name to search users…",
+      "department": "Type a department name or code…",
+      "location": "Type a location name or city…",
+      "warehouse": "Type a warehouse name or code…"
+    },
+    "searching": "Searching…",
+    "searchFailed": "Could not load the list. Check your connection and try again.",
+    "noResults": {
+      "user": "No matching users",
+      "department": "No matching departments",
+      "location": "No matching locations",
+      "warehouse": "No matching warehouses"
+    }
   },
   "flexElectionApprovals": {
     "noneMessage": "No flex benefit elections are waiting for approval.",
@@ -14951,6 +14970,9 @@
   "idpExport": {
     "notRecorded": "Couldn't record this export in the audit trail, so no file was created. Try again."
   },
+  "tableExport": {
+    "notRecorded": "Couldn't record this export in the audit trail, so no file was created. Try again."
+  },
   "workflowApproveGate": {
     "approveBlockedLoading": "Checking the required documents… Approve is unavailable until the check finishes.",
     "approveBlockedError": "The document checklist could not be loaded, so Approve is unavailable. Use Retry beside the checklist.",
@@ -14968,5 +14990,17 @@
     "chooseFile": "Choose file",
     "remove": "Remove logo",
     "saveFailed": "Couldn't save your changes. Please try again."
+  },
+  "asyncAccepted": {
+    "submitting": "Submitting…",
+    "accepted": "Received. Your change is being applied and will appear shortly.",
+    "pending": "Received. Updating…",
+    "refresh": "Refresh now",
+    "refreshedHint": "Refreshed. If you do not see the change yet, it is still being applied. Try again in a moment.",
+    "confirmed": "Done. The change is now showing.",
+    "timedOut": "Still processing. Your change was received but is not showing yet. Refresh to check again.",
+    "failed": "Could not submit. Nothing was changed.",
+    "dismiss": "Dismiss",
+    "continue": "Continue"
   }
 }

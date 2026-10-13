@@ -74,7 +74,7 @@ export function CashBankTable({
         filterable
         filterPlaceholder="Search entries…"
         pageSize={20}
-        exportable
+        exportable exportAudit="finance/treasury/cash-bank"
         exportFilename="cash-bank-book"
         emptyIcon="📖"
         emptyTitle="No entries"

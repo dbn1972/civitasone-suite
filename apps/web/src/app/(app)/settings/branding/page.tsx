@@ -27,10 +27,12 @@ import { useSessionIdentity } from "@/lib/auth/useSessionIdentity";
 import { ConfirmDialog } from "@/app/_components/ds";
 
 // Roles allowed to edit tenant-wide branding. This is a DISPLAY gate only —
-// theme-service PUT /v1/themes/brand independently calls requireRole with the
-// same set (see tokens/brand-routes.ts ADMIN_ROLES), so hiding the controls
-// here can never grant access, only avoid offering a Save that would 403.
-const BRANDING_ADMIN_ROLES = ["theme_admin", "super_admin", "tenant_admin"];
+// theme-service PUT /v1/themes/brand independently calls requireRole with
+// exactly this set (see tokens/brand-routes.ts ADMIN_ROLES), so hiding the
+// controls here can never grant access, only avoid offering a Save that would
+// 403. Keep the two lists identical: tenant_admin is deliberately NOT here
+// because the backend does not admit it (read-only preview for that role).
+const BRANDING_ADMIN_ROLES = ["theme_admin", "super_admin"];
 
 // Logo upload constraints (GAP-SETTINGS-BRANDING-04). Module scope so the
 // handler's useCallback deps stay stable. These mirror theme-service's
@@ -636,7 +638,7 @@ export default function BrandingPage() {
             role="status"
             className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700"
           >
-            You can preview the current branding, but only a tenant or theme
+            You can preview the current branding, but only a theme
             administrator can change it. Save is disabled.
           </div>
         )}

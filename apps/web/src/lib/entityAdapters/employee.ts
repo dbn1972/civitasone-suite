@@ -1,4 +1,5 @@
 import type { EntityOption } from "@/app/_components/ds";
+import { failStrict } from "./strict";
 
 // GAP-HR-EMPLOYEES-DETAIL-EDIT-05: `status` was always present on the real
 // GET /v1/hrms/employees row (services/hrms-service's queries.listEmployees
@@ -46,7 +47,7 @@ function toOption(row: EmployeeRow): EntityOption {
 export async function searchEmployees(
   query: string,
   signal: AbortSignal,
-  opts?: { excludeStatuses?: readonly string[]; onForbidden?: () => void },
+  opts?: { excludeStatuses?: readonly string[]; onForbidden?: () => void; strict?: boolean },
 ): Promise<EntityOption[]> {
   const res = await fetch(`/api/proxy/v1/hrms/employees?q=${encodeURIComponent(query)}&limit=20`, { signal });
   // GAP-PAYROLL-FNF-05 review: GET /v1/hrms/employees is DIRECTORY_ROLES-gated,
@@ -54,6 +55,7 @@ export async function searchEmployees(
   // pass `onForbidden` can say so explicitly instead of showing a silent
   // "no results"; behavior for every other caller is unchanged.
   if (res.status === 403) opts?.onForbidden?.();
+  failStrict(res, opts);
   if (!res.ok) return [];
   const body = (await res.json()) as { data?: EmployeeRow[] } | EmployeeRow[];
   const rows = Array.isArray(body) ? body : (body.data ?? []);

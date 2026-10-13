@@ -505,7 +505,8 @@ function mapMetrics(payload: unknown): MetricCard[] | null {
     if (!label || !value) continue;
     mapped.push({ label, value, note });
   }
-  return mapped.length > 0 ? mapped : null;
+  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
+  return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
 function mapSlaRules(payload: unknown): SLAQueueSummary[] | null {
@@ -526,7 +527,8 @@ function mapSlaRules(payload: unknown): SLAQueueSummary[] | null {
     if (!queue || !targetDisplay || breachedCount === null) continue;
     mapped.push({ queue, targetDisplay, breachedCount });
   }
-  return mapped.length > 0 ? mapped : null;
+  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
+  return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
 // Exported for unit tests. GAP-HELPDESK-INTERNAL-04: verifies unknown statuses
@@ -697,7 +699,8 @@ function mapLeaveRequests(payload: unknown): LeaveRequestSummary[] | null {
     if (status !== "Pending" && status !== "Approved" && status !== "Rejected") continue;
     mapped.push({ id, employee, leaveType, status });
   }
-  return mapped.length > 0 ? mapped : null;
+  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
+  return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
 function mapAttendance(payload: unknown): AttendanceSummary[] | null {
@@ -714,7 +717,8 @@ function mapAttendance(payload: unknown): AttendanceSummary[] | null {
     if (!date || presentCount === null || absentCount === null || lateCount === null) continue;
     mapped.push({ date, presentCount, absentCount, lateCount });
   }
-  return mapped.length > 0 ? mapped : null;
+  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
+  return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
 function mapPayrollRuns(payload: unknown): PayrollRunSummary[] | null {
@@ -731,7 +735,8 @@ function mapPayrollRuns(payload: unknown): PayrollRunSummary[] | null {
     if (status !== "In Processing" && status !== "Completed" && status !== "Failed") continue;
     mapped.push({ month, grossDisplay, status });
   }
-  return mapped.length > 0 ? mapped : null;
+  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
+  return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
 function mapApprovals(payload: unknown): ApprovalSummary[] | null {
@@ -786,7 +791,8 @@ function mapAccounts(payload: unknown): AccountSummary[] | null {
       ...(row.isControl === true ? { isControl: true } : {}),
     });
   }
-  return mapped.length > 0 ? mapped : null;
+  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
+  return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
 function mapTenantRoles(payload: unknown): RoleAssignmentSummary[] | null {
@@ -806,7 +812,8 @@ function mapTenantRoles(payload: unknown): RoleAssignmentSummary[] | null {
     if (!key) continue;
     mapped.push({ key, assignedUsers });
   }
-  return mapped.length > 0 ? mapped : null;
+  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
+  return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
 function mapTenantSettings(payload: unknown): TenantSettingSummary[] | null {
@@ -827,7 +834,8 @@ function mapTenantSettings(payload: unknown): TenantSettingSummary[] | null {
     if (!name) continue;
     mapped.push({ name });
   }
-  return mapped.length > 0 ? mapped : null;
+  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
+  return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
 export async function getAuditItems(): Promise<LoaderResult<AuditRowSummary[]>> {
@@ -1676,7 +1684,8 @@ function mapCrmContacts(payload: unknown): CRMContactSummary[] | null {
     const expectedValueDisplay = expectedValueMinorRaw ? formatMoney(expectedValueMinorRaw) : undefined;
     mapped.push({ id, name, account, email, phone, leadStatus, tags, lastActivity, temperature, priority, segment, product, region, expectedValueDisplay });
   }
-  return mapped.length > 0 ? mapped : null;
+  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
+  return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
 function mapCrmDeals(payload: unknown): CRMDealSummary[] | null {
@@ -1693,7 +1702,8 @@ function mapCrmDeals(payload: unknown): CRMDealSummary[] | null {
     if (!id || !name || !stage || !stages.has(stage)) continue;
     mapped.push({ id, name, stage: stage as CRMDealSummary["stage"], valueDisplay });
   }
-  return mapped.length > 0 ? mapped : null;
+  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
+  return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
 function formatTimeAgo(iso: string): string {
@@ -1718,7 +1728,8 @@ function mapCrmActivities(payload: unknown): ActivitySummary[] | null {
     if (!id || !actor || !text) continue;
     mapped.push({ id, actor, text, timeAgo: createdAt ? formatTimeAgo(createdAt) : "—" });
   }
-  return mapped.length > 0 ? mapped : null;
+  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
+  return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
 export interface CrmContactsQuery {
@@ -3721,7 +3732,8 @@ function mapDeals(payload: unknown): DealSummary[] | null {
       status: status as DealSummary["status"],
     });
   }
-  return mapped.length > 0 ? mapped : null;
+  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
+  return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
 export async function getDeals(): Promise<LoaderResult<DealSummary[]>> {
@@ -3812,7 +3824,8 @@ function mapPipelines(payload: unknown): PipelineView[] | null {
     stages.sort((a, b) => a.ordinal - b.ordinal);
     mapped.push({ id, name, stages, status });
   }
-  return mapped.length > 0 ? mapped : null;
+  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
+  return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
 export async function getPipelines(): Promise<LoaderResult<PipelineView[]>> {
@@ -3852,7 +3865,8 @@ function mapPipelineDeals(payload: unknown): PipelineDealCard[] | null {
       } : undefined,
     });
   }
-  return mapped.length > 0 ? mapped : null;
+  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
+  return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
 /**

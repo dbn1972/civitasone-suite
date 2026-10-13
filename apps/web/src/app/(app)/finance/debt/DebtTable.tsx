@@ -104,7 +104,7 @@ export function DebtTable({
             filterable
             filterPlaceholder={labels.search}
             pageSize={15}
-            exportable
+            exportable exportAudit="finance/debt"
             exportFilename="debt-portfolio"
             emptyIcon="🏦"
             emptyTitle={labels.emptyTitle}

@@ -64,7 +64,7 @@ export function AlertsTable({ alerts, source = "api" }: { alerts: CitizenAlert[]
           filterable
           filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
-          exportable
+          exportable exportAudit="citizen/alerts"
           exportFilename="citizen-alerts"
           columns={[
             { key: "title", label: t("colTitle") },

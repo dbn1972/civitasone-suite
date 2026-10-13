@@ -4,6 +4,7 @@ import { actionErrorText } from "../../_data/errorText";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, ConfirmDialog } from "@/app/_components/ds";
+import { DirectoryPicker } from "@/app/_components/DirectoryPicker";
 import {
   CONFIDENTIALITY_LEVELS,
   MEETING_TYPES,
@@ -410,17 +411,15 @@ export function NewMeetingForm() {
           >
             <div>
               <label htmlFor="nm-chair" style={labelStyle}>
-                Chairperson user ID
+                Chairperson
               </label>
-              <input
+              <DirectoryPicker
+                source="user"
                 id="nm-chair"
-                type="text"
-                value={form.chairpersonId}
-                placeholder="00000000-0000-0000-0000-000000000000"
-                onChange={(e) => set("chairpersonId", e.target.value)}
-                style={{ ...fieldStyle(Boolean(errors.chairpersonId)), fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
                 aria-invalid={Boolean(errors.chairpersonId)}
                 aria-describedby={errors.chairpersonId ? "nm-chair-err" : "nm-chair-help"}
+                value={form.chairpersonId || null}
+                onChange={(v) => set("chairpersonId", v ?? "")}
               />
               {errors.chairpersonId ? (
                 <div id="nm-chair-err" style={errStyle}>
@@ -435,17 +434,15 @@ export function NewMeetingForm() {
 
             <div>
               <label htmlFor="nm-secretary" style={labelStyle}>
-                Secretary user ID
+                Secretary
               </label>
-              <input
+              <DirectoryPicker
+                source="user"
                 id="nm-secretary"
-                type="text"
-                value={form.secretaryId}
-                placeholder="00000000-0000-0000-0000-000000000000"
-                onChange={(e) => set("secretaryId", e.target.value)}
-                style={{ ...fieldStyle(Boolean(errors.secretaryId)), fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
                 aria-invalid={Boolean(errors.secretaryId)}
                 aria-describedby={errors.secretaryId ? "nm-secretary-err" : "nm-secretary-help"}
+                value={form.secretaryId || null}
+                onChange={(v) => set("secretaryId", v ?? "")}
               />
               {errors.secretaryId ? (
                 <div id="nm-secretary-err" style={errStyle}>
@@ -460,17 +457,15 @@ export function NewMeetingForm() {
 
             <div>
               <label htmlFor="nm-convener" style={labelStyle}>
-                Convener user ID (optional)
+                Convener (optional)
               </label>
-              <input
+              <DirectoryPicker
+                source="user"
                 id="nm-convener"
-                type="text"
-                value={form.convenerId}
-                placeholder="00000000-0000-0000-0000-000000000000"
-                onChange={(e) => set("convenerId", e.target.value)}
-                style={{ ...fieldStyle(Boolean(errors.convenerId)), fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}
                 aria-invalid={Boolean(errors.convenerId)}
                 aria-describedby={errors.convenerId ? "nm-convener-err" : undefined}
+                value={form.convenerId || null}
+                onChange={(v) => set("convenerId", v ?? "")}
               />
               {errors.convenerId && (
                 <div id="nm-convener-err" style={errStyle}>

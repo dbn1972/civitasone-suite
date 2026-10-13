@@ -93,7 +93,7 @@ export function RevisedEstimatesTable({ estimates, source = "api", fy }: { estim
         filterable
         filterPlaceholder="Search estimates…"
         pageSize={15}
-        exportable
+        exportable exportAudit="finance/budget/revised-estimates"
         csvPlainAmounts
         exportFilename="revised-estimates"
         emptyIcon="📊"

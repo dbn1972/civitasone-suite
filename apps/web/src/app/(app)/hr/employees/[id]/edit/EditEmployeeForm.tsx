@@ -4,7 +4,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EmployeeDetail } from "@civitasone/types";
 import { useFormError } from "@/lib/useFormError";
-import { Button, ConfirmDialog, EntityPicker, Field } from "@/app/_components/ds";
+import { AcceptedNotice, Button, ConfirmDialog, EntityPicker, Field } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
+import { acceptedCopy } from "@/lib/acceptedCopy";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { searchPayStructures, resolvePayStructures } from "@/lib/entityAdapters/payStructure";
 import { useTranslations } from "next-intl";
@@ -87,13 +89,7 @@ export function EditEmployeeForm({ employee }: Props) {
   const [tone, setTone] = useState<"success" | "error">("error");
   const [invalidFields, setInvalidFields] = useState<Set<string>>(new Set());
   const formError = useFormError("employee record");
-  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // GAP-HR-EMPLOYEES-DETAIL-EDIT-06: the redirect timeout was never cleared
-  // on unmount (e.g. the user navigates away during the 1.2s window) --
-  // harmless with router.push alone, but paired with router.refresh() it
-  // could refresh a route the user is no longer on.
-  useEffect(() => () => { if (redirectTimer.current) clearTimeout(redirectTimer.current); }, []);
+  const accepted = useAcceptedWrite();
 
   // GAP-HR-EMPLOYEES-DETAIL-EDIT-03: pending patch + confirm-dialog state
   // for the sensitive-field reason prompt (maker-checker per the published
@@ -250,10 +246,8 @@ export function EditEmployeeForm({ employee }: Props) {
       setSubmitted(true);
       setTone("success");
       setMessage(t("updateSubmitted"));
-      redirectTimer.current = setTimeout(() => {
-        router.push(`/hr/employees/${employee.id}`);
-        router.refresh();
-      }, 1200);
+      // 202: no timed redirect that guesses the update has landed; the user continues from the notice.
+      void accepted.accept();
     } catch (caught) {
       setTone("error");
       setMessage(formError.fromException("save", caught).message);
@@ -298,6 +292,11 @@ export function EditEmployeeForm({ employee }: Props) {
             </p>
           )}
         </div>
+        <AcceptedNotice
+          {...accepted.noticeProps}
+          onRefresh={() => { router.push(`/hr/employees/${employee.id}`); router.refresh(); }}
+          labels={{ refresh: acceptedCopy().continue }}
+        />
 
         {/* Read-only summary */}
         <div

@@ -1,8 +1,8 @@
 "use client";
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Button, ConfirmDialog, DataTable, StatusPill } from "@/app/_components/ds";
+import { Button, ConfirmDialog, DataTable, StatusPill, AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useSeededResource } from "@/lib/sync/resource";
 import { platformExportGuard, revealOnboardingContact } from "@/lib/admin/platformExport";
 import {
@@ -37,7 +37,7 @@ export function OnboardingTable({
   canManage?: boolean;
 }) {
   const { data: raw, provenance, offline, cachedAt } = useSeededResource<RawRow[]>("sa.onboarding", queue, source, (d) => d.length === 0);
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   // A move is accepted (202) before the queue shows it: show the new stage meanwhile, but only while the row is
   // still in the stage it was moved FROM, so a refreshed queue (or another operator) always wins.
   const [moved, setMoved] = useState<Record<string, { from: string; to: string }>>({});
@@ -64,7 +64,7 @@ export function OnboardingTable({
     setCreating(false);
     setForm({ orgName: "", contactName: "", contactEmail: "", notes: "" });
     setNotice("Request accepted. It appears in the queue shortly.");
-    setTimeout(() => router.refresh(), 1200);
+    void accepted.accept();
   }
 
   async function submitMove(note: string | undefined) {
@@ -76,7 +76,7 @@ export function OnboardingTable({
     setMoved((p) => ({ ...p, [moving.row.id]: { from: moving.row.stage, to: moving.to } }));
     setNotice(`${moving.row.org}: moved to ${moving.to}.`);
     setMoving(null);
-    setTimeout(() => router.refresh(), 1200);
+    void accepted.accept();
   }
   const s = onboardingStats(rows);
   // GAP-ADMIN-ONBOARDING-05: the API returns the contact MASKED; the clear value is held here only after an
@@ -122,6 +122,7 @@ export function OnboardingTable({
         </div>
       )}
       {notice && <p role="status" style={{ fontSize: 13, margin: "0 0 10px", color: "var(--mut)" }}>{notice}</p>}
+      <AcceptedNotice {...accepted.noticeProps} />
       <DataTable<OnboardingRow>
         columns={[
           { key: "org", label: "Organisation" },

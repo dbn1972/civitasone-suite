@@ -30,8 +30,9 @@ function accessLevelPill(level: string) {
 }
 
 export default async function Page({ params }: { params: { id: string } }) {
-  const { data: doc, source } = await getKnowledgeDocument(params.id);
-  if (!doc && source !== "error") notFound();
+  const { data: doc, source, status } = await getKnowledgeDocument(params.id);
+  // SF-02: only a real 404 is "not found"; other failures render the error state below.
+  if (source === "error" && status === 404) notFound();
   if (!doc) {
     return (
       <>

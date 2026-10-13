@@ -23,7 +23,7 @@ export function ExperimentsTable({ rows }: { rows: ExperimentRow[] }) {
       ]}
       rows={rows}
       sortable
-      exportable
+      exportable exportAudit="notifications/experiments"
       exportFilename="notification-experiments"
       emptyIcon="🧪"
       emptyTitle="No experiments"

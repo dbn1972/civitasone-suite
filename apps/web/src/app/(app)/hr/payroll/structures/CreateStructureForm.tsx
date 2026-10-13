@@ -8,17 +8,16 @@ import { useRouter } from "next/navigation";
 // translatable unit instead of concatenating a fixed-position suffix, so a
 // Hindi (or any other locale) translation can reorder the clause naturally.
 import { useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog, AcceptedNotice } from "../../../../_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { browserJson } from "@/lib/api/browserClient";
-
-/** one delayed follow-up refresh after the 202 (GAP-PAYROLL-STRUCTURES-05) */
-export const CREATE_REFRESH_DELAY_MS = 2000;
 
 type AcceptedResponse = { id: string; status: string; correlationId?: string };
 
 export function CreateStructureForm() {
   const t = useTranslations("createStructureForm");
   const router = useRouter();
+  const accepted = useAcceptedWrite();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [isDefault, setIsDefault] = useState(false);
@@ -33,8 +32,6 @@ export function CreateStructureForm() {
   const defaultId = useId();
   const errId = useId();
   const nameRef = useRef<HTMLInputElement>(null);
-  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => () => { if (refreshTimer.current) clearTimeout(refreshTimer.current); }, []);
   const nameInvalid = tone === "bad" && !!message && !name.trim();
 
   function handleSubmit(e: React.FormEvent) {
@@ -75,7 +72,7 @@ export function CreateStructureForm() {
       router.refresh();
       // GAP-PAYROLL-STRUCTURES-05: creation is async (202 + consumer), so the
       // first refresh can race it. Refresh once more shortly after.
-      refreshTimer.current = setTimeout(() => router.refresh(), CREATE_REFRESH_DELAY_MS);
+      void accepted.accept();
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
@@ -85,6 +82,7 @@ export function CreateStructureForm() {
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
+      <AcceptedNotice {...accepted.noticeProps} />
       <Card title={t("formTitle")} padding>
       <div style={{ display: "grid", gap: 14 }}>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>

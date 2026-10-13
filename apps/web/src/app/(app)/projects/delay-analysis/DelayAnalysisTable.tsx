@@ -62,7 +62,7 @@ export function DelayAnalysisTable({ rows, source = "api" }: { rows: DelayRow[];
         filterable
         filterPlaceholder="Filter projects…"
         pageSize={15}
-        exportable
+        exportable exportAudit="projects/delay-analysis"
         exportFilename="project-delay-analysis"
         emptyIcon="📋"
         emptyTitle="No delay data"

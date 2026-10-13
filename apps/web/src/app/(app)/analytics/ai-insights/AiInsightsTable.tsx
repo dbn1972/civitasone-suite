@@ -36,7 +36,7 @@ export function AiInsightsTable({ rows, source = "api" }: { rows: AnalyticsAiIns
         filterable
         filterPlaceholder="Search insights…"
         pageSize={15}
-        exportable
+        exportable exportAudit="analytics/ai-insights"
         exportFilename="analytics-ai-insights"
         exportNotice="Exports leave the system. These rows may name a module and a recommended action; share the file only for a legitimate purpose."
         emptyIcon="🤖"

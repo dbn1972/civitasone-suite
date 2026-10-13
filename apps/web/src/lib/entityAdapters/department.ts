@@ -1,4 +1,5 @@
 import type { EntityOption } from "@/app/_components/ds";
+import { failStrict, type StrictOpt } from "./strict";
 
 type DepartmentRow = {
   id: string;
@@ -41,14 +42,15 @@ function rowsOf(body: unknown): DepartmentRow[] {
  * / "Public Works Dept" all file as different departments). Returns [] on any
  * non-ok response (the picker shows "No matches" rather than throwing).
  */
-async function fetchAll(signal?: AbortSignal): Promise<DepartmentRow[]> {
+async function fetchAll(signal?: AbortSignal, opts?: StrictOpt): Promise<DepartmentRow[]> {
   const res = await fetch("/api/proxy/v1/hrms/departments", signal ? { signal } : undefined);
+  failStrict(res, opts);
   if (!res.ok) return [];
   return rowsOf(await res.json());
 }
 
-export async function searchDepartments(query: string, signal: AbortSignal): Promise<EntityOption[]> {
-  const rows = await fetchAll(signal);
+export async function searchDepartments(query: string, signal: AbortSignal, opts?: StrictOpt): Promise<EntityOption[]> {
+  const rows = await fetchAll(signal, opts);
   const q = query.trim().toLowerCase();
   const filtered = q
     ? rows.filter(

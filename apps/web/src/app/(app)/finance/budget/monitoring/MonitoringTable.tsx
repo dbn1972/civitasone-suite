@@ -101,7 +101,7 @@ export function MonitoringTable({ lines, source = "api" }: { lines: Row[]; sourc
         filterable
         filterPlaceholder="Search heads…"
         pageSize={20}
-        exportable
+        exportable exportAudit="finance/budget/monitoring"
         csvPlainAmounts
         exportFilename="budget-monitoring"
         emptyIcon="📊"

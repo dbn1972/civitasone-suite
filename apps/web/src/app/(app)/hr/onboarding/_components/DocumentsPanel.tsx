@@ -11,10 +11,11 @@
  * back to "pending" and HR had no way to verify or reject a submission.
  */
 
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { DocumentUploadCard, type OnboardingDocument } from "./DocumentUploadCard";
 import { useFormError } from "@/lib/useFormError";
+import { AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 
 interface DocumentsPanelProps {
   employeeId: string;
@@ -24,7 +25,7 @@ interface DocumentsPanelProps {
 }
 
 export function DocumentsPanel({ employeeId, documents, dpdpNotice }: DocumentsPanelProps) {
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   const [error, setError] = useState<string | null>(null);
   const formError = useFormError("onboarding document");
 
@@ -43,7 +44,7 @@ export function DocumentsPanel({ employeeId, documents, dpdpNotice }: DocumentsP
       // Async write (F3 queue, same as every other mutation in this
       // module) -- refresh shortly after so the real committed status
       // (not just the presigned-upload's own local state) shows up.
-      setTimeout(() => router.refresh(), 1000);
+      void accepted.accept();
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
     }
@@ -51,6 +52,7 @@ export function DocumentsPanel({ employeeId, documents, dpdpNotice }: DocumentsP
 
   return (
     <div>
+      <AcceptedNotice {...accepted.noticeProps} />
       <DocumentUploadCard
         documents={documents}
         dpdpNotice={dpdpNotice}

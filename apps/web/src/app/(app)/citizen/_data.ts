@@ -55,7 +55,8 @@ function mapGrievances(payload: unknown): GrievanceSummary[] | null {
     const dueDate = toText(row.dueDate) ?? toText(row.due_date) ?? null;
     mapped.push({ id, grievanceNo, subject, complainantName, category, status, createdAt, dueDate });
   }
-  return mapped.length > 0 ? mapped : null;
+  // SF-03: an empty list is a valid result; null only when rows existed but none parsed.
+  return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
 export async function getGrievances(): Promise<LoaderResult<GrievanceSummary[]>> {

@@ -11,6 +11,7 @@ import {
   StatGrid,
   StatusPill,
 } from "@/app/_components/ds";
+import { DirectoryPicker } from "@/app/_components/DirectoryPicker";
 import { fmtTime } from "../_data/format";
 import { VisitorPhone } from "../_data/VisitorPhone";
 import type { PassVerifyResult, RosterEntry, VisitRequest, VisitorLocation } from "../_data/types";
@@ -220,7 +221,7 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
                 ))}
               </select>
             ) : (
-              <input id="guard-loc" placeholder="Location UUID" value={locationId} onChange={(e) => setLocationId(e.target.value)} style={fieldStyle} />
+              <DirectoryPicker source="location" id="guard-loc" value={locationId || null} onChange={(v) => setLocationId(v ?? "")} />
             )}
           </div>
           <div>

@@ -199,11 +199,14 @@ describe("BrandingPage", () => {
     expect(screen.getByText(/hard to read/i)).toBeInTheDocument();
   });
 
-  it("hides Save for a user without a branding-admin role (GAP-SETTINGS-BRANDING-03)", async () => {
+  // theme-service PUT /v1/themes/brand admits ONLY theme_admin and super_admin
+  // (tokens/brand-routes.ts ADMIN_ROLES). tenant_admin used to be offered the
+  // controls and then got a 403 on Save, so it is read-only here.
+  it.each([["employee"], ["tenant_admin"]])("is read-only for %s: controls and Save disabled (GAP-SETTINGS-BRANDING-03)", async (role) => {
     vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/api/auth/session")) {
-        return Promise.resolve(new Response(JSON.stringify({ authenticated: true, userId: "u2", roles: ["employee"] }), { status: 200 }));
+        return Promise.resolve(new Response(JSON.stringify({ authenticated: true, userId: "u2", roles: [role] }), { status: 200 }));
       }
       if (url.endsWith("/themes/brand/presets")) {
         return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
@@ -213,11 +216,29 @@ describe("BrandingPage", () => {
 
     render(<BrandingPage />);
     await waitFor(() => expect(screen.getByDisplayValue("Readonly Portal")).toBeInTheDocument());
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/only a tenant or theme administrator/i));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/only a theme administrator/i));
 
     const appNameInput = screen.getByLabelText("App Name") as HTMLInputElement;
     expect(appNameInput).toBeDisabled();
     expect(screen.getByRole("button", { name: /no changes|save/i })).toBeDisabled();
+  });
+
+  it.each([["theme_admin"], ["super_admin"]])("keeps the controls editable for %s", async (role) => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/auth/session")) {
+        return Promise.resolve(new Response(JSON.stringify({ authenticated: true, userId: "u3", roles: [role] }), { status: 200 }));
+      }
+      if (url.endsWith("/themes/brand/presets")) {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ ...FULL_BRAND_CONFIG, appName: "Editable Portal" }), { status: 200 }));
+    });
+
+    render(<BrandingPage />);
+    await waitFor(() => expect(screen.getByDisplayValue("Editable Portal")).toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+    expect(screen.getByLabelText("App Name")).not.toBeDisabled();
   });
 
   it("rejects an oversized logo file with a clear message (GAP-SETTINGS-BRANDING-04)", async () => {

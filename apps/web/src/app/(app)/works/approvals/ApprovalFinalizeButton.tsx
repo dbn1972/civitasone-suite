@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { ConfirmDialog, useToast, Button } from "@/app/_components/ds";
+import { ConfirmDialog, useToast, Button, AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
 import { FINALIZABLE_STATUSES, FINALIZED_STATUSES } from "@/lib/auth/workRoles";
 
@@ -35,7 +35,7 @@ export function ApprovalFinalizeButton({
   status,
   canFinalize = true,
 }: ApprovalFinalizeButtonProps) {
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -77,6 +77,7 @@ export function ApprovalFinalizeButton({
   // done. Colour + icon + text (never colour alone) so the state is legible.
   if (submitted) {
     return (
+      <>
       <span
         role="status"
         aria-live="polite"
@@ -94,6 +95,8 @@ export function ApprovalFinalizeButton({
       >
         ⏳ Finalization pending
       </span>
+      <AcceptedNotice {...accepted.noticeProps} />
+      </>
     );
   }
 
@@ -139,7 +142,7 @@ export function ApprovalFinalizeButton({
       toast.success(
         `${label} submitted for finalization. It will show as finalized once processed.`,
       );
-      setTimeout(() => router.refresh(), 800);
+      void accepted.accept();
     } catch (caught) {
       setErrorMessage(formError.fromException("save", caught).message);
     } finally {

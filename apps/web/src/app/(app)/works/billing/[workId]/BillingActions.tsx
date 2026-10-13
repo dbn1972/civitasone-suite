@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { ConfirmDialog, useToast, Card, Button } from "@/app/_components/ds";
+import { ConfirmDialog, useToast, Card, Button, AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
 import {
   BILL_FINALIZE_SEQUENCE,
@@ -44,7 +44,7 @@ function stepDescription(
 }
 
 export function BillingActions({ workId, canFinalize, bills }: BillingActionsProps) {
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   const { toast } = useToast();
 
   // ── Bill finalize ──────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ export function BillingActions({ workId, canFinalize, bills }: BillingActionsPro
         `Bill ${billDialog.billNo} advanced to ${billStatusLabel(billDialog.nextStatus)}.`,
       );
       setBillDialog(null);
-      setTimeout(() => router.refresh(), 600);
+      void accepted.accept();
     } catch (caught) {
       setBillError(billFormError.fromException("save", caught).message);
     } finally {
@@ -154,7 +154,7 @@ export function BillingActions({ workId, canFinalize, bills }: BillingActionsPro
       );
       setMbDialog(null);
       await loadMbs();
-      setTimeout(() => router.refresh(), 600);
+      void accepted.accept();
     } catch (caught) {
       setMbError(mbFormError.fromException("save", caught).message);
     } finally {
@@ -181,6 +181,7 @@ export function BillingActions({ workId, canFinalize, bills }: BillingActionsPro
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 16 }}>
+      <AcceptedNotice {...accepted.noticeProps} />
       {/* ── Bill finalization stepper ──────────────────────────────────────── */}
       {actionableBills.length > 0 && (
         <Card title="Finalize Bills">

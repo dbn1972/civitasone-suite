@@ -400,7 +400,7 @@ Counts: ACTION 28, BACKEND-VERIFY 5, REFUTED 1
 
 ### GAP-MEETING-MEETINGS-NEW-01  ·  HIGH  ·  confirmed  ·  theme INPUT (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-06: closed by #2013, replaces the raw-UUID Chairperson/Secretary/Convener boxes with a user-directory picker; supersedes the W0 PROVISIONAL tick)
 - **First-pass claim:** Chairperson, Secretary and Convener are free-text UUID fields with a 00000000-... placeholder (NewMeetingForm.tsx:343,368,393; validation "Enter a valid user ID (UUID format)"). Government clerks do not know user UUIDs; there is no employee search, so this form is unusable without copying ids from elsewhere. Wrong-but-valid UUIDs silently assign a stranger as chair.
 - **Verified evidence:** NewMeetingForm.tsx: Chairperson/Secretary/Convener are type=text inputs with placeholder 00000000-0000-0000-0000-000000000000 (~:340-395), validated by UUID_RE with 'Enter a valid user ID (UUID format).' (:115-116). Only committees have a list loader (listCommittees, client.ts:120). No user search in meeting _data. A valid-but-wrong UUID is accepted. A user-directory endpoint is not visible in the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/meeting/meetings/new/NewMeetingForm.tsx`, `apps/web/src/app/(app)/meeting/_data/client.ts`, `apps/web/src/app/_components/ds/UserPicker.tsx (new)`
@@ -431,7 +431,7 @@ Counts: ACTION 28, BACKEND-VERIFY 5, REFUTED 1
 
 ### GAP-MEETING-MEETINGS-NEW-03  ·  MEDIUM  ·  partly  ·  theme COPY (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-06 re-confirmed on this branch (NewMeetingForm.test.tsx confidentiality-explanation test passes): closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Meeting type and confidentiality option labels come from raw enum tokens via humanize-less rendering (MEETING_TYPES, CONFIDENTIALITY_LEVELS, types.ts:34-50), e.g. "ad_hoc", "top_secret"; no explanation of what each confidentiality level restricts.
 - **Verified evidence:** Options render humanize(t) (NewMeetingForm.tsx:263, :445) so labels are 'Ad hoc', 'Top secret' not raw tokens; the observation's 'humanize-less' claim is wrong. Valid part: no explanation of what each confidentiality level restricts (helper text absent near :433-450).
 - **Files to change:** `apps/web/src/app/(app)/meeting/meetings/new/NewMeetingForm.tsx`
@@ -460,7 +460,7 @@ Counts: ACTION 28, BACKEND-VERIFY 5, REFUTED 1
 
 ### GAP-MEETING-MEETINGS-NEW-05  ·  LOW  ·  partly  ·  theme DIRTYFORM (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-06 re-confirmed on this branch (NewMeetingForm.test.tsx Cancel dirty/pristine tests pass): closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** A 202 with a fixed NAVIGATE_DELAY_MS pause then navigation; if the id is missing it sends the user to the list without confirming what was created (NewMeetingForm.tsx:190-197). Cancel discards silently without a dirty-form warning.
 - **Verified evidence:** NewMeetingForm.tsx:55 NAVIGATE_DELAY_MS=900; after 202 it shows created alert then pushes to /meeting/meetings/{id} (:190-197) or the list when id missing (:200-204). The list fallback is silent (created flag already shows a success alert). Cancel (:484-490) does router.push without dirty check - confirmed; no beforeunload either. A ConfirmDialog with reason/maker-checker is not applicable.
 - **Files to change:** `apps/web/src/app/(app)/meeting/meetings/new/NewMeetingForm.tsx`

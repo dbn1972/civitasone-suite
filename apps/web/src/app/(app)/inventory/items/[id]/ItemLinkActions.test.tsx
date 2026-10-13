@@ -25,7 +25,7 @@ const SUGGESTION = { stockItemId: "s9", stockItemCode: "PAPER-A", stockItemName:
 const wrap = (ui: React.ReactElement) => <NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>;
 
 describe("ItemLinkActions: confirming the exact-code suggestion", () => {
-  it("POSTs the pair as 'suggested' with an x-idempotency-key, announces success, and refreshes later", async () => {
+  it("POSTs the pair as 'suggested' with an x-idempotency-key, announces success, and shows the accepted notice (no timed refresh)", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     fetchMock.mockResolvedValue(new Response("{}", { status: 202 }));
     render(wrap(<ItemLinkActions inventoryItemId="i1" link={null} suggestion={SUGGESTION} />));
@@ -37,8 +37,11 @@ describe("ItemLinkActions: confirming the exact-code suggestion", () => {
     expect(init.method).toBe("POST");
     expect(init.headers["x-idempotency-key"]).toMatch(/\S+/);
     expect(JSON.parse(init.body)).toEqual({ inventoryItemId: "i1", stockItemId: "s9", source: "suggested" });
-    vi.advanceTimersByTime(1000);
-    expect(refresh).toHaveBeenCalled();
+    await waitFor(() => expect(document.querySelector('[data-accepted-phase="accepted"]')).not.toBeNull());
+    vi.advanceTimersByTime(10_000);
+    expect(refresh).not.toHaveBeenCalled(); // a timer must not fake completion
+    fireEvent.click(screen.getByRole("button", { name: "Refresh now" }));
+    expect(refresh).toHaveBeenCalledTimes(1);
     vi.useRealTimers();
   });
 
@@ -72,5 +75,9 @@ describe("ItemLinkActions: removing a link", () => {
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Link removal submitted."));
     expect(fetchMock.mock.calls[0][0]).toBe("/api/proxy/v1/inventory/item-links/l1");
     expect(fetchMock.mock.calls[0][1].method).toBe("DELETE");
+    await waitFor(() => expect(document.querySelector('[data-accepted-phase="accepted"]')).not.toBeNull());
+    expect(refresh).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh now" }));
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });

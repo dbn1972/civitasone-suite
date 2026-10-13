@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { DataTable, Button, ConfirmDialog } from "@/app/_components/ds";
+import { DataTable, Button, ConfirmDialog, AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
 
@@ -21,7 +21,7 @@ export interface IssuesTableRow extends Record<string, unknown> {
  * gates the control UI-side; the service stays authoritative (403).
  */
 export function IssuesTable({ rows, canClose }: { rows: IssuesTableRow[]; canClose: boolean }) {
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   const { toast } = useToast();
   const [target, setTarget] = useState<IssuesTableRow | null>(null);
   const [busy, setBusy] = useState(false);
@@ -47,7 +47,7 @@ export function IssuesTable({ rows, canClose }: { rows: IssuesTableRow[]; canClo
       toast.success("Issue closed.");
       setTarget(null);
       setBusy(false);
-      setTimeout(() => router.refresh(), 400);
+      void accepted.accept();
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
       setBusy(false);
@@ -84,6 +84,7 @@ export function IssuesTable({ rows, canClose }: { rows: IssuesTableRow[]; canClo
 
   return (
     <>
+      <AcceptedNotice {...accepted.noticeProps} />
       <DataTable
         columns={columns}
         rows={rows}
@@ -91,7 +92,7 @@ export function IssuesTable({ rows, canClose }: { rows: IssuesTableRow[]; canClo
         filterable
         filterPlaceholder="Search issues..."
         pageSize={20}
-        exportable
+        exportable exportAudit="works/execution/issues"
         exportFilename="works-issues"
         rowLinkKey="workId"
         rowLinkPrefix="/works/execution/"

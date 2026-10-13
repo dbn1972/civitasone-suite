@@ -75,7 +75,7 @@ export function ClosureTable({ closures, source }: { closures: Record<string, un
         filterable
         filterPlaceholder="Search works..."
         pageSize={15}
-        exportable
+        exportable exportAudit="works/closure"
         exportFilename={`works-closure-${tabKey}`}
         emptyIcon="🔒"
         emptyTitle="No records found"

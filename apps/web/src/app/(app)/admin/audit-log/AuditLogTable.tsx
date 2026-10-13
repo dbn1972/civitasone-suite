@@ -4,6 +4,7 @@ import { DataTable, Segmented, StatusPill } from "@/app/_components/ds";
 import type { AdminAuditLogEntry } from "@/app/_data/loaders";
 import { formatIndianDateTime } from "@/lib/formatters";
 import { SYSTEM_ACTOR_ID } from "@/lib/systemActor";
+import { postExportAudit, type ExportVerdict } from "@/lib/export/csvExport";
 
 type Row = AdminAuditLogEntry & Record<string, unknown>;
 
@@ -16,13 +17,9 @@ type OutcomeOption = (typeof OUTCOME_OPTIONS)[number];
  * audit readers only -- the same people who can load this page). Fire-and-forget:
  * a failing audit call never blocks the user's own download.
  */
-export async function recordAuditLogExport(info: { rowCount: number; filter: string }): Promise<void> {
-  await fetch("/api/proxy/v1/admin/audit-logs/export-audit", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    // Only whether a search was active is recorded, never the raw search text.
-    body: JSON.stringify({ rowCount: info.rowCount, filtered: info.filter.trim() !== "" }),
-  });
+export async function recordAuditLogExport(info: { rowCount: number; filter: string }): Promise<ExportVerdict> {
+  // Only whether a search was active is recorded, never the raw search text.
+  return postExportAudit("/api/proxy/v1/admin/audit-logs/export-audit", { rowCount: info.rowCount, filtered: info.filter.trim() !== "" });
 }
 
 /**
@@ -79,7 +76,7 @@ export function AuditLogTable({ entries }: { entries: AdminAuditLogEntry[] }) {
         pageSize={25}
         exportable
         exportFilename="audit-log"
-        onExport={(info) => { void recordAuditLogExport(info).catch(() => undefined); }}
+        exportGuard={recordAuditLogExport}
         emptyIcon="🔍"
         emptyTitle={noEventsAtAll ? "No audit events yet" : "No audit events match"}
         emptyMessage={noEventsAtAll ? "Events appear here as actions are recorded." : "Adjust the filters above to find events."}

@@ -65,3 +65,5 @@ export { UserRef } from "./UserRef";
 export type { UserRefProps } from "./UserRef";
 export { Stepper } from "./Stepper";
 export type { StepperProps } from "./Stepper";
+export { AcceptedNotice } from "./AcceptedNotice";
+export type { AcceptedNoticeProps } from "./AcceptedNotice";

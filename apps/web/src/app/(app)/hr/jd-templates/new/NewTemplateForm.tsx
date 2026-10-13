@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Button, Field, Input, Textarea, ConfirmDialog } from "../../../../_components/ds";
+import { AcceptedNotice, Button, Field, Input, Textarea, ConfirmDialog } from "../../../../_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
+import { acceptedCopy } from "@/lib/acceptedCopy";
 
 // GAP-HR-JD-TEMPLATES-DETAIL-05 / NEW-04: labels now match the list page's
 // own filter-chip wording exactly (jdTemplates.filter* -- "Volunteer" not
@@ -65,6 +67,7 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
   const tAction = useTranslations("action");
   const TYPE_LABEL = typeLabels(t);
   const router = useRouter();
+  const accepted = useAcceptedWrite();
   const isEdit = !!templateId;
   const [name, setName] = useState("");
   const [vacancyType, setVacancyType] = useState("regular");
@@ -210,10 +213,8 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
       setDirty(false);
       setStatus("success");
       setMessage(isEdit ? t("updateSubmitted") : t("createSubmitted"));
-      setTimeout(() => {
-        router.push("/hr/jd-templates");
-        router.refresh();
-      }, 1000);
+      // 202: no timed redirect that guesses the write has landed; the user continues from the notice.
+      void accepted.accept();
     } catch {
       setStatus("error");
       setMessage(t("networkError"));
@@ -339,6 +340,11 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
             {message}
           </p>
         )}
+        <AcceptedNotice
+          {...accepted.noticeProps}
+          onRefresh={() => { router.push("/hr/jd-templates"); router.refresh(); }}
+          labels={{ refresh: acceptedCopy().continue }}
+        />
 
         <div style={{ display: "flex", gap: 10 }}>
           <Button type="submit" variant="primary" disabled={status === "submitting" || status === "success"}>

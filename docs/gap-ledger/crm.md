@@ -895,7 +895,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CAMPAIGNS-05  ·  LOW  ·  partly  ·  theme EXPORT (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-08 #2012 (export is permission-gated and fail-closed audited): closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Table offers CSV export of spend and revenue with no note that the file leaves the tenant boundary or is logged (exportable=true) (app/(app)/crm/campaigns/CampaignRoiTable.tsx:66).
 - **Verified evidence:** exportable is set (CampaignRoiTable.tsx:109; detail page :93). DataTable.downloadCsv (ds/DataTable.tsx:~275-290) builds a Blob client-side and downloads it: no notice, no audit call, nothing logged. The data is campaign spend/revenue aggregates, not personal data, so PII tag is overstated; the real gap is no export notice/audit for a finance-sensitive file.
 - **Files to change:** `apps/web/src/app/_components/ds/DataTable.tsx`, `apps/web/src/app/(app)/crm/campaigns/CampaignRoiTable.tsx`, `apps/web/src/app/(app)/crm/campaigns/[id]/page.tsx`
@@ -987,7 +987,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-01  ·  HIGH  ·  partly  ·  theme PII/EXPORT (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-08 #2012 (export is permission-gated and fail-closed audited): closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Export downloads every contact (name, phone, email) as a JSON file from a bare ghost button visible to all CRM roles: no ConfirmDialog, purpose or reason, it ignores the active filters, and nothing on the page shows the export is logged (app/(app)/crm/contacts/ContactToolbar.tsx:26).
 - **Verified evidence:** ContactToolbar.tsx:22-40, 60: ghost 'Export' button, no role check or dialog, calls browserFetch('v1/crm/contacts/export') without query params (l.26) so page filters are ignored, then downloads body.data as JSON. Shown to whoever sees the page. Fields exported and whether the backend audits/role-gates the export cannot be verified (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/ContactToolbar.tsx`, `apps/web/src/app/(app)/crm/contacts/page.tsx`
@@ -5228,7 +5228,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-02  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-08 #2012 (export is permission-gated and fail-closed audited): closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** ⬇ CSV exports the loaded rows including citizen names to any CRM user with no role gate, purpose prompt or audit note; citizen names are personal data under DPDP (ServiceRequestsTable.tsx:112, ds/DataTable.tsx:298).
 - **Verified evidence:** ServiceRequestsTable.tsx:159-160 sets exportable + exportFilename; DataTable.tsx:267-292 downloadCsv writes every column value (ref, citizen name, service type, subject, priority, status, created) for all sorted rows from the client, with no role check, purpose prompt or audit call. The CRM layout admits crm_user and above, so any of them can export. Cells are also not protected against CSV formula injection. Observation's line 112/298 approximate.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/ServiceRequestsTable.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`, `apps/web/src/app/(app)/crm/service-requests/page.tsx`

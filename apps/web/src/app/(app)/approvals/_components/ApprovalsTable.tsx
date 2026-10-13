@@ -91,7 +91,7 @@ export function ApprovalsTable({ initialData, source }: ApprovalsTableProps) {
         filterable
         filterPlaceholder="Filter by name, module, status…"
         pageSize={15}
-        exportable
+        exportable exportAudit="approvals/_components"
         exportFilename="my-approvals"
         columns={[
           {

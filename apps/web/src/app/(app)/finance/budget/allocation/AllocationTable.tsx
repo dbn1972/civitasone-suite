@@ -32,7 +32,7 @@ export function AllocationTable({ allocations, source = "api" }: { allocations: 
         filterable
         filterPlaceholder="Search allocations…"
         pageSize={15}
-        exportable
+        exportable exportAudit="finance/budget/allocation"
         exportFilename="budget-allocations"
         emptyIcon="📊"
         emptyTitle="No allocations"

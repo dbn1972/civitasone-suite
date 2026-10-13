@@ -42,7 +42,7 @@ describe("LoanSearchForm (GAP-PAYROLL-LOANS-01)", () => {
     renderForm();
     fireEvent.change(screen.getByLabelText("Employee"), { target: { value: "Asha" } });
 
-    await waitFor(() => expect(searchEmployeesMock).toHaveBeenCalledWith("Asha", expect.any(AbortSignal)));
+    await waitFor(() => expect(searchEmployeesMock).toHaveBeenCalledWith("Asha", expect.any(AbortSignal), { strict: true }));
     fireEvent.mouseDown(await screen.findByText("Asha Rao (EMP-001)"));
 
     expect(pushMock).toHaveBeenCalledWith(`/hr/payroll/loans?empId=${EMP_ID}`);

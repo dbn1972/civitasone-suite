@@ -20,6 +20,7 @@ import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { useAsyncMutation } from "@/lib/useAsyncMutation";
 import { Button } from "../../../_components/ds";
+import { EmployeePicker } from "../../../_components/EmployeePicker";
 
 type CreatedRequest = { id: string };
 type ShiftRequestsList = { data: Array<{ id: string }> };
@@ -99,6 +100,8 @@ export function ShiftChangeRequestForm({
   // navigate (or fall back to "still processing").
   const asyncMutation = useAsyncMutation<CreatedRequest, ShiftRequestsList>({
     mutate: async () => {
+      // The employee picker has no native `required`; refuse an empty pick here.
+      if (!employeeId) throw new UserFacingError(t("errorEmployeeRequired"));
       let res: Response;
       try {
         res = await fetch("/api/proxy/v1/hrms/shift-requests", {
@@ -190,16 +193,7 @@ export function ShiftChangeRequestForm({
               ))}
             </select>
           ) : (
-            <input
-              id={idEmp}
-              style={inputStyle}
-              value={employeeId}
-              onChange={(e) => setEmployeeId(e.target.value)}
-              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-              pattern="[0-9a-fA-F-]{36}"
-              required
-              aria-required="true"
-            />
+            <EmployeePicker id={idEmp} value={employeeId || null} onChange={(id) => setEmployeeId(id ?? "")} />
           )}
         </div>
       )}

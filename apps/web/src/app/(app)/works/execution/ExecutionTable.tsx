@@ -85,7 +85,7 @@ export function ExecutionTable({
               filterable
               filterPlaceholder="Search works..."
               pageSize={15}
-              exportable
+              exportable exportAudit="works/execution"
               exportFilename="works-execution-progress"
               emptyIcon="🏗️"
               emptyTitle="No execution data"
@@ -115,7 +115,7 @@ export function ExecutionTable({
               filterable
               filterPlaceholder="Search issues..."
               pageSize={15}
-              exportable
+              exportable exportAudit="works/execution"
               exportFilename="works-execution-issues"
               emptyIcon="🚧"
               emptyTitle="No issues found"

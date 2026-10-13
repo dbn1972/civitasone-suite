@@ -25,7 +25,7 @@ export function SsoTable({ providers, source }: { providers: SsoProvider[]; sour
       filterable
       filterPlaceholder="Search providers..."
       pageSize={15}
-      exportable
+      exportable exportAudit="tenant-admin/sso"
       exportFilename="sso-providers"
     />
   );

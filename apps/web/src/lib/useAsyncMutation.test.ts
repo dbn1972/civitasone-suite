@@ -263,3 +263,42 @@ describe("useAsyncMutation", () => {
     expect(result.current.error).toBeNull();
   });
 });
+
+describe("useAsyncMutation without a poll (SF-15 accepted state)", () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("settles at 'accepted' after a successful mutate and never polls or confirms", async () => {
+    const mutate = vi.fn().mockResolvedValue({ id: "a" });
+    const { result } = renderHook(() => useAsyncMutation<Mutated, Polled>({ mutate }));
+    await act(async () => { await result.current.run(); });
+    expect(result.current.phase).toBe("accepted");
+    expect(result.current.isBusy).toBe(false);
+    expect(result.current.mutateResult).toEqual({ id: "a" });
+    await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+    expect(result.current.phase).toBe("accepted");
+  });
+
+  it("accept() enters the accepted phase without calling mutate", async () => {
+    const mutate = vi.fn();
+    const { result } = renderHook(() => useAsyncMutation<Mutated, Polled>({ mutate }));
+    await act(async () => { await result.current.accept({ id: "z" }); });
+    expect(mutate).not.toHaveBeenCalled();
+    expect(result.current.phase).toBe("accepted");
+    expect(result.current.mutateResult).toEqual({ id: "z" });
+  });
+
+  it("accept() polls when a poll is configured and confirms", async () => {
+    const poll = vi.fn().mockResolvedValue({ data: [{ id: "z" }] });
+    const onConfirmed = vi.fn();
+    const { result } = renderHook(() =>
+      useAsyncMutation<Mutated, Polled>({ mutate: vi.fn(), poll, isDone, onConfirmed, initialDelayMs: 10 }),
+    );
+    let p!: Promise<void>;
+    act(() => { p = result.current.accept({ id: "z" }); });
+    expect(result.current.phase).toBe("pending");
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); await p; });
+    expect(result.current.phase).toBe("confirmed");
+    expect(onConfirmed).toHaveBeenCalledTimes(1);
+  });
+});

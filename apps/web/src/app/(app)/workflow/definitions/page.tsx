@@ -119,7 +119,7 @@ export default async function WorkflowDefinitionsPage() {
             rowLinkPrefix="/workflow/definitions/"
             sortable
             filterable
-            exportable
+            exportable exportAudit="workflow/definitions"
             filterPlaceholder="Search workflows…"
           />
         )}

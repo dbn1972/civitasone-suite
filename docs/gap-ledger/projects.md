@@ -396,7 +396,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-BENEFICIARIES-01  ·  HIGH  ·  partly  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1869, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-08 #2012 (export is permission-gated and fail-closed audited): closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** DPDP: beneficiary names, social category and disbursement are shown to every module user with no role gate or masking and can be exported in one click to CSV (BeneficiariesTable.tsx:46-54; page.tsx has no requireAnyRole).
 - **Verified evidence:** BeneficiariesTable.tsx:16-22 shows Name, District, Category, Disbursement columns and DataTable exportable (line 53) downloads CSV of all sorted rows (DataTable.tsx:274-290) with no audit/masking. page.tsx has no requireAnyRole; projects/layout.tsx only applies ModuleGate (tenant module flag). Server-side role scoping in the projects service cannot be verified (service absent). No Aadhaar/phone shown; category is sensitive social category.
 - **Files to change:** `apps/web/src/app/(app)/projects/beneficiaries/page.tsx`, `apps/web/src/app/(app)/projects/beneficiaries/BeneficiariesTable.tsx`, `apps/web/src/app/(app)/projects/beneficiaries/layout.tsx`
@@ -615,7 +615,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DPR-TRACKING-03  ·  MEDIUM  ·  partly  ·  theme LINK/PII (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1869, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-08 #2012 (export is permission-gated and fail-closed audited): closed by #1869, verified on main 9c5e9e9e9)
 - **First-pass claim:** DPR number is not linked to a project or document, and “Submitted By” is free text (possibly a named officer — DPDP-relevant) shown to every module user (DprTrackingTable.tsx:6-14).
 - **Verified evidence:** DprTrackingTable.tsx:6-14 row type has dprNo, projectTitle, submittedBy (plain string), no projectId, so DPR number and title are unlinked (no rowLinkPrefix at :46-58). Table is exportable (:53) so submittedBy goes into CSV and, via useSeededResource('projects.dprs') (:31), is also written to the offline cache on the device. Whether submittedBy is a named person is unknown (could be an agency); no <Masked> component exists in the repo (only a local MaskedInput in hr Step4). Access is only the module gate (projects/layout.tsx).
 - **Files to change:** `apps/web/src/app/(app)/projects/dpr-tracking/DprTrackingTable.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`, `apps/web/src/app/_data/loaders.ts`

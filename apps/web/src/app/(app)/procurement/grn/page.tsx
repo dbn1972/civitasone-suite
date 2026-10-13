@@ -112,7 +112,7 @@ export default async function GRNPage() {
             filterable
         filterPlaceholder="Filter by GRN no, PO ref, vendor…"
             pageSize={10}
-            exportable
+            exportable exportAudit="procurement/grn"
             columns={[
               { key: "grnNo", label: "GRN No" },
               { key: "poRef", label: "PO Ref" },

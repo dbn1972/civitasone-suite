@@ -43,7 +43,7 @@ export function TechAdminTable({ services, source = "api", fetchedAt }: { servic
           { key: "uptime", label: "Uptime", align: "right", render: (r) => formatUptime(r.uptime) },
           { key: "status", label: "Status", render: (r) => (r.status == null || r.status === "" ? "—" : <StatusPill status={String(r.status)} variant={serviceStatusTone(r.status)} />) },
         ]}
-        rows={rows} sortable filterable filterPlaceholder="Search services…" pageSize={20} exportable exportFilename="tech-admin" emptyIcon="⚙️" emptyTitle="No services" emptyMessage="Service health data not available."
+        rows={rows} sortable filterable filterPlaceholder="Search services…" pageSize={20} exportable exportAudit="admin/tech-admin" exportFilename="tech-admin" emptyIcon="⚙️" emptyTitle="No services" emptyMessage="Service health data not available."
       />
       </Card>
     </>

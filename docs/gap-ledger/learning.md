@@ -531,7 +531,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COURSES-DETAIL-03  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed W1 SF-02/03 (#2010): closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** The course cannot be consumed: lessons are listed without links and no lesson-player or progress route exists in learning/ (POST /learning/lessons/:id/progress is never called from web), so “Enrol to start learning” has no next step.
 - **Verified evidence:** Lesson table (courses/[id]/page.tsx:79-88) has no links; no lesson player route exists (learning/ has assessments, calendar, competency, courses, my-learning, training-plans only) and grep finds no web call to /learning/lessons/:id/progress. The enrol form posts to /api/v1/hrms/learning/courses/:id/enroll (:46); no post-enrol redirect visible. contentUri is in the Lesson type (_data.ts:30) but never displayed. my-learning has resumeLessonId with no destination route.
 - **Files to change:** `apps/web/src/app/(app)/learning/courses/[id]/lessons/[lessonId]/page.tsx`, `apps/web/src/app/(app)/learning/courses/[id]/page.tsx`, `apps/web/src/app/(app)/learning/my-learning/page.tsx`, `apps/web/src/app/(app)/learning/_data.ts`
@@ -714,7 +714,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-TRAINING-PLANS-02  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-06 re-confirmed on this branch (training-plans/page.tsx has the HR-gated New plan action and CreatePlanForm now uses a department picker): closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Empty state tells HR admins they can create plans, but there is no create action or route and the page does no role check (page.tsx:35-39; POST /training-plans is HR_ROLES, learning/routes.ts:263-266).
 - **Verified evidence:** Empty-state message at apps/web/src/app/(app)/learning/training-plans/page.tsx:86-90 says HR admins can create plans; page has no create button/route and no role check. Backend POST /v1/hrms/learning/training-plans requires HR_ROLES (learning/routes.ts:263-266) and accepts title, planYear, departmentId?, roleCode?. Session roles helper exists: getSessionRoles in @/lib/auth/roleGuard (used in hr/disciplinary/page.tsx:5,42).
 - **Files to change:** `apps/web/src/app/(app)/learning/training-plans/page.tsx`, `apps/web/src/app/(app)/learning/training-plans/new/page.tsx (new)`, `apps/web/src/app/(app)/learning/training-plans/new/CreatePlanForm.tsx (new)`

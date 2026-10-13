@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { ActionButton, DataTable, Segmented, StatusPill } from "@/app/_components/ds";
 import type { PillVariant } from "@/app/_components/ds/StatusPill";
 import { humanizeStatus } from "@/lib/formatters";
+import { postExportAudit, type ExportVerdict } from "@/lib/export/csvExport";
 
 export type DeviceRow = {
   id: string;
@@ -88,13 +89,9 @@ function IpCell({ row }: { row: DeviceRow }) {
  * each export is recorded (hrms-service POST /v1/hrms/devices/export-audit, same
  * roles as the list). Fire-and-forget: it never blocks the user's own download.
  */
-export async function recordDeviceExport(info: { rowCount: number; filter: string }): Promise<void> {
-  await fetch("/api/proxy/v1/hrms/devices/export-audit", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    // Only whether a search was active is recorded, never the raw search text.
-    body: JSON.stringify({ rowCount: info.rowCount, filtered: info.filter.trim() !== "" }),
-  });
+export async function recordDeviceExport(info: { rowCount: number; filter: string }): Promise<ExportVerdict> {
+  // Only whether a search was active is recorded, never the raw search text.
+  return postExportAudit("/api/proxy/v1/hrms/devices/export-audit", { rowCount: info.rowCount, filtered: info.filter.trim() !== "" });
 }
 
 async function setDeviceTrust(id: string, action: "block" | "unblock", reason?: string): Promise<void> {
@@ -203,7 +200,7 @@ export function DevicesTable({ items }: { items: DeviceRow[] }) {
         pageSize={25}
         exportable
         exportFilename="devices"
-        onExport={(info) => { void recordDeviceExport(info).catch(() => undefined); }}
+        exportGuard={recordDeviceExport}
         emptyIcon="📱"
         emptyTitle={items.length === 0 ? "No devices yet" : "No devices match"}
         emptyMessage={items.length === 0 ? "Devices appear here once employees sign in from the app." : "Try a different status or search."}

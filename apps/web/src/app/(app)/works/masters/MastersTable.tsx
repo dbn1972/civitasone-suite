@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { DataTable, Card, Button, ConfirmDialog, RefreshErrorState, useToast } from "@/app/_components/ds";
+import { DataTable, Card, Button, ConfirmDialog, RefreshErrorState, useToast, AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { formatMoney } from "@/lib/formatters";
 import { MasterCreateForm } from "./MasterCreateForm";
 import { humanizeMaster, PARENT_FIELD, TYPE_COLUMNS, type MasterType, type MasterColumn } from "./masterTypes";
@@ -36,7 +36,7 @@ interface MastersTableProps {
 type DisplayRow = Record<string, string> & { __id: string; __version: string };
 
 export function MastersTable({ masterType, items, failed, canManage, parentOptions, total }: MastersTableProps) {
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   const { toast } = useToast();
   const formError = useFormError("master data");
   const typeLabel = humanizeMaster(masterType);
@@ -116,7 +116,7 @@ export function MastersTable({ masterType, items, failed, canManage, parentOptio
       }
       toast.success("Deactivated. Changes will reflect shortly.");
       setDeactivating(null);
-      setTimeout(() => router.refresh(), 600);
+      void accepted.accept();
     } catch (err) {
       toast.error(formError.fromException("save", err).message);
     } finally {
@@ -126,6 +126,7 @@ export function MastersTable({ masterType, items, failed, canManage, parentOptio
 
   return (
     <>
+      <AcceptedNotice {...accepted.noticeProps} />
       {canManage && !editing && (
         <MasterCreateForm masterType={masterType} parentOptions={parentOptions} />
       )}
@@ -135,6 +136,8 @@ export function MastersTable({ masterType, items, failed, canManage, parentOptio
           parentOptions={parentOptions}
           editItem={editing}
           onDone={() => setEditing(null)}
+          // The edit form unmounts on save, so the table owns the accepted notice (and its refresh).
+          onCreated={() => void accepted.accept()}
         />
       )}
 

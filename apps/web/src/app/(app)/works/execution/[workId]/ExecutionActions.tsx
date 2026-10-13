@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { ConfirmDialog, useToast, Card, Button } from "@/app/_components/ds";
+import { ConfirmDialog, useToast, Card, Button, AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
 
 interface ExecutionActionsProps {
@@ -17,7 +17,7 @@ interface ExecutionActionsProps {
 type ClosureType = "closed" | "dropped" | "completion";
 
 export function ExecutionActions({ workId, canManage = true, openIssues = null }: ExecutionActionsProps) {
-  const router = useRouter();
+  const accepted = useAcceptedWrite();
   const { toast } = useToast();
 
   // ── Physical Completion Certificate ────────────────────────────────────────
@@ -46,7 +46,7 @@ export function ExecutionActions({ workId, canManage = true, openIssues = null }
       }
       toast.success("Work physically marked as complete.");
       setPhysDialog(false);
-      setTimeout(() => router.refresh(), 600);
+      void accepted.accept();
     } catch (caught) {
       setPhysError(physFormError.fromException("save", caught).message);
     } finally {
@@ -79,7 +79,7 @@ export function ExecutionActions({ workId, canManage = true, openIssues = null }
       }
       toast.success(`Work closed (${closureType}).`);
       setClosureDialog(false);
-      setTimeout(() => router.refresh(), 600);
+      void accepted.accept();
     } catch (caught) {
       setClosureError(closureFormError.fromException("save", caught).message);
     } finally {
@@ -89,6 +89,7 @@ export function ExecutionActions({ workId, canManage = true, openIssues = null }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 16 }}>
+      <AcceptedNotice {...accepted.noticeProps} />
       {!canManage ? (
         <Card title="Completion & Closure">
           <p style={{ padding: "16px 20px", margin: 0, fontSize: 13, color: "var(--muted)" }}>

@@ -152,12 +152,10 @@ describe("WFHRequestForm — UX-016 clerk-safe errors", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   async function submitValidForm(props: { redirectHref?: string } = {}) {
-    render(<WFHRequestForm payLevel={5} weeklyWfhCount={0} {...props} />);
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText(/employee id/i), {
-        target: { value: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" },
-      });
-    });
+    // The employee is chosen through EmployeePicker now (SF-06), not typed as a
+    // UUID; these tests are about the submit/error path, so seed the employee
+    // via the same `employeeId` prop a profile page passes.
+    render(<WFHRequestForm employeeId="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" payLevel={5} weeklyWfhCount={0} {...props} />);
     await act(async () => {
       fireEvent.change(screen.getByLabelText(/from date/i), { target: { value: "2026-09-20" } });
     });
