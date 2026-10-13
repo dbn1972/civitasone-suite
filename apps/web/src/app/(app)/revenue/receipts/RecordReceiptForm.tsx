@@ -5,21 +5,13 @@ import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
+import { rupeesToMinorString } from "@/lib/money";
 import { REVENUE_CHANNELS, channelLabel, channelNeedsInstrument } from "@/lib/revenue/channels";
 import type { DemandOption } from "./page";
 
 type AcceptedResponse = { id?: string; status?: string; correlationId?: string };
 
 const CHANNELS = REVENUE_CHANNELS;
-
-/** Convert a rupees-and-paise decimal string (clerk input) into a minor-unit integer string. */
-function rupeesToMinorString(v: string): string | null {
-  const trimmed = v.trim();
-  if (!trimmed) return null;
-  const n = Number(trimmed);
-  if (!Number.isFinite(n) || n <= 0) return null;
-  return Math.round(n * 100).toString();
-}
 
 export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string; demands: DemandOption[] }) {
   const router = useRouter();
