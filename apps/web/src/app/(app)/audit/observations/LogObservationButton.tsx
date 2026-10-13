@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
-import { Button, ConfirmDialog } from "@/app/_components/ds";
+import { Button, ConfirmDialog, Modal } from "@/app/_components/ds";
 
 interface FormState {
   obsNo: string;
@@ -32,7 +32,6 @@ export function LogObservationButton() {
   const [form, setForm] = useState<FormState>(EMPTY);
   // GAP-AUDIT-OBSERVATIONS-05: confirm gate before the create mutation.
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const titleId = useId();
   const formError = useFormError("observation");
 
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -62,15 +61,6 @@ export function LogObservationButton() {
     // literal isn't, so omitting it here is safe.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
   }, [busy]);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") close();
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, close]);
 
   const submit = useCallback(async (reason?: string) => {
     setError(null);
@@ -129,15 +119,15 @@ export function LogObservationButton() {
   return (
     <>
       <Button onClick={() => setOpen(true)}>+ Log Observation</Button>
-      {open && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby={titleId}
-          style={{ position: "fixed", inset: 0, background: "rgba(16,24,40,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}
-        >
-          <div className="card" style={{ width: "min(520px,100%)", maxHeight: "90vh", overflowY: "auto" }}>
-            <div className="card-h"><h3 id={titleId}>Log audit observation</h3></div>
+      {/* SF-19: ds/Modal (focus trap, inert background, Escape). Overlay click never discards typed input. */}
+      <Modal
+        open={open}
+        onClose={() => { if (!confirmOpen) close(); }}
+        title="Log audit observation"
+        size="lg"
+        closeOnOverlayClick={false}
+      >
+          <div style={{ maxHeight: "70vh", overflowY: "auto" }}>
             <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <label className="lbl" htmlFor="obs-no">Observation no.</label>
               <input id="obs-no" className="inp" value={form.obsNo} onChange={(e) => set("obsNo", e.target.value)} placeholder="OBS-2026-001" />
@@ -187,8 +177,7 @@ export function LogObservationButton() {
               </div>
             </div>
           </div>
-        </div>
-      )}
+      </Modal>
 
       {/* GAP-AUDIT-OBSERVATIONS-05: confirm gate summarising the observation
           before the create mutation. Reason is optional per policy. */}

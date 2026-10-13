@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, ConfirmDialog } from "../../../../_components/ds";
+import { Button, ConfirmDialog, Modal } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Mode = "reply" | "refer" | "review-accept" | "review-reject";
@@ -19,7 +19,6 @@ function Dialog({
   onClose: () => void;
 }) {
   const router = useRouter();
-  const titleId = useId();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,14 +34,6 @@ function Dialog({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const formError = useFormError("observation action");
-
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape" && !busy && !confirmOpen) onClose();
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [busy, confirmOpen, onClose]);
 
   function validateForm(): boolean {
     if (mode === "review-accept" || mode === "review-reject") {
@@ -133,15 +124,15 @@ function Dialog({
 
   return (
     <>
-      {!isReview && (
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        style={{ position: "fixed", inset: 0, background: "rgba(16,24,40,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}
+      {/* SF-19: ds/Modal (focus trap, inert background, Escape). Overlay click never discards typed input. */}
+      <Modal
+        open={!isReview}
+        onClose={() => { if (!busy && !confirmOpen) onClose(); }}
+        title={mode === "reply" ? "Record auditee reply (ATN)" : "Refer — draft audit para"}
+        size="lg"
+        closeOnOverlayClick={false}
       >
-        <div className="card" style={{ width: "min(520px,100%)", maxHeight: "90vh", overflowY: "auto" }}>
-          <div className="card-h"><h3 id={titleId}>{mode === "reply" ? "Record auditee reply (ATN)" : "Refer — draft audit para"}</h3></div>
+        <div style={{ maxHeight: "70vh", overflowY: "auto" }}>
           <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
             {mode === "reply" ? (
               <>
@@ -184,8 +175,7 @@ function Dialog({
             </div>
           </div>
         </div>
-      </div>
-      )}
+      </Modal>
 
       {/* Confirm gate — required reason before the irreversible audit action executes */}
       <ConfirmDialog

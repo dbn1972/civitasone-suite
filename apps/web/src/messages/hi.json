@@ -13869,9 +13869,19 @@
     "priority_normal": "सामान्य",
     "priority_low": "निम्न"
   },
+  "trainingNew": {
+    "dirtyConfirmMessage": "इस बिना सहेजे प्रशिक्षण कार्यक्रम को छोड़ें?",
+    "discardTitle": "इस प्रशिक्षण कार्यक्रम को छोड़ें?",
+    "discardConfirm": "छोड़ें",
+    "keepEditing": "संपादन जारी रखें"
+  },
   "crmGrievanceNew": {
     "invalidPhone": "मान्य फ़ोन नंबर दर्ज करें (जैसे 9876543210 या +91 9876543210)।",
     "invalidEmail": "मान्य ईमेल पता दर्ज करें (जैसे name@example.com)।",
+    "discardTitle": "इस शिकायत को छोड़ें?",
+    "discardMessage": "आपके बिना सहेजे बदलाव खो जाएँगे।",
+    "discardConfirm": "छोड़ें",
+    "keepEditing": "संपादन जारी रखें",
     "title": "नई शिकायत",
     "subtitle": "नागरिक की शिकायत या परिवाद दर्ज करें।",
     "backLabel": "शिकायतें",

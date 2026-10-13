@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, EmptyState, ConfirmDialog } from "@/app/_components/ds";
+import { Button, EmptyState, ConfirmDialog, Modal } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { useFormError } from "@/lib/useFormError";
@@ -199,11 +199,14 @@ export function DomainClient({ domains: initialDomains, source }: { domains: Cus
         onCancel={() => { if (!deleting) { setPendingDelete(null); deleteError.clear(); } }}
       />
 
-      {showAddModal && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Add Custom Domain">
-          {/* GAP-TENANT-ADMIN-DOMAIN-04: token-based colours (dark-mode safe). */}
-          <div className="modal-content" style={{ maxWidth: 450, padding: 24, borderRadius: 8, background: "var(--bg, #fff)", color: "var(--ink)" }}>
-            <h3>Register Custom Domain</h3>
+      {/* SF-19: ds/Modal (focus trap, inert background, Escape). Overlay click never discards typed input. */}
+      <Modal
+        open={showAddModal}
+        onClose={() => { setShowAddModal(false); addError.clear(); }}
+        title="Register Custom Domain"
+        closeOnOverlayClick={false}
+      >
+          <div style={{ color: "var(--ink)" }}>
             <form onSubmit={handleAddDomain}>
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="domain-name">Domain Name</label>
@@ -223,13 +226,16 @@ export function DomainClient({ domains: initialDomains, source }: { domains: Cus
               </div>
             </form>
           </div>
-        </div>
-      )}
+      </Modal>
 
       {showInstructions && instructionDomain && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="DNS Instructions">
-          <div className="modal-content" style={{ maxWidth: 520, padding: 24, borderRadius: 8, background: "var(--bg, #fff)", color: "var(--ink)" }}>
-            <h3>DNS Verification Instructions</h3>
+        <Modal
+          open
+          onClose={() => setShowInstructions(null)}
+          title="DNS Verification Instructions"
+          size="lg"
+        >
+          <div style={{ color: "var(--ink)" }}>
             <p style={{ color: "var(--ink2)", margin: "8px 0 16px" }}>Add the following record to your DNS configuration:</p>
             <div style={{ background: "var(--surface2, #f1f5f9)", color: "var(--ink)", padding: 16, borderRadius: 6, fontFamily: "monospace", fontSize: 13 }}>
               {instructionDomain.verificationMethod === "dns_txt" ? (
@@ -257,7 +263,7 @@ export function DomainClient({ domains: initialDomains, source }: { domains: Cus
               <Button variant="ghost" onClick={() => setShowInstructions(null)}>Close</Button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </>
   );

@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
-import { Button } from "@/app/_components/ds";
+import { Button, Modal } from "@/app/_components/ds";
 import { riskScore, band, BAND_LABEL, LIKELIHOOD_LABEL, IMPACT_LABEL, CATEGORY_LABEL } from "@/lib/audit/riskScoring";
 
 const LIKELIHOOD = ["rare", "unlikely", "possible", "likely", "almost_certain"] as const;
@@ -12,7 +12,6 @@ const CATEGORY = ["financial", "operational", "compliance", "reputational", "str
 
 export function AddRiskButton() {
   const router = useRouter();
-  const titleId = useId();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,15 +25,6 @@ export function AddRiskButton() {
   const formError = useFormError("risk");
 
   const close = useCallback(() => { if (!busy) { setOpen(false); setError(null); } }, [busy]);
-
-  useEffect(() => {
-    if (!open) return;
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") close();
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, close]);
 
   const submit = useCallback(async () => {
     setError(null);
@@ -74,11 +64,9 @@ export function AddRiskButton() {
   return (
     <>
       <Button onClick={() => setOpen(true)}>+ Add Risk</Button>
-      {open && (
-        <div role="dialog" aria-modal="true" aria-labelledby={titleId}
-          style={{ position: "fixed", inset: 0, background: "rgba(16,24,40,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
-          <div className="card" style={{ width: "min(520px,100%)", maxHeight: "90vh", overflowY: "auto" }}>
-            <div className="card-h"><h3 id={titleId}>Add risk</h3></div>
+      {/* SF-19: ds/Modal (focus trap, inert background, Escape). Overlay click never discards typed input. */}
+      <Modal open={open} onClose={close} title="Add risk" size="lg" closeOnOverlayClick={false}>
+          <div style={{ maxHeight: "70vh", overflowY: "auto" }}>
             <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <label className="lbl" htmlFor="rk-code">Risk code</label>
               <input id="rk-code" className="inp" value={riskCode} onChange={(e) => setRiskCode(e.target.value)} placeholder="RISK-2026-007" />
@@ -121,8 +109,7 @@ export function AddRiskButton() {
               </div>
             </div>
           </div>
-        </div>
-      )}
+      </Modal>
     </>
   );
 }

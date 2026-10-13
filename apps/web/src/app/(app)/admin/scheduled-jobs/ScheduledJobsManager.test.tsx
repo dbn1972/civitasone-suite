@@ -173,14 +173,16 @@ describe("ScheduledJobsManager - reload failures, history errors, layout, copy",
     route({
       "GET /job-1/history": () => new Response(JSON.stringify({ data: [{ id: "r1", jobId: "job-1", startedAt: "2026-10-01T00:00:00.000Z", completedAt: null, durationMs: null, status: "running", errorMessage: null }] }), { status: 200 }),
     });
-    const { container } = render(<ScheduledJobsManager initialJobs={[{ ...job, lastRunStatus: "running" }]} source="api" />);
+    render(<ScheduledJobsManager initialJobs={[{ ...job, lastRunStatus: "running" }]} source="api" />);
     fireEvent.click(screen.getByRole("button", { name: /history/i }));
     await screen.findByRole("table", { name: "Execution history" });
-    const panel = Array.from(container.querySelectorAll<HTMLElement>("div")).find((d) => d.style.position === "fixed")!;
-    expect(panel.style.width).toBe("min(480px, 100vw)");
-    expect(panel.style.maxWidth).toBe("100vw");
+    // SF-19: the panel is a ds/Modal dialog -- sized by the shared .modal-panel rule
+    // (width:100% inside the padded overlay, max-width capped), never a fixed pixel width.
+    const panel = screen.getByRole("dialog", { name: "Execution History" });
+    expect(panel.className).toContain("modal-panel");
+    expect(panel.style.width).toBe("");
     expect(screen.getByRole("table", { name: "Execution history" }).parentElement!.style.overflowX).toBe("auto");
-    expect(container.innerHTML).not.toMatch(/animation/);
+    expect(document.body.innerHTML).not.toMatch(/animation/);
   });
 
   it("schedule text carries AM/PM and never prints garbage for step expressions", () => {

@@ -2,9 +2,10 @@
 
 /**
  * Accessible modal dialog listing all keyboard shortcuts,
- * grouped by category. Supports focus trap and Escape to close.
+ * grouped by category. Built on ds/Modal (SF-19), which owns the focus trap,
+ * inert background, Escape and focus restore.
  */
-import { useEffect, useRef } from "react";
+import { Modal } from "./ds/Modal";
 import type { Shortcut } from "./KeyboardShortcuts";
 
 interface ShortcutSheetProps {
@@ -14,47 +15,6 @@ interface ShortcutSheetProps {
 }
 
 export function ShortcutSheet({ open, onClose, shortcuts }: ShortcutSheetProps) {
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const closeButtonRef = useRef<HTMLButtonElement>(null);
-
-  // Focus trap + Escape handling
-  useEffect(() => {
-    if (!open) return;
-
-    // Focus the close button when opening
-    closeButtonRef.current?.focus();
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        onClose();
-        return;
-      }
-
-      // Simple focus trap within the dialog
-      if (e.key === "Tab" && dialogRef.current) {
-        const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        );
-        if (focusable.length === 0) return;
-
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last?.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first?.focus();
-        }
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [open, onClose]);
-
   if (!open) return null;
 
   const grouped = {
@@ -64,40 +24,10 @@ export function ShortcutSheet({ open, onClose, shortcuts }: ShortcutSheetProps) 
   };
 
   return (
-    <div
-      className="shortcut-sheet-overlay"
-      role="presentation"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 9999,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "rgba(0, 0, 0, 0.5)",
-      }}
-    >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Keyboard shortcuts"
-        style={{
-          background: "var(--surface, #fff)",
-          borderRadius: 12,
-          padding: "24px 32px",
-          maxWidth: 520,
-          width: "90vw",
-          maxHeight: "80vh",
-          overflow: "auto",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Keyboard Shortcuts</h2>
+    <Modal open onClose={onClose} title="Keyboard Shortcuts" zIndex={9999}>
+      <div style={{ maxHeight: "70vh", overflow: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
           <button
-            ref={closeButtonRef}
             onClick={onClose}
             aria-label="Close shortcuts dialog"
             style={{
@@ -148,6 +78,6 @@ export function ShortcutSheet({ open, onClose, shortcuts }: ShortcutSheetProps) 
           Press the first key, then the second within 1.5 seconds. Shortcuts are disabled while typing in inputs.
         </p>
       </div>
-    </div>
+    </Modal>
   );
 }

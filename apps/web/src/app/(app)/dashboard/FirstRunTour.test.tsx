@@ -50,7 +50,7 @@ describe("FirstRunTour", () => {
     render(<FirstRunTour />);
     // The backdrop is the dialog's own presentation-role ancestor; only a
     // click on it directly (not a bubbled click from inside the card) closes.
-    fireEvent.click(screen.getByRole("presentation"));
+    fireEvent.mouseDown(screen.getByRole("presentation"));
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(localStorage.getItem(STORAGE_KEY)).toBeTruthy();

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { formatRupees } from "@/lib/formatters";
-import { Button, StatusPill } from "@/app/_components/ds";
+import { Button, Modal, StatusPill } from "@/app/_components/ds";
 
 type SlipRow = {
   id: string;
@@ -90,54 +90,21 @@ function SalarySlipModal({
   // silently hiding a mismatch behind a 10px disclaimer.
   const reconciles = slip.gross - slip.deductions === slip.net;
 
+  // SF-19: ds/Modal (focus trap, inert background, Escape, focus restore).
   return (
-    <div
-      role="presentation"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 9000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "rgba(0,0,0,0.42)",
-        padding: 16,
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="slip-dlg-title"
-        style={{
-          background: "var(--surface,#fff)",
-          borderRadius: 12,
-          width: "100%",
-          maxWidth: 520,
-          maxHeight: "92vh",
-          overflowY: "auto",
-          boxShadow: "0 8px 40px rgba(0,0,0,0.2)",
-        }}
-      >
+    <Modal open onClose={onClose} title={t("paySlipTitle", { period: payPeriod })} size="lg">
+      <div style={{ maxHeight: "80vh", overflowY: "auto" }}>
         {/* Header */}
         <div
           style={{
-            padding: "14px 20px",
-            borderBottom: "1px solid var(--line,#e2e8f0)",
+            padding: "0 0 10px",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
           }}
         >
-          <div>
-            <div id="slip-dlg-title" style={{ fontWeight: 700, fontSize: 15 }}>
-              {t("paySlipTitle", { period: payPeriod })}
-            </div>
-            <div style={{ fontSize: 11, color: "var(--mut,#64748b)", marginTop: 2 }}>
-              {t("indicativeSlipNotice")}
-            </div>
+          <div style={{ fontSize: 11, color: "var(--mut,#64748b)" }}>
+            {t("indicativeSlipNotice")}
           </div>
           <button
             type="button"
@@ -218,7 +185,7 @@ function SalarySlipModal({
           {t("slipFooterNotice")}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }
 

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { Modal } from "./ds/Modal";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -297,25 +298,21 @@ export function GlobalSearch() {
   const showEmpty = hasQuery && !loading && !error && results.length === 0;
   const showHint = !hasQuery && !loading;
 
+  // SF-19: ds/Modal (focus trap, inert background, Escape, focus restore) replaces the
+  // hand-rolled dialog. The heading is visually hidden -- a command palette shows its
+  // input, not a title -- and the panel is restyled to the palette look (top-aligned,
+  // unpadded) with Tailwind important modifiers over the base .modal-* rules.
   return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-start justify-center pt-[15vh]"
-      role="presentation"
+    <Modal
+      open
+      onClose={() => setOpen(false)}
+      title="Global search"
+      titleClassName="sr-only"
+      zIndex={9999}
+      overlayClassName="!place-items-start !pt-[15vh]"
+      panelClassName="relative !max-w-[560px] !p-0 bg-white dark:bg-gray-900 rounded-xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700"
     >
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={() => setOpen(false)}
-        aria-hidden="true"
-      />
-
-      {/* Dialog */}
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Global search"
-        className="relative w-full max-w-[560px] bg-white dark:bg-gray-900 rounded-xl shadow-2xl overflow-hidden border border-gray-200 dark:border-gray-700"
-      >
+      <div>
         {/* Input row */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-200 dark:border-gray-700">
           <svg
@@ -469,6 +466,6 @@ export function GlobalSearch() {
           )}
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

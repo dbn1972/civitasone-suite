@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { Button } from "../ds";
+import { Button, Modal } from "../ds";
 import { downloadServerCsv } from "@/lib/crm/crmExport";
 
 /**
@@ -69,22 +69,14 @@ export function ServerExportButton({
         {t("button")}
       </Button>
 
-      {open && (
-        <div
-          role="dialog"
-          aria-label={title}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            padding: 12,
-            border: "1px solid var(--line)",
-            borderRadius: "var(--r)",
-            background: "var(--panel)",
-            maxWidth: 420,
-          }}
-        >
-          <strong style={{ fontSize: 14 }}>{title}</strong>
+      {/* SF-19: ds/Modal (focus trap, inert background, Escape, focus restore). */}
+      <Modal
+        open={open}
+        onClose={() => { if (!busy) { setOpen(false); setPurpose(""); setError(null); } }}
+        title={title}
+        closeOnOverlayClick={false}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <p style={{ fontSize: 13, color: "var(--ink2)", margin: 0 }}>{description}</p>
           <label style={{ fontSize: 13, display: "flex", flexDirection: "column", gap: 4 }}>
             {t("purposeLabel")}
@@ -104,10 +96,13 @@ export function ServerExportButton({
               {t("cancel")}
             </Button>
           </div>
+          {error && (
+            <p role="alert" style={{ fontSize: 13, color: "var(--danger, #b42318)", margin: 0 }}>{error}</p>
+          )}
         </div>
-      )}
+      </Modal>
 
-      {error && (
+      {!open && error && (
         <p role="alert" style={{ fontSize: 13, color: "var(--danger, #b42318)", margin: 0 }}>{error}</p>
       )}
       {done && (
