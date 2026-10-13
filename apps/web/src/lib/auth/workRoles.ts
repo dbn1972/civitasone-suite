@@ -14,6 +14,15 @@
  */
 export const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
+/**
+ * W1 SF-05a: who may use the audited reveal on the employee master
+ * (POST /v1/hrms/pii/reveal). Mirrors REVEALABLE_EMPLOYEE_FIELDS in
+ * services/hrms-service/src/modules/employee/pii-reveal.ts -- the service
+ * enforces it regardless; this only hides the button from roles that would 403.
+ */
+export const EMPLOYEE_PII_REVEAL_ROLES = ["hr_admin", "super_admin"];
+export const EMPLOYEE_PHONE_REVEAL_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+
 export const PROPOSAL_WRITE_ROLES = [
   "works_admin",
   "works_operator",
