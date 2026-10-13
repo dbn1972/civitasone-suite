@@ -641,7 +641,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-ANOMALIES-08  ·  LOW  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-08 #2012 (export is permission-gated and fail-closed audited): closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** CSV export 'ms-predictions' (RecentPredictionsTable.tsx:159-160) exports entity ids and scores for the whole table with no role gate or DPDP purpose note.
 - **Verified evidence:** RecentPredictionsTable.tsx:66-67 sets exportable + exportFilename='ms-predictions'; DataTable.tsx:276-291 downloadCsv builds the CSV client-side from the currently sorted rows (all filtered rows, not just the page) with no permission check, purpose note or audit event. Access control is only ModuleGate moduleKey='analytics' (analytics/layout.tsx). Original :159-160 refs wrong (actual 66-67). Data exported: entityId, prediction, confidence, outcome, date; no names or PII columns, so 'PII' is overstated unless entityId maps to a person (e.g. leads/contacts). No <Masked> component exists in apps/web/src/app/_components. Backend RBAC/audit is cannot-verify (ms-service absent).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -868,7 +868,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-LEADS-06  ·  LOW  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-08 #2012 (export is permission-gated and fail-closed audited): closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** CSV export 'ms-predictions' (RecentPredictionsTable.tsx:159-160) exports entity ids and scores for the whole table with no role gate or DPDP purpose note.
 - **Verified evidence:** RecentPredictionsTable.tsx:66-67 sets exportable + exportFilename='ms-predictions'; DataTable.tsx:276-291 downloadCsv builds the CSV client-side from the currently sorted rows (all filtered rows, not just the page) with no permission check, purpose note or audit event. Access control is only ModuleGate moduleKey='analytics' (analytics/layout.tsx). Original :159-160 refs wrong (actual 66-67). Data exported: entityId, prediction, confidence, outcome, date; no names or PII columns, so 'PII' is overstated unless entityId maps to a person (e.g. leads/contacts). No <Masked> component exists in apps/web/src/app/_components. Backend RBAC/audit is cannot-verify (ms-service absent). Leads link to crm/contacts/[id] (route exists), so exported ids may identify individuals - the DPDP concern is more real here.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -982,7 +982,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-06  ·  LOW  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-08 #2012 (export is permission-gated and fail-closed audited): closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** CSV export 'ms-predictions' (RecentPredictionsTable.tsx:159-160) exports entity ids and scores for the whole table with no role gate or DPDP purpose note.
 - **Verified evidence:** RecentPredictionsTable.tsx:66-67 sets exportable + exportFilename='ms-predictions'; DataTable.tsx:276-291 downloadCsv builds the CSV client-side from the currently sorted rows (all filtered rows, not just the page) with no permission check, purpose note or audit event. Access control is only ModuleGate moduleKey='analytics' (analytics/layout.tsx). Original :159-160 refs wrong (actual 66-67). Data exported: entityId, prediction, confidence, outcome, date; no names or PII columns, so 'PII' is overstated unless entityId maps to a person (e.g. leads/contacts). No <Masked> component exists in apps/web/src/app/_components. Backend RBAC/audit is cannot-verify (ms-service absent).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -1122,7 +1122,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-SUBSCRIPTIONS-07  ·  LOW  ·  partly  ·  theme EXPORT (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-08 #2012 (export is permission-gated and fail-closed audited): closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** CSV export 'ms-predictions' (RecentPredictionsTable.tsx:159-160) exports entity ids and scores for the whole table with no role gate or DPDP purpose note.
 - **Verified evidence:** RecentPredictionsTable.tsx:66-67 sets exportable + exportFilename='ms-predictions' (not :159-160); DataTable.tsx:275-291 builds a client-side CSV Blob of the already-rendered (max recentPredictions) rows and downloads it - no role gate, no audit call, no purpose note. Overstated: it exports only the rows the page already showed (formatted % strings and entity ids), not 'the whole table' server-side, and the ids are business record ids, not direct personal data (whether they are PII depends on the domain; unverified). The page itself is reachable by anyone with route access; server-side authorization not verifiable here.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
