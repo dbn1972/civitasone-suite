@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ConfirmDialog, useToast, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { FINALIZABLE_STATUSES, FINALIZED_STATUSES } from "@/lib/auth/workRoles";
+import { formatShortId } from "@/lib/formatters";
 
 interface ApprovalFinalizeButtonProps {
   id: string;
@@ -162,7 +163,7 @@ export function ApprovalFinalizeButton({
             ? "Finalize Administrative Approval"
             : "Finalize Technical Sanction"
         }
-        description={`This finalizes ${label.toLowerCase()} ${id.slice(0, 8)}… and locks it for the next stage of the work. This action cannot be undone.`}
+        description={`This finalizes ${label.toLowerCase()} ${formatShortId(id)}… and locks it for the next stage of the work. This action cannot be undone.`}
         confirmLabel="Finalize"
         danger
         busy={busy}

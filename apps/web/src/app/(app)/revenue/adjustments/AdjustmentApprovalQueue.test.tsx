@@ -9,7 +9,7 @@ vi.mock("next/navigation", () => ({
 import { AdjustmentApprovalQueue, type PendingAdjustment } from "./AdjustmentApprovalQueue";
 
 const ROW: PendingAdjustment = {
-  id: "pend-aaaaaaaa",
+  id: "aaaaaaaa-1111-4000-8000-000000000001",
   createdAt: "2026-07-02T00:00:00.000Z",
   fromDemandId: "d1",
   toDemandId: "d2",
@@ -38,7 +38,7 @@ describe("AdjustmentApprovalQueue (GAP-REVENUE-ADJUSTMENTS-01)", () => {
     );
 
     render(<AdjustmentApprovalQueue pending={[ROW]} demandFyById={FY} currentUserId="checker-1" />);
-    fireEvent.click(screen.getByRole("button", { name: "Approve transfer pend-aaa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Approve transfer aaaaaaaa" }));
 
     await waitFor(() => expect(screen.getByText("Approve this transfer?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Approve transfer"));
@@ -51,13 +51,13 @@ describe("AdjustmentApprovalQueue (GAP-REVENUE-ADJUSTMENTS-01)", () => {
 
   it("disables Approve/Reject and explains why when the current user raised the transfer", () => {
     render(<AdjustmentApprovalQueue pending={[ROW]} demandFyById={FY} currentUserId="maker-9" />);
-    expect(screen.getByRole("button", { name: "Approve transfer pend-aaa" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Reject transfer pend-aaa" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Approve transfer aaaaaaaa" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reject transfer aaaaaaaa" })).toBeDisabled();
     expect(screen.getByText("You requested this transfer; a different officer must decide.")).toBeInTheDocument();
   });
 
   it("fails OPEN (buttons enabled) when the current user id is unknown — server still enforces", () => {
     render(<AdjustmentApprovalQueue pending={[ROW]} demandFyById={FY} currentUserId={null} />);
-    expect(screen.getByRole("button", { name: "Approve transfer pend-aaa" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Approve transfer aaaaaaaa" })).toBeEnabled();
   });
 });

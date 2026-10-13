@@ -36,7 +36,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Card, ConfirmDialog, Button } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatShortId } from "@/lib/formatters";
 
 type AcceptedResponse = { id: string; status: string; correlationId?: string };
 
@@ -179,7 +179,7 @@ export function SeniorityListActions({ canAdminister, lists }: Props) {
                             setApprovingId(l.id);
                           }}
                         >
-                          {t("approveListBtn", { idPrefix: l.id.slice(0, 8) })}
+                          {t("approveListBtn", { idPrefix: formatShortId(l.id) })}
                         </Button>
                       )}
                     </td>

@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ActionButton } from "../../../_components/ds";
 import { rupeesToMinorString } from "@/lib/money";
-import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { formatIndianDate, formatMoney, formatShortId } from "@/lib/formatters";
 
 export type ContractBond = {
   id: string;
@@ -189,7 +189,7 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
         <ul style={{ margin: 0, paddingLeft: 18 }}>
           {bonds.map((b) => (
             <li key={b.id} style={{ marginBottom: 8, fontSize: 13 }}>
-              <strong>{b.referenceNo ?? b.id.slice(0, 8)}</strong> — {b.status}
+              <strong>{b.referenceNo ?? formatShortId(b.id)}</strong> — {b.status}
               {/* GAP-CONTRACTS-DETAIL-02: surface the bond's validity window so
                   an officer can see at a glance when the security lapses. */}
               {b.validFrom || b.validTo ? (

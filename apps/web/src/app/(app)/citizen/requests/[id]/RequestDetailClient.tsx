@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { PageHeader, EmptyState, StatusPill, ActionButton, Button } from "@/app/_components/ds";
-import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
+import { formatIndianDate, humanizeStatus, formatShortId } from "@/lib/formatters";
 import type { Grievance } from "../../_data/loaders";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
@@ -186,7 +186,7 @@ export function RequestDetailClient({
   }
 
   const isResolved = grievance.status === "resolved" || grievance.status === "closed";
-  const requestNo = `GR-${grievance.id.slice(0, 8).toUpperCase()}`;
+  const requestNo = `GR-${formatShortId(grievance.id, { upper: true })}`;
 
   return (
     <>

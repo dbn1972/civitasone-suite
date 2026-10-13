@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader, StatusPill, RefreshErrorState } from "../../../../../_components/ds";
 import { getServiceRequest, getCatalogueOffering } from "../../../../../_data/loaders";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatShortId } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { SlaBadge } from "../../../SlaBadge";
 
@@ -28,7 +28,7 @@ export default async function Page({ params }: { params: { id: string } }) {
   // Load offering details for names (best-effort, no crash on failure)
   const { data: offering } = await getCatalogueOffering(req.offeringId);
 
-  const ref = `SR-${req.id.slice(0, 8).toUpperCase()}`;
+  const ref = `SR-${formatShortId(req.id, { upper: true })}`;
 
   const STATUS_LABEL: Record<string, string> = {
     pending_approval: "Pending approval",

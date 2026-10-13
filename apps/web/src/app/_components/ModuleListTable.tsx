@@ -8,11 +8,7 @@ import { RefreshErrorState } from "./ds/RefreshErrorState";
 import type { ModuleRowSummary } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 import { toHumanError } from "@/lib/messages";
-import { formatIndianDate } from "@/lib/formatters";
-
-// GAP-ADMIN-GATEWAY-ROUTES-02: only UUID-shaped ids are shortened; slug ids
-// ("hrms-leave-requests") used to collapse to a shared 8-char prefix.
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { formatIndianDate, formatShortId } from "@/lib/formatters";
 
 // GAP-INSTALL-STEPS-03: the bare <table className="tbl"> had no search, sort,
 // pagination or mobile card transform, and status was plain text. The shared
@@ -36,11 +32,12 @@ const MODULE_COLUMNS: ModuleCol[] = [
   {
     key: "id",
     label: "ID",
-    // Slug/code ids are shown in full; only a bare UUID is shortened, with the
-    // full id kept in a title for copy/disambiguation (GAP-ADMIN-GATEWAY-ROUTES-02).
+    // SF-01a: shared formatShortId. Slug/code ids are shown in full; only a bare
+    // UUID is shortened, with the full id kept in a title for copy/disambiguation
+    // (GAP-ADMIN-GATEWAY-ROUTES-02).
     render: (row) => (
       <span className="mono" title={row.id}>
-        {UUID_RE.test(row.id) ? row.id.slice(0, 8) : row.id}
+        {formatShortId(row.id)}
       </span>
     ),
   },
@@ -133,7 +130,14 @@ export function ModuleListTable({
           here provenance is only ever "live" or "cached". */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {data.length === 0 ? (
-        <EmptyState icon="📋" title="No records" message="Nothing to show yet for this module." />
+        // SF-01a: reaching here means the fetch SUCCEEDED (the error-no-data
+        // case returned RefreshErrorState above), so say so — a clerk must
+        // never have to guess whether an empty list is a failure.
+        <EmptyState
+          icon="📋"
+          title="No records"
+          message={`The ${errorArea ?? "records"} list loaded successfully, but there is nothing to show yet.`}
+        />
       ) : (
         <DataTable<ModuleRow>
           columns={MODULE_COLUMNS}

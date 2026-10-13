@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageHeader, Card, StatGrid, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatShortId } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { canCloseIssue } from "@/lib/auth/workRoles";
 import { IssuesTable, type IssuesTableRow } from "./IssuesTable";
@@ -23,7 +23,8 @@ interface IssuesResponse {
 }
 
 function shortId(id: string): string {
-  return id.length > 8 ? `${id.slice(0, 8)}…` : id;
+  const short = formatShortId(id);
+  return short !== id ? `${short}…` : id;
 }
 
 export default async function IssuesRegisterPage() {

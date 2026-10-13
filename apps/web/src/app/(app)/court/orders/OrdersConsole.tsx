@@ -32,6 +32,7 @@ import {
   verifyOrderDsc,
   type DscVerificationResult,
 } from "../_data/client";
+import { formatShortId } from "@/lib/formatters";
 
 const fieldStyle: React.CSSProperties = {
   padding: 8,
@@ -442,7 +443,7 @@ function OrderRow({
   // Include a short id suffix — two same-type orders drafted the same day on
   // the same case would otherwise collide and give every row action button
   // (submit/approve/send-back/recall) the same accessible name.
-  const rowLabel = `${humanize(order.orderType)} order (${fmtDate(order.orderDate)}) for ${caseLabel} (#${order.id.slice(0, 8)})`;
+  const rowLabel = `${humanize(order.orderType)} order (${fmtDate(order.orderDate)}) for ${caseLabel} (#${formatShortId(order.id)})`;
 
   async function doSubmit() {
     setSubmitBusy(true);

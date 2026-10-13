@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { formatMoneyCompact, formatMoney, formatCrore, formatIndianDate, formatIndianDateTime, todayIST, istDatePart, addDaysIST, minorToRupeesOrNull, formatClockTime12h, percentOfMinor, humanizeStatus, formatEntityRef, utilisationPercent, isOverUtilised, formatEnumLabel, formatDays, formatPoints } from "./formatters";
+import { formatMoneyCompact, formatMoney, formatCrore, formatIndianDate, formatIndianDateTime, todayIST, istDatePart, addDaysIST, minorToRupeesOrNull, formatClockTime12h, percentOfMinor, humanizeStatus, formatEntityRef, utilisationPercent, isOverUtilised, formatEnumLabel, formatDays, formatPoints, formatShortId } from "./formatters";
 
 // ---------------------------------------------------------------------------
 // formatClockTime12h -- GAP-HR-ATTENDANCE-CONFIG-02
@@ -583,5 +583,24 @@ describe("formatDays", () => {
   });
   it("shows — for null", () => {
     expect(formatDays(null)).toBe("—");
+  });
+});
+
+describe("formatShortId (SF-01a)", () => {
+  const uuid = "5b1c2d3e-0000-4000-8000-000000000000";
+  it("shortens a bare UUID to 8 chars", () => {
+    expect(formatShortId(uuid)).toBe("5b1c2d3e");
+  });
+  it("upper-cases on request", () => {
+    expect(formatShortId(uuid, { upper: true })).toBe("5B1C2D3E");
+  });
+  it("keeps slug and code ids whole so distinct records stay distinct", () => {
+    expect(formatShortId("hrms-leave-requests")).toBe("hrms-leave-requests");
+    expect(formatShortId("PO-2026-014")).toBe("PO-2026-014");
+  });
+  it("renders a dash for missing ids", () => {
+    expect(formatShortId(null)).toBe("—");
+    expect(formatShortId(undefined)).toBe("—");
+    expect(formatShortId("")).toBe("—");
   });
 });

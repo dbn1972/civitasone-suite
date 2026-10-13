@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Modal, Button, StatusPill } from "@/app/_components/ds";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, formatShortId } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
 import { useSessionIdentity } from "@/lib/auth/useSessionIdentity";
 import {
@@ -136,7 +136,7 @@ export function OfferWorkflowDialog({ applicationId, applicantName, onClose, onC
             {offers.map((o) => (
               <li key={o.id} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-xs">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-semibold text-slate-800 dark:text-slate-100">{o.offerNo ?? o.id.slice(0, 8)} · v{o.offerVersion}</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-100">{o.offerNo ?? formatShortId(o.id)} · v{o.offerVersion}</span>
                   <StatusPill status={o.status} />
                 </div>
                 <p className="mt-1 text-slate-600 dark:text-slate-300">

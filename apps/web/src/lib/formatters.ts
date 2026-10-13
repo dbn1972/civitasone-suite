@@ -1261,3 +1261,25 @@ export function formatPaise(amountMinor: number | null | undefined, currency = "
   });
   return `${formatted} ${currency}`;
 }
+
+/**
+ * SF-01a: the one shared way to show a record id to a clerk. Only a bare UUID
+ * is shortened (first 8 hex chars); slug / code ids ("hrms-leave-requests",
+ * "PO-2026-014") are returned in full because an 8-char prefix of those
+ * collapses distinct records onto the same label (GAP-ADMIN-GATEWAY-ROUTES-02).
+ * Missing ids render "—", never "undefined". Callers that shorten should also
+ * keep the full id reachable (e.g. `title={id}`).
+ *
+ *   formatShortId("5b1c2d3e-0000-4000-8000-000000000000")             -> "5b1c2d3e"
+ *   formatShortId("5b1c2d3e-0000-4000-8000-000000000000", { upper: true }) -> "5B1C2D3E"
+ *   formatShortId("PO-2026-014")                                       -> "PO-2026-014"
+ *   formatShortId(null)                                                -> "—"
+ */
+export function formatShortId(
+  id: string | null | undefined,
+  opts: { upper?: boolean } = {},
+): string {
+  if (!id) return "—";
+  const out = UUID_ID.test(id) ? id.slice(0, 8) : id;
+  return opts.upper ? out.toUpperCase() : out;
+}

@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Button, DataTable, ConfirmDialog } from "@/app/_components/ds";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatShortId } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { rupeesToMinorString } from "@/lib/money";
 
@@ -363,7 +363,7 @@ export function AssessmentsTable({
       label: "Actions",
       sortable: false,
       render: (row: AssessmentRow) => {
-        const shortId = row.id.slice(0, 8);
+        const shortId = formatShortId(row.id);
         // GAP-REVENUE-ASSESSMENTS-01: a remission decision is only valid on a
         // row that HAS a pending remission, and the deciding officer must differ
         // from the officer who requested it (separation of duties). Pre-disable

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { buildShortlistRequest, rowProblem, toRows, type ShortlistCandidate } from "./reservationShortlist";
+import { formatShortId } from "@/lib/formatters";
 
 type Allocation = { applicationId: string; category: string; allocatedAgainst: string; rank: number };
 type Waitlisted = { applicationId: string; category: string; rank: number };
@@ -22,7 +23,7 @@ export function ReservationShortlistPanel({ jobOpeningId, candidates }: { jobOpe
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const rows = toRows(candidates, scores);
-  const label = (id: string) => candidates.find((c) => c.id === id)?.label ?? id.slice(0, 8);
+  const label = (id: string) => candidates.find((c) => c.id === id)?.label ?? formatShortId(id);
 
   async function compute(e: React.FormEvent) {
     e.preventDefault();

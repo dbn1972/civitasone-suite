@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Card } from "../../../../../../_components/ds";
 import { StatusPill } from "../../../../../../_components/ds/StatusPill";
-import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { formatIndianDate, formatMoney, formatShortId } from "@/lib/formatters";
 
 // GAP-RECRUITMENT-DETAIL-APPLICATIONS-APPLICATION-06: fee status, offers and the application PDF,
 // each loaded independently with its own error state (a failing fee call must not blank the page).
@@ -122,7 +122,7 @@ export function ApplicationExtras({ appId }: { appId: string }) {
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8, fontSize: 14 }}>
               {offers.data.map((o) => (
                 <li key={o.id} style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-                  <code style={{ fontSize: 12 }}>{o.offerNo ?? o.id.slice(0, 8)}</code>
+                  <code style={{ fontSize: 12 }}>{o.offerNo ?? formatShortId(o.id)}</code>
                   <StatusPill status={o.status} />
                   {o.offerVersion != null && <span style={{ color: "var(--mut)" }}>{t("offerVersion", { version: o.offerVersion })}</span>}
                   <span>{t("offerGrossCtc")} {formatMoney(o.grossCtcMinor)}</span>

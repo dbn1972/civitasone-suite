@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader, Card, StatCard, LoadErrorState } from "@/app/_components/ds";
 import { fetchJson } from "@/app/_data/apiClient";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, formatShortId } from "@/lib/formatters";
 import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
 import { APPROVAL_FINALIZE_ROLES } from "@/lib/auth/workRoles";
 import { ApprovalFinalizeButton } from "../ApprovalFinalizeButton";
@@ -154,7 +154,7 @@ export default async function TsDetailPage({
   return (
     <div className="page-main wrap">
       <PageHeader
-        title={ts.tsNumber ?? `TS ${params.id.slice(0, 8)}…`}
+        title={ts.tsNumber ?? `TS ${formatShortId(params.id)}…`}
         subtitle="Technical Sanction"
         back="/works/approvals"
         backLabel="Approvals"
