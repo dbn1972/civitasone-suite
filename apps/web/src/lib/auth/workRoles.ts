@@ -560,3 +560,14 @@ export function worksRolesAllow(
 ): boolean {
   return sessionRoles.some((r) => allowed.includes(r));
 }
+
+/**
+ * SF-20: roles workflow-service admits on GET /v1/workflow/tasks, the call behind the /approvals
+ * inbox. Mirrors `ROLES` in services/workflow-service/src/modules/tasks/routes.ts; keep in sync.
+ * Note tenant_admin and platform_admin are not in that list, so the API refuses them today.
+ */
+export const WORKFLOW_TASK_ROLES: readonly string[] = [
+  "workflow_user", "workflow_admin", "super_admin", "hr_admin", "manager",
+  "payroll_admin", "procurement_admin", "procurement_officer",
+  "estab_officer", "estab_admin", "estab_section_officer", "estab_under_secretary", "estab_deputy_secretary",
+];

@@ -120,6 +120,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0 note:** partly fixed by #1925 — Client role check (BRANDING_ADMIN_ROLES) and save confirm added; no settings layout gate; server auth/audit unverifiable
+- **W1 SF-20 note:** backend checked: theme-service PUT /v1/themes/brand and apply-preset require theme_admin or super_admin (brand-routes.ts ADMIN_ROLES); GET is open to any caller, so settings/layout.tsx is deliberately an open pass-through (the page is read-only for non-admins). Left open: the audit event is still unverified, and the page's BRANDING_ADMIN_ROLES also lists tenant_admin, which the backend does not, so a tenant_admin sees enabled controls whose Save returns 403.
 - **First-pass claim:** Any signed-in user can rewrite tenant-wide branding: no requireAnyRole, no settings/layout.tsx and no ModuleGate; Save PUTs the entire BrandConfig with no confirmation and no audit indication in the UI. theme-service is absent from the snapshot (services/ has only hrms-service), so server role checks and auditing are undeterminable (page.tsx:430-455).
 - **Service:** `theme-service`  ·  **Endpoint(s):** `['GET/PUT /api/proxy/v1/themes/brand', 'GET /api/proxy/v1/themes/brand/presets']`
 - **Question:** Does PUT /v1/themes/brand require a tenant-admin role and emit an audit event with before/after?

@@ -76,3 +76,25 @@ export function rolesAllow(sessionRoles: readonly string[], allowed: readonly st
 
 /** document-service bulk-scan routes (BULK_SCAN_ROLES in modules/bulk-scan/http.ts): Admin > Bulk scan (GAP-ADMIN-BULK-SCAN-02). */
 export const BULK_SCAN_ADMIN_ROLES: readonly string[] = ["document_admin", "super_admin"];
+
+/**
+ * SF-20: the /admin segment layout floor. /admin hosts pages with different backend owners, and each
+ * page re-checks its own list (AdminAccessGate / requireAnyRole), so the layout admits the union of
+ * every list the pages use: tenant and platform admin (ADMIN_TENANT_ROLES, which contains
+ * ADMIN_PLATFORM_ROLES), api_admin (API_CATALOGUE_ROLES), billing_admin (BILLING_INVOICE_READER_ROLES),
+ * audit readers (AUDIT_LOG_VIEW_ROLES), hr_admin/it_admin (DEVICE_ADMIN_ROLES), document_admin
+ * (BULK_SCAN_ADMIN_ROLES) and finance_admin/payroll_admin (INTEGRATION_ADMIN_ROLES). Anyone outside it
+ * would be refused by every page below, so they are redirected once, up front.
+ */
+export const ADMIN_CONSOLE_ROLES: readonly string[] = Array.from(
+  new Set([
+    ...ADMIN_TENANT_ROLES,
+    ...ADMIN_PLATFORM_ROLES,
+    ...API_CATALOGUE_ROLES,
+    ...BILLING_INVOICE_READER_ROLES,
+    ...AUDIT_LOG_VIEW_ROLES,
+    ...DEVICE_ADMIN_ROLES,
+    ...BULK_SCAN_ADMIN_ROLES,
+    ...INTEGRATION_ADMIN_ROLES,
+  ]),
+);

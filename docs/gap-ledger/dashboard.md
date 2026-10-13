@@ -163,7 +163,7 @@ Counts: ACTION 10, BACKEND-VERIFY 1
 
 ### GAP-DASHBOARD-HOME-2-05  ·  LOW  ·  partly  ·  theme I18N
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1924, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed W1 SF-20: Sidebar nav label still comes from next-intl nav.dashboard in en and hi, covered by Sidebar.test.tsx; closed by #1924, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Command Center' title vs nav label 'Dashboard'; 'My approvals' goes to /workflow which is not a module tile.
 - **Verified evidence:** en.json:2299 home.title='Command Center'; Sidebar.tsx:48 label 'Dashboard' (hard-coded English in sidebar) - mismatch true. '/workflow' link (page.tsx:47) is not a module tile - true but intended as a cross-module inbox, not a bug. Sidebar label not i18n'd.
 - **Files to change:** `apps/web/src/messages/en.json`, `apps/web/src/messages/hi.json`, `apps/web/src/app/_components/ds/Sidebar.tsx`
