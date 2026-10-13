@@ -91,7 +91,7 @@ export function ShiftRequestsTable({
     cellType?: "status";
     render?: (row: ShiftRequestRow) => React.ReactNode;
   }[] = [
-    { key: "employeeName", label: t("colEmployee") },
+    { key: "employeeName", label: t("colEmployee"), render: (r) => <span title={r.employeeId}>{r.employeeName}</span> },
     { key: "currentShift", label: t("colCurrentShift") },
     { key: "requestedShift", label: t("colRequestedShift") },
     { key: "effectiveDate", label: t("colEffectiveDate"), render: (r) => formatIndianDate(r.effectiveDate) },

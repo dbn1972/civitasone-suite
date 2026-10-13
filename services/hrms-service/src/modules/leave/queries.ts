@@ -1,5 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import { and, eq, inArray } from "drizzle-orm";
+import { batchEmployees } from "../../shared/batch-resolve.js";
 import * as repo from "./repo.js";
 import { effectiveBalanceDays, exactAppliedDays } from "./domain.js";
 import * as employeeRepo from "../employee/repo.js";
@@ -64,7 +65,7 @@ export async function getLeaveApplicationsByEmp(
   return {
     data: rows.map((r) => ({
       ...r,
-      leaveTypeName: typeNameById.get(r.leaveTypeId) ?? r.leaveTypeId.slice(0, 8),
+      leaveTypeName: typeNameById.get(r.leaveTypeId) ?? "Unknown leave type",
     })),
     total,
     statusCounts,
@@ -94,7 +95,7 @@ export async function listLeaveApplicationsByEmp(
     employeeRepo.findById(employeeId, tenantId),
   ]);
   const rows = result.data;
-  const employeeName = employee?.fullName ?? employeeId.slice(0, 8);
+  const employeeName = employee?.fullName ?? "Unknown employee";
   return {
     data: rows.map((r) => ({
       id: r.id,
@@ -106,18 +107,19 @@ export async function listLeaveApplicationsByEmp(
 }
 
 export async function listLeaveApplications(tenantId: string, limit: number, offset = 0): Promise<{ data: Array<{ id: string; employee: string; leaveType: string; status: "Pending" | "Approved" | "Rejected" }> }> {
-  const [rows, employees, leaveTypes] = await Promise.all([
+  const [rows, leaveTypes] = await Promise.all([
     repo.findLeaveAppsByTenant(tenantId, limit, offset),
-    employeeRepo.listByTenant(tenantId, 500, 0),
     repo.listLeaveTypesByTenant(tenantId),
   ]);
-  const empNameById = new Map(employees.map((e) => [e.id, e.fullName]));
+  // GAP-HR-SF-17a: batched lookup of this page's employee ids (was an
+  // unordered 500-row window with an id-fragment fallback).
+  const empNameById = new Map([...(await batchEmployees(tenantId, rows.map((r) => r.employeeId))).values()].map((e) => [e.id, e.fullName]));
   const typeNameById = new Map(leaveTypes.map((t) => [t.id, t.name]));
   return {
     data: rows.map((r) => ({
       id: r.id,
-      employee: empNameById.get(r.employeeId) ?? r.employeeId.slice(0, 8),
-      leaveType: typeNameById.get(r.leaveTypeId) ?? r.leaveTypeId.slice(0, 8),
+      employee: empNameById.get(r.employeeId) ?? "Unknown employee",
+      leaveType: typeNameById.get(r.leaveTypeId) ?? "Unknown leave type",
       status: r.status === "approved" ? "Approved" as const : r.status === "rejected" ? "Rejected" as const : "Pending" as const,
     })),
   };
@@ -148,7 +150,7 @@ async function toLeaveRequestDetails(tenantId: string, rows: LeaveAppRow[]) {
     id: r.id,
     employeeId: r.employeeId,
     employeeName: empMap.get(r.employeeId)?.fullName ?? "Unknown employee",
-    leaveType: typeNameById.get(r.leaveTypeId) ?? r.leaveTypeId.slice(0, 8),
+    leaveType: typeNameById.get(r.leaveTypeId) ?? "Unknown leave type",
     fromDate: r.fromDate,
     toDate: r.toDate,
     days: exactAppliedDays(r),

@@ -103,7 +103,7 @@ export function WfhRequestsTable({
     cellType?: "status";
     render?: (row: WfhRow) => React.ReactNode;
   }[] = [
-    { key: "employeeName", label: t("colEmployee") },
+    { key: "employeeName", label: t("colEmployee"), render: (r) => <span title={r.employeeId}>{r.employeeName}</span> },
     { key: "fromDate", label: t("colFrom"), render: (r) => formatIndianDate(r.fromDate) },
     { key: "toDate", label: t("colTo"), render: (r) => formatIndianDate(r.toDate) },
     {

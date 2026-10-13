@@ -20,7 +20,7 @@ export function AttendanceTable({ attendance, source = "api", canConfigure = fal
   );
 
   const columns: { key: keyof AttendanceSummaryItem & string; label: string; align?: "left" | "right"; render?: (row: AttendanceSummaryItem) => ReactNode }[] = [
-    { key: "employeeName", label: t("colEmployee") },
+    { key: "employeeName", label: t("colEmployee"), render: (r) => <span title={r.employeeId}>{r.employeeName}</span> },
     { key: "department", label: t("colDepartment") },
     { key: "date", label: t("colDate"), render: (r) => formatIndianDate(r.date) },
     { key: "checkIn", label: t("colCheckIn"), render: (r) => r.checkIn ?? "—" },

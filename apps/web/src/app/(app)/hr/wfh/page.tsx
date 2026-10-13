@@ -69,7 +69,7 @@ async function getData(): Promise<LoaderResult<WfhRow[]>> {
       // named both anyway, so they always rendered blank.
       return arr.map((r) => ({
         ...r,
-        employeeName: (r as Record<string, unknown>).employeeName as string ?? r.employeeId,
+        employeeName: (r as Record<string, unknown>).employeeName as string ?? "—",
       }));
     },
   });

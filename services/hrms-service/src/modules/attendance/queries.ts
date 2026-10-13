@@ -6,6 +6,9 @@ import * as employeeRepo from "../employee/repo.js";
 import { batchEmployees, batchDepartments } from "../../shared/batch-resolve.js";
 import type { AttendanceRow } from "./schema.js";
 
+/** Shown when an employee id cannot be resolved (deleted / other tenant); never a raw id. */
+export const UNKNOWN_EMPLOYEE = "Unknown employee";
+
 function mapStatus(status: string): "present" | "absent" | "half_day" | "on_leave" | "holiday" {
   if (status === "absent") return "absent";
   if (status === "half_day") return "half_day";
@@ -47,12 +50,14 @@ export async function listRegularisations(tenantId: string, limit: number, emplo
   // that key is invalidated per tenant and must never serve a scoped viewer.
   const load = async () => {
     const rows = await repo.listRegularisationsByTenant(tenantId, limit, employeeIds);
-    const employees = await employeeRepo.listByTenant(tenantId, 500, 0);
-    const empMap = new Map(employees.map((e) => [e.id, e]));
+    // GAP-HR-SF-17a: one batched, tenant-scoped lookup of exactly the ids on
+    // this page. The old listByTenant(tenantId, 500, 0) was an unordered
+    // 500-row window, so any employee outside it rendered as an id fragment.
+    const empMap = await batchEmployees(tenantId, rows.map((r) => r.employeeId));
     return rows.map((r) => ({
       id: r.id,
       employeeId: r.employeeId,
-      employeeName: empMap.get(r.employeeId)?.fullName ?? r.employeeId.slice(0, 8),
+      employeeName: empMap.get(r.employeeId)?.fullName ?? UNKNOWN_EMPLOYEE,
       date: r.date,
       reason: r.reason,
       requestedStatus: r.requestedStatus,
@@ -73,24 +78,17 @@ export async function listAttendance(tenantId: string, limit: number, employeeId
 
 async function loadAttendanceList(tenantId: string, limit: number, employeeIds?: string[]) {
   const rows = await repo.listByTenant(tenantId, limit, employeeIds);
-  const employees = await employeeRepo.listByTenant(tenantId, 500, 0);
-  const empMap = new Map(employees.map((e) => [e.id, e]));
-  // GAP-HR-ATTENDANCE-01: department used to be the first 8 chars of the
-  // raw departmentId uuid (a permanent-looking id fragment, never a real
-  // department name). employee/repo.ts already exposes a cross-module-safe
-  // name lookup (findDepartmentsByIds) for exactly this -- one batched
-  // query, not N+1, and via the employee module's own repo rather than
-  // importing hrms_departments directly (CLAUDE.md rule 4: module
-  // isolation).
-  const departmentIds = [...new Set(employees.map((e) => e.departmentId))];
-  const departments = await employeeRepo.findDepartmentsByIds(tenantId, departmentIds);
-  const deptNameById = new Map(departments.map((d) => [d.id, d.name]));
+  // GAP-HR-SF-17a: batched lookup of this page's own employee ids (the old
+  // unordered 500-row window dropped names for everyone outside it), then
+  // one batched department lookup via the employee module's own repo.
+  const empMap = await batchEmployees(tenantId, rows.map((r) => r.employeeId));
+  const deptNameById = await batchDepartments(tenantId, [...empMap.values()].map((e) => e.departmentId));
   return rows.map((r) => {
     const emp = empMap.get(r.employeeId);
     return {
       id: r.id,
       employeeId: r.employeeId,
-      employeeName: emp?.fullName ?? r.employeeId.slice(0, 8),
+      employeeName: emp?.fullName ?? UNKNOWN_EMPLOYEE,
       department: (emp && deptNameById.get(emp.departmentId)) ?? "",
       date: r.attendanceDate,
       checkIn: r.inTime ?? undefined,
