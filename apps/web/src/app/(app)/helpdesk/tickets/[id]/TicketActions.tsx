@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ConfirmDialog, EntityPicker } from "../../../../_components/ds";
 import { searchIdentityUsers, resolveIdentityUsers } from "@/lib/entityAdapters/identityUser";
 import { useFormError } from "@/lib/useFormError";
+import { formatShortId } from "@/lib/formatters";
 
 type Props = {
   ticketId: string;
@@ -244,9 +245,9 @@ export function TicketActions({ ticketId, status, canAct = true }: Props) {
                 // Resolve the display label for the confirm dialog.
                 if (id) {
                   resolveIdentityUsers([id]).then((opts) => {
-                    const label = opts[0]?.label ?? id.slice(0, 8);
+                    const label = opts[0]?.label ?? formatShortId(id);
                     setAssigneeLabel(label);
-                  }).catch(() => setAssigneeLabel(id.slice(0, 8)));
+                  }).catch(() => setAssigneeLabel(formatShortId(id)));
                 } else {
                   setAssigneeLabel("");
                 }

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { fetchJson } from "@/app/_data/apiClient";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, Card, DataTable, StatGrid, StatCard, StatusPill } from "@/app/_components/ds";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, formatShortId } from "@/lib/formatters";
 import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
 import { deriveTenderStatus } from "../../_data/format";
 import { TenderActions } from "./TenderActions";
@@ -168,7 +168,7 @@ export default async function TenderDetailPage({
         title={
           tender?.workNumber
             ? `Tender — ${tender.workNumber}`
-            : `Tender ${params.id.slice(0, 8)}…`
+            : `Tender ${formatShortId(params.id)}…`
         }
         subtitle={String(tender?.tenderType ?? "Pre-tender")}
         back="/works/tenders"

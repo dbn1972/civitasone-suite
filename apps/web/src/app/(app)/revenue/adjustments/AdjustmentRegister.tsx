@@ -1,7 +1,7 @@
 "use client";
 
 import { DataTable } from "@/app/_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatShortId } from "@/lib/formatters";
 import type { AdjustmentRegisterRow } from "./page";
 
 type Row = AdjustmentRegisterRow & { fromFy: string; toFy: string };
@@ -20,7 +20,7 @@ export function AdjustmentRegister({
   demandFyById: Record<string, string>;
 }) {
   const fy = (id: string | undefined) =>
-    (id && demandFyById[id]) ?? (id ? `${id.slice(0, 8)}…` : "—");
+    (id && demandFyById[id]) ?? (id ? `${formatShortId(id)}…` : "—");
   const rows: Row[] = adjustments.map((a) => ({ ...a, fromFy: fy(a.fromDemandId), toFy: fy(a.toDemandId) }));
 
   return (

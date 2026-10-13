@@ -1,7 +1,7 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { getCatalogueOfferings, getRequestBreachReport } from "../../../../_data/loaders";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatShortId } from "@/lib/formatters";
 import { slaLabel } from "@/lib/slaLabels";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles, hasAnyRole, HELPDESK_MANAGER_ROLES } from "@/lib/auth/roleGuard";
@@ -36,7 +36,7 @@ export default async function Page() {
   const rows: Row[] = report.data.map((r) => ({
     id: r.id,
     // Short reference — first 8 chars of the UUID, uppercase
-    ref: `SR-${r.id.slice(0, 8).toUpperCase()}`,
+    ref: `SR-${formatShortId(r.id, { upper: true })}`,
     // GAP-HELPDESK-CATALOGUE-BREACHES-01: offering name from the map
     service: offeringMap.get(r.offeringId) ?? "Unknown service",
     stage: r.currentStage ?? "—",

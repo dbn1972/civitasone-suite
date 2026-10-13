@@ -18,7 +18,7 @@ import { Button, Card, EmptyState, StatusPill } from "@/app/_components/ds";
 import type { CertifiedCopy, CopyStatus } from "../../_data/types";
 import { COPY_TRANSITIONS } from "../../_data/types";
 import { fmtDateTime, humanize, copyPillStatus } from "../../_data/format";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatShortId } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
 import { fetchCaseCertifiedCopies, requestCertifiedCopy, transitionCertifiedCopy } from "../../_data/client";
 
@@ -309,7 +309,7 @@ function CopyRow({
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
         <div style={{ minWidth: 0, flex: "1 1 260px" }}>
           <div style={{ fontWeight: 600 }}>
-            {copy.documentRef ? copy.documentRef : `Copy #${copy.id.slice(0, 8)}`}
+            {copy.documentRef ? copy.documentRef : `Copy #${formatShortId(copy.id)}`}
             {copy.urgent && <span style={{ color: "var(--ink2)", fontWeight: 400 }}> · urgent</span>}
           </div>
           <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 2, ...mono }}>

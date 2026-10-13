@@ -1,6 +1,6 @@
 import { PageHeader, StatusPill, RefreshErrorState } from "../../../../_components/ds";
 import { getInternalHelpdeskTicketById } from "../../../../_data/loaders";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatShortId } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { SlaBadge } from "../../SlaBadge";
 import { getSessionRoles, hasAnyRole, HELPDESK_ROLES } from "@/lib/auth/roleGuard";
@@ -32,7 +32,7 @@ export default async function Page({ params }: { params: { id: string } }) {
 
   // GAP-HELPDESK-INTERNAL-DETAIL-05: show a real ticket number or a clean subtitle
   // instead of a truncated UUID
-  const displayRef = ticket.ticketNo ?? `INT-${ticket.id.slice(0, 8).toUpperCase()}`;
+  const displayRef = ticket.ticketNo ?? `INT-${formatShortId(ticket.id, { upper: true })}`;
   const subtitle = ticket.createdAt
     ? `${displayRef} · Raised ${formatIndianDate(ticket.createdAt)}`
     : displayRef;

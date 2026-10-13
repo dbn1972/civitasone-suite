@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button, PageHeader, Term, ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { formatShortId } from "@/lib/formatters";
 
 // Classification options are exactly the four tiers the estab-service actually
 // stores and enforces as an ordered clearance lattice
@@ -100,7 +101,7 @@ export default function NewFilePage() {
           setDakOptions(
             (body.data ?? [])
               .filter((d) => d.dakNo || d.receiptNo)
-              .map((d) => ({ id: d.id, dakNo: d.dakNo ?? d.receiptNo ?? d.id.slice(0, 8) })),
+              .map((d) => ({ id: d.id, dakNo: d.dakNo ?? d.receiptNo ?? formatShortId(d.id) })),
           );
         }
       } catch (err) {

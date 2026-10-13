@@ -10,6 +10,7 @@ import {
   fetchCauseListByCourtDate,
   fetchCauseListItems,
 } from "../_data/client";
+import { formatShortId } from "@/lib/formatters";
 
 const mono: React.CSSProperties = {
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -67,7 +68,7 @@ export function CauseListConsole({
     }
     return [...seen.entries()].map(([id, sample]) => ({
       id,
-      name: sample.title ? `Court of “${sample.title.slice(0, 24)}”` : `Court ${id.slice(0, 8)}`,
+      name: sample.title ? `Court of “${sample.title.slice(0, 24)}”` : `Court ${formatShortId(id)}`,
       courtType: null,
       establishmentCode: null,
     }));
@@ -403,7 +404,7 @@ function AddItemForm({
               <option value="">Select a case…</option>
               {cases.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {(c.title ?? "Case").slice(0, 30)} — {c.cnrNumber || c.id.slice(0, 8)}
+                  {(c.title ?? "Case").slice(0, 30)} — {c.cnrNumber || formatShortId(c.id)}
                 </option>
               ))}
             </select>

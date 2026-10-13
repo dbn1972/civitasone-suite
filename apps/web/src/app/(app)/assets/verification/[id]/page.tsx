@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PageHeader, DataTable, EmptyState, ErrorState, SkeletonTable } from "../../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { summariseItems, type VerificationItem } from "../sessions";
+import { formatShortId } from "@/lib/formatters";
 
 /**
  * GAP-ASSETS-VERIFICATION-02: read-only session detail -- the assets recorded
@@ -53,7 +54,7 @@ export default function VerificationSessionPage() {
   return (
     <>
       <PageHeader
-        title={`Verification session ${id.slice(0, 8)}`}
+        title={`Verification session ${formatShortId(id)}`}
         subtitle={loading || loadError ? "Assets recorded against this physical-verification session." : `${summary.total} recorded · ${summary.found} found · ${summary.missing} not found`}
         back="/assets/verification"
         backLabel="Verification sessions"

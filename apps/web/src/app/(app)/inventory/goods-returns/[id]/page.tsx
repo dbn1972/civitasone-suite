@@ -2,7 +2,7 @@ import { PageHeader, Card, StatusPill, EmptyState, LoadErrorState } from "@/app/
 import { getGoodsReturnById } from "@/app/_data/loaders";
 import { getSessionUserId } from "@/lib/auth/roleGuard";
 import { getInventorySettings } from "../../_data";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatShortId } from "@/lib/formatters";
 import { getItemNames, getStoreNames } from "../../_lookups";
 import { itemLabel, nameOrDash, userRefLabel } from "../../_labels";
 import { QcInspectionForm } from "./QcInspectionForm";
@@ -58,7 +58,7 @@ export default async function GoodsReturnDetailPage({ params }: { params: { id: 
     <>
       <PageHeader
         title="Goods Return — QC Inspection"
-        subtitle={`Return #${goodsReturn.id.slice(0, 8)}`}
+        subtitle={`Return #${formatShortId(goodsReturn.id)}`}
         back="/inventory/goods-returns"
         actions={<StatusPill status={goodsReturn.qcStatus} />}
       />

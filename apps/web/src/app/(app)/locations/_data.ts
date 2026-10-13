@@ -93,7 +93,7 @@ export const getLocationInfrastructure = moduleLoader("/api/v1/locations/infrast
 // ───────────────────────────────────────────────────────────────────────────
 // GAP2-LOCATIONS-INFRASTRUCTURE-01: typed loaders for the infrastructure,
 // geofence and jurisdiction child pages. The generic mapRows above flattens
-// every record to id/label/sublabel/status/meta and prints row.id.slice(0,8)
+// every record to id/label/sublabel/status/meta and prints a truncated id
 // as a UUID column, dropping the attributes that define each record (asset
 // type/condition; geofence shape/radius; jurisdiction level/office). These
 // typed loaders preserve those attributes so the typed tables (_tables.tsx)

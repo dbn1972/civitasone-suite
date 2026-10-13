@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ActionButton } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { formatShortId } from "@/lib/formatters";
 
 export type InspectionRow = {
   id: string;
@@ -243,7 +244,7 @@ export function InspectionActions({ inspections }: Props) {
     <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 12 }}>
       {actionable.map((row) => (
         <div key={row.id} style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ fontSize: 13, flex: 1 }}>{row.id.slice(0, 8)}… — {row.status}</span>
+          <span style={{ fontSize: 13, flex: 1 }}>{formatShortId(row.id)}… — {row.status}</span>
           <InspectionRowAction id={row.id} status={row.status} />
         </div>
       ))}

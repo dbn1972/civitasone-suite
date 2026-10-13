@@ -2,7 +2,7 @@ import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { getCatalogueOfferings, getMyServiceRequests } from "../../../../_data/loaders";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatShortId } from "@/lib/formatters";
 import { slaLabel } from "@/lib/slaLabels";
 import { toHumanError } from "@/lib/messages";
 
@@ -59,7 +59,7 @@ export default async function Page() {
   const rows: Row[] = requests.map((r) => ({
     id: r.id,
     // Short reference instead of raw UUID
-    ref: `SR-${r.id.slice(0, 8).toUpperCase()}`,
+    ref: `SR-${formatShortId(r.id, { upper: true })}`,
     // Offering name or placeholder for retired offerings
     service: offeringMap.get(r.offeringId) ?? "Service (retired)",
     status: STATUS_LABEL[r.status] ?? r.status,

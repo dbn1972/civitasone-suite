@@ -47,6 +47,9 @@ describe("ModuleListTable", () => {
     mockedHook.mockReturnValue({ data: [], fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
     render(<ModuleListTable cacheKey="test" rows={[]} source="api" />);
     expect(screen.getByText("No records")).toBeInTheDocument();
+    // SF-01a: a genuine empty result says the load succeeded and offers no retry.
+    expect(screen.getByText(/loaded successfully/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /retry|try again/i })).not.toBeInTheDocument();
   });
 
   it("shows nothing extra when data is live", () => {

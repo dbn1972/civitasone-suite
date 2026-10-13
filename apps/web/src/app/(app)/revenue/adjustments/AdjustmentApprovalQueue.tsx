@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button, ConfirmDialog, EmptyState } from "@/app/_components/ds";
 import { StatusPill } from "@/app/_components/ds/StatusPill";
 import { browserJson } from "@/lib/api/browserClient";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, formatShortId } from "@/lib/formatters";
 
 /**
  * GAP-REVENUE-ADJUSTMENTS-01: a balance-transfer adjustment is now maker-checker.
@@ -46,7 +46,7 @@ export function AdjustmentApprovalQueue({
   const [tone, setTone] = useState<"good" | "bad">("good");
   const [decidedIds, setDecidedIds] = useState<Set<string>>(new Set());
 
-  const fy = (id: string) => demandFyById[id] ?? `${id.slice(0, 8)}…`;
+  const fy = (id: string) => demandFyById[id] ?? `${formatShortId(id)}…`;
 
   function startDecide(row: PendingAdjustment, approve: boolean) {
     setDeciding({ row, approve });
@@ -107,7 +107,7 @@ export function AdjustmentApprovalQueue({
 
       <div style={{ display: "grid", gap: 10 }}>
         {visible.map((row) => {
-          const shortId = row.id.slice(0, 8);
+          const shortId = formatShortId(row.id);
           // Fail OPEN only when the id is unknown; server still enforces.
           const isMaker = !!currentUserId && !!row.makerUserId && currentUserId === row.makerUserId;
           return (
