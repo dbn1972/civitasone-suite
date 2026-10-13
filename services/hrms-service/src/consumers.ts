@@ -14,6 +14,7 @@ import type { Queue } from "@civitasone/queue";
 import type { ModuleProfile } from "./shared/module-profile.js";
 
 import { registerEmployeeConsumers }   from "./modules/employee/consumer.js";
+import { registerEmployeePiiRevealConsumer } from "./modules/employee/pii-reveal.js";
 import { registerApplyPostingConsumer } from "./modules/workforce-core/apply-posting/consumer.js";
 import { isPostingLedgerEnabled } from "./modules/workforce-core/config.js";
 import { registerLifecycleConsumers }  from "./modules/lifecycle/consumer.js";
@@ -86,6 +87,7 @@ export function registerConsumers(queue: Queue, profile: ModuleProfile): void {
   // reservation / manpower, bulk import, dashboard / reports / orgchart /
   // holidays, scheduler, seniority, and the cross-service internal surface.
   registerEmployeeConsumers(queue);
+  registerEmployeePiiRevealConsumer(queue); // W1 SF-05a: audit for the employee PII reveal
   // ST-M01-09: the single applyPosting write path. Subscribed ONLY when the
   // Workforce Core posting ledger is enabled (M01 exit criterion 2); when the
   // flag is off the consumer is absent and the legacy transfer paths are
