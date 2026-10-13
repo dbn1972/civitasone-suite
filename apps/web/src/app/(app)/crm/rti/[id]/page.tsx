@@ -4,6 +4,7 @@ import { PageHeader, StatusPill, Card, LoadErrorState, EmptyState } from "../../
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { RtiActions } from "./RtiActions";
 import { formatMoney } from "@/lib/formatters";
+import { rupeesNumberToMinorString } from "@/lib/money";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { sectionLabel } from "@/lib/crm/rti";
 import { CaseStatusTimeline, type CaseHistoryEntry } from "../../../../_components/crm/CaseStatusTimeline";
@@ -34,7 +35,7 @@ function feeDisplay(
     r.feeAmountMinor !== undefined && r.feeAmountMinor !== null
       ? r.feeAmountMinor
       : typeof r.feeAmount === "number"
-        ? Math.round(r.feeAmount * 100)
+        ? rupeesNumberToMinorString(r.feeAmount)
         : null;
   if (minor === null) return t("feePaid");
   const money = formatMoney(minor);

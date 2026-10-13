@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { rupeesInputToMinorNumber } from "@/lib/money";
 import { ItemPicker } from "@/app/_components/ItemPicker";
 import { resolveStockItemEntry } from "@/lib/entityAdapters/item";
 import type { PickerEntry } from "../../linkHelpers";
@@ -74,7 +75,7 @@ export default function NewStockEntryPage() {
     setMessage("");
     setIsError(false);
     const qtyNum = Math.round(Number(qty || "0"));
-    const rateMinor = Math.round(Number(rate || "0") * 100);
+    const rateMinor = rupeesInputToMinorNumber(rate);
     const wh = warehouseId.trim();
     const trimmedReason = reason?.trim();
     const combinedNotes = [notes.trim(), trimmedReason ? `Reason: ${trimmedReason}` : ""]

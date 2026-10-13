@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useToast, Button, EntityPicker, type EntityOption } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { rupeesToMinorString } from "@/lib/money";
 import { humanizeMaster, PARENT_FIELD } from "./masterTypes";
 import type { MasterItem, ParentOption } from "./MastersTable";
 
@@ -278,9 +279,9 @@ export function MasterCreateForm({
         } else if (field.type === "money") {
           const val = String(form[field.key] ?? "").trim();
           if (val !== "") {
-            const numeric = parseFloat(val);
-            if (Number.isNaN(numeric)) throw new Error(`${field.label} must be a number`);
-            body[field.key] = String(Math.round(numeric * 100));
+            const minor = rupeesToMinorString(val, { allowZero: true });
+            if (minor === null) throw new Error(`${field.label} must be a valid amount (up to 2 decimal places)`);
+            body[field.key] = minor;
           } else if (field.required) {
             throw new Error(`${field.label} is required`);
           }

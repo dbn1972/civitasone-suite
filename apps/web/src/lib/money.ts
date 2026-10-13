@@ -227,3 +227,47 @@ export function sumMinor(values: readonly (string | number | bigint | null | und
   }
   return total;
 }
+
+/**
+ * SF-12: exact paise digit-string (or integer number/bigint) -> plain rupees
+ * for an <input> value, no float math. "50000" -> "500.00", "5" -> "0.05".
+ * Null, "", non-integer or negative input -> "". Inverse of rupeesToMinorString.
+ */
+export function minorToRupeesInput(minor: string | number | bigint | null | undefined): string {
+  if (minor === null || minor === undefined) return "";
+  let digits: string;
+  if (typeof minor === "number") {
+    if (!Number.isSafeInteger(minor) || minor < 0) return "";
+    digits = String(minor);
+  } else digits = String(minor);
+  if (!/^\d+$/.test(digits)) return "";
+  const p = digits.padStart(3, "0");
+  return `${p.slice(0, -2)}.${p.slice(-2)}`;
+}
+
+/**
+ * SF-12: a legacy FLOAT rupees value (e.g. an API field that is still a JS
+ * number) -> paise digit-string without a float multiply. The value is first
+ * fixed to 2 decimals (which rounds the float representation), then parsed by
+ * rupeesToMinorString. Non-finite, negative or >= 1e21 -> null. Zero allowed.
+ */
+export function rupeesNumberToMinorString(rupees: number): string | null {
+  if (!Number.isFinite(rupees) || rupees < 0) return null;
+  return rupeesToMinorString(rupees.toFixed(2), { allowZero: true });
+}
+
+/**
+ * SF-12: lenient as-you-type rupees input -> paise NUMBER (0 when not yet a
+ * valid amount). Tolerates a trailing "." ("500.") and a leading "." (".5");
+ * more than 2 decimals, signs, exponents or separators give 0 (use the strict
+ * parsers for submit-time validation). Values beyond 2^53 paise give 0.
+ */
+export function rupeesInputToMinorNumber(input: string): number {
+  let t = (input ?? "").trim();
+  if (t.endsWith(".") && t.length > 1) t = t.slice(0, -1);
+  if (t.startsWith(".")) t = `0${t}`;
+  const minor = rupeesToMinorString(t, { allowZero: true });
+  if (minor === null) return 0;
+  const n = Number(minor);
+  return Number.isSafeInteger(n) ? n : 0;
+}
