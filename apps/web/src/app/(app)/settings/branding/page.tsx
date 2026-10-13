@@ -41,16 +41,20 @@ const BRANDING_ADMIN_ROLES = ["theme_admin", "super_admin", "tenant_admin"];
 const MAX_LOGO_BYTES = 200 * 1024;
 const ALLOWED_LOGO_TYPES = ["image/png", "image/jpeg", "image/webp"];
 
-/** The server's own validation message from a non-2xx response, if it sent one. */
+/**
+ * The server's field-level validation message, only for a 400 that carries one
+ * (e.g. an oversize or SVG logo). Every other status, including 5xx and gateway
+ * errors, returns null so the caller shows the generic localized message and
+ * never a raw server string.
+ */
 async function serverErrorMessage(res: Response): Promise<string | null> {
+  if (res.status !== 400) return null;
   try {
     const body = (await res.json()) as {
-      message?: unknown;
       fieldErrors?: Array<{ message?: unknown }>;
     };
     const first = body.fieldErrors?.[0]?.message;
-    const msg = typeof first === "string" && first ? first : body.message;
-    return typeof msg === "string" && msg ? msg.slice(0, 300) : null;
+    return typeof first === "string" && first ? first.slice(0, 300) : null;
   } catch {
     return null;
   }
