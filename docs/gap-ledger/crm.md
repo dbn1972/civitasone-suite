@@ -14,7 +14,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HOME-01  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** All 35 tiles render for every CRM role, but ten routes (Custom Fields, Matching Rules, Lead Scoring, Qualification Frameworks, Lead Stage Reasons, Assignment Rules, Assignment Directory, Escalation Rules, Task Escalation, Document Types) sit behind requireAnyRole(crm_admin, admin, super_admin, platform_admin, tenant_admin) and silently redirect a crm_user back to /crm, so the tile looks broken; Agent Workload, also labelled admin in its own source comment, has no gate at all (app/(app)/crm/page.tsx:53, app/(app)/crm/custom-fields/layout.tsx:8, app/(app)/crm/assignment-rules/layout.tsx:11).
 - **Verified evidence:** page.tsx:53-62 lists all 35 tiles unfiltered; ten route layouts call requireAnyRole(['crm_admin','admin','super_admin','platform_admin','tenant_admin'],'/crm') (custom-fields, lead-scoring, qualification-frameworks, lead-reason-codes, assignment-rules, assignment-directory, escalation-rules, task-escalation, document-types) and dedup-rules redirects to /crm/data-quality (not /crm). CRM layout allows crm_user (layout.tsx:5) so a crm_user is bounced. agent-workload has no layout; page.tsx:4 comment says 'admin'. Server enforcement in crm-service is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/crm/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`, `apps/web/src/app/(app)/crm/agent-workload/layout.tsx (new)`, `apps/web/src/app/_components/LinkTiles.tsx`
@@ -31,7 +31,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme COPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Vocabulary conflicts with the rest of the module: hub says "Deals", "Sales Pipelines", "Quotations" while the Deals page is titled "Vendor / Stakeholder Engagements" and the dashboard notes the module is "not a commercial sales pipeline" (app/(app)/crm/page.tsx:21).
 - **Verified evidence:** page.tsx:13 'Deals', :18 'Sales & Pipeline', :21 'Sales Pipelines', :25 'Quotations' vs deals/page.tsx:16 title 'Vendor / Stakeholder Engagements' and crm/dashboard/page.tsx:44-47 'not a commercial sales pipeline'. Tile description at :13 already says 'Engagements'.
 - **Files to change:** `apps/web/src/app/(app)/crm/page.tsx`, `apps/web/src/app/(app)/crm/deals/page.tsx`, `apps/web/messages/en.json`
@@ -46,7 +46,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HOME-03  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle is hard-coded English while the title goes through next-intl, so the page is half-translated in any other locale (app/(app)/crm/page.tsx:75).
 - **Verified evidence:** page.tsx:75 subtitle 'Pipeline and customer operations workspace.' is a literal while title uses t('title') (:74). Worse than stated: section headings and every tile title/description (:6-66) are also English literals, and messages/en.json crm.title is 'Citizen Services' (line 1149), which does not match the CRM module name used elsewhere.
 - **Files to change:** `apps/web/src/app/(app)/crm/page.tsx`, `apps/web/messages/en.json`, `apps/web/messages/hi.json`
@@ -61,7 +61,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HOME-04  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx shows 4 stat tiles and a 288px block wrapped in min-h-screen bg-slate-50, unlike the loaded hub (tile sections) and nested inside the app shell padding (app/(app)/crm/loading.tsx:3).
 - **Verified evidence:** crm/loading.tsx:3 wraps in min-h-screen bg-slate-50 p-6 md:p-8 with 4 stat tiles (h-24) and h-72 block; loaded hub (page.tsx:77-89) is a PageHeader plus five tile sections. Same wrapper pattern in health/loading.tsx:3, so it is systemic.
 - **Files to change:** `apps/web/src/app/(app)/crm/loading.tsx`
@@ -75,7 +75,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HOME-05  ·  LOW  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** not-found EmptyState has no link back to the CRM hub (app/(app)/crm/not-found.tsx:1).
 - **Verified evidence:** crm/not-found.tsx renders <EmptyState title message/> with no action prop (EmptyState supports action, ds/EmptyState.tsx:8). Note it is a segment not-found, shown only where notFound() is called under /crm.
 - **Files to change:** `apps/web/src/app/(app)/crm/not-found.tsx`
@@ -95,7 +95,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-01  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed load the table card shows the "Couldn't load — showing nothing" badge and, directly beneath it, the EmptyState "No accounts yet — Create an account…", and Account Hierarchy says "No hierarchy yet"; both read as facts about an empty master rather than an outage (app/(app)/crm/accounts/AccountsTable.tsx:54, app/(app)/crm/accounts/AccountHierarchy.tsx:16).
 - **Verified evidence:** accounts/page.tsx:9 gets {data, source}; on error data=[] (apiClient.ts fetchJson returns empty+source:'error'). AccountsTable.tsx:41-51 renders DataSourceBadge (provenance 'error-no-data' -> "Couldn't load — showing nothing") and then, because tableRows.length===0, EmptyState 'No accounts yet / Create an account...' (AccountsTable.tsx:49-54). AccountHierarchy.tsx:16 receives only `accounts` (no source) so it shows 'No hierarchy yet / Accounts appear here once the organisation master has entries'. Stat cards already use '—' (page.tsx:14) so only the two panels mask the outage. RefreshErrorState exists (app/_components/ds/RefreshErrorState.tsx) but is not used on this route.
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/AccountsTable.tsx`, `apps/web/src/app/(app)/crm/accounts/AccountHierarchy.tsx`, `apps/web/src/app/(app)/crm/accounts/page.tsx`
@@ -114,7 +114,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-02  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Hierarchy helper documents that "the API caps the list", yet Total Accounts / Linked Contacts / Sectors are computed from the returned page with no total or "showing N of M" cue, so they can silently undercount (app/(app)/crm/accounts/hierarchy.ts:10, app/(app)/crm/accounts/page.tsx:13).
 - **Verified evidence:** Real on the client side: page.tsx:9-13 and :47-53 compute Total Accounts, Linked Contacts (sum of contactCount), Sectors from the array only, and mapCrmAccounts (app/_data/apiMappers.ts:558-577) returns a bare CRMAccountSummary[] and discards any total/next-cursor field, so the UI has no way to show 'N of M'. hierarchy.ts:10 comment states 'the API caps the list'. Whether the accounts endpoint actually caps or returns a total cannot be verified: CRM service and @civitasone/schemas (crmAccountsListSchema) are not in the snapshot. Note also Linked Contacts sums only listed accounts.
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/crm/accounts/page.tsx`, `apps/web/src/app/(app)/crm/accounts/AccountsTable.tsx`
@@ -132,7 +132,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** New account is two writes (POST then PATCH parent). If the PATCH fails the form closes with a success-styled "Account created…" message and only a hint that the parent was not set; nothing offers a retry (app/(app)/crm/accounts/NewAccountForm.tsx:48).
 - **Verified evidence:** NewAccountForm.tsx:38-47 POSTs v1/crm/accounts, then (only if form.parentId && body.id) PATCHes v1/crm/accounts/{id}/parent. On PATCH failure (:49-56) it sets message 'Account created. The parent could not be set — you can set it from the account page.', closes the form and refreshes; the message is rendered in the green role=status paragraph (:120-122, colour #047857), with no retry action. Two extra defects found: (a) the form state is NOT reset on this path (setForm reset is only on the success path, :60), so re-opening shows the old values and a resubmit creates a duplicate; (b) if the 202 body has no `id`, the parent step is skipped silently and the user sees the plain success message with no hint the parent was dropped.
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/NewAccountForm.tsx`
@@ -150,7 +150,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-04  ·  MEDIUM  ·  partly  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Create is queue-backed (202): the new row does not appear until the consumer runs, but router.refresh() is called immediately, so a user can submit twice and create a duplicate; neither the form nor browserFetch sets an idempotency key (browserClient.ts sends only device headers) (app/(app)/crm/accounts/NewAccountForm.tsx:50).
 - **Verified evidence:** NewAccountForm.tsx:50-55 POSTs with headers only from browserFetch (browserClient.ts:22-34 adds content-type + x-device-id/trust); no idempotency header is set, although the BFF proxy already forwards x-idempotency-key (app/api/proxy/[...path]/route.ts:7) and finance JournalEntryForm.tsx:74,159 shows the pattern. router.refresh() is called right after the 202 (:62) so the new row is not yet listed. Overstated: the submit Button is disabled/loading while busy (:110-112) and the form closes and resets after success, so an accidental double-click is already blocked; duplicates need the user to reopen the form and re-enter. There is no zod validation at the form boundary (only `required` on name; website free text). Backend queue/idempotency behaviour cannot be verified (CRM service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/NewAccountForm.tsx`, `apps/web/src/app/(app)/crm/accounts/newAccountSchema.ts`
@@ -167,7 +167,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-06  ·  LOW  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Hierarchy uses role="tree"/"treeitem" with aria-selected={false} but has no roving focus or arrow-key handling, so it is announced as a widget it does not behave as (app/(app)/crm/accounts/AccountHierarchy.tsx:19).
 - **Verified evidence:** AccountHierarchy.tsx:19-21 renders <ul role='tree'> with <li role='treeitem' aria-selected={false} aria-level=...>. There is no tabIndex/roving focus, no aria-expanded and no key handler anywhere in the component; items are flat (depth by padding-left) with an <a> inside each. Assistive tech announces a tree widget with arrow-key semantics that do not exist.
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/AccountHierarchy.tsx`
@@ -183,7 +183,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-07  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle carries a hard-coded Devanagari suffix (संगठन पंजी) instead of a next-intl key, and for an Odisha tenant would be expected in Odia (app/(app)/crm/accounts/page.tsx:34).
 - **Verified evidence:** accounts/page.tsx:34 subtitle is a literal string ending '• संगठन पंजी' (Devanagari) and activities/page.tsx:22 has the same pattern ('• अन्तःक्रियाएँ'); neither uses next-intl. Correction: Odia is not a supported locale at all (src/i18n/config.ts:12 SUPPORTED_LOCALES = en, hi, ta, te, kn), so 'expected in Odia' is not currently actionable; the real defect is a hard-coded Hindi suffix shown to every locale/tenant (a Tamil/English user sees Hindi text) and it is not FABRICATED data.
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/page.tsx`, `apps/web/src/app/(app)/crm/activities/page.tsx`, `apps/web/src/messages/en.json`, `apps/web/src/messages/hi.json`
@@ -199,7 +199,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-08  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Parent not in the list is rendered as "Reports to another account", giving no clue which one (app/(app)/crm/accounts/AccountsTable.tsx:38).
 - **Verified evidence:** AccountsTable.tsx:38 builds hierarchy as `Reports to ${nameById.get(a.parentId) ?? 'another account'}`; nameById (:35) is built only from the loaded rows, so any parent outside the (possibly capped or cached) list shows the generic text with no name or link. The row itself is a link to the account, and CRMAccountSummary carries only parentId (no parent name). The account detail page has an ancestors loader (getCrmAccountAncestors, loaders.ts:1431) so names are obtainable but not on this list.
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/AccountsTable.tsx`
@@ -222,7 +222,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-DETAIL-01  ·  HIGH  ·  partly  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Account is resolved with accounts.find over the list response, which hierarchy.ts documents as API-capped; a valid deep link to an account beyond the cap renders "Account not found — does not exist or is no longer active" (app/(app)/crm/accounts/[id]/page.tsx:34, app/(app)/crm/accounts/hierarchy.ts:10).
 - **Verified evidence:** page.tsx:15-34 resolves the account via accounts.find over getCrmAccounts() (list, /api/v1/crm/accounts); hierarchy.ts:9-10 documents that the API caps the list. So a deep link beyond the cap would not be found. However, because ancestors/children are fetched by id (loaders.ts:1431-1448), a truly missing id probably errors first (RefreshErrorState) - and whether a GET /crm/accounts/:id exists or the cap size is cannot-verify (crm service not in snapshot).
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/[id]/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -238,7 +238,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-DETAIL-02  ·  HIGH  ·  partly  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** DocumentsPanel receives canVerify unconditionally, so verify/reject controls show for every crm_user; either the API 403s a normal user or document verification is not role-limited at all — no role check exists in the page or layout (app/(app)/crm/accounts/[id]/page.tsx:147).
 - **Verified evidence:** page.tsx:147 passes canVerify (also contacts/[id]/page.tsx:89) unconditionally; DocumentsPanel shows Verify/Reject when canVerify (DocumentsPanel.tsx:328). Claim 'no role check in layout' is wrong: crm/layout.tsx:5-11 requireAnyRole(['crm_user','crm_admin','platform_admin','super_admin']) - but that is module access, not verify permission, so every crm_user sees Verify/Reject. Server enforcement cannot-verify (crm service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/[id]/page.tsx`, `apps/web/src/app/(app)/crm/contacts/[id]/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`
@@ -253,7 +253,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-DETAIL-03  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Re-parenting has no ConfirmDialog although it moves the whole subtree in the hierarchy, and the parent select lists every account except itself — including its own descendants — so the only guard against a cycle is the server 422 (app/(app)/crm/accounts/[id]/page.tsx:61, app/(app)/crm/accounts/[id]/AccountParentForm.tsx:20).
 - **Verified evidence:** AccountParentForm.tsx:79-95 submits PATCH /crm/accounts/:id/parent with no ConfirmDialog and no reason; options (page.tsx:61) exclude only the account itself, so descendants are selectable; CYCLE_DETECTED 422 handled at :55-57. Audit emission is a backend concern (cannot-verify). Suggestion of maker-checker is not appropriate for a hierarchy edit; a simple confirm is.
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/[id]/AccountParentForm.tsx`, `apps/web/src/app/(app)/crm/accounts/[id]/page.tsx`
@@ -269,7 +269,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Three fetches are combined all-or-nothing: if only ancestors or children fail, the whole account (already loaded) is replaced by "We couldn't load account" (app/(app)/crm/accounts/[id]/page.tsx:25).
 - **Verified evidence:** page.tsx:24-32 combineResourceState treats any of the three results being source 'error' as a full error (useResource.ts:54-61), replacing the loaded account with 'We couldn't load account.'.
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/[id]/page.tsx`
@@ -283,7 +283,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme XSS (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Website is put straight into href with no scheme check; a stored "javascript:" value or a bare domain (relative link) would misbehave (app/(app)/crm/accounts/[id]/page.tsx:77).
 - **Verified evidence:** page.tsx:77 `<a href={account.website}>`; apiMappers.ts:571 does toText only, no scheme validation. A stored javascript: URL would execute on click; bare domain becomes relative path. rel noopener/noreferrer and target _blank present.
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/[id]/page.tsx`, `apps/web/src/lib/url.ts`
@@ -297,7 +297,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-DETAIL-06  ·  MEDIUM  ·  confirmed  ·  theme FILTER (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** "View contacts" links to /crm/contacts?search=<account name>, a free-text search, not an account filter, so similarly named organisations mix and renamed accounts lose their contacts (app/(app)/crm/accounts/[id]/page.tsx:133).
 - **Verified evidence:** page.tsx:133 links to /crm/contacts?search=<account.name>; getCrmContacts (loaders.ts:1398-1412) has no accountId param, only free-text search, and contacts carry `account` as a name string. Similar names mix, renamed accounts lose contacts. Backend support for accountId filter cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/[id]/page.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/crm/contacts/page.tsx`
@@ -311,7 +311,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-DETAIL-07  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Seven independent client panels load below the fold with their own spinners and errors; the loading.tsx skeleton is a single block and does not mirror the two-column layout (app/(app)/crm/accounts/[id]/loading.tsx:7).
 - **Verified evidence:** [id]/loading.tsx:1-11 is a single h-64 block inside min-h-screen wrapper; page has g-main two columns plus 7 client panels (Customer360Panel, AccountRelationshipsEditor, ActivityFeed, CommunicationLog, AddressesEditor, DocumentAlertsView, DocumentsPanel) each with own spinner/error. Loading skeleton doesn't mirror layout.
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/[id]/loading.tsx`
@@ -324,7 +324,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-DETAIL-08  ·  LOW  ·  confirmed  ·  theme COPY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Error copy reads "We couldn't load account." — the area noun lacks an article because toHumanError drops determiners by design (app/(app)/crm/accounts/[id]/page.tsx:29, lib/messages.ts:41).
 - **Verified evidence:** page.tsx:29 toHumanError('load',{area:'account'}) and messages.ts:36-41 template `We couldn't load ${thing}.` intentionally omits determiners, giving 'We couldn't load account.'.
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/[id]/page.tsx`
@@ -344,7 +344,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACTIVITIES-01  ·  HIGH  ·  confirmed  ·  theme VALIDATION (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The Log form offers Type "Site Visit" (value site_visit) and the subtitle promises site visits, but mapCRMActivityEntries only accepts call|meeting|email|task|note and silently skips any other row, so a saved site visit never appears in the list (app/(app)/crm/activities/LogActivityButton.tsx:97, app/_data/loaders.ts:3176).
 - **Verified evidence:** LogActivityButton.tsx:97 offers <option value='site_visit'>, and the page subtitle (activities/page.tsx:22) promises site visits. mapCRMActivityEntries (app/_data/loaders.ts:3176) validTypes = call|meeting|email|task|note, and line 3186 `continue`s past any row with another type, so a saved site_visit never renders and is not counted in any stat. No other mention of site_visit exists in apps/packages (grep). Whether the backend accepts site_visit (and whether CRMActivityEntryListSchema in @civitasone/schemas or the CRMActivityEntry type in @civitasone/types allow it) cannot be verified, those packages are absent. Related: the mapper is shared by no other screen, so widening it is local. The PII theme tag is wrong.
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/crm/activities/LogActivityButton.tsx`, `apps/web/src/app/(app)/crm/activities/ActivitiesTable.tsx`, `packages/types (CRMActivityEntry type)`, `packages/schemas (CRMActivityEntryListSchema)`
@@ -361,7 +361,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACTIVITIES-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed load the badge and "—" stats say the load failed, yet the table below still shows "No interactions yet — Schedule your first call…" because ActivitiesTable never receives source (app/(app)/crm/activities/page.tsx:26, app/(app)/crm/activities/ActivitiesTable.tsx:64).
 - **Verified evidence:** activities/page.tsx:26 renders DataSourceBadge when source==='error' and stats show '—' via stat() (:12), but line 36 passes only `activities` and `initialSegment` to ActivitiesTable (no source). ActivitiesTable.tsx:63-64 renders EmptyState 'No interactions yet — Schedule your first call...' whenever activities.length===0, so an outage looks like an empty register; the All/Today/Overdue Segmented control is still shown. Unlike accounts, this table does not use useSeededResource so there is no offline cache either.
 - **Files to change:** `apps/web/src/app/(app)/crm/activities/page.tsx`, `apps/web/src/app/(app)/crm/activities/ActivitiesTable.tsx`
@@ -379,7 +379,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACTIVITIES-03  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Today" is computed as new Date().toISOString().slice(0,10), i.e. the UTC date, in both the stat and the segment; between 00:00 and 05:30 IST an Odisha user sees yesterday's items as "Due Today" (app/(app)/crm/activities/page.tsx:14, app/(app)/crm/activities/ActivitiesTable.tsx:40).
 - **Verified evidence:** activities/page.tsx:14 (server) and ActivitiesTable.tsx:40 (client) both use new Date().toISOString().slice(0,10), i.e. the UTC calendar date. Between 00:00 and 05:30 IST that is the previous IST day, so 'Due Today' and the Today segment match yesterday's dueDate. Two more issues: server (UTC host) and client (browser) can disagree, and the equality assumes dueDate is a bare YYYY-MM-DD (format not verifiable, schema absent). formatters.ts has formatIndianDate but no today-in-IST helper; lib/fiscalYear.ts already references Asia/Kolkata.
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/crm/activities/page.tsx`, `apps/web/src/app/(app)/crm/activities/ActivitiesTable.tsx`
@@ -396,7 +396,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACTIVITIES-04  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Mapper returns null when every row is invalid or the list is empty, and skips rows with an unknown status; a "cancelled" activity is valid but counted by none of the four stat cards or the segments (app/_data/loaders.ts:3177).
 - **Verified evidence:** Confirmed and worse than stated: mapCRMActivityEntries (loaders.ts:3172-3200) `continue`s past rows with unknown type or status (:3186) and ends `return mapped.length > 0 ? mapped : null` (:3199); fetchJson (apiClient.ts:154-158) treats a null map as invalid_payload and returns {data: [], source:'error'}, so a legitimately EMPTY activity list is reported as 'Couldn't load' with '—' stats. Overstated part: 'cancelled' is valid (validStatuses :3177) and is counted in Total Interactions (activities.length) and the All segment; it is just excluded from Due Today/Overdue/Completed and there is no card for open/cancelled. Rows with statuses like in_progress/done are silently dropped entirely.
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/crm/activities/page.tsx`, `apps/web/src/app/(app)/crm/activities/ActivitiesTable.tsx`
@@ -413,7 +413,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACTIVITIES-05  ·  LOW  ·  confirmed  ·  theme CAP (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Table has sortable only: no filter box, pagination or export, unlike Accounts, Contacts and Deals; a long register is one unbroken table (app/(app)/crm/activities/ActivitiesTable.tsx:77).
 - **Verified evidence:** ActivitiesTable.tsx:77 passes only `sortable` to DataTable. DataTable supports filterable, filterPlaceholder, pageSize, and exportable (ds/DataTable.tsx:72-87,180-187). AccountsTable.tsx:70-73 uses sortable + filterable + pageSize={25}. The whole register is fetched in one call and rendered as one unpaginated table. The PII theme tag is wrong (it is a capability gap); if `exportable` is added it exports names/subjects of stakeholders, so it needs role gating and audit logging.
 - **Files to change:** `apps/web/src/app/(app)/crm/activities/ActivitiesTable.tsx`
@@ -429,7 +429,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACTIVITIES-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Contact picker failures are swallowed ("contact picker is optional"), so the select silently shows only "— No contact —" and a user cannot tell the list did not load (app/(app)/crm/activities/LogActivityButton.tsx:37).
 - **Verified evidence:** LogActivityButton.tsx:32-46: on open it fetches v1/crm/contacts; `if (!res.ok) return;` (:37) and `catch { /* contact picker is optional */ }` swallow failures, so the <select> (:83-88) only ever shows '— No contact —' with no message, and the user may log an interaction unlinked to the contact they meant. Also loads the contacts list unpaginated on every open and shows no loading state.
 - **Files to change:** `apps/web/src/app/(app)/crm/activities/LogActivityButton.tsx`
@@ -446,7 +446,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACTIVITIES-07  ·  LOW  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Error/empty states inside the segment view fall back to DataTable's generic "No records found — There are no items to display yet." (app/(app)/crm/activities/ActivitiesTable.tsx:76).
 - **Verified evidence:** ActivitiesTable.tsx:76-89 passes no emptyTitle/emptyMessage to DataTable, so DataTable's defaults 'No records found / There are no items to display yet.' (ds/DataTable.tsx:184-185) appear. Correction: this only happens when a segment filter yields zero rows (Today/Overdue with nothing due) because activities.length===0 is caught earlier by the page-specific EmptyState (:63-64); the error state never reaches DataTable. So the true defect is generic, non-contextual copy for empty segments, not an outage mask (that is ACTIVITIES-02).
 - **Files to change:** `apps/web/src/app/(app)/crm/activities/ActivitiesTable.tsx`
@@ -462,7 +462,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACTIVITIES-08  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Page and stats are titled "Stakeholder Interactions" while the hub and nav call the route "Activities" and the dashboard quick link says "Activities" (app/(app)/crm/activities/page.tsx:21).
 - **Verified evidence:** activities/page.tsx:21 PageHeader title='Stakeholder Interactions', stat 'Total Interactions' (:30), button '+ Log Interaction' (LogActivityButton.tsx:79) and empty state 'No interactions yet', whereas the CRM hub tile is 'Activities' (crm/page.tsx:14) and dashboard quick link is 'Activities' (crm/dashboard/page.tsx:36). The API route and variable names also say activities. Terminology is inconsistent for one screen.
 - **Files to change:** `apps/web/src/app/(app)/crm/activities/page.tsx`, `apps/web/src/app/(app)/crm/activities/LogActivityButton.tsx`, `apps/web/src/app/(app)/crm/activities/ActivitiesTable.tsx`, `apps/web/src/app/(app)/crm/page.tsx`, `apps/web/src/app/(app)/crm/dashboard/page.tsx`
@@ -484,7 +484,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-AGENT-WORKLOAD-01  ·  HIGH  ·  confirmed  ·  theme AUTHZ (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Every sibling assignment/config route redirects non-admins in a layout.tsx, but agent-workload has none; any crm_user who reaches the URL gets a fully wired capacity editor (set maxLeads, mark agents available/on leave) for platform-wide routing, and the hub tile is shown to everyone (app/(app)/crm/agent-workload/page.tsx:4 vs app/(app)/crm/assignment-rules/layout.tsx:11).
 - **Verified evidence:** app/(app)/crm/agent-workload/ contains only error.tsx, loading.tsx, page.tsx (no layout.tsx). Siblings assignment-rules, assignment-directory, escalation-rules, task-escalation, custom-fields, dedup-rules etc. each have a layout.tsx calling requireAnyRole(['crm_admin','admin','super_admin','platform_admin','tenant_admin'], '/crm'). The parent crm/layout.tsx:5-9 only requires CRM_ROLES = crm_user|crm_admin|platform_admin|super_admin, and middleware.ts has no role rules. Hub tile 'Agent Workload' (crm/page.tsx:60) is shown to all. So any crm_user reaching /crm/agent-workload renders AgentWorkloadEditor, which PATCHes v1/crm/teams/agents/{id}/capacity (assignment.ts:334-340). Whether the backend also rejects non-admins cannot be verified (CRM service absent), but the UI gate is missing.
 - **Files to change:** `apps/web/src/app/(app)/crm/agent-workload/layout.tsx`, `apps/web/src/app/(app)/crm/page.tsx`
@@ -502,7 +502,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-AGENT-WORKLOAD-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Saving one row calls load() which replaces all rows from the server, discarding unsaved edits the user made on other rows (app/_components/crm/AgentWorkloadEditor.tsx:72).
 - **Verified evidence:** AgentWorkloadEditor.tsx:72 calls `await load()` after a successful save; load() (:34-40) does setSource('loading') which makes the component return only the 'Loading agent workload…' paragraph (:88-94), then setAgents(data) replaces all rows from the server. Any unsaved edits (maxLeads, available, onLeave) on other rows are discarded, the table unmounts (focus lost) and the success message set after the reload. Same pattern in OwnershipDirectoryEditor (see ASSIGNMENT-DIRECTORY-05/06).
 - **Files to change:** `apps/web/src/app/_components/crm/AgentWorkloadEditor.tsx`
@@ -519,7 +519,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-AGENT-WORKLOAD-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Capacity 0 is accepted (min 0) and the over-capacity pill is suppressed for 0, but no help text says whether 0 means "unlimited" or "receives nothing" — a wrong guess silently stops routing to that agent (app/_components/crm/AgentWorkloadEditor.tsx:120, app/_components/crm/AgentWorkloadEditor.tsx:135).
 - **Verified evidence:** AgentWorkloadEditor.tsx:117-125 input has min={0} and sanitizeInt (:24-28) accepts 0; the over-capacity flag at :103 requires `a.maxLeads > 0`, implying the UI treats 0 as 'no cap', but no label, hint or tooltip says what 0 means, and the header is just 'Max leads'. Also normaliseAgents (assignment.ts:310) does num(r.maxLeads) so a missing maxLeads from the API becomes 0 and would be saved back as 0 on the next Save. What the routing engine does with 0 (unlimited vs none) cannot be verified; CRM assignment service absent.
 - **Files to change:** `apps/web/src/app/_components/crm/AgentWorkloadEditor.tsx`, `apps/web/src/lib/crm/assignment.ts`
@@ -536,7 +536,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-AGENT-WORKLOAD-04  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Availability and leave changes alter who receives every new lead but there is no confirmation, reason or visible audit trail on the page (the mutation is a bare PATCH) (lib/crm/assignment.ts:335).
 - **Verified evidence:** assignment.ts:334-340 updateAgentCapacity issues a bare PATCH v1/crm/teams/agents/{id}/capacity with {maxLeads, available, onLeave}; AgentWorkloadEditor.tsx:60-75 saves immediately on the row Save click with no ConfirmDialog, no reason and no history view; the only feedback is `${name}'s capacity saved.` Confirmed as a UI gap. Whether the backend emits an audit event cannot be verified (CRM service absent), so 'no audit trail' is only true on the page. Precedent in the same module: transferOwnership (assignment.ts:274-285) requires a reason, and ConfirmDialog supports requireReason/minReasonLength. 'maker≠checker' is a policy decision, not evidenced as required for this action.
 - **Files to change:** `apps/web/src/app/_components/crm/AgentWorkloadEditor.tsx`, `apps/web/src/lib/crm/assignment.ts`
@@ -554,7 +554,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-AGENT-WORKLOAD-05  ·  LOW  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Agent falls back to the raw agentId when name is missing, so a UUID can appear as the agent (lib/crm/assignment.ts:308).
 - **Verified evidence:** assignment.ts:308 `name: str(r.name) || agentId`; AgentWorkloadEditor.tsx:107 renders {a.name} in the first cell and setError/setMessage use agent.name (:63, :73), so when the API omits name a raw agentId (likely a UUID) is shown as the agent identity in the table and toasts. It is a fallback path, it depends on the API omitting name (unverifiable).
 - **Files to change:** `apps/web/src/lib/crm/assignment.ts`, `apps/web/src/app/_components/crm/AgentWorkloadEditor.tsx`
@@ -570,7 +570,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-AGENT-WORKLOAD-06  ·  LOW  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Row controls are labelled by position ("Max leads for agent 3") and every Save button reads just "Save"; screen-reader users cannot tell whose row they are editing after a sort or reload (app/_components/crm/AgentWorkloadEditor.tsx:132).
 - **Verified evidence:** AgentWorkloadEditor.tsx:132 label 'Max leads for agent {n}' where n = index+1 (:98), checkboxes aria-label 'Available for agent {n}' / 'On leave for agent {n}' (:142,:149), and every Save button is just 'Save' with no aria-label (:154-156). The name is in a plain <td> not a row header (:107). After any reload the index-to-agent mapping can change, and the screen-reader user hears positions rather than names. Not an i18n issue (theme corrected).
 - **Files to change:** `apps/web/src/app/_components/crm/AgentWorkloadEditor.tsx`
@@ -588,7 +588,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-AGENT-WORKLOAD-07  ·  LOW  ·  partly  ·  theme STATE (was CAP)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Load happens client-side on mount with a bare text line; unlike server-loaded CRM lists there is no cached copy or offline fallback (app/_components/crm/AgentWorkloadEditor.tsx:84).
 - **Verified evidence:** Accurate description: AgentWorkloadEditor.tsx:44-51 loads via getAgents() (browserFetch) in useEffect, and shows a bare 'Loading agent workload…' paragraph (:88-94) with no skeleton; agent-workload/page.tsx is a static server component so nothing is server-seeded and there is no useSeededResource/offline cache (unlike accounts). Overstated as a defect: this is an admin configuration screen where a stale cached capacity table could be misleading, and failure is handled with 'Workload unavailable' + badge (:113-119). The real improvement is a proper loading skeleton and not resetting to the loading state on refresh (ties to WORKLOAD-02).
 - **Files to change:** `apps/web/src/app/_components/crm/AgentWorkloadEditor.tsx`
@@ -611,7 +611,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-DIRECTORY-01  ·  MEDIUM  ·  confirmed  ·  theme COPY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Singular forms are made with label.replace(/s$/, ""), so the Territories tab shows "+ Add territorie" and placeholder "Territorie name", and Branches shows "+ Add branche" (app/_components/crm/OwnershipDirectoryEditor.tsx:161, lib/crm/assignment.ts:211).
 - **Verified evidence:** OwnershipDirectoryEditor.tsx:161 placeholder `${label.replace(/s$/, '')} name` and :193 `+ Add ${label.replace(/s$/, '').toLowerCase()}`. Labels come from OWNERSHIP_RESOURCE_LABELS (assignment.ts:209-214): Queues->'Queue', Partners->'Partner', but Territories->'Territorie' and Branches->'Branche'. So the Territories tab shows '+ Add territorie' and placeholder 'Territorie name'; Branches shows '+ Add branche'. Not fabricated data, so theme corrected.
 - **Files to change:** `apps/web/src/lib/crm/assignment.ts`, `apps/web/src/app/_components/crm/OwnershipDirectoryEditor.tsx`
@@ -628,7 +628,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-DIRECTORY-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** When a tab fails to load, rows are [] so the tab shows "No queues yet — Add queues…" beside the error badge and keeps "+ Add queue" enabled; an admin can re-create entries that exist and duplicate them (app/_components/crm/OwnershipDirectoryEditor.tsx:137, lib/crm/assignment.ts:5).
 - **Verified evidence:** getResources (assignment.ts:241-249) returns {data: [], source:'error'} on failure. In ResourceTable (OwnershipDirectoryEditor.tsx:127-137) the header shows DataSourceBadge when source==='error' but rows.length===0 renders EmptyState 'No queues yet — Add queues used to route and own leads.', and the '+ Add queue' button (:192-194) stays enabled. The admin can add and Create an entry that already exists on the server (unique-name enforcement by the backend cannot be verified) and, after Create, load() may still fail.
 - **Files to change:** `apps/web/src/app/_components/crm/OwnershipDirectoryEditor.tsx`
@@ -646,7 +646,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-DIRECTORY-03  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The interface comment says extra backend fields are "carried through opaquely", but normaliseResources copies only id, name, description, enabled and updateResource PUTs that body, so any other stored field would be overwritten on save (lib/crm/assignment.ts:216, lib/crm/assignment.ts:234).
 - **Verified evidence:** Client-side facts confirmed: the interface comment (assignment.ts:216) says extra backend fields are 'carried through opaquely', but normaliseResources (:224-239) copies only id, name, description, enabled, and saveRow (OwnershipDirectoryEditor.tsx:77-82) builds the body from those four fields again, which updateResource PUTs (assignment.ts:256-263). The impact (overwriting/clearing other stored fields, e.g. parent territory, region, capacity) depends on PUT semantics and on which extra fields exist, neither of which is verifiable here (CRM service absent). The comment is wrong either way.
 - **Files to change:** `apps/web/src/lib/crm/assignment.ts`, `apps/web/src/app/_components/crm/OwnershipDirectoryEditor.tsx`
@@ -663,7 +663,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-DIRECTORY-05  ·  LOW  ·  confirmed  ·  theme STATE (was NAVUX)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Switching tabs remounts the table (key={resource}) and drops unsaved edits or new rows without a warning (app/_components/crm/OwnershipDirectoryEditor.tsx:216).
 - **Verified evidence:** OwnershipDirectoryEditor.tsx:210-218: <ResourceTable key={resource}> under <Tabs onChange={setActive}>. Changing the tab unmounts ResourceTable, so its local rows state (including edited fields and unsaved 'new-N' rows added via addRow, :66-68) is dropped with no prompt; each tab re-fetches on mount. Tabs (ds/Tabs.tsx) has no beforeChange guard. No unsaved-changes helper exists in the repo (grep for beforeunload/useUnsavedChanges found only unrelated forms).
 - **Files to change:** `apps/web/src/app/_components/crm/OwnershipDirectoryEditor.tsx`, `apps/web/src/app/_components/ds/Tabs.tsx`
@@ -681,7 +681,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-DIRECTORY-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Every row has its own Save; there is no dirty marker, so an admin cannot tell which of many edited rows are still unsaved (app/_components/crm/OwnershipDirectoryEditor.tsx:177).
 - **Verified evidence:** OwnershipDirectoryEditor.tsx:177-179: each row has its own Save/Create button (`disabled={busy}` only), enabled regardless of whether the row changed; update() (:62-64) mutates local state without tracking a baseline, so there is no dirty marker or per-row 'unsaved' indication. Additionally saveRow ends with `await load()` (:88), which reloads the whole table and discards edits made in other rows (same defect as AGENT-WORKLOAD-02).
 - **Files to change:** `apps/web/src/app/_components/crm/OwnershipDirectoryEditor.tsx`
@@ -699,7 +699,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-DIRECTORY-07  ·  LOW  ·  confirmed  ·  theme AUTHZ (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Hub shows this tile to every crm_user although the layout silently redirects them to /crm (app/(app)/crm/page.tsx:59).
 - **Verified evidence:** crm/page.tsx:59 lists { title: 'Assignment Directory', href: '/crm/assignment-directory' } in the Configuration section for everyone (LinkTiles.tsx has no role filtering); assignment-directory/layout.tsx:14-16 does requireAnyRole(ALLOWED_ROLES, '/crm'), so a crm_user clicking the tile is silently redirected back to /crm with no message. The same applies to Assignment Rules (:58), Agent Workload (:60, currently not even gated, see AGENT-WORKLOAD-01), Escalation Rules, Task Escalation and other admin-only tiles, since 10 sibling layouts gate admin roles.
 - **Files to change:** `apps/web/src/app/(app)/crm/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`, `apps/web/src/lib/auth/crmRoles.ts`
@@ -723,7 +723,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-RULES-01  ·  HIGH  ·  confirmed  ·  theme VALIDATION (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Routing rules are a platform-wide, live control edited as free JSON: criteria is any JSON object (only "is an object" is checked), the placeholder shows {"region":"west"}, and there is no per-strategy schema, dry-run or test-a-lead preview before a row is saved and starts routing leads (app/_components/crm/AssignmentRulesEditor.tsx:48, app/_components/crm/AssignmentRulesEditor.tsx:244).
 - **Verified evidence:** AssignmentRulesEditor.tsx:48-57 parseCriteria only checks JSON.parse gives a non-array object; :239-246 criteria is a plain <input> with placeholder '{"region":"west"}' (a placeholder, not fabricated data). rowValid (:59) and saveRow (:104-131) POST/PUT straight to v1/crm/assignment-rules with no per-strategy shape check; lib/crm/assignment.ts has no dry-run/preview call (only assignLead runRules on a real lead, :~145). Route is already admin-gated by assignment-rules/layout.tsx (requireAnyRole crm_admin etc.). Theme FABRICATED is wrong: nothing is fabricated.
 - **Files to change:** `apps/web/src/app/_components/crm/AssignmentRulesEditor.tsx`, `apps/web/src/lib/crm/assignment.ts`, `apps/web/src/lib/crm/assignmentCriteria.ts`, `apps/web/src/lib/crm/__tests__/assignmentCriteria.test.ts`
@@ -742,7 +742,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-RULES-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was UUID)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Fallback owner is a hand-typed raw id ("owner id"); a typo saves fine and mis-routes fallback leads, and the id is unreadable when reviewing the chain (app/_components/crm/AssignmentRulesEditor.tsx:254).
 - **Verified evidence:** AssignmentRulesEditor.tsx:250-256 fallbackOwnerId is a free-text <input placeholder='owner id'>; saveRow only trims it (:118) and rowValid does not require it or check it exists. The id is shown raw in the table. No EntityPicker component exists in apps/web/src or packages/ui-kit (grep found none); only SmartCombobox (string options, recent values) and an admin users loader (_data/loaders.ts:4851 /api/v1/admin/users) exist. Which directory endpoint is right for CRM owners cannot be verified (crm-service absent).
 - **Files to change:** `apps/web/src/app/_components/crm/AssignmentRulesEditor.tsx`, `apps/web/src/lib/crm/assignment.ts`, `apps/web/src/app/_components/crm/OwnerPicker.tsx`
@@ -760,7 +760,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-RULES-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed load the editor shows data [] plus the badge, so the chain reads as empty and "+ Add rule" stays enabled; an admin can build a second chain over one they cannot see (app/_components/crm/AssignmentRulesEditor.tsx:176, lib/crm/assignment.ts:103).
 - **Verified evidence:** getAssignmentRules (lib/crm/assignment.ts:100-108) returns {data:[], source:'error'} on non-ok or exception. The editor (:79-85, :168) sets rows=[] and shows only DataSourceBadge; with rows.length===0 (:173-178) it renders the EmptyState 'No assignment rules yet', and '+ Add rule' (:282) stays enabled. Also, after any save/delete load() (:125,:146) is re-run and a failed reload would blank the table in the same way.
 - **Files to change:** `apps/web/src/app/_components/crm/AssignmentRulesEditor.tsx`, `apps/web/src/app/_components/ds/ErrorState.tsx`
@@ -775,7 +775,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-RULES-04  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Order is a free number input per row: duplicates or gaps are accepted and evaluated order for ties is not defined in the UI; reordering means editing numbers and saving each row separately (app/_components/crm/AssignmentRulesEditor.tsx:211).
 - **Verified evidence:** Order input :204-213 is type=number min=0; sanitizeInt (:42) only rejects negatives/non-integers, rowValid does not compare across rows, so duplicate or gapped ordinals save. Rows render sorted by ordinal (:193-195, stable sort so ties fall back to load order) but nothing tells the admin how ties are evaluated by the backend (cannot verify: crm-service absent). New rows default ordinal to prev.length (:100), which can collide when gaps exist. Reordering = edit numbers and Save each row (:266). Save of one row calls load() (:125) which also discards other rows' unsaved edits.
 - **Files to change:** `apps/web/src/app/_components/crm/AssignmentRulesEditor.tsx`
@@ -793,7 +793,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-RULES-05  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Enabling, disabling or deleting a rule changes routing for all new leads immediately, yet only Delete has a confirmation and nothing on the page shows who changed the chain or when (bare PUT/DELETE) (lib/crm/assignment.ts:129).
 - **Verified evidence:** Delete does use ConfirmDialog (:285-294). Enable/disable is just a checkbox (:260) that changes local state only; it takes effect when the row's Save is pressed (:266), so 'immediately' is overstated, but Save on an enable change has no confirmation. There is no audit/last-changed display: AssignmentRule (lib/crm/assignment.ts:AssignmentRule) carries no updatedBy/updatedAt and the page never shows one; whether the backend returns them cannot be verified. Audit emission on mutation is a backend concern (CLAUDE.md rule 8), not visible here.
 - **Files to change:** `apps/web/src/app/_components/crm/AssignmentRulesEditor.tsx`, `apps/web/src/lib/crm/assignment.ts`
@@ -809,7 +809,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-RULES-06  ·  LOW  ·  confirmed  ·  theme STATE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** No dirty marker per row; unsaved edits are lost on reload and there is no discard or "unsaved changes" cue (app/_components/crm/AssignmentRulesEditor.tsx:93).
 - **Verified evidence:** Rows are held in useState (:71) with no baseline copy, so there is no dirty flag per row, no Discard, and no beforeunload guard. Worse, every successful save/delete calls load() (:125,:146) which replaces all rows with server data, silently wiping unsaved edits and unsaved new rows in other rows.
 - **Files to change:** `apps/web/src/app/_components/crm/AssignmentRulesEditor.tsx`
@@ -832,7 +832,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CAMPAIGNS-01  ·  HIGH  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Campaigns are identified only by campaignId: the first column, the row link label and the detail subtitle print the raw id (a UUID), so a marketing officer cannot tell which campaign is which; the summary row type carries no name (app/(app)/crm/campaigns/CampaignRoiTable.tsx:42, app/(app)/crm/campaigns/[id]/page.tsx:50).
 - **Verified evidence:** Confirmed for the UI: CampaignRoiTable.tsx:42/85 column 'Campaign' shows row.campaignId, rowHref (:105) links by id, and detail subtitle (:50) prints the id; CampaignRow has no name. Not verifiable: whether CRMCampaignRoiSummaryRow (@civitasone/types, absent) or the API can supply a name, so 'the summary row type carries no name' cannot be checked.
 - **Files to change:** `apps/web/src/app/(app)/crm/campaigns/CampaignRoiTable.tsx`, `apps/web/src/app/(app)/crm/campaigns/page.tsx`, `apps/web/src/app/(app)/crm/campaigns/[id]/page.tsx`, `packages/types (crmCampaignRoiSummarySchema)`
@@ -848,7 +848,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CAMPAIGNS-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed load the badge appears but Campaigns Tracked shows 0 and Total Spend / Attributed Revenue show ₹0.00 (unlike Accounts and Activities, which use "—"), and the table says "No campaign spend recorded" — an outage reads as "nothing spent" (app/(app)/crm/campaigns/page.tsx:32).
 - **Verified evidence:** campaigns/page.tsx:11-13 always folds campaigns (=[] on error) so totals.campaigns=0, costMinor '0', revenueMinor '0'; :32-34 render '0' and formatMoney('0') = '₹0.00' (only ROI becomes '—' because cost===0). The table (CampaignRoiTable emptyTitle :112) says 'No campaign spend recorded'. The error only adds the DataSourceBadge (:30). Status is not read.
 - **Files to change:** `apps/web/src/app/(app)/crm/campaigns/page.tsx`, `apps/web/src/app/(app)/crm/campaigns/CampaignRoiTable.tsx`
@@ -864,7 +864,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CAMPAIGNS-03  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The summary is fetched with a hard limit=200 and totals are folded from whatever returns; beyond 200 campaigns Total Spend, Revenue and Portfolio ROI are silently partial with no "showing 200" cue (app/_data/loaders.ts:3128).
 - **Verified evidence:** loaders.ts:3128 fetches roi-summary?limit=200; the page (:11-13) sums whatever returns via portfolioTotals and prints 'Campaigns Tracked' = rows.length. Nothing indicates truncation. Whether the response carries a total/next cursor cannot be verified (schema in absent @civitasone/types).
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/crm/campaigns/page.tsx`, `apps/web/src/app/(app)/crm/campaigns/campaigns.ts`
@@ -879,7 +879,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CAMPAIGNS-04  ·  MEDIUM  ·  confirmed  ·  theme MONEY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** portfolioTotals adds revenue from campaigns with no spend recorded ("No spend recorded" rows) into the numerator but they add nothing to cost, which lifts Portfolio ROI above what measured campaigns earned (app/(app)/crm/campaigns/campaigns.ts:45).
 - **Verified evidence:** portfolioTotals (campaigns.ts:39-56) sums costMinor and revenueMinor over all rows including rows roiVerdict flags 'unmeasured' (cost 0, :66-68); their revenue enters the numerator of ROI ((revenue-cost)*10000/cost, :54) with no cost, inflating Portfolio ROI. Page (campaigns/page.tsx:17-20) then displays it. Line cited (:45) is the cost accumulation; the ROI is at :54.
 - **Files to change:** `apps/web/src/app/(app)/crm/campaigns/campaigns.ts`, `apps/web/src/app/(app)/crm/campaigns/page.tsx`, `apps/web/src/app/(app)/crm/campaigns/__tests__/campaigns.test.ts`
@@ -894,7 +894,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CAMPAIGNS-05  ·  LOW  ·  partly  ·  theme EXPORT (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Table offers CSV export of spend and revenue with no note that the file leaves the tenant boundary or is logged (exportable=true) (app/(app)/crm/campaigns/CampaignRoiTable.tsx:66).
 - **Verified evidence:** exportable is set (CampaignRoiTable.tsx:109; detail page :93). DataTable.downloadCsv (ds/DataTable.tsx:~275-290) builds a Blob client-side and downloads it: no notice, no audit call, nothing logged. The data is campaign spend/revenue aggregates, not personal data, so PII tag is overstated; the real gap is no export notice/audit for a finance-sensitive file.
 - **Files to change:** `apps/web/src/app/_components/ds/DataTable.tsx`, `apps/web/src/app/(app)/crm/campaigns/CampaignRoiTable.tsx`, `apps/web/src/app/(app)/crm/campaigns/[id]/page.tsx`
@@ -915,7 +915,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CAMPAIGNS-DETAIL-01  ·  MEDIUM  ·  confirmed  ·  theme UUID (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The only identity of the campaign is the raw campaignId in the subtitle ("Campaign 7f3a1c2e-… · INR"); the title is the generic "Campaign Performance", identical to the list page (app/(app)/crm/campaigns/[id]/page.tsx:50).
 - **Verified evidence:** app/(app)/crm/campaigns/[id]/page.tsx:48-53 title is the constant 'Campaign Performance' (same as campaigns/page.tsx:25) and subtitle prints `Campaign ${campaign.campaignId} · ${campaign.currency}`. Whether the API supplies a campaign name cannot be verified: the schema crmCampaignRoiSchema lives in @civitasone/types, absent from the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/crm/campaigns/[id]/page.tsx`, `packages/types (crmCampaignRoiSchema, backend response)`
@@ -931,7 +931,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CAMPAIGNS-DETAIL-02  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** A fetch failure and a campaign with no figures both render EmptyState "No performance recorded — This campaign has no cost, revenue or response figures…"; only a small badge distinguishes an outage from a true empty (app/(app)/crm/campaigns/[id]/page.tsx:22).
 - **Verified evidence:** Loader getCrmCampaignRoi (loaders.ts:3141) returns data null with source:'error' and status for every non-ok response, including the 404 the comment calls 'expected' (apiClient.ts fetchJson: !response.ok -> source:'error', status). page.tsx:22-33 shows the badge when source==='error' and the same EmptyState in every null case, so an outage and a true 'no figures' 404 look identical (both get the badge, and the page never reads `status`). So the finding's premise that the badge distinguishes them is wrong: it appears in both.
 - **Files to change:** `apps/web/src/app/(app)/crm/campaigns/[id]/page.tsx`, `apps/web/src/app/_components/ds/LoadErrorState.tsx`
@@ -948,7 +948,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CAMPAIGNS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The subtitle prints campaign.currency (e.g. "INR") but every amount goes through formatMoney, which always prints ₹, so a non-INR campaign would show rupee symbols on foreign amounts (app/(app)/crm/campaigns/[id]/page.tsx:50, lib/formatters.ts:55).
 - **Verified evidence:** formatMoney(minorUnits) in lib/formatters.ts:~66-131 takes no currency and hard-codes '₹' (:131). The page prints campaign.currency in the subtitle (:50) but formats Spend/Revenue/Net and the amount cells (cellType 'amount') and cost-per-response through formatMoney, so a non-INR campaign would show rupee symbols. Whether non-INR campaigns exist cannot be verified (crm-service absent); CLAUDE.md rule 11 says money carries an ISO 4217 code.
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/crm/campaigns/[id]/page.tsx`, `apps/web/src/app/(app)/crm/campaigns/page.tsx`, `apps/web/src/app/(app)/crm/campaigns/CampaignRoiTable.tsx`
@@ -964,7 +964,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CAMPAIGNS-DETAIL-04  ·  LOW  ·  confirmed  ·  theme DEADEND (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Detail is read-only: there is no way to post a period's cost or revenue from here although the empty period state tells the user to "Post a reporting period's cost and revenue" (app/(app)/crm/campaigns/[id]/page.tsx:97).
 - **Verified evidence:** Detail page is read-only (no forms/actions); the DataTable emptyMessage (:97) says 'Post a reporting period's cost and revenue to see the breakdown.' and no page, component or lib helper in apps/web posts campaign periods (grep of web for campaign period/roi writes found only the two loaders). Whether a POST endpoint exists in crm-service cannot be verified. Note the empty state is also unreachable in practice: a campaign with zero periods returns 404 and shows the page-level EmptyState instead.
 - **Files to change:** `apps/web/src/app/(app)/crm/campaigns/[id]/page.tsx`, `apps/web/src/lib/crm/campaignPeriods.ts`, `apps/web/src/app/(app)/crm/campaigns/[id]/PostPeriodForm.tsx`
@@ -986,7 +986,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-01  ·  HIGH  ·  partly  ·  theme PII/EXPORT (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Export downloads every contact (name, phone, email) as a JSON file from a bare ghost button visible to all CRM roles: no ConfirmDialog, purpose or reason, it ignores the active filters, and nothing on the page shows the export is logged (app/(app)/crm/contacts/ContactToolbar.tsx:26).
 - **Verified evidence:** ContactToolbar.tsx:22-40, 60: ghost 'Export' button, no role check or dialog, calls browserFetch('v1/crm/contacts/export') without query params (l.26) so page filters are ignored, then downloads body.data as JSON. Shown to whoever sees the page. Fields exported and whether the backend audits/role-gates the export cannot be verified (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/ContactToolbar.tsx`, `apps/web/src/app/(app)/crm/contacts/page.tsx`
@@ -1002,7 +1002,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-02  ·  HIGH  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Phone and Email are printed in full in an 11-column list for every role while the banner promises "Access is role-scoped and logged"; there is no masking or reveal step for personal data under DPDP (app/(app)/crm/contacts/ContactsTable.tsx:50, app/(app)/crm/contacts/page.tsx:63).
 - **Verified evidence:** ContactsTable.tsx:50 phone and :52-ish email columns print c.phone/c.email in full for all users (l.116-118 mapping); page.tsx:63 banner says 'Access is role-scoped and logged'. No <Masked> component exists in apps/web (grep). Role-scoping/logging by backend cannot be verified. The 11 columns claim is true.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/ContactsTable.tsx`, `apps/web/src/app/_components/ds/Masked.tsx`, `apps/web/src/app/(app)/crm/contacts/page.tsx`
@@ -1019,7 +1019,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-03  ·  MEDIUM  ·  confirmed  ·  theme LABELS (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The column labelled "Priority Level" renders c.temperature (hot/warm/cold) and sits next to "Priority" (high/medium/low); the two headers read as the same thing (app/(app)/crm/contacts/ContactsTable.tsx:76).
 - **Verified evidence:** ContactsTable.tsx:76 `{ key: 'temperature', label: 'Priority Level' }` next to l.77 `{ key: 'priority', label: 'Priority' }`. Data: temperature = hot/warm/cold.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/ContactsTable.tsx`
@@ -1032,7 +1032,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-04  ·  MEDIUM  ·  confirmed  ·  theme FILTER-STATE (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Toolbar search box and segment select start empty (useState("")) and are never seeded from the URL, so after a search the results are filtered while the box is blank; pressing Search or Apply filters also drops the other control's parameters because each pushes only its own query (app/(app)/crm/contacts/ContactToolbar.tsx:10, app/(app)/crm/contacts/ContactToolbar.tsx:19).
 - **Verified evidence:** ContactToolbar.tsx:10-11 useState('') / 'all', not read from searchParams; applyFilters (l.15-20) pushes only search+segment, dropping segmentName/temperature/priority/etc. LeadFilters.tsx:46-56 likewise builds params only from its own state and drops search/segment. Theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/ContactToolbar.tsx`, `apps/web/src/app/_components/crm/LeadFilters.tsx`, `apps/web/src/app/(app)/crm/contacts/page.tsx`
@@ -1049,7 +1049,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-05  ·  MEDIUM  ·  confirmed  ·  theme EMPTY-STATE (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Empty copy "No contacts yet — Add your first contact to get started" is shown when a search or filter matches nothing, telling the user the master is empty; it also has no action (app/(app)/crm/contacts/ContactsTable.tsx:68).
 - **Verified evidence:** ContactsTable.tsx:68 (EmptyState 'No contacts yet' / 'Add your first contact to get started.') renders whenever tableRows.length===0, including when the server filtered by search/filters (page.tsx passes them to the loader); no action prop. source==='error' is handled elsewhere (badge). Copy is hard-coded (next-intl theme is generic).
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/ContactsTable.tsx`, `apps/web/src/app/(app)/crm/contacts/page.tsx`
@@ -1066,7 +1066,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-06  ·  MEDIUM  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Lead Status prints the raw enum (new, qualified, unqualified); the New Contact form relabels the same values as "Engaged Stakeholder" and "Inactive Stakeholder", so one status has two names across the module (app/(app)/crm/contacts/ContactsTable.tsx:52, app/(app)/crm/contacts/new/page.tsx:291).
 - **Verified evidence:** ContactsTable.tsx:52 prints c.leadStatus raw ('qualified'); new/page.tsx:291-292 labels the same values 'Engaged Stakeholder'/'Inactive Stakeholder'; edit form capitalises. See NEW-05.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/ContactsTable.tsx`, `apps/web/src/lib/crm/leadQualification.ts`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -1081,7 +1081,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-07  ·  LOW  ·  confirmed  ·  theme LABELS (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Two separate filter mechanisms (toolbar segment "mine/recent" and classification segment) share the word "segment"; the page itself needs a comment to keep them apart (app/(app)/crm/contacts/page.tsx:11).
 - **Verified evidence:** page.tsx:11-12 defines both `segment` (view mode mine/recent, sent to backend as `segment` in loaders.ts:1401) and `segmentName` (classification), with a comment to tell them apart. The URL/backend key `segment` cannot be renamed without backend change.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/page.tsx`, `apps/web/src/app/(app)/crm/contacts/ContactToolbar.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -1095,7 +1095,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-08  ·  LOW  ·  partly  ·  theme RESPONSIVE (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Eleven columns in one table is heavy on a phone; rows without an id get an empty rowHref ("") and cannot be opened (app/(app)/crm/contacts/ContactsTable.tsx:85).
 - **Verified evidence:** ContactsTable.tsx:138-149 defines 11 columns (true); DataTable wraps in .tbl-wrap (DataTable.tsx:322, scrolls horizontally). rowHref returns '' when no id (l.85), but DataTable.resolveHref (l.211) returns '' which is falsy at l.362-375, so the row simply is not clickable; no error. PII theme is wrong.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/ContactsTable.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -1116,7 +1116,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme UUID (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Assign and Transfer ownership ask for a hand-typed "owner id" with placeholder "owner id"; a mistyped or copied UUID reassigns a lead to nobody or the wrong person, and the confirm dialog cannot show a name (app/_components/crm/LeadAssignmentControl.tsx:131).
 - **Verified evidence:** LeadAssignmentControl.tsx:127-135 (assign) and :167-175 (transfer) are free-text inputs with placeholder 'owner id'; beginAssign/beginTransfer (:36-54) only check non-empty; dialog titles interpolate the raw typed id (:97,:109) and success messages too (:68,:82). Nothing validates the id exists.
 - **Files to change:** `apps/web/src/app/_components/crm/LeadAssignmentControl.tsx`, `apps/web/src/app/_components/crm/OwnerPicker.tsx`, `apps/web/src/lib/crm/assignment.ts`
@@ -1133,7 +1133,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-02  ·  HIGH  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Phone, Email and Marketing Consent are printed in full to every role; consent is shown as bare Yes/No with no purpose, date or source, which DPDP consent records need, and there is no masked-until-revealed step (app/(app)/crm/contacts/[id]/page.tsx:58).
 - **Verified evidence:** Detail page prints phone and email (page.tsx:58-59) and Marketing Consent as Yes/No (:64-66) to every role that passes the CRM layout (crm_user, crm_admin, platform_admin, super_admin) with no masking; no mask helper exists in apps/web (grep). Overstated: the Customer360Panel on the same page shows consent with the updatedAt date (:165-178), but still no purpose/source, and the page's own Yes/No duplicates it.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/page.tsx`, `apps/web/src/app/_components/Masked.tsx`
@@ -1149,7 +1149,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Log Activity, Edit and Delete render for every CRM role with no canDelete/role check; a normal crm_user gets a Delete control whose success or 403 is only learned after the reason dialog (app/(app)/crm/contacts/[id]/ContactDetailActions.tsx:74).
 - **Verified evidence:** ContactDetailActions.tsx renders Log Activity, Edit and Delete (:211-231) unconditionally; the CRM layout (crm/layout.tsx) admits crm_user etc. and page.tsx passes no role info. Delete uses ActionButton requireReason so a denied user learns about a 403 only after typing a reason. lib/auth/roleGuard.ts getSessionRoles() (server-only) is available. Which roles the backend allows to edit/delete cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/ContactDetailActions.tsx`, `apps/web/src/app/(app)/crm/contacts/[id]/page.tsx`
@@ -1164,7 +1164,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme DUPLICATION (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The same facts appear twice: page-level Related Deals and Activity Timeline cards duplicate the Deals and Next actions inside Customer360Panel and the Activity & follow-up panel, so the screen can show two versions of one deal list (app/(app)/crm/contacts/[id]/page.tsx:93, app/_components/crm/Customer360Panel.tsx:200).
 - **Verified evidence:** page.tsx:91-110 'Related Deals' (from contact.deals) and :125-139 'Activity Timeline' (contact.activityTimeline) are rendered in addition to Customer360Panel (Deals :197-215, Next actions :181-195, at :83) and ActivityFeed (:84). Two data sources (contact detail payload vs 360 aggregate) can disagree. Theme VALIDATION is wrong.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/page.tsx`, `apps/web/src/app/_components/crm/Customer360Panel.tsx`
@@ -1179,7 +1179,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** A failed fetch and a deleted/missing contact render the same "Contact not found — does not exist or has been removed" with only a small badge to tell an outage apart (app/(app)/crm/contacts/[id]/page.tsx:27).
 - **Verified evidence:** page.tsx:22-29 shows 'Contact not found - This contact does not exist or has been removed.' for any null; the badge is added when source==='error' (:26). But fetchJson returns source:'error' for a real 404 too, so the badge does not distinguish outage from missing; `status` is ignored.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/page.tsx`, `apps/web/src/app/_components/ds/LoadErrorState.tsx`
@@ -1193,7 +1193,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-06  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Ten client panels each fetch separately after the server render, so the page paints its top card and then fills in over many spinners; loading.tsx shows two blocks and no columns (app/(app)/crm/contacts/[id]/loading.tsx:7).
 - **Verified evidence:** Eleven client components fetch in useEffect after the server render (QualifyPanel, Customer360Panel, ActivityFeed, CommunicationLog, AddressesEditor, ContactRolesEditor, DocumentAlertsView, DocumentsPanel, LeadTransitionControl, AssignmentLogView, ScoreHistoryView), each with its own loading state. contacts/[id]/loading.tsx has header bars and two card blocks (h-48, h-40) in a single column and uses Tailwind min-h-screen bg-slate-50 unlike the two-column g-main layout.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/loading.tsx`, `apps/web/src/app/(app)/crm/contacts/[id]/page.tsx`
@@ -1208,7 +1208,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-07  ·  LOW  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stage text is the enum with underscores replaced ("prospecting", "closed won") and Lead Status prints raw values, unlike the form labels (app/(app)/crm/contacts/[id]/page.tsx:103).
 - **Verified evidence:** page.tsx:103 uses deal.stage.replace(/_/g,' ') giving lower-case 'closed won' into a status pill (cellType 'status'); :61 prints contact.leadStatus raw ('new', 'disqualified'); classification pills (:75) print raw temperature/priority. formatters.ts has humanizeStatus (:~41) that title-cases underscored values, and the edit form capitalises status labels (EditContactForm.tsx:222).
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -1230,7 +1230,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-EDIT-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Core fields are sent as `value || undefined`, which JSON.stringify drops, so clearing Email, Phone, Organisation, Designation or City in the form silently leaves the stored value unchanged; the classification patch correctly sends null, so the two halves of one form disagree, and a data-correction/erasure request under DPDP cannot be done here (app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx:125, app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx:98).
 - **Verified evidence:** EditContactForm.tsx:161-165 sends email/phone/company/designation/city as `form.x || undefined`; JSON.stringify omits undefined keys, so emptying a field leaves the stored value unchanged. Classification patch uses `|| null` (:134-139) and documents null=clear (:117-121). Whether the contact PATCH accepts null to clear cannot be verified (crm-service absent). Also leadStatus and marketingConsent are always sent.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx`, `apps/web/src/lib/crm/contactPatch.ts`, `apps/web/src/lib/crm/__tests__/contactPatch.test.ts`
@@ -1248,7 +1248,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-EDIT-02  ·  HIGH  ·  confirmed  ·  theme GOVERNANCE (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The Lead status select here can set any status, including disqualified, with no Reason code, note or ConfirmDialog; the contact page's "Change lead status" control requires a reason and audit note, so editing bypasses that governance (app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx:183 vs app/_components/crm/LeadTransitionControl.tsx:174).
 - **Verified evidence:** EditContactForm.tsx:219-224 offers all six LEAD_STATUSES (leadQualification.ts:18-25) and sends leadStatus on every PATCH (:166), with no reason, note or ConfirmDialog. LeadTransitionControl (used on the detail page, page.tsx:113) restricts targets via TRANSITIONS (:23-30), requires a reason code or note (:75-86) and confirms (:191-200), and states changes are audited. Whether the backend PATCH enforces the same transition rules cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx`, `apps/web/src/app/(app)/crm/contacts/[id]/edit/page.tsx`
@@ -1264,7 +1264,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-EDIT-03  ·  MEDIUM  ·  confirmed  ·  theme PARTIAL (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Saving is two sequential calls (contact PATCH, then classification); if the second fails the user sees "Could not update the contact." although the first already persisted, and retrying resends everything (app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx:136).
 - **Verified evidence:** submit() (:143-180 in file) awaits the contact PATCH (:157-170), then saveClassification (:172); a throw from the second lands in the shared catch (:175-176) with the generic or server message, though the first call persisted. Retry resends both. No partial-success state exists.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx`
@@ -1281,7 +1281,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-EDIT-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The edit page ignores the loader source: an API outage renders "Contact not found" with no message and no badge, so a temporary failure looks like a deleted record (app/(app)/crm/contacts/[id]/edit/page.tsx:6).
 - **Verified evidence:** edit/page.tsx:6 destructures only `data`; any null (outage, 403, 404, invalid payload) renders EmptyState 'Contact not found' (:11) with no badge or message, contrary to the detail page which at least shows the badge. fetchJson supplies `status`/`errorMessage` that are ignored.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/edit/page.tsx`
@@ -1296,7 +1296,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-EDIT-05  ·  MEDIUM  ·  partly  ·  theme VALIDATION (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Phone and other fields have no format validation or duplicate check here, whereas New Contact shows field-level phone/GSTIN/PAN/PIN errors and a duplicate panel; an edit can introduce invalid or duplicate data (app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx:167).
 - **Verified evidence:** Edit form has only type=email on email (:200) and required on name; no phone format check and no duplicate check on edit, and errors show as one generic banner (:189). New Contact (contacts/new/page.tsx) runs duplicateCheck and maps backend validation codes to fields via parseFieldError (lib/crm/dataQuality.ts:91). Note new-contact validation is server-driven, not client formats, and the edit form has no GSTIN/PAN/PIN fields at all (see EDIT-07), so 'GSTIN/PAN/PIN errors' do not apply to edit today.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx`, `apps/web/src/lib/crm/dataQuality.ts`
@@ -1312,7 +1312,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-EDIT-06  ·  LOW  ·  confirmed  ·  theme NAVUX
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** No Cancel or unsaved-changes guard: only Save changes and the back link; success redirects after a fixed 500 ms timeout (app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx:138).
 - **Verified evidence:** Form has only 'Save changes' (:234) plus a top back link (:184, plain <a>); no Cancel and no dirty-state guard. Success sets message and router.push after setTimeout 500 (:174) with no cleanup, so it can fire after unmount.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx`
@@ -1327,7 +1327,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-EDIT-07  ·  LOW  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Marketing consent is a bare checkbox labelled "(DPDP)"; toggling it records no purpose, timestamp or channel in the UI, and GSTIN, PAN, PIN code and Lead source captured at creation cannot be edited (app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx:195).
 - **Verified evidence:** Consent is a bare checkbox 'Marketing consent (DPDP)' (:229-232) sent as marketingConsent boolean (:167); no purpose, channel or timestamp UI. The form has no fields for GSTIN, PAN, PIN or lead source (New Contact has them: contacts/new/page.tsx:29-30,150-155). Customer360Panel shows consent updatedAt read-only (:165-178) so the backend may record a time, but the edit UI captures nothing else.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx`, `apps/web/src/app/(app)/crm/contacts/[id]/edit/page.tsx`, `apps/web/src/app/_components/crm/ConsentField.tsx`
@@ -1350,7 +1350,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-IMPORT-01  ·  HIGH  ·  partly  ·  theme VALIDATION (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Bulk import bypasses everything the New Contact form enforces: no duplicate check, no phone/email format validation, no consent (marketingConsent) column or default; leadStatus is cast with `as "new"` unchecked, so any string a user types is sent (app/(app)/crm/contacts/import/page.tsx:64, app/(app)/crm/contacts/new/page.tsx:104).
 - **Verified evidence:** import/page.tsx:59-65 maps parsed rows to {name,email,phone,company,leadStatus} with `leadStatus: c.leadStatus as "new"` (l.64, a TS cast only; parseCsv l.36 passes any string through). No duplicate check, no email/phone/PAN format check (parseCsv l.19-40 only tests for empty name); marketingConsent is never sent. new/page.tsx:104-ish uses duplicateCheck()+parseFieldError from lib/crm/dataQuality. Whether POST v1/crm/contacts/bulk/import validates server-side (zod) is not visible: no crm-service in snapshot (only hrms-service).
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/import/page.tsx`, `apps/web/src/lib/crm/dataQuality.ts`, `apps/web/src/lib/crm/leadQualification.ts`
@@ -1369,7 +1369,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-IMPORT-02  ·  HIGH  ·  confirmed  ·  theme DEFAULTS (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The textarea opens pre-filled with "Sample User, user@example.com, 9900000000, Acme Corp"; the Import button is already enabled, so one click creates a junk contact (app/(app)/crm/contacts/import/page.tsx:44).
 - **Verified evidence:** import/page.tsx:43-45 initialises csv state to a header plus 'Sample User,user@example.com,9900000000,Acme Corp,new'. parseCsv yields 1 row, so the submit Button (l.163-172, disabled only when busy or 0 rows) is enabled on load and one click POSTs a junk contact. No confirm step.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/import/page.tsx`
@@ -1386,7 +1386,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-IMPORT-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Parsing is line.split(",") with the first line always discarded: a quoted value with a comma (e.g. "Housing & Urban Development, Odisha") silently shifts every later column, and a file without a header loses its first contact; neither is reported (app/(app)/crm/contacts/import/page.tsx:25).
 - **Verified evidence:** import/page.tsx:20 `csv.trim().split("\n").slice(1)` always drops line 1 (header assumed), and l.24-26 `line.split(",")` has no quote handling, so quoted commas shift columns; CRLF leaves a trailing \r on the last field. Neither case is reported.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/import/page.tsx`, `apps/web/src/lib/crm/parseCsv.ts`
@@ -1403,7 +1403,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-IMPORT-04  ·  MEDIUM  ·  confirmed  ·  theme FEEDBACK (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The result is only "Import accepted — N contacts queued" followed by a redirect after 800 ms; because the command is queue-backed there is no per-row outcome, error download or count of rejected rows (app/(app)/crm/contacts/import/page.tsx:73).
 - **Verified evidence:** import/page.tsx:72-73 sets message `Import accepted — ${contacts.length} contacts queued.` and router.push('/crm/contacts') after 800 ms. The response body is never read (only res.ok, l.71) so no job id, rejected count or error file. Whether the backend returns per-row results is not visible (crm-service absent). Theme DATEFMT is wrong.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/import/page.tsx`
@@ -1420,7 +1420,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-IMPORT-05  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Only paste input is supported (no file picker, no size cap); the preview shows 50 rows while the POST sends every valid row in a single request, so a large paste is neither reviewed nor chunked (app/(app)/crm/contacts/import/page.tsx:59).
 - **Verified evidence:** import/page.tsx:59-65 posts all preview rows in one request; the preview table shows preview.slice(0,50) (l.188). Input is a textarea only (l.138-151), no file input, no size or row cap. A reusable app/_components/FileUpload.tsx exists.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/import/page.tsx`
@@ -1437,7 +1437,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-IMPORT-06  ·  LOW  ·  confirmed  ·  theme FEEDBACK (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Skipped rows are counted but never shown or explained beyond "(missing name)"; invalid emails or phones are not flagged at all (app/(app)/crm/contacts/import/page.tsx:159).
 - **Verified evidence:** import/page.tsx:157-161 shows '{n} valid rows ready · {m} rows skipped (missing name)'. Skipped rows are counted (l.28-29) but not listed; email/phone are not validated in parseCsv, so nothing flags them. Theme PII is wrong.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/import/page.tsx`
@@ -1460,7 +1460,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-NEW-01  ·  MEDIUM  ·  confirmed  ·  theme ERRORS (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The comment says the mandatory-field 422 "falls through to the page-level error banner", but the code sets a fixed "Could not create the contact." for every non-format failure, so the user is never told which mandatory field is missing (app/(app)/crm/contacts/new/page.tsx:167).
 - **Verified evidence:** new/page.tsx:359-361 comment says the LM-001 422 falls to the banner, but l.362-369 setError('Could not create the contact.') for any non-field error; body.message is read (l.362) but discarded. The form does pre-mark required fields via lead-field-rules (l.249-269), so the case is narrowed to a race with config changes or read failure.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/new/page.tsx`
@@ -1475,7 +1475,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-NEW-02  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Organisation is free text, not an Account picker, so a new contact is never linked to an account and the Accounts screens (Linked Contacts count, "View contacts" by name search) cannot rely on the link (app/(app)/crm/contacts/new/page.tsx:234 vs accounts/[id]/page.tsx View contacts).
 - **Verified evidence:** new/page.tsx:235 (`new-company`, label 'Organisation') is a free-text input sent as `company` (l.348); no Account picker exists. accounts/[id]/page.tsx:81,129-134 shows API-supplied contactCount and 'View contacts' links to /crm/contacts?search=<account name>. Whether the backend links by name to compute contactCount cannot be verified (no crm-service). The name-search link is real.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/new/page.tsx`, `apps/web/src/app/_components/SmartCombobox.tsx`, `apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx`
@@ -1491,7 +1491,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-NEW-03  ·  MEDIUM  ·  partly  ·  theme CONSENT (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** PAN and GSTIN are collected in the open with no purpose or notice text; PAN of an individual is personal data, and the only consent line is a bare "Marketing consent (GDPR/DPDP)" checkbox (GDPR is not the governing law here) (app/(app)/crm/contacts/new/page.tsx:252, app/(app)/crm/contacts/new/page.tsx:316).
 - **Verified evidence:** new/page.tsx:238-264 GSTIN and PAN inputs have no helper text; l.315-318 checkbox reads 'Marketing consent (GDPR/DPDP)' (edit form EditContactForm.tsx says 'Marketing consent (DPDP)'). No purpose or notice text anywhere on the form (only the subtitle). GDPR mention is real; it is not the governing law. Masking is not the relevant fix here.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/new/page.tsx`, `apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx`
@@ -1505,7 +1505,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme DUPLICATE-SUBMIT (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** If the create response carries no id the page shows "Contact created." but stays on the filled form with the submit button enabled, so a second click creates a duplicate (app/(app)/crm/contacts/new/page.tsx:173).
 - **Verified evidence:** new/page.tsx:171-173: on success it sets message 'Contact created.' and toasts, then only redirects `if (body?.id)`. finally (l.377) clears busy, so with no id the form remains filled, the submit button is enabled again and a second click creates another record (duplicate check may catch it but ackDuplicates path allows 'Create anyway').
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/new/page.tsx`
@@ -1519,7 +1519,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-NEW-05  ·  LOW  ·  partly  ·  theme STATUS (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Lead status here uses "Engaged Stakeholder"/"Inactive Stakeholder", omits "disqualified", and differs from the list, filters and edit form which show the raw values qualified/unqualified (app/(app)/crm/contacts/new/page.tsx:292 vs contacts/ContactsTable.tsx).
 - **Verified evidence:** new/page.tsx:289-295 options: new, contacted, qualified='Engaged Stakeholder', unqualified='Inactive Stakeholder', customer; no 'disqualified' although LeadTransitionControl.tsx:24-27 allows it. ContactsTable.tsx:52 and contacts/[id]/page.tsx:61 print raw values; EditContactForm.tsx:186 prints capitalised values (Qualified), not raw, so three variants exist.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/new/page.tsx`, `apps/web/src/app/(app)/crm/contacts/ContactsTable.tsx`, `apps/web/src/app/(app)/crm/contacts/[id]/edit/EditContactForm.tsx`, `apps/web/src/lib/crm/leadQualification.ts`
@@ -1548,7 +1548,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-NEW-07  ·  LOW  ·  confirmed  ·  theme COPY (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** error.tsx names the area "CRM New", so the boundary reads "We couldn't open CRM New." (app/(app)/crm/contacts/new/error.tsx:12).
 - **Verified evidence:** new/error.tsx:12 passes area="CRM New" to RouteError, which renders 'We couldn't open CRM New.' (RouteError.tsx sentence). Same string used in crm/deals/new, opportunities/new error.tsx.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/new/error.tsx`, `apps/web/src/app/(app)/crm/deals/new/error.tsx`, `apps/web/src/app/(app)/crm/opportunities/new/error.tsx`, `apps/web/src/app/(app)/crm/deals/[id]/error.tsx`
@@ -1569,7 +1569,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTROL-TOWER-01  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The card is titled "GIS — pipeline by region" and the empty state says regions "appear on the heat map", but the code renders a plain table with no map or heat colouring (app/(app)/crm/control-tower/page.tsx:70).
 - **Verified evidence:** control-tower/page.tsx:57 Card title 'GIS — pipeline by region', :70 emptyMessage '...appear on the heat map', :47 subtitle 'Regional pipeline heat'; the body is a DataTable (l.58-72) with no map or colour scale.
 - **Files to change:** `apps/web/src/app/(app)/crm/control-tower/page.tsx`
@@ -1582,7 +1582,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTROL-TOWER-02  ·  MEDIUM  ·  partly  ·  theme DATA-QUALITY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Regions come from the contact "region" field, which the contact forms capture as free text with placeholder "e.g. South, West"; the same district spelt two ways splits the pipeline into separate rows (app/_components/crm/ClassificationFields.tsx:83, app/(app)/crm/control-tower/page.tsx:70).
 - **Verified evidence:** ClassificationFields.tsx region input is free text with placeholder 'e.g. South, West'. Region aggregation for control tower is done by the backend (getCrmControlTower -> /api/v1/crm/dashboard/control-tower, loaders.ts:3109); page only renders data.regions (page.tsx:26-32). Whether the backend normalises/case-folds cannot be verified. Split rows for spelling variants is plausible but unproven. Theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/_components/crm/ClassificationFields.tsx`, `apps/web/src/app/(app)/crm/control-tower/page.tsx`
@@ -1596,7 +1596,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTROL-TOWER-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** When the feed fails the whole page becomes "Control tower unavailable" with a small badge and no Retry or Back action, unlike the RefreshErrorState used on account detail; the title also changes to "Control Tower" (app/(app)/crm/control-tower/page.tsx:20).
 - **Verified evidence:** page.tsx:16-24: `if (!data)` returns PageHeader title 'Control Tower' plus EmptyState 'Control tower unavailable' (no action), and the badge only if source==='error'. Success title is 'Executive Control Tower' (l.45). RefreshErrorState (ds/RefreshErrorState.tsx) is available for server pages. Also l.102 `source==="error" &&` is effectively dead because error yields data=null.
 - **Files to change:** `apps/web/src/app/(app)/crm/control-tower/page.tsx`, `apps/web/src/lib/messages.ts`
@@ -1611,7 +1611,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTROL-TOWER-04  ·  MEDIUM  ·  partly  ·  theme ROBUSTNESS (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** rankRegions calls BigInt(pipelineMinor || "0") without a guard; a decimal or malformed string throws during render and takes down the whole route to error.tsx (app/(app)/crm/control-tower/tower.ts:5).
 - **Verified evidence:** tower.ts:5-6 `BigInt(a.pipelineMinor || "0")` throws SyntaxError on '12.5' or 'abc', which would bubble to error.tsx. Whether crmControlTowerSchema (from @civitasone/types, absent from snapshot, imported loaders.ts:219) already constrains pipelineMinor to an integer string cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/crm/control-tower/tower.ts`
@@ -1626,7 +1626,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTROL-TOWER-05  ·  LOW  ·  partly  ·  theme LABELS (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Exception volume" adds counts across different exception types, so one dormant, overdue account is counted several times and the total is not a number of records (app/(app)/crm/control-tower/tower.ts:19).
 - **Verified evidence:** tower.ts:19-21 totalExceptionCount sums e.count across all exception types and page.tsx:105 shows it as 'Exception volume'. Overlap between types (same account in several) depends on backend definitions and cannot be verified; summing counts is code-true.
 - **Files to change:** `apps/web/src/app/(app)/crm/control-tower/tower.ts`, `apps/web/src/app/(app)/crm/control-tower/page.tsx`
@@ -1639,7 +1639,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTROL-TOWER-06  ·  LOW  ·  partly  ·  theme NAV/SECURITY (was NAVUX)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The Open button uses a plain <a href={row.href}> with the API-supplied string, no allow-list or client navigation, so it reloads the app and trusts the feed for the target (app/(app)/crm/control-tower/ExceptionTable.tsx:21).
 - **Verified evidence:** ExceptionTable.tsx:21 `<a className="btn" href={row.href}>Open</a>`: full page load and unvalidated href from the feed. Risk is low because the feed is the app's own API; javascript: URLs would be an issue only if the backend were compromised.
 - **Files to change:** `apps/web/src/app/(app)/crm/control-tower/ExceptionTable.tsx`
@@ -1654,7 +1654,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTROL-TOWER-07  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx is one line of text ("Loading control tower…") while every sibling uses skeleton blocks (app/(app)/crm/control-tower/loading.tsx:2).
 - **Verified evidence:** control-tower/loading.tsx:1-3 is `<div className="page-main"><p>Loading control tower…</p></div>`; crm/accounts/loading.tsx and contacts/new/loading.tsx use animate-pulse skeleton blocks.
 - **Files to change:** `apps/web/src/app/(app)/crm/control-tower/loading.tsx`
@@ -1673,7 +1673,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CUSTOM-FIELDS-01  ·  HIGH  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** An admin can define a Text field named anything (e.g. Aadhaar or PAN) on contacts, leads or deals; the form has no sensitivity, masking or role-visibility setting, so the value would render unmasked on every record for every CRM role (lib/crm/customFields.ts:178).
 - **Verified evidence:** CustomFieldsManager.tsx:229-256 offers only name, type (text/number/date/boolean/select/multi_select), required, order; buildValidationSchema (customFields.ts:178-189) persists only required+options, so no sensitivity/mask/role-visibility can be defined. Admin-only via custom-fields/layout.tsx. However no web screen in this snapshot reads or renders custom-field VALUES (only the definitions manager uses customFields.ts), and crm-service is absent, so the 'renders unmasked on every record' consequence cannot be seen; the missing control is real. No shared <Masked> exists in ds (only a local MaskedInput in hr Step4).
 - **Files to change:** `apps/web/src/lib/crm/customFields.ts`, `apps/web/src/app/(app)/crm/custom-fields/_components/CustomFieldsManager.tsx`, `apps/web/src/app/_components/ds/Masked.tsx`
@@ -1692,7 +1692,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CUSTOM-FIELDS-02  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The Type select stays editable on a saved definition; switching Text to Number or Single select to Text has no warning although records already hold values, unlike Delete which has a ConfirmDialog (app/(app)/crm/custom-fields/_components/CustomFieldsManager.tsx:250).
 - **Verified evidence:** CustomFieldsManager.tsx:246-255 the Type <select> is enabled for saved rows (row.id set); onChange only calls update(). Save then sends fieldType via updateCustomField (customFields.ts:~248 PATCH body includes fieldType). Delete alone uses ConfirmDialog (335-348). No warning about existing values. (Line ref 250 is the select's aria-label; block is 246-255.)
 - **Files to change:** `apps/web/src/app/(app)/crm/custom-fields/_components/CustomFieldsManager.tsx`
@@ -1708,7 +1708,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CUSTOM-FIELDS-03  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Save is a 202 (queue-backed) mutation followed immediately by a reload; the success line "Custom field “x” saved." can appear while the reloaded list does not yet contain the change (app/(app)/crm/custom-fields/_components/CustomFieldsManager.tsx:152).
 - **Verified evidence:** CustomFieldsManager.tsx:147-153 awaits create/update (which resolves on the 202 accepted per customFields.ts header comment), sets message at 152 then immediately load() at 153. If the consumer write has not landed, the list reloads without the change while the message says 'saved'. Real race but depends on backend consumer latency (crm-service not in snapshot, cannot measure); new rows would also vanish from the list since load() replaces rows with server data.
 - **Files to change:** `apps/web/src/app/(app)/crm/custom-fields/_components/CustomFieldsManager.tsx`
@@ -1724,7 +1724,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CUSTOM-FIELDS-04  ·  MEDIUM  ·  confirmed  ·  theme COPY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Delete copy says the field "will be removed from leads/contacts/deals" but does not say whether values already captured on records are deleted or retained, which matters for retention and RTI (app/(app)/crm/custom-fields/_components/CustomFieldsManager.tsx:340).
 - **Verified evidence:** CustomFieldsManager.tsx:338-342 description: '“x” will be removed from leads. This cannot be undone.' - silent on whether captured values on records are deleted or retained. Backend behaviour is unknown (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/custom-fields/_components/CustomFieldsManager.tsx`
@@ -1739,7 +1739,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CUSTOM-FIELDS-05  ·  LOW  ·  partly  ·  theme VALIDATION (was CAP)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Validation only checks empty, >64 chars and missing select options; a duplicate field name within an entity is not checked client-side (lib/crm/customFields.ts:192).
 - **Verified evidence:** validateDraft (customFields.ts:192-205) checks empty, >64, and select options only; no duplicate-name check within rows. The server may reject duplicates (crm-service not visible) - if so the error surfaces via errorMessageFromResponse at save (152-155). Theme CAP is wrong.
 - **Files to change:** `apps/web/src/lib/crm/customFields.ts`, `apps/web/src/app/(app)/crm/custom-fields/_components/CustomFieldsManager.tsx`
@@ -1754,7 +1754,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CUSTOM-FIELDS-06  ·  LOW  ·  confirmed  ·  theme CONFIRM (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Switching the entity type replaces the list, discarding any unsaved new definition or edits without warning (app/(app)/crm/custom-fields/_components/CustomFieldsManager.tsx:104).
 - **Verified evidence:** CustomFieldsManager.tsx:99-104 effect on [entity] calls load() which setRows(server data) (93), discarding unsaved new rows/edits; Segmented onChange (197-200) switches immediately without a dirty check. The stale-response guard exists but not a dirty guard.
 - **Files to change:** `apps/web/src/app/(app)/crm/custom-fields/_components/CustomFieldsManager.tsx`
@@ -1769,7 +1769,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CUSTOM-FIELDS-07  ·  LOW  ·  confirmed  ·  theme COPY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Entity labels say "Deals" while the Deals screen and dashboard call them "Engagements" (lib/crm/customFields.ts:33, app/(app)/crm/deals/page.tsx:16).
 - **Verified evidence:** customFields.ts:33 ENTITY_TYPE_LABELS.deals = 'Deals'; crm/deals/page.tsx:16 title is 'Vendor / Stakeholder Engagements', dashboard says Engagements. Hub tile (crm/page.tsx) says 'Deals'. Terminology is mixed across module.
 - **Files to change:** `apps/web/src/lib/crm/customFields.ts`, `apps/web/src/app/(app)/crm/custom-fields/_components/CustomFieldsManager.tsx`
@@ -1790,7 +1790,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DASHBOARD-01  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** When the dashboard fetch fails the stat cards render 0, 0, 0 and ₹0.00 next to the small "Couldn't load" badge; the Accounts, Contacts and Activities pages show "—" for exactly this case, so this one can read as "no contacts, no engagements" (app/(app)/crm/dashboard/page.tsx:27, app/_data/loaders.ts:2723).
 - **Verified evidence:** dashboard/page.tsx:27-30 renders dash.* directly; on failure getCRMDashboard falls back to CRM_DASHBOARD_EMPTY (loaders.ts:2723-2728, all zeros) so cards show 0,0,0 and formatMoney(0) beside a DataSourceBadge (line 25). Contacts/Accounts/Activities pages use stat=(n)=>source==='error'?'—':... (contacts/page.tsx:37).
 - **Files to change:** `apps/web/src/app/(app)/crm/dashboard/page.tsx`
@@ -1806,7 +1806,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DASHBOARD-02  ·  MEDIUM  ·  confirmed  ·  theme COPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The banner says the module is "not a commercial sales pipeline" while the hub offers Sales & Pipeline, Pipeline Board, Quotations and Price Books under the same module (app/(app)/crm/dashboard/page.tsx:46, app/(app)/crm/page.tsx:18).
 - **Verified evidence:** dashboard/page.tsx:44-47 banner says 'not a commercial sales pipeline'; crm/page.tsx:17-26 hub has 'Sales & Pipeline' section with Pipeline Board, Opportunities, Quotations, and Price Books under Products & Pricing. Contradictory copy (line refs: hub ~15-26 not 18).
 - **Files to change:** `apps/web/src/app/(app)/crm/dashboard/page.tsx`, `apps/web/src/app/(app)/crm/page.tsx`
@@ -1820,7 +1820,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DASHBOARD-03  ·  LOW  ·  confirmed  ·  theme COPY (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The loading skeleton prints the heading "Dashboard" while the loaded page title is "CRM", so the h1 changes as the page paints; the hub tile is "Dashboard" too (app/(app)/crm/dashboard/loading.tsx:6, app/(app)/crm/dashboard/page.tsx:13).
 - **Verified evidence:** dashboard/loading.tsx:6 h1 'Dashboard' (id page-heading, own page-main wrapper); page.tsx:13 title 'CRM'; hub tile is 'Dashboard' (crm/page.tsx:10). Heading flips on paint. Loading.tsx also has no subtitle/actions.
 - **Files to change:** `apps/web/src/app/(app)/crm/dashboard/loading.tsx`, `apps/web/src/app/(app)/crm/dashboard/page.tsx`
@@ -1833,7 +1833,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DASHBOARD-04  ·  LOW  ·  confirmed  ·  theme NAVUX (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stat cards are not links: Contacts, Engagements and Interactions Today do not drill into their lists (the Quick links card repeats three of them separately); Interactions Today has no link to the activities "Today" segment (app/(app)/crm/dashboard/page.tsx:29).
 - **Verified evidence:** dashboard/page.tsx:27-30 StatCard (ds/StatCard.tsx:27) has no href prop, so cards are not links. Quick links (34-36) cover Contacts, Engagements, Activities only. Activities table supports ?segment=Today (ActivitiesTable.tsx:22-39), so a drill link is feasible.
 - **Files to change:** `apps/web/src/app/_components/ds/StatCard.tsx`, `apps/web/src/app/(app)/crm/dashboard/page.tsx`
@@ -1849,7 +1849,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DASHBOARD-05  ·  LOW  ·  partly  ·  theme NAVUX (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Quick links list three of the module's 35 screens and duplicate the header buttons; "Engagements" here versus "Deals" on the hub (app/(app)/crm/dashboard/page.tsx:28).
 - **Verified evidence:** Quick links (page.tsx:33-37) do list three screens; hub crm/page.tsx has ~35 tiles (count of href: lines = 35). But they do NOT duplicate the header buttons (those are '+ New Contact' / '+ New Engagement', lines 20-21). 'Engagements' here vs 'Deals' on the hub is true (hub crm/page.tsx:15).
 - **Files to change:** `apps/web/src/app/(app)/crm/dashboard/page.tsx`, `apps/web/src/app/(app)/crm/page.tsx`
@@ -1862,7 +1862,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DASHBOARD-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle has a hard-coded Devanagari suffix, not a next-intl key, and not Odia for an Odisha tenant (app/(app)/crm/dashboard/page.tsx:14).
 - **Verified evidence:** dashboard/page.tsx:14 subtitle ends with '• सरकारी हितधारक पंजी' hard-coded literal; no getTranslations use in this file (hub crm/page.tsx does import next-intl). Odia not provided.
 - **Files to change:** `apps/web/src/app/(app)/crm/dashboard/page.tsx`
@@ -1882,7 +1882,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DATA-QUALITY-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The Record column prints the raw id (a UUID) as the link text, so a data steward sees a list of ids with a score and issue text but no name to recognise the contact or account to fix (app/_components/crm/DataQualityView.tsx:141).
 - **Verified evidence:** DataQualityView.tsx:142 renders <a>{r.id}</a>; DqRecord (lib/crm/dataQuality.ts:52-56) carries only id, score, issues - no name field, so the web cannot show a name without the backend adding one (mapper at dataQuality.ts ~225 maps only those). Whether the API returns a name cannot be verified (crm-service absent). Line ref 141 -> 142.
 - **Files to change:** `apps/web/src/lib/crm/dataQuality.ts`, `apps/web/src/app/_components/crm/DataQualityView.tsx`
@@ -1897,7 +1897,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DATA-QUALITY-02  ·  MEDIUM  ·  confirmed  ·  theme DATAVIZ (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Distribution bars are scaled to the largest bucket, not to the share of records, so a 1,123-record top bucket makes 8, 21 and 96 look negligible and the bars cannot be read as percentages of the master (app/_components/crm/DataQualityView.tsx:101).
 - **Verified evidence:** DataQualityView.tsx:65 maxBucket = largest count; line 101 ProgressBar value=(count/maxBucket)*100. Bars are relative to the biggest bucket, not to total records.
 - **Files to change:** `apps/web/src/app/_components/crm/DataQualityView.tsx`
@@ -1912,7 +1912,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DATA-QUALITY-03  ·  MEDIUM  ·  confirmed  ·  theme LOADING (was NAVUX)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The report is refetched on every Entity or Tab change (useEffect on [entity, filter]) and stats flip to "…" each time, so clicking Invalid format re-loads the counts and distribution that did not change (app/_components/crm/DataQualityView.tsx:60).
 - **Verified evidence:** DataQualityView.tsx:49-60 one effect on [entity, filter] calls getDataQuality(entity, filter) and setSource('loading'), so stats show '…' (84-86) and distribution re-fetches on every Tab change. Counts/distribution are independent of filter per DataQualityReport shape (only records change).
 - **Files to change:** `apps/web/src/app/_components/crm/DataQualityView.tsx`, `apps/web/src/lib/crm/dataQuality.ts`
@@ -1927,7 +1927,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DATA-QUALITY-04  ·  LOW  ·  confirmed  ·  theme NAVUX (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Leads" and "Contacts" are separate entity options but both drill into /crm/contacts/:id, so the selector suggests two datasets that open the same screen (app/_components/crm/DataQualityView.tsx:35).
 - **Verified evidence:** DataQualityView.tsx:33-37 DETAIL_BASE maps both contacts and leads to /crm/contacts/, selector options at 19-25. Whether leads are the same table as contacts in crm-service cannot be verified.
 - **Files to change:** `apps/web/src/app/_components/crm/DataQualityView.tsx`
@@ -1940,7 +1940,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DATA-QUALITY-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The header "Matching rules" link goes to an admin-only route; a crm_user is redirected straight back to /crm/data-quality with no explanation (app/(app)/crm/data-quality/page.tsx:13, app/(app)/crm/dedup-rules/layout.tsx:2).
 - **Verified evidence:** data-quality/page.tsx:13 header has an unconditional 'Matching rules' link to /crm/dedup-rules; dedup-rules/layout.tsx:9-10 requireAnyRole(ALLOWED_ROLES,'/crm/data-quality') redirects non-admins back with no message.
 - **Files to change:** `apps/web/src/app/(app)/crm/data-quality/page.tsx`, `apps/web/src/app/(app)/crm/dedup-rules/layout.tsx`
@@ -1953,7 +1953,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DATA-QUALITY-06  ·  LOW  ·  confirmed  ·  theme COPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Quality score is shown as a rounded percentage with no description of how it is computed or what threshold counts as "missing" versus "stale" (app/_components/crm/DataQualityView.tsx:143).
 - **Verified evidence:** DataQualityView.tsx:143 shows Math.round(r.score*100)% with header 'Quality score' (135); no tooltip/help text about scoring or thresholds for missing/stale. Actual rules are server-side (not visible).
 - **Files to change:** `apps/web/src/app/_components/crm/DataQualityView.tsx`
@@ -1966,7 +1966,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DATA-QUALITY-07  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Title carries a hard-coded Devanagari suffix, not a next-intl key, and not Odia for an Odisha tenant (app/(app)/crm/data-quality/page.tsx:9).
 - **Verified evidence:** data-quality/page.tsx:9 title 'Data Quality • डेटा गुणवत्ता' hard-coded; no next-intl; no Odia.
 - **Files to change:** `apps/web/src/app/(app)/crm/data-quality/page.tsx`
@@ -1986,7 +1986,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-01  ·  MEDIUM  ·  confirmed  ·  theme I18N
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The Won→Concluded / Lost→Lapsed relabel uses case-sensitive \bWon\b and \bLost\b, but mapDealSummaries lower-cases stages to closed_won / closed_lost, so rows show "closed won" and "closed lost" and the intended vocabulary never appears (app/(app)/crm/deals/DealsTable.tsx:27, app/_data/apiMappers.ts:499).
 - **Verified evidence:** DealsTable.tsx:86 does d.stage.replace(/_/g,' ').replace(/\bWon\b/,'Concluded').replace(/\bLost\b/,'Lapsed') (cited :27 is wrong). mapDealSummaries/normalizeDealStage (apiMappers.ts:499-500) always yields closed_won/closed_lost, so the string becomes 'closed won'/'closed lost' and neither case-sensitive regex matches. Rows show 'closed won'.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/DealsTable.tsx`
@@ -2002,7 +2002,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Lost engagements appear only under All: "Open" filters status open and "Concluded" filters status won, so a lapsed engagement has no segment and no stat card counts it (app/(app)/crm/deals/DealsTable.tsx:42).
 - **Verified evidence:** DealsTable.tsx:76-80: 'Open' -> status==='open', 'Concluded' -> status==='won', else all. SEGMENTS (:63) has no lost option; deals/page.tsx:28-31 stat cards count total, open and won value only, so lost engagements are visible only under All and in no stat.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/DealsTable.tsx`, `apps/web/src/app/(app)/crm/deals/page.tsx`
@@ -2018,7 +2018,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed load the stat cards print 0 and ₹0.00 (deals.length is used directly, no "—" guard as on Accounts/Contacts) while the badge is inside the table card below (app/(app)/crm/deals/page.tsx:28).
 - **Verified evidence:** deals/page.tsx:28-31 renders deals.length, openDeals and formatMoney sums directly; getDeals (loaders.ts:2769-2775) returns [] with source 'error' on failure, so cards show 0 and ₹0.00. `source` is only forwarded to DealsTable (:33), where the badge lives (DealsTable.tsx:118), and useSeededResource may serve cached rows so cards (server data) and table can disagree.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/page.tsx`, `apps/web/src/app/(app)/crm/deals/DealsTable.tsx`
@@ -2034,7 +2034,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-04  ·  MEDIUM  ·  partly  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Money is a JS number (parseMinor → Number) summed with reduce, contrary to the paise-bigint rule used by campaigns.ts; precision is safe only below 2^53 paise and the type invites float arithmetic (app/(app)/crm/deals/page.tsx:10, app/_data/apiMappers.ts:63).
 - **Verified evidence:** amount is number: parseMinor (apiMappers.ts ~63) returns Number(); deals/page.tsx:10-11 sum with reduce. Sums of integer paise are exact below 2^53 (~9e13 rupees) so practical precision risk is nil; the valid point is type discipline (CLAUDE.md money=bigint minor). formatMoney (formatters.ts:90) already accepts bigint/string. The campaigns.ts comparison was not checked.
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/crm/deals/page.tsx`, `apps/web/src/app/(app)/crm/deals/DealsTable.tsx`
@@ -2050,7 +2050,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The "Account" column shows contactName ?? company, i.e. usually a person, not an Account record, and does not link to /crm/accounts (app/(app)/crm/deals/DealsTable.tsx:48, app/_data/apiMappers.ts:523).
 - **Verified evidence:** DealsTable.tsx:84 account: d.contactName ?? '—'; apiMappers.ts:523 contactName = row.contactName ?? row.company. Column labelled 'Account' (:126), no link. The row has contactId (mapper :522) and /crm/contacts/[id] exists.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/DealsTable.tsx`
@@ -2066,7 +2066,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-06  ·  LOW  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** DealsTable defines an exportCsv() that writes the raw paise integer under a "Value" header but nothing calls it; the working export is DataTable's own. Dead code that would misstate values 100x if wired (app/(app)/crm/deals/DealsTable.tsx:54).
 - **Verified evidence:** DealsTable.tsx:90-105 defines exportCsv() writing String(r.amount) raw paise under 'Value'; nothing references it (only DataTable's exportable at :135). DataTable's own export (DataTable.tsx:267-268) uses formatMoney. Line cited (54) is wrong.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/DealsTable.tsx`
@@ -2080,7 +2080,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-07  ·  LOW  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The same object is "Deals" (route, hub, custom fields), "Engagements" (dashboard, page) and "Engagement/New Engagement" (buttons); close date and probability are mapped but never shown (app/(app)/crm/deals/DealsTable.tsx:74).
 - **Verified evidence:** Naming inconsistency real: deals/page.tsx:16 'Vendor / Stakeholder Engagements', :20 '+ New Engagement', DealsTable.tsx:110 'Engagements'; crm/page.tsx:13 hub says 'Deals'; new page says 'New Deal'. closeDate and probability are mapped (apiMappers.ts:527-528) but DealsTable columns (:123-129) omit them. Cited line 74 is wrong.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/DealsTable.tsx`, `apps/web/src/app/(app)/crm/deals/page.tsx`
@@ -2102,7 +2102,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The workflow list is index-based over [prospecting, proposal, negotiation, closed_won, closed_lost]; a lost deal has currentIdx 4, so 'Closed Won' is rendered as done and 'Closed Lost' as current — a lost deal appears to have passed through a win (page.tsx:25-26, 64-66).
 - **Verified evidence:** deals/[id]/page.tsx:25-26 STAGES ends [...,'closed_won','closed_lost']; a lost deal has currentIdx 4 so i=3 'Closed Won' gets 'done' (65) and 'Closed Lost' 'cur'. normalizeDealStage (apiMappers.ts:499-500) yields closed_lost for lost.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/[id]/page.tsx`
@@ -2117,7 +2117,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-DETAIL-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** When the fetch fails the page shows the error badge plus 'Deal not found — This deal does not exist or has been removed', which reads as a deletion rather than an outage (page.tsx:14-15).
 - **Verified evidence:** page.tsx:10-16 when !deal shows DataSourceBadge if source==='error' plus EmptyState 'Deal not found'. fetchJson (apiClient.ts:141-166) returns source:'error' for any non-ok response including 5xx/network, with status field, so outages read as deletion.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/[id]/page.tsx`
@@ -2131,7 +2131,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme COPY (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** error.tsx passes area='CRM [Id]' to RouteError, so the user-facing sentence is 'We couldn't open CRM [Id]' (deals/[id]/error.tsx:17).
 - **Verified evidence:** deals/[id]/error.tsx:17 area='CRM [Id]'; RouteError.tsx:63 prints 'We couldn't open {area}.' giving 'We couldn't open CRM [Id]'.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/[id]/error.tsx`
@@ -2144,7 +2144,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-DETAIL-05  ·  LOW  ·  confirmed  ·  theme NAVUX (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The Parties card duplicates Account and Owner already shown in Deal Details, and neither links to the account or contact record although contactId is available (page.tsx:49,53,73-78).
 - **Verified evidence:** page.tsx:49,53 (Deal Details) and 75,76 (Parties) both show contactName and owner; both plain text. deal.contactId is passed to actions (38) so a link is possible; contactName falls back to company (apiMappers.ts:523) so it may be a company, not a contact.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/[id]/page.tsx`
@@ -2172,7 +2172,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-DETAIL-07  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** A deal whose stage is not in STAGES gets currentIdx -1, so every workflow step shows as todo with no current marker (page.tsx:26).
 - **Verified evidence:** page.tsx:26 indexOf returns -1 for stage not in STAGES. The real trigger is 'qualification': normalizeDealStage (apiMappers.ts:487,494) keeps 'qualification' as-is (in DEAL_STAGES) while STAGES omits it, so such deals show all steps 'todo'. Unknown strings map to 'prospecting' (501), so it is not general.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/[id]/page.tsx`
@@ -2194,7 +2194,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-NEW-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stage can be set to Won or Lost at creation with no reason and no confirmation, bypassing the governed close flow (POST /close with a required reason of at least 10 characters for lost) that DealDetailActions enforces (deals/new/page.tsx:11-17, deals/[id]/DealDetailActions.tsx:97-107).
 - **Verified evidence:** deals/new/page.tsx:11-17 STAGES includes Won and Lost; select at :115-120 posts form.stage straight to POST v1/crm/deals (:68-79) with no dialog or reason. DealDetailActions.tsx:85-107 closes via ActionButton requireReason (lost adds minReasonLength=10) -> POST v1/crm/deals/:id/close {outcome,reason} (:40-46). Whether crm-service rejects Won/Lost on create is not verifiable (service absent from snapshot). maker!=checker is not applicable to a single-user create.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/new/page.tsx`
@@ -2211,7 +2211,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-NEW-02  ·  MEDIUM  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stage vocabulary differs from the rest of the module: the form posts capitalised Lead/Proposal/…/Won/Lost while the list and detail use prospecting/proposal/negotiation/closed_won/closed_lost; 'Lead' has no counterpart (deals/new/page.tsx:11-17, app/_data/apiMappers.ts normalizeDealStage).
 - **Verified evidence:** Form STAGES (deals/new/page.tsx:11-17) are capitalised Lead/Proposal/Negotiation/Won/Lost, while list/detail use prospecting/proposal/negotiation/closed_won/closed_lost. But normalizeDealStage (apiMappers.ts:489-502) explicitly maps lead->prospecting, won->closed_won, lost->closed_lost, and loaders.ts:2778-2783 states the real backend contract returns capitalised values. So 'Lead' does have a counterpart (prospecting) and the list renders correctly; the real gap is that the vocabulary is duplicated in three places and 'qualification' exists in the mapper but not the form.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/new/page.tsx`, `apps/web/src/app/_data/apiMappers.ts`
@@ -2227,7 +2227,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-NEW-03  ·  MEDIUM  ·  partly  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Money is a JS Number times 100 rounded on the client from a step=1 input, so paise cannot be entered and large values lose precision above 2^53 paise; no lakh grouping or preview of the entered amount (page.tsx:65-66, 112).
 - **Verified evidence:** page.tsx:65-66 does Number(form.value) then Math.round(rupees*100); input at :112 is type=number step=1 so browser validation blocks fractional rupees (paise cannot be typed) and the >2^53 concern (~90 trillion rupees) is not realistic. Real gaps: float math against the money rule, no lakh grouping or preview (no formatMoney under the field), and NaN silently becomes 0 (:66). The repo already has rupeesToMinorString in lib/money.ts:28, used by OpportunityForm.tsx:85.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/new/page.tsx`
@@ -2244,7 +2244,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The contact picker swallows both a non-OK response and an exception with no message, and loads the full contact list into a single dropdown (unpaged, no search) (page.tsx:42-52, 124-129).
 - **Verified evidence:** page.tsx:42-52: `if (!res.ok) return;` and `catch { /* ignore */ }` give no message; fetch v1/crm/contacts has no query/limit and options are rendered in one <select> (:124-129). Server-side default page size is not verifiable (crm-service absent), so the picker may silently truncate.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/new/page.tsx`
@@ -2259,7 +2259,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-NEW-05  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Probability is independent of stage: a deal can be saved as Won at 0% or Lead at 100% (page.tsx:27-31, 67).
 - **Verified evidence:** Initial state stage 'Lead', probability '0' (page.tsx:25-32); probability is clamped 0-100 only (:67) and never tied to stage. Nothing stops Won at 0% or Lead at 100%; DealDetailActions confirm text says close sets probability 100/0, showing the intended rule. No zod schema at the form boundary; submit only disabled by busy.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/new/page.tsx`
@@ -2275,7 +2275,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-NEW-06  ·  LOW  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The API returns the new record but the page ignores it and redirects to the list after a fixed 600 ms timeout rather than to the new deal (page.tsx:81-83).
 - **Verified evidence:** page.tsx:80-83: response body is not read; after toast it calls setTimeout(() => router.push('/crm/deals'), 600) with no cleanup on unmount. Whether POST returns the new id cannot be verified (crm-service absent; CLAUDE.md CQRS rule says writes return 202 with the new id).
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/new/page.tsx`
@@ -2313,7 +2313,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-CANDIDATES-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Full email and phone of both contacts are shown side by side to any CRM role with no masking or role gate, although the page's purpose only needs enough to recognise a match (DPDP data minimisation) (dedup-candidates/page.tsx:47-53, 119-125).
 - **Verified evidence:** FIELDS (dedup-candidates/page.tsx:47-53) include email and phone; PairCard prints raw pair.left/right[key] via fmt (:119,125). No masking or role gate beyond the CRM layout roles; no <Masked> shared component exists (grep found only integration secret mask). NOTE: dedupCandidates.ts:4-21 says GET /v1/crm/contacts/dedup-candidates does not exist in crm-service, so the page currently always renders the error state; the issue is latent until the endpoint exists.
 - **Files to change:** `apps/web/src/app/(app)/crm/dedup-candidates/page.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`
@@ -2329,7 +2329,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-CANDIDATES-02  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Merge is irreversible ('cannot be undone') yet always keeps the left contact and only backfills its empty fields; the reviewer cannot swap sides or choose per-field winners even though differing fields are highlighted (page.tsx:139, 296; lib/crm/dedupCandidates.ts:60-66).
 - **Verified evidence:** Merge button 'Merge → keep left' (page.tsx:139), ConfirmDialog at :291-305 says 'cannot be undone' and has no reason; mergeDedupPair(left.id,right.id) (dedupCandidates.ts:67-73) posts {primaryId,duplicateId}; left is always primary and only empty fields backfilled (:61-66). No swap or per-field choice; backend carry-over rules (merge-consumer) not verifiable.
 - **Files to change:** `apps/web/src/app/(app)/crm/dedup-candidates/page.tsx`, `apps/web/src/lib/crm/dedupCandidates.ts`
@@ -2345,7 +2345,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-CANDIDATES-03  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Dismiss pair' fires immediately with no confirmation or reason, and the pair 'will not surface again' (dedupCandidates.ts:75); a mis-click permanently hides a real duplicate (page.tsx:141-147, 180-191).
 - **Verified evidence:** Dismiss button onClick calls onDismiss=handleDismiss (page.tsx:141-147,284) which immediately calls dismissDedupPair (:180-191) and removes the pair; no ConfirmDialog or reason. Endpoint PATCH .../dismiss does not exist in crm-service per dedupCandidates.ts:4-21.
 - **Files to change:** `apps/web/src/app/(app)/crm/dedup-candidates/page.tsx`
@@ -2360,7 +2360,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-CANDIDATES-04  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** No pagination, filter or sort: every flagged pair is fetched and rendered as a full card, so a large queue becomes a very long page; there is also no way to sort by confidence (page.tsx:272-288, dedupCandidates.ts:52-57).
 - **Verified evidence:** getDedupCandidates (dedupCandidates.ts:50-59) fetches one unpaged list; page.tsx:272-289 maps all pairs to cards in server order; no sort/filter/pagination controls. Endpoint itself is absent from the backend snapshot.
 - **Files to change:** `apps/web/src/app/(app)/crm/dedup-candidates/page.tsx`, `apps/web/src/lib/crm/dedupCandidates.ts`
@@ -2375,7 +2375,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-CANDIDATES-05  ·  LOW  ·  confirmed  ·  theme STALE-COMMENT (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The file header documents PATCH /v1/crm/contacts/:leftId/merge {mergeIntoId} but the client calls POST /v1/crm/contacts/merge {primaryId, duplicateId} — stale comment (page.tsx:8; lib/crm/dedupCandidates.ts:68-70).
 - **Verified evidence:** Header comment page.tsx:8 says PATCH /v1/crm/contacts/:leftId/merge {mergeIntoId}; dedupCandidates.ts:68-70 actually POSTs /v1/crm/contacts/merge {primaryId,duplicateId}.
 - **Files to change:** `apps/web/src/app/(app)/crm/dedup-candidates/page.tsx`
@@ -2387,7 +2387,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-CANDIDATES-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Highest confidence is rendered in red and lowest in green, so a 92% match reads as an alarm rather than 'very likely the same person'; colours also come from a scoped style block with hex values and prefers-color-scheme rather than tokens (page.tsx:322-324, 358-363).
 - **Verified evidence:** confidenceClass (page.tsx:28-32) gives >=80 'conf-high' styled red (#b91c1c on #fef2f2, :322); <60 green (:324). STYLES block uses hex and @media (prefers-color-scheme:dark) (:358-363), so it ignores the app's manual dark toggle.
 - **Files to change:** `apps/web/src/app/(app)/crm/dedup-candidates/page.tsx`
@@ -2402,7 +2402,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-CANDIDATES-07  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Other dedup calls use 'v1/...' while this module uses a leading slash '/v1/...' with browserFetch; harmless if the client normalises, but inconsistent (dedupCandidates.ts:52,68,77).
 - **Verified evidence:** dedupCandidates.ts:52,68,77 use leading-slash paths; dataQuality.ts uses 'v1/...'. browserFetch strips a leading slash (browserClient.ts:22), so it is functionally harmless.
 - **Files to change:** `apps/web/src/lib/crm/dedupCandidates.ts`
@@ -2421,7 +2421,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-RULES-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed load the editor renders the 'No matching rules yet' empty state with an enabled 'Save rules' button; the empty branch is not gated on source==='error', so saving from that view PUTs an empty rule set and can wipe the tenant's deduplication rules — contradicting the file header 'never fabricate an empty rule set as fact' (DedupRulesEditor.tsx:5-6, 137, 146-152, 235).
 - **Verified evidence:** DedupRulesEditor.tsx: getDedupRules returns {data:[],source:'error'} (dataQuality.ts getDedupRules); the editor shows DataSourceBadge (:137) but still falls to `rules.length === 0` -> EmptyState 'No matching rules yet' (:146-151), with '+ Add rule' and 'Save rules' enabled only by busy (:233-237). save() PUTs {rules} (dataQuality.ts saveDedupRules) so an empty array can be sent, wiping the tenant rules if the backend accepts it. Header comment :5-6 promises otherwise. Backend behaviour on empty PUT not verifiable.
 - **Files to change:** `apps/web/src/app/_components/crm/DedupRulesEditor.tsx`
@@ -2437,7 +2437,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-RULES-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Saving replaces the whole rule list (PUT {rules}) with no version or If-Match token and no change summary; two admins editing at once silently overwrite each other, and there is no dirty-state warning when leaving with unsaved edits (DedupRulesEditor.tsx:107-123; lib/crm/dataQuality.ts:192-198).
 - **Verified evidence:** save() calls saveDedupRules(rules) -> PUT v1/crm/dedup-rules {rules} (dataQuality.ts) with no version/ETag; normaliseRules keeps no version field. No dirty-state tracking or beforeunload/route-change guard anywhere in the editor (no shared hook found). Last write wins. Backend concurrency support not verifiable.
 - **Files to change:** `apps/web/src/app/_components/crm/DedupRulesEditor.tsx`, `apps/web/src/lib/crm/dataQuality.ts`
@@ -2453,7 +2453,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-RULES-03  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Remove' deletes the row immediately (local state) with no confirmation, and a new rule defaults to weight 1 (out of 100) so it has almost no effect until edited; nothing stops two rules on the same field (DedupRulesEditor.tsx:94-105).
 - **Verified evidence:** removeRule (DedupRulesEditor.tsx:102-105) deletes locally with no confirm, but nothing is persisted until 'Save rules', so it is recoverable by reloading; addRule default weight 1 (:97) with threshold 90 is confirmed and duplicates of the same field are not checked (save only runs ruleNumbersValid, :110). A reason-dialog is overkill.
 - **Files to change:** `apps/web/src/app/_components/crm/DedupRulesEditor.tsx`
@@ -2469,7 +2469,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-RULES-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Weight and threshold are unexplained bare numbers: no help text on how they combine, no total, and no preview of what a change does to the flagged-pair count (DedupRulesEditor.tsx:158-159, 189-210).
 - **Verified evidence:** Table headers 'Weight' and 'Threshold' (DedupRulesEditor.tsx:158-159) and number inputs (:189-210) have only sr-only labels; no help text, sum of weights, or impact preview. Preview needs backend support (dry-run count).
 - **Files to change:** `apps/web/src/app/_components/crm/DedupRulesEditor.tsx`
@@ -2484,7 +2484,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-RULES-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** ALLOWED_ROLES includes 'admin' and 'tenant_admin', but the parent CRM layout already requires crm_user, crm_admin, platform_admin or super_admin, so those two roles cannot reach the page unless they also hold a CRM role (dedup-rules/layout.tsx:8; crm/layout.tsx:5).
 - **Verified evidence:** dedup-rules/layout.tsx:8 ALLOWED_ROLES includes admin and tenant_admin; crm/layout.tsx:5,8 requires one of crm_user, crm_admin, platform_admin, super_admin (requireAnyRole in lib/auth/roleGuard.ts redirects otherwise), so admin/tenant_admin without a CRM role never reach it.
 - **Files to change:** `apps/web/src/app/(app)/crm/dedup-rules/layout.tsx`, `apps/web/src/app/(app)/crm/layout.tsx`
@@ -2496,7 +2496,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-RULES-06  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Success and error messages use hard-coded hex colours and English literals; field values render as raw enum text ('gstin', 'exact') (DedupRulesEditor.tsx:140-143, 175, 186).
 - **Verified evidence:** Hard-coded hex at DedupRulesEditor.tsx:140 (#047857) and :143 (#b42318); English literals throughout; option values render raw enum text 'gstin'/'exact' (:175,186). Not fabricated data so FABRICATED tag is wrong. Icon is an emoji (:148).
 - **Files to change:** `apps/web/src/app/_components/crm/DedupRulesEditor.tsx`
@@ -2518,7 +2518,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENT-TYPES-02  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** A type can be saved with no 'Applies to' box ticked, and 'Mandatory' with none selected means it applies to nothing; no validation or hint (editor:318-320, 409-415).
 - **Verified evidence:** apps/web/src/app/_components/crm/DocumentTypesEditor.tsx:77-79 rowValid() checks only code and name; save() (81-109) sends appliesTo unchecked; Applies-to checkboxes at 165-175 and Mandatory at 177-180 have no hint. Editor uses no zod (CLAUDE.md rule 9 applies to services; web-side form validation is plain code). Disable-while-busy already exists (line 195). What an empty appliesTo means to the backend cannot be verified (crm-service absent from snapshot).
 - **Files to change:** `apps/web/src/app/_components/crm/DocumentTypesEditor.tsx`
@@ -2535,7 +2535,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENT-TYPES-03  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Delete confirmation says the type 'will no longer be selectable for new uploads' but does not say whether existing documents of that type are kept, nor show how many exist (editor:459-461).
 - **Verified evidence:** apps/web/src/app/_components/crm/DocumentTypesEditor.tsx:216-225 ConfirmDialog description is only '“name” will no longer be selectable for new uploads.'; no reason field, no count, no statement about existing documents. Lines cited (459-461) are wrong. deleteDocumentType(id) at lib/crm/documents.ts:402 takes only id. Count of existing documents or reason support needs a crm-service endpoint (absent from snapshot).
 - **Files to change:** `apps/web/src/app/_components/crm/DocumentTypesEditor.tsx`, `apps/web/src/lib/crm/documents.ts`
@@ -2551,7 +2551,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENT-TYPES-04  ·  LOW  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** On failed load the DataSourceBadge is shown twice, in the card header and again inline (editor:378, 388).
 - **Verified evidence:** apps/web/src/app/_components/crm/DocumentTypesEditor.tsx:137 renders DataSourceBadge in card header when source==='error' and line 147 renders it again inside the unavailable message. Line numbers in the observation (378, 388) are wrong. Note the error state does correctly avoid an empty list (145-148) and hides Add (207).
 - **Files to change:** `apps/web/src/app/_components/crm/DocumentTypesEditor.tsx`
@@ -2565,7 +2565,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENT-TYPES-05  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx renders a heading plus four 80px tiles and a 280px block, but the loaded page has no tiles and a different card list, so the layout jumps on load (document-types/loading.tsx:1-19).
 - **Verified evidence:** document-types/loading.tsx:9-16 renders 4 tiles (80px) and a 280px block; the real page (page.tsx + apps/web/src/app/_components/crm/DocumentTypesEditor.tsx) is a header plus a card of stacked li rows with no tiles. Also loading.tsx duplicates the heading via its own .ph h1 while the loaded page uses PageHeader (harmless as they replace each other but structures differ). The same copy-pasted skeleton is used in documents/ and escalation-rules/.
 - **Files to change:** `apps/web/src/app/(app)/crm/document-types/loading.tsx`
@@ -2580,7 +2580,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENT-TYPES-06  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Card rows use a fixed 1fr/2fr grid and inline 36-40px controls with no responsive rule, and each row saves independently so edits to several rows can be lost when one Save reloads the list via load() (editor:396, 344).
 - **Verified evidence:** True: apps/web/src/app/_components/crm/DocumentTypesEditor.tsx:155 uses gridTemplateColumns '1fr 2fr' with no breakpoint; and save() line 103 calls load() which sets source='loading' (line 48), which swaps the whole list for the loading text (143-144) and then setRows replaces every row, so unsaved edits/new rows in other cards are lost. Not a defect: controls are 36px inputs (inputStyle) and 40px Buttons, which are acceptable sizes. Line refs 396/344 wrong.
 - **Files to change:** `apps/web/src/app/_components/crm/DocumentTypesEditor.tsx`
@@ -2596,7 +2596,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENT-TYPES-07  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** All copy is hard-coded English with hex colours for status text; subject labels come from SUBJECT_TYPE_LABELS (lib/crm/documents.ts:72-79).
 - **Verified evidence:** All UI copy in apps/web/src/app/_components/crm/DocumentTypesEditor.tsx is hard-coded English and success/error colours are literal hex (#047857 line 140, #b42318 line 141). SUBJECT_TYPE_LABELS is at apps/web/src/lib/crm/documents.ts:68-75, not 72-79. The suite shows no i18n runtime in web/src/lib for CRM (only lib/payroll/statusLabels.ts label map), so 'hard-coded English' is the codebase norm, not a page-specific defect. Hex colours are real.
 - **Files to change:** `apps/web/src/app/_components/crm/DocumentTypesEditor.tsx`
@@ -2616,7 +2616,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENTS-01  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Manage Document Types' is rendered as the primary action for every CRM role, but /crm/document-types is admin-only (layout requireAnyRole with redirect to /crm), so a clerk clicks the main button and is bounced back (documents/page.tsx:34; document-types/layout.tsx:11-14).
 - **Verified evidence:** documents/page.tsx:34 renders <a className='btn primary' href='/crm/document-types'> for everyone; document-types/layout.tsx:11-14 uses requireAnyRole(['crm_admin','admin','super_admin','platform_admin','tenant_admin'],'/crm'), which redirects others to /crm. The page is a server component and roleGuard.ts exposes getSessionRoles() usable to gate the button.
 - **Files to change:** `apps/web/src/app/(app)/crm/documents/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`
@@ -2630,7 +2630,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENTS-02  ·  MEDIUM  ·  partly  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The route is a dead-end explainer: there is no cross-record document list, no search by scan status, missing-mandatory or expiring documents, even though the copy describes exactly those states; a clerk cannot see what is expiring without opening each record (page.tsx:12-37).
 - **Verified evidence:** documents/page.tsx:9-37 is indeed a static explainer with links to accounts/contacts/document-types; no list, filter or search. Copy (28) says panels flag missing/expiring docs per record. lib/crm/documents.ts exports only per-subject getDocuments(subjectType, subjectId) (304); no cross-record listing endpoint is visible and crm-service is absent, so a cross-record list is a new backend capability. Overstated only in that per-record flags do exist.
 - **Files to change:** `apps/web/src/app/(app)/crm/documents/page.tsx`, `apps/web/src/lib/crm/documents.ts`
@@ -2646,7 +2646,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENTS-03  ·  LOW  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** All links are plain anchor tags instead of next/link, forcing full page loads inside the app shell (page.tsx:27, 32-34).
 - **Verified evidence:** documents/page.tsx uses <a href> at lines 27, 32, 33, 34 for internal routes, causing full document loads. The same pattern (<a className='btn'>) is used in forecast/page.tsx:28 and StageBreakdownTable.tsx:66, so it is systemic.
 - **Files to change:** `apps/web/src/app/(app)/crm/documents/page.tsx`, `apps/web/src/app/(app)/crm/forecast/page.tsx`, `apps/web/src/app/(app)/crm/forecast/StageBreakdownTable.tsx`
@@ -2660,7 +2660,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENTS-04  ·  LOW  ·  partly  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx draws four stat tiles and a 280px block for a page that has neither, and titles itself 'Documents' with its own h1 (documents/loading.tsx).
 - **Verified evidence:** documents/loading.tsx:9-16 has 4 tiles + 280px block while the page is a single text card (page.tsx:18-37). The 'own h1 titled Documents' is not a real conflict: loading replaces the page during Suspense and its title matches; it just omits the subtitle/back link.
 - **Files to change:** `apps/web/src/app/(app)/crm/documents/loading.tsx`
@@ -2681,7 +2681,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ESCALATION-RULES-01  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Recipient user is a free-text raw user id ('user id (optional)') and recipient role a free-text string ('e.g. sales_manager'); there is no picker or validation against real users/roles, so a typo saves and leads escalate to nobody (EscalationRulesEditor.tsx:200-205).
 - **Verified evidence:** apps/web/src/app/_components/crm/EscalationRulesEditor.tsx:198-205 recipientRole is free text (placeholder 'e.g. sales_manager') and recipientId free text ('user id (optional)'); rowValid (38-44) only requires one to be non-empty. No lookup exists. Whether backend validates ids/roles cannot be verified (crm-service absent).
 - **Files to change:** `apps/web/src/app/_components/crm/EscalationRulesEditor.tsx`, `apps/web/src/lib/crm/assignment.ts`
@@ -2697,7 +2697,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ESCALATION-RULES-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed load the badge appears but the table area shows 'No escalation rules yet', presenting an outage as an empty configuration (editor:145-156).
 - **Verified evidence:** apps/web/src/app/_components/crm/EscalationRulesEditor.tsx:145 shows the badge when source==='error', but rows is [] (assignment.ts:388 returns data []) so lines 150-155 render EmptyState 'No escalation rules yet' and 235-237 still offers '+ Add escalation rule'. Contradicts the file's own header comment (7-8).
 - **Files to change:** `apps/web/src/app/_components/crm/EscalationRulesEditor.tsx`
@@ -2712,7 +2712,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ESCALATION-RULES-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Saving one row calls load(), which replaces all rows from the server and discards unsaved edits in the other rows; new unsaved rows disappear too (editor:100-103).
 - **Verified evidence:** apps/web/src/app/_components/crm/EscalationRulesEditor.tsx:103 calls load() after save; load() (57-63) sets source='loading' and the component returns early at 131-137, unmounting the table, then setRows(data.map(toRow)) replaces every row. Unsaved edits and unsaved new rows in other rows are discarded. Same at delete (123).
 - **Files to change:** `apps/web/src/app/_components/crm/EscalationRulesEditor.tsx`
@@ -2728,7 +2728,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ESCALATION-RULES-04  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Threshold is only in minutes (a day is 1440) with no unit switch or humanised preview; 'Reassign' is a bare Yes/No with no explanation of who receives the lead (editor:161, 164, 207-210).
 - **Verified evidence:** apps/web/src/app/_components/crm/EscalationRulesEditor.tsx:161 header 'Threshold (min)', input type=number in minutes (191) with no unit or preview; 'Reassign' is a checkbox with Yes/No text (207-210) and no help text on who receives the lead.
 - **Files to change:** `apps/web/src/app/_components/crm/EscalationRulesEditor.tsx`
@@ -2743,7 +2743,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ESCALATION-RULES-05  ·  LOW  ·  confirmed  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Nothing stops duplicate rules for the same trigger and threshold, and there is no ordering or precedence shown when several rules match (editor:75-80).
 - **Verified evidence:** apps/web/src/app/_components/crm/EscalationRulesEditor.tsx:75-80 addRule defaults to trigger 'unaccepted', 60 min, and rowValid (38-44) has no duplicate check; no ordering column or precedence note in the table (157-232). Whether backend enforces uniqueness cannot be verified.
 - **Files to change:** `apps/web/src/app/_components/crm/EscalationRulesEditor.tsx`
@@ -2758,7 +2758,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ESCALATION-RULES-06  ·  LOW  ·  partly  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx shows four stat tiles and a 280px block under its own h1 although the page has neither; the table is a seven-column grid with no mobile transform (escalation-rules/loading.tsx; editor:157-168).
 - **Verified evidence:** escalation-rules/loading.tsx:9-16 has 4 tiles + 280px block; page has none (confirmed). The table at apps/web/src/app/_components/crm/EscalationRulesEditor.tsx:157 is a real <table className='tbl'> with 7 columns and inline inputs, NOT wrapped in .tbl-wrap (civitas-ds.css:132 gives overflow-x:auto only to the wrapper), so on mobile it overflows the card; no stacked transform. 'Seven-column grid' wording is inaccurate.
 - **Files to change:** `apps/web/src/app/_components/crm/EscalationRulesEditor.tsx`, `apps/web/src/app/(app)/crm/escalation-rules/loading.tsx`
@@ -2774,7 +2774,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ESCALATION-RULES-07  ·  LOW  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Two similarly named admin routes exist for escalation (this lead escalation and /crm/task-escalation for tasks); the page title and subtitle do not say 'lead' in the heading (page.tsx:9).
 - **Verified evidence:** page.tsx:9-10 title is 'Escalation Rules' but the subtitle explicitly says 'Escalate leads...', so the subtitle does mention leads; the title alone is ambiguous. A sibling route apps/web/src/app/(app)/crm/task-escalation exists (verified by listing), so ambiguity is real but smaller than described.
 - **Files to change:** `apps/web/src/app/(app)/crm/escalation-rules/page.tsx`, `apps/web/src/app/(app)/crm/escalation-rules/error.tsx`, `apps/web/src/app/(app)/crm/escalation-rules/loading.tsx`
@@ -2794,7 +2794,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-FORECAST-01  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed load the badge is shown but the tiles print ₹0.00 / 0 and the table says 'No forecast yet'; unlike Grievances / Lead Forms there is no '—' guard, so an outage reads as a genuinely empty pipeline (page.tsx:18, 30-56; StageBreakdownTable.tsx:63-66).
 - **Verified evidence:** apps/web/src/app/(app)/crm/forecast/page.tsx:18 sets source='error'; line 30 shows only the badge; lines 31-56 still render StatCards with formatMoney('0') (= ₹0.00), '0' deals and '—' top stage; StageBreakdownTable.tsx:63-66 shows 'No forecast yet'. Loader falls back to CRM_FORECAST_EMPTY (loaders.ts:3017). LoaderResult carries status/errorMessage so LoadErrorState (ds) is usable.
 - **Files to change:** `apps/web/src/app/(app)/crm/forecast/page.tsx`
@@ -2810,7 +2810,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-FORECAST-02  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The Pipeline filter component returns null when the pipeline list is empty, so a failed pipelines fetch silently removes the filter with no message while the forecast still renders (PipelineFilter.tsx:21; page.tsx:15-18).
 - **Verified evidence:** PipelineFilter.tsx:21 returns null for an empty list and page.tsx:15-18 derives pipelines from getPipelines() whose error fallback is []. But line 18 folds pipelineSource into source, so line 30 does show the badge when the pipelines fetch fails; it is not fully silent, just non-specific.
 - **Files to change:** `apps/web/src/app/(app)/crm/forecast/page.tsx`, `apps/web/src/app/(app)/crm/forecast/PipelineFilter.tsx`
@@ -2824,7 +2824,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-FORECAST-03  ·  MEDIUM  ·  partly  ·  theme FILTER (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** A forecast with no time horizon: the page has no period, close-date or owner filter and forecast.ts models only totals and stages, so 'Weighted Forecast' cannot be tied to a quarter or financial year for the department (page.tsx:31-58; forecast.ts:8-16).
 - **Verified evidence:** No period/close-date/owner filter: page searchParams only has pipelineId (page.tsx:9-11) and getCrmForecast(pipelineId) sends only that query param (loaders.ts:3040-3048); forecast.ts:10-16 models totals/stages only. Whether the forecast endpoint supports period/owner params cannot be verified (crm-service absent). Theme is not DATEFMT.
 - **Files to change:** `apps/web/src/app/(app)/crm/forecast/page.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/crm/forecast/PipelineFilter.tsx`
@@ -2838,7 +2838,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-FORECAST-05  ·  LOW  ·  partly  ·  theme CLARITY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Share of Forecast is rounded to two decimals per row and may not add to 100.00; probability bands (30 / 70) are hard-coded and not shown to the user (forecast.ts:43-47; StageBreakdownTable.tsx:56).
 - **Verified evidence:** forecast.ts:24-36 computes share via bigint floor division then /100, so rows are truncated (never rounded up) and their sum is <= 100.00, possibly 99.9x; it cannot exceed 100. Probability bands at forecast.ts:44-45 (>=70 high, >=30 medium) are hard-coded and only shown as labels Likely/Possible/Early (StageBreakdownTable.tsx:15-19, 38) without thresholds. Theme is not FABRICATED.
 - **Files to change:** `apps/web/src/app/(app)/crm/forecast/forecast.ts`, `apps/web/src/app/(app)/crm/forecast/StageBreakdownTable.tsx`
@@ -2853,7 +2853,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-FORECAST-06  ·  LOW  ·  partly  ·  theme CONSISTENCY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Engagements' here, 'Deals' in the route and hub, and 'Engagement Board' for /crm/pipeline; stat icons are glyph characters on hard-coded hex backgrounds (#dcfce7, #e0f2fe, #fef3c7, #fce7f3) instead of tokens (page.tsx:32-55).
 - **Verified evidence:** Hex icon backgrounds confirmed at page.tsx:34,40,46,52 (#dcfce7,#e0f2fe,#fef3c7,#fce7f3) and glyph-character icons; StatCard defaults iconBg to #eef2ff (ds/StatCard.tsx:32). Terminology drift is real: page.tsx labels say 'Engagements', crm/page.tsx:13 titles the route 'Deals' (description 'Engagements and procurement opportunities'), page.tsx:28 link says 'Engagement Board' to /crm/pipeline, and empty action is '+ New Engagement' to /crm/deals/new. Not a fabrication issue.
 - **Files to change:** `apps/web/src/app/(app)/crm/forecast/page.tsx`, `apps/web/src/app/(app)/crm/page.tsx`, `apps/web/src/app/_components/ds/StatCard.tsx`
@@ -2875,7 +2875,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-01  ·  HIGH  ·  confirmed  ·  theme PAGINATION (was FAILMASK)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The loader requests limit=50&page=1 and the page never passes a page param nor renders pagination; the DataTable's 15-per-page pager only pages those 50 rows, so any register beyond 50 grievances has unreachable records and the 'this page' counts describe only the first 50 (page.tsx:13-19; app/_data/loaders.ts:1521-1522).
 - **Verified evidence:** app/_data/loaders.ts:1514-1522 getCrmGrievances defaults limit=50, page=1. grievances/page.tsx:13-17 forwards only status/priority/search; SP type (line 6) has no page. GrievancesTable.tsx:166 uses DataTable pageSize={15}, a client-only pager over the rows passed (DataTable.tsx:237). data.total is read (page.tsx:56) but no pager consumes it, so rows 51+ are unreachable, and the 'Open/Escalated/Resolved (this page)' tiles count only those <=50 rows (they are honestly labelled 'this page'). The loader already supports `page`.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/page.tsx`, `apps/web/src/app/(app)/crm/grievances/GrievancesTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -2893,7 +2893,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-02  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** status, priority and search searchParams are forwarded to the API, but no control on the page sets them (the only filter is DataTable's client-side search), so server-side filtering is reachable only by hand-editing the URL (page.tsx:6, 13-17; GrievancesTable.tsx:102-103).
 - **Verified evidence:** grievances/page.tsx:6,13-17 forwards status/priority/search to the API, and the comment (9-12) claims server-side filtering. GrievancesTable.tsx has only DataTable's client-side `filterable` box (line 164-165) which filters just the fetched rows; no select/links set ?status= or ?priority=, and the search box does not write ?search=. So server filtering works only via hand-edited URL, and the visible search cannot reach records beyond the first 50.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/page.tsx`, `apps/web/src/app/(app)/crm/grievances/GrievancesTable.tsx`
@@ -2911,7 +2911,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-03  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** On an outage the tiles correctly show '—' but the table still renders 'No grievances yet — log the first citizen grievance', which reads as an empty register (GrievancesTable.tsx:107-109, page.tsx:32).
 - **Verified evidence:** page.tsx:32 stat() shows '—' when source==='error' and line 59 passes source='error' to GrievancesTable. But GrievancesTable.tsx:170-171 always sets emptyTitle 'No grievances yet' / 'Use the button above to log the first citizen grievance', which DataTable shows when rows are empty (DataTable.tsx:319-320). Mitigation: line 110 renders DataSourceBadge with the hook's provenance, so an error banner appears above when useSeededResource reports an error; the empty state text still contradicts it. Cached rows may be shown instead if the sync cache has data.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/GrievancesTable.tsx`, `apps/web/src/app/(app)/crm/grievances/page.tsx`
@@ -2926,7 +2926,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-04  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** dueAt is mapped by the loader but no column, overdue marker or sort exposes it, so a clerk cannot see which grievances are near or past their disposal deadline (app/_data/loaders.ts:1539; GrievancesTable.tsx:50-98).
 - **Verified evidence:** loaders.ts:1539 maps dueAt into CrmGrievanceRow, but GrievancesTable.tsx columns (lines 50-98 of the file) are Ref, Citizen, Category, Subject, Priority, Status, Logged, View; dueAt and assignedTo (also mapped) are not shown, no overdue marker and no sort on due date. The detail page shows 'Due By' only after opening each record (page.tsx:~171).
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/GrievancesTable.tsx`, `apps/web/src/app/(app)/crm/grievances/page.tsx`
@@ -2943,7 +2943,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-05  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Citizen names are listed and exported to CSV with the register and no role gate or masking; the export button is shown to every CRM role (DPDP data minimisation) (GrievancesTable.tsx:58, 105-106).
 - **Verified evidence:** GrievancesTable.tsx column citizenName (line ~120) renders the name unmasked; DataTable is `exportable` (line 167) so ds/DataTable.tsx:274-290 downloadCsv writes every column, including the citizen name, to a client-side Blob for any user who can open the page. No role check, no audit call, no purpose prompt. Phone/email are not in this export (they are not in the list row), so exposure is names plus subject text.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/GrievancesTable.tsx`, `apps/web/src/app/(app)/crm/grievances/page.tsx`
@@ -2960,7 +2960,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-06  ·  LOW  ·  partly  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status shows raw enum text (REGISTERED, APPEAL) in StatusPill, and the tile 'Escalated' counts APPEAL rows which the actions call 'First Appeal'; priority pills use var(--bg) text on var(--ink2) backgrounds (GrievancesTable.tsx:9-14, 80; page.tsx:30, 54).
 - **Verified evidence:** Overstated: StatusPill (ds/StatusPill.tsx) passes status through humanizeStatus (lib/formatters.ts:44), so users see 'Registered', 'Forwarded', 'Attended', 'Disposed', 'Appeal', not raw uppercase. True: none of the five CPGRAMS values is in STATUS_MAP, so all fall back to the neutral 'info' variant (no visual difference between Registered, Attended, Disposed, Appeal). True: page.tsx:30,54 tile 'Escalated (this page)' counts APPEAL while the detail action is 'First Appeal' and detail timeline says 'Escalated'. True: priority pill uses color var(--bg) on var(--ink2)/var(--warn)/var(--bad) (GrievancesTable.tsx:9-14,80); actual contrast in dark theme is unverified.
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/app/(app)/crm/grievances/page.tsx`, `apps/web/src/app/(app)/crm/grievances/GrievancesTable.tsx`
@@ -2976,7 +2976,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-07  ·  LOW  ·  confirmed  ·  theme FABRICATED
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx has no stat-tile placeholders while the loaded page leads with four tiles, causing layout shift (grievances/loading.tsx).
 - **Verified evidence:** grievances/loading.tsx renders a breadcrumb bar, a title bar and one h-80 block. The loaded page (page.tsx:52-57) shows a StatGrid with four StatCards between header and table, so the skeleton lacks the tile row and the table below shifts down on load. Same hard-coded slate-200 / max-w-7xl styling as other loading files. Theme FABRICATED does not apply.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/loading.tsx`
@@ -2997,7 +2997,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme CONCURRENCY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The detail type carries `version` but every lifecycle PATCH (forward, first-appeal, resolve, close) is sent without it or an If-Match, so two clerks acting on the same grievance overwrite each other with no conflict signal (grievances/[id]/page.tsx:25; GrievanceActions.tsx:46-56).
 - **Verified evidence:** grievances/[id]/page.tsx:25 declares `version: number` on GrievanceDetail but it is never read. GrievanceActions.tsx:46-56 `patch()` sends only Content-Type and the payload; no version in body, no If-Match. apps/web/src/app/api/proxy/[...path]/route.ts:7 FORWARD allow-list omits if-match, so even a header set in the browser would be dropped. Whether crm-service enforces version is cannot-verify (services/crm-service is absent from the snapshot; only hrms-service exists).
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/[id]/GrievanceActions.tsx`, `apps/web/src/app/(app)/crm/grievances/[id]/page.tsx`, `apps/web/src/app/api/proxy/[...path]/route.ts`
@@ -3016,7 +3016,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-DETAIL-02  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Close' is offered to every CRM role with the text 'Requires administrator rights', so non-admins confirm the dialog and then get the generic failure message (GrievanceActions.tsx:100-106, 15-18).
 - **Verified evidence:** GrievanceActions.tsx:100-106 always renders the danger 'Close' ActionButton with confirmDescription 'Requires administrator rights'. The component takes only {id, status} (line 39); page.tsx:253 passes no role information. A non-admin confirms the dialog, `patch('close')` gets a non-ok response and throws the generic 'couldn't save' text (lines 15-18, 52-54). Server-side session roles are available via lib/auth/roleGuard.ts getSessionRoles(), but the page does not use it. The exact role name that is 'administrator' cannot be verified (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/[id]/page.tsx`, `apps/web/src/app/(app)/crm/grievances/[id]/GrievanceActions.tsx`
@@ -3035,7 +3035,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Every failed action, whether 403, 409 or 5xx, throws the same catalogued 'save' message via grievanceActionError() (no status passed), so a permission refusal looks like a transient error (GrievanceActions.tsx:15-18, 52-54).
 - **Verified evidence:** GrievanceActions.tsx:15-18 grievanceActionError() takes no argument and always returns toHumanError('save', {area:'grievance'}) = "We couldn't save your grievance. Nothing was changed. Please try again in a moment." Lines 52-54 throw it for any !res.ok, so 403, 409, 422 and 5xx are identical; useConfirmAction (ds/ActionButton.tsx) shows e.message in the dialog. lib/messages.ts has no forbidden/conflict MessageKind, so a new kind or a dedicated string is needed.
 - **Files to change:** `apps/web/src/lib/messages.ts`, `apps/web/src/app/(app)/crm/grievances/[id]/GrievanceActions.tsx`
@@ -3051,7 +3051,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme MISSING-FIELD (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Forward stores forwardedTo and First Appeal stores appealReason, but GrievanceDetail has neither field, so the department a grievance was forwarded to and the appeal reason are never displayed after saving; the Status Timeline has no 'Forwarded' step and 'Assigned' never shows a time (page.tsx:6-26, 129-135).
 - **Verified evidence:** page.tsx:6-26 GrievanceDetail has no forwardedTo or appealReason; nothing in the Details/Resolution cards renders them. GrievanceActions.tsx:75 sends {forwardedTo} and :85 sends {appealReason}. Timeline (page.tsx:129-135) has Logged/Assigned/Escalated/Resolved/Closed; 'Assigned' has `ts: undefined` (line 131) so never shows a time, and there is no Forwarded step although FORWARDED is a status. Whether the GET returns forwardedTo/appealReason/forwardedAt/assignedAt is cannot-verify (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/[id]/page.tsx`
@@ -3069,7 +3069,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Citizen phone and email are shown in full to every CRM role, with no masking or role gate (DPDP), alongside a free-text description that may contain further personal data (page.tsx:227-230).
 - **Verified evidence:** page.tsx:227-230 (Citizen card) prints g.citizenPhone and g.citizenEmail verbatim; the page has no requireAnyRole/getSessionRoles call and no reveal/audit. Description is printed pre-wrapped in full (line ~179-191). No shared masking component exists: only page-local maskPhone in telephony/calls/page.tsx:37 and a MaskedInput in hr/employees/new/steps/Step4.tsx. Also the list table exports citizenName to CSV (see -LIST-05).
 - **Files to change:** `apps/web/src/app/_components/ds/Masked.tsx`, `apps/web/src/app/_components/ds/index.ts`, `apps/web/src/app/(app)/crm/grievances/[id]/page.tsx`
@@ -3087,7 +3087,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-DETAIL-06  ·  MEDIUM  ·  confirmed  ·  theme RESPONSIVE (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The two-column layout is an inline `1fr 320px` grid with no breakpoint, so at phone width the main column is squeezed to a sliver (page.tsx:148).
 - **Verified evidence:** page.tsx:148 `style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 20 }}` is inline, so no media query can override it; at 360px the main column is ~1fr of 360-320-20 minus gutters, a sliver. The same inline pattern exists in crm/rti/[id]/page.tsx:80 and crm/service-requests/[id]/page.tsx:99. Also the 140px/1fr details dl (line ~155) does not collapse. Theme tag PII is wrong.
 - **Files to change:** `apps/web/src/app/globals.css`, `apps/web/src/app/(app)/crm/grievances/[id]/page.tsx`, `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`, `apps/web/src/app/(app)/crm/service-requests/[id]/page.tsx`
@@ -3103,7 +3103,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-DETAIL-07  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** A failed fetch renders 'Grievance Not Found' (title) with only 'The grievance could not be loaded.' beneath, so an outage is titled as a missing record (page.tsx:117-126).
 - **Verified evidence:** page.tsx:117-126: `if (!g)` renders PageHeader title 'Grievance Not Found', a DataSourceBadge only when source==='error', and 'The grievance could not be loaded.' There is no distinction between HTTP 404 and network/5xx/403, although fetchJson returns `status` (app/_data/apiClient.ts LoaderResult) and ds/LoadErrorState.tsx already implements 403/other handling with RefreshErrorState; hr/apar/[id]/page.tsx:97 shows the intended pattern.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/[id]/page.tsx`, `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`
@@ -3120,7 +3120,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-DETAIL-08  ·  LOW  ·  confirmed  ·  theme DEADCODE (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The `!disposed` guard around Resolve is dead code, because the disposed case has already returned the 'no further action' line above it; assignedTo is printed as returned, with no evidence it is a person's name rather than an id (GrievanceActions.tsx:42-64, 88; page.tsx:170).
 - **Verified evidence:** GrievanceActions.tsx:43-44 `terminal` and `disposed` are both `status === 'DISPOSED'`; line 58 returns early when terminal, so `{!disposed && ...}` at line 88 is always true (dead guard). page.tsx:170 (`{g.assignedTo ?? 'Unassigned'}`) prints the value as-is; whether it is a name or a user id is cannot-verify (crm-service absent, list loader maps it only via toText). Theme DEADROUTE is wrong (no route involved).
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/[id]/GrievanceActions.tsx`, `apps/web/src/app/(app)/crm/grievances/[id]/page.tsx`
@@ -3142,7 +3142,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-NEW-01  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Citizen phone and email are collected with no purpose or consent notice and no format check beyond the input type, although this is personal data under DPDP; the record is not linked to an existing CRM contact and no duplicate check is run (grievances/new/page.tsx:113-147).
 - **Verified evidence:** grievances/new/page.tsx:113-147: Phone is `type='tel' maxLength=32`, Email `type='email' maxLength=320`; no pattern, no purpose or consent text anywhere on the page, and body (lines 23-31) posts only the raw fields; no contact lookup or duplicate check code exists. Backend duplicate/contact linking is cannot-verify (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/new/page.tsx`
@@ -3160,7 +3160,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-NEW-02  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Inline errors exist only for name, category, subject and description; a server rejection of phone, email or priority appears only in the top banner, not next to the field (page.tsx:109, 179, 222, 243 versus 113-147, 183-202).
 - **Verified evidence:** new/page.tsx renders formError.fieldError() for citizenName (109), category (179), subject (222), description (243) only; phone (113-130), email (131-147) and priority (183-202) have none. useFormError.fromResponse (lib/useFormError.ts:100-108) fills fieldErrors from the backend envelope for any field, but the top banner (page.tsx:69-84) shows only the generic catalogued 'couldn't save' sentence, so a phone/email rejection tells the clerk nothing about which field failed.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/new/page.tsx`
@@ -3175,7 +3175,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme CONFIG (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The nine categories are hard-coded in the page rather than loaded from the department's taxonomy, so they cannot be aligned to CPGRAMS categories or changed by an administrator (page.tsx:7-11).
 - **Verified evidence:** new/page.tsx:7-11 hard-codes nine category strings used in the select (lines 175-177). Nothing loads a taxonomy, and the string (not an id) is posted. Whether a category-master or CPGRAMS-category endpoint exists is cannot-verify (crm-service absent); no loader for it exists in app/_data/loaders.ts. Not a 'fabricated figure' - it is configuration hard-coding.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/new/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -3191,7 +3191,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-NEW-04  ·  LOW  ·  confirmed  ·  theme BUSINESS-RULE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Any clerk can log a grievance directly as Urgent; there is no rule or note on when Urgent applies, and the detail page separately raises priority to urgent on First Appeal (page.tsx:197-200; grievances/[id]/GrievanceActions.tsx:82).
 - **Verified evidence:** new/page.tsx:197-200 offers Low/Normal/High/Urgent to every user with no help text. GrievanceActions.tsx:82 says first appeal 'escalates to urgent priority' (the server-side bump itself is cannot-verify). No role check exists in either file.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/new/page.tsx`
@@ -3207,7 +3207,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-NEW-05  ·  LOW  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Cancel is a plain link with no unsaved-changes prompt, and the form uses uncontrolled FormData with raw fetch to /api/proxy instead of the browserFetch used by sibling forms (page.tsx:22-38, 251).
 - **Verified evidence:** True: Cancel is `<a href='/crm/grievances' className='btn'>` (page.tsx:251) with no dirty-form guard; form reads values via FormData (line 22) and posts with raw fetch('/api/proxy/v1/crm/grievances') (34-38). Overstated: browserFetch is used by 8 files under crm but 10 files also use raw fetch to /api/proxy (incl. GrievanceActions.tsx and FollowUpModal.tsx), so raw fetch is common in the sibling grievance/health code, not a deviation. browserFetch (lib/api/browserClient.ts:21) adds x-device-id and trust headers, which the raw call omits. Cancel as plain <a> also forces a full page reload instead of client navigation.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/new/page.tsx`
@@ -3222,7 +3222,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-NEW-06  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx is max-w-7xl with a full-width block while the form is a 640px card, so the skeleton and loaded page have different widths (grievances/new/loading.tsx; page.tsx:66).
 - **Verified evidence:** grievances/new/loading.tsx renders `mx-auto max-w-7xl` with header bars and an `h-80 rounded-xl` block; the loaded page (page.tsx:60-67) is PageHeader plus a card with maxWidth 640. It is byte-identical to grievances/loading.tsx, so the new-form route shows a table-shaped skeleton. It also uses hard-coded Tailwind slate-200 / min-h-screen rather than tokens (dark-mode mismatch).
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/new/loading.tsx`
@@ -3236,7 +3236,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-NEW-07  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Required marks use a decorative asterisk with no legend such as 'Fields marked * are required'; the description has a 5,000-character limit but no counter (page.tsx:93, 231).
 - **Verified evidence:** new/page.tsx:93, 160, 206: required marks are `<span aria-hidden='true'>*</span>` with the native `required` attribute doing the semantic work; there is no 'Fields marked * are required' legend. Description textarea has maxLength={5000} (line 231) and no live counter; the browser silently stops typing at the limit.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/new/page.tsx`
@@ -3258,7 +3258,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed load the page prints the badge but Critical and At risk show 0 and the table says 'Every scored account is currently healthy or thriving', a false all-clear on the one screen meant to surface risk; the tiles have no '—' guard like Grievances / Lead Forms (health/page.tsx:13-14, 29-41; WatchlistTable.tsx:47-49).
 - **Verified evidence:** health/page.tsx:8-14 derives source='error' when either loader fails (loaders return [] on failure, loaders.ts:1422,2990), but only renders <DataSourceBadge> (:28). Critical/At risk tiles (:30-41) show summary counts of 0 and WatchlistTable (WatchlistTable.tsx:47-49) shows 'Every scored account is currently healthy or thriving'. Correction: Average Score (:46) already shows '—' when total==0 and Call First falls back to '—', so only the two count tiles and the empty table lack a guard.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/page.tsx`, `apps/web/src/app/(app)/crm/health/WatchlistTable.tsx`
@@ -3276,7 +3276,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-02  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The watchlist is requested with limit=100 and nothing shows truncation, so counts and 'Average Score' silently describe at most 100 accounts; the average is over at-risk accounts only, yet is labelled a plain 'Average Score' (app/_data/loaders.ts:2990; health/health.ts:44-71).
 - **Verified evidence:** loaders.ts:2990 requests /api/v1/recommendations/health/at-risk?limit=100; the loader keeps only payload.data (:2994) so any total is discarded. summariseWatchlist (health.ts:44-71) computes counts and averageScore over that capped, already at-risk-only list, yet the tile is labelled 'Average Score' (page.tsx:45). Whether the endpoint returns a total or supports offset is cannot-verify (recommendation-service absent from snapshot).
 - **Files to change:** `apps/web/src/app/(app)/crm/health/page.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/crm/health/health.ts`
@@ -3294,7 +3294,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-03  ·  MEDIUM  ·  confirmed  ·  theme DATA-JOIN (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Names are joined from getCrmAccounts (one unparameterised call), so any account not in that response appears as 'Unknown account' with no id or link text to identify it, and can also be picked as 'Call First' (health/health.ts:86-95, page.tsx:16-18).
 - **Verified evidence:** health.ts:86-95 joins by accounts.id from getCrmAccounts() (loaders.ts:1421, no params, 30s cache) and falls back to 'Unknown account' (:93). page.tsx:16-18 picks worstName from that joined list so a missing account can be 'Call First'; row shows no id. Note the fallback is deliberate (doc comment :80-84 avoids hiding accounts). Whether getCrmAccounts is itself paginated/capped is cannot-verify (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/health/health.ts`, `apps/web/src/app/(app)/crm/health/page.tsx`, `apps/web/src/app/(app)/crm/health/WatchlistTable.tsx`
@@ -3310,7 +3310,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-04  ·  MEDIUM  ·  confirmed  ·  theme I18N
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The empty-state copy hard-codes 'falls to 50 or below' as the at-risk rule although banding is owned by the recommendation-service; if thresholds change the message goes stale (WatchlistTable.tsx:49).
 - **Verified evidence:** WatchlistTable.tsx:49 hard-codes 'falls to 50 or below'; health.ts:4 states banding is owned by recommendation-service and the client has no threshold constant. Also all page strings (title, subtitle, labels, filterPlaceholder) are literals, no next-intl.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/WatchlistTable.tsx`, `apps/web/src/app/(app)/crm/health/page.tsx`, `apps/web/messages/en.json`, `apps/web/messages/hi.json`
@@ -3325,7 +3325,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The list has no owner, last-contact or next-action column and no way to start a follow-up from a row; the only action is to open the account first (WatchlistTable.tsx:31-38).
 - **Verified evidence:** WatchlistTable.tsx:30-39 columns are Account, Band, Health Score, Last Scored only; rowHref (:41) is the only action. AccountHealthEntry carries no owner/last-contact (types in @civitasone/types; health.ts). Owner/next-action need crm account/activity data not in the payload.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/WatchlistTable.tsx`, `apps/web/src/app/(app)/crm/health/health.ts`, `apps/web/src/app/(app)/crm/health/page.tsx`
@@ -3341,7 +3341,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-06  ·  LOW  ·  partly  ·  theme TOKENS (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stat icons are emoji on hard-coded hex backgrounds (#fee2e2, #fef3c7, #e0f2fe, #fce7f3) rather than tokens (page.tsx:30-48).
 - **Verified evidence:** Emoji icons with hex iconBg exist at page.tsx:31-48 (#fee2e2,#fef3c7,#e0f2fe,#fce7f3) as claimed, but this is the StatCard icon/iconBg API used across the app (lead-forms, deals/page.tsx:28), not a health-page one-off. Nothing here is fabricated data; theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/page.tsx`, `apps/web/src/app/_components/ds/StatCard.tsx`, `apps/web/src/app/_components/ds/StatIcon.tsx`
@@ -3363,7 +3363,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-ACCOUNTID-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The detail page never shows which account it describes: the title is a fixed 'Account Health', the subtitle is the scored time, and the follow-up dialog labels the account with its raw id (a UUID), so a clerk cannot confirm the target before creating a service request (health/[accountId]/page.tsx:49-52; FollowUpModal.tsx:144-154).
 - **Verified evidence:** health/[accountId]/page.tsx:30 and 50 set title 'Account Health' (fixed); subtitle (51) is 'Scored <date>'. FollowUpModal.tsx:144-154 (file lines ~271-282) prints `Account: <code>{accountId}</code>`. Nothing on the page shows the account name; the breakdown fields used (accountId, score, band, version, computedAt, storedScore, contributingFactors) do not include a name, and the AccountHealthBreakdown type is in @civitasone/types which is absent from the snapshot. The View Account link (line 56) exists but only after the fact. Existing getCrmAccounts() (loaders.ts:1421, used by crm/accounts/[id]/page.tsx) can resolve the name.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/[accountId]/page.tsx`, `apps/web/src/app/(app)/crm/health/[accountId]/FollowUpModal.tsx`
@@ -3379,7 +3379,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-ACCOUNTID-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a fetch failure the page shows the badge and then 'This account has not been scored', which presents an outage as a scoring gap; getAccountHealthBreakdown returns null for both a 404 and an error (page.tsx:26-43; app/_data/loaders.ts:3002-3013).
 - **Verified evidence:** loaders.ts:3002-3015 getAccountHealthBreakdown uses fetchJson with null fallback; any failure and a 404 both yield data=null. page.tsx:26-43 then renders EmptyState 'No health score yet ... This account has not been scored', with a DataSourceBadge only when source==='error' and still offers Create Follow-up. The loader doc says a 404 is expected, but does not separate it; fetchJson's LoaderResult.status (apiClient.ts) makes the split possible, as ds/LoadErrorState.tsx and hr/apar/[id] do.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/[accountId]/page.tsx`
@@ -3394,7 +3394,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-ACCOUNTID-03  ·  MEDIUM  ·  partly  ·  theme WIRING (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The follow-up reuses the citizen service-request API: it posts citizenName / citizenPhone for what is an account representative, and offers service types 'New Water Connection' and 'New Electricity Connection' for an account-health action, so the resulting record is mis-typed (FollowUpModal.tsx:77-85, 234-247).
 - **Verified evidence:** True: FollowUpModal.tsx:77-85 (file lines ~204-212) POSTs {citizenName, citizenPhone, serviceType, subject, description, priority, relatedAccountId} to /api/proxy/v1/crm/service-requests, the citizen service-request API; select options (file ~363-374) include 'New Water Connection' and 'New Electricity Connection' next to health-specific ones. Softening: the name field label is 'Contact Name' with placeholder 'Citizen or account representative name', so it is partly acknowledged. Phone is optional. Whether the endpoint accepts these free-text service types, or a dedicated account follow-up endpoint exists, is cannot-verify (crm-service absent). Theme PII is mis-tagged; the issue is domain mis-typing.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/[accountId]/FollowUpModal.tsx`
@@ -3410,7 +3410,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-ACCOUNTID-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The default Subject embeds the raw account id ('Account health follow-up — 3f2a…'), which then becomes the service request's subject line (FollowUpModal.tsx:265).
 - **Verified evidence:** FollowUpModal.tsx defaultValue `Account health follow-up — ${accountId}` (file line 392, i.e. ~265 of the modal body) on the Subject input; the user can edit it, but by default the created service request's subject contains the full id (likely a UUID; id format not verifiable). The subject is shown in SR lists and detail.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/[accountId]/FollowUpModal.tsx`, `apps/web/src/app/(app)/crm/health/[accountId]/page.tsx`
@@ -3425,7 +3425,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-ACCOUNTID-05  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Value, Weight and Contribution print raw with no unit or scale, and 'Clamped' is unexplained jargon, so a clerk cannot tell why an account scored what it did or what to fix (page.tsx:101-108).
 - **Verified evidence:** page.tsx:84-112: Weight is NOT raw - it is `Math.round(factor.weight*100)%` (line 102). True: Value (101) and Contribution (103) print `factor.value` and `factor.contribution` with no unit, scale, or explanation of what value range means (payload types absent, so the scale is cannot-verify). The column header is 'Data Quality' and the cell is a StatusPill 'Clamped' vs 'Reported' (105-107), with no tooltip or legend explaining that Clamped means the raw signal was capped to its allowed range. No guidance on what to fix per signal.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/[accountId]/page.tsx`, `apps/web/src/app/(app)/crm/health/health.ts`
@@ -3440,7 +3440,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-ACCOUNTID-06  ·  LOW  ·  defect  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** FollowUpButton.tsx is dead code (no importer in the snapshot) and duplicates the button already inside FollowUpModal; the modal's overlay is hand-rolled with a fixed z-index rather than the shared ConfirmDialog / dialog primitive (FollowUpButton.tsx:6-16; FollowUpModal.tsx:15-34).
 - **Service:** `crm-service (web-only finding)`  ·  **Endpoint(s):** `['POST /api/proxy/v1/crm/service-requests (modal)']`
 - **Question:** Is FollowUpButton.tsx unreferenced and FollowUpModal a hand-rolled overlay instead of the shared dialog primitive?
@@ -3452,7 +3452,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-ACCOUNTID-07  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The 'Score Recomputed From Signals' card exposes a stored-vs-computed discrepancy as an explanation paragraph with no action or timestamp of the last recompute (page.tsx:116-124).
 - **Verified evidence:** page.tsx:116-124 shows the 'Score Recomputed From Signals' card when storedScore !== score, as text only: 'A recompute will bring the stored value back in line.' There is no recompute button or link (whether a recompute endpoint exists is cannot-verify). Overstated: a scored timestamp is present in the header subtitle (line 51, breakdown.computedAt), though it is not in the card and it is not labelled as the last recompute. Also the paragraph uses hard-coded color #475569 (line 118) instead of a token, poor in dark mode (same for iconBg hex on lines 61-69).
 - **Files to change:** `apps/web/src/app/(app)/crm/health/[accountId]/page.tsx`
@@ -3475,7 +3475,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-FORMS-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The empty state tells the user to 'Register a lead-capture form to mint a public key', but the page has no register, edit, pause or rotate control at all (page.tsx:21-26, no actions; LeadFormsTable.tsx:48-50); a consent-gap form flagged here cannot be fixed from this screen.
 - **Verified evidence:** lead-forms/page.tsx:21-37 has PageHeader with no actions and a read-only table; LeadFormsTable.tsx:48-50 emptyMessage says 'Register a lead-capture form to mint a public key' but no control exists. Grep of apps/web shows the only reference to lead-capture-forms outside loaders is the export filename, so no create/update/rotate client exists. Backend POST/PATCH endpoints are cannot-verify (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/lead-forms/page.tsx`, `apps/web/src/app/(app)/crm/lead-forms/LeadFormsTable.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/lib/crm/leadForms.ts (new client)`
@@ -3493,7 +3493,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-FORMS-02  ·  MEDIUM  ·  partly  ·  theme SECURITY (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The public submit endpoint is unauthenticated and 'keyed only by formKey' (leadForms.ts:1-8), yet the full key path is printed in the table for every CRM role and included in the CSV export, so anyone with the export can post leads into the tenant; origin allow-list and rate limit are the only guards (LeadFormsTable.tsx:23, 39, 45-47).
 - **Verified evidence:** LeadFormsTable.tsx:23,39 show publicSubmitPath(formKey) (leadForms.ts:11-13) and DataTable.downloadCsv (DataTable.tsx:274-291) exports every column incl. it, no audit. But formKey is a public embed key by design (leadForms.ts:1-8 says operators paste the URL on landing pages), visible in page source to any visitor, so it is not a secret and masking is not the right control. Real gaps: no admin role gate on /crm/lead-forms (only crm layout), CSV export ungated/unaudited, and abuse protection (origin allow-list, maxPerMinute) is server-side, cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/crm/lead-forms/page.tsx`, `apps/web/src/app/(app)/crm/lead-forms/LeadFormsTable.tsx`, `apps/web/src/app/(app)/crm/lead-forms/layout.tsx (new)`
@@ -3508,7 +3508,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-FORMS-03  ·  MEDIUM  ·  confirmed  ·  theme STATUS (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The status value 'unlawful' is printed verbatim as the pill label and the tile says 'Consent gaps', giving two names for the same condition; the DPDP reason (enabled but requireConsent is false) is not stated anywhere on the page (LeadFormsTable.tsx:37; leadForms.ts:17-24).
 - **Verified evidence:** LeadFormsTable.tsx:37 passes label={row.health} so pill shows 'unlawful' verbatim (StatusPill label override); page.tsx:31 tile says 'Consent gaps'. formHealth (leadForms.ts:21-25) returns 'unlawful' when enabled && !requireConsent; no page copy explains DPDP reason. 'Unlawful' is also a legal conclusion the UI should not assert.
 - **Files to change:** `apps/web/src/app/(app)/crm/lead-forms/LeadFormsTable.tsx`, `apps/web/src/app/(app)/crm/lead-forms/page.tsx`, `apps/web/src/app/(app)/crm/lead-forms/leadForms.ts`
@@ -3523,7 +3523,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-FORMS-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** On an outage the tiles show '—' but the table still says 'No website forms registered', reading as an empty registry (LeadFormsTable.tsx:48-50; page.tsx:17).
 - **Verified evidence:** page.tsx:34 passes only ranked rows; on source==='error' forms=[] so LeadFormsTable shows emptyTitle 'No website forms registered' (LeadFormsTable.tsx:48-50) while tiles show '—' (page.tsx:17).
 - **Files to change:** `apps/web/src/app/(app)/crm/lead-forms/page.tsx`
@@ -3538,7 +3538,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-FORMS-05  ·  LOW  ·  confirmed  ·  theme UX (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Allowed origins collapse to 'first +N more' with no way to see the rest, the URL is a relative gateway path with no host, copy button or embed snippet, and there is no search or status filter (leadForms.ts:37-41; LeadFormsTable.tsx:23-24).
 - **Verified evidence:** leadForms.ts:37-41 originSummary returns 'first +N more' as plain text with no title/expand; publicSubmitPath is '/api/v1/crm/public/leads/<key>' relative (:11-13); LeadFormsTable passes sortable+exportable but not filterable (:45-46); no copy/embed control.
 - **Files to change:** `apps/web/src/app/(app)/crm/lead-forms/LeadFormsTable.tsx`, `apps/web/src/app/(app)/crm/lead-forms/leadForms.ts`
@@ -3555,7 +3555,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-FORMS-06  ·  LOW  ·  confirmed  ·  theme LOADING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx is a bare text line with no heading or skeleton, unlike the sibling loading screens; icons in the tiles are emoji on hard-coded hex backgrounds (lead-forms/loading.tsx; page.tsx:29-31).
 - **Verified evidence:** lead-forms/loading.tsx is 3 lines: page-main with a <p>Loading website lead forms…</p>, no heading/skeleton unlike lead-scoring/loading.tsx. page.tsx:29-31 use emoji icons with #e0f2fe/#dcfce7/#fee2e2 backgrounds (same StatCard pattern as HEALTH-06).
 - **Files to change:** `apps/web/src/app/(app)/crm/lead-forms/loading.tsx`, `apps/web/src/app/(app)/crm/lead-forms/page.tsx`
@@ -3577,7 +3577,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-REASON-CODES-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed load the editor shows 'No reason codes yet' and an enabled 'Save reason codes'; the empty branch is not gated on source==='error', so saving from that view PUTs {codes: []} and can erase the tenant's whole reason taxonomy, contradicting the header comment 'never fabricate an empty list as fact' (ReasonCodesEditor.tsx:3-6, 99, 104-110, 162-164).
 - **Verified evidence:** ReasonCodesEditor.tsx:42-46 setCodes(data) with data=[] on error (leadQualification getReasonCodes returns {data:[],source:'error'}); :99 shows badge, :104-109 renders 'No reason codes yet' regardless of source, and :162-164 Save is enabled (only busy disables). save() (:69-85) passes the empty-array check (every() on []) and saveReasonCodes PUTs {codes} (leadQualification.ts:331-337). Whether the server rejects an empty list is cannot-verify, so erase is plausible. Adding one row then saving on an errored load also overwrites the taxonomy with a single row.
 - **Files to change:** `apps/web/src/app/_components/crm/ReasonCodesEditor.tsx`
@@ -3594,7 +3594,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-REASON-CODES-02  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Remove deletes a code locally with no confirmation, and the PUT replaces the whole list, so a code already recorded against leads can disappear; 'Active: Off' is the safe path but nothing says so (editor:64-67, 152).
 - **Verified evidence:** removeCode (:64-67) drops the row locally with no confirm (button :152). Nothing is deleted server-side until Save PUTs the whole list (leadQualification.ts:331-337), so the loss is reversible by reload; the risk is that Save silently persists removals of codes already referenced by leads. Whether backend blocks removal of in-use codes is cannot-verify. Active toggle exists (:145-149) but no hint recommends it.
 - **Files to change:** `apps/web/src/app/_components/crm/ReasonCodesEditor.tsx`
@@ -3610,7 +3610,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-REASON-CODES-03  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Only Code is validated: Label may be blank (the picker would show an empty option) and duplicate codes are allowed (editor:72, 137).
 - **Verified evidence:** save() validates only c.code.trim() (:72); label input (:137) has no required check or aria-invalid; no duplicate detection (codes are upper-cased at :130 but not compared). Server-side validators cannot-verify.
 - **Files to change:** `apps/web/src/app/_components/crm/ReasonCodesEditor.tsx`, `apps/web/src/lib/crm/leadQualification.ts`
@@ -3626,7 +3626,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-REASON-CODES-04  ·  MEDIUM  ·  partly  ·  theme CONCURRENCY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Same wholesale-PUT design as other list editors: no version token, so concurrent admins overwrite each other; no audit trail is visible on the page even though the empty-state copy promises 'consistent, auditable' reasons (editor:70-88, 108).
 - **Verified evidence:** Whole-list PUT with no version/etag: saveReasonCodes sends only {codes} (leadQualification.ts:331-337); load at :40-47 keeps no version. No audit trail UI; empty-state copy :108 says 'consistent, auditable reason' (copy refers to the reasons captured on leads, not to edits of this list). Whether crm-service audits/locks is cannot-verify. Theme WIRING is off.
 - **Files to change:** `apps/web/src/app/_components/crm/ReasonCodesEditor.tsx`, `apps/web/src/lib/crm/leadQualification.ts`
@@ -3642,7 +3642,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-REASON-CODES-05  ·  LOW  ·  confirmed  ·  theme COPY (was STATUS)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The same screen is 'Lead Stage Reasons' (page title), 'Reason codes' (card) and 'Lead Reason Codes' (loading.tsx and error area); the status dropdown shows raw enum text such as 'disqualified' (page.tsx:9; loading.tsx; editor:141).
 - **Verified evidence:** Names: page.tsx:9 'Lead Stage Reasons'; editor h3 :98 'Reason codes'; loading.tsx:6 h1 'Lead Reason Codes'; error.tsx:12 area 'CRM Lead Reason Codes'; hub tile 'Lead Stage Reasons'. Status option renders raw enum s (:142); LEAD_STATUSES are lowercase (leadQualification.ts:18+). Not a StatusPill issue.
 - **Files to change:** `apps/web/src/app/(app)/crm/lead-reason-codes/page.tsx`, `apps/web/src/app/(app)/crm/lead-reason-codes/loading.tsx`, `apps/web/src/app/(app)/crm/lead-reason-codes/error.tsx`, `apps/web/src/app/_components/crm/ReasonCodesEditor.tsx`
@@ -3657,7 +3657,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-REASON-CODES-06  ·  LOW  ·  partly  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx draws four stat tiles and a 280px block that the loaded page never shows, and the table has no mobile transform (lead-reason-codes/loading.tsx; editor:111-119).
 - **Verified evidence:** loading.tsx:9-16 renders 4 stat tiles + 280px block while the loaded page has PageHeader and one card (page.tsx, editor :96). Mobile claim is unverified: editor uses plain table.tbl (:111); whether global CSS provides a responsive transform is cannot-verify without stylesheet review.
 - **Files to change:** `apps/web/src/app/(app)/crm/lead-reason-codes/loading.tsx`, `apps/web/src/app/_components/crm/ReasonCodesEditor.tsx`
@@ -3678,7 +3678,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-SCORING-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed load the editor shows 'No scoring rules yet' with an enabled 'Save rules'; the empty branch is not gated on source==='error', so saving from that view PUTs {rules: []} and can switch off automatic scoring for every lead, contradicting the header comment 'never fabricate an empty rule set as fact' (LeadScoreRulesEditor.tsx:3-8, 147-158, 236-239).
 - **Verified evidence:** Same as reason codes: LeadScoreRulesEditor.tsx:83-90 sets rows=[] on error (getScoreRules returns {data:[],source:'error'}, leadQualification.ts ~236-242); :147 badge; :152-157 'No scoring rules yet'; Save (:237-239) enabled; save() passes rows.every on [] and PUTs {rules:[]} (saveScoreRules :248-254). Server behaviour on empty rules cannot-verify.
 - **Files to change:** `apps/web/src/app/_components/crm/LeadScoreRulesEditor.tsx`
@@ -3694,7 +3694,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-SCORING-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Params is a raw JSON text box with no schema, example per score function or preview; admins must know the params contract of linear/step/boolean (opaque Record<string, unknown>) to configure a rule, and the only guard is 'is a JSON object' (editor:45-54, 213-216; lib/crm/leadQualification.ts:196-202).
 - **Verified evidence:** Params is a plain text input (LeadScoreRulesEditor.tsx:208-217, placeholder '{"max":100}'); parseParams (:45-54) only checks JSON object; type is Record<string, unknown> (leadQualification.ts:196-202). Param contract per linear/step/boolean is in crm-service, cannot-verify.
 - **Files to change:** `apps/web/src/app/_components/crm/LeadScoreRulesEditor.tsx`, `apps/web/src/lib/crm/leadQualification.ts`
@@ -3710,7 +3710,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-SCORING-03  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Attribute is a free-text string with a single placeholder ('e.g. industry'); nothing validates it against real lead fields or custom fields, so a typo saves a rule that never scores (editor:178-183).
 - **Verified evidence:** Attribute input (:177-184) is free text with placeholder 'e.g. industry'; rowValid only requires non-empty (:58). No source of valid attributes in the file. Theme FABRICATED is wrong (no fake data); it is validation.
 - **Files to change:** `apps/web/src/app/_components/crm/LeadScoreRulesEditor.tsx`
@@ -3725,7 +3725,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-SCORING-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Weights are independent 0-100 numbers with no total, normalisation hint, or preview of the resulting score distribution; the change applies to every lead after Save with no impact summary (editor:164, 236-239).
 - **Verified evidence:** Weight inputs (:197-207) are int 0-100 each; no sum, normalisation hint or preview; Save (:235-240) applies to all leads per note. Preview needs backend.
 - **Files to change:** `apps/web/src/app/_components/crm/LeadScoreRulesEditor.tsx`
@@ -3740,7 +3740,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-SCORING-05  ·  MEDIUM  ·  partly  ·  theme CONCURRENCY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Whole-list PUT with no version token and no visible audit trail: two admins overwrite each other and there is no record on this page of who changed which weight (lib/crm/leadQualification.ts:249-255).
 - **Verified evidence:** saveScoreRules (leadQualification.ts:248-254) PUTs {rules} with no version; editor holds none. Audit trail absence on page is true; backend audit cannot-verify.
 - **Files to change:** `apps/web/src/app/_components/crm/LeadScoreRulesEditor.tsx`, `apps/web/src/lib/crm/leadQualification.ts`
@@ -3754,7 +3754,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-SCORING-06  ·  LOW  ·  partly  ·  theme DEFAULTS (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** A new rule defaults to weight 1 on a 0-100 scale, so it is effectively inert until edited (editor:104).
 - **Verified evidence:** addRule (:104) sets weight 1 (valid 0-100 int). 'Effectively inert' depends on how the server normalises weights (cannot-verify); relative to other rules it is low, not zero. Theme DEADROUTE is wrong.
 - **Files to change:** `apps/web/src/app/_components/crm/LeadScoreRulesEditor.tsx`
@@ -3767,7 +3767,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-SCORING-07  ·  LOW  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx shows four stat tiles and a 280px block the page never renders; Remove deletes a rule immediately with no confirmation (lead-scoring/loading.tsx; editor:108, 226).
 - **Verified evidence:** lead-scoring/loading.tsx:9-16 4 tiles + 280px block; loaded page has no tiles. removeRule (:108) fires from button :226 with no confirm; local only until Save, so partly reversible.
 - **Files to change:** `apps/web/src/app/(app)/crm/lead-scoring/loading.tsx`, `apps/web/src/app/_components/crm/LeadScoreRulesEditor.tsx`
@@ -3789,7 +3789,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LINKED-ACCOUNTS-02  ·  MEDIUM  ·  confirmed  ·  theme STATUS (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Every status renders in the same 'pill info' regardless of value, so 'Needs attention' and 'Disconnected' look identical to 'Connected' (panel:157).
 - **Verified evidence:** apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx:157 renders every row as <span className="pill info">{STATUS_LABEL[a.status]}</span>; STATUS_LABEL (28-33) distinguishes pending/connected/error/revoked by text only. CSS has .pill.good/.warn/.bad/.mut variants unused here.
 - **Files to change:** `apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx`
@@ -3805,7 +3805,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LINKED-ACCOUNTS-03  ·  MEDIUM  ·  partly  ·  theme COPY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The button says 'Connect provider' although nothing is connected: the request stays pending and no items are imported; the honest wording is in small grey text above the form rather than on the action or in the success message beyond the first sentence (panel:105-108, 132).
 - **Verified evidence:** Button label is 'Connect provider' (apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx:132) while nothing syncs. But the honest wording exists: paragraph at 105-107 (13px muted, above the form) and the success message at 73 is the full sentence 'Connection requested. It is pending — automatic sync is not live yet.' so 'beyond the first sentence' is overstated. Strings are hardcoded English (no next-intl), so the I18N tag is loosely right but the real issue is copy.
 - **Files to change:** `apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx`
@@ -3821,7 +3821,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LINKED-ACCOUNTS-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** After a failed load the list says 'Connections unavailable' but the connect form stays enabled, so a user can add a link (possibly a duplicate) without seeing existing ones; duplicates for the same provider and email are not prevented client-side (panel:143-147, 114-134).
 - **Verified evidence:** When getLinkedAccounts fails (source==='error', apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx:143-146) the form (110-137) is still enabled; submit only checks EMAIL_RE (66) and busy. No client-side check for an existing provider+email (accounts state is empty on error, and even on success connect() at 72 does not compare). Whether the backend (v1/crm/linked-accounts, crm-service absent from snapshot) rejects duplicates: cannot verify.
 - **Files to change:** `apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx`
@@ -3837,7 +3837,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LINKED-ACCOUNTS-05  ·  LOW  ·  confirmed  ·  theme LOADING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The DataSourceBadge is shown twice on failure (card header and inline) (panel:102, 145).
 - **Verified evidence:** DataSourceBadge source="error" is rendered in the card header (apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx:102) and again inside the 'Connections unavailable' paragraph (145).
 - **Files to change:** `apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx`
@@ -3850,7 +3850,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LINKED-ACCOUNTS-06  ·  LOW  ·  confirmed  ·  theme LOADING (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The screen is 'Connected Accounts' (page), 'Connect email & calendar' (card) and 'Linked Accounts' (loading.tsx, route, error area); loading.tsx also draws four stat tiles the page never shows (linked-accounts/loading.tsx).
 - **Verified evidence:** Title inconsistency verified: page.tsx PageHeader title 'Connected Accounts'; card h3 'Connect email & calendar' (apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx:101); loading.tsx h1 'Linked Accounts' and 4 stat-tile skeletons + 280px block that the page never renders (page is one card with form+table); error.tsx area='CRM Linked Accounts'. Not a PII issue.
 - **Files to change:** `apps/web/src/app/(app)/crm/linked-accounts/loading.tsx`, `apps/web/src/app/(app)/crm/linked-accounts/error.tsx`, `apps/web/src/app/(app)/crm/linked-accounts/page.tsx`
@@ -3872,7 +3872,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The list identifies a case only by the first 8 characters of a record id; Account is likewise an id fragment and the deal is not shown, so a clerk cannot tell which customer a row is without opening it (OnboardingList.tsx:30-32, 114, 122).
 - **Verified evidence:** apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx:30-32 shortId slices to 8 chars; used for case link text (114) and Account (122); no deal column; model has no names (lib/crm/onboarding.ts:195-208). Clerks cannot tell customers apart.
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx`, `apps/web/src/lib/crm/onboarding.ts`
@@ -3889,7 +3889,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-02  ·  MEDIUM  ·  partly  ·  theme LIST (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Hand-rolled table with no sort, search, pagination or export (unlike the DataTable lists elsewhere in CRM); the request has no limit or page and the UI has none, so a long case list is unbounded (OnboardingList.tsx:97-128; lib/crm/onboarding.ts:266-277).
 - **Verified evidence:** Hand-rolled <table className="tbl"> (apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx:97-128) with no sort/search/paging/export; getOnboardingCases sends only stage/accountId, no limit/page (apps/web/src/lib/crm/onboarding.ts:261-277). True. Not a PII/masking issue (theme wrong). A shared DataTable exists (app/_components/ds/DataTable.tsx). Whether backend caps result size is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx`, `apps/web/src/lib/crm/onboarding.ts`
@@ -3905,7 +3905,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Filtering is by stage only; KYC status is the gate for completion but cannot be filtered, and there is no age-in-stage or overdue signal beyond a full timestamp in 'Updated' (OnboardingList.tsx:35, 104, 123).
 - **Verified evidence:** Only a stage select (apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx:59-74); ListFilters has stage/accountId only (lib:261-264); Updated is a full timestamp (123) with no age/overdue cue. KYC filter/param not supported by client; backend support cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx`, `apps/web/src/lib/crm/onboarding.ts`
@@ -3920,7 +3920,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-04  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The data-source badge is shown twice on failure (beside the filter and in the card) and the loading state is a bare text line (OnboardingList.tsx:75, 88; onboarding/loading.tsx).
 - **Verified evidence:** Badge rendered at apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx:75 (filter row) and again at 88 (error paragraph) on failure; loading is a bare <p> at 82-85 and onboarding/loading.tsx is a text line, no skeleton. Error row also has no Retry.
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx`, `apps/web/src/app/(app)/crm/onboarding/loading.tsx`
@@ -3934,7 +3934,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-05  ·  LOW  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Updated' prints toLocaleString('en-IN') (dd/mm/yyyy with seconds) rather than the department date format; case links are plain anchors that cause full page loads (OnboardingList.tsx:24-28, 114).
 - **Verified evidence:** fmtDate (apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx:24-28) uses toLocaleString('en-IN'); case link (114) is a raw <a href> (full navigation) not next/link.
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx`, `apps/web/src/lib/formatters.ts`
@@ -3949,7 +3949,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-06  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status uses emoji glyphs (🆕 📄 🔎 ⚙️ ✅ 🚫 / ⏳ 📤 ⛔) that render differently across platforms, although they are hidden from assistive tech and always paired with text (lib/crm/onboarding.ts:162-194).
 - **Verified evidence:** Emoji icons in STAGE_META/KYC_META (apps/web/src/lib/crm/onboarding.ts:162-183) are rendered aria-hidden (OL:117,120) next to text labels, so accessibility is fine; the remaining issue is cross-platform rendering and inconsistency with other pills only. Low value.
 - **Files to change:** `apps/web/src/lib/crm/onboarding.ts`, `apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx`, `apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx`
@@ -3969,7 +3969,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-DETAIL-01  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The card title is 'Case {full record id}' and Account and Deal are raw UUIDs with no names or links to /crm/accounts or the deal; the page title is a static 'Onboarding Case', so the customer being onboarded is never named (OnboardingDetail.tsx:246, 256-257; page.tsx:8).
 - **Verified evidence:** apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx:246 <h3>Case {item.id}</h3> prints the full id; 256-257 print item.accountId and item.dealId raw with no link or name. page.tsx:8 PageHeader title is static 'Onboarding Case'. OnboardingCase model (lib/crm/onboarding.ts:195-208) carries only ids, no customer name. Account/deal name lookup endpoints not visible in this snapshot (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx`, `apps/web/src/app/(app)/crm/onboarding/[id]/page.tsx`, `apps/web/src/lib/crm/onboarding.ts`
@@ -3986,7 +3986,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-DETAIL-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The KYC panel records only a status: applyKyc sends {status, version} although recordKyc accepts a `reference`, so the 'KYC reference' field shown on the case can never be captured from this screen (OnboardingDetail.tsx:134, 258; lib/crm/onboarding.ts:326-350).
 - **Verified evidence:** applyKyc apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx:134 calls recordKyc(item.id,{status, version}); RecordKycInput has optional reference (apps/web/src/lib/crm/onboarding.ts:326-330) and recordKyc forwards it (339-346), but no input exists in the UI, while 'KYC reference' is displayed at 258. Backend contract for reference cannot be verified (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx`
@@ -4003,7 +4003,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Recording verified or rejected is offered to every CRM role and says 'requires an approver role'; the refusal only arrives as a 403 after the confirm dialog (OnboardingDetail.tsx:276-278, 391-402).
 - **Verified evidence:** KYC panel text at apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx:276-278 says verified/rejected 'requires an approver role'; kycNextOptions (117) offers verified/rejected to anyone; the 403 is only surfaced via applyKyc catch (143-144) after ConfirmDialog (391-401). Layout gate is CRM_ROLES only ('crm_user','crm_admin','platform_admin','super_admin', crm/layout.tsx:5). Which roles are 'approver' in crm-service: cannot verify. Client roles are only readable server-side via getSessionRoles() (lib/auth/roleGuard.ts:26).
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx`, `apps/web/src/app/(app)/crm/onboarding/[id]/page.tsx`, `apps/web/src/lib/crm/onboarding.ts`
@@ -4020,7 +4020,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed load the EmptyState says 'Try again in a moment' but offers no retry control, so the clerk must reload the browser (OnboardingDetail.tsx:221-235).
 - **Verified evidence:** apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx:221-235: on isError with item==null, EmptyState says 'Try again in a moment' but has no action prop, no retry (reload exists at 107 but unused). Note not-found is separated correctly (getOnboardingCase returns 'not-found' on 404, lib:286).
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx`
@@ -4036,7 +4036,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-DETAIL-05  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The KYC reference and verification time are shown in full to every CRM role with no masking or role gate (DPDP-sensitive KYC data), and there is no stage/KYC history or audit view on the case (OnboardingDetail.tsx:258-259).
 - **Verified evidence:** apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx:258-259 show kycReference and kycVerifiedAt in clear to anyone passing the CRM layout gate. True. No stage/KYC history or audit section exists on the page (only current values). Whether kycReference is actually sensitive (e.g. PAN/Aadhaar number vs. an internal ticket id) cannot be verified; no <Masked> component exists in the repo (grep found none), so it would need creating.
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx`, `apps/web/src/app/_components/ds/Masked.tsx`
@@ -4053,7 +4053,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-DETAIL-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Accepted (202) mutations show 'may take a moment to take effect' but the case is reloaded immediately, so the panel can still show the old stage or KYC status (OnboardingDetail.tsx:107-109, 136-143, 192-199).
 - **Verified evidence:** applyKyc (137-142) and applyStage (192-199) show 'may take a moment to take effect' when result.accepted (HTTP 202) then immediately call reload(), so the fetched case may still be stale; no polling. Stage/KYC selects reset, so the user sees old values with a success message.
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx`
@@ -4068,7 +4068,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-DETAIL-07  ·  LOW  ·  confirmed  ·  theme DATEFMT (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Timestamps use toLocaleString('en-IN'); stage, KYC and Version are shown as bare values, and the raw version number is exposed to clerks (OnboardingDetail.tsx:47-51, 263).
 - **Verified evidence:** fmtDate (apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx:47-51) uses d.toLocaleString('en-IN') (browser timezone, includes seconds) instead of shared formatIndianDate (lib/formatters.ts:2). Version shown as bare 'Version' field at 263. Stage/KYC are icon+label (251,254), not styled badges.
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx`, `apps/web/src/lib/formatters.ts`
@@ -4091,7 +4091,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-02  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Two different boards run over the same deals: /crm/pipeline uses drag-and-drop with no confirmation, sends stage name + probability, and hides the pipeline picker, while this page uses a select + ConfirmDialog and sends stage key + version; users get different guarantees per screen (OpportunityViews.tsx:225, pipeline/_components/KanbanBoard.tsx:80).
 - **Verified evidence:** OpportunityViews board uses a per-card select + ConfirmDialog (OV:224-233, 355-367) and changeOpportunityStage sends {stage key, version} (apps/web/src/lib/crm/opportunity.ts:305-319). /crm/pipeline KanbanBoard (app/(app)/crm/pipeline/_components/KanbanBoard.tsx ~107-130) applies optimistic update on drop, no ConfirmDialog (grep), and PATCHes {stage name, stageId?, probability, version} to deals/:id/stage; it has no pipeline picker. Different contracts (probability from the stage vs. none).
 - **Files to change:** `apps/web/src/app/(app)/crm/pipeline/_components/KanbanBoard.tsx`, `apps/web/src/app/_components/crm/OpportunityViews.tsx`
@@ -4107,7 +4107,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-03  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Close is offered on every open row to any CRM_ROLES user (crm_user included) with no role gate, and a Won close only needs a 1-character reason (CloseOpportunityDialog.tsx:67, crm/layout.tsx:5).
 - **Verified evidence:** List shows a Close button for every non-closed row (apps/web/src/app/_components/crm/OpportunityViews.tsx:283-289) with no role check; the layout admits crm_user (crm/layout.tsx:5). CloseOpportunityDialog reasonMin = outcome==='won'?1:10 (67), comment says backend mirrors this (server enforcement cannot be verified, crm-service absent).
 - **Files to change:** `apps/web/src/app/_components/crm/CloseOpportunityDialog.tsx`, `apps/web/src/app/_components/crm/OpportunityViews.tsx`, `apps/web/src/app/(app)/crm/opportunities/page.tsx`
@@ -4123,7 +4123,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed views render an EmptyState whose title is the bare character "—", while the badge says "Couldn't load — showing nothing"; the row-level message "could not be loaded just now" gives no retry action (OpportunityViews.tsx:200,216).
 - **Verified evidence:** Failed views use <EmptyState title="—" message="…could not be loaded just now."> (apps/web/src/app/_components/crm/OpportunityViews.tsx:205,257,301,323 - finding said 200,216) with no retry; header badge shows separately (189). Retry could call reload().
 - **Files to change:** `apps/web/src/app/_components/crm/OpportunityViews.tsx`
@@ -4136,7 +4136,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-05  ·  MEDIUM  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The calendar view issues a second full kanban fetch (same endpoint as the board) instead of a dedicated route, and a Board→Calendar switch refetches all deals; deals without expectedCloseDate silently vanish from it (lib/crm/opportunity.ts:446-470).
 - **Verified evidence:** getCalendar (apps/web/src/lib/crm/opportunity.ts:446-470) fetches v1/crm/deals/kanban, the same endpoint as getKanban, and reload() refetches on each view switch (OV:78-101). But this is documented and deliberate (no calendar route exists); normaliseCalendar drops deals without expectedCloseDate (line ~437) also deliberately. Real gap: calendar empty text says 'No opportunities have an expected close date' though only some may lack one, and no count of omitted deals is shown.
 - **Files to change:** `apps/web/src/app/_components/crm/OpportunityViews.tsx`, `apps/web/src/lib/crm/opportunity.ts`
@@ -4151,7 +4151,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Board cards are not links: the opportunity name cannot be opened, and no detail/edit route exists in this segment even though OpportunityForm supports edit (OpportunityViews.tsx:216, OpportunityForm.tsx:36).
 - **Verified evidence:** Board cards (apps/web/src/app/_components/crm/OpportunityViews.tsx:218-220) and list rows (277) render name as plain text; app/(app)/crm/opportunities has only new/ (no [id]); OpportunityForm is imported only by new/page.tsx and its edit mode (opportunity prop) is unreachable.
 - **Files to change:** `apps/web/src/app/_components/crm/OpportunityViews.tsx`, `apps/web/src/app/(app)/crm/opportunities/[id]/page.tsx`, `apps/web/src/app/(app)/crm/opportunities/[id]/edit/page.tsx`
@@ -4165,7 +4165,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-07  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Board container scrolls horizontally with fixed 240px columns and no column value totals, unlike /crm/pipeline which shows per-stage value (OpportunityViews.tsx:212).
 - **Verified evidence:** Board columns fixed minWidth/flex 240px inside overflowX:auto (apps/web/src/app/_components/crm/OpportunityViews.tsx:209-211); header shows only stageName and deal count (213-215); /crm/pipeline StageColumn shows totalValue via formatMoney. Totals can be summed client-side from col.deals valueMinor using BigInt.
 - **Files to change:** `apps/web/src/app/_components/crm/OpportunityViews.tsx`
@@ -4186,7 +4186,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-NEW-01  ·  HIGH  ·  confirmed  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** After a successful create the form stays filled and the page does not navigate or capture the new id, so a second click on Create opportunity POSTs a duplicate deal; onSaved is not passed by this route (apps/web/src/app/_components/crm/OpportunityForm.tsx:130, apps/web/src/app/(app)/crm/opportunities/new/page.tsx:15).
 - **Verified evidence:** submit() (apps/web/src/app/_components/crm/OpportunityForm.tsx:95-136) on success sets message and calls onSaved?.() but the route passes no onSaved (new/page.tsx:14), fields are not reset and no id is captured (createOpportunity returns void, lib/crm/opportunity.ts:293-296). Button is disabled only while busy (268), so a second click POSTs another deal. No idempotency key.
 - **Files to change:** `apps/web/src/app/_components/crm/OpportunityForm.tsx`, `apps/web/src/lib/crm/opportunity.ts`, `apps/web/src/app/(app)/crm/opportunities/new/page.tsx`
@@ -4202,7 +4202,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-NEW-02  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The create form has no Account or Contact field: accountId is added to the payload only when editing an existing record, so every opportunity made here is unlinked to an account and cannot feed account-level views (OpportunityForm.tsx:124).
 - **Verified evidence:** Payload adds accountId only from an existing record (apps/web/src/app/_components/crm/OpportunityForm.tsx:118); no account/contact input exists in the form; Opportunity type has accountId (apps/web/src/lib/crm/opportunity.ts:206). Whether backend requires/accepts contact: cannot-verify. No EntityPicker exists in repo.
 - **Files to change:** `apps/web/src/app/_components/crm/OpportunityForm.tsx`, `apps/web/src/app/_components/ds/EntityPicker.tsx`
@@ -4218,7 +4218,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-NEW-03  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Mandatory stage fields are discovered only after a failed submit: the stage select shows a bare count "(needs 4)" but not which fields, so users fill the form, submit and are rejected (OpportunityForm.tsx:200,173).
 - **Verified evidence:** Stage option shows ' (needs N)' (apps/web/src/app/_components/crm/OpportunityForm.tsx:194) but not field names; after a rejected submit the missing list is shown (162-166) and starred labels (isMissing). Line refs 200/173 in the finding were wrong. Stage mandatoryFields are already on selectedPipeline.stages (s.mandatoryFields) so names are available client-side.
 - **Files to change:** `apps/web/src/app/_components/crm/OpportunityForm.tsx`
@@ -4232,7 +4232,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx heading is "New" and the error boundary area is "CRM New", while the page title is "New Opportunity"; the error page reads "We couldn't open CRM New" (apps/web/src/app/(app)/crm/opportunities/new/loading.tsx:6, error.tsx:11).
 - **Verified evidence:** loading.tsx h1 'New' with 4-tile skeleton (page is a single form card); error.tsx area 'CRM New' so RouteError prints "We couldn't open CRM New" (RouteError.tsx:63); page title 'New Opportunity'.
 - **Files to change:** `apps/web/src/app/(app)/crm/opportunities/new/loading.tsx`, `apps/web/src/app/(app)/crm/opportunities/new/error.tsx`
@@ -4246,7 +4246,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-NEW-05  ·  LOW  ·  confirmed  ·  theme A11Y (was FAILMASK)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The Name input is aria-invalid on first render (empty name), so assistive tech announces an error before the user has typed anything (OpportunityForm.tsx:191).
 - **Verified evidence:** Name input has aria-invalid={name.trim() ? undefined : true} (apps/web/src/app/_components/crm/OpportunityForm.tsx:171) so it is invalid on first render; other fields flag only after invalid input. Theme is a11y/validation, not failure-mask.
 - **Files to change:** `apps/web/src/app/_components/crm/OpportunityForm.tsx`
@@ -4259,7 +4259,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-NEW-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Probability and quantity default to 0 when left blank rather than unset, so an untouched form saves a 0% deal (OpportunityForm.tsx:121-122).
 - **Verified evidence:** Payload uses probability: probability.trim()===''?0:probNum and quantity same (apps/web/src/app/_components/crm/OpportunityForm.tsx:112,114; finding cited 121-122). An untouched form saves 0% / 0 quantity, indistinguishable from a real 0.
 - **Files to change:** `apps/web/src/app/_components/crm/OpportunityForm.tsx`, `apps/web/src/lib/crm/opportunity.ts`
@@ -4281,7 +4281,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITY-AGEING-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stage limits are keyed by a hand-typed "stage key" with no pipeline selector or stage list; a typo (e.g. "proposel") saves as a valid limit that matches nothing, silently disabling the alert for that stage (apps/web/src/app/_components/crm/StageAgeingDashboard.tsx:205,87).
 - **Verified evidence:** apps/web/src/app/_components/crm/StageAgeingDashboard.tsx:219-226 Stage is a free <input placeholder='stage key'>; rowValid (:75-77) only checks non-empty; saveLimit (:86-92) PUTs it as-is via createStageLimit (lib/crm/opportunity.ts:585, upsert keyed pipelineId+stage). New rows never get a pipelineId (:72). Whether the server rejects unknown stage keys cannot be verified (crm-service absent). Ageing rows carry stage and stageName (opportunity.ts:477-486), so the key must equal the server's stage key.
 - **Files to change:** `apps/web/src/app/_components/crm/StageAgeingDashboard.tsx`, `apps/web/src/lib/crm/opportunity.ts`
@@ -4298,7 +4298,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITY-AGEING-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The `enabled` flag of a limit is sent (true) but never shown or editable, so a limit can only be removed, not paused (StageAgeingDashboard.tsx:87).
 - **Verified evidence:** apps/web/src/app/_components/crm/StageAgeingDashboard.tsx:86-92 payload sets enabled: row.enabled ?? true; the table (:199-257) has only Stage, Limit (days), Actions columns, no toggle. StageLimit.enabled exists (opportunity.ts:538) and is normalised (:552). Saving a limit that was disabled server-side re-enables it silently.
 - **Files to change:** `apps/web/src/app/_components/crm/StageAgeingDashboard.tsx`
@@ -4313,7 +4313,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITY-AGEING-03  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Ageing breaches show the opportunity name as plain text with no link to the record and no owner column, so a manager cannot see who to chase (StageAgeingDashboard.tsx:163).
 - **Verified evidence:** apps/web/src/app/_components/crm/StageAgeingDashboard.tsx:161-163 renders <td>{r.name}</td> plain text; StageAgeingRow (opportunity.ts:477-486) has no owner/id link field and normaliseAgeing (:488-514) drops any owner in the payload. Opportunity detail route exists at /crm/opportunities (list) and deals detail at /crm/deals/[id] (used by DealCard). Whether the ageing endpoint returns an owner cannot be verified (crm-service absent).
 - **Files to change:** `apps/web/src/app/_components/crm/StageAgeingDashboard.tsx`, `apps/web/src/lib/crm/opportunity.ts`
@@ -4328,7 +4328,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITY-AGEING-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The ageing error says "Showing saved information" while the badge says "Couldn't load — showing nothing"; nothing is cached, so the two messages contradict (StageAgeingDashboard.tsx:135, DataSourceBadge.tsx:47).
 - **Verified evidence:** apps/web/src/app/_components/crm/StageAgeingDashboard.tsx:135 shows <DataSourceBadge source='error'/> (DataSourceBadge.tsx:47-48 -> 'Couldn't load — showing nothing') while :142 EmptyState says 'Ageing could not be loaded. Showing saved information.' Nothing is cached (getStageAgeing returns data:[] on error, opportunity.ts:517-526). Same false 'saved information' line in PriceBookEditor.tsx:337.
 - **Files to change:** `apps/web/src/app/_components/crm/StageAgeingDashboard.tsx`, `apps/web/src/app/_components/crm/PriceBookEditor.tsx`
@@ -4344,7 +4344,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITY-AGEING-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Any CRM user can change or delete limits that drive the alert for the whole tenant; unlike task-escalation and qualification-frameworks this route has no admin-only layout (crm/layout.tsx:5, no opportunity-ageing/layout.tsx).
 - **Verified evidence:** apps/web/src/app/(app)/crm/layout.tsx:5-8 allows crm_user for all CRM routes; opportunity-ageing has only error/loading/page (no layout.tsx) whereas task-escalation/layout.tsx and qualification-frameworks/layout.tsx use requireAnyRole(['crm_admin','admin','super_admin','platform_admin','tenant_admin'],'/crm'). The page's limits card has Save/Delete for anyone. Server-side authorisation cannot be verified (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/opportunity-ageing/layout.tsx`, `apps/web/src/app/(app)/crm/pipelines/layout.tsx`, `apps/web/src/app/(app)/crm/price-books/layout.tsx`, `apps/web/src/app/(app)/crm/products/layout.tsx`
@@ -4361,7 +4361,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITY-AGEING-06  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx heading is "Opportunity Ageing" but the page title is "Stage Ageing" (opportunity-ageing/loading.tsx:6).
 - **Verified evidence:** opportunity-ageing/loading.tsx:6 has <h1>Opportunity Ageing</h1>; page.tsx:8 PageHeader title is 'Stage Ageing'. Loading skeleton also shows 4 stat tiles and one block whereas the page renders two cards (no stat tiles).
 - **Files to change:** `apps/web/src/app/(app)/crm/opportunity-ageing/loading.tsx`
@@ -4381,7 +4381,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINE-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed load the four StatCards print 0, ₹0.00 and 0% (no "—" fallback, unlike rti and service-requests) and the board shows "No deals in pipeline / Create Deal", so an outage reads as an empty pipeline; only a small badge above says otherwise (apps/web/src/app/(app)/crm/pipeline/page.tsx:36-40, _components/KanbanBoard.tsx:162).
 - **Verified evidence:** pipeline/page.tsx:8-20 on error loaders return [] so totals compute to 0, and :33-36 StatCards render '0', formatMoney(0n) and '0%' with no '—' fallback; badge only at :30. KanbanBoard.tsx:207-217 renders 'No deals in pipeline / Create Deal' whenever localDeals is empty, regardless of the source prop (source is used only by useSeededResource :43-48, which may substitute a cached copy).
 - **Files to change:** `apps/web/src/app/(app)/crm/pipeline/page.tsx`, `apps/web/src/app/(app)/crm/pipeline/_components/KanbanBoard.tsx`
@@ -4398,7 +4398,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINE-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Dropping a card saves at once, optimistically, with no confirmation, and overwrites the deal's own probability with the stage default; /crm/opportunities asks to confirm and enforces mandatory stage fields, this board does neither (KanbanBoard.tsx:80-100).
 - **Verified evidence:** apps/web/src/app/(app)/crm/pipeline/_components/KanbanBoard.tsx:91-130 moveDealToStage applies an optimistic update on drop/keyboard arrow and PATCHes /deals/:id/stage immediately with probability: targetStage.probability (:109,127); no ConfirmDialog, no mandatory-field check. OpportunityViews.tsx:355-366 uses a ConfirmDialog and OP-003 mandatory-field validation for the same move. Server-side stage-entry enforcement cannot be verified (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/pipeline/_components/KanbanBoard.tsx`, `apps/web/src/app/_components/crm/OpportunityViews.tsx`
@@ -4415,7 +4415,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINE-03  ·  MEDIUM  ·  partly  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** "High-Value Engagements" counts valueMinor >= 1000000 paise (₹10,000), an unlabelled hard-coded threshold that is trivial for departmental contracts (lakhs to crores), so the tile equals the total (pipeline/page.tsx:22).
 - **Verified evidence:** pipeline/page.tsx:22 filters valueMinor >= 1000000n paise (= INR 10,000), unlabelled magic number, tile label 'High-Value Engagements' (:38). Threshold is real; the claim that the tile 'equals the total' is an inference that holds only when all deals exceed INR 10,000, and is not something the code guarantees.
 - **Files to change:** `apps/web/src/app/(app)/crm/pipeline/page.tsx`
@@ -4430,7 +4430,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINE-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Vocabulary splits within the screen: header and cards say "Engagement", the empty state and columns say "deals" ("No deals in pipeline", "Create Deal", "Drop deals here"), and the sister page calls the same records "Opportunities" (KanbanBoard.tsx:164, StageColumn.tsx:80).
 - **Verified evidence:** Header 'Engagement Pipeline' and cards say Engagement (page.tsx:26-38, DealCard aria-label); KanbanBoard.tsx:212-214 'No deals in pipeline','Create Deal'; StageColumn.tsx:74 'deals' and :98 'Drop deals here'; sister page is /crm/opportunities. (Observation cites KanbanBoard.tsx:164, actual :212.)
 - **Files to change:** `apps/web/src/app/(app)/crm/pipeline/_components/KanbanBoard.tsx`, `apps/web/src/app/(app)/crm/pipeline/_components/StageColumn.tsx`, `apps/web/src/app/(app)/crm/pipeline/page.tsx`
@@ -4444,7 +4444,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINE-05  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Only pipelines[0] is rendered with no selector, and deals are fetched with limit=200 with no truncation notice, so a second pipeline or the 201st deal is invisible (pipeline/page.tsx:15, loaders.ts:2901).
 - **Verified evidence:** pipeline/page.tsx:11 uses pipelines[0] with no selector; loaders.ts:2901 fetches /api/v1/crm/deals?limit=200 with no total or truncation notice; stat cards (:17-21) are computed from those 200. Deals of a second pipeline would also be matched by stage name in the first pipeline's columns (KanbanBoard.tsx:259-261).
 - **Files to change:** `apps/web/src/app/(app)/crm/pipeline/page.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/crm/pipeline/_components/KanbanBoard.tsx`
@@ -4459,7 +4459,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINE-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The deal-name link inside each card has tabIndex -1, so keyboard users can move a card but cannot open its record (DealCard.tsx:56).
 - **Verified evidence:** DealCard.tsx:52-58 the <a href='/crm/deals/:id'> has tabIndex={-1}; the card is role=button tabIndex=0 whose keydown handler handles arrows/Enter only for moving. No keyboard path to the record.
 - **Files to change:** `apps/web/src/app/(app)/crm/pipeline/_components/DealCard.tsx`
@@ -4481,7 +4481,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINES-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stages cannot be reordered: order is the process flow, but the editor only appends new stages and removes existing ones (PipelineEditor.tsx:145-170).
 - **Verified evidence:** apps/web/src/app/_components/crm/PipelineEditor.tsx:93-98 only addStage (append) and removeStage exist; the stage row (:247-280) has no up/down control. Stage order is array order and saved as-is (:112-120).
 - **Files to change:** `apps/web/src/app/_components/crm/PipelineEditor.tsx`
@@ -4496,7 +4496,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINES-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Pipeline configuration is open to every CRM user; qualification-frameworks and task-escalation use an admin-only layout but this route relies on the broad CRM layout (crm/layout.tsx:5).
 - **Verified evidence:** crm/layout.tsx:5-8 only requires CRM_ROLES incl. crm_user; pipelines/ has error/loading/page and no layout.tsx, unlike task-escalation and qualification-frameworks (requireAnyRole admin list). PipelineEditor exposes create, edit, delete. Server enforcement cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/crm/pipelines/layout.tsx`
@@ -4511,7 +4511,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINES-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Gate" is a bare checkbox with no explanation; the meaning ("requires an explicit review before the deal may pass") lives only in a type comment, and scope inputs (Product/Region/Business unit) are free text with no picker (PipelineEditor.tsx:255, lib/crm/opportunity.ts:101).
 - **Verified evidence:** apps/web/src/app/_components/crm/PipelineEditor.tsx:261-269 bare 'Gate' checkbox, no help text; :299-321 product/region/business unit are free-text inputs. Meaning of gate is only in lib/crm/opportunity.ts:101 comment. No lookup source visible for scope values (cannot verify a catalogue API).
 - **Files to change:** `apps/web/src/app/_components/crm/PipelineEditor.tsx`
@@ -4526,7 +4526,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINES-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Clicking Edit on another pipeline silently replaces an unsaved draft with no dirty warning, and the editor opens below the list without scrolling into view (PipelineEditor.tsx:74).
 - **Verified evidence:** apps/web/src/app/_components/crm/PipelineEditor.tsx:67-72 edit() replaces draft unconditionally; startNew (:62) likewise; the fieldset renders below the list (:219-225) with no ref/scrollIntoView or focus move.
 - **Files to change:** `apps/web/src/app/_components/crm/PipelineEditor.tsx`
@@ -4541,7 +4541,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINES-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stage-name edits keep the old stage key, so keys drift from names (e.g. name "Proposal", key "stage_2") and stage limits typed against keys become opaque (PipelineEditor.tsx:120).
 - **Verified evidence:** apps/web/src/app/_components/crm/PipelineEditor.tsx:29-31 blankStage assigns key `stage_${SEQ++}` at creation; save (:118) only derives from the name when key is empty, which never happens, so renaming never changes the key and new keys are stage_0, stage_1... Stage limits are entered against this key (StageAgeingDashboard placeholder 'stage key').
 - **Files to change:** `apps/web/src/app/_components/crm/PipelineEditor.tsx`, `apps/web/src/app/_components/crm/StageAgeingDashboard.tsx`
@@ -4564,7 +4564,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRICE-BOOKS-01  ·  HIGH  ·  partly  ·  theme AUDIT (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Price books that drive quotation prices are edited in place with no effective dates, version, or change history shown: saving a new rate overwrites the one in force for every quotation built afterwards, and nothing on the page shows who changed a price or when (apps/web/src/app/_components/crm/PriceBookEditor.tsx:104-135, lib/crm/quotation.ts:203-224).
 - **Verified evidence:** PriceBook (lib/crm/quotation.ts:151-160) has no effective-from/to or version, and apps/web/src/app/_components/crm/PriceBookEditor.tsx:126-131 sends a PATCH overwrite (quotation.ts:213-217); the page shows no changed-by/at. True for the UI. Whether crm-service versions or audits price books cannot be verified (absent). The DATEFMT theme is wrong.
 - **Files to change:** `apps/web/src/app/_components/crm/PriceBookEditor.tsx`, `apps/web/src/lib/crm/quotation.ts`
@@ -4580,7 +4580,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRICE-BOOKS-02  ·  MEDIUM  ·  partly  ·  theme VALIDATION (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Segment, Geography and Channel are free-text fields (placeholders "government", "north", "direct"), and the resolver matches on the same typed text, so a typo yields a book that can never resolve; geography examples do not match state/district geography (PriceBookEditor.tsx:262-285).
 - **Verified evidence:** apps/web/src/app/_components/crm/PriceBookEditor.tsx:236,244,248 Segment/Geography/Channel are free-text inputs with placeholders 'government','north','direct'; resolvePriceBook passes the trimmed text (:158-168). Typo risk is real; 'fabricated' theme is wrong (placeholders, not data). Geography 'north' vs state/district taxonomy cannot be verified without master data.
 - **Files to change:** `apps/web/src/app/_components/crm/PriceBookEditor.tsx`
@@ -4594,7 +4594,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRICE-BOOKS-04  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1861, verified on main 9c5e9e9e9)
 - **First-pass claim:** Currency is a free-text field, yet prices are always entered as rupees and echoed with the ₹ formatter, so a USD book would silently show rupee amounts (PriceBookEditor.tsx:268, lib/formatters.ts:127).
 - **Verified evidence:** apps/web/src/app/_components/crm/PriceBookEditor.tsx:240 Currency is free text (default INR); prices are entered in rupees (rupeesToMinorString :113) and formatted via formatMoney (:343) which always emits the INR symbol (formatters.ts:90-134). A book with currency 'USD' would display rupees.
 - **Files to change:** `apps/web/src/app/_components/crm/PriceBookEditor.tsx`
@@ -4610,7 +4610,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRICE-BOOKS-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The product picker lists every product, including disabled or out-of-window ones, while the quotation builder disables those; a book can be priced for a product that cannot be quoted, and the same product can be added twice (PriceBookEditor.tsx:296, QuotationBuilder.tsx:388).
 - **Verified evidence:** apps/web/src/app/_components/crm/PriceBookEditor.tsx:268-272 maps every product with no filter; QuotationBuilder.tsx:420-421 disables products failing isProductSelectable. Entries (:290) can be added repeatedly; select has no duplicate exclusion.
 - **Files to change:** `apps/web/src/app/_components/crm/PriceBookEditor.tsx`
@@ -4624,7 +4624,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRICE-BOOKS-06  ·  LOW  ·  confirmed  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Create/Save book is disabled without saying why (no inline validation text), unlike other editors that print a message (PriceBookEditor.tsx:317).
 - **Verified evidence:** apps/web/src/app/_components/crm/PriceBookEditor.tsx:297 Save disabled by !draftValid(draft) (:101-103) with no message; other editors (PipelineEditor) show setError on click. Note draftValid treats blank price as '0.01' valid but save() (:113) then rejects blank, so the button enables and errors later.
 - **Files to change:** `apps/web/src/app/_components/crm/PriceBookEditor.tsx`
@@ -4645,7 +4645,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRODUCTS-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Any CRM user can change a product price or tax rate, which flows straight into quotations; the catalogue shows no last-changed-by/at, and Delete removes a product with no indication of how many quotations or price books reference it (apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx:99-125,262).
 - **Verified evidence:** products/ has no layout.tsx (only crm/layout.tsx crm_user); apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx:94-118 saves price/tax to the catalogue and :120-138 deletes; the table (:172-187) has no updated-by/at column and the delete dialog (:263-272) shows a generic description. Server audit/references cannot be verified (absent).
 - **Files to change:** `apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx`, `apps/web/src/app/(app)/crm/products/layout.tsx`
@@ -4662,7 +4662,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRODUCTS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tax is a single free-text percentage per product: no HSN/SAC code, no GST slab list, and no CGST/SGST/IGST split, so a mistyped rate (e.g. 81) saves as valid and invoices cannot be tied to a tax classification (ProductCatalogueEditor.tsx:66,215).
 - **Verified evidence:** apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx:77-80 taxBpsOf uses percentToBps (money.ts:68-77), which accepts any non-negative number up to 2 decimals, so 81 (8100 bps) is valid; Product has only taxRateBps (quotation.ts:70), no HSN/SAC or CGST/SGST/IGST fields.
 - **Files to change:** `apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx`, `apps/web/src/lib/crm/quotation.ts`
@@ -4677,7 +4677,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRODUCTS-03  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** A blank Price or blank Tax % silently saves as 0, so a half-filled row becomes a ₹0.00, 0% product that is "Live" and quotable (ProductCatalogueEditor.tsx:66-72).
 - **Verified evidence:** apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx:73-80 blank price returns '0' and blank tax returns 0; rowValid passes; blank() new row has priceMinor '0', enabled true (:39), so save posts a INR 0.00 live product.
 - **Files to change:** `apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx`
@@ -4692,7 +4692,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRODUCTS-04  ·  MEDIUM  ·  partly  ·  theme RESPONSIVE (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Ten editable columns render as a horizontally scrolling table (overflowX auto) with no card transform at phone width, and every cell is an input, so the row is hard to read or edit on mobile (ProductCatalogueEditor.tsx:168).
 - **Verified evidence:** Table is 10 columns inside overflowX:auto (ProductCatalogueEditor.tsx:170-171), every cell an input; no responsive card transform. Real, but theme tag PII is wrong (responsive/mobile).
 - **Files to change:** `apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx`
@@ -4706,7 +4706,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRODUCTS-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The Live/Off badge is computed from unsaved edits, so toggling Enabled shows "Live" before anything is saved, and there is no dirty marker per row or check that Active to is not before Active from (ProductCatalogueEditor.tsx:196).
 - **Verified evidence:** apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx:194-196 selectable is computed from the in-memory row (row.enabled, activeFrom, activeTo) so toggling the checkbox flips the badge to Live before Save; no per-row dirty marker; save (:94-106) never checks activeTo >= activeFrom.
 - **Files to change:** `apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx`
@@ -4721,7 +4721,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRODUCTS-06  ·  LOW  ·  partly  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Code is not checked for duplicates client-side and Currency is fixed to INR with no field, so multi-currency price books cannot reference a matching product currency (ProductCatalogueEditor.tsx:44,98).
 - **Verified evidence:** apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx:98-101 no client-side duplicate-code check (server enforcement cannot be verified); currency is not editable: blank() sets 'INR' (:39) but existing rows keep their loaded currency and payload sends row.currency.trim()||'INR' (:102), so 'fixed to INR with no field' is true only for new rows. Price display always uses formatMoney (INR).
 - **Files to change:** `apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx`
@@ -4743,7 +4743,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-QUALIFICATION-FRAMEWORKS-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The page defines weighted questions "that decide whether a lead qualifies" but has no total, no normalisation and no pass threshold anywhere; weights are independent 0–100 numbers, so two admins can build frameworks summing to 60 and 240 with no cue (apps/web/src/app/_components/crm/QualificationFrameworksEditor.tsx:30,225-275).
 - **Verified evidence:** QualificationFrameworksEditor.tsx:31-35 sanitizeNumber clamps each weight to int 0-100; the question table (225-257) has no Total row, no normalisation and no pass-threshold field; Save (112-131) sends only name/businessLine/active/questions. Score/outcome is computed server-side (QualifyPanel.tsx:60,143 shows result.outcome/score) and crm-service is absent from the snapshot, so how the backend uses weights/threshold is cannot-verify. UI-side claim is accurate.
 - **Files to change:** `apps/web/src/app/_components/crm/QualificationFrameworksEditor.tsx`
@@ -4759,7 +4759,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-QUALIFICATION-FRAMEWORKS-03  ·  MEDIUM  ·  partly  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Save validates only name and business line: empty question text and a NaN weight pass and are sent (QualificationFrameworksEditor.tsx:110).
 - **Verified evidence:** save() (QFE:112-131) checks only name and businessLine, so an empty question text does pass and is POSTed; the doc wording is right there. But NaN weight cannot happen: onChange runs sanitizeNumber (31-35) which maps NaN/negative to 0 and clamps 0-100 integers, so a blank weight silently becomes 0 (the aria-invalid branch at 246 is dead). Also lib/crm/leadQualification.ts normaliseQuestions:97 drops questions with empty text on reload, so a blank question disappears silently after save. No zod schema at the form boundary; no duplicate/zero-question check.
 - **Files to change:** `apps/web/src/app/_components/crm/QualificationFrameworksEditor.tsx`, `apps/web/src/lib/crm/leadQualification.ts`
@@ -4777,7 +4777,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-QUALIFICATION-FRAMEWORKS-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Business line is a free-text field (placeholder "government, psu") not tied to any business-line list, so frameworks can silently never match leads (QualificationFrameworksEditor.tsx:238).
 - **Verified evidence:** Business line is a free-text <input> (QFE:206-207, placeholder 'e.g. government, psu'), saved verbatim after only a trim check (116). No business-line list exists in apps/web (grep for BUSINESS_LINES/business-line found nothing), and QualifyPanel/getFrameworks (leadQualification.ts:142-144) filters by the raw string, so a typo or case difference means the framework never matches a lead's businessLine. The theme tag FABRICATED is wrong; this is a free-text-vs-controlled-vocabulary issue.
 - **Files to change:** `apps/web/src/app/_components/crm/QualificationFrameworksEditor.tsx`, `apps/web/src/lib/crm/leadQualification.ts`
@@ -4793,7 +4793,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-QUALIFICATION-FRAMEWORKS-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** + Add framework sits in a separate top card and appends the new framework at the bottom of a long page without scrolling to it (QualificationFrameworksEditor.tsx:198).
 - **Verified evidence:** '+ Add framework' (QFE:176-186) sits in the top card and does setFrameworks([...prev, blank]); the new card renders at the end of the list (197) with no scrollIntoView or focus call. With several frameworks the new card is off-screen and the user gets no feedback. Note: '+ Add question' (220) appends within the card so is fine.
 - **Files to change:** `apps/web/src/app/_components/crm/QualificationFrameworksEditor.tsx`
@@ -4815,7 +4815,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-QUOTATIONS-01  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The Approve button on a pending discount/deviation request is shown to every CRM user, including whoever raised it, with no role check or maker-checker split, and no Reject action although the decide endpoint supports "reject"; a requester can self-approve and unblock Send (apps/web/src/app/_components/crm/QuotationApprovalPanel.tsx:170, apps/web/src/lib/crm/quotation.ts:583-596).
 - **Verified evidence:** QuotationApprovalPanel.tsx:169-173 renders an Approve button for every non-approved row for anyone who can open the page; no role check and no comparison of requester vs current user (panel has no identity or role input). Only approve is wired (grant, 97-110): lib/crm/quotation.ts:597-599 already exports rejectApproval(approvalId, reason) and decideApprovalRequest:581-591 posts {decision:'approve'|'reject'}, but the panel never calls reject, so a rejected/denied path is unreachable. A requester can therefore click Approve on their own request. Server enforcement of maker-checker is cannot-verify (crm-service not in snapshot).
 - **Files to change:** `apps/web/src/app/_components/crm/QuotationApprovalPanel.tsx`, `apps/web/src/app/_components/crm/QuotationBuilder.tsx`, `apps/web/src/app/(app)/crm/quotations/page.tsx`, `apps/web/src/lib/crm/quotation.ts`
@@ -4833,7 +4833,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-QUOTATIONS-02  ·  HIGH  ·  confirmed  ·  theme OTHER (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The list identifies a quotation only by Template, vN, line count, total and status: no quoteRef, account, opportunity or date columns, and New quotation has no account/opportunity field (they are only carried over from an opened record), so two "standard v1" quotes are indistinguishable and unlinked to a customer (QuotationBuilder.tsx:255-275,215).
 - **Verified evidence:** QuotationBuilder list table (QB:311-340) columns are Template, Version, Lines, Total, Status, actions only: no quoteRef, account, opportunity or created date even though the Quotation model carries quoteRef/accountId/opportunityId (lib/crm/quotation.ts:267-281). startNew() (157-166) sets no account/opportunity and the New quotation form (365-384) has no such fields; createQuotation (QL:428-438) sends only dealId if q.opportunityId, so a from-scratch quote is unlinked to any customer. Theme DATEFMT is wrong.
 - **Files to change:** `apps/web/src/app/_components/crm/QuotationBuilder.tsx`, `apps/web/src/lib/crm/quotation.ts`
@@ -4849,7 +4849,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-QUOTATIONS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Save quotation on an existing record actually POSTs /new-version with a client-computed totalMinor yet reports "Quotation saved."; each save silently creates a superseding version, and a separate New version button clones without edits, so users cannot tell the two apart (lib/crm/quotation.ts:449-460, QuotationBuilder.tsx:190).
 - **Verified evidence:** save() (QB:217-247) calls updateQuotation for an existing id, which POSTs /v1/crm/quotations/:id/new-version with lineItems+client-computed totalMinor (QL:448-458) and then shows 'Quotation saved.' (240). Each save therefore creates a superseding version. Separately, the 'New version' button (494) calls newQuotationVersion (QL:507-510) with no body, cloning unchanged. Extra bugs found: updateQuotation does not send the template, so a template change on an existing quote is silently dropped; after save, load() refreshes the list but `selected` still points at the old superseded row, so a second Save supersedes the wrong version. Server-side recompute of total is not verifiable.
 - **Files to change:** `apps/web/src/app/_components/crm/QuotationBuilder.tsx`, `apps/web/src/lib/crm/quotation.ts`
@@ -4867,7 +4867,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-QUOTATIONS-04  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Send, Accept, Reject, New version and Convert to order are all rendered regardless of status (a converted or rejected quote still offers Send/Accept), and Accept records a customer decision with no confirmation, note or evidence (QuotationBuilder.tsx:420-440).
 - **Verified evidence:** The action row (QB:483-501) renders Send/Finalize, Accept, Reject, New version, Convert to order for any selected.id with only busy/blocking disabling; selected.status is never consulted, so accepted/rejected/converted quotes still offer Send/Accept. Reject (537-567) and Convert (537-548) do use ConfirmDialog (Reject requires a >=10-char reason), but Accept (488-490) runs acceptQuotation immediately with no confirm, note or evidence; QL:494-497 posts no body. Line numbers in the finding (420-440) are wrong; correct is 483-501.
 - **Files to change:** `apps/web/src/app/_components/crm/QuotationBuilder.tsx`, `apps/web/src/lib/crm/quotation.ts`
@@ -4885,7 +4885,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-QUOTATIONS-06  ·  MEDIUM  ·  partly  ·  theme OTHER (was STATUS)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Template values are raw slugs shown with hyphens (government-tender, annual-contract) and Status prints the raw enum; Grand total has no CGST/SGST/IGST split for GST-registered supplies (QuotationBuilder.tsx:300,266,388).
 - **Verified evidence:** Template raw slugs are shown in the list (QB:327 `q.template`) and the select options (369-373 render `t` as-is: government-tender, annual-contract); Status prints raw enum (331, also 352 and 522). Grand total (457-469) is net+tax summed across lines via quotationTotalMinor (QL:355-359) and per-line Tax is shown, but there is no total tax line and no CGST/SGST/IGST split; the model has no supplier/place-of-supply state, so a split cannot be computed client-side. Cited line 388 is wrong (386-470). Theme STATUS is partly right.
 - **Files to change:** `apps/web/src/app/_components/crm/QuotationBuilder.tsx`, `apps/web/src/lib/crm/quotation.ts`, `apps/web/src/lib/formatters.ts`
@@ -4909,7 +4909,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-01  ·  HIGH  ·  confirmed  ·  theme STATUS (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The Overdue tile and the red "N d overdue" SLA badge ignore status: a RESPONDED or DISPOSED request past its original due date still counts as overdue and shows a red badge, while Open excludes those statuses, so the tiles contradict each other and closed RTIs read as statutory breaches (apps/web/src/app/(app)/crm/rti/page.tsx:33-40, RtiTable.tsx:21-44).
 - **Verified evidence:** rti/page.tsx:318-324: overdue = daysLeft(dueAt)<0 and critical = <7 days ignore status, while open excludes RESPONDED and DISPOSED only (REJECTED, appeals still count). RtiTable.tsx SlaBadge (390-420) also ignores status, so a RESPONDED/DISPOSED row past due shows red 'Nd overdue'. Tiles are labelled '(this page)'. Also uses new Date(dueAt).toLocaleDateString at 525 rather than formatIndianDate, and Math.ceil on ms loses IST day boundaries. Cited lines 33-40 are off; correct 318-324 and 390-420.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/page.tsx`, `apps/web/src/app/(app)/crm/rti/RtiTable.tsx`, `apps/web/src/lib/formatters.ts`
@@ -4926,7 +4926,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-02  ·  HIGH  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The loader is hard-wired to limit=50, page=1 and the table has no pagination, so RTI requests beyond the first 50 cannot be reached from this register even though the Total tile can be larger; the URL filters ?status/?section/?search work only if typed by hand (apps/web/src/app/_data/loaders.ts:1606, rti/page.tsx:8-20).
 - **Verified evidence:** loaders.ts:1601-1613 getCrmRti defaults limit 50, page 1; rti/page.tsx:302-306 passes only status/section/search from searchParams and never page/limit; RtiTable (DataTable, no pagination props) renders only rows. data.total is shown in the 'Total' tile so it can exceed the visible 50. There are no filter/search controls in the UI (only hand-typed ?status=, ?section=, ?search=). Tiles are labelled '(this page)', which is honest but unhelpful, and the counts are computed on 50 rows only.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/page.tsx`, `apps/web/src/app/(app)/crm/rti/RtiTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -4942,7 +4942,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-03  ·  MEDIUM  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status colour carries no meaning: StatusPill maps only a few words, so RECEIVED, TRANSFERRED, RESPONDED, FIRST_APPEAL, SECOND_APPEAL and DISPOSED all fall back to the same "info" pill; only REJECTED is distinct, and the raw enum (e.g. FIRST_APPEAL) is printed as the label (RtiTable.tsx:137, ds/StatusPill.tsx:4-40).
 - **Verified evidence:** ds/StatusPill.tsx:5-36 STATUS_MAP has no keys for received, transferred, responded, first_appeal, second_appeal, disposed (lookup is status.toLowerCase(), so 'first_appeal'), so they fall to 'info'; only 'rejected' maps (bad). RtiTable.tsx:540-543 passes label={r.status}, printing raw 'FIRST_APPEAL' (the detail page omits label so it humanizes). Note a status 'open' maps to good but is unused here.
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/app/(app)/crm/rti/RtiTable.tsx`
@@ -4957,7 +4957,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-04  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The list shows applicant full names to every CRM user with no role gate or masking; RTI applicant identity is personal data under DPDP and the page has no purpose-limited access note (RtiTable.tsx:118).
 - **Verified evidence:** RtiTable.tsx:511-517 renders applicantName in clear for every viewer in the list; no masking, role gate, or purpose note. No shared <Masked> exists in ds. Cited line 118 is wrong; correct 511-517. Server-side access logging cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/RtiTable.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`
@@ -4973,7 +4973,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-05  ·  MEDIUM  ·  confirmed  ·  theme COPY (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Empty state says "No RTI requests match the current filters." although there are no filter controls; loading.tsx uses a different subtitle ("30-day response register") from the page ("30-day statutory response register") (RtiTable.tsx:146, rti/loading.tsx:9).
 - **Verified evidence:** RtiTable.tsx:548 emptyMessage 'No RTI requests match the current filters.' while the page has no filter controls (only URL params); rti/loading.tsx:5 subtitle is '...30-day response register.' vs page.tsx:332 '...30-day statutory response register.' Both copy issues are real; cited lines 146 and 9 are off.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/RtiTable.tsx`, `apps/web/src/app/(app)/crm/rti/loading.tsx`, `apps/web/src/app/(app)/crm/rti/page.tsx`
@@ -4989,7 +4989,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-06  ·  LOW  ·  confirmed  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Section reads "§6 Information" here but "§6 — Information Request" on the detail and new-request screens (RtiTable.tsx:55, rti/[id]/page.tsx:37).
 - **Verified evidence:** RtiTable.tsx:436-440 sectionLabel returns '§6 Information' / '§11 Third-party' while detail (page.tsx:34-37) and new (new/page.tsx:8-11) use '§6 — Information Request' / '§11 — Third-party Information'. Three separate label maps; theme WIRING is wrong (pure label drift).
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/RtiTable.tsx`, `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`, `apps/web/src/app/(app)/crm/rti/new/page.tsx`, `apps/web/src/lib/crm/rti.ts (new)`
@@ -5011,7 +5011,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Statuses FIRST_APPEAL and SECOND_APPEAL (and DISPOSED) fall through to "no further action available here", so once First Appeal is raised nothing in the UI can decide, forward or close it; the statutory appeal chain dead-ends at the button that starts it (apps/web/src/app/(app)/crm/rti/[id]/RtiActions.tsx:27,35).
 - **Verified evidence:** RtiActions.tsx:214-215 canProgress = RECEIVED|TRANSFERRED, canAppeal = RESPONDED|REJECTED; any other status (FIRST_APPEAL, SECOND_APPEAL, DISPOSED) hits the early return at 229-235 'no further action available here'. The file header comment (208-210) states there is no backend route for second appeal or disposal, and nothing exists to decide a first appeal. Confirmed as a real dead end; fix needs backend routes (crm-service absent, cannot see). Cited lines 27,35 are wrong; correct 214-235.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/[id]/RtiActions.tsx`, `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`
@@ -5028,7 +5028,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-DETAIL-02  ·  HIGH  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Forward, Respond and First Appeal are offered to every CRM user: the CPIO/APIO roles are not modelled, and the recorded response (a statutory document) needs only a 1-character "Response text" with no draft, attachment or preview (RtiActions.tsx:35-75, ds/ConfirmDialog.tsx:72).
 - **Verified evidence:** True: Forward/Respond/First Appeal (RtiActions.tsx:239-271) are shown to any user who reaches the page by status only; no role/CPIO/APIO check (header lists CPIO only in comments). Respond uses ActionButton requireReason with default minReasonLength=1 (ConfirmDialog.tsx:72,174), so a 1-char response is accepted, no attachment/preview/draft. Overstated: all three actions do go through a ConfirmDialog (ActionButton) and Forward/Respond require non-empty text. Whether the server enforces roles and emits audit events is cannot-verify. Cited ConfirmDialog line 72 is the minReasonLength default.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/[id]/RtiActions.tsx`, `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`
@@ -5045,7 +5045,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-DETAIL-03  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Applicant name and contact (phone/email) print in clear to all CRM users with no masking or reveal-with-reason; under DPDP the applicant's identity and contact should be role-gated and access-logged (rti/[id]/page.tsx:160-170).
 - **Verified evidence:** Detail page prints applicantName and applicantContact in clear to any viewer (page.tsx:162-165) with no masking or access logging; the list does the same (RtiTable.tsx:511-517). There is no shared <Masked> component in ds (only ad-hoc secretMasked strings in admin/integrations). Whether the server audit-logs reads is cannot-verify. Line refs 160-170 are approximately right.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`, `apps/web/src/app/_components/ds/index.ts`
@@ -5063,7 +5063,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Forward asks for a free-text "Department / Office" that overwrites departmentRef; there is no department picker, no record of the previous department, and no check of the s.6(3) transfer window (RtiActions.tsx:39).
 - **Verified evidence:** Forward (RtiActions.tsx:242-248) uses the ConfirmDialog reason box labelled 'Department / Office' and sends {departmentRef:dept} to PATCH /forward; the value is free text that replaces departmentRef (page.tsx:100 shows only the current value). The UI keeps no previous-department history and does not check the s.6(3) 5-day transfer window (only text in the description). Backend behaviour on history is cannot-verify. Cited line 39 is wrong; correct 242-248.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/[id]/RtiActions.tsx`, `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`
@@ -5080,7 +5080,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Fee prints "₹" + a raw JS number (e.g. ₹10, ₹2.5) instead of paise-based lakh-grouped formatMoney, breaking the platform money rule (rti/[id]/page.tsx:118).
 - **Verified evidence:** page.tsx:102 renders `Paid — ₹${r.feeAmount}` with the raw JS number (RtiDetail.feeAmount?: number, line 17), so 10 prints ₹10 and 2.5 prints ₹2.5, with no formatRupees/formatMoney (formatters.ts:67,90). The amount is in rupees not paise (see RTI-NEW-01), so the fix depends on the contract. Cited line 118 is wrong; correct 102.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -5096,7 +5096,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-DETAIL-06  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** A failed or forbidden load is shown as "RTI Request Not Found — The RTI request could not be loaded." so a network outage, a 403 and a genuine 404 look identical; there is no timeline of forward/respond events beyond "Last Updated" (rti/[id]/page.tsx:60-66).
 - **Verified evidence:** page.tsx:44-67: fetchJson result's status/errorCode are ignored; any null (network error, 401/403, 404, invalid payload) renders the same 'RTI Request Not Found' header and 'could not be loaded' text. A DataSourceBadge is shown when source==='error' (61) so failure is partly signalled, but the title still says Not Found and 403 vs 404 are not distinguished; fetchJson returns status (apiClient.ts:144) and ds/LoadErrorState.tsx already maps 403 to PermissionDenied and others to RefreshErrorState. Also no timeline of forward/respond events exists (only Last Updated), and the response-record shows in a Response card. There is no notFound() call. Cited lines 60-66 fit.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`
@@ -5119,7 +5119,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-NEW-01  ·  HIGH  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** feeAmount is sent as a JSON number in rupees (Number("10.00")), not as paise, contradicting the platform rule that money travels as paise bigint; float rounding is possible and the detail page later prints it unformatted (apps/web/src/app/(app)/crm/rti/new/page.tsx:39,62).
 - **Verified evidence:** rti/new/page.tsx:35,44 sends feeAmount: Number(feeAmountRaw) from a type=number step=0.01 input (254-261), i.e. rupees as a JSON float, contrary to CLAUDE.md paise rule; detail page and RtiDetail/CrmRtiRow (loaders.ts feeAmount number) treat it as rupees too. Whether the API accepts feeAmountMinor is cannot-verify (services/crm-service absent), so this needs a contract change. Lines 39,62 cited are off; correct 35,44.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/new/page.tsx`, `apps/web/src/lib/money.ts`, `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -5135,7 +5135,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-NEW-03  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Applicant name and free-text contact are collected with no DPDP purpose note and no contact-format check, unlike the citizen feedback form which carries a consent statement (rti/new/page.tsx:235-255, voice-of-customer/feedback/page.tsx).
 - **Verified evidence:** new/page.tsx:212-234 collects applicantName (required) and free-text applicantContact (maxLength 200, no pattern/type) with no DPDP purpose or notice text; the citizen feedback form has an explicit consent checkbox (voice-of-customer/feedback/page.tsx:215-238). Mitigation: this is an officer-side register entry on behalf of an applicant, so the correct control may be a notice/lawful-basis statement rather than a consent checkbox (decision). No contact format validation exists.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/new/page.tsx`
@@ -5150,7 +5150,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Department / Public Authority" is free text with a datalist of central bodies (Ministry of Finance, UIDAI, Department of Posts); a state department's own public authorities are not offered and typos fracture the register (rti/new/page.tsx:15-24,150).
 - **Verified evidence:** new/page.tsx:13-22 SAMPLE_DEPARTMENTS is a hard-coded list of 8 central bodies fed to a <datalist> (164-168) on a free text input (156-163, required, maxLength 200); anything can be typed, so typos fracture the register and state authorities are not offered. Cited lines 15-24,150 are roughly right (13-22,156).
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/new/page.tsx`
@@ -5166,7 +5166,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-NEW-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Fee Paid? and Fee Amount are independent: "No" with an amount, or "Yes" with none, both submit (rti/new/page.tsx:262-285).
 - **Verified evidence:** new/page.tsx:246-262: Fee Paid select and Fee Amount input are uncoupled; handleSubmit (29-45) sends feePaid and feeAmount independently, so 'No'+amount and 'Yes'+empty both submit. RtiDetail then prints 'Paid' without amount or 'Not paid' hiding the amount. No client validation; server validation cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/new/page.tsx`
@@ -5183,7 +5183,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-NEW-06  ·  LOW  ·  partly  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The route has no loading.tsx or error.tsx of its own, so it shows the list skeleton while loading and an error page named "RTI Requests" (rti/loading.tsx, rti/error.tsx).
 - **Verified evidence:** rti/new has no loading.tsx or error.tsx (directory contains only page.tsx), so it inherits rti/error.tsx, whose RouteError uses area='RTI Requests' and backHref '/crm' (error.tsx:9-13). New is a client component so the loading.tsx of rti/ (list skeleton with 4 stat tiles) shows on navigation. Real but minor. Note rti/[id] has its own loading/error.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/new/loading.tsx (new)`, `apps/web/src/app/(app)/crm/rti/new/error.tsx (new)`
@@ -5204,7 +5204,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-01  ·  HIGH  ·  confirmed  ·  theme PAGINATION (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The register loads only the first 50 rows (limit=50, page=1) and then pages, sorts and searches those rows in the browser, so "Page 1 of 4" and the search box silently cover a fraction of the total (the Total tile can read 132); older requests are unreachable and the ?status/?search params are never set by any control (apps/web/src/app/_data/loaders.ts:1554, service-requests/ServiceRequestsTable.tsx:105).
 - **Verified evidence:** getCrmServiceRequests (loaders.ts, ~1530-1560) always sends limit=50&page=1 (params default). The page (service-requests/page.tsx:8-14) forwards only status/priority/serviceType/search from searchParams and has no page param; no control in page.tsx or ServiceRequestsTable.tsx sets those params. The table (ServiceRequestsTable.tsx:154-159) uses DataTable with client-side sortable/filterable/pageSize=15 over the 50 rows, so search/sort cover only the first 50 while the Total tile uses data.total (meta.total). Confirmed.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/page.tsx`, `apps/web/src/app/(app)/crm/service-requests/ServiceRequestsTable.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -5222,7 +5222,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-02  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** ⬇ CSV exports the loaded rows including citizen names to any CRM user with no role gate, purpose prompt or audit note; citizen names are personal data under DPDP (ServiceRequestsTable.tsx:112, ds/DataTable.tsx:298).
 - **Verified evidence:** ServiceRequestsTable.tsx:159-160 sets exportable + exportFilename; DataTable.tsx:267-292 downloadCsv writes every column value (ref, citizen name, service type, subject, priority, status, created) for all sorted rows from the client, with no role check, purpose prompt or audit call. The CRM layout admits crm_user and above, so any of them can export. Cells are also not protected against CSV formula injection. Observation's line 112/298 approximate.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/ServiceRequestsTable.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`, `apps/web/src/app/(app)/crm/service-requests/page.tsx`
@@ -5239,7 +5239,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** dueAt and assignedTo are fetched but never shown, so the list cannot show which requests are past due or who owns them, the two things a citizen-service desk sorts by (loaders.ts:1499).
 - **Verified evidence:** CrmServiceRequestRow includes assignedTo and dueAt and the loader maps them (loaders.ts ~1493-1494, mapping ~1552-1553), but ServiceRequestsTable.tsx columns (105-152) render only ref, citizen, service type, subject, priority, status, logged, View. No overdue signal or owner.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/ServiceRequestsTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -5256,7 +5256,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-04  ·  MEDIUM  ·  partly  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Priority uses colour alone to separate urgent/high from normal/low, and normal and low share one grey; StatusPill leaves in_progress, resolved and cancelled on the same blue as unknown values (ServiceRequestsTable.tsx:11, ds/StatusPill.tsx:4-40).
 - **Verified evidence:** ServiceRequestsTable.tsx:11-16 PRIORITY_TONE maps normal and low both to var(--ink2), so those two are identical; however the badge renders the priority word via titleCase (line ~130), so priority is not colour-only. StatusPill.tsx STATUS_MAP has 'in progress' (space) but the value is 'in_progress' (lookup is status.toLowerCase() at line 53, no underscore normalisation), and has no 'resolved' or 'cancelled', so all three fall to the 'info' (blue) fallback; 'open' maps to 'good' (green), which is questionable for a new request. Also the colour contrast of white text on var(--warn) is unchecked.
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/app/(app)/crm/service-requests/ServiceRequestsTable.tsx`, `apps/web/src/app/(app)/crm/service-requests/[id]/page.tsx`
@@ -5272,7 +5272,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-05  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stat tiles are labelled "(this page)" but count only the loaded 50 rows regardless of the 15-row pager, so Open + Pending + Closed does not add up to Total (service-requests/page.tsx:20-24).
 - **Verified evidence:** service-requests/page.tsx:18-21 compute Open/Pending/Closed from data.rows (first 50 rows) and the labels say '(this page)' (45-47), while the visible pager is 15 rows so 'this page' is misleading; Total uses data.total (48). Cancelled requests are counted in none of the three tiles, and Open+Pending+Closed of loaded rows will not equal Total once >50 rows. Theme I18N is wrong; this is a counts/labelling issue.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/page.tsx`
@@ -5288,7 +5288,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-06  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** loading.tsx is the generic three-bar template with no tiles or table shape, unlike the list it precedes (service-requests/loading.tsx).
 - **Verified evidence:** service-requests/loading.tsx is three Tailwind pulse bars (h-4, h-9, h-80) inside min-h-screen p-6 - no tile row, no table header rows, and uses a different structure from sibling loading files (voice-of-customer/loading.tsx uses page-main/ph with four tile skeletons). Confirmed but cosmetic.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/loading.tsx`
@@ -5310,7 +5310,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Every status change sends its reason in the `resolution` field, including "What is it waiting on?" for Mark pending and Closing remarks for Close; a pending request then shows a "Resolution" card ("Resolved —") that is really a waiting note, and the true resolution text is overwritten by closing remarks (apps/web/src/app/(app)/crm/service-requests/[id]/ServiceRequestActions.tsx:18-24,45, [id]/page.tsx:127).
 - **Verified evidence:** ServiceRequestActions.tsx:33-41 setStatus(next, resolution) sends the single reason as body.resolution for every transition; Mark pending (63-72, reasonLabel 'What is it waiting on?') and Close (84-92, 'Closing remarks') both go through it. page.tsx:123-132 shows the Resolution card whenever r.resolution is truthy and prints 'Resolved {fmt(r.resolvedAt)}' (fmt(undefined)='—'), so a pending request shows 'Resolved —' with a waiting note; Close overwrites a prior resolution. Whether the PATCH /status route accepts a separate note field is cannot-verify (crm-service is not in the snapshot).
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/[id]/ServiceRequestActions.tsx`, `apps/web/src/app/(app)/crm/service-requests/[id]/page.tsx`
@@ -5328,7 +5328,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Citizen phone and email print in clear to every CRM user; contact details of citizens should be masked or reveal-on-demand with access logging under DPDP (service-requests/[id]/page.tsx:140-146).
 - **Verified evidence:** [id]/page.tsx:138-140 renders r.citizenPhone and r.citizenEmail as plain text in the Citizen card, visible to every user passing the CRM layout (crm_user etc.). No masking helper or access log. No shared <Masked> exists in ds (only a local maskPhone in telephony/calls/page.tsx:37). Observation's line range 140-146 is slightly off.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/[id]/page.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`, `apps/web/src/app/_components/ds/index.ts`
@@ -5345,7 +5345,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The status PATCH omits the `version` the page fetched, so two officers acting at once silently overwrite each other; the Audit card shows only two timestamps, no actor or status history (ServiceRequestActions.tsx:18, [id]/page.tsx:148-152).
 - **Verified evidence:** ServiceRequestDetail declares version (page.tsx:23) but ServiceRequestActions receives only id and status (page.tsx:95) and setStatus body is {status, resolution?} (Actions:37) - no version/If-Match, so last write wins (whether the service would enforce it is cannot-verify). Audit card (page.tsx:143-148) shows only Logged and Last updated timestamps, no actor or status history; the detail type has no createdBy/updatedBy/history fields to render.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/[id]/page.tsx`, `apps/web/src/app/(app)/crm/service-requests/[id]/ServiceRequestActions.tsx`
@@ -5363,7 +5363,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** assignedTo is loaded but never shown, there is no assign/reassign action, and Due is a plain date with no overdue indicator; a "cancelled" status is treated as terminal yet no action sets it (service-requests/[id]/page.tsx:17,112, ServiceRequestActions.tsx:24).
 - **Verified evidence:** assignedTo is in ServiceRequestDetail (page.tsx:17) but not rendered anywhere in the JSX; there is no assign/reassign ActionButton in ServiceRequestActions.tsx (only Start work, Mark pending, Resolve, Close). Due renders fmt(r.dueAt) (page.tsx:114) as date-time with no overdue cue or SLA state. Actions:31 treats 'cancelled' as terminal, yet no action calls setStatus('cancelled'). Observation line numbers are off by a few lines.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/[id]/page.tsx`, `apps/web/src/app/(app)/crm/service-requests/[id]/ServiceRequestActions.tsx`, `apps/web/src/app/(app)/crm/service-requests/ServiceRequestsTable.tsx`
@@ -5381,7 +5381,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-DETAIL-06  ·  LOW  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Reasons need only one character, and Close is offered from every non-terminal status including open, so a request can be closed without ever being worked (ds/ConfirmDialog.tsx:72, ServiceRequestActions.tsx:64).
 - **Verified evidence:** ConfirmDialog.tsx:72 defaults minReasonLength = 1 and ActionButton only forwards minReasonLength when set (ActionButton.tsx:122); none of the four actions in ServiceRequestActions.tsx pass it, so one character satisfies 'Resolution', 'Closing remarks' etc. Close (Actions:84-92) renders for every non-terminal status including open. The dialogs already require a reason, so the 'add ConfirmDialog' fix text does not apply; maker!=checker is not applicable to this flow.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/[id]/ServiceRequestActions.tsx`
@@ -5404,7 +5404,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-NEW-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Phone and email of a citizen are collected with no DPDP purpose or consent note and neither is required, so a request can be filed with no way to reach the citizen (the feedback form, by contrast, carries a DPDP consent checkbox) (apps/web/src/app/(app)/crm/service-requests/new/page.tsx:88-100, voice-of-customer/feedback/page.tsx).
 - **Verified evidence:** new/page.tsx:124-131 Phone and Email inputs have no required attribute, no DPDP purpose/notice and no consent checkbox; body sends them as undefined when blank (43-56), so a request can be filed with no contact route. The feedback form has a consent checkbox (feedback/page.tsx:227-245) but that form is itself not wired. Observation's line numbers (88-100) are off; real ones 124-131.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/new/page.tsx`
@@ -5422,7 +5422,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-NEW-02  ·  MEDIUM  ·  partly  ·  theme WIRING (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Service types are a 10-item constant inside the page, not an admin taxonomy, although the list route's own comment says a service request has "its own service-type taxonomy"; new services need a code change and "Other" is a dead-end (service-requests/new/page.tsx:8-19, service-requests/page.tsx:34).
 - **Verified evidence:** SERVICE_TYPES is a 10-entry constant (new/page.tsx:14-25); the list page comment (service-requests/page.tsx:30-32) says the register has its own service-type taxonomy. True that adding a type needs a code change. 'Other' is not a dead-end: it is a selectable value and Subject/Description capture detail, though the list has no way to filter by it meaningfully. Existence of an admin taxonomy endpoint is cannot-verify (no crm-service); the theme DEADROUTE is wrong.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/new/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -5438,7 +5438,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme DATAMODEL (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The request is not linked to an existing CRM contact or account and there is no duplicate check, so the same citizen filing twice creates two unrelated records (service-requests/new/page.tsx:26-34).
 - **Verified evidence:** The POST body (new/page.tsx:48-56) has only citizenName, citizenPhone, citizenEmail, serviceType, subject, description, priority: no contactId/accountId and no lookup or duplicate check before submit. The list loader row type also has no contact link. Whether the service dedups is cannot-verify. Theme VALIDATION is loose; this is a data-linking gap.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/new/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -5453,7 +5453,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-NEW-05  ·  LOW  ·  confirmed  ·  theme VALIDATION (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Phone is type=tel with maxLength 32 and no format hint or validation for a 10-digit Indian mobile (service-requests/new/page.tsx:92).
 - **Verified evidence:** new/page.tsx:126 is <input type='tel' maxLength={32} placeholder='e.g. 9876543210'>: a placeholder exists but no pattern, inputMode or validation; submit has no client zod (handleSubmit at 43-56 only relies on server field errors, and there is no fieldError display for phone/email). Line 92 in the observation is wrong. The PII fix text does not apply - this is validation.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/new/page.tsx`
@@ -5476,7 +5476,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-TASK-ESCALATION-01  ·  HIGH  ·  confirmed  ·  theme VALIDATION (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Manager role and Manager user are free-text (placeholders "sales_manager", "user id (optional)"), so a mistyped role or id saves as valid and tasks escalate to nobody; the rule shows no resolved name, no preview and no dry run (apps/web/src/app/_components/crm/TaskEscalationEditor.tsx:106,150-165).
 - **Verified evidence:** TaskEscalationEditor.tsx:156 (Manager role, placeholder 'e.g. sales_manager') and :160 (Manager user, placeholder 'user id (optional)') are free-text inputs; rowValid (34-36) only checks non-empty, so a mistyped role/id saves. The rule shows no resolved name, no preview and no dry run. Server-side validation is cannot-verify (crm-service absent). Theme FABRICATED is wrong: it is a validation/picker issue.
 - **Files to change:** `apps/web/src/app/_components/crm/TaskEscalationEditor.tsx`, `apps/web/src/lib/crm/activityAccount.ts`
@@ -5493,7 +5493,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-TASK-ESCALATION-02  ·  HIGH  ·  partly  ·  theme IDLEAK (was FAILMASK)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The Owner column can print a raw owner id (uuid) because the loader falls back owner → actorName → ownerId, and the overdue list has no limit or paging (apps/web/src/lib/crm/activityAccount.ts:282, OverdueTaskAlerts.tsx:80).
 - **Verified evidence:** activityAccount.ts:284 sets owner from r.owner ?? r.actorName ?? r.ownerId, so an opaque id is printed if the API sends no name; OverdueTaskAlerts.tsx:86 renders t.owner directly. getOverdueTasks (activityAccount.ts ~getOverdueTasks) calls v1/crm/activities?type=task&status=open&overdue=true with no limit/page, and the table renders all rows with no paging. Error handling is actually correct (isError shows '—' and badge), so theme FAILMASK is wrong. Line refs in the observation (282, 80) are off.
 - **Files to change:** `apps/web/src/lib/crm/activityAccount.ts`, `apps/web/src/app/_components/crm/OverdueTaskAlerts.tsx`
@@ -5510,7 +5510,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-TASK-ESCALATION-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The route is admin-only as a whole, so the managers who receive escalations cannot open the overdue list unless they hold crm_admin; monitoring and configuration are bundled on one page (task-escalation/layout.tsx:8, page.tsx:17).
 - **Verified evidence:** task-escalation/layout.tsx:11-14 allows only crm_admin, admin, super_admin, platform_admin, tenant_admin (requireAnyRole with redirect to /crm); page.tsx:31-34 puts OverdueTaskAlerts and TaskEscalationEditor on that single admin-gated route, so a crm_user manager cannot see the overdue list. Whether escalation-target managers hold crm_admin is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/crm/task-escalation/layout.tsx`, `apps/web/src/app/(app)/crm/task-escalation/page.tsx`, `apps/web/src/app/(app)/crm/overdue-tasks/page.tsx (new, name to decide)`
@@ -5527,7 +5527,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-TASK-ESCALATION-04  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The task link routes to /crm/contacts/:id for every subject type except account, so a task attached to a deal or lead opens the wrong record (OverdueTaskAlerts.tsx:22).
 - **Verified evidence:** OverdueTaskAlerts.tsx:21-24 subjectHref returns /crm/accounts/:id for 'account' and /crm/contacts/:id for everything else. SUBJECT_TYPES in activityAccount.ts:58 is contact, account, lead, deal, so lead and deal tasks link to a contact route with a wrong id. /crm/deals/[id] exists; no /crm/leads/[id] page was found in the app, so lead needs a decision.
 - **Files to change:** `apps/web/src/app/_components/crm/OverdueTaskAlerts.tsx`
@@ -5542,7 +5542,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-TASK-ESCALATION-05  ·  MEDIUM  ·  partly  ·  theme VALIDATION (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Threshold is entered in raw minutes (default 1440) with no unit hint or conversion, and rules have no order, level or cascade, so two enabled rules at the same threshold have undefined behaviour in the UI (TaskEscalationEditor.tsx:66,145).
 - **Verified evidence:** TaskEscalationEditor.tsx:71 defaults thresholdMinutes to 1440 and the input (142-152) is labelled 'Overdue by (minutes)' with number input, so the unit is stated in the label - 'no unit hint' is overstated - but there is no hours/days conversion or readable echo. Rules carry only thresholdMinutes/managerRole/managerId/enabled (rule object 81-87): no order, level or cascade fields; duplicate thresholds are not rejected in the UI. Backend behaviour for ties is cannot-verify.
 - **Files to change:** `apps/web/src/app/_components/crm/TaskEscalationEditor.tsx`
@@ -5559,7 +5559,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-TASK-ESCALATION-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The tile and card read "Overdue tasks" / "Overdue open tasks" but there is no action (reassign, snooze, escalate now) beside a row (OverdueTaskAlerts.tsx:60).
 - **Verified evidence:** OverdueTaskAlerts.tsx table (lines ~70-86) has columns Task, Due, Overdue by, Owner only; no row actions. Tile label 'Overdue tasks' (52). Whether reassign/snooze endpoints exist is cannot-verify; only the activities and rules routes are referenced in activityAccount.ts.
 - **Files to change:** `apps/web/src/app/_components/crm/OverdueTaskAlerts.tsx`, `apps/web/src/lib/crm/activityAccount.ts`
@@ -5582,7 +5582,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-VOICE-OF-CUSTOMER-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The Partial-window card tells readers to "Narrow the period to read an exact figure", but the page has no period control and calls the loader with no from/to, so the advice cannot be followed and truncated figures stay approximate (apps/web/src/app/(app)/crm/voice-of-customer/page.tsx:20,72-80, _data/loaders.ts:3065).
 - **Verified evidence:** apps/web/src/app/(app)/crm/voice-of-customer/page.tsx:17 calls getCrmSentimentSummary() with no args; the Partial-window Card at :73-81 says 'Narrow the period'. The loader (apps/web/src/app/_data/loaders.ts:3065-3072) already accepts range {from,to} and forwards them as query params to /api/v1/crm/sentiment/summary, but the page has no searchParams or date control, so the advice cannot be followed.
 - **Files to change:** `apps/web/src/app/(app)/crm/voice-of-customer/page.tsx`, `apps/web/src/app/(app)/crm/voice-of-customer/PeriodFilter.tsx (new)`
@@ -5600,7 +5600,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-VOICE-OF-CUSTOMER-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failure reads as absence for the themes: on error the four tiles show "—" but the theme card renders the empty state "Nothing scored yet — Log an interaction", pushing staff to create data instead of retry (voice-of-customer/page.tsx:112, ThemeTable.tsx:73).
 - **Verified evidence:** apps/web/src/app/(app)/crm/voice-of-customer/page.tsx:23,44-70,89-107 gates all tiles on isError and shows a DataSourceBadge, but :113 renders <ThemeTable themes={themes}/> unconditionally; on error the loader returns CRM_VOC_EMPTY (themes: [], apps/web/src/app/_data/loaders.ts:3049-3056), so ThemeTable.tsx:64-70 shows 'Nothing scored yet' with a 'Log an interaction' CTA. No RefreshErrorState is used on the page.
 - **Files to change:** `apps/web/src/app/(app)/crm/voice-of-customer/page.tsx`
@@ -5615,7 +5615,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-VOICE-OF-CUSTOMER-03  ·  MEDIUM  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tone pills carry no signal: "Needs attention", "Watch" and "Healthy" are not in StatusPill's colour map, so all three fall back to the same info blue and a 64% negative theme looks identical to a 7% one (ThemeTable.tsx:14, ds/StatusPill.tsx:4-40).
 - **Verified evidence:** ThemeTable.tsx:15-19 returns 'Needs attention' / 'Watch' / 'Healthy' and :38 passes it as StatusPill status. ds/StatusPill.tsx STATUS_MAP (:5-39) has none of those keys, so :53 falls back to 'info' for every row (all render blue). Tone is also colour-only in effect (label text does differ, so not totally lost).
 - **Files to change:** `apps/web/src/app/(app)/crm/voice-of-customer/ThemeTable.tsx`
@@ -5630,7 +5630,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-VOICE-OF-CUSTOMER-05  ·  MEDIUM  ·  partly  ·  theme ACCESS (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Staff-conduct and "Integrity concerns" themes are visible, with counts and CSV export, to every CRM user; the only protection is a paragraph about anonymisation, with no role gate for vigilance-sensitive aggregates (voc.ts:10-11, ThemeTable.tsx:60).
 - **Verified evidence:** True that the page exposes 'Staff conduct' and 'Integrity concerns' (voc.ts:7,9 THEME_LABELS in apps/web/src/app/(app)/crm/voice-of-customer/voc.ts) with counts and a CSV export (ThemeTable.tsx:61-63 exportable) and an anonymisation note (page.tsx:40-43). The only gate is the CRM layout: crm/layout.tsx requireAnyRole(['crm_user','crm_admin','platform_admin','super_admin']), so it is not 'every user' but every CRM user, with no finer role. <Masked> exists (used in admin/integrations, hr employees) but is for secrets/PII fields and is not a fit for aggregates. Whether the API itself restricts sensitive themes cannot be verified (CRM service absent). DataTable export has no audit hook.
 - **Files to change:** `apps/web/src/app/(app)/crm/voice-of-customer/page.tsx`, `apps/web/src/app/(app)/crm/voice-of-customer/ThemeTable.tsx`, `apps/web/src/lib/auth/workRoles.ts (add role constant)`
@@ -5648,7 +5648,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-VOICE-OF-CUSTOMER-06  ·  MEDIUM  ·  confirmed  ·  theme COPY (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Naming is split: route and loading.tsx say "Voice Of Customer", the page says "Voice of Citizen", and the mood is "Mixed" in the tile but "Neutral" in the mix card; the DPDP banner uses hard-coded blue Tailwind colours instead of tokens (voice-of-customer/loading.tsx:6, page.tsx:39,49).
 - **Verified evidence:** apps/web/src/app/(app)/crm/voice-of-customer/loading.tsx:6 h1 'Voice Of Customer' and error.tsx area 'CRM Voice Of Customer' vs page.tsx:31 title 'Voice of Citizen' and ThemeTable exportFilename 'crm-voice-of-citizen-themes'. Mood label: voc.ts MOOD_LABEL.neutral='Mixed' (tile, page.tsx:51) vs 'Neutral' StatCard label at page.tsx:92. DPDP banner page.tsx:40 uses Tailwind bg-blue-50 border-blue-200 text-blue-800 instead of DS tokens (--infobg/--infobd/--info; .alert class exists in civitas-ds.css:147). Theme 'PII' is wrong.
 - **Files to change:** `apps/web/src/app/(app)/crm/voice-of-customer/loading.tsx`, `apps/web/src/app/(app)/crm/voice-of-customer/error.tsx`, `apps/web/src/app/(app)/crm/voice-of-customer/page.tsx`, `apps/web/src/app/(app)/crm/voice-of-customer/voc.ts`
@@ -5719,7 +5719,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-04  ·  MEDIUM  ·  partly  ·  theme A11Y (was NAVUX)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The rating is marked required but the star group has no required semantics, unselected and selected stars are the same glyph told apart only by colour, and each star is a separate tab stop with no arrow-key radio behaviour (feedback/page.tsx:20-60).
 - **Verified evidence:** StarRating (feedback/page.tsx:45-88) uses role=radiogroup/role=radio with aria-checked and aria-label, which is decent; but the group has no aria-required, the '*' is aria-hidden (154), all five buttons are separate tab stops with no roving tabindex/arrow-key handling, and selected vs unselected stars are the same glyph differing by colour (79) - the visible 'Poor/Fair...' label at 160 partly compensates. Also the rating is not enforced: no validation that rating>0 (submission disabled anyway).
 - **Files to change:** `apps/web/src/app/(app)/crm/voice-of-customer/feedback/page.tsx`
@@ -5735,7 +5735,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-05  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Feedback is not tied to a service, request or interaction, and the Voice of Citizen dashboard scores logged interactions only, so even a wired form would not reach the dashboard it is named after (feedback/page.tsx, voice-of-customer/page.tsx:20).
 - **Verified evidence:** The form has no serviceId/requestId/interactionId field (feedback/page.tsx fields: rating, comment, contactType, dpdpConsent). voice-of-customer/page.tsx:20 reads getCrmSentimentSummary, and the file header (10-17) states the sentiment pipeline is populated only by scoring logged CRM interactions with no write route for self-report. So feedback would not reach the dashboard.
 - **Files to change:** `apps/web/src/app/(app)/crm/voice-of-customer/feedback/page.tsx`, `apps/web/src/app/(app)/crm/voice-of-customer/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -5751,7 +5751,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-06  ·  LOW  ·  confirmed  ·  theme COPY (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Titles diverge: "Citizen Feedback" / back label "Voice of Citizen", while the route and sibling loading.tsx say "Voice Of Customer" (feedback/page.tsx:85, voice-of-customer/loading.tsx:6).
 - **Verified evidence:** feedback/page.tsx:108 title 'Citizen Feedback' and back label 'Voice of Citizen' (111); voice-of-customer/page.tsx title is 'Voice of Citizen'; voice-of-customer/loading.tsx:6 says 'Voice Of Customer' and the URL segment is voice-of-customer. Copy inconsistency only; also the loading heading is hard-coded with odd capitalisation.
 - **Files to change:** `apps/web/src/app/(app)/crm/voice-of-customer/loading.tsx`, `apps/web/src/app/(app)/crm/voice-of-customer/error.tsx`, `apps/web/src/app/(app)/crm/voice-of-customer/feedback/page.tsx`
@@ -5769,7 +5769,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Merge duplicate accounts is a destructive-looking control placed between header and stats for all roles; the dialog (MergeDialog.tsx) was not read, so confirmation and audit of the merge are undeterminable (app/(app)/crm/accounts/page.tsx:44).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['PATCH /v1/crm/accounts/:id/parent', '(merge) MergeDialog uses client lib/crm/dataQuality mergeEntities']`
 - **Question:** Is account merge performed server-side with role gate, confirmation-worthy irreversibility handling and audit, rather than client only?
@@ -5780,7 +5780,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-DIRECTORY-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Deleting a queue, territory, partner or branch says only "no longer available for assignment"; nothing warns when an assignment rule or lead still references it, and the response to that case is undeterminable without the backend (app/_components/crm/OwnershipDirectoryEditor.tsx:200).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['DELETE /v1/crm/{assignment-queues|territories|partners|branches}/:id', 'GET /v1/crm/assignment-rules']`
 - **Question:** Does DELETE of a referenced queue/territory/partner/branch return 409 or cascade, instead of leaving dangling rule/lead references?
@@ -5802,7 +5802,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENT-TYPES-01  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The Code of an existing type is freely editable and saved with PUT; changing the code of a type already attached to documents may orphan them, and there is no warning (DocumentTypesEditor.tsx:399, 329-333). Backend behaviour undeterminable.
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['PUT /v1/crm/document-types/:id', 'POST /v1/crm/document-types']`
 - **Question:** Is code immutable once documents reference the type (409 or ignored) so documents are not orphaned?
@@ -5813,7 +5813,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENTS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Copy asserts behaviour ('Infected files are quarantined automatically', '30 days') that is not verifiable from this route; the rules live in crm-service (absent from the snapshot), so the claim is undeterminable here (page.tsx:28-29).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['POST /v1/crm/documents/presign', 'POST /v1/crm/documents', 'GET /v1/crm/documents/:id/download']`
 - **Question:** Does the service quarantine infected files automatically and apply a 30-day rule as the copy states?
@@ -5824,7 +5824,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LINKED-ACCOUNTS-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Connecting' only POSTs a provider and a typed email address with status 'pending'; there is no OAuth / consent or proof of mailbox ownership, so any CRM user can register someone else's mailbox or calendar, and mailbox metadata later syncs into CRM under DPDP consent rules. The owner check would have to be server-side (crm-service absent, undeterminable) (LinkedAccountsPanel.tsx:72, 118-128; lib/crm/activityAccount.ts:919-925).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['POST /v1/crm/linked-accounts', 'DELETE /v1/crm/linked-accounts/:id']`
 - **Question:** Does the server verify mailbox ownership via OAuth/consent before activating a linked account, tying it to the caller only?
@@ -5835,7 +5835,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The stage dropdown on every card lists every stage including terminal ones, so a card can be moved to Won or Lost through a plain stage change that skips the OP-006 Close dialog (outcome, reason, competitor); whether the server refuses is undeterminable because crm-service is absent (apps/web/src/app/_components/crm/OpportunityViews.tsx:225).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['PATCH /v1/crm/deals/:id/stage', 'POST /v1/crm/deals/:id/close']`
 - **Question:** Does the stage endpoint reject terminal stages (Won/Lost) so closing must go through /close with outcome and reason?
@@ -5846,7 +5846,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINES-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Deleting a pipeline (and ✕ removing a stage of a saved pipeline) is confirmed with generic text only; the UI never shows how many opportunities sit in it, and removing a stage in the editor just drops it locally, so deals in that stage may be orphaned on save; server behaviour is undeterminable (apps/web/src/app/_components/crm/PipelineEditor.tsx:337,264).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['DELETE /v1/crm/pipelines/:id', 'PUT /v1/crm/pipelines/:id']`
 - **Question:** Does delete or stage removal return 409 when deals reference the pipeline/stage instead of orphaning them?
@@ -5857,7 +5857,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRICE-BOOKS-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Two enabled books may carry identical criteria and the UI gives no warning or precedence; which one wins in Resolve is undeterminable because crm-service is absent (PriceBookEditor.tsx:104, lib/crm/quotation.ts:243).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['GET /v1/crm/price-books/resolve', 'POST/PUT /v1/crm/price-books']`
 - **Question:** Is there a deterministic precedence, or a uniqueness check, when two enabled books share identical criteria?
@@ -5868,7 +5868,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-QUALIFICATION-FRAMEWORKS-02  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** A framework is saved as one document including all questions with no version or conflict check; two admins editing at once overwrite each other, and questions removed from a saved framework may orphan answers already recorded on leads (undeterminable, service absent) (QualificationFrameworksEditor.tsx:110-125).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['PATCH /v1/crm/qualification-frameworks/:id', 'POST /v1/crm/qualification-frameworks', 'POST /v1/crm/leads/:id/qualify']`
 - **Question:** Does PATCH qualification-frameworks/:id require and check the row `version` (409 on stale) and does it reject or soft-retire removed question ids that leads already answered?
@@ -5879,7 +5879,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-QUALIFICATION-FRAMEWORKS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The delete dialog promises "This is recorded in the audit trail" but nothing on the page shows an audit entry, and audit is undeterminable from this snapshot (QualificationFrameworksEditor.tsx:281).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['DELETE /v1/crm/qualification-frameworks/:id']`
 - **Question:** Does the DELETE handler emit an audit event via @civitasone/events with actor, tenant and framework id (CLAUDE.md rule 8)?
@@ -5901,7 +5901,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-NEW-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** There is no received-date or mode-of-receipt field, so an RTI physically received days ago is registered with the clock starting whenever the form is filed (server default undeterminable); the 30-day statutory deadline is the register's core purpose (rti/new/page.tsx:105-260).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['POST /v1/crm/rti']`
 - **Question:** Does POST /v1/crm/rti accept a receivedDate (and mode) and compute the 30-day dueDate from it, defaulting to server now only when omitted?
@@ -5923,7 +5923,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-NEW-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** No due date, SLA class or intake channel (walk-in, phone, portal) is captured, and priority is freely chosen per request; the due date shown later on the detail page has no visible source here (undeterminable server default) (service-requests/new/page.tsx:120-135).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['POST /v1/crm/service-requests']`
 - **Question:** Does the create handler derive dueDate/SLA class from serviceType and priority server-side, and are channel/dueDate accepted in the schema?
@@ -5934,7 +5934,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-VOICE-OF-CUSTOMER-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Average Score prints "n / 100" while Mixed/Negative thresholds are +15 and -15, implying a signed scale (a -22 would read "-22 / 100"); the actual scale is undeterminable because @civitasone/types is absent (voc.ts:25, voice-of-customer/page.tsx:105).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['GET /v1/crm/sentiment/summary']`
 - **Question:** Is averageScore in the sentiment summary on a 0-100 scale or a signed -100..+100 scale?

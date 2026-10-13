@@ -14,7 +14,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-HOME-01  ·  HIGH  ·  partly  ·  theme NAV (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Eight routes under /citizen have no tile and no other in-app link: catalogue, intake, documents, eligibility, payments, certificates, discovery, appeals (grep of apps/web/src finds no href to them outside their own pages; page.tsx:6-15). Reachable only by typing the URL.
 - **Verified evidence:** citizen/page.tsx:6-15 lists 8 tiles (requests, rti, grievances, feedback, portal, alerts, notices, surveys). Repo-wide grep of apps/web/src finds no link to /citizen/intake, documents, eligibility, payments, discovery or appeals (only fetch URLs to /api/.../citizen/*). Two of the eight do have in-app links, contrary to the observation: /citizen/catalogue (TrackClient.tsx:64, ServiceRuntimeFlow.tsx:265, services/[serviceKey]/page.tsx:41 back links) and /citizen/certificates (TrackClient.tsx:121) - but those pages are only reachable from the catalogue itself, so it is effectively orphaned too. navRouteManifest.ts lists only /citizen and /citizen/grievances.
 - **Files to change:** `apps/web/src/app/(app)/citizen/page.tsx`, `apps/web/src/messages/en.json (+hi/kn/ta/te)`, `apps/web/src/app/_components/navRouteManifest.ts`
@@ -31,7 +31,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle says 'Grievances, service requests, and RTI applications' (messages en.json citizen.description) but the module also hosts the whole SVC-081..090 service-delivery lifecycle.
 - **Verified evidence:** messages/en.json:513 citizen.description = 'Grievances, service requests, and RTI applications.' and page.tsx:20 passes it as the subtitle. The module directory hosts catalogue, intake, documents, eligibility, payments, certificates, discovery, appeals, services/[serviceKey] (SVC-081..090), which the copy omits.
 - **Files to change:** `apps/web/src/messages/en.json`, `apps/web/src/messages/hi.json`, `apps/web/src/messages/kn.json`, `apps/web/src/messages/ta.json`, `apps/web/src/messages/te.json`
@@ -46,7 +46,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Page uses legacy PageShell (bg-slate-50, text-3xl) while every sibling route uses PageHeader (page.tsx:3,19).
 - **Verified evidence:** citizen/page.tsx:3,19 uses PageShell (_components/PageShell.tsx: min-h-screen bg-slate-50 p-6, h1 text-3xl). Within the citizen tree it is the only PageShell user (grep); all sibling routes use ds PageHeader, which supports help and back. Nested inside the (app) shell this double-pads and adds a slate background that ignores dark mode tokens.
 - **Files to change:** `apps/web/src/app/(app)/citizen/page.tsx`
@@ -61,7 +61,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-HOME-04  ·  LOW  ·  confirmed  ·  theme NAV (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** not-found.tsx renders an EmptyState with no back-to-Citizen action (not-found.tsx:8-11).
 - **Verified evidence:** citizen/not-found.tsx:8-11 renders EmptyState with title/message only. EmptyState (ds/EmptyState.tsx) accepts an `action` ReactNode that is unused, so a mistyped citizen URL offers no way back.
 - **Files to change:** `apps/web/src/app/(app)/citizen/not-found.tsx`, `apps/web/src/messages/en.json`
@@ -81,7 +81,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-ALERTS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch reads as good news on the stat cards: page.tsx:9-29 counts from `alerts` even when source==='error' (empty array), so four real zeros show above the badge. Sibling portal/page.tsx null-gates (UX-013).
 - **Verified evidence:** page.tsx:8 destructures only data/source and never checks source; on error `alerts` is [] (loaders.ts:3413 default) so :10-12 and :26-29 render four real-looking zeros (Active 0, Total 0, Expired 0, Drafts 0). AlertsTable (AlertsTable.tsx:48-50) shows the error-no-data badge but also the 'No alerts published' EmptyState for an outage. Sibling citizen pages (appeals/catalogue/certificates) already use toResourceState and em dashes.
 - **Files to change:** `apps/web/src/app/(app)/citizen/alerts/page.tsx`, `apps/web/src/app/(app)/citizen/alerts/AlertsTable.tsx`
@@ -96,7 +96,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-ALERTS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status counts use exact-case 'Active'/'Expired'/'Draft' (page.tsx:10-12) while the table paints any string via cellType 'status'; any other casing/status (e.g. 'scheduled', 'active') is uncounted and 'Total Published' includes Drafts (page.tsx:27).
 - **Verified evidence:** page.tsx:10-12 compare status with exact-case 'Active'/'Expired'/'Draft'; CitizenAlert.status is a free string (loaders.ts:3409, mapped by bare cast at :3416, no normalisation). DataTable status column (AlertsTable.tsx:65) shows any string, so 'active'/'scheduled' render but are uncounted. Allowed backend values cannot be verified (citizen service absent).
 - **Files to change:** `apps/web/src/app/(app)/citizen/alerts/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -113,7 +113,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-ALERTS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Total Published' = alerts.length includes Draft rows, contradicting its own label (page.tsx:27).
 - **Verified evidence:** page.tsx:27 `value={alerts.length}` under label statTotal='Total Published' (messages/en.json:521); alerts.length includes Draft rows counted in :12. Label and value disagree. Theme I18N is wrong; strings are already in next-intl.
 - **Files to change:** `apps/web/src/app/(app)/citizen/alerts/page.tsx`, `apps/web/src/messages/en.json`
@@ -127,7 +127,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-ALERTS-04  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Published date printed raw (ISO / empty) while requests and RTI pages format via formatIndianDate (AlertsTable.tsx:63).
 - **Verified evidence:** AlertsTable.tsx:63 defines the publishedDate column with no render/cellType, and the row builder (:30-37) passes a.publishedDate unchanged; DataTable.cellValue (DataTable.tsx:126-138) falls to String(value). RTIClient.tsx:139-140 pre-formats with formatIndianDate (lib/formatters.ts:2, output dd/mm/yyyy en-IN, not 'dd Mon yyyy').
 - **Files to change:** `apps/web/src/app/(app)/citizen/alerts/AlertsTable.tsx`
@@ -162,7 +162,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-APPEALS-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Appeal is filed against a raw 'Application ID (UUID, optional)' typed by hand (AppealPanel.tsx:43-44); with the ID optional an appeal can be filed against nothing.
 - **Verified evidence:** AppealPanel.tsx:44-45 is a free-text input labelled 'Application ID (UUID, optional)' (en.json:538); submit is disabled only by `!grounds || !decisionDate` (:52) and the body sends `applicationId: applicationId || undefined` (:30), so an appeal can be filed with no application and with a mistyped UUID. Also the citizen can type the filing window (`windowDays`, :48-49), which should come from the decision/service. No EntityPicker exists in the repo (grep finds none). Backend validation of applicationId cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/appeals/AppealPanel.tsx`, `apps/web/src/app/(app)/citizen/appeals/page.tsx`, `apps/web/src/app/_components/ds/EntityPicker.tsx (new)`, `apps/web/src/messages/en.json`
@@ -180,7 +180,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-APPEALS-03  ·  MEDIUM  ·  confirmed  ·  theme COPYMISMATCH (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle promises 'appellate authority assignment, hearings and orders' but the list shows only type, grounds, deadline, status and outcome (appeals/page.tsx:41-47).
 - **Verified evidence:** en.json:536 subtitle: 'track appellate authority assignment, hearings and orders'. The list (appeals/page.tsx:41-47) has only type, grounds, deadline, status, outcome, and AppealSummary (citizenPartials.ts:49-56) has no authority/hearing/order fields. Wrong theme: this is copy/feature mismatch.
 - **Files to change:** `apps/web/src/messages/en.json`, `apps/web/src/app/(app)/citizen/appeals/page.tsx`
@@ -193,7 +193,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-APPEALS-04  ·  MEDIUM  ·  confirmed  ·  theme ERRORCOPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Error text from a failed POST is res.text() shown raw in role=alert (AppealPanel.tsx:34,63) except for FILING_WINDOW_EXPIRED.
 - **Verified evidence:** AppealPanel.tsx:33-34 throws Error(txt) with the raw response body (only FILING_WINDOW_EXPIRED is special-cased), catch at :37 stores e.message, rendered at :60 in role=alert. A JSON error envelope, stack text or internal code would be shown to the citizen. Also line 57 prints raw status and unformatted filingDeadline ('Filing deadline was ...').
 - **Files to change:** `apps/web/src/app/(app)/citizen/appeals/AppealPanel.tsx`, `apps/web/src/messages/en.json`
@@ -208,7 +208,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-APPEALS-05  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** No pagination or filtering on the list; grounds truncated with ellipsis and no way to read the full text (appeals/page.tsx:52).
 - **Verified evidence:** appeals/page.tsx:39-60 renders every row of getAppeals() (citizenPartials.ts:57, no page/limit params) in a plain table with no filter, sort or pagination; :53 uses whiteSpace:nowrap + ellipsis with no title, so grounds text is unreadable beyond 320px. Server-side row cap of the endpoint cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/appeals/page.tsx`, `apps/web/src/app/(app)/citizen/appeals/AppealsTable.tsx (new)`, `apps/web/src/app/_data/citizenPartials.ts`
@@ -223,7 +223,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-APPEALS-06  ·  LOW  ·  partly  ·  theme RAWCODE (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Table status/type printed as raw codes ('first', 'under_review'); the list has no link to the application (appeals/page.tsx:52-56).
 - **Verified evidence:** page.tsx:52,55 print appealType and status raw ('first', 'under_review'; loader defaults 'appeal'/'filed', citizenPartials.ts:64-65). 'No link to the application' is real but not fixable in the page alone: AppealSummary (citizenPartials.ts:49-56) does not carry applicationId, so nothing to link. Theme DEADROUTE is wrong.
 - **Files to change:** `apps/web/src/app/(app)/citizen/appeals/page.tsx`, `apps/web/src/app/_data/citizenPartials.ts`
@@ -245,7 +245,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-CATALOGUE-01  ·  HIGH  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Table has 5 <th> but 6 <td>: the SLA value (slaDays) renders in an unlabeled sixth column (catalogue/page.tsx:40-44 vs 55-60), so the subtitle's 'SLA' is unlabeled and breaks table semantics.
 - **Verified evidence:** catalogue/page.tsx:40-44 declare 5 <th> (Service, Owner, Version, Channels, Documents); rows emit 6 <td> (:52-60), the last being slaDays formatted `${n}d`. The SLA cell has no header although the subtitle (en.json:554) advertises SLA. No colSla key exists in citizenCatalogue.
 - **Files to change:** `apps/web/src/app/(app)/citizen/catalogue/page.tsx`, `apps/web/src/messages/en.json`
@@ -259,7 +259,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-CATALOGUE-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Raw serviceKey shown under each name and channels printed as comma-joined codes ('portal, whatsapp') (catalogue/page.tsx:53-58).
 - **Verified evidence:** page.tsx:54 prints s.serviceKey as a muted line under the service name; :58 `s.channels.join(', ')` prints raw codes (loader passes strings through, citizenPartials.ts:41). serviceKey is also the URL slug, so showing it is developer-facing detail for citizens.
 - **Files to change:** `apps/web/src/app/(app)/citizen/catalogue/page.tsx`, `apps/web/src/messages/en.json`
@@ -272,7 +272,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-CATALOGUE-03  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Catalogue is a register-style table with no search, filter or sort, no category grouping and no direct Apply link; a citizen must open each service page (catalogue/page.tsx:36-64).
 - **Verified evidence:** True that the list has no search, filter, sort or category (page.tsx:36-64 is a static table; CatalogueService has no category field, citizenPartials.ts:20-28 region). Overstated: the service name is already a Link to /citizen/services/[serviceKey] (page.tsx:51), and that route has an apply sub-route (services/[serviceKey]/apply), so an Apply path exists but not a direct button in the row.
 - **Files to change:** `apps/web/src/app/(app)/citizen/catalogue/page.tsx`, `apps/web/src/app/(app)/citizen/catalogue/CatalogueTable.tsx (new)`
@@ -288,7 +288,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-CATALOGUE-04  ·  MEDIUM  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Page shows 'Published' definitions only; the Service ID (UUID) that Intake, Documents, Eligibility and Payments require is never displayed here, so those screens cannot be filled from this one.
 - **Verified evidence:** True: loader captures s.id (citizenPartials.ts:35) but the page never displays it, and Intake/Documents ask for a typed 'Service ID' (IntakePanel.tsx:18,66-67 with UUID placeholder; DocumentPanel.tsx:18). Better fix than showing UUIDs: those panels should not need typing them. Note the observation says page shows only Published - correct per endpoint name catalogue/published.
 - **Files to change:** `apps/web/src/app/(app)/citizen/intake/IntakePanel.tsx`, `apps/web/src/app/(app)/citizen/documents/DocumentPanel.tsx`, `apps/web/src/app/(app)/citizen/eligibility`, `apps/web/src/app/(app)/citizen/payments`, `apps/web/src/app/(app)/citizen/catalogue/page.tsx`
@@ -324,7 +324,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-CERTIFICATES-02  ·  HIGH  ·  partly  ·  theme TOKEN-UX (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Verify token is truncated to 12 characters + '…' in the list (certificates/page.tsx:58), so the register cannot be used to copy a working token; no copy button, QR or download.
 - **Verified evidence:** certificates/page.tsx:58 shows `verifyToken.slice(0,12)…` in monospace 11px; no copy control, QR or download anywhere on the page. Truncation is real, but likely a deliberate secret-hygiene choice (the token is a bearer for the public verify endpoint), so 'cannot copy' is not necessarily a defect; and it conflicts with -04. Theme I18N is wrong.
 - **Files to change:** `apps/web/src/app/(app)/citizen/certificates/page.tsx`
@@ -340,7 +340,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-CERTIFICATES-03  ·  MEDIUM  ·  confirmed  ·  theme COPYMISMATCH (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle promises maker-checker issuance, gapless numbering and signed output — the page has no issuance action, approval queue or download (certificates/page.tsx:21-24).
 - **Verified evidence:** en.json:565 subtitle promises 'Maker-checker issuance with gapless numbering, signed output and QR verification'. certificates/page.tsx renders only a verify form and a read-only register; there is no issue/approve action, queue or download. Whether the backend implements maker-checker is not visible. Copy/feature mismatch, not a CONFIRM-dialog gap.
 - **Files to change:** `apps/web/src/messages/en.json`, `apps/web/src/app/(app)/citizen/certificates/page.tsx`
@@ -353,7 +353,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-CERTIFICATES-04  ·  MEDIUM  ·  partly  ·  theme PII (was ROLEGATE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Verify result exposes payloadHash to any signed-in user (CertificateVerify.tsx:70) and status/type as raw codes; verifyToken appears in the clear (12 chars) in a register visible to every user.
 - **Verified evidence:** CertificateVerify.tsx:68-69 print certType/status raw and :71 (not :70) prints payloadHash (:70 is validTo). The register (page.tsx:52-59) lists tokens (12 chars) under only ModuleGate (citizen/layout.tsx), no role check. Whether the verify endpoint and register are tenant/owner-scoped or public cannot be verified (service absent); payloadHash is a digest, low sensitivity but not needed by a citizen.
 - **Files to change:** `apps/web/src/app/(app)/citizen/certificates/CertificateVerify.tsx`, `apps/web/src/app/(app)/citizen/certificates/page.tsx`
@@ -369,7 +369,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-CERTIFICATES-05  ·  MEDIUM  ·  confirmed  ·  theme ERRORCOPY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Error copy on a failed verify is res.text() shown raw (CertificateVerify.tsx:37,58).
 - **Verified evidence:** CertificateVerify.tsx:37 `throw new Error((await res.text()) || 'Verification failed.')`, caught at :39-40 and rendered at :57 in role=alert. Raw response bodies reach the user; strings 'Verification failed.', 'Certificate is ...', 'Certificate not found' (:63) are also hard-coded English, not next-intl.
 - **Files to change:** `apps/web/src/app/(app)/citizen/certificates/CertificateVerify.tsx`, `apps/web/src/messages/en.json`
@@ -384,7 +384,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-CERTIFICATES-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'active' stat counts amended and renewed as active (certificates/page.tsx:17) but the column shows the raw status.
 - **Verified evidence:** page.tsx:17 counts status active|amended|renewed as 'active' while the status column (:56) prints the raw status; a row marked 'renewed' is counted active but labelled otherwise, and 'renewed' of an old certificate may actually be superseded. Backend status semantics cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/certificates/page.tsx`
@@ -405,7 +405,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-DISCOVERY-01  ·  HIGH  ·  confirmed  ·  theme CONSENT (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** DPDP consent is granted by whoever types a citizen UUID and presses 'Grant consent' (DiscoveryPanel.tsx:29-34,68): no proof the citizen consented, no purpose text, no withdrawal control, no consent record shown on the page.
 - **Verified evidence:** DiscoveryPanel.tsx:26-38 grant() POSTs only {citizenId} to /api/proxy/v1/citizen/discovery/consent; button at :68 enabled by any non-empty citizenId (no UUID validation). Any operator can record consent on a citizen's behalf; UI has no purpose text, no withdraw control, no list of consent records (en.json citizenDiscovery has no such keys). Server-side consent evidence/actor logging cannot be verified: citizen service absent from snapshot (only hrms-service present). Theme is consent, not masking.
 - **Files to change:** `apps/web/src/app/(app)/citizen/discovery/DiscoveryPanel.tsx`, `apps/web/src/app/(app)/citizen/discovery/page.tsx`, `apps/web/src/messages/en.json`
@@ -424,7 +424,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-DISCOVERY-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Run discovery notifies matched citizens as a side effect ('found and notified', DiscoveryPanel.tsx:54) with no preview or confirmation step — a batch messaging action behind a plain submit.
 - **Verified evidence:** run() at DiscoveryPanel.tsx:40-58 submits directly to /discovery/run; success text 'N likely-eligible service(s) found and notified' (:54) uses body.notified. The DiscoveryMatch type (citizenGaps.ts:93-99) has notified boolean, confirming notification is a side effect. No preview/dry-run endpoint is known; whether the API supports dry-run is cannot-verify (service absent). Maker-checker is overkill here; a confirm is reasonable.
 - **Files to change:** `apps/web/src/app/(app)/citizen/discovery/DiscoveryPanel.tsx`, `apps/web/src/messages/en.json`
@@ -441,7 +441,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-DISCOVERY-03  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Matches list shows raw Service UUIDs and raw outcome/strength codes (DiscoveryPanel.tsx:78); getDiscoveryMatches (citizenGaps.ts:92) exists but no history is shown.
 - **Verified evidence:** Match list renders {m.serviceId} — {m.outcome} (strength) at DiscoveryPanel.tsx:80 (raw UUID, raw code). getDiscoveryMatches exists in apps/web/src/app/_data/citizenGaps.ts:100 (GET /api/v1/citizen/discovery/matches?citizenId=) but is imported nowhere (grep) so no history. Citizen ID is also hand-typed (:64). Catalogue (citizen/catalogue/page.tsx) shows name + serviceKey, and getServices could map id->name.
 - **Files to change:** `apps/web/src/app/(app)/citizen/discovery/DiscoveryPanel.tsx`, `apps/web/src/app/(app)/citizen/discovery/page.tsx`, `apps/web/src/app/_data/citizenGaps.ts`, `apps/web/src/messages/en.json`
@@ -458,7 +458,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-DISCOVERY-04  ·  MEDIUM  ·  partly  ·  theme ERRORCOPY (was ROLEGATE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Error copy is res.text() raw for anything but 403 (DiscoveryPanel.tsx:52,58); success/error messages are hard-coded English literals, not next-intl keys.
 - **Verified evidence:** Error handling: 403 gets a fixed English message (:50), any other non-OK throws raw res.text() (:51, :33), raw text shown at :72. Messages 'Consent recorded.', 'Discovery failed.', 'Profile must be valid JSON.' are hard-coded English (:34,:45,:51,:54). True. But it is an error-copy/i18n issue, not role gating; no role guard exists in the component (server role enforcement cannot be verified).
 - **Files to change:** `apps/web/src/app/(app)/citizen/discovery/DiscoveryPanel.tsx`, `apps/web/src/messages/en.json`
@@ -473,7 +473,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-DISCOVERY-05  ·  MEDIUM  ·  confirmed  ·  theme SAMPLEDATA (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Profile is a free JSON textarea with a sample prefilled (age 65) that is submitted as-is if untouched (DiscoveryPanel.tsx:20,64).
 - **Verified evidence:** DiscoveryPanel.tsx:20 initial state '{"age":65,"income_proof":"x"}'; submit at :44-48 parses and posts it untouched; textarea free JSON (:66). Same sample as EligibilityCheck.tsx:17. Fabricated sample data is sent as the citizen's real profile.
 - **Files to change:** `apps/web/src/app/(app)/citizen/discovery/DiscoveryPanel.tsx`, `apps/web/src/messages/en.json`
@@ -496,7 +496,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-DOCUMENTS-02  ·  HIGH  ·  confirmed  ·  theme CONSENT (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** DigiLocker 'fetch' is fabricated client-side: docUri = `digilocker://${docType}` (DocumentPanel.tsx:38) with no OAuth/consent redirect and no citizen consent capture — DPDP-relevant document access by the operator.
 - **Verified evidence:** DocumentPanel.tsx:38 sends docUri: `digilocker://${docType}` to /v1/citizen/documents/digilocker-fetch; no OAuth redirect, no citizen consent step. Result text shows 'provider not configured' when configured===false (:72), suggesting backend stubs the provider. Real DigiLocker flow needs citizen authorisation; backend behaviour cannot be verified. Theme is consent/integration, not masking.
 - **Files to change:** `apps/web/src/app/(app)/citizen/documents/DocumentPanel.tsx`, `apps/web/src/messages/en.json`
@@ -513,7 +513,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-DOCUMENTS-03  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Every action needs hand-typed Service and Application UUIDs (DocumentPanel.tsx:58-63); nothing on the page or the catalogue shows those IDs to copy.
 - **Verified evidence:** DocumentPanel.tsx:59-62 two plain text inputs for Service ID and Application ID (UUID); catalogue page lists name/serviceKey only, never the UUID (catalogue/page.tsx:49-53). Upload/Load checklist disabled unless serviceId set (:66,:82). No copyable IDs anywhere.
 - **Files to change:** `apps/web/src/app/(app)/citizen/documents/DocumentPanel.tsx`, `apps/web/src/app/(app)/citizen/documents/page.tsx`, `apps/web/src/messages/en.json`
@@ -529,7 +529,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-DOCUMENTS-04  ·  MEDIUM  ·  confirmed  ·  theme ENUMLABEL (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Verification result reads raw statuses ('pending', 'provider not configured') and doc types as codes like id_proof (DocumentPanel.tsx:73-78,98-101).
 - **Verified evidence:** Result shows 'verification {uploaded.verificationStatus}' and '(DigiLocker: {providerStatus} — provider not configured)' at DocumentPanel.tsx:71-72; checklist 'Source: {source} · complete/incomplete' (:86) and docType is a free text input placeholder id_proof (:64), label falls back to raw docType (:94). English literals, no i18n.
 - **Files to change:** `apps/web/src/app/(app)/citizen/documents/DocumentPanel.tsx`, `apps/web/src/messages/en.json`
@@ -561,7 +561,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-DOCUMENTS-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Success panel uses a hard-coded #f8fafc surface and English literals rather than tokens/next-intl (DocumentPanel.tsx:74-77).
 - **Verified evidence:** DocumentPanel.tsx:70 uses background 'var(--surface, #f8fafc)' (token with hex fallback - overstated, not purely hard-coded); message literals 'Submitted — verification' (:71-72) and colours #067647/#b42318 (:75,:91) are hard-coded English/hex. Theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/(app)/citizen/documents/DocumentPanel.tsx`, `apps/web/src/messages/en.json`
@@ -581,7 +581,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-ELIGIBILITY-01  ·  HIGH  ·  confirmed  ·  theme USABILITY (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Eligibility is checked by pasting a JSON blob of applicant attributes and a raw Service UUID (EligibilityCheck.tsx:47-52); the prefilled sample ({age: 65, income_proof: 'x'}) will be submitted as-is. Non-technical clerks cannot use this, and attributes may include income/caste data (DPDP) typed in the clear.
 - **Verified evidence:** EligibilityCheck.tsx:16-17 serviceId input (:52) and JSON textarea prefilled with {age:65,income_proof:'x'} (:17,:54), parsed and posted as-is (:27-31). Non-technical use is hard. Attributes are sent via proxy over HTTPS, so 'typed in the clear' is overstated (it's a visible textarea); masking is not the fix. Server-side logging of attributes cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/eligibility/EligibilityCheck.tsx`, `apps/web/src/app/(app)/citizen/eligibility/page.tsx`, `apps/web/src/messages/en.json`
@@ -598,7 +598,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-ELIGIBILITY-02  ·  HIGH  ·  partly  ·  theme ENUMLABEL (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Outcome shown to the operator only as raw codes ('eligible', 'not_eligible') and the reason strings from the API; no explanation of what data was used or an audit reference for the decision (EligibilityCheck.tsx:63-74).
 - **Verified evidence:** EligibilityCheck.tsx:63-74 shows 'Outcome: {result.outcome}' raw code (eligible/not_eligible) and reason.message strings; reviewStatus 'pending' adds '(manual review queued)'. Result type (:10-11) has no audit id or inputs used, so an audit reference cannot be shown without a backend field. Not a date-format issue.
 - **Files to change:** `apps/web/src/app/(app)/citizen/eligibility/EligibilityCheck.tsx`, `apps/web/src/messages/en.json`
@@ -614,7 +614,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-ELIGIBILITY-03  ·  MEDIUM  ·  confirmed  ·  theme COPY (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle promises 'maker-checker publish' but the page is read-only for rule sets — no publish or approve control (eligibility/page.tsx:19-22; designer/_data/eligibilityBuilderApi.ts owns authoring).
 - **Verified evidence:** messages citizenEligibility.pageSubtitle = 'Versioned rule sets (maker-checker publish) and applicant eligibility checks.'; page.tsx:19-22 renders it but the page has only the checker form and a read-only table (:26-60); no publish/approve control. Authoring lives elsewhere (designer/_data/eligibilityBuilderApi.ts, not checked further). Fix is copy plus link, not a confirm dialog.
 - **Files to change:** `apps/web/src/messages/en.json`, `apps/web/src/app/(app)/citizen/eligibility/page.tsx`
@@ -629,7 +629,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-ELIGIBILITY-04  ·  MEDIUM  ·  confirmed  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Invalid JSON error 'Subject must be valid JSON.' names the field 'subject' while the label reads 'Applicant attributes (JSON)' (EligibilityCheck.tsx:27).
 - **Verified evidence:** EligibilityCheck.tsx:27 throws 'Subject must be valid JSON.' while label t('subjectLabel') = 'Applicant attributes (JSON)' and state var is `subject`. Also error is displayed via setError(e.message) (:36). Trivial wording mismatch.
 - **Files to change:** `apps/web/src/app/(app)/citizen/eligibility/EligibilityCheck.tsx`, `apps/web/src/messages/en.json`
@@ -663,7 +663,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-FEEDBACK-01  ·  HIGH  ·  partly  ·  theme PLACEHOLDER (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Dead-end tile: /citizen home links 'Feedback' (page.tsx:9 of home) but the page is a permanent empty state with no data source, no form and no way to submit feedback (feedback/page.tsx:15-21).
 - **Verified evidence:** Home tile exists (citizen/page.tsx:10 in this snapshot, not :9). feedback/page.tsx:14-20 renders only an EmptyState; no loader/form. No feedback route/API elsewhere in citizen dir. Page loads (not a 404), so 'dead route' is really 'placeholder module'.
 - **Files to change:** `apps/web/src/app/(app)/citizen/page.tsx`, `apps/web/src/app/(app)/citizen/feedback/page.tsx`, `apps/web/src/messages/en.json`
@@ -677,7 +677,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-FEEDBACK-02  ·  MEDIUM  ·  confirmed  ·  theme COPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Empty message refers to 'the feedback module' being enabled — an internal concept — with no action for the user (messages en.json citizenFeedback.emptyMessage).
 - **Verified evidence:** en.json citizenFeedback.emptyMessage = 'Citizen feedback submissions will appear here once the feedback module is enabled.'; no action supplied in EmptyState (feedback/page.tsx:15-19).
 - **Files to change:** `apps/web/src/messages/en.json`, `apps/web/src/app/(app)/citizen/feedback/page.tsx`
@@ -711,7 +711,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-GRIEVANCES-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Every register row links to /citizen/grievances/{id} (GrievancesTable.tsx:70-71) but no such route exists in the segment (only requests/[id] renders a grievance); clicking a row lands on citizen/not-found.
 - **Verified evidence:** GrievancesTable.tsx:168-169 rowLinkKey='id', rowLinkPrefix='/citizen/grievances/'. The grievances directory contains only new/, page, table, loading, error - no [id]. Grievance detail is served at /citizen/requests/[id] (getGrievanceDetail, requests/[id]/page.tsx:5). Row click yields 404. Theme is navigation, not loading.
 - **Files to change:** `apps/web/src/app/(app)/citizen/grievances/GrievancesTable.tsx`
@@ -725,7 +725,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-GRIEVANCES-02  ·  HIGH  ·  confirmed  ·  theme FABRICATED
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Due date is invented client-side: when the API sends no dueDate, the loader adds 30 days to createdAt (_data.ts:57-63) and the 'Days Left' clock shows it as a statutory deadline. CPGRAMS per-category timelines are not modelled.
 - **Verified evidence:** _data.ts:52-60 dueDate falls back to createdAt+30d when row has no dueDate/due_date; passed as dueDate and drives daysLeft (page.tsx:46). UI presents it as statutory clock (GrievancesTable clockCell). Also d.setDate mutates in local timezone. Per-category timelines are not modelled (cannot verify server side).
 - **Files to change:** `apps/web/src/app/(app)/citizen/_data.ts`, `apps/web/src/app/(app)/citizen/grievances/page.tsx`, `apps/web/src/app/(app)/citizen/grievances/GrievancesTable.tsx`, `apps/web/src/messages/en.json`
@@ -741,7 +741,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-GRIEVANCES-03  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Complainant name printed for every row to any signed-in user (GrievancesTable.tsx:60) — DPDP personal data with no role gate.
 - **Verified evidence:** GrievancesTable.tsx:159 (col, not :60) prints complainantName for all rows. The page is behind authenticated app shell; role gating is not done in web (moduleVisibility may gate route; not verified). Names are in a staff register - masking depends on policy. No Masked component exists (only admin integrations secretMasked).
 - **Files to change:** `apps/web/src/app/(app)/citizen/grievances/GrievancesTable.tsx`, `apps/web/src/lib/mask.ts`
@@ -770,7 +770,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-GRIEVANCES-05  ·  MEDIUM  ·  confirmed  ·  theme TIMEZONE (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** TODAY is computed at module load (new Date().toISOString().slice(0,10), page.tsx:11) so a long-lived server process keeps yesterday's date and UTC midnight skews IST by 5.5 h — days-left can be off by one.
 - **Verified evidence:** grievances/page.tsx:10 const TODAY = new Date().toISOString().slice(0,10) at module scope: fixed at server start (stale in long-lived process; page has no dynamic export so may also be statically cached with revalidate) and UTC date (IST off between 00:00-05:30 IST). daysRemaining uses Math.round on UTC-midnight difference (:18). dueDate slice(0,10) in _data.ts:59 is UTC too.
 - **Files to change:** `apps/web/src/app/(app)/citizen/grievances/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -785,7 +785,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-GRIEVANCES-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Register CTA '+ Register Grievance' keeps a literal '+' in the translated string (messages en.json grievances.register).
 - **Verified evidence:** en.json grievances.register = '+ Register Grievance' used at grievances/page.tsx:56.
 - **Files to change:** `apps/web/src/messages/en.json`
@@ -804,7 +804,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-GRIEVANCES-NEW-01  ·  HIGH  ·  confirmed  ·  theme CONSENT (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** DPDP consent is checked in the browser only: dpdpConsent is absent from the POST body (new/page.tsx:46-52), so no consent record, timestamp or notice version reaches the server or the audit trail; §4(a)/180-day retention promises are unenforceable from this screen.
 - **Verified evidence:** new/page.tsx:218-223 body has subject, description, category, complainantName only; dpdpConsent used just to enable submit (:421) and guard (:210). No consent flag/time/noticeVersion sent. Server handling cannot be verified; may derive nothing. Retention (180 days) is claimed in en.json dpdpNoticeBody but not enforceable from UI.
 - **Files to change:** `apps/web/src/app/(app)/citizen/grievances/new/page.tsx`, `apps/web/src/messages/en.json`
@@ -819,7 +819,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-GRIEVANCES-NEW-02  ·  HIGH  ·  partly  ·  theme PROCESS (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Applicant name' is free text sent as complainantName; a signed-in officer can file on anyone's behalf with no contact field, no identity link and no acknowledgement of who filed (new/page.tsx:46-52).
 - **Verified evidence:** Applicant name is free text -> complainantName (new/page.tsx:222). No identity link, contact or filed-by in the body; the proxy adds auth so the server can know the officer, but the UI never shows filed-by and never captures citizenId. Whether the server records the filing officer is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/citizen/grievances/new/page.tsx`
@@ -834,7 +834,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-GRIEVANCES-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme FEEDBACK (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Success gives no acknowledgement or grievance number: the page redirects to the register immediately (new/page.tsx:63-64); the citizen never sees a reference to quote.
 - **Verified evidence:** new/page.tsx:235-236 after res.ok does router.push('/citizen/grievances') and refresh; response body is not read, so no grievanceNo. The list page also generates GRV-<id8> if no number (grievances/_data.ts:38-41).
 - **Files to change:** `apps/web/src/app/(app)/citizen/grievances/new/page.tsx`, `apps/web/src/messages/en.json`
@@ -849,7 +849,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-GRIEVANCES-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme CONSENT (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Contact details are promised in the DPDP notice ('name, contact details') but no contact field exists in the form (messages en.json grievances.dpdpNoticeBody vs new/page.tsx:100-165).
 - **Verified evidence:** en.json grievances.dpdpNoticeBody says data processed includes 'name, contact details, and grievance description'; form (new/page.tsx:257-333) has name, category, subject, description only.
 - **Files to change:** `apps/web/src/app/(app)/citizen/grievances/new/page.tsx`, `apps/web/src/messages/en.json`
@@ -864,7 +864,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-GRIEVANCES-NEW-05  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Category labels and the two validation messages are hard-coded English (new/page.tsx:23-29,35,40) and an 'Applicant name *' label carries a literal asterisk in the translation.
 - **Verified evidence:** new/page.tsx:195-201 CATEGORIES labels English literals; :207,:212 validation messages hard-coded; en.json applicantNameLabel 'Applicant name *' and consentCheckboxLabel ends with ' *' inside the string. Also the category list is hardcoded with only 5 values.
 - **Files to change:** `apps/web/src/app/(app)/citizen/grievances/new/page.tsx`, `apps/web/src/messages/en.json`
@@ -878,7 +878,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-GRIEVANCES-NEW-06  ·  LOW  ·  confirmed  ·  theme TENANTCONFIG (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Notice hard-codes mailto:dpo@gov.in for every tenant (new/page.tsx:196).
 - **Verified evidence:** new/page.tsx:359 hard-codes href="mailto:dpo@gov.in" and the visible address is inside en.json dpdpNoticeBody, not tenant config.
 - **Files to change:** `apps/web/src/app/(app)/citizen/grievances/new/page.tsx`, `apps/web/src/messages/en.json`, `apps/web/src/lib/orgConfig.ts`
@@ -898,7 +898,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-INTAKE-01  ·  HIGH  ·  confirmed  ·  theme OTHER (was UUID)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1934, verified on main 9c5e9e9e9)
 - **First-pass claim:** The intake form has only a Service UUID and a channel — no applicant, contact or form answers — so 'Application Intake' cannot capture an application; the real data-entry flow lives in the services/[serviceKey]/apply runtime (IntakePanel.tsx:62-83 vs services/_components/ServiceRuntimeFlow.tsx).
 - **Verified evidence:** IntakePanel.tsx:37-38 POSTs /v1/citizen/intake/drafts with only { serviceId, channel }; there is no applicant, contact, or formData field (form lines 60-90). The real capture flow is services/_components/ServiceRuntimeFlow.tsx (sends formData: values at :138/:199 and operatorId for counter mode). The page therefore creates an empty draft that is then 'acknowledged' with a tracking number.
 - **Files to change:** `apps/web/src/app/(app)/citizen/intake/page.tsx`, `apps/web/src/app/(app)/citizen/intake/IntakePanel.tsx`
@@ -915,7 +915,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-INTAKE-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Service ID (UUID) must be typed by hand; the catalogue does not display it (IntakePanel.tsx:66-67).
 - **Verified evidence:** IntakePanel.tsx:65-66 is a free-text input (placeholder '00000000-0000-4000-8000-000000000000', label 'Service ID (UUID)' in en.json:633). catalogue/page.tsx links rows by serviceKey (:51) and never prints the id, so a user cannot obtain the UUID from the UI. CatalogueService (citizenPartials.ts:19-29) does carry id, name, channels.
 - **Files to change:** `apps/web/src/app/(app)/citizen/intake/IntakePanel.tsx`, `apps/web/src/app/(app)/citizen/intake/page.tsx`, `apps/web/src/messages/en.json`
@@ -931,7 +931,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-INTAKE-03  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Submit for acknowledgement' has no confirmation and the draft disappears on success (IntakePanel.tsx:41-44); losing the draft id means a second submit cannot be retried.
 - **Verified evidence:** IntakePanel.tsx:43-47 submitDraft() posts .../submit immediately from a plain Button with no ConfirmDialog, then setDraft(null) (:47) so the draft id is dropped; the ack is kept in state (ack.applicationId, trackingNo) and tracking number is prefilled into trackNo, so the user is not left without a reference. Retry after failure is possible (draft is only cleared on success). Overstated: 'second submit cannot be retried' is true only after success, which is correct behaviour.
 - **Files to change:** `apps/web/src/app/(app)/citizen/intake/IntakePanel.tsx`
@@ -946,7 +946,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-INTAKE-04  ·  MEDIUM  ·  confirmed  ·  theme PII (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Assisted/counter channels record assistedBy but the form does not ask who is assisting or capture the applicant's consent for assisted entry (IntakePanel.tsx:84-86).
 - **Verified evidence:** IntakePanel.tsx:84-86 only displays draft.assistedBy returned from the server. The form sends { serviceId, channel } (:38) with no operatorId and no consent field. ServiceRuntimeFlow sends operatorId only when counterMode && assistedBy (:139) and also has no consent capture (grep 'consent' finds nothing in services/). Whether the server derives assistedBy from the JWT is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/citizen/intake/IntakePanel.tsx`, `apps/web/src/messages/en.json`
@@ -962,7 +962,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-INTAKE-05  ·  MEDIUM  ·  partly  ·  theme COPY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status and channel printed as raw codes ('submitted', 'counter', 'api'); the 'API' option is an untranslated literal (IntakePanel.tsx:75,105).
 - **Verified evidence:** IntakePanel.tsx:105 prints '{track.trackingNo} - status {track.status} ({track.channel})' with raw codes, and ack line :98 prints status raw; draft line :83 prints draft.channel raw ('counter'). The 'API' option (:75) is a literal, unlike the other channel options that use t(). Theme FABRICATED is wrong - nothing is hard-coded data. English hard-coded strings also: 'Draft saved (...)', 'status', 'assisted by'.
 - **Files to change:** `apps/web/src/app/(app)/citizen/intake/IntakePanel.tsx`, `apps/web/src/messages/en.json`
@@ -984,7 +984,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-NOTICES-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch shows four real zero stats and 'No notices published' under the badge (notices/page.tsx:10-29 never null-gates on source; NoticesTable.tsx:50-52).
 - **Verified evidence:** notices/page.tsx:8-9 destructures source but never gates: StatCards at :26-29 receive notices.length and filtered counts (0 on error, since the loader falls back to []). NoticesTable.tsx:50-52 shows EmptyState 'No notices published' when rows are empty, with DataSourceBadge above it (provenance 'error-no-data') - contradictory. Note useSeededResource may serve cached rows, so the table can be right while the stats (page.tsx) are 0.
 - **Files to change:** `apps/web/src/app/(app)/citizen/notices/page.tsx`, `apps/web/src/app/(app)/citizen/notices/NoticesTable.tsx`
@@ -1000,7 +1000,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-NOTICES-02  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Expired notices stay on the board: 'Expiry' is a column but nothing hides or flags rows past expiry (NoticesTable.tsx:66) — a citizen-facing notice board listing lapsed hearings.
 - **Verified evidence:** NoticesTable.tsx:66 passes expiry as a plain column; no code filters or flags rows whose expiry < today, and the page has no active/expired filter. Whether /api/v1/citizen/notices already excludes expired rows cannot be verified (citizen-service absent). Route is staff-side inside the (app) shell, not a public board.
 - **Files to change:** `apps/web/src/app/(app)/citizen/notices/NoticesTable.tsx`, `apps/web/src/messages/en.json`
@@ -1017,7 +1017,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-NOTICES-03  ·  MEDIUM  ·  partly  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Type column uses cellType 'status', so 'Statutory'/'Tender' render through StatusPill, whose colour map is for workflow statuses (NoticesTable.tsx:68).
 - **Verified evidence:** NoticesTable.tsx:68 sets cellType:'status' for type; DataTable.tsx:127 renders <StatusPill status=...>. STATUS_MAP has no 'statutory', 'tender' or 'public hearing' keys, so they fall back to variant 'info' (neutral blue) with humanizeStatus label ('Public Hearing' etc.). Labels are correct; only the semantic colour (workflow good/warn/bad) is not applicable. Overstated - no wrong colour is shown.
 - **Files to change:** `apps/web/src/app/(app)/citizen/notices/NoticesTable.tsx`
@@ -1030,7 +1030,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-NOTICES-04  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Dates (published, expiry) printed raw, not formatIndianDate (NoticesTable.tsx:66-67).
 - **Verified evidence:** NoticesTable.tsx:44-45 pass n.published and n.expiry through unformatted and the DataTable columns (:66-67) have no cellType/format, so ISO strings or API text print raw. formatIndianDate exists in lib/formatters.ts:2 and is used by the sibling CitizenRequestsClient. Also empty expiry would print blank rather than '—'.
 - **Files to change:** `apps/web/src/app/(app)/citizen/notices/NoticesTable.tsx`
@@ -1066,7 +1066,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-PAYMENTS-01  ·  HIGH  ·  partly  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Money is printed exactly as the API string with a separate 'Currency' column and 'INR 1500' in the receipt line (payments/page.tsx:48-49; PaymentPanel.tsx:32) — no ₹ symbol, no lakh grouping, no paise→rupee conversion (CLAUDE.md: money is paise bigint).
 - **Verified evidence:** payments/page.tsx:48-49 prints s.baseAmount (string from citizenGaps.ts:59, default '0') and s.currency in separate columns; PaymentPanel.tsx:32 prints `${body.currency} ${body.amount}` ('INR 1500'). No formatMoney/formatRupees (lib/formatters.ts:67,90). Unit of baseAmount (paise vs rupees) is not documented in the client; the designer uses baseAmountPaise (feeTypes.ts:41) but this endpoint's unit cannot be verified (citizen-service absent). Money not shown as INR with grouping is real.
 - **Files to change:** `apps/web/src/app/(app)/citizen/payments/page.tsx`, `apps/web/src/app/(app)/citizen/payments/PaymentPanel.tsx`, `apps/web/src/app/_data/citizenGaps.ts`
@@ -1082,7 +1082,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-PAYMENTS-02  ·  HIGH  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Record & issue receipt' posts a financial record on one click with no confirmation, no amount preview and no payer/receipt-mode fields; subject: {} means fee exemptions are never applied (PaymentPanel.tsx:25-30,52).
 - **Verified evidence:** PaymentPanel.tsx:25-30 posts {applicationId, scheduleId, subject: {}} on submit (no ConfirmDialog; button :52). Confirmed: no confirmation, no amount preview, no payer/receipt-mode/instrument fields, subject is always {} (so any exemption keyed on subject cannot apply - whether the server applies exemptions from the application is cannot-verify). Also line :31 throws raw res.text() into the visible error.
 - **Files to change:** `apps/web/src/app/(app)/citizen/payments/PaymentPanel.tsx`, `apps/web/src/messages/en.json`
@@ -1100,7 +1100,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-PAYMENTS-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed schedules fetch the list shows RefreshErrorState but the payment form silently offers 'No schedules' (payments/page.tsx:20,27-30; PaymentPanel.tsx:47).
 - **Verified evidence:** page.tsx:27 passes schedules.map(...) (empty on fetch error) to PaymentPanel regardless of `errored`; PaymentPanel.tsx:47 then renders option 'No schedules' and the submit stays disabled (!scheduleId). Only the list card below (page.tsx:29-32) shows RefreshErrorState. Also PaymentPanel's useState(scheduleId) initialises from schedules[0] once and will not update after router.refresh() recovery.
 - **Files to change:** `apps/web/src/app/(app)/citizen/payments/page.tsx`, `apps/web/src/app/(app)/citizen/payments/PaymentPanel.tsx`
@@ -1115,7 +1115,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-PAYMENTS-05  ·  MEDIUM  ·  confirmed  ·  theme COPY (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Subtitle promises payment intents, receipts and maker-checker refunds; the page offers only offline payment recording — no receipts list, no refund workflow (payments/page.tsx:18-21).
 - **Verified evidence:** en.json:669 subtitle promises 'payment intents, receipts and maker-checker refunds'; payments/page.tsx renders only PaymentPanel (offline record) and a schedules list. No refund UI exists in the citizen web tree (grep 'refund' finds nothing); receipts are only shown in the service-runtime TrackClient/ServiceRuntimeFlow. Payment intents exist only in services/_data/runtimeApi.ts:195.
 - **Files to change:** `apps/web/src/messages/en.json`, `apps/web/src/app/(app)/citizen/payments/page.tsx`
@@ -1128,7 +1128,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-PAYMENTS-06  ·  MEDIUM  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Application ID is a hand-typed UUID (PaymentPanel.tsx:49-50); the success line is not announced with the receipt link or a print action.
 - **Verified evidence:** PaymentPanel.tsx:49-50 is a hand-typed UUID input (label 'Application ID (UUID)' en.json:673). Success message :32 is a plain text status with receipt number only - no link to a receipt and no print action (PrintButton/PrintDocumentLink exist in _components). role=status makes it announced to screen readers, so the 'not announced' phrase is inaccurate.
 - **Files to change:** `apps/web/src/app/(app)/citizen/payments/PaymentPanel.tsx`
@@ -1144,7 +1144,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-PAYMENTS-07  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** No total or count in the schedules card header, unlike appeals/catalogue/certificates/eligibility (payments/page.tsx:25).
 - **Verified evidence:** payments/page.tsx:25 header is <strong>{t('listTitle')}</strong> only. Sibling pages (catalogue/appeals/certificates/eligibility) show counts per observation; low-impact consistency issue.
 - **Files to change:** `apps/web/src/app/(app)/citizen/payments/page.tsx`, `apps/web/src/messages/en.json`
@@ -1163,7 +1163,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-PORTAL-01  ·  MEDIUM  ·  partly  ·  theme NUMFMT (was MONEY)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Avg. Resolution Days shows a bare number ('6') with no unit or decimal handling; toLocaleString('en-IN') on a float gives up to 3 decimals (page.tsx:46).
 - **Verified evidence:** portal/page.tsx:46 uses metrics.avgResolutionDays.toLocaleString('en-IN') - default maxFractionDigits is 3, so 6.3333333 shows '6.333'. The unit is not missing: the card label is 'Avg. Resolution Days' (en.json statAvgResolutionDays). Theme MONEY is wrong (not money). Value is a number per mapCitizenPortalMetrics (loaders.ts:3383).
 - **Files to change:** `apps/web/src/app/(app)/citizen/portal/page.tsx`
@@ -1176,7 +1176,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-PORTAL-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Error state offers only the amber badge — no retry or help, unlike appeals/catalogue/etc. which use RefreshErrorState (page.tsx:20).
 - **Verified evidence:** portal/page.tsx:18-20,36: on error the stats show '—' (UX-013 already fixed zeros) and PageHeader actions shows DataSourceBadge only; no RefreshErrorState/retry. Other citizen pages (payments/page.tsx:29) use RefreshErrorState.
 - **Files to change:** `apps/web/src/app/(app)/citizen/portal/page.tsx`
@@ -1190,7 +1190,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-PORTAL-03  ·  LOW  ·  confirmed  ·  theme NAV (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stat cards are not links: 'Active Requests' does not lead to /citizen/requests (page.tsx:23-48).
 - **Verified evidence:** portal/page.tsx:23-48 StatCard usage has no href/onClick (ds StatCard exposes neither per grep). /citizen/requests exists. Low-value nicety.
 - **Files to change:** `apps/web/src/app/_components/ds/StatCard.tsx`, `apps/web/src/app/(app)/citizen/portal/page.tsx`
@@ -1203,7 +1203,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-PORTAL-04  ·  LOW  ·  confirmed  ·  theme LOADING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Loading state is a bare .skeleton div with aria-label 'Loading…' — no header or stat placeholders (portal/loading.tsx:1-6).
 - **Verified evidence:** portal/loading.tsx:3-5 returns a single div.skeleton with aria-label; notices/loading.tsx is identical. Page shape is PageHeader + 4-card StatGrid. Theme FABRICATED is wrong -> LOADING.
 - **Files to change:** `apps/web/src/app/(app)/citizen/portal/loading.tsx`, `apps/web/src/app/(app)/citizen/notices/loading.tsx`
@@ -1223,7 +1223,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-REQUESTS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch reads as good news: page.tsx:24 renders only the badge; stats show real 0s and the table says 'No service requests' (page.tsx:8-29; CitizenRequestsClient.tsx:60).
 - **Verified evidence:** requests/page.tsx:10,24 only renders <DataSourceBadge> when source==="error"; loader getCitizenRequests (_data/loaders.ts:3336) falls back to [] so StatCards (page.tsx:26-29) print 0 and CitizenRequestsClient.tsx:59-60 shows EmptyState 'No service requests'. No notFound() involved. RefreshErrorState (ds/RefreshErrorState.tsx) exists and is unused here.
 - **Files to change:** `apps/web/src/app/(app)/citizen/requests/page.tsx`, `apps/web/src/app/(app)/citizen/requests/CitizenRequestsClient.tsx`
@@ -1240,7 +1240,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-REQUESTS-02  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** DPDP: citizen phone numbers are printed unmasked and unconditionally in the register (CitizenRequestsClient.tsx:32,48) for any signed-in user; no role gate or masking.
 - **Verified evidence:** CitizenRequestsClient.tsx:13,32,48 always renders citizenPhone (raw value or '—') as a plain column; DataTable is filterable/sortable. page.tsx has no role/permission check and there is no <Masked> component in ds/ (only unrelated 'Masked' hits in admin/integrations). Whether the backend already strips/masks phone for low-privilege roles cannot be verified (citizen-service absent from snapshot).
 - **Files to change:** `apps/web/src/app/(app)/citizen/requests/CitizenRequestsClient.tsx`, `apps/web/src/app/_components/ds/Masked.tsx`, `apps/web/src/app/_components/ds/index.ts`
@@ -1256,7 +1256,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-REQUESTS-03  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Log Request' is shown to every user with the module; the created record goes to POST /v1/citizen/grievances with no complainant/consent fields (LogRequestButton.tsx:23-28), while the dedicated /citizen/grievances/new form collects name and DPDP consent — two intake paths with different obligations.
 - **Verified evidence:** LogRequestButton.tsx:25-28 POSTs only {category,subject,description} to /api/proxy/v1/citizen/grievances; no complainant name/contact/consent. The dedicated grievances/new form collects complainantName (grievances/new page ~line 50) and a mandatory DPDP consent checkbox (lines 17,38-40,164-206). The button is rendered unconditionally in page.tsx:22. Whether the backend fills complainant from the session cannot be verified (citizen-service absent).
 - **Files to change:** `apps/web/src/app/(app)/citizen/requests/LogRequestButton.tsx`, `apps/web/src/app/(app)/citizen/requests/page.tsx`, `apps/web/src/app/(app)/citizen/grievances/new/page.tsx`
@@ -1273,7 +1273,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-REQUESTS-04  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Breached' segment filters status==='breached' (CitizenRequestsClient.tsx:41-42) but no stat counts breaches and the SLA/breach state is never explained on this page; subtitle promises 'SLA & routing' yet there is no SLA column.
 - **Verified evidence:** CitizenRequestsClient.tsx:41-42 filters status==="breached"; page.tsx:12-14 stats count open/resolved/rejected/total only; COLUMNS (lines 27-34) have no SLA/due column; en.json citizenRequests.pageSubtitle = 'Grievances and service requests with SLA & routing.' Whether the API ever emits status 'breached' (vs a separate sla field) cannot be verified: CitizenRequestSummary type comes from an absent package.
 - **Files to change:** `apps/web/src/app/(app)/citizen/requests/CitizenRequestsClient.tsx`, `apps/web/src/app/(app)/citizen/requests/page.tsx`, `apps/web/src/messages/en.json`
@@ -1288,7 +1288,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-REQUESTS-05  ·  MEDIUM  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Segmented options 'All/Grievance/Service/Breached' are hard-coded English literals, not next-intl keys (CitizenRequestsClient.tsx:21).
 - **Verified evidence:** CitizenRequestsClient.tsx:21 SEG_OPTIONS=["All","Grievance","Service","Breached"] are English literals; ds/Segmented.tsx:9-21 takes string[] and uses the string as key, value and label, so the filter logic (lines 37-43) compares against the same English literals. Not fabricated data; it's an i18n gap.
 - **Files to change:** `apps/web/src/app/(app)/citizen/requests/CitizenRequestsClient.tsx`, `apps/web/src/app/_components/ds/Segmented.tsx`, `apps/web/src/messages/en.json`
@@ -1356,7 +1356,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-REQUESTS-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Escalate defaults the reason to 'Escalated by officer' and Reopen to 'Reopened' when the dialog reason is empty (RequestDetailClient.tsx:113,122) — audit trail gets a placeholder instead of an enforced reason though requireReason is set.
 - **Verified evidence:** RequestDetailClient.tsx:113,122 default reasons exist, but the ActionButtons pass requireReason (:175,187,201) and ConfirmDialog disables Confirm until trimmed reason length >= minReasonLength=1 (ConfirmDialog.tsx:170-174), so the fallback strings are unreachable from the UI - dead defensive code, not a live audit-trail issue. Resolve sends note only; no minimum length is set for escalate/reopen. Server audit behaviour cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/requests/[id]/RequestDetailClient.tsx`
@@ -1369,7 +1369,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-REQUESTS-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme ASYNC (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Endpoints answer asynchronously (202): notice 'Resolution submitted.' appears but status may not change until reload (RequestDetailClient.tsx:70-78) — no pending status indicator.
 - **Verified evidence:** RequestDetailClient.tsx:72-77 afterMutate sets a notice, calls load() and router.refresh() immediately; with 202/async processing the fetched status can still be old, and the notice text ('Resolution submitted.') is the only cue. No pending state on StatusPill or auto-poll.
 - **Files to change:** `apps/web/src/app/(app)/citizen/requests/[id]/RequestDetailClient.tsx`
@@ -1383,7 +1383,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-REQUESTS-DETAIL-06  ·  MEDIUM  ·  confirmed  ·  theme ENUMLABEL (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Priority, category and actionType printed as raw snake_case codes (RequestDetailClient.tsx:222,225,265).
 - **Verified evidence:** RequestDetailClient.tsx:164,222 (category), :224 (priority) and :266 (a.actionType e.g. 'info_sought') print raw API values. Status uses StatusPill (humanised); these three do not. humanizeStatus (lib/formatters.ts:44) is available.
 - **Files to change:** `apps/web/src/app/(app)/citizen/requests/[id]/RequestDetailClient.tsx`
@@ -1396,7 +1396,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-REQUESTS-DETAIL-07  ·  LOW  ·  partly  ·  theme MISSING (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** No link back to the citizen/complainant and no assignee shown despite assignedTo in the type (_data/loaders.ts:38).
 - **Verified evidence:** Grievance type has assignedTo (loaders.ts:38) and departmentRef; the detail page renders departmentRef (:225) but not assignedTo. No complainant/citizen field exists in the Grievance type at all, so a link to the citizen cannot be built from current data. Theme DEADROUTE is wrong (no dead link).
 - **Files to change:** `apps/web/src/app/(app)/citizen/requests/[id]/RequestDetailClient.tsx`, `apps/web/src/app/(app)/citizen/_data/loaders.ts`
@@ -1416,7 +1416,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-RTI-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch reads as 'no RTI applications': rti/page.tsx:26 renders only the badge; stats are real zeros and RTIClient shows the EmptyState (page.tsx:12-32; RTIClient.tsx:186-188) — on a statutory 30-day register.
 - **Verified evidence:** rti/page.tsx:12,26 shows only DataSourceBadge on source==='error'; getRTIApplications (_data/loaders.ts:3345) returns [] on failure so stats (page.tsx:28-31) show 0 and RTIClient.tsx:186-188 renders EmptyState. Same shape as CITIZEN-REQUESTS-01.
 - **Files to change:** `apps/web/src/app/(app)/citizen/rti/page.tsx`
@@ -1430,7 +1430,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-RTI-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Transfer succeeds silently and the row does not update: after a 2xx the dialog closes with only a comment 'Soft-refresh: the server component will revalidate on next navigation' — no router.refresh(), no confirmation, and the row keeps its Transfer button (RTIClient.tsx:104-112).
 - **Verified evidence:** RTIClient.tsx:105-112: after res.ok it does setTransferId(null) and only a comment (line 112) says the server component will revalidate; no router.refresh (router not imported), no success message. Additionally the loader uses revalidateSeconds:120 (loaders.ts:3348, apiClient.ts:137 -> next.revalidate) so even router.refresh() may serve cached data until the cache is invalidated. Row keeps Transfer button since TRANSFERABLE is based on stale status. The reasonLabel 'Transfer to (public authority name)' (line 205) is a literal.
 - **Files to change:** `apps/web/src/app/(app)/citizen/rti/RTIClient.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/messages/en.json`
@@ -1447,7 +1447,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-RTI-03  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Register RTI' requires a raw CPIO reference UUID typed by hand (RegisterRTIButton.tsx:9,23-26, label 'CPIO reference (UUID)'); users cannot look up the CPIO by name/authority.
 - **Verified evidence:** RegisterRTIButton.tsx:9,23-26 enforce a UUID regex; label en.json citizenRti.cpioLabel = 'CPIO reference (UUID)' (messages/en.json:789), input id new-rti-cpio is free text (line 61). No CPIO lookup endpoint or picker is present in the web code; ds has no EntityPicker (only _components/SmartCombobox.tsx). Available CPIO directory endpoint cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/rti/RegisterRTIButton.tsx`, `apps/web/src/messages/en.json`
@@ -1463,7 +1463,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-RTI-04  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Due (30-day)' counts by status (received|under_review|forwarded), not by deadline, and 'Appeals' counts isFirstAppeal only (page.tsx:14-16) — neither matches the Overdue segment's date logic (RTIClient.tsx:120-124).
 - **Verified evidence:** rti/page.tsx:14 pendingReply = status in received|under_review|forwarded (labelled 'Due (30-day)'), :16 appeals = isFirstAppeal. RTIClient.tsx:119-124: 'Due' segment uses the same status test, but 'Overdue' uses daysRemaining<0 && !CLOSED. So no stat corresponds to Overdue, and 'Due (30-day)' includes already-overdue items. Not a dead route.
 - **Files to change:** `apps/web/src/app/(app)/citizen/rti/page.tsx`, `apps/web/src/app/(app)/citizen/rti/RTIClient.tsx`
@@ -1478,7 +1478,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-RTI-05  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Closed-status sets disagree: list CLOSED = replied|closed|appeal (RTIClient.tsx:37) but detail treats responded|appealed or any response as closed (RTIDetailClient.tsx closed=…), so the same RTI can show 'Closed' in one view and a running clock in the other.
 - **Verified evidence:** Duplicate of RTI-DETAIL-05. RTIClient.tsx:37 CLOSED={replied,closed,appeal}; RTIDetailClient.tsx:157 also treats responded/appealed and any response as closed. Also stat 'Replied' (page.tsx:15) counts only status==='replied'.
 - **Files to change:** `apps/web/src/app/(app)/citizen/rti/RTIClient.tsx`, `apps/web/src/app/(app)/citizen/rti/[id]/RTIDetailClient.tsx`, `apps/web/src/lib/rtiStatus.ts`
@@ -1491,7 +1491,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-RTI-06  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** DPDP: applicant names are shown to every signed-in user (RTIClient.tsx:151); RTI applicant identity is protected personal data.
 - **Verified evidence:** RTIClient.tsx:149 (observation said 151) renders applicantName in a plain column; rows built at line 136. No role check in rti/page.tsx and no Masked component in ds. Backend-side masking/RBAC for the /v1/citizen/rti list cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/rti/RTIClient.tsx`, `apps/web/src/app/(app)/citizen/rti/page.tsx`, `apps/web/src/app/_components/ds/Masked.tsx`
@@ -1507,7 +1507,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-RTI-07  ·  LOW  ·  confirmed  ·  theme DATEFMT (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** TODAY is computed once at module load in UTC (page.tsx:8), same day-skew risk as grievances; 'Yes/No' in 1st Appeal? are literals (RTIClient.tsx:144).
 - **Verified evidence:** rti/page.tsx:8 `const TODAY = new Date().toISOString().slice(0,10)` is evaluated once per server process/build (module scope), so it goes stale after midnight and is UTC (IST date differs 00:00-05:30). It is passed as `today` to RTIClient (line 33). RTIClient.tsx:144 uses literal 'Yes'/'No'; SEG_OPTIONS 'All/Due/Overdue' (line 25), 'Transfer to…' (205) also literals. Not fabricated data.
 - **Files to change:** `apps/web/src/app/(app)/citizen/rti/page.tsx`, `apps/web/src/app/(app)/citizen/rti/RTIClient.tsx`, `apps/web/src/lib/rtiClock.ts`
@@ -1530,7 +1530,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-RTI-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme ERRORCOPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Load failure surfaces the raw response body to the clerk: res.text() into loadError rendered in <p role=alert> (RTIDetailClient.tsx:66,136-143).
 - **Verified evidence:** RTIDetailClient.tsx:66 `throw new Error((await res.text()) || ...)`, caught at 70 into loadError and rendered at 136-143 in <p role=alert>. Same raw-body pattern in respond (line 103) and fileAppeal (line 116). The sibling RTIClient uses useFormError/toHumanError instead.
 - **Files to change:** `apps/web/src/app/(app)/citizen/rti/[id]/RTIDetailClient.tsx`
@@ -1546,7 +1546,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-RTI-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme UPLOAD (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Response 'document' is only a URL typed into the ConfirmDialog reason field ('Response document URL (https://…)') — no upload, virus-scan or hash; the link is rendered with target=_blank (RTIDetailClient.tsx:94-103,235).
 - **Verified evidence:** RTIDetailClient.tsx:69-78 (real lines ~169-178) use ActionButton requireReason with reasonLabel 'Response document URL (https://…)'; respond() (93-104) only tests /^https?:\/\//i and POSTs {responseUrl}. Responses render as <a href={r.responseUrl} target=_blank rel=noopener noreferrer> at line 235. No upload, scan or hash. ds/FileUpload.tsx exists in _components. Backend URL validation/allow-list cannot be verified. The <a href> renders server data unvalidated at render time.
 - **Files to change:** `apps/web/src/app/(app)/citizen/rti/[id]/RTIDetailClient.tsx`, `apps/web/src/app/_components/FileUpload.tsx`
@@ -1562,7 +1562,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-RTI-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** isOverdue is returned by the API (_data/loaders.ts:140) but the clock is recomputed in the browser from local midnight (RTIDetailClient.tsx:16-19); it can disagree with the list page's UTC TODAY and with the server.
 - **Verified evidence:** RTIDetailClient.tsx:16-19 StatutoryClock builds today with new Date().setHours(0,0,0,0) (browser-local midnight) and diffs against new Date(deadline). loaders.ts:156 (not 140) maps isOverdue but RTIDetailClient never reads it. The list (rti/page.tsx:8, RTIClient.tsx:29-35) uses UTC date at module load with both dates parsed as UTC, so the two views can differ by a day depending on browser TZ.
 - **Files to change:** `apps/web/src/app/(app)/citizen/rti/[id]/RTIDetailClient.tsx`, `apps/web/src/app/(app)/citizen/rti/page.tsx`, `apps/web/src/app/(app)/citizen/rti/RTIClient.tsx`, `apps/web/src/lib/formatters.ts`
@@ -1578,7 +1578,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-RTI-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'closed' set here (replied|closed|appeal|responded|appealed or any response) differs from the list's CLOSED (RTIClient.tsx:37).
 - **Verified evidence:** Detail: RTIDetailClient.tsx:157 closed = status in [replied,closed,appeal,responded,appealed] || responses.length>0. List: RTIClient.tsx:37 CLOSED = {replied,closed,appeal}. Diverging vocabularies: 'responded'/'appealed' only in detail; 'appeal' status closes the clock in both. Actual backend status enum cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/rti/[id]/RTIDetailClient.tsx`, `apps/web/src/app/(app)/citizen/rti/RTIClient.tsx`, `apps/web/src/lib/rtiStatus.ts`
@@ -1609,7 +1609,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-RTI-DETAIL-07  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Appeal type labels and 'Response submitted.' style notices are partly literals (RTIDetailClient.tsx:119,177 notices) while others are translated.
 - **Verified evidence:** Appeal type labels ARE translated (t('appealFirstShort'/'appealCicShort') at line 251). What is true: notices 'Appeal submitted. It will appear once processed.' (line 119) and 'Response submitted.' (line 177) plus reasonLabel/confirmTitle/confirmDescription (lines 171-174), 'Enter a valid response document URL' (95), subtitle '· RTI Act 2005' (line 163) and fallback error strings are English literals.
 - **Files to change:** `apps/web/src/app/(app)/citizen/rti/[id]/RTIDetailClient.tsx`, `apps/web/src/messages/en.json`
@@ -1630,7 +1630,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** A failed lookup is rendered as a 404: `if (!service || source === "error") notFound()` (page.tsx:31; same on apply/page.tsx:30). A gateway blip tells a citizen the service does not exist, with no retry — and it is cached 30s (revalidateSeconds).
 - **Verified evidence:** [serviceKey]/page.tsx:31 and apply/page.tsx:30 call notFound() when !service || source==='error'. fetchJson returns source 'error' for missing base URL, missing auth cookie (401), any non-OK (incl. 5xx), invalid payload and network failure (apiClient.ts:108-166), and result carries status. So a gateway blip or expired session shows the 404 page with no retry. Caching: revalidate 30s applies to fetch; whether Next caches a non-OK response is version-dependent (not verified), but the blip itself is not the issue.
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/[serviceKey]/page.tsx`, `apps/web/src/app/(app)/citizen/services/[serviceKey]/apply/page.tsx`
@@ -1661,7 +1661,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-04  ·  MEDIUM  ·  partly  ·  theme I18N (was MONEY)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Hard-coded English outside next-intl: 'working day(s)' (ServicePageClient.tsx:84), 'Continue where you left off —' (ServicePageClient.tsx:159), 'from ₹' / 'Fee on approval' (runtimeApi.ts:243-247) on a page that is otherwise translated and aimed at Odia/Hindi-speaking citizens.
 - **Verified evidence:** Hard-coded English confirmed: ServicePageClient.tsx:84 `${slaDays} working day(s)`, :159 'Continue where you left off —', runtimeApi.ts:243-247 formatFee 'Fee on approval' and 'from ₹'. Also channelDisabledMessage (runtimeApi.ts) is English, and :42 uses fallback hex. Theme MONEY is wrong (I18N) but formatFee does divide minor by 100 with toLocaleString - float division of a number, only display; acceptable but should use shared formatINR/paise helper. Other translated keys exist (slaPromise, resumeDraft).
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/_components/ServicePageClient.tsx`, `apps/web/src/app/(app)/citizen/services/_data/runtimeApi.ts`, `apps/web/src/messages/en.json`, `apps/web/src/messages/hi.json`
@@ -1692,7 +1692,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-06  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** No segment loading.tsx: falls back to citizen/loading.tsx, a 7xl-wide skeleton for a 640px page.
 - **Verified evidence:** No loading.tsx under citizen/services or [serviceKey]/ (directory listing confirms). Falls back to citizen/loading.tsx: min-h-screen bg-slate-50 with max-w-7xl blocks, while the page is a 640px centred card.
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/[serviceKey]/loading.tsx`, `apps/web/src/app/(app)/citizen/services/[serviceKey]/track/[trackingNo]/loading.tsx`
@@ -1730,7 +1730,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-APPLY-02  ·  HIGH  ·  confirmed  ·  theme PAYMENT (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Production citizen UI exposes test wording: button 'Pay (sandbox) & submit' and the fee note 'For Test runs, sandbox capture posts a receipt and GL journal…' (en.json citizenServices.paySandboxAndSubmit / feeSummaryNote; ServiceRuntimeFlow.tsx:394). confirmPayment defaults to mode 'sandbox' (runtimeApi.ts:216), so real fee-bearing services record a sandbox receipt.
 - **Verified evidence:** en.json:860 feeSummaryNote 'For Test runs, sandbox capture posts a receipt and GL journal...' rendered at ServiceRuntimeFlow.tsx:352; button label paySandboxAndSubmit 'Pay (sandbox) & submit' at :394 (en.json:865). onSubmit hardcodes confirmPayment(paymentId,'sandbox') (:215) and runtimeApi.ts:216 defaults mode to 'sandbox'. Nothing selects gateway mode by environment. Whether backend rejects sandbox capture in production cannot be verified. Not a ConfirmDialog issue; theme tag is wrong.
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/_components/ServiceRuntimeFlow.tsx`, `apps/web/src/app/(app)/citizen/services/_data/runtimeApi.ts`, `apps/web/src/messages/en.json`
@@ -1779,7 +1779,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-APPLY-05  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** DPDP: autosave persists partial personal data (name, mobile, address) on every field change after 800ms (ServiceRuntimeFlow.tsx:152-155) with no purpose/consent notice before the form starts and no way to discard a saved draft.
 - **Verified evidence:** Autosave: ServiceRuntimeFlow.tsx:152-155 debounces 800ms and saves all values via saveDraft/updateDraft (runtimeApi.ts:116-154) on every change. Draft is auto-resumed on load (:106-121, latest draft). No 'consent'/'discard' strings or controls exist in the component (grep). Masked component is not relevant to this finding (citizen enters own data). Backend retention/encryption of drafts cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/_components/ServiceRuntimeFlow.tsx`, `apps/web/src/app/(app)/citizen/services/_data/runtimeApi.ts`, `apps/web/src/messages/en.json`
@@ -1809,7 +1809,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-APPLY-07  ·  MEDIUM  ·  partly  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Money: formatFeeExact divides paise by 100 with a float (runtimeApi.ts:250-254) and prints no GST/breakup; the only demand line is the service fee. Lakh grouping relies on toLocaleString('en-IN').
 - **Verified evidence:** runtimeApi.ts:243-254 formatFee/formatFeeExact do minor/100 then toLocaleString('en-IN') with max 2 fraction digits. This is display-only division of an integer paise value (no accumulation/rounding of computed money), so precision risk is low, but it bypasses the shared lib/formatters.ts formatMoney (line 90) required by CLAUDE.md. buildDemandLines (:413-421) returns a single application-fee line; no GST/breakup exists in the data type (Pick of feeFromMinor,feeCurrency,name). Whether the API supplies a tax breakup cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/_data/runtimeApi.ts`, `apps/web/src/lib/formatters.ts`
@@ -1824,7 +1824,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-APPLY-08  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Step labels 'Form/Review/Fee/Done' and 'Saving…/Saved just now/Offline — retrying' are hard-coded English (runtimeApi.ts:292-297, ServiceRuntimeFlow.tsx:317).
 - **Verified evidence:** Literals confirmed: JOURNEY_STEPS labels 'Form/Review/Fee/Done' at runtimeApi.ts:292-297 (journeyStepsForService returns them, JourneyRail renders step.label), save-state strings at ServiceRuntimeFlow.tsx:317. Others in the same flow: 'Channel not available' ErrorState (:~150), channelDisabledMessage (runtimeApi.ts:272-275), validation messages (:257-262), submit fallback error (:~230), and apply/page.tsx:37 `Apply — ${service.name}`. Not fabricated data.
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/_components/ServiceRuntimeFlow.tsx`, `apps/web/src/app/(app)/citizen/services/_data/runtimeApi.ts`, `apps/web/src/app/(app)/citizen/services/[serviceKey]/apply/page.tsx`, `apps/web/src/messages/en.json`
@@ -1865,7 +1865,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-TRACK-TRACKINGNO-03  ·  MEDIUM  ·  partly  ·  theme STUB (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** The Notifications card is a permanent EmptyState — no fetch is made (TrackClient.tsx:104-113) — so the copy 'will appear here when the office sends them' can never come true on this screen.
 - **Verified evidence:** True that the Notifications card is a permanent EmptyState with no fetch (TrackClient.tsx:106-112 - line numbers 104-113 roughly right), so the promise 'will appear here when the office sends them' (en.json noMessagesMessage, line 879) can never be fulfilled. But the theme is not I18N: the strings are already next-intl keys (t('notificationsTitle'), t('noMessagesTitle')). Also note hi.json has citizenServices keys but kn/ta/te do not (grep found 0 hits), so those locales fall back. No citizen per-application notifications endpoint was visible in the snapshot (only /citizen/alerts route exists); backend cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/_components/TrackClient.tsx`, `apps/web/src/messages/en.json`
@@ -1897,7 +1897,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-TRACK-TRACKINGNO-05  ·  MEDIUM  ·  partly  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1656, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status pill prints the raw status string (e.g. 'under-review', 'payment_due') via StatusPill (TrackClient.tsx:94); the timeline normalises but the pill does not.
 - **Verified evidence:** TrackClient.tsx:94 passes ack.status to StatusPill, but StatusPill (ds/StatusPill.tsx:52-56) runs humanizeStatus, so the label is humanised, not raw: 'payment_due' -> 'Payment Due', but hyphenated 'under-review' -> 'Under-review' (humanizeStatus splits only on whitespace/underscore). Tone lookup uses STATUS_MAP keys with spaces ('under review'), so hyphenated/underscored statuses fall to the neutral 'info' tone. So not raw, but inconsistent label and no meaningful tone.
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/app/(app)/citizen/services/_components/TrackClient.tsx`
@@ -1912,7 +1912,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-TRACK-TRACKINGNO-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Tracking unavailable' and the 'Check the tracking number…' sentence are hard-coded outside next-intl (TrackClient.tsx:60-62); the error back link goes to the catalogue, not the service (TrackClient.tsx:66).
 - **Verified evidence:** TrackClient.tsx:60-62 hard-codes 'Tracking unavailable' and 'Check the tracking number and try again, or ask at the counter with your receipt.' outside next-intl (also the 'Not found' fallback at :39 and runtimeApi.ts:231 message). :64 backHref='/citizen/catalogue' rather than the service, though the page header (track/[trackingNo]/page.tsx:19) already has a back-to-service button. Theme is I18N, not FABRICATED.
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/_components/TrackClient.tsx`, `apps/web/src/app/(app)/citizen/services/_data/runtimeApi.ts`, `apps/web/src/messages/en.json`, `apps/web/src/messages/hi.json`
@@ -1936,7 +1936,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SURVEYS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch reads as good news: loader returns [] (loaders.ts:3447-3453), stat cards print 0 and the table says 'No surveys found' (page.tsx:10-29, SurveysTable.tsx:50); only the small DataSourceBadge signals the error.
 - **Verified evidence:** loaders.ts:3447-3453 getCitizenSurveys passes [] as empty; on error fetchJson returns {data:[],source:'error'}. page.tsx:10-12 computes active/completed/total from [] so StatCards show 0 (values are numbers, StatCard's '—' logic only triggers on null/NaN). SurveysTable.tsx:84-86 shows EmptyState 'No surveys found' when rows empty (unless cache fallback). Only DataSourceBadge (SurveysTable.tsx:83) signals error. error.tsx exists only for thrown errors.
 - **Files to change:** `apps/web/src/app/(app)/citizen/surveys/page.tsx`, `apps/web/src/app/(app)/citizen/surveys/SurveysTable.tsx`
@@ -1952,7 +1952,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SURVEYS-02  ·  MEDIUM  ·  confirmed  ·  theme STALE (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stat cards and table can disagree: stats are computed from the server prop (page.tsx:8-12) but rows come from useSeededResource, which may substitute a cached copy (SurveysTable.tsx:21-26). The UX-012 comment fixed the badge but not the counters.
 - **Verified evidence:** page.tsx:10-12 stats come from server prop `surveys`; SurveysTable.tsx:56-61 useSeededResource swaps in cached rows when server source is error or empty (resource.ts:229-250), so the table can list cached surveys while cards show 0. Comment UX-012 (page.tsx:16-19) only moved the badge. Theme is not FABRICATED.
 - **Files to change:** `apps/web/src/app/(app)/citizen/surveys/page.tsx`, `apps/web/src/app/(app)/citizen/surveys/SurveysTable.tsx`
@@ -1967,7 +1967,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SURVEYS-03  ·  MEDIUM  ·  confirmed  ·  theme STATUS (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status matching is case-sensitive string equality with 'Active' / 'Completed' (page.tsx:10-11); any other status (Draft, Closed, 'active') is counted only in Total Surveys, so the cards do not add up.
 - **Verified evidence:** page.tsx:10-11 uses strict equality to 'Active'/'Completed'; status is a free string (CitizenSurvey.status: string, loaders.ts:3442) mapped with no validation, so 'active', 'Draft', 'Closed' count only in the Total card. Backend status vocabulary cannot-verify (no citizen service in the snapshot; hrms engagement surveys are a different endpoint).
 - **Files to change:** `apps/web/src/app/(app)/citizen/surveys/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -1982,7 +1982,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SURVEYS-04  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Completion is a free string column (CitizenSurvey.completion, loaders.ts:3442) typed as a string, so a sort on it is lexical unless DataTable parses percentages (DataTable not read); no progress bar.
 - **Verified evidence:** completion is a string (loaders.ts CitizenSurvey.completion). DataTable compareValues (ds/DataTable.tsx:160-170) tries Number() then falls back to localeCompare with numeric:true, so '72%' vs '100%' sort correctly via natural ordering; but values with mixed formats ('72 %', '—') could misorder. No progress bar is true (SurveysTable.tsx:98 plain text). Claim 'lexical sort' is overstated.
 - **Files to change:** `apps/web/src/app/(app)/citizen/surveys/SurveysTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -1996,7 +1996,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SURVEYS-05  ·  LOW  ·  partly  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Register is read-only: no create-survey action, no row link to results, though the empty copy says surveys 'will appear here once created' — no route exists to create one under citizen/surveys.
 - **Verified evidence:** SurveysTable.tsx:84-86/en.json emptyMessage says surveys 'will appear here once created'. No create route exists under citizen/surveys (only page, table, error, loading) and rows have no link. But this is the citizen-facing portal register, so creation may belong to another module (hrms engagement has POST surveys/:id at services/hrms-service gap-features/routes.ts:284, a different domain); whether a citizen survey create/result UI is in scope is a product decision.
 - **Files to change:** `apps/web/src/app/(app)/citizen/surveys/SurveysTable.tsx`, `apps/web/src/messages/en.json`
@@ -2009,7 +2009,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SURVEYS-06  ·  LOW  ·  partly  ·  theme LOADING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Stat icons are emoji on hard-coded hex backgrounds (page.tsx:26-29); loading.tsx has no header/stat placeholders.
 - **Verified evidence:** page.tsx:26-29 passes emoji strings, but StatIcon maps icon strings to lucide icons (ds/StatIcon.tsx imports lucide), so emoji are not rendered raw; hard-coded hex iconBg values (#eef2ff etc.) are real and bypass tokens. surveys/loading.tsx is a bare skeleton block with no header or stat placeholders (confirmed).
 - **Files to change:** `apps/web/src/app/(app)/citizen/surveys/page.tsx`, `apps/web/src/app/(app)/citizen/surveys/loading.tsx`
@@ -2027,7 +2027,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-APPEALS-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Filing window is a free-entry number field (default 30) sent from the browser as windowDays (AppealPanel.tsx:23,30,49): the citizen can enter 3650 and the client-side window check is meaningless unless the server derives the limit from the decision type. Server behaviour undeterminable (citizen-service absent).
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['POST /v1/citizen/appeals', 'GET /api/v1/citizen/appeals']`
 - **Question:** Does the server derive the appeal filing window from the decision type and ignore or reject client-sent windowDays?
@@ -2038,7 +2038,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-CERTIFICATES-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** The 'public QR verify' lives inside the authenticated (app) shell: verifying requires sign-in and the ModuleGate, so a third party scanning a certificate QR cannot use it (certificates/page.tsx; CertificateVerify.tsx:35 calls /api/proxy). A separate unauthenticated verify route is undeterminable from this tree.
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['GET /api/proxy/v1/citizen/certificates/verify/:id']`
 - **Question:** Is there a public unauthenticated verify endpoint returning only minimal validity data (no PII) that a QR can resolve?
@@ -2049,7 +2049,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-DOCUMENTS-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1934, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Upload' sends no file: upload('upload') posts JSON { applicationId, serviceId, docType } only (DocumentPanel.tsx:36-39) — there is no file-picker control, so it cannot attach a document. Whether the API accepts a bare declaration is undeterminable (citizen-service absent).
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['POST /v1/citizen/documents/upload', 'POST /v1/citizen/documents/digilocker-fetch', 'GET /v1/citizen/documents/checklist']`
 - **Question:** Does /documents/upload accept a JSON declaration without a file, or does it require a presigned or multipart file with size/type/virus checks?
@@ -2071,7 +2071,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-PAYMENTS-03  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Recording payment is available to every signed-in user with the module enabled; no role gate for a cashier action. Audit behaviour undeterminable (citizen-service absent).
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['POST /v1/citizen/payments/offline']`
 - **Question:** Is recording an offline payment restricted to a cashier role and audited with operator id, receipt no and amount?
@@ -2115,7 +2115,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-RTI-DETAIL-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Record response is offered to every signed-in user, and File appeal is offered even before any response or deadline breach (RTIDetailClient.tsx:168-186); no role gate, and a citizen-side action (appeal) sits next to a PIO-side action (respond) on one screen. Server RBAC undeterminable (citizen-service absent).
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['GET /v1/citizen/rti/:id', 'POST /v1/citizen/rti/:id/respond', 'POST /v1/citizen/rti/:id/appeal']`
 - **Question:** Is respond restricted to PIO role, appeal to the applicant, and is appeal refused before a response or deadline breach?
@@ -2126,7 +2126,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-02  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W0 2026-10-13: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** ?counter=1 is a client-controlled query flag (page.tsx:26); the UI only mirrors the server CHANNEL_NOT_ALLOWED gate. Whether the server verifies the operator behind counter mode cannot be determined: no citizen backend exists in the snapshot.
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['GET /api/v1/citizen/catalogue/published/lookup', 'POST /v1/citizen/intake (channel)']`
 - **Question:** Does the server verify an authenticated operator/role before accepting channel=counter, rejecting CHANNEL_NOT_ALLOWED otherwise?
