@@ -76,7 +76,8 @@ export function RequestAdvanceForm({ selfServiceOnly = false }: { selfServiceOnl
   function validate(): boolean {
     const errs = new Set<string>();
     if (!selfServiceOnly && !employeeId) errs.add("employee");
-    if (rupeesToMinorString(amount) === null) errs.add("amount");
+    const amountMinor = rupeesToMinorString(amount);
+    if (amountMinor === null || !Number.isSafeInteger(Number(amountMinor))) errs.add("amount");
     if (!purpose.trim() || purpose.trim().length < 2) errs.add("purpose");
     const mo = parseInt(months, 10);
     if (!months || isNaN(mo) || mo < 1 || mo > 12) errs.add("months");

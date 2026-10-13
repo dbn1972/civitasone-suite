@@ -60,4 +60,15 @@ describe("new stock entry: the single item picker", () => {
     show();
     expect(await screen.findByRole("alert")).toBeInTheDocument();
   });
+
+  it("blocks submit on a non-plain-decimal rate instead of posting a zero rate", async () => {
+    show();
+    expect(await screen.findByDisplayValue("PEN-01 · Gel Pen")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Quantity"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText(/Rate/), { target: { value: "1e3" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post entry" }));
+    expect(await screen.findByText(/Rate must be zero or a positive amount/)).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(fetchMock.mock.calls.some((c) => c[0] === "/api/proxy/v1/stock/entries")).toBe(false);
+  });
 });
