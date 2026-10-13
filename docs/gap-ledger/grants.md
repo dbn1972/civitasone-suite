@@ -643,7 +643,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-GRANTEES-04  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1865, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed W1 SF-02/03 (#2010): closed by #1865, verified on main 9c5e9e9e9)
 - **First-pass claim:** Grantee rows are not links (GranteesTable.tsx:43 has no rowLinkPrefix) and there is no grantee detail route, so the compliance figure cannot be traced to the UCs behind it; individual beneficiaries appear by name with no masking or role gate (DPDP).
 - **Verified evidence:** True: GranteesTable.tsx:43 passes no rowLinkPrefix and no grantee detail route exists under grants/ (directory listing). Individuals appear by name/code/registrationNo with no masking; role gating absent (see ROLEGATE). Unverifiable: which fields the API returns and whether registrationNo is PAN/Aadhaar-like.
 - **Files to change:** `apps/web/src/app/(app)/grants/grantees/GranteesTable.tsx`, `apps/web/src/app/(app)/grants/grantees/[id]/page.tsx (new)`, `apps/web/src/app/(app)/grants/layout.tsx`

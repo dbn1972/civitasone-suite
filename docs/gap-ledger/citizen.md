@@ -726,7 +726,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-GRIEVANCES-02  ·  HIGH  ·  confirmed  ·  theme FABRICATED
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1870, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed W1 SF-02/03 (#2010): closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Due date is invented client-side: when the API sends no dueDate, the loader adds 30 days to createdAt (_data.ts:57-63) and the 'Days Left' clock shows it as a statutory deadline. CPGRAMS per-category timelines are not modelled.
 - **Verified evidence:** _data.ts:52-60 dueDate falls back to createdAt+30d when row has no dueDate/due_date; passed as dueDate and drives daysLeft (page.tsx:46). UI presents it as statutory clock (GrievancesTable clockCell). Also d.setDate mutates in local timezone. Per-category timelines are not modelled (cannot verify server side).
 - **Files to change:** `apps/web/src/app/(app)/citizen/_data.ts`, `apps/web/src/app/(app)/citizen/grievances/page.tsx`, `apps/web/src/app/(app)/citizen/grievances/GrievancesTable.tsx`, `apps/web/src/messages/en.json`
