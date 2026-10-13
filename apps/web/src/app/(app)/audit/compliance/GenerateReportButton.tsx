@@ -1,5 +1,6 @@
 "use client";
 
+import { todayIST } from "@/lib/formatters";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AuditComplianceItem } from "@civitasone/types";
 import { Button, ConfirmDialog } from "@/app/_components/ds";
@@ -57,7 +58,7 @@ export function GenerateReportButton({ items }: { items: AuditComplianceItem[] }
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `compliance-snapshot-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `compliance-snapshot-${todayIST()}.json`;
     a.click();
     URL.revokeObjectURL(url);
     showToast(`Unsigned snapshot of ${counts.total} requirements downloaded.`);

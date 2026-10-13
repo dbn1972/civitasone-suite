@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, todayIST } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
 import { toHumanError } from "@/lib/messages";
 import { Button } from "@/app/_components/ds";
@@ -23,7 +23,7 @@ export function CreateContractForm() {
   // rupeesToMinorString (exact paise, no float math). "" default means "no
   // value entered yet" so the ₹ hint is hidden until the clerk types.
   const [value, setValue] = useState("");
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(todayIST());
   const [expiry, setExpiry] = useState("");
   const [poRef, setPoRef] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "accepted" | "error">("idle");

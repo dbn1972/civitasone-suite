@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { ActionButton } from "@/app/_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, todayIST } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 
 /**
@@ -28,7 +28,7 @@ export function SignSrnAction({
   receivedAt?: string | null;
 }) {
   const router = useRouter();
-  const effectiveReceivedAt = receivedAt ?? new Date().toISOString().slice(0, 10);
+  const effectiveReceivedAt = receivedAt ?? todayIST();
 
   async function sign(reason?: string): Promise<void> {
     const res = await fetch(`/api/proxy/v1/inventory/srn/${srnId}/sign`, {

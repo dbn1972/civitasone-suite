@@ -1,3 +1,5 @@
+import { istDatePart, todayIST } from "@/lib/formatters";
+
 /**
  * Pure helpers for the cash & bank book (GAP-FINANCE-TREASURY-CASH-BANK-02/03/04/06).
  * Amounts are bigint paise end to end: gl.finance_cash_book columns reach the
@@ -40,11 +42,6 @@ export function cashBookTotals(entries: readonly CashBookLike[]): CashBookTotals
   return t;
 }
 
-/** Today's calendar date in India as YYYY-MM-DD (not UTC: 00:00-05:30 IST would be "yesterday"). */
-export function todayIST(now: Date = new Date()): string {
-  return now.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-}
-
 /**
  * True when an entry date falls on the given IST calendar day. Accepts a bare
  * "YYYY-MM-DD" (taken as that calendar date) or a full ISO timestamp (converted
@@ -54,9 +51,7 @@ export function isSameISTDate(value: unknown, istDay: string): boolean {
   const s = String(value ?? "").trim();
   if (!s) return false;
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s === istDay;
-  const d = new Date(s);
-  if (Number.isNaN(d.getTime())) return false;
-  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) === istDay;
+  return istDatePart(s) === istDay;
 }
 
 export function countToday(entries: readonly CashBookLike[], istDay: string = todayIST()): number {

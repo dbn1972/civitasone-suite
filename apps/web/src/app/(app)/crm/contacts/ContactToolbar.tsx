@@ -1,5 +1,6 @@
 "use client";
 
+import { todayIST } from "@/lib/formatters";
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -77,7 +78,7 @@ export function ContactToolbar({ canExport = false, exportQuery = {}, initialSea
       const res = await browserFetch(`v1/crm/contacts/export${qs ? `?${qs}` : ""}`);
       if (!res.ok) throw new Error(await errorMessageFromResponse(res));
       const csv = await res.text();
-      downloadCsvFile(`contacts-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+      downloadCsvFile(`contacts-${todayIST()}.csv`, csv);
       setExportOpen(false);
       setMessage(tExport("contactsDone"));
     } catch (e) {

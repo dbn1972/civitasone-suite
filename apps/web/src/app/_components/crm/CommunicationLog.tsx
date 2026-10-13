@@ -5,6 +5,7 @@
  * communications timeline for the record. Save is blocked until a summary is
  * entered; a failed load shows the saved-info badge rather than an empty log.
  */
+import { formatIndianDateTime } from "@/lib/formatters";
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { EmptyState, Button } from "../ds";
@@ -29,7 +30,7 @@ function fmtDateTime(iso: string): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatIndianDateTime(iso);
 }
 
 /** Local datetime string for the default "now" value of the datetime-local input. */

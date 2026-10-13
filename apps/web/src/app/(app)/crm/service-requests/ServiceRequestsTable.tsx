@@ -1,5 +1,6 @@
 "use client";
 
+import { formatIndianDate } from "@/lib/formatters";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
@@ -23,7 +24,7 @@ function isOverdue(dueAt: string | null, status: string): boolean {
 }
 
 function fmtDate(dt: string | null): string {
-  return dt ? new Date(dt).toLocaleDateString("en-IN") : "—";
+  return dt ? formatIndianDate(dt) : "—";
 }
 
 /**
@@ -178,7 +179,7 @@ export function ServiceRequestsTable({
             label: t("colLogged"),
             render: (r) => (
               <span style={{ color: "var(--ink2)", fontSize: 13 }}>
-                {r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-IN") : "—"}
+                {r.createdAt ? formatIndianDate(r.createdAt) : "—"}
               </span>
             ),
           },

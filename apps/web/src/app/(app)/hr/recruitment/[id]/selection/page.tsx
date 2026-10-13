@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { Button, ConfirmDialog, StatusPill, useConfirmAction } from "@/app/_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, todayIST } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
 import { useSessionIdentity } from "@/lib/auth/useSessionIdentity";
 import { approvalBlock, autoRank, buildEntries, isNoLists, type EditorError, type EditorRow } from "./selectionEditor";
@@ -167,7 +167,7 @@ export default function SelectionListsPage() {
 
   const block = useMemo(() => (detail ? approvalBlock(detail.list, who.userId) : null), [detail, who.userId]);
   const setRow = (appId: string, patch: Partial<EditorRow>) => setRows((rs) => rs.map((r) => (r.applicationId === appId ? { ...r, ...patch } : r)));
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIST();
 
   return (
     <div className="page-main" aria-labelledby="sel-heading">

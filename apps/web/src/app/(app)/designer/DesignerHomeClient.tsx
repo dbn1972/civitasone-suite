@@ -1,5 +1,6 @@
 "use client";
 
+import { formatIndianDate } from "@/lib/formatters";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
@@ -66,7 +67,7 @@ export function DesignerHomeClient({
     office: s.ownerDepartment || "—",
     version: `v${s.version}`,
     status: s.status,
-    updated: s.updatedAt ? new Date(s.updatedAt).toLocaleDateString("en-IN") : "—",
+    updated: s.updatedAt ? formatIndianDate(s.updatedAt) : "—",
   }));
 
   const packRows = domainPacks.map((p) => ({

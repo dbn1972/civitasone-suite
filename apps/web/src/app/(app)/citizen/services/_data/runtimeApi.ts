@@ -4,7 +4,7 @@ import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import type { FormDesignState } from "@/app/_components/ds/designer/formTypes";
 import { formDesignFromService } from "@/app/_components/ds/designer/StatusTimeline";
 import { toHumanError } from "@/lib/messages";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
 
 export interface PublishedServiceRuntime {
   id: string;
@@ -470,7 +470,7 @@ export function buildTrackingTimeline(opts: TrackingTimelineOptions): {
   laneDefs.push({ id: "issued", label: issuedLabel });
 
   const submittedDate = opts.acknowledgedAt
-    ? new Date(opts.acknowledgedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+    ? formatIndianDate(opts.acknowledgedAt)
     : undefined;
 
   if (status === "rejected" || status === "cancelled" || status === "withdrawn") {

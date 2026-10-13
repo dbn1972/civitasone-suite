@@ -112,7 +112,7 @@ describe("candidate portal list", () => {
   it("shows the applied date on each card and pages with ?page=", async () => {
     const f = stub(list([app()], 45));
     await open({ page: "2" });
-    expect(screen.getByText(/Applied on 1 Mar 2026/)).toBeTruthy();
+    expect(screen.getByText(/Applied on 01 Mar 2026/)).toBeTruthy();
     const url = (f.mock.calls[0] as unknown as [string])[0];
     expect(url).toContain("limit=20");
     expect(url).toContain("offset=20");

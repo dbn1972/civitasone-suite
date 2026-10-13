@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ActionButton } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, todayIST } from "@/lib/formatters";
 
 export type ContractMilestone = {
   id: string;
@@ -41,7 +41,7 @@ export function MilestoneActions({ contractId, milestones }: Props) {
     setBusyId(milestoneId);
     setMessage("");
     try {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayIST();
       const res = await fetch(
         `/api/proxy/v1/contract/contracts/${contractId}/milestones/${milestoneId}/${kind}`,
         {

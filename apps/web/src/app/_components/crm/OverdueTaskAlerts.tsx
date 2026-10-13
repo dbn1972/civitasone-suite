@@ -14,13 +14,13 @@ import {
   getOverdueTasks, snoozeTask, reassignTask, getEscalationUsers, formatAgeing,
   type OverdueTask, type AaSource, type EscalationUser,
 } from "@/lib/crm/activityAccount";
-import { todayIST, addDaysIST } from "@/lib/formatters";
+import { todayIST, addDaysIST, formatIndianDateTime } from "@/lib/formatters";
 
 function fmtDateTime(iso: string): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatIndianDateTime(iso);
 }
 
 /**

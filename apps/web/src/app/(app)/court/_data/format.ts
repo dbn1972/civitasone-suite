@@ -131,7 +131,7 @@ export function hearingStatusLabel(status: string | null | undefined): string {
 
 /** Today as YYYY-MM-DD (local) — the default date for cause lists / orders. */
 export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayIST();
 }
 
 /**

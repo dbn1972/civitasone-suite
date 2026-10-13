@@ -237,6 +237,15 @@ describe("todayIST", () => {
     vi.setSystemTime(new Date("2024-01-15T19:00:00.000Z"));
     expect(todayIST()).toBe("2024-01-16");
   });
+
+  it("at 00:30 IST gives the IST date, not the (previous) UTC date that toISOString gives", () => {
+    // 2026-10-14 00:30 IST == 2026-10-13 19:00 UTC.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-13T19:00:00.000Z"));
+    expect(new Date().toISOString().slice(0, 10)).toBe("2026-10-13"); // the old, wrong "today"
+    expect(todayIST()).toBe("2026-10-14");
+    expect(addDaysIST(todayIST(), 7)).toBe("2026-10-21");
+  });
 });
 
 // ---------------------------------------------------------------------------

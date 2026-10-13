@@ -3,7 +3,7 @@ import { Breadcrumb } from "../Breadcrumb";
 import { getComplianceOverview } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
-import { formatPercent } from "@/lib/formatters";
+import { formatPercent, formatIndianDateTime } from "@/lib/formatters";
 
 export default async function ComplianceDashboardPage() {
   const result = await getComplianceOverview();
@@ -48,7 +48,7 @@ export default async function ComplianceDashboardPage() {
                 <div style={{ flex: 1 }}>
                   <p style={{ margin: 0, fontWeight: 500, fontSize: 14 }}>{check.title}</p>
                   <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--ink2)" }}>
-                    {new Date(check.timestamp).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                    {formatIndianDateTime(check.timestamp)}
                   </p>
                 </div>
                 {/* GAP-TENANT-ADMIN-COMPLIANCE-01: token-based, contrast-checked

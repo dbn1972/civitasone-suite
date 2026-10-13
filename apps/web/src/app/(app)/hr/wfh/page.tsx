@@ -1,3 +1,4 @@
+import { todayIST } from "@/lib/formatters";
 import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -48,7 +49,7 @@ function isoWeekBoundsUtc(dateStr: string): { start: string; end: string } {
 /** Count of this employee's own pending/approved WFH requests whose fromDate falls in the current ISO week. */
 function countWeeklyWfh(items: WfhRow[], employeeId: string | undefined): number | undefined {
   if (!employeeId) return undefined;
-  const { start, end } = isoWeekBoundsUtc(new Date().toISOString().slice(0, 10));
+  const { start, end } = isoWeekBoundsUtc(todayIST());
   return items.filter((i) =>
     i.employeeId === employeeId &&
     (i.status === "pending" || i.status === "approved") &&

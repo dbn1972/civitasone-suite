@@ -3,7 +3,7 @@
  * workflow.transition_history for an instance as an accessible ordered list,
  * newest-first, with from→to step, action, decision and actor.
  */
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDateTime } from "@/lib/formatters";
 import { UserRef } from "@/app/_components/ds";
 import type { WorkflowTransition } from "../_data/workflowTypes";
 import { titleCase } from "../_data/workflowTypes";
@@ -19,9 +19,7 @@ function decisionPill(decision: string | null): string {
 function fmtTime(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  const date = formatIndianDate(iso);
-  const time = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
-  return `${date} ${time}`;
+  return formatIndianDateTime(iso);
 }
 
 export function HistoryTimeline({ transitions }: { transitions: WorkflowTransition[] }) {

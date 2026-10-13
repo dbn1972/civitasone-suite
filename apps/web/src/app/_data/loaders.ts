@@ -378,7 +378,7 @@ import {
 import { fetchJson, type LoaderResult, type LoaderSource } from "./apiClient";
 import { mapBillingSettings, mapOfflinePayments, mapReminderStatus, type BillingSettingsView, type OfflinePaymentView, type ReminderView } from "@/lib/admin/invoiceOps";
 import { mapDiscoveryRegistry as mapDiscoveryRegistryImpl, type DiscoveryRegistry as DiscoveryRegistryModel } from "@/lib/admin/discoveryRegistry";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, todayIST } from "@/lib/formatters";
 import { toApiEndpointRow, toEditionRow, type ApiEndpointRow, type EditionRow } from "@/lib/admin/monitoring";
 import {
   mapAdminUserSummaries,
@@ -2265,7 +2265,7 @@ export interface ContractExpirySummary {
 
 export function computeContractExpirySummary(
   rows: ContractListRow[],
-  today: string = new Date().toISOString().slice(0, 10),
+  today: string = todayIST(),
 ): ContractExpirySummary {
   const summary: ContractExpirySummary = { in30: 0, in60: 0, in90: 0, expired: 0 };
   const todayMs = Date.parse(`${today}T00:00:00Z`);

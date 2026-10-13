@@ -1,4 +1,5 @@
 "use client";
+import { todayIST } from "@/lib/formatters";
 import { useEffect, useRef, useState, useId } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader, Card, Button, ConfirmDialog } from "../../../../_components/ds";
@@ -37,7 +38,7 @@ export default function OvertimeNewPage() {
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const redirectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIST();
   const isDirty = requestDate !== "" || hours !== "" || reason !== "" || (mode === "picker" && employeeId !== "");
 
   useEffect(() => {
