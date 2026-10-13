@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
-import { PageHeader, Card } from "../../../../../_components/ds";
+import { PageHeader, Card, RefreshErrorState } from "../../../../../_components/ds";
 import { PermissionDenied } from "../../../../../_components/PermissionDenied";
 import { fetchJson } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
 import { EmployeeTypeForm, type EmployeeTypeFormValues } from "../../_components/EmployeeTypeForm";
@@ -10,7 +11,7 @@ const EMPLOYEE_TYPE_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
 
 type EmpType = EmployeeTypeFormValues & { id: string };
 
-async function getType(id: string): Promise<EmpType | null> {
+async function getType(id: string): Promise<{ type: EmpType | null; failed: boolean; status?: number }> {
   // The list route is the only one this module exposes (no GET /:id) --
   // fetch the tenant's full list and find the row, same cost as the list
   // page itself already pays and consistent with a tenant type master
@@ -20,7 +21,8 @@ async function getType(id: string): Promise<EmpType | null> {
     telemetryKey: "config.employee_types",
     mapResponse: (p) => (p as { data: EmpType[] })?.data ?? null,
   });
-  return (r.data ?? []).find((t) => t.id === id) ?? null;
+  if (r.source === "error") return { type: null, failed: true, status: r.status };
+  return { type: (r.data ?? []).find((t) => t.id === id) ?? null, failed: false };
 }
 
 export default async function EditEmployeeTypePage({ params }: { params: { id: string } }) {
@@ -36,7 +38,16 @@ export default async function EditEmployeeTypePage({ params }: { params: { id: s
     );
   }
 
-  const type = await getType(params.id);
+  const { type, failed, status } = await getType(params.id);
+  // SF-02: a missing row in a successfully-fetched list, or a real 404, is "not
+  // found"; any other fetch failure is a load error, never a 404.
+  if (failed && status !== 404) {
+    return (
+      <div className="page-main wrap">
+        <RefreshErrorState error={toHumanError("load", { area: "employee type" })} backHref="/hr/employee-types" />
+      </div>
+    );
+  }
   if (!type) notFound();
 
   return (

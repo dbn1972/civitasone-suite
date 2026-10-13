@@ -8,18 +8,17 @@ import { getTrainingPlanDetail, getCourses, getTrainingPrograms, getDepartments 
 type ItemRow = { id: string; item: string; type: string; targetDate: string; mandatory: string };
 
 export default async function Page({ params }: { params: { id: string } }) {
-  const { data: plan, source } = await getTrainingPlanDetail(params.id);
+  const { data: plan, source, status } = await getTrainingPlanDetail(params.id);
 
-  if (source === "error") {
+  // SF-02: only a real 404 is "not found"; other failures are load errors.
+  if (source === "error" && status === 404) notFound();
+  if (source === "error" || !plan) {
     return (
       <>
         <PageHeader title="Training Plan" back="/learning/training-plans" />
         <RefreshErrorState error={toHumanError("load", { area: "training plan" })} backHref="/learning/training-plans" />
       </>
     );
-  }
-  if (!plan) {
-    notFound();
   }
 
   const [{ data: courses }, { data: programs }, { data: departments }] = await Promise.all([

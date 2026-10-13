@@ -12,8 +12,9 @@ import { PolicyActions } from "./PolicyActions";
 const POLICY_ADMIN_ROLES = ["knowledge_admin", "super_admin", "hr_admin"];
 
 export default async function Page({ params }: { params: { id: string } }) {
-  const { data: policy, source } = await getKnowledgePolicy(params.id);
-  if (!policy && source !== "error") notFound();
+  const { data: policy, source, status } = await getKnowledgePolicy(params.id);
+  // SF-02: only a real 404 is "not found"; other failures render the error state below.
+  if (source === "error" && status === 404) notFound();
   if (!policy) {
     return (
       <>

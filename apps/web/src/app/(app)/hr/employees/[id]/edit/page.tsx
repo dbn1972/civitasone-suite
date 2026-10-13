@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { PageHeader } from "../../../../../_components/ds";
+import { PageHeader, RefreshErrorState } from "../../../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { PermissionDenied } from "../../../../../_components/PermissionDenied";
 import { getEmployeeById } from "../../../../../_data/loaders";
 import { EditEmployeeForm } from "./EditEmployeeForm";
@@ -29,11 +30,18 @@ export default async function EditEmployeePage({
     return <PermissionDenied module="editing employee details" requiredRoles={EMPLOYEE_ADMIN_ROLES} />;
   }
 
-  const { data: employee } = await getEmployeeById(params.id);
+  const { data: employee, source, status } = await getEmployeeById(params.id);
   const t = await getTranslations("employeeEdit");
 
+  // SF-02: only a real 404 is "not found"; other failures are load errors.
+  if (source === "error" && status === 404) notFound();
   if (!employee) {
-    notFound();
+    return (
+      <div className="page-main wrap">
+        <PageHeader title={t("pageTitle")} back={`/hr/employees/${params.id}`} />
+        <RefreshErrorState error={toHumanError("load", { area: "employee" })} backHref={`/hr/employees/${params.id}`} />
+      </div>
+    );
   }
 
   return (
