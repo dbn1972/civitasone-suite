@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { EntityPicker, type EntityOption } from "./ds";
-import { searchIdentityUsers, resolveIdentityUsers } from "@/lib/entityAdapters/identityUser";
+import { searchDirectoryUsers, resolveDirectoryUsers, DIRECTORY_MIN_QUERY } from "@/lib/directory/searchUsers";
 import { searchDepartments, resolveDepartments } from "@/lib/entityAdapters/department";
 import { searchLocations, resolveLocations } from "@/lib/entityAdapters/location";
 import { searchWarehouses, resolveWarehouses } from "@/lib/entityAdapters/warehouse";
@@ -17,7 +17,11 @@ const SOURCES: Record<
     resolve: (ids: string[]) => Promise<EntityOption[]>;
   }
 > = {
-  user: { search: searchIdentityUsers, resolve: resolveIdentityUsers },
+  // Tenant-wide non-PII directory (/identity/users/directory, open to any
+  // member of the tenant). NOT identityUser.ts: its /identity/users list is
+  // ADMIN-gated (and the /v1 path is not routed), so a picker built on it
+  // could never load for a normal user.
+  user: { search: searchDirectoryUsers, resolve: resolveDirectoryUsers },
   department: { search: searchDepartments, resolve: resolveDepartments },
   location: { search: searchLocations, resolve: resolveLocations },
   warehouse: { search: searchWarehouses, resolve: resolveWarehouses },
@@ -34,6 +38,9 @@ export interface DirectoryPickerProps {
   "aria-label"?: string;
   /** Overrides the per-source placeholder. */
   placeholder?: string;
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
+  inputRef?: React.Ref<HTMLInputElement>;
 }
 
 /**
@@ -52,6 +59,9 @@ export function DirectoryPicker({
   id,
   "aria-label": ariaLabel,
   placeholder,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
+  inputRef,
 }: DirectoryPickerProps) {
   const t = useTranslations("directoryPicker");
   const adapter = SOURCES[source];
@@ -73,6 +83,10 @@ export function DirectoryPicker({
       disabled={disabled}
       id={id}
       aria-label={ariaLabel}
+      aria-invalid={ariaInvalid}
+      aria-describedby={ariaDescribedBy}
+      inputRef={inputRef}
+      minQueryLength={source === "user" ? DIRECTORY_MIN_QUERY : undefined}
     />
   );
 }

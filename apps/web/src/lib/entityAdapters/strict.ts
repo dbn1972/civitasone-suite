@@ -10,5 +10,5 @@ export interface StrictOpt {
 }
 
 export function failStrict(res: Response, opts?: StrictOpt): void {
-  if (opts?.strict && !res.ok) throw new Error(`entity lookup failed: HTTP ${res.status}`);
+  if (opts?.strict && !res.ok) throw new Error("entity lookup failed");
 }

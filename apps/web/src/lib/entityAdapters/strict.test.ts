@@ -29,7 +29,7 @@ describe("entity adapters: strict search", () => {
 
   it.each(ADAPTERS)("%s: non-ok throws with { strict: true }", async (_n, search) => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("x", { status: 503 }));
-    await expect(search("a", signal(), { strict: true })).rejects.toThrow(/HTTP 503/);
+    await expect(search("a", signal(), { strict: true })).rejects.toThrow(/entity lookup failed/);
   });
 
   it.each(ADAPTERS)("%s: a 200 with strict does not throw", async (_n, search) => {

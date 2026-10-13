@@ -22,7 +22,10 @@ describe("RtiActions — Assign PIO picker", () => {
   it("lets the user pick the PIO by name and POSTs the chosen id, never a typed UUID", async () => {
     const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
       if (init?.method === "POST") return new Response("{}", { status: 200 });
-      return new Response(JSON.stringify({ data: [{ id: PIO_ID, name: "Pia Officer", designation: "PIO" }] }), { status: 200 });
+      // Real tenant directory endpoint (open to any tenant member); the
+      // ADMIN-gated /identity/users list is not routed and must not be used.
+      if (!String(url).startsWith("/api/proxy/v1/identity/users/directory?q=")) return new Response("not found", { status: 404 });
+      return new Response(JSON.stringify({ data: [{ id: PIO_ID, displayName: "Pia Officer" }] }), { status: 200 });
     });
     vi.stubGlobal("fetch", fetchMock);
 

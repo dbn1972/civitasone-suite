@@ -308,6 +308,9 @@ export default function NewGuesthouseBookingPage() {
               ) : (
                 <EmployeePicker
                   id="guestRef"
+                  inputRef={setRef("guestRef")}
+                  aria-invalid={fieldErrors.guestRef ? true : undefined}
+                  aria-describedby={fieldErrors.guestRef ? "guestRef-error guestRef-help" : "guestRef-help"}
                   value={guestRef || null}
                   clearable
                   placeholder="Search staff, if the guest is staff"
