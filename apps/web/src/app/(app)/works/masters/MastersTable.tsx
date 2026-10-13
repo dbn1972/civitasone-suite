@@ -136,6 +136,8 @@ export function MastersTable({ masterType, items, failed, canManage, parentOptio
           parentOptions={parentOptions}
           editItem={editing}
           onDone={() => setEditing(null)}
+          // The edit form unmounts on save, so the table owns the accepted notice (and its refresh).
+          onCreated={() => void accepted.accept()}
         />
       )}
 

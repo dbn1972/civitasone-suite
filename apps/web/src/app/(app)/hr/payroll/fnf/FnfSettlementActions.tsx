@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { AcceptedNotice, Button, ConfirmDialog, Modal, Field, Input } from "../../../../_components/ds";

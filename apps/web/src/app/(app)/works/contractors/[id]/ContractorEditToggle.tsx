@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
 import { AcceptedNotice, Button } from "@/app/_components/ds";

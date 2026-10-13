@@ -56,6 +56,8 @@ export function ItemLinkActions({
 
   if (link) {
     return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <AcceptedNotice {...accepted.noticeProps} />
       <ActionButton
         label={t("detail.unlink")}
         confirmTitle={t("detail.unlinkTitle")}
@@ -68,6 +70,7 @@ export function ItemLinkActions({
           markAccepted();
         }}
       />
+      </div>
     );
   }
 
