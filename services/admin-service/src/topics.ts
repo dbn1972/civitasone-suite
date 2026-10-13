@@ -81,6 +81,8 @@ export const COMMANDS = {
   // w0-report defect: audit-on-export for the tenant-admin IdP providers CSV
   // (the web called a route that did not exist, so exports were never audited).
   idpExportRecorded: "admin.idp_providers.export_recorded",
+  // W1 SF-08: generic audit-on-export for any DataTable CSV without its own route.
+  tableExportRecorded: "admin.table_export.recorded",
   backupTrigger:      "admin.backup.trigger",
   breakGlassOpen:     "admin.breakglass.open",
   breakGlassClose:    "admin.breakglass.close",

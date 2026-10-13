@@ -36,7 +36,7 @@ export function KpiTable({ rows, source = "api" }: { rows: AnalyticsKpiRow[]; so
         filterable
         filterPlaceholder="Search KPIs…"
         pageSize={15}
-        exportable
+        exportable exportAudit="analytics/kpi"
         exportFilename="analytics-kpis"
         emptyIcon="🎯"
         emptyTitle="No KPIs"

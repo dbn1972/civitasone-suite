@@ -173,7 +173,7 @@ export function ReverseAuctionTable({ auctions, source = "api" }: { auctions: Re
             filterable
             filterPlaceholder="Search auction, item, status…"
             pageSize={15}
-            exportable
+            exportable exportAudit="procurement/reverse-auction"
             exportFilename="reverse-auctions"
             columns={[
               { key: "auctionNo", label: "Auction No" },

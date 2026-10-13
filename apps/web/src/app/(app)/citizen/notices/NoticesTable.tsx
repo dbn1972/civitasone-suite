@@ -118,7 +118,7 @@ export function NoticesTable({ notices, source = "api" }: { notices: CitizenNoti
             filterable
             filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
-            exportable
+            exportable exportAudit="citizen/notices"
             exportFilename="citizen-notices"
             columns={[
               { key: "noticeNo", label: t("colNoticeNo") },

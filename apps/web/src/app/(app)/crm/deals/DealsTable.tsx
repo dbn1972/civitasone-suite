@@ -196,7 +196,7 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
             sortable
             filterable
             filterPlaceholder="Filter engagements…"
-            exportable
+            exportable exportAudit="crm/deals"
             exportFilename="engagements"
             pageSize={15}
           />

@@ -77,7 +77,7 @@ export function BeneficiariesTable({ rows, source = "api", canExport = false }: 
         filterable
         filterPlaceholder="Filter beneficiaries…"
         pageSize={15}
-        {...(canExport ? { exportable: true, exportFilename: "project-beneficiaries" } : {})}
+        {...(canExport ? { exportable: true, exportAudit: "projects/beneficiaries", exportFilename: "project-beneficiaries" } : {})}
         emptyIcon="🔍"
         emptyTitle="No matching beneficiaries"
         emptyMessage="No beneficiaries match the current filter. Clear the filter to see all registered beneficiaries."

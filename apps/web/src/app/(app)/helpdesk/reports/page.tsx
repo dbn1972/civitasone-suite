@@ -77,7 +77,7 @@ export default async function Page({ searchParams }: { searchParams: { period?: 
                   ]}
                   rows={priorityRows}
                   sortable
-                  exportable
+                  exportable exportAudit="helpdesk/reports"
                   exportFilename={`helpdesk-reports-priority-${period}`}
                 />
               )}
@@ -95,7 +95,7 @@ export default async function Page({ searchParams }: { searchParams: { period?: 
                   ]}
                   rows={channelRows}
                   sortable
-                  exportable
+                  exportable exportAudit="helpdesk/reports"
                   exportFilename={`helpdesk-reports-channel-${period}`}
                 />
               )}

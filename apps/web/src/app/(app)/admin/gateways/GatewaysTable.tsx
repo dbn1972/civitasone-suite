@@ -39,7 +39,7 @@ export function GatewaysTable({ gateways, source = "api", unavailable = false }:
             { key: "status", label: "Status", cellType: "status" },
           ]}
           rows={raw.map(toGatewayRow)}
-          sortable filterable filterPlaceholder="Search gateways…" pageSize={15} exportable exportFilename="gateways"
+          sortable filterable filterPlaceholder="Search gateways…" pageSize={15} exportable exportAudit="admin/gateways" exportFilename="gateways"
           emptyIcon="📡" emptyTitle="No gateways" emptyMessage="No communication gateways configured."
         />
       )}

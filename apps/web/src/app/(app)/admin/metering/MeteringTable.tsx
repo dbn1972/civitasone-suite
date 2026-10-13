@@ -50,7 +50,7 @@ export function MeteringTable({
           { key: "amountMinor", label: "Amount", align: "right", cellType: "amount" },
           { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} variant={meterStatusTone(r.status)} /> },
         ]}
-        rows={rows} sortable filterable filterPlaceholder="Search metering…" pageSize={15} exportable exportFilename="usage-metering" emptyIcon="📊" emptyTitle="No metering data" emptyMessage="No usage metering records found."
+        rows={rows} sortable filterable filterPlaceholder="Search metering…" pageSize={15} exportable exportAudit="admin/metering" exportFilename="usage-metering" emptyIcon="📊" emptyTitle="No metering data" emptyMessage="No usage metering records found."
       />
     </AdminRegister>
   );

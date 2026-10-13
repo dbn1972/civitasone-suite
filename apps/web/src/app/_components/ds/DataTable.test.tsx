@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { DataTable } from "./DataTable";
 
+const okGuard = async () => ({ ok: true as const });
 type Row = { id: string; name: string; amount: number; status: string };
 
 const columns = [
@@ -217,8 +218,8 @@ describe("DataTable", () => {
     expect(screen.getByText("Next →")).toBeDisabled();
   });
 
-  it("shows export button when exportable=true", () => {
-    render(<DataTable columns={columns} rows={rows} exportable />);
+  it("shows export button when exportable=true and an audit hook is supplied (W1 SF-08: default-deny without one)", () => {
+    render(<DataTable columns={columns} rows={rows} exportable exportGuard={okGuard} />);
     expect(screen.getByText("⬇ CSV")).toBeInTheDocument();
   });
 
@@ -408,7 +409,7 @@ describe("DataTable", () => {
       expect(screen.getByText("not-a-date")).toBeInTheDocument();
     });
 
-    it("exports the date cellType via CSV using the same formatting", () => {
+    it("exports the date cellType via CSV using the same formatting", async () => {
       const originalCreateObjectURL = URL.createObjectURL;
       const blobs: Blob[] = [];
       URL.createObjectURL = vi.fn((blob: Blob) => {
@@ -417,9 +418,9 @@ describe("DataTable", () => {
       });
       URL.revokeObjectURL = vi.fn();
       const dateRows: DateRow[] = [{ id: "1", label: "Kickoff", when: "2026-01-26T12:00:00.000Z" }];
-      render(<DataTable columns={dateColumns} rows={dateRows} exportable />);
+      render(<DataTable columns={dateColumns} rows={dateRows} exportable exportGuard={okGuard} />);
       fireEvent.click(screen.getByText("⬇ CSV"));
-      expect(blobs.length).toBe(1);
+      await waitFor(() => expect(blobs.length).toBe(1));
       URL.createObjectURL = originalCreateObjectURL;
     });
   });
@@ -431,8 +432,9 @@ describe("DataTable", () => {
       const origCreate = URL.createObjectURL;
       URL.createObjectURL = vi.fn((b: Blob) => { blobs.push(b); return "blob:mock"; });
       URL.revokeObjectURL = vi.fn();
-      render(<DataTable columns={[{ key: "id" as const, label: "ID" }, { key: "who" as const, label: "Who" }]} rows={data} exportable />);
+      render(<DataTable columns={[{ key: "id" as const, label: "ID" }, { key: "who" as const, label: "Who" }]} rows={data} exportable exportGuard={okGuard} />);
       fireEvent.click(screen.getByText("⬇ CSV"));
+      await waitFor(() => expect(blobs.length).toBe(1));
       URL.createObjectURL = origCreate;
       return await new Promise<string>((resolve) => {
         const fr = new FileReader();

@@ -97,7 +97,7 @@ export function TendersTable({ tenders, source }: { tenders: Record<string, unkn
         filterable
         filterPlaceholder="Search tenders..."
         pageSize={15}
-        exportable
+        exportable exportAudit="works/tenders"
         exportFilename="works-tenders"
         emptyIcon="📢"
         emptyTitle="No tenders found"

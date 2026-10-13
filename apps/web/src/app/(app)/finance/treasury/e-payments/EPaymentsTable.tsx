@@ -48,7 +48,7 @@ export function EPaymentsTable({ orders, source = "api" }: { orders: PaymentSumm
         filterable
         filterPlaceholder="Search payment orders…"
         pageSize={15}
-        exportable
+        exportable exportAudit="finance/treasury/e-payments"
         exportFilename="e-payment-orders"
         emptyIcon="💳"
         emptyTitle="No payment orders"

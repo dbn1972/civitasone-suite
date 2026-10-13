@@ -3,6 +3,7 @@
 import { DataTable } from "@/app/_components/ds";
 import type { RecentPredictionRow } from "../_data";
 import type { PredictionKind } from "../_metrics";
+import { postExportAudit, type ExportVerdict } from "@/lib/export/csvExport";
 
 interface RecentPredictionsTableProps {
   predictions: RecentPredictionRow[];
@@ -91,12 +92,8 @@ type TableRow = {
 export async function recordMlPredictionsExport(
   domain: string,
   info: { rowCount: number; filter: string },
-): Promise<void> {
-  await fetch("/api/proxy/v1/ml/predictions/export-audit", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ domain, rowCount: info.rowCount, filtered: info.filter.trim() !== "" }),
-  });
+): Promise<ExportVerdict> {
+  return postExportAudit("/api/proxy/v1/ml/predictions/export-audit", { domain, rowCount: info.rowCount, filtered: info.filter.trim() !== "" });
 }
 
 export function RecentPredictionsTable({
@@ -138,7 +135,7 @@ export function RecentPredictionsTable({
       exportable={canExport}
       exportFilename={`ml-${domain}-predictions`}
       exportNotice={canExport ? "Export leaves the system and is recorded." : undefined}
-      onExport={canExport ? (info) => { void recordMlPredictionsExport(domain, info).catch(() => undefined); } : undefined}
+      exportGuard={canExport ? (info) => recordMlPredictionsExport(domain, info) : undefined}
       emptyIcon="🤖"
       emptyTitle="No predictions yet"
       emptyMessage="Predictions will appear here once the ML model is active and producing results."

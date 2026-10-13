@@ -105,7 +105,7 @@ export function PreBidTable({ conferences, source = "api" }: { conferences: PreB
             filterable
             filterPlaceholder="Search tender, status…"
             pageSize={15}
-            exportable
+            exportable exportAudit="procurement/pre-bid"
             exportFilename="pre-bid-conferences"
             columns={[
               { key: "tender", label: "Tender" },

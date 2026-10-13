@@ -48,7 +48,7 @@ export function AuditLogTable({ rows, labels }: Props) {
       sortable
       filterable
       filterPlaceholder={labels.filterPlaceholder}
-      exportable
+      exportable exportAudit="hr/audit-log"
       exportFilename="hr-audit-log"
       emptyIcon="📋"
       emptyTitle={labels.emptyTitle}

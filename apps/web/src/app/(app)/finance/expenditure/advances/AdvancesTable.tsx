@@ -95,7 +95,7 @@ export function AdvancesTable({ advances, source = "api" }: { advances: AdvanceS
         filterable
         filterPlaceholder={t("filterPlaceholder")}
         pageSize={15}
-        exportable
+        exportable exportAudit="finance/expenditure/advances"
         exportFilename="advances-register"
       />
     </>

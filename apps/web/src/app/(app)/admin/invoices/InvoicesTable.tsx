@@ -55,7 +55,7 @@ export function InvoicesTable({
           { key: "issuedAt", label: "Issued", cellType: "date" },
           { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} variant={invoiceStatusTone(r.status)} /> },
         ]}
-        rows={rows} sortable filterable filterPlaceholder="Search invoices…" pageSize={15} exportable exportFilename="invoices" emptyIcon="🧾" emptyTitle="No invoices" emptyMessage="No billing invoices found."
+        rows={rows} sortable filterable filterPlaceholder="Search invoices…" pageSize={15} exportable exportAudit="admin/invoices" exportFilename="invoices" emptyIcon="🧾" emptyTitle="No invoices" emptyMessage="No billing invoices found."
       />
     </AdminRegister>
   );

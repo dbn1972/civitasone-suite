@@ -122,7 +122,7 @@ export function EmpanelmentTable({ vendors, source = "api", serverTotal = null }
             filterable
             filterPlaceholder="Search vendor, category…"
             pageSize={15}
-            exportable
+            exportable exportAudit="procurement/empanelment"
             exportFilename="vendor-empanelment"
             columns={[
               { key: "vendorName", label: "Vendor Name" },

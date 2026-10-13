@@ -44,7 +44,7 @@ export function ChequesTable({ cheques, source = "api" }: { cheques: FinanceInst
         filterable
         filterPlaceholder="Search cheques…"
         pageSize={15}
-        exportable
+        exportable exportAudit="finance/treasury/cheques"
         exportFilename="cheque-register"
         emptyIcon="📝"
         emptyTitle="No cheques"

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type MockInstance } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
@@ -51,11 +51,20 @@ describe("AuditLogTable", () => {
       expect(JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string)).toEqual({ rowCount: 2, filtered: false });
     });
 
-    it("still downloads when the audit call fails", () => {
+    // W1 SF-08: the audit is now FAIL-CLOSED (it used to be fire-and-forget). The
+    // exact inverse of the old "still downloads when the audit call fails".
+    it("builds NO file when the audit call fails (fail-closed)", async () => {
       fetchSpy.mockRejectedValue(new Error("offline"));
       render(<AuditLogTable entries={entries} />);
       fireEvent.click(screen.getByText("⬇ CSV"));
-      expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+      expect(URL.createObjectURL).not.toHaveBeenCalled();
+    });
+
+    it("downloads once the audit call succeeds", async () => {
+      render(<AuditLogTable entries={entries} />);
+      fireEvent.click(screen.getByText("⬇ CSV"));
+      await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalledTimes(1));
     });
   });
 });

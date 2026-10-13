@@ -76,7 +76,7 @@ export function CampaignRoiTable({ rows }: { rows: CRMCampaignRoiSummaryRow[] })
       sortable
       filterable
       filterPlaceholder={t("filterPlaceholder")}
-      exportable
+      exportable exportAudit="crm/campaigns"
       exportFilename="crm-campaign-roi"
       exportNotice="Exports leave the system; handle spend and revenue figures per policy."
       emptyIcon="📣"

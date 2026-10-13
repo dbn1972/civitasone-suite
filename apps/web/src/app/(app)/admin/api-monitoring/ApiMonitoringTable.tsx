@@ -96,7 +96,7 @@ export function ApiMonitoringTable({
             filterable
             filterPlaceholder="Search APIs…"
             pageSize={20}
-            exportable
+            exportable exportAudit="admin/api-monitoring"
             exportFilename="api-monitoring"
             emptyIcon="🔌"
             emptyTitle="No API data"

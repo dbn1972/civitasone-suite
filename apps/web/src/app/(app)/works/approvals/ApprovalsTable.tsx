@@ -135,7 +135,7 @@ export function ApprovalsTable({
           filterable
           filterPlaceholder="Search approvals..."
           pageSize={15}
-          exportable
+          exportable exportAudit="works/approvals"
           exportFilename={`works-approvals-${tab}`}
           rowHref={rowHref}
           emptyIcon="✅"

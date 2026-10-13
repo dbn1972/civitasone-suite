@@ -85,7 +85,7 @@ export function FundReleasesTable({ releases, source = "api" }: { releases: Row[
         filterable
         filterPlaceholder="Search releases…"
         pageSize={20}
-        exportable
+        exportable exportAudit="finance/budget/fund-releases"
         csvPlainAmounts
         exportFilename="fund-releases"
         emptyIcon="💸"

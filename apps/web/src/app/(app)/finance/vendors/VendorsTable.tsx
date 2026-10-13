@@ -10,6 +10,7 @@ import { browserFetch } from "@/lib/api/browserClient";
 import { Button } from "@/app/_components/ds";
 import { workflowErrorMessage } from "@/lib/finance/workflowErrors";
 import type { FinanceVendorSummary } from "@civitasone/types";
+import { downloadCsvFile } from "@/lib/export/csvExport";
 
 // DataTable's generic requires an index signature; FinanceVendorSummary is a
 // plain named type. Intersection satisfies the constraint without widening
@@ -31,12 +32,7 @@ export function VendorsTable({ vendors, source = "api", canExport = false }: { v
       const res = await browserFetch("v1/finance/vendors/export", { method: "POST", body: "{}" });
       if (!res.ok) { setExportError(await workflowErrorMessage(res, (k) => te(k), "load", "vendor register")); return; }
       const { csv } = (await res.json()) as { csv: string };
-      const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "vendor-master.csv";
-      a.click();
-      URL.revokeObjectURL(url);
+      downloadCsvFile("vendor-master.csv", csv);
     } catch {
       setExportError(t("failed"));
     } finally {

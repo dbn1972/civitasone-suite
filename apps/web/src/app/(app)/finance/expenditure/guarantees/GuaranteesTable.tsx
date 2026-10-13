@@ -45,7 +45,7 @@ export function GuaranteesTable({ guarantees, source = "api" }: { guarantees: Ro
         filterable
         filterPlaceholder={t("filterPlaceholder")}
         pageSize={15}
-        exportable
+        exportable exportAudit="finance/expenditure/guarantees"
         exportFilename="guarantees-emd"
         emptyIcon="🛡️"
         emptyTitle={t("emptyTitle")}

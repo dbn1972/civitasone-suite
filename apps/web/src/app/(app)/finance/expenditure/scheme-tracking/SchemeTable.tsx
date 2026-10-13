@@ -52,7 +52,7 @@ export function SchemeTable({ schemes, source = "api" }: { schemes: FinanceSchem
         filterable
         filterPlaceholder={t("filterPlaceholder")}
         pageSize={15}
-        exportable
+        exportable exportAudit="finance/expenditure/scheme-tracking"
         exportFilename="scheme-tracking"
         emptyIcon="🎯"
         emptyTitle={t("emptyTitle")}

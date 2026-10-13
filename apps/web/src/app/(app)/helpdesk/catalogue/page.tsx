@@ -107,7 +107,7 @@ export default async function Page() {
             filterable
             filterPlaceholder="Filter catalogue…"
             pageSize={15}
-            exportable
+            exportable exportAudit="helpdesk/catalogue"
             exportFilename="catalogue-offerings"
           />
         )}

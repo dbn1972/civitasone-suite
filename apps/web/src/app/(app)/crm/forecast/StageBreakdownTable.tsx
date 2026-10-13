@@ -73,7 +73,7 @@ export function StageBreakdownTable({ stages }: { stages: RankedForecastStage[] 
         ]}
         rows={rows}
         sortable
-        exportable
+        exportable exportAudit="crm/forecast"
         exportFilename="crm-forecast-by-stage"
         emptyIcon="▽"
         emptyTitle="No forecast yet"

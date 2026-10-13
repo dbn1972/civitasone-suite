@@ -129,7 +129,7 @@ export function DprTrackingTable({ rows, source = "api", canReview = false }: { 
         filterable
         filterPlaceholder="Filter DPRs…"
         pageSize={15}
-        exportable
+        exportable exportAudit="projects/dpr-tracking"
         exportFilename="project-dprs"
         emptyIcon="📄"
         emptyTitle="No DPRs"

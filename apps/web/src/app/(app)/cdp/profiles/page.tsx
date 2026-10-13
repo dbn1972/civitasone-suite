@@ -96,7 +96,7 @@ export default async function CdpProfilesPage() {
               filterable
               filterPlaceholder="Filter profiles"
               pageSize={25}
-              exportable
+              exportable exportAudit="cdp/profiles"
               exportFilename="cdp-profiles"
               emptyIcon="👥"
               emptyTitle="No profiles yet"

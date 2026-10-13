@@ -86,7 +86,7 @@ export function SurveysTable({ surveys, source = "api" }: { surveys: CitizenSurv
             filterable
             filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
-            exportable
+            exportable exportAudit="citizen/surveys"
             exportFilename="citizen-surveys"
             columns={[
               { key: "surveyName", label: t("colSurveyName") },

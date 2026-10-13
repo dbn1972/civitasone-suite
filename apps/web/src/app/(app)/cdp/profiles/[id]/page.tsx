@@ -175,7 +175,7 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
           sortable
           filterable
           filterPlaceholder="Filter attributes"
-          exportable
+          exportable exportAudit="cdp/profiles/id"
           exportFilename={`cdp-profile-${profile.id}-attributes`}
           emptyIcon="🧾"
           emptyTitle="No attributes yet"

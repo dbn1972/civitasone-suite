@@ -5,6 +5,7 @@ import Link from "next/link";
 import { DataTable, Tabs, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import type { SummaryRow, LedgerRow, ItcRow } from "./types";
+import { postExportAudit, type ExportVerdict } from "@/lib/export/csvExport";
 
 const TABS = ["Summary", "GST Ledger", "ITC Reconciliation"] as const;
 type Tab = (typeof TABS)[number];
@@ -57,12 +58,8 @@ export function ledgerColumns(all: boolean): LedgerColumn[] {
  * recorded server-side (finance-service POST /v1/finance/gst/ledger/export-audit).
  * Fire-and-forget: audit recording never blocks the user's own download.
  */
-export async function recordGstLedgerExport(period: string, info: { rowCount: number; filter: string }): Promise<void> {
-  await fetch("/api/proxy/v1/finance/gst/ledger/export-audit", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ period, rowCount: info.rowCount, filtered: info.filter.trim().length > 0 }),
-  });
+export async function recordGstLedgerExport(period: string, info: { rowCount: number; filter: string }): Promise<ExportVerdict> {
+  return postExportAudit("/api/proxy/v1/finance/gst/ledger/export-audit", { period, rowCount: info.rowCount, filtered: info.filter.trim().length > 0 });
 }
 
 const TAB_ERROR_KEY = { Summary: "summary", "GST Ledger": "ledger", "ITC Reconciliation": "itc" } as const;
@@ -136,7 +133,7 @@ export function GstConsole({ period, summary, ledger, itc, errors = {} }: GstCon
                 description: `The file lists party GSTINs, invoice numbers and tax values for ${period}. Each export is recorded in the audit trail.`,
                 confirmLabel: "Export CSV",
               }}
-              onExport={(info) => { void recordGstLedgerExport(period, info).catch(() => undefined); }}
+              exportGuard={(info) => recordGstLedgerExport(period, info)}
               pageSize={15}
             />
           </>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 vi.mock("@/lib/sync/resource", () => ({
   useSeededResource: (_k: string, data: unknown) => ({ data, provenance: "live", offline: false, cachedAt: null }),
@@ -28,16 +28,16 @@ describe("SiemTable (GAP-TENANT-ADMIN-SIEM-02/04/05)", () => {
     expect(screen.getByText("Resolved")).toBeInTheDocument();
   });
 
-  it("records an export audit beacon on CSV download (SIEM-04)", () => {
+  it("records the export in the audit trail BEFORE the file is built (SIEM-04, W1 SF-08 generic audit route)", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 202 }));
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     (URL as unknown as { createObjectURL: () => string }).createObjectURL = () => "blob:x";
     (URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL = () => {};
     render(<SiemTable alerts={alerts} source="api" />);
     fireEvent.click(screen.getByRole("button", { name: /CSV/ }));
-    expect(fetchSpy).toHaveBeenCalledWith(
-      "/api/proxy/v1/admin/siem/alerts/export-audit",
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledWith(
+      "/api/proxy/v1/admin/table-exports/audit",
       expect.objectContaining({ method: "POST" }),
-    );
+    ));
   });
 });

@@ -256,7 +256,7 @@ export default async function PayrollRegisterPage({
           filterable
           filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
-          exportable
+          exportable exportAudit="hr/payroll/register"
           exportFilename={`payroll-register${statsPeriod ? `-${statsPeriod}` : ""}`}
           emptyIcon="📋"
           emptyTitle={t("emptyTitle")}
