@@ -1,4 +1,33 @@
 /**
+ * GAP-HR-SF-09a (W1 SF-09a): shared role tiers for the /hr page and action
+ * gates. Each constant mirrors the hrms-service requireRole list it fronts
+ * (checked per route by scripts/contract/hr-role-matrix.mjs, which follows
+ * these imports). Pages alias them to a local, semantic name
+ * (`const DISCIPLINARY_ROLES = HR_STAFF_ROLES;`) instead of re-typing the
+ * array, so a backend tier change is one edit here, not forty.
+ */
+/** hr_admin + hr_officer + super_admin: the routine HR-staff tier (backend HR_ROLES in most hrms modules). */
+export const HR_STAFF_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+/** hr_admin + super_admin only: lock/config/irreversible-step tier (attendance LOCK_ROLES, disciplinary HR_ROLES). */
+export const HR_ADMIN_TIER_ROLES = ["hr_admin", "super_admin"];
+/** Masters/bulk-import tier (employee-types, departments, designations, holidays, bulk-import HR_ROLES). */
+export const HR_MASTERS_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
+/** HR staff + manager: approver tier (leave/wfh/shift/travel approve, attendance view). */
+export const HR_STAFF_MANAGER_ROLES = [...HR_STAFF_ROLES, "manager"];
+/** HR staff + manager + employee: modules with a self-service half (apar, benefits, regularisation view). */
+export const HR_SELF_SERVICE_ROLES = [...HR_STAFF_MANAGER_ROLES, "employee"];
+/** HR staff + finance_admin: loan/advance decide + export tier (loans-routes.ts HR_ROLES). */
+export const HR_FINANCE_DECIDER_ROLES = [...HR_STAFF_ROLES, "finance_admin"];
+/** Roles that can open /hr/loans (loans-routes.ts). */
+export const HR_LOANS_ROLES = [...HR_FINANCE_DECIDER_ROLES, "manager", "officer"];
+/** Roles that can open /hr/advances and file one (adds employee self-service). */
+export const HR_ADVANCE_ROLES = [...HR_LOANS_ROLES, "employee"];
+/** id-cards/routes.ts admin tier. */
+export const ID_CARD_ROLES = ["hr_admin", "security_admin", "super_admin"];
+/** disciplinary/icc-routes.ts list/create/hearing tier. */
+export const ICC_ACCESS_ROLES = [...HR_ADMIN_TIER_ROLES, "icc_member"];
+
+/**
  * GAP-HR-EMPLOYEES-DETAIL-02: the narrower role list actually allowed to
  * administer an employee record -- PATCH /v1/hrms/employees/:id and the
  * Initiate Transfer/Promotion/Separation lifecycle actions are all
@@ -12,7 +41,7 @@
  * Mirrors employee/routes.ts's own HR_ROLES exactly -- keep in sync if
  * that list ever changes.
  */
-export const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+export const EMPLOYEE_ADMIN_ROLES = [...HR_STAFF_ROLES];
 
 export const PROPOSAL_WRITE_ROLES = [
   "works_admin",

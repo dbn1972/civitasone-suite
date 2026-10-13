@@ -1,4 +1,5 @@
 import type { AttendanceRegularisation } from "@civitasone/types";
+import { HR_SELF_SERVICE_ROLES, HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * GAP-HR-ATTENDANCE-REGULARISATION-02: mirrors
@@ -18,10 +19,10 @@ import type { AttendanceRegularisation } from "@civitasone/types";
  */
 // GAP-HR-ATTENDANCE-REGULARISATION-01: "employee" is now admitted -- they raise
 // their own requests, and the backend scopes the list to their own rows.
-export const REGULARISATION_VIEW_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "employee"];
+export const REGULARISATION_VIEW_ROLES = HR_SELF_SERVICE_ROLES;
 
 /** HR and managers choose who a request is for; an employee only ever raises their own. */
-export const REGULARISATION_PICK_EMPLOYEE_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager"];
+export const REGULARISATION_PICK_EMPLOYEE_ROLES = HR_STAFF_MANAGER_ROLES;
 
 export function canPickRegularisationEmployee(roles: string[]): boolean {
   return roles.some((r) => REGULARISATION_PICK_EMPLOYEE_ROLES.includes(r));

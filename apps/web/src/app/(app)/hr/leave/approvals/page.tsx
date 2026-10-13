@@ -3,6 +3,7 @@ import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { LeaveApprovalsPanel } from "./LeaveApprovalsPanel";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * GAP-HR-LEAVE-APPROVALS-05 (decision): this page had NO role gate at all —
@@ -11,7 +12,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
  * honest PermissionDenied. Mirrors leave/page.tsx's ADMIN_OR_MANAGER_ROLES
  * (HR_ROLES + manager) — the roles that already see the Approvals link.
  */
-const LEAVE_APPROVAL_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager"];
+const LEAVE_APPROVAL_ROLES = HR_STAFF_MANAGER_ROLES;
 
 export default async function LeaveApprovalsPage() {
   const t = await getTranslations("leaveApprovals");

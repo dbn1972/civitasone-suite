@@ -112,33 +112,6 @@
       },
       "routeCount": 2,
       "reason": "CONFIRMED INTENTIONAL by GAP-HR-SF-09b (no source change needed): ADVANCE_ROLES admits manager/officer (and now also employee) to view and request salary advances, but PATCH .../approve and PATCH .../reject narrow to finance_admin/hr_admin/hr_officer/super_admin on the backend (loans-routes.ts HR_ROLES) -- an approval/rejection step correctly excluding the requester's own tier. Two regression tests in services/hrms-service/src/__tests__/loans-advances-manager-scope-real-db.test.ts (\"GAP-HR-SF09A-015: manager ... cannot approve\" / \"... finance_admin ... can approve\") lock the approve half of this in. Corrected on 2026-10-01's rebase onto current main: extraInWeb was [manager,officer] (routeCount 1, approve only) when GAP-HR-SF-09b first wrote this entry; employee was added to ADVANCE_ROLES by an unrelated already-merged change since then, and reject carries the identical backend role list to approve -- both now extraInWeb=[employee,manager,officer], routeCount 2. Caught only because this rebase re-ran the analyzer against current main, same as GAP-HR-SF-16/GAP-HR-SF09A-019's precedent. Left allowlisted because the drift is real and by design, not unverified."
-    },
-    {
-      "id": "GAP-HR-SF09A-021",
-      "match": {
-        "comparator": "page:leave-policies (LEAVE_POLICY_ADMIN_ROLES)",
-        "extraInBackend": [
-          "hr_admin",
-          "platform_admin",
-          "super_admin",
-          "tenant_admin"
-        ],
-        "extraInWeb": []
-      },
-      "routeCount": 4,
-      "reason": "NOT a real drift -- a confirmed analyzer false positive, found during the 2026-10-01 GAP-HR-SF-09b rebase. leave-policies/page.tsx imports LEAVE_POLICY_ADMIN_ROLES via the \"@/lib/auth/workRoles\" path alias; hr-role-matrix.mjs's getFileImports() only follows relative (\"./\", \"../\") import specifiers (`if (!spec.startsWith(\".\")) continue;`), so it never resolves this page's own gate, resolvePageConst() falls back to `{roles: null}`, and main()'s `comparatorRoles = resolved.roles ?? []` silently turns that into an EMPTY array instead of surfacing an error -- making every one of these 4 routes' real roles look like an unexplained mismatch. The real LEAVE_POLICY_ADMIN_ROLES (apps/web/src/lib/auth/workRoles.ts) is exactly [\"hr_admin\", \"super_admin\", \"tenant_admin\", \"platform_admin\"] -- an EXACT match with these 4 backend routes' own role list (leave/policy-admin-routes.ts's HR_ADMIN_ROLES), confirmed by direct source comparison, not assumed. Allowlisted as a known-false-positive rather than fixed here since the fix (path-alias resolution in getFileImports) is shared-tooling scope beyond this rebase; flagged separately as a follow-up rather than silently left unexplained."
-    },
-    {
-      "id": "GAP-HR-SF09A-022",
-      "match": {
-        "comparator": "page:payroll/salary-slips + slips (list) (SALARY_ADMIN_ROLES)",
-        "extraInBackend": [
-          "employee"
-        ],
-        "extraInWeb": []
-      },
-      "routeCount": 1,
-      "reason": "NOT a real drift -- analyzer comparator false positive found 2026-10-07 (CI arch-contract lane, rebase onto current main): payroll-service payroll/routes.ts GET /v1/payroll/slips/mine (GAP-PAYROLL-SALARY-SLIPS-04) is the self-service My-payslips route and is deliberately employee-only (it returns only the caller own slips, resolved from the token). The analyzer maps it to the admin salary-slips page (SALARY_ADMIN_ROLES) by path prefix, so the roles look mismatched. Allowlisted as an analyzer comparator false positive; the real fix is excluding /slips/mine via OUT_OF_SCOPE_PATTERNS in hr-role-matrix.mjs, left as a follow-up."
     }
   ],
   "noRoleCheckEntries": [

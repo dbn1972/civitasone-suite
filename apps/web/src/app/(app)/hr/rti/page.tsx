@@ -7,8 +7,9 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
 import { FileRtiAction } from "./_components/FileRtiAction";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
-const RTI_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const RTI_ROLES = HR_STAFF_ROLES;
 const PAGE_SIZE = 200;
 
 type Row = {

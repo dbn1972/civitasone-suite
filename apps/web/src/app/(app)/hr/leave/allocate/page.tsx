@@ -3,6 +3,7 @@ import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { AllocateLeaveForm } from "./AllocateLeaveForm";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * Mirrors services/hrms-service/src/modules/leave/routes.ts's HR_ROLES
@@ -11,7 +12,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
  * the read-only GET of this same resource and other self-service leave
  * actions -- not this admin allocation action.)
  */
-const LEAVE_ALLOCATE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const LEAVE_ALLOCATE_ADMIN_ROLES = HR_STAFF_ROLES;
 
 export default async function AllocateLeavePage() {
   const roles = getSessionRoles();

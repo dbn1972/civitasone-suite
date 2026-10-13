@@ -7,13 +7,14 @@ import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
 import { canViewRegularisations, canPickRegularisationEmployee, computeRegularisationStats, REGULARISATION_VIEW_ROLES } from "./access";
 import { RaiseRegularisation } from "./RaiseRegularisation";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * Mirrors attendance/routes.ts: approve/reject regularisation routes
  * require HR_ROLES (hr_admin, hr_officer, super_admin). The manager role
  * can view but not act.
  */
-const REGULARISATION_APPROVE_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const REGULARISATION_APPROVE_ROLES = HR_STAFF_ROLES;
 
 export default async function AttendanceRegularisationPage() {
   const t = await getTranslations("attendanceRegularisation");

@@ -9,6 +9,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 
 import { getTranslations } from "next-intl/server";
+import { HR_ADVANCE_ROLES, HR_LOANS_ROLES, HR_FINANCE_DECIDER_ROLES, HR_SELF_SERVICE_ROLES } from "@/lib/auth/workRoles";
 
 // Matches ADVANCE_ROLES on the backend (services/hrms-service/src/modules/
 // employee/loans-routes.ts) -- this page had no client-side gate at all, so
@@ -17,11 +18,11 @@ import { getTranslations } from "next-intl/server";
 // server-side). GAP-HR-ADVANCES-03 (decision packet, recommended default
 // applied): "employee" added for self-service -- the backend forces their
 // own employeeId server-side regardless of what the form sends.
-const ADVANCE_ROLES = ["hr_admin", "finance_admin", "super_admin", "hr_officer", "manager", "officer", "employee"];
+const ADVANCE_ROLES = HR_ADVANCE_ROLES;
 
 // GAP-HR-ADVANCES-02: only these roles may approve/reject -- mirrors the
 // backend's own HR_ROLES for the approve/reject routes exactly (loans-routes.ts).
-const ADVANCE_DECIDE_ROLES = ["hr_admin", "finance_admin", "super_admin", "hr_officer"];
+const ADVANCE_DECIDE_ROLES = HR_FINANCE_DECIDER_ROLES;
 
 async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/salary-advances", [], {
@@ -46,7 +47,7 @@ export default async function AdvancesPage() {
   // overlap) can only ever file for themselves -- the form hides the picker
   // entirely for this case rather than show one whose selection is ignored.
   const selfServiceOnly = roles.includes("employee")
-    && !roles.some((r) => ["hr_admin", "finance_admin", "super_admin", "hr_officer", "manager", "officer"].includes(r));
+    && !roles.some((r) => HR_LOANS_ROLES.includes(r));
 
   // GAP-HR-ADVANCES-05: mirrors employee/routes.ts's DIRECTORY_ROLES exactly
   // (READER_ROLES = HR_ROLES + manager, then + employee) -- the roles GET
@@ -58,7 +59,7 @@ export default async function AdvancesPage() {
   // before ever attempting that doomed fetch, rather than letting
   // RequestAdvanceForm render an interactive-looking picker that can only
   // ever fail.
-  const DIRECTORY_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "employee"];
+  const DIRECTORY_ROLES = HR_SELF_SERVICE_ROLES;
   const canPickEmployees = roles.some((r) => DIRECTORY_ROLES.includes(r));
   const canRequestAdvance = selfServiceOnly || canPickEmployees;
 
