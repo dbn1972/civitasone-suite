@@ -146,6 +146,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "workforce_core", // ST-M01-08 backfill/mapping tool
   "posting", // ST-M01-09 applyPosting consumer (hrms-service)
   "posting_history", // ST-M01-11 payroll posting-history consumer
+  "learning_enrollment", // W1 SF-16 learning enrolment read / enrol-on-behalf audit
 ] as const;
 
 /** Detail-page route per resource type, for the types that have one keyed by the audited id. */
