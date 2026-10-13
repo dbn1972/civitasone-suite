@@ -100,6 +100,11 @@ export const COMMANDS = {
   // same async CQRS shape as every other command in this file (routes must
   // not write to Postgres directly; see f3-leftover-hrms-cqrs.test.ts).
   medicalClaimsListRead: "hrms.medical_claims.list_read",
+  // GAP-LEARNING-MY-LEARNING-01 (DPDP): audit-on-read when HR or a manager reads
+  // ANOTHER employee's learning enrolments / counts. Published from the route,
+  // recorded to the audit outbox by learning/f3-consumer.ts (routes may not
+  // write to Postgres directly).
+  learningEnrolmentsRead: "hrms.learning.enrolments_read",
 
   // claims (LTC / CEA)
   claimCreate:          "hrms.claim.create",

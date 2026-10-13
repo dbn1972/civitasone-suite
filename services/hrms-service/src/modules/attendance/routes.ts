@@ -13,6 +13,7 @@ import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
+import { resolveSelfOrReportsScopedEmployeeId } from "../../shared/self-scope.js";
 import { getPolicy } from "../policy-settings/repo.js";
 import { isGazettedForWfh, resolveEmployeePayLevel } from "./wfh-eligibility.js";
 import { scopedRead } from "../../shared/db.js";
@@ -24,7 +25,7 @@ import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 /**
  * Builds the drizzle WHERE condition for an employeeId column from a
- * resolved scope (see resolveSelfScopedEmployeeId): a concrete array uses
+ * resolved scope (see resolveSelfOrReportsScopedEmployeeId): a concrete array uses
  * inArray, a single id uses eq, and undefined/empty leaves the column
  * unfiltered (empty is only ever passed here after the caller has already
  * short-circuited to an empty response -- see isEmptyScope below -- so this
@@ -87,7 +88,7 @@ async function assertPeriodsUnlocked(tenantId: string, dates: string[]): Promise
 // working. Fixed by resolving through resolveEmployeeForActor, the same
 // pattern already used by ~25 other modules in this service (apar,
 // geo-attendance, medical, leave, self-service, etc.) -- see medical/
-// routes.ts's resolveSelfScopedEmployeeId for the closest precedent to the
+// routes.ts's resolveSelfOrReportsScopedEmployeeId for the closest precedent to the
 // two helpers below.
 
 /**
@@ -112,28 +113,9 @@ async function assertPeriodsUnlocked(tenantId: string, dates: string[]): Promise
  *   - the employee's own id, or `null` — bare "employee": UNCHANGED from
  *     before.
  */
-async function resolveSelfScopedEmployeeId(
-  ctx: RequestContext,
-  requested: string | undefined,
-): Promise<string | string[] | undefined | null> {
-  const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
-  if (isHrActor) return requested;
-  if (ctx.roles.includes("manager")) {
-    const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
-    if (!actorEmp) return [];
-    const reports = await scopedRead((tx) => tx.select({ id: hrmsEmployees.id }).from(hrmsEmployees)
-      .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.managerId, actorEmp.id))));
-    const scope = [actorEmp.id, ...reports.map((r) => r.id)];
-    if (requested) return scope.includes(requested) ? [requested] : [];
-    return scope;
-  }
-  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
-  return actorEmp ? actorEmp.id : null;
-}
-
 /**
  * IDOR guard for the *create* routes below. Deliberately NOT the same
- * privilege set as resolveSelfScopedEmployeeId above: a manager may VIEW the
+ * privilege set as resolveSelfOrReportsScopedEmployeeId above: a manager may VIEW the
  * full queue but (existing, unchanged behavior) may not submit a request on
  * someone else's behalf -- only HR can. Throws 403 unless the caller is HR
  * or claimedEmployeeId resolves to the caller's own linked hrms_employees
@@ -190,7 +172,7 @@ async function isSelfApproval(ctx: RequestContext, ownerEmployeeId: string): Pro
 
 /**
  * Reporting-line guard for the WFH / shift-change approve/reject routes
- * below. Discovered, not in the original catalogue: resolveSelfScopedEmployeeId
+ * below. Discovered, not in the original catalogue: resolveSelfOrReportsScopedEmployeeId
  * already restricts the GET /wfh-requests and /shift-requests LIST queries so
  * a manager only ever sees self + direct reports (GAP-HR-SF-16 fold-in), but
  * the approve/reject routes next to those GETs only ever checked
@@ -199,13 +181,13 @@ async function isSelfApproval(ctx: RequestContext, ownerEmployeeId: string): Pro
  * manager could still approve or reject ANY other employee's pending WFH or
  * shift-change request tenant-wide, same shape as the GET-side leak
  * GAP-HR-SF-16 already fixed for the list views. HR is unaffected
- * (resolveSelfScopedEmployeeId returns `requested` unchanged for HR, which is
+ * (resolveSelfOrReportsScopedEmployeeId returns `requested` unchanged for HR, which is
  * always non-empty here since ownerEmployeeId is a real row's id). Only HR
  * and manager roles ever reach these routes (role gate above), so this is
  * safe to call unconditionally.
  */
 async function assertManagerOwnsReport(ctx: RequestContext, ownerEmployeeId: string, action: string): Promise<void> {
-  const scope = await resolveSelfScopedEmployeeId(ctx, ownerEmployeeId);
+  const scope = await resolveSelfOrReportsScopedEmployeeId(ctx, ownerEmployeeId);
   if (isEmptyScope(scope)) {
     throw new HttpError(403, "NOT_YOUR_REPORT", `you may only ${action} for your own direct reports`);
   }
@@ -271,10 +253,17 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
       empId: z.string().uuid().optional(),
       month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
     }).parse(req.query);
+    // SF-16 IDOR fix: a manager (no HR role) used to read any employee's
+    // attendance, or the whole tenant's list. Scope them to self + direct
+    // reports; HR is unchanged.
+    const scope = await resolveSelfOrReportsScopedEmployeeId(ctx, q.empId);
+    if (isEmptyScope(scope)) return q.empId && q.month ? reply.send([]) : sendValidated(reply, AttendanceSummaryListSchema, []);
+    const allowed = Array.isArray(scope) ? new Set(scope) : scope ? new Set([scope]) : undefined;
     if (q.empId && q.month) {
       return reply.send(await queries.getAttendanceByEmpAndMonth(ctx.tenantId, q.empId, q.month));
     }
-    sendValidated(reply, AttendanceSummaryListSchema, await queries.listAttendance(ctx.tenantId, q.limit));
+    const list = await queries.listAttendance(ctx.tenantId, q.limit);
+    sendValidated(reply, AttendanceSummaryListSchema, allowed ? list.filter((r) => allowed.has(r.employeeId)) : list);
   });
 
   app.get("/v1/hrms/attendance/checkin-log", async (req, reply) => {
@@ -289,11 +278,11 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     // reaches this route) got the full tenant's checkin log, not just their
     // own team's. Mirrors GET /v1/hrms/shift-requests' scoping above; HR
     // keeps the full tenant view (unchanged).
-    const scope = await resolveSelfScopedEmployeeId(ctx, undefined);
+    const scope = await resolveSelfOrReportsScopedEmployeeId(ctx, undefined);
     if (isEmptyScope(scope)) return reply.send({ data: [] });
     const employeeIds = Array.isArray(scope) ? scope : scope ? [scope] : undefined;
     // GAP-HR-CHECKIN-LOG-02 (display half): the scoping/IDOR half of this gap
-    // was already closed above by resolveSelfScopedEmployeeId (GAP-HR-SF-16);
+    // was already closed above by resolveSelfOrReportsScopedEmployeeId (GAP-HR-SF-16);
     // what remained was repo.listCheckinLog returning a raw 8-char employeeId
     // slice and a permanently blank department, with no employee/department
     // join (unlike queries.listAttendance). queries.listCheckinLog (new)
@@ -311,7 +300,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     // sibling shift/WFH/overtime lists already apply); HR sees the full queue.
     requireRole(ctx, [...ALL_ROLES, "employee"]);
     const q = listQuerySchema.parse(req.query);
-    const scope = await resolveSelfScopedEmployeeId(ctx, undefined);
+    const scope = await resolveSelfOrReportsScopedEmployeeId(ctx, undefined);
     if (isEmptyScope(scope)) return sendValidated(reply, AttendanceRegularisationListSchema, []);
     // Scope goes into the SQL WHERE (before limit), not a post-filter.
     const ids = scope === undefined ? undefined : scope === null ? [] : Array.isArray(scope) ? scope : [scope];
@@ -447,7 +436,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     // Self-service (WAVE-4): employees may only list their own shift-change
     // requests; HR/manager keep the full tenant queue or an empId filter.
     // Mirrors GET /v1/hrms/overtime-requests' IDOR guard below.
-    const effectiveEmpId = await resolveSelfScopedEmployeeId(ctx, q.empId);
+    const effectiveEmpId = await resolveSelfOrReportsScopedEmployeeId(ctx, q.empId);
     if (isEmptyScope(effectiveEmpId)) {
       return reply.send({ data: [] });
     }
@@ -486,7 +475,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     // Self-service (WAVE-4): employees may only list their own WFH requests;
     // HR/manager keep the full tenant queue or an empId filter. Mirrors
     // GET /v1/hrms/overtime-requests' IDOR guard below.
-    const effectiveEmpId = await resolveSelfScopedEmployeeId(ctx, q.empId);
+    const effectiveEmpId = await resolveSelfOrReportsScopedEmployeeId(ctx, q.empId);
     if (isEmptyScope(effectiveEmpId)) {
       return reply.send({ data: [] });
     }
@@ -573,7 +562,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
       empId: z.string().uuid().optional(),
       // GAP-HR-OVERTIME-04: the manager-scope half of this gap (a manager
       // seeing every employee's overtime, not just direct reports) was
-      // already closed by resolveSelfScopedEmployeeId below (same shared fix
+      // already closed by resolveSelfOrReportsScopedEmployeeId below (same shared fix
       // as GET /wfh-requests and /shift-requests). What remained was the
       // silent `.limit(200)` truncation with no hasMore/total signal, so a
       // tenant with >200 rows had its stat cards computed from an
@@ -583,7 +572,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
     // IDOR guard: employees may only read their own OT requests
-    const effectiveEmpId = await resolveSelfScopedEmployeeId(ctx, q.empId);
+    const effectiveEmpId = await resolveSelfOrReportsScopedEmployeeId(ctx, q.empId);
     if (isEmptyScope(effectiveEmpId)) {
       return reply.send({ data: [], hasMore: false, total: 0 });
     }
