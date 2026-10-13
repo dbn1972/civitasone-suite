@@ -14909,5 +14909,19 @@
     "windowNotePartial": "{base}: {shown} of {total} total — older or additional changes beyond this window are not shown.",
     "windowNoteCapped": "{base}: first {limit} shown — there may be more pending changes beyond this window.",
     "windowNoteShown": "{base}: {shown} shown."
+  },
+  "pluginMarketplace": {
+    "install": "Install",
+    "installed": "Installed",
+    "requested": "Install requested",
+    "requestedNote": "The install is running in the background and is not complete yet. This updates when it finishes.",
+    "stillPending": "Still installing. Check back shortly.",
+    "confirmTitle": "Install “{name}”?",
+    "confirmDescription": "Installing provisions this plugin for the entire tenant and may grant it access to tenant data. The install runs in the background after you confirm.",
+    "confirmLabel": "Request install",
+    "reasonLabel": "Reason for installing (recorded in the audit log)"
+  },
+  "idpExport": {
+    "notRecorded": "Couldn't record this export in the audit trail, so no file was created. Try again."
   }
 }

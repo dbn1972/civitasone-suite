@@ -8,6 +8,7 @@ import { registerItemConsumers } from "./modules/items/consumer.js";
 import { registerRegistryConsumers } from "./modules/registry/consumer.js";
 import { registerHookConsumers } from "./modules/hooks/consumer.js";
 import { registerStoreConsumers } from "./modules/store/consumer.js";
+import { registerMarketplaceConsumers } from "./modules/marketplace/consumer.js";
 import { registerRuntimeConsumers } from "./modules/runtime/consumer.js";
 
 const log = pino({ name: "plugins-worker" });
@@ -28,6 +29,7 @@ registerItemConsumers(queue);
 registerRegistryConsumers(queue);
 registerHookConsumers(queue);
 registerStoreConsumers(queue);
+registerMarketplaceConsumers(queue);
 registerRuntimeConsumers(queue);
 await queue.start();
 const relay = startRelay(db, queue);

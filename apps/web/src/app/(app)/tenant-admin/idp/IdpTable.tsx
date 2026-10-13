@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -9,18 +10,25 @@ import type { IdpProviderSummary } from "@/app/_data/loaders";
 export function IdpTable({ providers, source }: { providers: IdpProviderSummary[]; source: "api" | "error" }) {
   const { data, provenance, offline, cachedAt } = useSeededResource("admin.idp.providers", providers, source, (d) => d.length === 0);
 
-  // GAP-TENANT-ADMIN-IDP-04: record a CSV export as an audit event (fire-and-
-  // forget; never blocks the user's download). Endpoint identifiers would be
-  // sensitive, so that column is excluded from the CSV (see csvExclude below).
-  function recordExport(info: { rowCount: number; filter: string }) {
-    void fetch("/api/proxy/v1/admin/idp/providers/export-audit", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      credentials: "same-origin",
-      body: JSON.stringify({ rowCount: info.rowCount, filter: info.filter || null }),
-    }).catch(() => {
-      /* audit is best-effort; a failed beacon must not block the export */
-    });
+  // GAP-TENANT-ADMIN-IDP-04 / w0-report F5: FAIL-CLOSED audited export. The CSV is
+  // only built after admin-service accepts the audit record (POST
+  // /v1/admin/idp/providers/export-audit). A failed or unreachable audit call shows
+  // a plain-language message and nothing leaves the screen, so an export can never
+  // go unaudited. Never carries a status code or server text. Endpoint identifiers
+  // are sensitive, so that column is excluded from the CSV (see csvExclude below).
+  const t = useTranslations("idpExport");
+  async function exportGuard(info: { rowCount: number; filter: string }): Promise<{ ok: true } | { ok: false; message: string }> {
+    try {
+      const res = await fetch("/api/proxy/v1/admin/idp/providers/export-audit", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ rowCount: info.rowCount, filter: info.filter || null }),
+      });
+      return res.ok ? { ok: true } : { ok: false, message: t("notRecorded") };
+    } catch {
+      return { ok: false, message: t("notRecorded") };
+    }
   }
 
   return (
@@ -54,7 +62,7 @@ export function IdpTable({ providers, source }: { providers: IdpProviderSummary[
       pageSize={15}
       exportable
       exportFilename="idp-providers"
-      onExport={recordExport}
+      exportGuard={exportGuard}
       exportNotice="Export excludes endpoint URLs and is recorded in the audit log."
       />
     </>
