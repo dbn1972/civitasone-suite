@@ -127,6 +127,19 @@ export function registerF3_learning_Consumers(queue: Queue): void {
             await repo.insertEnrollment(tx, {
                   id, tenantId: p.tenantId, courseId, employeeId: body.employeeId, status: "enrolled", progressPct: 0,
                 });
+            // GAP-LEARNING-COURSES-DETAIL-02: HR enrolling someone else is
+            // audited in the SAME transaction as the enrolment write.
+            // `enrolledOnBehalf` is set (never client-supplied) by routes.ts.
+            if (body.enrolledOnBehalf === true) {
+              await enqueue(tx, {
+                topic: "audit.event.record", eventType: "audit.event.record",
+                tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+                payload: {
+                  service: "hrms", action: "enrol_on_behalf", resourceType: "learning_enrollment",
+                  resourceId: id, outcome: "success", employeeId: body.employeeId, courseId,
+                },
+              });
+            }
             break;
           }
           case "learning_routes__6": {
@@ -227,5 +240,18 @@ export function registerF3_learning_Consumers(queue: Queue): void {
       log.error({ err, op, messageId: msg.messageId }, "f3RouteWrite failed");
       throw err;
     }
+  });
+
+  // GAP-LEARNING-MY-LEARNING-01 (DPDP): audit row for an HR/manager read of
+  // another employee's enrolments, published by routes.ts's auditEnrolmentsRead.
+  queue.subscribe(COMMANDS.learningEnrolmentsRead, async (msg) => {
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await enqueue(tx, {
+        topic: "audit.event.record", eventType: "audit.event.record",
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: msg.payload as Record<string, unknown>,
+      });
+    });
   });
 }

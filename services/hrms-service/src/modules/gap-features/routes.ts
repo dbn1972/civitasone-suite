@@ -2,13 +2,13 @@
  * World-class gap features — compensation planning, LMS, skills matrix,
  * succession planning, engagement surveys, onboarding, 360° feedback, benefits.
  */
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
-import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlClient, db } from "../../shared/db.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
+import { resolveOwnEmployeeIdIfBareEmployee, resolveSelfAndReportsScope, resolveOwnEmployeeIdUnlessHr } from "../../shared/self-scope.js";
 import * as employeeRepo from "../employee/repo.js";
 import { emitAudit } from "../recruitment/audit-emit.js";
 import { captureError } from "@civitasone/observability";
@@ -17,76 +17,6 @@ import { VIGILANCE_STATUS_GROUPS } from "../disciplinary/state-machine.js";
 const HR_ROLES = ["hr_admin", "super_admin", "hr_officer"];
 const READER_ROLES = [...HR_ROLES, "manager", "employee"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
-
-/**
- * IDOR fix (audit): GET /v1/hrms/skills/gap-analysis took a client-supplied
- * employeeId with no check against the caller's identity. A bare "employee"
- * caller is forced onto their own linked hrms_employees record (resolved
- * via resolveEmployeeForActor -- NOT ctx.actorId, a different id space; see
- * employee/actor-link.ts). HR and manager roles pass the requested id
- * through unchanged -- this module has no existing "manager scoped to
- * direct reports" precedent of its own, the same judgment call
- * medical/routes.ts's resolveSelfScopedEmployeeId documents. Returns null
- * when a bare-employee caller has no resolvable employee link -- callers
- * MUST treat that as "nothing to show" (fails CLOSED).
- */
-async function resolveOwnEmployeeIdIfBareEmployee(
-  ctx: RequestContext, req: FastifyRequest, requested: string,
-): Promise<string | null> {
-  const isPrivileged = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
-  if (isPrivileged) return requested;
-  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
-  return actorEmp ? actorEmp.id : null;
-}
-
-/**
- * Scope resolver for GET /v1/hrms/certifications (CERTIFICATIONS-02) only —
- * deliberately NOT resolveOwnEmployeeIdIfBareEmployee above (that one treats
- * "manager" as fully privileged, an existing precedent this file's
- * skills/work-summaries routes already rely on and which this fix does not
- * touch). Certifications had no scoping at all before this fix, so there is
- * a free choice here, and the campaign's stated target model is used: HR
- * unrestricted (returns null — no filter), manager scoped to self + direct
- * reports, bare employee scoped to self. Returns a concrete (possibly
- * empty) array for non-HR; empty means "authorized for nothing" — callers
- * must respond with an empty list, never fall back to unscoped.
- */
-async function resolveCertificationsScope(ctx: RequestContext): Promise<string[] | null> {
-  const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
-  if (isHrActor) return null;
-  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
-  if (!actorEmp) return [];
-  if (!ctx.roles.includes("manager")) return [actorEmp.id];
-  const rows = await sqlClient.begin(async (sql) => {
-    await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
-    return sql.unsafe(
-      `SELECT id FROM employee.hrms_employees WHERE tenant_id = $1 AND manager_id = $2`,
-      [ctx.tenantId, actorEmp.id],
-    );
-  });
-  return [actorEmp.id, ...rows.map((r) => r.id as string)];
-}
-
-/**
- * IDOR fix (audit): GET /v1/hrms/skills and GET /v1/hrms/work-summaries were
- * org-wide list dumps with no employee filter at all, exposing every
- * employee's competency/appraisal data to any employee or manager. Unlike
- * resolveOwnEmployeeIdIfBareEmployee above, this scopes BOTH bare
- * "employee" and "manager" callers to their own record (only HR_ROLES is
- * privileged/tenant-wide here) -- these are list-dump endpoints with no
- * existing "manager sees direct reports" precedent, so manager is treated
- * the same as employee rather than the same as HR.
- * Returns: undefined (HR — unrestricted, no filter), a uuid (non-HR,
- * resolved to caller's own hrms_employees.id), or null (non-HR caller with
- * no resolvable employee link — callers MUST return an empty list).
- */
-async function resolveOwnEmployeeIdIfNonHr(
-  ctx: RequestContext, req: FastifyRequest,
-): Promise<string | null | undefined> {
-  if (HR_ROLES.some((r) => ctx.roles.includes(r))) return undefined;
-  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
-  return actorEmp ? actorEmp.id : null;
-}
 
 export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   // ─── Gap 1: Compensation Planning ──────────────────────────────────────────
@@ -831,7 +761,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     // convention for skills/work-summaries) — a fresh check here targets
     // the campaign's stated model: HR unrestricted, manager scoped to self
     // + direct reports, bare employee scoped to self.
-    const scope = await resolveCertificationsScope(ctx);
+    const scope = await resolveSelfAndReportsScope(ctx);
     if (Array.isArray(scope) && scope.length === 0) return reply.send({ data: [] });
     const rows = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
@@ -873,10 +803,10 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   // ── Gap: Skills (employee competency assessments) ──────────────────────────
   // IDOR fix (audit): org-wide list dump with no employee filter, exposing
   // every employee's competency data to any employee/manager. Self-scoped
-  // for non-HR callers (see resolveOwnEmployeeIdIfNonHr above).
+  // for non-HR callers (see resolveOwnEmployeeIdUnlessHr in shared/self-scope.ts).
   app.get("/v1/hrms/skills", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);
-    const scopeId = await resolveOwnEmployeeIdIfNonHr(ctx, req);
+    const scopeId = await resolveOwnEmployeeIdUnlessHr(ctx);
     if (scopeId === null) return reply.send({ data: [], meta: { total: 0, hasMore: false } });
     // GAP-HR-SKILLS-06: the old hard LIMIT 500 with no offset/total silently
     // truncated with no way for the client to know or page further.
@@ -1080,10 +1010,10 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   // ── Gap: Work Summaries (derived from appraisals) ─────────────────────────
   // IDOR fix (audit): org-wide list dump with no employee filter, exposing
   // every employee's appraisal-derived data to any employee/manager.
-  // Self-scoped for non-HR callers (see resolveOwnEmployeeIdIfNonHr above).
+  // Self-scoped for non-HR callers (see resolveOwnEmployeeIdUnlessHr in shared/self-scope.ts).
   app.get("/v1/hrms/work-summaries", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);
-    const scopeId = await resolveOwnEmployeeIdIfNonHr(ctx, req);
+    const scopeId = await resolveOwnEmployeeIdUnlessHr(ctx);
     if (scopeId === null) return reply.send({ data: [], total: 0, offset: 0 });
     const q = z.object({ offset: z.coerce.number().int().min(0).default(0) }).parse(req.query ?? {});
     const PAGE_SIZE = 500;

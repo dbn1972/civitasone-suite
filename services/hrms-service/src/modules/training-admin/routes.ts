@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
@@ -167,7 +168,13 @@ export async function trainingAdminRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const { id } = idParam.parse(req.params);
-    const rows = await repo.listAttendance(ctx.tenantId, id);
+    let rows = await repo.listAttendance(ctx.tenantId, id);
+    // SF-16 IDOR fix: a bare employee sees only their OWN attendance row for
+    // the session (and a summary of it), never co-attendees'. Unlinked => none.
+    if (!HR_ROLES.some((r) => ctx.roles.includes(r)) && !ctx.roles.includes("manager")) {
+      const own = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+      rows = own ? rows.filter((r) => r.employeeId === own.id) : [];
+    }
     return reply.send({ records: rows, summary: summariseAttendance(rows) });
   });
 

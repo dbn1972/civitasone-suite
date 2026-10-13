@@ -45,7 +45,7 @@ function tok(roles: string[], sub: string) {
   return signToken({ sub, tid: TENANT, roles, sid: "sess-learning-idor" }, SECRET);
 }
 const empAToken = tok(["employee"], A_SUB);
-const hrToken   = tok(["hr_admin"], "learning-idor-hr");
+const hrToken   = tok(["hr_admin"], "facade00-1ea2-4000-8000-0000000000a1");
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 const asTenant = <T>(fn: (tx: typeof sqlClient) => Promise<T>): Promise<T> => withRawTenantGuc(sqlClient, TENANT, fn);
