@@ -16,8 +16,9 @@ import { type OnboardingDocument, type DocStatus } from "../_components/Document
 import { DocumentsPanel } from "../_components/DocumentsPanel";
 import { TaskCalendar, type CalendarTask } from "../_components/TaskCalendar";
 import { getTranslations } from "next-intl/server";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
-const ONBOARDING_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const ONBOARDING_ROLES = HR_STAFF_ROLES;
 
 // ---------------------------------------------------------------------------
 // Types

@@ -4,9 +4,11 @@ import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
-  resolveOwnEmployeeIdIfBareEmployee,
+  resolveLearningReadTarget,
   resolveOwnEmployeeIdIfNonHr,
 } from "../../shared/self-scope.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import {
   computeProgress, deriveEnrollmentStatus, nextResumeLesson, checkPrerequisites,
@@ -20,6 +22,35 @@ import * as repo from "./repo.js";
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
 const idParam = z.object({ id: z.string().uuid() });
+
+/**
+ * GAP-LEARNING-MY-LEARNING-01 (DPDP): record that a privileged (HR/manager)
+ * caller read ANOTHER employee's learning data. Reading one's own record is
+ * not audited. Published (fire-and-forget CQRS) -- the audit outbox row is
+ * written by learning/f3-consumer.ts, since a route may not write to Postgres.
+ */
+async function auditEnrolmentsRead(
+  ctx: { tenantId: string; actorId: string; correlationId: string; roles: string[] },
+  targetEmployeeId: string,
+  view: "my-learning" | "dashboard" | "enrollment",
+): Promise<void> {
+  const own = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+  if (own?.id === targetEmployeeId) return;
+  await queue.publish(COMMANDS.learningEnrolmentsRead, {
+    messageId: randomUUID(),
+    type: COMMANDS.learningEnrolmentsRead,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: {
+      service: "hrms", action: "read", resourceType: "learning_enrollment",
+      resourceId: targetEmployeeId, outcome: "success", view,
+    },
+  });
+}
+const isHrCtx = (ctx: { roles: string[] }): boolean => HR_ROLES.some((r) => ctx.roles.includes(r));
+const isHrOrManagerCtx = (ctx: { roles: string[] }): boolean => isHrCtx(ctx) || ctx.roles.includes("manager");
 
 export async function learningRoutes(app: FastifyInstance): Promise<void> {
   // ── Catalogue: courses ──────────────────────────────────────────
@@ -175,7 +206,15 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     // Persist the SELF-SCOPED employee id (effectiveEmployeeId), not the raw
     // attacker-supplied body.employeeId, so the async consumer inserts the
     // enrolment against the correct identity.
-    await publishF3Write(ctx, "learning_routes__5", enrollmentId, { body: { ...((req.body as Record<string, unknown>) ?? {}), employeeId: effectiveEmployeeId }, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // GAP-LEARNING-COURSES-DETAIL-02: HR enrolling someone other than
+    // themselves is audited by the consumer, in the enrolment's own
+    // transaction. Set AFTER the spread so a client cannot forge/clear it.
+    let enrolledOnBehalf = false;
+    if (isHrCtx(ctx)) {
+      const own = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+      enrolledOnBehalf = own?.id !== effectiveEmployeeId;
+    }
+    await publishF3Write(ctx, "learning_routes__5", enrollmentId, { body: { ...((req.body as Record<string, unknown>) ?? {}), employeeId: effectiveEmployeeId, enrolledOnBehalf }, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     // Deterministic post-insert values — match the consumer's insertEnrollment literals.
     return reply.code(201).send({ id: enrollmentId, status: "enrolled", progressPct: 0 });
   });
@@ -222,11 +261,13 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     // GAP-LEARNING-MY-LEARNING-01 IDOR fix: a bare employee always reads their
     // OWN enrolments regardless of the employeeId they submit; HR/manager pass
-    // through. `employeeId` is now optional — when absent the caller gets their
-    // own record (the normal self-service path).
+    // through (and are audited when the target is someone else). `employeeId`
+    // is optional — when absent the caller gets their own record (the normal
+    // self-service path). Fail closed ([]) when no employee can be resolved.
     const { employeeId } = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
-    const effectiveEmployeeId = await resolveOwnEmployeeIdIfBareEmployee(ctx, req, employeeId ?? "");
+    const effectiveEmployeeId = await resolveLearningReadTarget(ctx, employeeId);
     if (!effectiveEmployeeId) return reply.send([]);
+    if (isHrOrManagerCtx(ctx)) await auditEnrolmentsRead(ctx, effectiveEmployeeId, "my-learning");
     return reply.send(await repo.listMyEnrollments(ctx.tenantId, effectiveEmployeeId));
   });
 
@@ -238,17 +279,19 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const { employeeId } = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
-    // GAP-LEARNING-MY-LEARNING-01: a bare employee only sees their OWN counts
-    // regardless of ?employeeId; HR/manager may omit it for tenant-wide totals
-    // or pass a specific id. A bare employee with no linked record gets zeros
+    // GAP-LEARNING-HOME-01 / GAP-LEARNING-MY-LEARNING-01: ONLY HR may omit
+    // ?employeeId for tenant-wide totals. A manager (or bare employee) who
+    // omits it gets their OWN counts; a bare employee is forced onto their own
+    // record even when another id is passed; a manager may pass a specific id
+    // (audited). With no resolvable employee link the caller gets zeros
     // (fail closed), never tenant-wide figures.
-    const isPrivileged = ["hr_admin", "hr_officer", "super_admin", "manager"].some((r) => ctx.roles.includes(r));
     let scopedEmployeeId = employeeId;
-    if (!isPrivileged) {
-      const own = await resolveOwnEmployeeIdIfBareEmployee(ctx, req, employeeId ?? "");
-      if (!own) return reply.send({ enrolled: 0, in_progress: 0, completed: 0, overdue: 0, total: 0 });
-      scopedEmployeeId = own;
+    if (!isHrCtx(ctx)) {
+      const target = await resolveLearningReadTarget(ctx, employeeId);
+      if (!target) return reply.send({ enrolled: 0, in_progress: 0, completed: 0, overdue: 0, total: 0 });
+      scopedEmployeeId = target;
     }
+    if (scopedEmployeeId && isHrOrManagerCtx(ctx)) await auditEnrolmentsRead(ctx, scopedEmployeeId, "dashboard");
     const [statusCounts, overdueCount] = await Promise.all([
       repo.countEnrollmentsByStatus(ctx.tenantId, scopedEmployeeId),
       repo.countOverdueEnrollments(ctx.tenantId, scopedEmployeeId),
@@ -371,6 +414,8 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     if (!isPrivileged) {
       const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
       if (!actorEmp || actorEmp.id !== row.employeeId) throw new HttpError(404, "NOT_FOUND", "enrollment not found");
+    } else {
+      await auditEnrolmentsRead(ctx, row.employeeId, "enrollment");
     }
     return reply.send(row);
   });

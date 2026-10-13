@@ -47,8 +47,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 ### GAP-SETTINGS-BRANDING-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-- **W0-10 note:** review found the W0 tick partly — Client dropzone+file input, PNG/SVG, 200KB and https/data: URL validation done (branding/page.tsx:465-512,694-738), but upload is only a data: URL put in logoUrl and sent in PUT while theme-service upsertBrandBody validates logoUrl as z.string().url().max(2048) (services/theme-service/src/modules/tokens/validators.ts:28), so a 150KB data URL cannot persist; no upload endpoint/SVG sanitisation (code comment 'backend sanitises' is not true). Acceptance 'persists after save' fails
+- [x] **Status** (W1 follow-up: closed by #2002, verified on main d341ad6f1)
 - **First-pass claim:** "Drag & drop logo here" has no drop handler and no file input — the only working control is the "Logo image URL" text box, and the arbitrary URL is rendered in <img> in the preview and sent unchecked to the API (page.tsx:503-530).
 - **Verified evidence:** apps/web/src/app/(app)/settings/branding/page.tsx:503-530 the dashed zone shows 'Drag & drop logo here' (:515) and 'SVG or PNG, max 200KB' but has no onDrop/onDragOver/onClick handlers and no <input type=file>; the only control is a text input `Logo image URL` writing config.logoUrl, rendered via <img src> in the zone (:511) and in the preview (:~182), and sent in the PUT. No validation of scheme or type. Also, middleware CSP is `img-src 'self' data: blob:` (middleware.ts:73), so an external https logo URL will be blocked in the browser anyway; only same-origin or data: URLs render. There is a FileUpload DS component (_components/ds/FileUpload.tsx) that could be reused, but its backend upload endpoint is not visible.
 - **Files to change:** `apps/web/src/app/(app)/settings/branding/page.tsx`, `apps/web/src/app/_components/ds/FileUpload.tsx`, `(backend) theme-service logo upload endpoint if absent`
@@ -100,6 +99,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0-10 note:** review found the W0 tick partly — loading skeleton added (page.tsx:560) but on brand-fetch failure Save stays enabled and message says Showing defaults — review before saving (page.tsx:411-415), no Retry button; canEdit (page.tsx:366) ignores loadError so defaults can overwrite stored branding
+- **W1 note (2026-10-13):** Not fixed by #2001: on brand-fetch failure Save is still enabled and there is no Retry (checked on main d341ad6f1).
 - **First-pass claim:** On first load the editor shows hard-coded defaults with no skeleton or "loading" state until the brand fetch resolves, so a returning admin may edit and save over their real branding before it loads (page.tsx:383-409).
 - **Verified evidence:** apps/web/src/app/(app)/settings/branding/page.tsx:321-348 initial state is hard-coded defaults; the load effect at :373-393 replaces it via .then(setConfig) with no loading flag. Save is disabled only by `!dirty || saving` (:~640), so an admin can edit within the fetch window, and then setConfig overwrites their edit, or if they save first, the PUT (whole config) writes defaults over stored branding. On load failure the banner says 'Showing defaults — saving will still work' (:~396), which invites overwriting real branding with defaults.
 - **Files to change:** `apps/web/src/app/(app)/settings/branding/page.tsx`
@@ -120,6 +120,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0 note:** partly fixed by #1925 — Client role check (BRANDING_ADMIN_ROLES) and save confirm added; no settings layout gate; server auth/audit unverifiable
+- **W1 SF-20 note:** backend checked: theme-service PUT /v1/themes/brand and apply-preset require theme_admin or super_admin (brand-routes.ts ADMIN_ROLES); GET is open to any caller, so settings/layout.tsx is deliberately an open pass-through (the page is read-only for non-admins). Left open: the audit event is still unverified, and the page's BRANDING_ADMIN_ROLES also lists tenant_admin, which the backend does not, so a tenant_admin sees enabled controls whose Save returns 403.
 - **First-pass claim:** Any signed-in user can rewrite tenant-wide branding: no requireAnyRole, no settings/layout.tsx and no ModuleGate; Save PUTs the entire BrandConfig with no confirmation and no audit indication in the UI. theme-service is absent from the snapshot (services/ has only hrms-service), so server role checks and auditing are undeterminable (page.tsx:430-455).
 - **Service:** `theme-service`  ·  **Endpoint(s):** `['GET/PUT /api/proxy/v1/themes/brand', 'GET /api/proxy/v1/themes/brand/presets']`
 - **Question:** Does PUT /v1/themes/brand require a tenant-admin role and emit an audit event with before/after?

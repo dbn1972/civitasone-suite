@@ -8,9 +8,14 @@ import {
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function listByTenant(tenantId: string, limit = 200): Promise<AttendanceRow[]> {
+export async function listByTenant(tenantId: string, limit = 200, employeeIds?: string[]): Promise<AttendanceRow[]> {
+  if (employeeIds && employeeIds.length === 0) return [];
+  // Employee scope is applied in SQL, BEFORE the limit, so a scoped caller is
+  // never starved by tenant-wide rows that fall inside the limit window.
   return scopedRead((tx) => tx.select().from(hrmsAttendance)
-    .where(eq(hrmsAttendance.tenantId, tenantId))
+    .where(employeeIds
+      ? and(eq(hrmsAttendance.tenantId, tenantId), inArray(hrmsAttendance.employeeId, employeeIds))
+      : eq(hrmsAttendance.tenantId, tenantId))
     .limit(limit));
 }
 

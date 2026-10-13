@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { canReadEmployeeRecord } from "../../shared/self-scope.js";
 import { publishF3Write } from "../../shared/f3-publish.js";
 /**
  * LTC and CEA claim modules (submit -> approve, with ceiling enforcement).
@@ -90,6 +91,9 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, SUBMIT_ROLES);
     const { id } = idParam.parse(req.params);
+    // SF-16 IDOR fix: a bare employee may only list their OWN claims, a manager
+    // their own or a direct report's; HR/finance/payroll keep tenant access.
+    if (!(await canReadEmployeeRecord(ctx, id, HR_ROLES))) throw new HttpError(403, "FORBIDDEN", "you may only view your own claims");
     return reply.send(jsonSafe({ data: await repo.listLtcByEmployee(ctx.tenantId, id) }));
   });
 
@@ -98,6 +102,8 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, SUBMIT_ROLES);
     const { claimId } = claimParam.parse(req.params);
     const c = await mustLtc(ctx.tenantId, claimId);
+    // SF-16 IDOR fix: 404 (not 403) so claim ids are not enumerable.
+    if (!(await canReadEmployeeRecord(ctx, c.employeeId, HR_ROLES))) throw new HttpError(404, "NOT_FOUND", "claim not found");
     return reply.send(jsonSafe(c));
   });
 
@@ -177,6 +183,9 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, SUBMIT_ROLES);
     const { id } = idParam.parse(req.params);
+    // SF-16 IDOR fix: a bare employee may only list their OWN claims, a manager
+    // their own or a direct report's; HR/finance/payroll keep tenant access.
+    if (!(await canReadEmployeeRecord(ctx, id, HR_ROLES))) throw new HttpError(403, "FORBIDDEN", "you may only view your own claims");
     return reply.send(jsonSafe({ data: await repo.listCeaByEmployee(ctx.tenantId, id) }));
   });
 
@@ -185,6 +194,8 @@ export async function claimsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, SUBMIT_ROLES);
     const { claimId } = claimParam.parse(req.params);
     const c = await mustCea(ctx.tenantId, claimId);
+    // SF-16 IDOR fix: 404 (not 403) so claim ids are not enumerable.
+    if (!(await canReadEmployeeRecord(ctx, c.employeeId, HR_ROLES))) throw new HttpError(404, "NOT_FOUND", "claim not found");
     return reply.send(jsonSafe(c));
   });
 

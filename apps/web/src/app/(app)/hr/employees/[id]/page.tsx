@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatusPill, LoadErrorState } from "../../../../_components/ds";
+import { PageHeader, Card, StatusPill, LoadErrorState, Masked } from "../../../../_components/ds";
 import { getEmployeeById } from "../../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 import { getSessionRoles, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
-import { EMPLOYEE_ADMIN_ROLES } from "@/lib/auth/workRoles";
+import { EMPLOYEE_ADMIN_ROLES, EMPLOYEE_PII_REVEAL_ROLES, EMPLOYEE_PHONE_REVEAL_ROLES } from "@/lib/auth/workRoles";
 import { isServingStatus, isExitedStatus } from "@/lib/employeeStatus";
 import { LifecycleTimeline, type LifecycleEvent } from "../../_components/LifecycleTimeline";
 import { fetchJson } from "@/app/_data/apiClient";
@@ -198,6 +198,12 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
   // report), unrelated to *administering the employee record itself*.
   const roles = getSessionRoles();
   const canAdminister = roles.some((r) => EMPLOYEE_ADMIN_ROLES.includes(r));
+  // W1 SF-05a: values arrive server-masked; a permitted role gets the audited reveal (reason + audit row).
+  const canRevealPii = roles.some((r) => EMPLOYEE_PII_REVEAL_ROLES.includes(r));
+  const canRevealPhone = roles.some((r) => EMPLOYEE_PHONE_REVEAL_ROLES.includes(r));
+  const revealFor = (field: string, label: string, canReveal: boolean) => ({
+    canReveal, resourceType: "employee" as const, resourceId: params.id, field, label, revealPath: "v1/hrms/pii/reveal",
+  });
   const costCenterName = canAdminister && employee.costCenterId ? await getCostCenterName(employee.costCenterId) : null;
   // GAP-ADMIN-BULK-SCAN-02: scanned records on the personnel file (hrms-service gates the read to these same HR roles).
   const scannedDocs = canAdminister ? await getEmployeeScannedDocuments(params.id) : null;
@@ -426,38 +432,50 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
           {employee.phone && (
             <div className="fld">
               <span className="l">{t("fieldPhone")}</span>
-              <span className="v">{employee.phone}</span>
+              <span className="v">
+                <Masked kind="phone" value={employee.phone} ariaLabel={t("maskedAriaLabel")}
+                  onReveal={revealFor("phone", t("fieldPhone"), canRevealPhone)} />
+              </span>
             </div>
           )}
         </div>
       </Card>
 
-      {/* GAP-HR-EMPLOYEES-DETAIL-05: PAN/bank account/IFSC are already
-          returned by GET /v1/hrms/employees/:id, already masked server-side
-          (queries.ts's maskValue -- this API never sends the unmasked
-          value to begin with, so there is no reveal control here, ever) --
-          they just weren't shown anywhere on this page. Admin-only: an
-          employee's own bank details are not something a manager viewing
-          a direct report needs to see. */}
+      {/* GAP-HR-EMPLOYEES-DETAIL-05: PAN/bank account/IFSC are returned by
+          GET /v1/hrms/employees/:id already masked server-side (queries.ts
+          maskValue). W1 SF-05a: hr_admin / super_admin get an audited reveal
+          (reason required, audit row written before the value is returned --
+          POST /v1/hrms/pii/reveal); everyone else only ever sees the masked
+          value. Admin-only card: an employee's own bank details are not
+          something a manager viewing a direct report needs to see. */}
       {canAdminister && (employee.pan || employee.bankAccountNo || employee.bankIfsc) && (
         <Card title={t("statutoryBankTitle")} padding>
           <div className="fields">
             {employee.pan && (
               <div className="fld">
                 <span className="l">{t("fieldPan")}</span>
-                <span className="v" style={{ fontFamily: "monospace" }} aria-label={t("maskedAriaLabel")}>{employee.pan}</span>
+                <span className="v">
+                  <Masked kind="pan" value={employee.pan} ariaLabel={t("maskedAriaLabel")}
+                    onReveal={revealFor("pan", t("fieldPan"), canRevealPii)} />
+                </span>
               </div>
             )}
             {employee.bankAccountNo && (
               <div className="fld">
                 <span className="l">{t("fieldBankAccount")}</span>
-                <span className="v" style={{ fontFamily: "monospace" }} aria-label={t("maskedAriaLabel")}>{employee.bankAccountNo}</span>
+                <span className="v">
+                  <Masked kind="account" value={employee.bankAccountNo} ariaLabel={t("maskedAriaLabel")}
+                    onReveal={revealFor("bankAccountNo", t("fieldBankAccount"), canRevealPii)} />
+                </span>
               </div>
             )}
             {employee.bankIfsc && (
               <div className="fld">
                 <span className="l">{t("fieldBankIfsc")}</span>
-                <span className="v" style={{ fontFamily: "monospace" }} aria-label={t("maskedAriaLabel")}>{employee.bankIfsc}</span>
+                <span className="v">
+                  <Masked kind="last4" value={employee.bankIfsc} ariaLabel={t("maskedAriaLabel")}
+                    onReveal={revealFor("bankIfsc", t("fieldBankIfsc"), canRevealPii)} />
+                </span>
               </div>
             )}
           </div>

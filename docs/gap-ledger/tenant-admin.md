@@ -911,8 +911,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-IDP-04  ·  LOW  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-- **W0-10 note:** review found the W0 tick partly — IdpTable.tsx:12-24,57 posts export audit to /api/proxy/v1/admin/idp/providers/export-audit and excludes endpoint, but no such backend route exists in services (only /v1/admin/idp/providers, admin-service gap/routes.ts:800), so the beacon 404s silently; acceptance 'backend export audit event exists per download' unmet
+- [x] **Status** (W1 follow-up: closed by #2002, verified on main d341ad6f1)
 - **First-pass claim:** Duplicate Add Provider CTA (header and EmptyState) and exportable table with no audit of export (IdpTable.tsx:32-34).
 - **Verified evidence:** Export: IdpTable.tsx:33-34 sets exportable + exportFilename; ds/DataTable.tsx downloadCsv (lines ~267-290) builds a client-side Blob CSV of all columns (including endpoint) with no audit call or role check - true. Duplicate CTA is weak: idp/page.tsx:23 header 'Add Provider' is always shown, and the second (line 50) appears only in the empty state, which is a normal pattern (and both go to the same place, see IDP-02).
 - **Files to change:** `apps/web/src/app/_components/ds/DataTable.tsx`, `apps/web/src/app/(app)/tenant-admin/idp/IdpTable.tsx`

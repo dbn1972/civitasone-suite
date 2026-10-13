@@ -62,7 +62,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-HOME-05  ·  LOW  ·  partly  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1867, verified on main 9c5e9e9e9; W1 SF-12 re-confirmed on #2003)
 - **First-pass claim:** Tiles link to /works/masters and /works/reports without any role gate; hub does not mirror the works_operator role used in contractor pages (contractors/[id]/page.tsx:58).
 - **Verified evidence:** apps/web/src/app/(app)/works/page.tsx:42-47 does gate the Quick Actions card with WORKS_ADMIN_ROLES, but the eight module tiles (:87-107), including /works/masters and /works/reports, are ungated; masters/page.tsx and its create form (apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx) do no role check (no getSessionRoles in masters or reports). WORKS_ADMIN_ROLES (works_admin, dao, do, super_admin, div_officer) omits works_operator and differs from PROPOSAL_WRITE_ROLES and CONTRACTOR_RATE_ROLES (apps/web/src/app/(app)/works/contractors/[id]/page.tsx:58-64), so role lists are duplicated and inconsistent. Server enforcement cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/works/page.tsx`, `apps/web/src/lib/auth/workRoles.ts`, `apps/web/src/app/(app)/works/masters/page.tsx`, `apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx`
@@ -1920,8 +1920,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-RECORD-PROGRESS-01  ·  HIGH  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-- **W0 note:** partly fixed by #1867 — Work EntityPicker + scope select + scopesError state done, UUID input removed. Remains: Retry button calls setWorkId(w=>`${w}`) which is a same-value no-op so the scopes effect never re-runs (Retry does not refetch)
+- [x] **Status** (W1 follow-up: closed by #2002, verified on main d341ad6f1)
 - **First-pass claim:** No workId → the form asks the clerk to paste a scope UUID (page.tsx:186-197); the hint says "enter a scope ID manually" but there is nowhere in the app that lists scope ids, and the preload failure is silently swallowed (page.tsx:90-93).
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/record-progress/page.tsx:189-197 renders a free-text scope UUID input (placeholder is a sample UUID) whenever scopes.length==0; hint at :201-205. Scopes preload only runs when ?workId= is present (:70-100), so the primary entry point (+ Record progress on apps/web/src/app/(app)/works/execution/page.tsx:31-37, no workId) always lands on the UUID box. Preload failure is swallowed by design (catch at :90-93, comment :79-82) so the user gets 'No scopes found' even on an outage. Overstated only in that the dropdown (:172-187) is used when arriving from a work page and preload succeeds. No page shows a work_scope.id (work detail apps/web/src/app/(app)/works/execution/[workId]/page.tsx:135-141 shows label/target/dates only), so the manual fallback is unusable.
 - **Files to change:** `apps/web/src/app/(app)/works/execution/record-progress/page.tsx`, `apps/web/src/app/_components/ds/EntityPicker.tsx (new)`, `apps/web/src/app/_components/ds/index.ts`
@@ -2036,7 +2035,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-MASTERS-03  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1867, verified on main 9c5e9e9e9; W1 SF-12 re-confirmed on #2003)
 - **First-pass claim:** Parent references (Work Type ID, Program ID) are raw UUID text boxes labelled "Paste Work Type UUID" (MasterCreateForm.tsx:53,73,83) and the table shows only an 8-character ID prefix (page.tsx:124), so a user cannot look the UUID up on this screen.
 - **Verified evidence:** apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx:53 (work-sub-types workTypeId), :73 (repair-types programId), :83 (scopes workTypeId) are required text inputs with 'Paste ... UUID' placeholders; apps/web/src/app/(app)/works/masters/page.tsx:124 shows String(item.id).slice(0,8) as the ID column and never shows parent. The UUID cannot be found on this screen (the ID column is truncated). Whether list responses include workTypeId/programId cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx`, `apps/web/src/app/(app)/works/masters/page.tsx`, `apps/web/src/app/_components/ds/EntityPicker.tsx (new)`
@@ -2054,7 +2053,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-MASTERS-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1867, verified on main 9c5e9e9e9; W1 SF-12 re-confirmed on #2003)
 - **First-pass claim:** Registry is create-only: no edit, deactivate or delete, and no parent/child display for Work Sub-Types, Scopes or Repair Types (page.tsx:67-72).
 - **Verified evidence:** apps/web/src/app/(app)/works/masters/page.tsx:67-72 columns are ID/Name/Code/Active only; apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx only POSTs (:264) and the row cannot be clicked (no rowHref, page.tsx:179-190). No edit/deactivate/delete UI exists, and parent/child columns are absent for sub-types, scopes and repair types. Whether PATCH/PUT/DELETE endpoints exist in works-service cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/works/masters/page.tsx`, `apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx`, `services/works-service (not in snapshot)`

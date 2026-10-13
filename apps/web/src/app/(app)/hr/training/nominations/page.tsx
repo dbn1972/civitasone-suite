@@ -7,6 +7,7 @@ import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getTranslations } from "next-intl/server";
 import { formatIndianDate } from "@/lib/formatters";
 import { NominationsTable, type NominationRow } from "./NominationsTable";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 type RawRow = {
   id: string;
@@ -53,7 +54,7 @@ async function getData(): Promise<LoaderResult<Payload>> {
  * Mirrors training/routes.ts: GET /v1/hrms/training/nominations
  * requires HR_ROLES = ["hr_admin", "hr_officer", "super_admin"].
  */
-const TRAINING_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const TRAINING_ADMIN_ROLES = HR_STAFF_ROLES;
 
 export default async function TrainingNominationsPage() {
   const t = await getTranslations("trainingNominations");

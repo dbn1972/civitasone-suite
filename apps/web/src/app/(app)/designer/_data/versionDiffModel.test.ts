@@ -5,7 +5,6 @@ import {
   buildVersionDiffRows,
   extractFeeFromMinor,
   feeSummaryForPublish,
-  formatPaiseInr,
 } from "./versionDiffModel";
 
 const current: ServiceDefinitionDto = {
@@ -36,8 +35,7 @@ describe("versionDiffModel", () => {
   it("extracts feeFromMinor from runtimeMeta", () => {
     expect(extractFeeFromMinor(current)).toBe(75000);
     // GAP-DESIGNER-DETAIL-ENGINES-04: unified with formatMoney — always 2dp.
-    expect(formatPaiseInr(75000)).toBe("₹750.00");
-    expect(formatPaiseInr(75000)).toBe(formatMoney(75000));
+    expect(formatMoney(75000)).toBe("₹750.00");
   });
 
   it("emits human-readable fee and form field summaries", () => {

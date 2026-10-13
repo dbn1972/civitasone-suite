@@ -241,6 +241,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   // GAP-ADMIN-BULK-SCAN-02: scan-link target (lookup + scanned-documents read).
   const { scanLinkRoutes } = await import("./modules/employee/scan-link-routes.js");
   await app.register(scanLinkRoutes);
+  // W1 SF-05a: audited reveal of employee PAN / Aadhaar / bank / phone.
+  await app.register((await import("./modules/employee/pii-reveal.js")).employeePiiRevealRoutes);
 
   // ── NON-CORE: gated by HRMS_MODULES ──────────────────────────────────────
   // leave

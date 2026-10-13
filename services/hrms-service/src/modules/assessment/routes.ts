@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { canReadEmployeeRecord } from "../../shared/self-scope.js";
 import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
@@ -311,6 +312,10 @@ export async function assessmentRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const attempt = await repo.getAttempt(ctx.tenantId, id);
     if (!attempt) throw new HttpError(404, "NOT_FOUND", "attempt not found");
+    // SF-16 IDOR fix: an attempt (score, status, certificate) belongs to one
+    // employee -- a bare employee only reads their own, a manager their own or
+    // a direct report's; 404 keeps attempt ids non-enumerable.
+    if (!(await canReadEmployeeRecord(ctx, attempt.employeeId, HR_ROLES))) throw new HttpError(404, "NOT_FOUND", "attempt not found");
     const cert = await repo.getCertificateByAttempt(ctx.tenantId, id);
     return reply.send({ ...attempt, certificate: cert ?? null });
   });

@@ -9,6 +9,8 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
 }));
 
+const escapeRegExp = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 describe("Sidebar", () => {
   it("renders brand name", () => {
     render(<Sidebar />);
@@ -178,6 +180,26 @@ describe("Sidebar", () => {
     it("is hidden from roles the hub does not admit", () => {
       render(<Sidebar enabledModules={null} roles={["hr_admin"]} />);
       expect(screen.queryByRole("link", { name: /Administration/ })).not.toBeInTheDocument();
+    });
+  });
+
+  // SF-20: role-gated entries are hidden from roles whose module layout would redirect them.
+  describe("role-gated entries (SF-20)", () => {
+    it.each([
+      ["Tenant Admin", "tenant_admin", "crm_user"],
+      ["Change & Release", "tenant_admin", "hr_admin"],
+      ["Identity", "tenant_admin", "crm_user"],
+      ["HR & Payroll", "hr_admin", "crm_user"],
+    ])("%s is shown to %s and hidden from %s", (label, allowed, denied) => {
+      const { unmount } = render(<Sidebar enabledModules={null} roles={[allowed]} />);
+      expect(screen.getByRole("link", { name: new RegExp(escapeRegExp(label)) })).toBeInTheDocument();
+      unmount();
+      render(<Sidebar enabledModules={null} roles={[denied]} />);
+      expect(screen.queryByRole("link", { name: new RegExp(escapeRegExp(label)) })).not.toBeInTheDocument();
+    });
+    it("shows every entry when roles are unknown (advisory hide only)", () => {
+      render(<Sidebar enabledModules={null} />);
+      expect(screen.getByRole("link", { name: /Change & Release/ })).toBeInTheDocument();
     });
   });
 

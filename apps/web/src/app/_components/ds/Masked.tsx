@@ -152,6 +152,8 @@ export interface MaskedProps {
     resourceId: string;
     field: string;
     label: string;
+    /** Reveal endpoint override (HR: `v1/hrms/pii/reveal`); default crm. */
+    revealPath?: string;
   };
 }
 
@@ -168,6 +170,7 @@ export function Masked({ value, kind, fallback = null, className, ariaLabel, onR
           resourceId={onReveal.resourceId}
           field={onReveal.field}
           label={onReveal.label}
+          {...(onReveal.revealPath ? { revealPath: onReveal.revealPath } : {})}
           className={className}
         />
       );

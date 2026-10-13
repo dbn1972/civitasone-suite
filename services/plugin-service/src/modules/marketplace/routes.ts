@@ -40,12 +40,24 @@ export async function marketplaceRoutes(app: FastifyInstance): Promise<void> {
     const row = await runWithTenant(ctx.tenantId, () => db.transaction((tx) => repo.findInstalledByListingTx(tx, ctx.tenantId, id)));
     return reply.send({ data: { pluginId: id, status: row ? "installed" : "install_requested", ...(row ? { installId: row.id, state: row.state } : {}) } });
   });
+  // Review is asynchronous (202): the plugin.marketplace.review consumer records it.
+  // reviewId is the command messageId; GET .../review reports it back once applied.
   app.post("/v1/plugins/marketplace/:id/review", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-    const body = z.object({ rating: z.number().int().min(1).max(5), comment: z.string().max(1000).optional() }).parse(req.body);
-    await queue.publish("plugin.marketplace.review", { messageId: randomUUID(), type: "plugin.marketplace.review", tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { pluginId: id, ...body, reviewerId: ctx.actorId } });
-    return reply.code(202).send({ data: { pluginId: id, status: "accepted" } });
+    const body = z.object({ rating: z.number().int().min(1).max(5), comment: z.string().trim().max(1000).optional() }).parse(req.body);
+    const listing = await repo.findListing(id);
+    if (!listing || !listing.isActive) throw new HttpError(404, "NOT_FOUND", "Plugin not found");
+    const reviewId = randomUUID();
+    await queue.publish(COMMANDS.marketplaceReview, { messageId: reviewId, type: COMMANDS.marketplaceReview, tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { pluginId: id, ...body, reviewerId: ctx.actorId } });
+    return reply.code(202).send({ data: { reviewId, pluginId: id, status: "review_requested" } });
+  });
+  // The caller's own review of this listing (null until the consumer has applied it).
+  app.get("/v1/plugins/marketplace/:id/review", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ADMIN);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const row = await runWithTenant(ctx.tenantId, () => db.transaction((tx) => repo.findReviewTx(tx, ctx.tenantId, id, ctx.actorId)));
+    return reply.send({ data: row ? { pluginId: id, reviewId: row.messageId, rating: row.rating, comment: row.comment, updatedAt: row.updatedAt } : null });
   });
   app.setErrorHandler((err, req, reply) => {
     const cid = (req.headers["x-correlation-id"] as string) ?? req.id;

@@ -2736,8 +2736,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-01  ·  HIGH  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-- **W0-10 note:** review found the W0 tick partly — Subtitle fixed, Segmented status filter added, PO/RFQ pickers exclude/disable blacklisted, RFQ route 422 (rfq/routes.ts:36). But POST /v1/procurement/pos (po/routes.ts:38-42 -> commands.ts:9) returns 202 with no sync blacklist check; rejection only async in po/consumer.ts:178 (event+audit, no PO), so acceptance "POST PO with blacklisted vendorId returns 4xx" unmet; CreatePOForm.tsx:44 comment wrongly claims 422. not_empanelled not warned/disabled.
+- [x] **Status** (W1 follow-up: closed by #2002, verified on main d341ad6f1)
 - **First-pass claim:** Subtitle promises "Approved vendor directory" but the table lists every status, including Blacklisted and Not Empanelled, mixed with approved vendors and with no filter (Table) — the same list feeds the PO and RFQ pickers, which is how blacklisted vendors become selectable.
 - **Verified evidence:** apps/web/src/app/(app)/procurement/vendors/page.tsx:156 subtitle says 'Approved vendor directory'; l.142 fetches limit 500 with no status filter and VendorsTable.tsx:244-270 lists all statuses with only a free-text filter (l.249). The PO and RFQ pickers also take all vendors: procurement/orders/new/CreatePOForm.tsx:28-33 and rfq/new/CreateRFQForm.tsx:42-46 call /procurement/vendors?limit=100 and only filter on id&&name, with VendorOption = {id,name} (no status). So blacklisted vendors are selectable client-side; server-side rejection is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/procurement/vendors/page.tsx`, `apps/web/src/app/(app)/procurement/vendors/VendorsTable.tsx`, `apps/web/src/app/(app)/procurement/orders/new/CreatePOForm.tsx`, `apps/web/src/app/(app)/procurement/rfq/new/CreateRFQForm.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -2990,8 +2989,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-NEW-01  ·  HIGH  ·  partly  ·  theme WIRING (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-- **W0 note:** partly fixed by #1866 — Web form now has category, contact person, address, account no + confirm, IFSC/account coupling. BUT procurement-service createVendorBody accepts only name,gstin,pan,email,phone,mse,msme,udyamNo,bankAccount,ifsc; web posts bankAccountNo/category/contactPerson/address which zod strips and vendor consumer never persists, so bank account number and category are silently dropped.
+- [x] **Status** (W1 follow-up: closed by #2002, verified on main d341ad6f1)
 - **First-pass claim:** Registration captures only name, GSTIN, PAN, email, phone and IFSC (Form), but the profile and directory display category, contact person, address, KYC status and bank account number (vendors/[id]/page.tsx, VendorsTable.tsx): a vendor can never be given a category or a bank account from the UI, so registered vendors appear with empty profiles and an unusable payment record.
 - **Verified evidence:** Confirmed: apps/web/src/app/(app)/procurement/vendors/new/RegisterVendorForm.tsx state l.303-308 and POST body l.339-346 carry only name, gstin, pan, email, phone, ifsc. No category, contactPerson, address or bank account number. Overstated: the mapper defaults category to 'General' (apiMappers.ts:135), so profiles are not blank, and KYC is presumably server-set. The bank record is genuinely unusable: an IFSC with no account number (detail page shows Account No only when present, page.tsx:115-123). Whether the create API accepts category/address/bankAccount is cannot-verify (procurement-service absent), though the GET mapper reads bankAccount/bankAccountNo/address/category/contactPerson.
 - **Files to change:** `apps/web/src/app/(app)/procurement/vendors/new/RegisterVendorForm.tsx`, `apps/web/src/app/(app)/procurement/_components/validators.ts`

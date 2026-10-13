@@ -19,7 +19,10 @@ import {
   FileSignature,
   LucideIcon,
 } from "lucide-react";
-import { FINANCE_ROLES } from "@/lib/auth/workRoles";
+import { FINANCE_ROLES, HR_ROLES } from "@/lib/auth/workRoles";
+import { IDENTITY_ADMIN_ROLES } from "@/lib/auth/identityRoles";
+import { GRANTS_VIEW_ROLES } from "@/app/(app)/grants/roles";
+import { TENANT_ADMIN_ROLES } from "@/app/(app)/tenant/_roles";
 import { ADMIN_TENANT_ROLES } from "@/lib/auth/adminRoles";
 
 const COLLAPSED_KEY = "civitas-sidebar-collapsed";
@@ -88,7 +91,7 @@ const NAV: NavGroup[] = [
   {
     group: "OPERATIONS",
     items: [
-      { icon: Users, label: "HR & Payroll", href: "/hr", moduleKey: "hrms" },
+      { icon: Users, label: "HR & Payroll", href: "/hr", moduleKey: "hrms", rolesAllowed: HR_ROLES },
       { icon: ShoppingCart, label: "Procurement", href: "/procurement", moduleKey: "procurement" },
       // GAP-CONTRACTS-HOME-02: the /contracts area was reachable only from
       // GlobalSearch/VoiceNav/navRouteManifest and had no Sidebar entry, so an
@@ -97,7 +100,7 @@ const NAV: NavGroup[] = [
       // ModuleGate uses, so the entry appears exactly when the module is on.
       { icon: FileSignature, label: "Contracts", href: "/contracts", moduleKey: "contracts" },
       { icon: BarChart2, label: "Projects", href: "/projects", moduleKey: "projects" },
-      { icon: Gift, label: "Grants", href: "/grants", moduleKey: "grants" },
+      { icon: Gift, label: "Grants", href: "/grants", moduleKey: "grants", rolesAllowed: GRANTS_VIEW_ROLES },
       { icon: Building2, label: "Establishment", href: "/estab", moduleKey: "establishment" },
       { icon: FileText, label: "Documents", href: "/documents", moduleKey: "documents" },
       { icon: HardHat, label: "Assets", href: "/assets", moduleKey: "assets" },
@@ -184,13 +187,13 @@ const NAV: NavGroup[] = [
       { icon: MessageCircleQuestion, label: "FAQ", href: "/knowledge/faqs", moduleKey: "knowledge" },
       { icon: Bot, label: "Assistant", href: "/knowledge/assistant", moduleKey: "knowledge" },
       { icon: Bell, label: "Notifications", href: "/notifications", moduleKey: null },
-      { icon: CreditCard, label: "Identity", href: "/identity", moduleKey: "identity" },
-      { icon: Building, label: "Tenant", href: "/tenant", moduleKey: "tenant" },
+      { icon: CreditCard, label: "Identity", href: "/identity", moduleKey: "identity", rolesAllowed: IDENTITY_ADMIN_ROLES },
+      { icon: Building, label: "Tenant", href: "/tenant", moduleKey: "tenant", rolesAllowed: TENANT_ADMIN_ROLES },
       // GAP-ADMIN-HOME-04: the /admin hub had no nav entry. The hub admits tenant_admin and above
       // (each tile is then filtered to what the caller's role may open), so gate on the same list.
       { icon: ShieldCheck, label: "Administration", href: "/admin", moduleKey: null, rolesAllowed: ADMIN_TENANT_ROLES },
-      { icon: Shield, label: "Tenant Admin", href: "/tenant-admin", moduleKey: null },
-      { icon: Wrench, label: "Change & Release", href: "/change", moduleKey: null },
+      { icon: Shield, label: "Tenant Admin", href: "/tenant-admin", moduleKey: null, rolesAllowed: ADMIN_TENANT_ROLES },
+      { icon: Wrench, label: "Change & Release", href: "/change", moduleKey: null, rolesAllowed: ADMIN_TENANT_ROLES },
     ],
   },
 ];

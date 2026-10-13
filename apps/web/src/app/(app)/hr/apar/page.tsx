@@ -16,6 +16,7 @@ import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { APAR_STATUSES, stageLabelKey } from "@/lib/apar/stages";
+import { HR_SELF_SERVICE_ROLES, HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 // Mirrors the backend's ACTOR_ROLES (apar/routes.ts). "employee"/"manager"
 // are included here too -- the API scopes their view server-side (own
@@ -23,7 +24,7 @@ import { APAR_STATUSES, stageLabelKey } from "@/lib/apar/stages";
 // this gate only needs to keep roles with NO legitimate APAR access (e.g. a
 // citizen-only session) off the page. Defense in depth alongside the API's
 // own auth checks, matching the pattern on the RTI page.
-const APAR_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "employee"];
+const APAR_ROLES = HR_SELF_SERVICE_ROLES;
 
 // GAP-HR-SF09A-010 / GAP-HR-APAR-04: mirrors the backend's OWN, narrower
 // HR_ROLES (apar/routes.ts) used specifically for POST /v1/hrms/apar and
@@ -33,7 +34,7 @@ const APAR_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "employe
 // with the identical const in ./new/page.tsx (that page's own server-side
 // gate) -- see this app's role-matrix contract test
 // (scripts/contract/hr-role-matrix.mjs) for the two routes this covers.
-const APAR_INITIATE_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const APAR_INITIATE_ROLES = HR_STAFF_ROLES;
 
 interface AparListCounts {
   selfPending: number;

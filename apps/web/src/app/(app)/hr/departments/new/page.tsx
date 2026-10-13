@@ -3,6 +3,7 @@ import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { NewDepartmentPageClient } from "./NewDepartmentPageClient";
 import { fetchJson } from "@/app/_data/apiClient";
 import type { MinimalDept } from "@/lib/hr/departmentTree";
+import { HR_MASTERS_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * Mirrors services/hrms-service/src/modules/employee/masters-routes.ts's
@@ -15,7 +16,7 @@ import type { MinimalDept } from "@/lib/hr/departmentTree";
  * button) with no indication it would ever work; the backend correctly
  * rejected the submit with 403, but only after the user filled it in.
  */
-const DEPARTMENT_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
+const DEPARTMENT_ADMIN_ROLES = HR_MASTERS_ADMIN_ROLES;
 
 /**
  * GAP-HR-DEPARTMENTS-03: the parent-department select needs the existing

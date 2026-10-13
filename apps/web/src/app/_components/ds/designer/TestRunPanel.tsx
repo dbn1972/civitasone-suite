@@ -5,11 +5,11 @@ import { useEffect, useState } from "react";
 import { Button } from "../Button";
 import { DataTable } from "../DataTable";
 import {
-  formatPaise,
   parseDemandLines,
   parseJournalPreview,
   resolveThreePartError,
 } from "@/app/(app)/designer/_data/sandboxTestModel";
+import { formatPaise } from "@/lib/formatters";
 
 export type TestStepStatus = "pending" | "running" | "pass" | "fail";
 

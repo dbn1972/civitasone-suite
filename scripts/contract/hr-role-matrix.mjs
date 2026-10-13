@@ -130,8 +130,12 @@ function getFileImports(filePath) {
   while ((im = importRe.exec(src))) {
     const names = im[1].split(",").map((s) => s.trim()).filter(Boolean);
     const spec = im[2];
-    if (!spec.startsWith(".")) continue;
-    const resolved = path.resolve(path.dirname(filePath), spec);
+    // `@/x` is the apps/web tsconfig path alias for apps/web/src/x (W1 SF-09a:
+    // pages now import their role tiers from "@/lib/auth/workRoles"). Any
+    // other bare specifier is a package import and cannot hold a role list.
+    const isAlias = spec.startsWith("@/");
+    if (!spec.startsWith(".") && !isAlias) continue;
+    const resolved = isAlias ? path.resolve(ROOT, "apps/web/src", spec.slice(2)) : path.resolve(path.dirname(filePath), spec);
     // `import ... from "./x.js"` (the repo's ESM convention) names the COMPILED file; the source is x.ts.
     const asTs = resolved.replace(/\.js$/, ".ts");
     const candidates = [resolved + ".ts", resolved + ".tsx", asTs, resolved, resolved + ".js", path.join(resolved, "index.ts")];
@@ -170,6 +174,13 @@ function getFileConsts(filePath) {
       idx++;
     }
     map.set(name, src.slice(start, idx - 1));
+  }
+  // `const LOCAL_ROLES = SHARED_ROLES;` -- a page's semantic name for a shared
+  // tier. Stored as a one-element spread so resolveConstValue follows it
+  // (same file, or through the file's imports).
+  const aliasRe = /\b(?:export\s+)?const\s+([A-Za-z0-9_]+)\s*(?::[^=]+)?=\s*([A-Z][A-Z0-9_]*)\s*;/g;
+  while ((m = aliasRe.exec(src))) {
+    if (!map.has(m[1])) map.set(m[1], `...${m[2]}`);
   }
   return map;
 }
@@ -494,6 +505,9 @@ const OUT_OF_SCOPE_PATTERNS = [
   (r) => /self-service\/routes\.ts$/.test(r.file),
   (r) => /id-cards\/routes\.ts$/.test(r.file) && r.routePath === "/v1/hrms/id-cards/me",
   (r) => /visiting-cards\/routes\.ts$/.test(r.file) && /\/me(\/|$)|public\//.test(r.routePath),
+  // GAP-HR-SF09A-022: payroll self-service "My payslips" (employee-only by
+  // design, token-scoped) -- not the admin salary-slips page's route.
+  (r) => /payroll-service.*payroll\/routes\.ts$/.test(r.file) && r.routePath === "/v1/payroll/slips/mine",
 ];
 
 function resolvePageConst(pageRelPath, constName) {
@@ -519,6 +533,11 @@ function main() {
     if (gateCache.has(area)) return gateCache.get(area);
     const g = PAGE_GATES.find((x) => x.area === area);
     const resolved = resolvePageConst(g.page, g.constName);
+    if (!resolved.roles) {
+      // Never let an unresolvable page gate silently become [] (that made
+      // every route look like an unexplained drift -- GAP-HR-SF09A-021).
+      throw new Error(`hr-role-matrix: cannot resolve ${g.constName} for ${g.page}: ${resolved.error}`);
+    }
     gateCache.set(area, resolved);
     return resolved;
   }

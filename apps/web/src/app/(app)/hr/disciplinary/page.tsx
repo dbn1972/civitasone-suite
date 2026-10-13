@@ -6,12 +6,13 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * Mirrors services/hrms-service/src/modules/gap-features/routes.ts's
  * HR_ROLES guard on GET /v1/hrms/disciplinary-cases exactly.
  */
-const DISCIPLINARY_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const DISCIPLINARY_ROLES = HR_STAFF_ROLES;
 
 // GAP-HR-DISCIPLINARY-04: server batch size per fetch. DataTable's own
 // pageSize=15 still paginates client-side *within* whichever batch is

@@ -20,14 +20,6 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
-export function formatPaiseInr(amountMinor: number | null | undefined): string {
-  if (amountMinor == null || Number.isNaN(amountMinor)) return "—";
-  // GAP-DESIGNER-DETAIL-ENGINES-04: unified with lib/formatters.formatMoney so
-  // the same fee reads identically on B5, test, and review (always 2dp, Indian
-  // grouping, bigint-safe). Previously dropped decimals for whole rupees.
-  return formatMoney(amountMinor);
-}
-
 /** Prefer forms[0].runtimeMeta.feeFromMinor, then top-level feeFromMinor on published blobs. */
 export function extractFeeFromMinor(source: unknown): number | null {
   if (!isRecord(source)) return null;
@@ -111,8 +103,8 @@ export function buildVersionDiffRows(
   const pubAmount = extractFeeFromMinor(published);
   const curAmount = extractFeeFromMinor(current);
   if (pubAmount !== curAmount && (pubAmount != null || curAmount != null)) {
-    const before = formatPaiseInr(pubAmount);
-    const after = formatPaiseInr(curAmount);
+    const before = formatMoney(pubAmount);
+    const after = formatMoney(curAmount);
     pushChange(rows, "Fee amount", before, after, `Fee changed ${before} → ${after}`);
   }
 
@@ -206,7 +198,7 @@ export function feeSummaryForPublish(def: ServiceDefinitionDto): string {
   const amount = extractFeeFromMinor(def);
   const parts: string[] = [];
   if (def.feeModel) parts.push(`${def.feeModel} fee`);
-  if (amount != null) parts.push(`from ${formatPaiseInr(amount)}`);
+  if (amount != null) parts.push(`from ${formatMoney(amount)}`);
   if (def.hoaCode) parts.push(`HOA ${def.hoaCode}`);
   return parts.length > 0 ? parts.join(" · ") : "No fee configured";
 }

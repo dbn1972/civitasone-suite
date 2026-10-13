@@ -3,6 +3,7 @@ import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { ImportForm } from "./ImportForm";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { HR_MASTERS_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 // No backend template-generation route exists (GET .../import/template 404s
 // — confirmed live and matches the "no /import route anywhere" finding in
@@ -28,7 +29,7 @@ const TEMPLATE_HREF = `data:text/csv;charset=utf-8,${encodeURIComponent(TEMPLATE
  * PermissionDenied here instead of a working-looking upload that 403s on
  * every single row.
  */
-const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "super_admin"];
+const EMPLOYEE_ADMIN_ROLES = HR_MASTERS_ADMIN_ROLES;
 
 export default async function BulkImportPage() {
   const roles = getSessionRoles();

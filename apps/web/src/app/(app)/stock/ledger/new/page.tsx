@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { PageHeader } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { rupeesInputToMinorNumber, rupeesToMinorString } from "@/lib/money";
 import { useUnsavedChangesGuard } from "@/lib/useUnsavedChangesGuard";
 
 type Item = { id: string; name: string; code?: string };
@@ -42,8 +43,9 @@ function validateForm(form: typeof INITIAL): Record<string, string> {
   const qty = Number(form.qty);
   if (!form.qty || !Number.isInteger(qty) || qty <= 0) errors.qty = "Enter a whole quantity greater than zero.";
   if (form.rate !== "") {
-    const rate = Number(form.rate);
-    if (!Number.isFinite(rate) || rate < 0) errors.rate = "Rate must be zero or a positive amount.";
+    // Strict paise-exact parse: "12.345", "1e3" or "1,000" must be rejected here, not
+    // silently posted as a zero rate (rupeesInputToMinorNumber is for previews).
+    if (rupeesToMinorString(form.rate, { allowZero: true }) === null) errors.rate = "Rate must be zero or a positive amount with at most 2 decimals.";
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(form.postingDate)) errors.postingDate = "Pick a posting date.";
   return errors;
@@ -109,7 +111,7 @@ export default function NewStockEntryPage() {
     setIsError(false);
     try {
       // Rate is entered in rupees; the API takes integer paise.
-      const rateMinor = form.rate === "" ? 0 : Math.round(Number(form.rate) * 100);
+      const rateMinor = rupeesInputToMinorNumber(form.rate);
       const res = await fetch("/api/proxy/v1/stock/entries", {
         method: "POST",
         headers: { "content-type": "application/json" },

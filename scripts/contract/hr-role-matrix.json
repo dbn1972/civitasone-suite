@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-09",
+  "generatedAt": "2026-10-13",
   "webHrRoles": [
     "admin",
     "employee",
@@ -17,10 +17,10 @@
     "tenant_admin"
   ],
   "counts": {
-    "DRIFT": 44,
-    "MATCH": 829,
+    "DRIFT": 39,
+    "MATCH": 835,
     "NO_ROLE_CHECK": 19,
-    "OUT_OF_SCOPE": 20,
+    "OUT_OF_SCOPE": 21,
     "DYNAMIC": 9
   },
   "routes": [
@@ -13017,15 +13017,15 @@
       "errors": null,
       "dynamic": false,
       "comparator": "page:leave-policies (LEAVE_POLICY_ADMIN_ROLES)",
-      "comparatorRoles": [],
-      "extraInBackend": [
+      "comparatorRoles": [
         "hr_admin",
         "platform_admin",
         "super_admin",
         "tenant_admin"
       ],
+      "extraInBackend": [],
       "extraInWeb": [],
-      "status": "DRIFT"
+      "status": "MATCH"
     },
     {
       "service": "hrms-service",
@@ -13046,15 +13046,15 @@
       "errors": null,
       "dynamic": false,
       "comparator": "page:leave-policies (LEAVE_POLICY_ADMIN_ROLES)",
-      "comparatorRoles": [],
-      "extraInBackend": [
+      "comparatorRoles": [
         "hr_admin",
         "platform_admin",
         "super_admin",
         "tenant_admin"
       ],
+      "extraInBackend": [],
       "extraInWeb": [],
-      "status": "DRIFT"
+      "status": "MATCH"
     },
     {
       "service": "hrms-service",
@@ -13075,15 +13075,15 @@
       "errors": null,
       "dynamic": false,
       "comparator": "page:leave-policies (LEAVE_POLICY_ADMIN_ROLES)",
-      "comparatorRoles": [],
-      "extraInBackend": [
+      "comparatorRoles": [
         "hr_admin",
         "platform_admin",
         "super_admin",
         "tenant_admin"
       ],
+      "extraInBackend": [],
       "extraInWeb": [],
-      "status": "DRIFT"
+      "status": "MATCH"
     },
     {
       "service": "hrms-service",
@@ -13104,15 +13104,15 @@
       "errors": null,
       "dynamic": false,
       "comparator": "page:leave-policies (LEAVE_POLICY_ADMIN_ROLES)",
-      "comparatorRoles": [],
-      "extraInBackend": [
+      "comparatorRoles": [
         "hr_admin",
         "platform_admin",
         "super_admin",
         "tenant_admin"
       ],
+      "extraInBackend": [],
       "extraInWeb": [],
-      "status": "DRIFT"
+      "status": "MATCH"
     },
     {
       "service": "hrms-service",
@@ -26909,6 +26909,43 @@
     },
     {
       "service": "hrms-service",
+      "file": "services/hrms-service/src/modules/workforce-core/apply-posting/routes.ts",
+      "method": "POST",
+      "routePath": "/v1/hrms/workforce-core/postings/apply",
+      "line": 35,
+      "roleExprs": [
+        "POSTING_ROLES"
+      ],
+      "permKeys": [],
+      "roles": [
+        "hr_admin",
+        "super_admin"
+      ],
+      "errors": null,
+      "dynamic": false,
+      "comparator": "layout:HR_ROLES",
+      "comparatorRoles": [
+        "admin",
+        "employee",
+        "finance_admin",
+        "finance_officer",
+        "hr_admin",
+        "hr_officer",
+        "icc_member",
+        "manager",
+        "officer",
+        "payroll_admin",
+        "payroll_officer",
+        "platform_admin",
+        "super_admin",
+        "tenant_admin"
+      ],
+      "extraInBackend": [],
+      "extraInWeb": [],
+      "status": "MATCH"
+    },
+    {
+      "service": "hrms-service",
       "file": "services/hrms-service/src/modules/workforce-planning/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/workforce/headcount",
@@ -31243,19 +31280,8 @@
       ],
       "errors": null,
       "dynamic": false,
-      "comparator": "page:payroll/salary-slips + slips (list) (SALARY_ADMIN_ROLES)",
-      "comparatorRoles": [
-        "finance_officer",
-        "hr_admin",
-        "payroll_admin",
-        "payroll_officer",
-        "super_admin"
-      ],
-      "extraInBackend": [
-        "employee"
-      ],
-      "extraInWeb": [],
-      "status": "DRIFT"
+      "comparator": "OUT_OF_SCOPE",
+      "status": "OUT_OF_SCOPE"
     },
     {
       "service": "payroll-service",
@@ -32229,6 +32255,48 @@
         "employee",
         "finance_officer",
         "hr_admin",
+        "payroll_admin",
+        "payroll_officer",
+        "super_admin"
+      ],
+      "errors": null,
+      "dynamic": false,
+      "comparator": "layout:HR_ROLES",
+      "comparatorRoles": [
+        "admin",
+        "employee",
+        "finance_admin",
+        "finance_officer",
+        "hr_admin",
+        "hr_officer",
+        "icc_member",
+        "manager",
+        "officer",
+        "payroll_admin",
+        "payroll_officer",
+        "platform_admin",
+        "super_admin",
+        "tenant_admin"
+      ],
+      "extraInBackend": [],
+      "extraInWeb": [],
+      "status": "MATCH"
+    },
+    {
+      "service": "payroll-service",
+      "file": "services/payroll-service/src/modules/posting-history/routes.ts",
+      "method": "GET",
+      "routePath": "/v1/payroll/posting-history/:employeeId",
+      "line": 70,
+      "roleExprs": [
+        "POSTING_HISTORY_ROLES"
+      ],
+      "permKeys": [],
+      "roles": [
+        "finance_admin",
+        "finance_officer",
+        "hr_admin",
+        "hr_officer",
         "payroll_admin",
         "payroll_officer",
         "super_admin"

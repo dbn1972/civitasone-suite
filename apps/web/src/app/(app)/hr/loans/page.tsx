@@ -6,13 +6,14 @@ import { fetchJson } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
+import { HR_FINANCE_DECIDER_ROLES, HR_LOANS_ROLES } from "@/lib/auth/workRoles";
 
 // GAP-HR-LOANS-04: mirrors the backend's ALL_ROLES exactly (services/
 // hrms-service/src/modules/employee/loans-routes.ts) -- this page had no
 // role gate at all, so a plain "employee" (admitted by hr/layout.tsx but
 // not by this route) hit a bare 403 rendered as a generic retryable error
 // instead of an honest "Access restricted".
-const LOANS_ROLES = ["hr_admin", "finance_admin", "super_admin", "hr_officer", "manager", "officer"];
+const LOANS_ROLES = HR_LOANS_ROLES;
 // GAP-HR-LOANS-02: CSV export dumps sanctioned amounts, EMI, balance and
 // employee identity with no role check today -- restrict the export button
 // to HR/finance roles, matching the decision packet's platform-wide default
@@ -22,7 +23,7 @@ const LOANS_ROLES = ["hr_admin", "finance_admin", "super_admin", "hr_officer", "
 // audit-service whose existence this campaign's catalog itself could not
 // verify ("not verified in this snapshot") -- inventing an endpoint would be
 // worse than leaving it flagged. See this PR's description.
-const LOANS_EXPORT_ROLES = ["hr_admin", "finance_admin", "super_admin", "hr_officer"];
+const LOANS_EXPORT_ROLES = HR_FINANCE_DECIDER_ROLES;
 
 const LOAN_TYPES = ["hba", "motor_car", "computer", "festival", "personal", "medical", "other"] as const;
 

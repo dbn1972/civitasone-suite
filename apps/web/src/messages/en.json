@@ -14922,6 +14922,21 @@
     "saving": "Saving…",
     "success": "Module selection confirmed."
   },
+  "pluginMarketplaceReview": {
+    "review": "Review",
+    "submitted": "Review submitted",
+    "submittedNote": "It is being recorded in the background and is not saved yet. This updates when it is.",
+    "stillPending": "Still being recorded. Check back shortly.",
+    "recorded": "Review recorded",
+    "confirmTitle": "Review “{name}”",
+    "confirmDescription": "Your rating is public to marketplace users. If you have already reviewed this plugin, this replaces your earlier review. The review is recorded in the background after you submit.",
+    "ratingLabel": "Rating",
+    "ratingPlaceholder": "Select a rating",
+    "ratingOption": "{count} out of 5",
+    "ratingRequired": "Choose a rating from 1 to 5.",
+    "confirmLabel": "Submit review",
+    "commentLabel": "Comment (optional)"
+  },
   "pluginMarketplace": {
     "install": "Install",
     "installed": "Installed",

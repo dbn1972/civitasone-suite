@@ -1,4 +1,5 @@
 import type { AttendanceSummaryItem } from "@civitasone/types";
+import { HR_ADMIN_TIER_ROLES, HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * Mirrors services/hrms-service/src/modules/attendance/routes.ts's own
@@ -17,24 +18,21 @@ import type { AttendanceSummaryItem } from "@civitasone/types";
  * the systemic "duplicated role arrays" risk the catalog itself flags on
  * several of these items.
  */
-export const ATTENDANCE_VIEW_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager"];
+export const ATTENDANCE_VIEW_ROLES = HR_STAFF_MANAGER_ROLES;
 
 export function canViewAttendanceRecords(roles: string[]): boolean {
   return roles.some((r) => ATTENDANCE_VIEW_ROLES.includes(r));
 }
 
 /**
- * Same tier as attendance/config/page.tsx's own (separately declared)
- * ATTENDANCE_CONFIG_ROLES -- kept as two small, independent copies rather
- * than one shared import so this PR and the config-module PR stay
- * independently mergeable/revertable in either order; if that ever drifts,
- * tests/contract/hr-role-matrix.contract.test.ts's allowlist is the place to
- * reconcile it, same as every other duplicated role list this catalog
- * flags. Used by AttendanceTable's emptyAction: only hr_admin/super_admin
- * can reach the read-only attendance-rules reference page, so only they
- * should see a link to it (GAP-HR-ATTENDANCE-04).
+ * Same tier (HR_ADMIN_TIER_ROLES in lib/auth/workRoles.ts) as
+ * attendance/config/page.tsx's ATTENDANCE_CONFIG_ROLES -- both now alias the one
+ * shared constant, so they cannot drift apart. Used by AttendanceTable's
+ * emptyAction: only hr_admin/super_admin can reach the read-only
+ * attendance-rules reference page, so only they should see a link to it
+ * (GAP-HR-ATTENDANCE-04).
  */
-export const ATTENDANCE_CONFIG_ROLES = ["hr_admin", "super_admin"];
+export const ATTENDANCE_CONFIG_ROLES = HR_ADMIN_TIER_ROLES;
 
 export function canConfigureAttendance(roles: string[]): boolean {
   return roles.some((r) => ATTENDANCE_CONFIG_ROLES.includes(r));

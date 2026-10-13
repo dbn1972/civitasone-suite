@@ -13,7 +13,7 @@
  *         hospital_name, hospital_id, diagnosis, documents[], status, dependant_name, dependant_relation
  */
 import { randomUUID } from "node:crypto";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import type { RequestContext } from "@civitasone/types";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -22,6 +22,7 @@ import { withRawTenantGuc } from "@civitasone/db";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
+import { resolveOwnEmployeeIdIfBareEmployee } from "../../shared/self-scope.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin", "finance_officer"];
 const SELF_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -60,17 +61,6 @@ const SELF_ROLES = [...HR_ROLES, "manager", "employee"];
  *     the manager-employee-read-scope-real-db.test.ts precedent for list
  *     routes), never fall through to an unscoped query.
  */
-async function resolveSelfScopedEmployeeId(
-  ctx: RequestContext,
-  req: FastifyRequest,
-  requested: string | undefined,
-): Promise<string | undefined | null> {
-  const isPrivileged = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
-  if (isPrivileged) return requested;
-  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
-  return actorEmp ? actorEmp.id : null;
-}
-
 /**
  * medical.hrms_medical_claims has RLS ENABLEd and FORCEd (migration
  * 0040_medical_claims.sql), and this module talks to `sqlClient` directly (no
@@ -255,7 +245,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
     // forced onto their OWN resolved employee record instead — closing the
     // forgery hole where any employee could set an arbitrary employeeId in
     // the body and have the claim recorded as a colleague's.
-    const ownerEmployeeId = await resolveSelfScopedEmployeeId(ctx, req, body.employeeId);
+    const ownerEmployeeId = await resolveOwnEmployeeIdIfBareEmployee(ctx, req, body.employeeId, HR_ROLES);
     if (!ownerEmployeeId) {
       throw new HttpError(403, "NO_EMPLOYEE_LINK", "no linked employee record for this actor");
     }
@@ -316,7 +306,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
     // routes.ts's, loans-routes.ts's and leave/routes.ts's own manager
     // read-scope helpers all use; see manager-employee-read-scope-real-db.
     // test.ts:146 and leave/routes.ts's resolveNonHrEmployeeScope doc
-    // comment). Deliberately NOT routed through resolveSelfScopedEmployeeId
+    // comment). Deliberately NOT routed through resolveOwnEmployeeIdIfBareEmployee
     // below (used by submit/insurance/history) — that helper's manager
     // branch stays unchanged on purpose (see tests/medical-routes.test.ts's
     // "managers can submit claims" and "managers' access by employeeId is
@@ -342,7 +332,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
     // reintroduce the tenant-wide leak this fix closes.
     const effectiveEmployeeId = isManagerActor
       ? undefined
-      : await resolveSelfScopedEmployeeId(ctx, req, query.employeeId);
+      : await resolveOwnEmployeeIdIfBareEmployee(ctx, req, query.employeeId, HR_ROLES);
     if (effectiveEmployeeId === null) return reply.send({ data: [] });
 
     const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
@@ -506,7 +496,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
     // and replaced by their own linked id — an unresolvable link folds into
     // the same 404 a genuinely-missing record gets (never leaks whether the
     // record exists for someone else).
-    const effectiveEmployeeId = await resolveSelfScopedEmployeeId(ctx, req, query.employeeId);
+    const effectiveEmployeeId = await resolveOwnEmployeeIdIfBareEmployee(ctx, req, query.employeeId, HR_ROLES);
     if (!effectiveEmployeeId) throw new HttpError(404, "NOT_FOUND", "no insurance record found for employee");
 
     const [row] = await sqlClient`
@@ -532,7 +522,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.query);
 
     // IDOR guard: same self-scoping as claims/insurance above.
-    const effectiveEmployeeId = await resolveSelfScopedEmployeeId(ctx, req, query.employeeId);
+    const effectiveEmployeeId = await resolveOwnEmployeeIdIfBareEmployee(ctx, req, query.employeeId, HR_ROLES);
     if (!effectiveEmployeeId) return reply.send({ data: [] });
 
     const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`

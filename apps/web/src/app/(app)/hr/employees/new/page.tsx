@@ -6,6 +6,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { AddEmployeeWizard } from "./AddEmployeeWizard";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { EMPLOYEE_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 type Dept = { id: string; name: string };
 // `level` (optional — a designation need not have one) feeds Step2's
@@ -21,7 +22,6 @@ type EmpSummary = { id: string; name: string; designationName?: string };
  * departments/designations/managers fetches it can't do anything useful
  * with.
  */
-const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 async function getDepartments(): Promise<LoaderResult<Dept[]>> {
   return fetchJson<unknown, Dept[]>("/api/v1/hrms/departments", [], {

@@ -43,7 +43,7 @@ export type RouteSpec = {
 export const CURATED_ROUTES: RouteSpec[] = [
   // ── landing / cross-cutting ────────────────────────────────────────────────
   { path: "/dashboard", persona: "superadmin", archetype: "dashboard" },
-  { path: "/approvals", persona: "commissioner", archetype: "list" },
+  { path: "/approvals", persona: "hrofficer", archetype: "list" },
   { path: "/notifications", persona: "superadmin", archetype: "list" },
   { path: "/help", persona: "superadmin", archetype: "hub" },
   { path: "/settings/branding", persona: "superadmin", archetype: "form" },

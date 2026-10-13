@@ -3,6 +3,7 @@ import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { NewTemplateForm } from "./NewTemplateForm";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 export const metadata = { title: "New JD Template — HR" };
 
@@ -10,7 +11,7 @@ export const metadata = { title: "New JD Template — HR" };
  * Mirrors jd-template-routes.ts: POST /v1/hrms/jd-templates requires
  * HR_ROLES = ["hr_admin", "hr_officer", "super_admin"].
  */
-const JD_TEMPLATE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const JD_TEMPLATE_ADMIN_ROLES = HR_STAFF_ROLES;
 
 export default async function NewTemplatePage() {
   const t = await getTranslations("jdTemplateNew");

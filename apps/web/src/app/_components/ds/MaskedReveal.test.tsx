@@ -90,4 +90,16 @@ describe("MaskedReveal (F1-05 audited reveal)", () => {
     await waitFor(() => expect(screen.queryByText("9876543210")).not.toBeInTheDocument(), { timeout: 1500 });
     expect(screen.getByText("******3210")).toBeInTheDocument();
   });
+  it("W1 SF-05a: revealPath retargets the audited call to another service (hrms) with the same body contract", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ data: { value: "ABCDE1234F" } }), { status: 200 }));
+    render(<MaskedReveal {...props} resourceType="employee" field="pan" label="PAN" maskedText="******234F" revealPath="v1/hrms/pii/reveal" />);
+    fireEvent.click(screen.getByRole("button", { name: "Reveal" }));
+    fireEvent.change(await screen.findByLabelText(/Reason for revealing/i), { target: { value: "verify PAN for Form 16" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Reveal" }).pop()!);
+    expect(await screen.findByText("ABCDE1234F")).toBeInTheDocument();
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/proxy/v1/hrms/pii/reveal");
+    expect(JSON.parse(init.body as string)).toMatchObject({ resourceType: "employee", field: "pan", reason: "verify PAN for Form 16" });
+  });
 });

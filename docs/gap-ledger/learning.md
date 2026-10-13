@@ -14,7 +14,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-HOME-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W1 SF-16: closed by #2004)
 - **W0-10 note:** review found the W0 tick partly — Web passes own employee id (learning/page.tsx) and bare employee is scoped server-side (routes.ts:247-251), but backend still lets "manager" omit employeeId for tenant-wide totals (routes.ts:245) contrary to "only HR"; web falls back to tenant totals when profile id missing (myId undefined)
 - **First-pass claim:** "Enrolled / In Progress / Completed / Overdue" are tenant-wide counts: getLmsDashboard() is called with no employeeId (page.tsx:12) and the endpoint aggregates every enrolment in the tenant (learning/routes.ts:199-215). They sit next to My Learning links and read as personal progress.
 - **Verified evidence:** learning/page.tsx:12 calls getLmsDashboard() with no employeeId; endpoint (learning/routes.ts:199-215) scopes to employee only if ?employeeId is given, else counts every enrolment in tenant (countEnrollmentsByStatus). Cards labelled Enrolled/In Progress/Completed/Overdue and all link to My Learning (page.tsx:47-58 in file numbering). Any employee sees tenant totals; also employeeId param unscoped server-side.
@@ -172,7 +172,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-ASSESSMENTS-VERIFY-01  ·  HIGH  ·  partly  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1916; re-confirmed in W1 SF-16, #2004)
 - **First-pass claim:** Verification discloses employeeId and assessmentId (raw UUIDs) to any authenticated user holding a token (page.tsx:51-52; assessment/routes.ts:288-296) — no masking or role limit (DPDP); no rate limit is visible in the route, only a 8–64 character token length.
 - **Verified evidence:** apps/web/src/app/(app)/learning/assessments/verify/page.tsx:51-52 prints cert.employeeId and cert.assessmentId; routes.ts:277-292 returns them for any caller with ALL_ROLES (includes employee, routes.ts:20). Token length 8-64 only (:280). repo.getCertificateByToken(token) takes no tenantId (:281), so a token resolves across tenants. Rate limiting is not visible in the route (may exist globally, cannot-verify). The IDs are UUIDs, not names, so the PII severity is moderate, but they link a person to a certificate.
 - **Files to change:** `services/hrms-service/src/modules/assessment/routes.ts`, `services/hrms-service/src/modules/assessment/repo.ts`, `apps/web/src/app/(app)/learning/assessments/verify/page.tsx`
@@ -436,7 +436,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COURSES-01  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1916; re-confirmed in W1 SF-16, #2004)
 - **First-pass claim:** Draft and retired courses are listed to every role: listCourses has no status filter (learning/repo.ts:22-31) while the page says "published courses" (page.tsx:22,33). The Status column exposes it, but non-published rows still link to a detail page.
 - **Verified evidence:** repo.listCourses (learning/repo.ts:22-31) filters only tenant and search; GET /learning/courses (routes.ts:34-39) allows ALL_ROLES with no status filter, so draft/retired courses reach employees. Page copy says 'published courses' (courses/page.tsx:22,33 in file numbering ~ lines 115,126), Status column shown, and rows link to detail (rowLinkPrefix). Detail endpoint also serves drafts to all roles (routes.ts:41-53) though enrol requires published (:129).
 - **Files to change:** `services/hrms-service/src/modules/learning/routes.ts`, `services/hrms-service/src/modules/learning/repo.ts`, `apps/web/src/app/(app)/learning/courses/page.tsx`
@@ -512,7 +512,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COURSES-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W1 SF-16: closed by #2004)
 - **W0-10 note:** review found the W0 tick partly — Self-scoping + 403 NO_EMPLOYEE_LINK in learning/routes.ts:149-150,191-192 and IDOR tests exist, but no audit event for HR enrolling on behalf (no audit/emit anywhere in modules/learning); acceptance point missing
 - **First-pass claim:** Enrolment takes employeeId from the body with only a role check (learning/routes.ts:122-127; ALL_ROLES). Combined with an employeeId typed in the URL, any employee can enrol any colleague.
 - **Verified evidence:** Enrol route POST /v1/hrms/learning/courses/:id/enroll (learning/routes.ts:122-154) uses ALL_ROLES and takes employeeId from enrollBody (validators.ts:32) with no self-scope, unlike nominations (training/routes.ts:57-63). Creates enrolment for any employeeId in the tenant. Web supports it by hidden input from ?employeeId (courses/[id]/page.tsx:47). Same lack of scoping on GET /learning/my-learning (routes.ts:188-193) and POST lessons/:id/progress (:156).
@@ -602,7 +602,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-MY-LEARNING-01  ·  HIGH  ·  confirmed  ·  theme IDOR (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W1 SF-16: closed by #2004)
 - **W0-10 note:** review found the W0 tick partly — IDOR closed (shared/self-scope.ts, learning/routes.ts:220-231 my-learning and :237-252 dashboard fail closed; real-DB idor test). Missing: fix step 5/acceptance 2 - no audit event when HR/manager read another employee's enrolments (no audit call in learning/routes.ts my-learning/dashboard handlers; test has no audit assertion). Manager can read any employee id (same as training, documented)
 - **First-pass claim:** IDOR: GET /learning/my-learning?employeeId= only requires an ALL_ROLES role (learning/routes.ts:188-193), so any employee can read any colleague’s course enrolments and progress by changing the UUID (DPDP). Contrast training/routes.ts:22-60 which forces bare employees onto their own record.
 - **Verified evidence:** services/hrms-service/src/modules/learning/routes.ts:188-193: GET /v1/hrms/learning/my-learning does requireRole(ctx, ALL_ROLES) then repo.listMyEnrollments(ctx.tenantId, employeeId) with the client-supplied uuid (repo.ts:162-174, filtered only by tenant+employeeId); no comparison to the caller. training/routes.ts:22-38 (resolveOwnEmployeeIdIfBareEmployee via resolveEmployeeForActor) does force bare employees onto their own record, learning does not. Same gap on GET /learning/dashboard (employeeId optional, tenant-wide counts for every role) and web page.tsx:9,20 passes the URL param straight through.
@@ -658,7 +658,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-MY-LEARNING-04  ·  LOW  ·  confirmed  ·  theme UX (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1916; re-confirmed in W1 SF-16, #2004)
 - **First-pass claim:** Progress is plain text "65%" without a bar or overdue cue although overdue counts are on the home page (page.tsx:23).
 - **Verified evidence:** apps/web/src/app/(app)/learning/my-learning/page.tsx:23 sets progress: `${e.progressPct}%` as text; DataTable column is a plain right-aligned string. ds/ProgressBar.tsx exists (value 0-100). 'Overdue' on the home page is a heuristic in learning/repo.ts:197-211 (enrolled/in_progress and not updated for 30 days), not a due date; MyEnrollment carries no due/updatedAt field, so a per-row overdue cue needs a field.
 - **Files to change:** `apps/web/src/app/(app)/learning/my-learning/page.tsx`, `apps/web/src/app/(app)/learning/_data.ts`, `services/hrms-service/src/modules/learning/routes.ts`
@@ -761,7 +761,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-TRAINING-PLANS-05  ·  LOW  ·  partly  ·  theme CAP
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1916; re-confirmed in W1 SF-16, #2004)
 - **First-pass claim:** listTrainingPlans has no pagination or year filter surfaced in the UI; ALL_ROLES can read every plan.
 - **Verified evidence:** repo.listTrainingPlans(tenantId, limit=100) orders by planYear and hard-caps at 100 (learning/repo.ts:258-265); route (learning/routes.ts:257-261) exposes no limit/offset/year params and returns a bare array with no total. The web DataTable filters/pages client-side (pageSize 15, filterable) over that capped array. ALL_ROLES read is by design (plans are not personal data) - not a defect.
 - **Files to change:** `services/hrms-service/src/modules/learning/routes.ts`, `services/hrms-service/src/modules/learning/repo.ts`, `apps/web/src/app/(app)/learning/_data.ts`, `apps/web/src/app/(app)/learning/training-plans/page.tsx`

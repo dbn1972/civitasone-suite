@@ -65,35 +65,39 @@ export async function listRegularisations(tenantId: string, limit: number, emplo
   return (await cache.getOrLoad(key, load)) ?? [];
 }
 
-export async function listAttendance(tenantId: string, limit: number) {
-  return cache.listOrLoad(tenantId, "attendance", `list:${limit}`, async () => {
-    const rows = await repo.listByTenant(tenantId, limit);
-    const employees = await employeeRepo.listByTenant(tenantId, 500, 0);
-    const empMap = new Map(employees.map((e) => [e.id, e]));
-    // GAP-HR-ATTENDANCE-01: department used to be the first 8 chars of the
-    // raw departmentId uuid (a permanent-looking id fragment, never a real
-    // department name). employee/repo.ts already exposes a cross-module-safe
-    // name lookup (findDepartmentsByIds) for exactly this -- one batched
-    // query, not N+1, and via the employee module's own repo rather than
-    // importing hrms_departments directly (CLAUDE.md rule 4: module
-    // isolation).
-    const departmentIds = [...new Set(employees.map((e) => e.departmentId))];
-    const departments = await employeeRepo.findDepartmentsByIds(tenantId, departmentIds);
-    const deptNameById = new Map(departments.map((d) => [d.id, d.name]));
-    return rows.map((r) => {
-      const emp = empMap.get(r.employeeId);
-      return {
-        id: r.id,
-        employeeId: r.employeeId,
-        employeeName: emp?.fullName ?? r.employeeId.slice(0, 8),
-        department: (emp && deptNameById.get(emp.departmentId)) ?? "",
-        date: r.attendanceDate,
-        checkIn: r.inTime ?? undefined,
-        checkOut: r.outTime ?? undefined,
-        status: mapStatus(r.status),
-        hoursWorked: computeHoursWorked(r.inTime, r.outTime),
-      };
-    });
+export async function listAttendance(tenantId: string, limit: number, employeeIds?: string[]) {
+  // Scoped (manager/employee) reads bypass the shared tenant-wide list cache.
+  if (employeeIds) return loadAttendanceList(tenantId, limit, employeeIds);
+  return cache.listOrLoad(tenantId, "attendance", `list:${limit}`, () => loadAttendanceList(tenantId, limit));
+}
+
+async function loadAttendanceList(tenantId: string, limit: number, employeeIds?: string[]) {
+  const rows = await repo.listByTenant(tenantId, limit, employeeIds);
+  const employees = await employeeRepo.listByTenant(tenantId, 500, 0);
+  const empMap = new Map(employees.map((e) => [e.id, e]));
+  // GAP-HR-ATTENDANCE-01: department used to be the first 8 chars of the
+  // raw departmentId uuid (a permanent-looking id fragment, never a real
+  // department name). employee/repo.ts already exposes a cross-module-safe
+  // name lookup (findDepartmentsByIds) for exactly this -- one batched
+  // query, not N+1, and via the employee module's own repo rather than
+  // importing hrms_departments directly (CLAUDE.md rule 4: module
+  // isolation).
+  const departmentIds = [...new Set(employees.map((e) => e.departmentId))];
+  const departments = await employeeRepo.findDepartmentsByIds(tenantId, departmentIds);
+  const deptNameById = new Map(departments.map((d) => [d.id, d.name]));
+  return rows.map((r) => {
+    const emp = empMap.get(r.employeeId);
+    return {
+      id: r.id,
+      employeeId: r.employeeId,
+      employeeName: emp?.fullName ?? r.employeeId.slice(0, 8),
+      department: (emp && deptNameById.get(emp.departmentId)) ?? "",
+      date: r.attendanceDate,
+      checkIn: r.inTime ?? undefined,
+      checkOut: r.outTime ?? undefined,
+      status: mapStatus(r.status),
+      hoursWorked: computeHoursWorked(r.inTime, r.outTime),
+    };
   });
 }
 

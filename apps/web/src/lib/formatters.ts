@@ -1245,3 +1245,19 @@ export function formatCreditHours(value: string | number | null | undefined): st
   const text = Number(n.toFixed(2)).toString();
   return `${text} ${n === 1 ? "hr" : "hrs"}`;
 }
+
+/**
+ * SF-12: INR delegates to formatMoney (always 2dp, Indian grouping); other
+ * currencies render "1,234.00 USD". Null/undefined/non-finite -> "—" (never
+ * "₹NaN" or a fabricated "₹0.00"). Was duplicated in designer sandboxTestModel.
+ */
+export function formatPaise(amountMinor: number | null | undefined, currency = "INR"): string {
+  if (currency === "INR") return formatMoney(amountMinor);
+  const rupees = minorToRupeesOrNull(amountMinor);
+  if (rupees === null) return "—";
+  const formatted = rupees.toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${formatted} ${currency}`;
+}

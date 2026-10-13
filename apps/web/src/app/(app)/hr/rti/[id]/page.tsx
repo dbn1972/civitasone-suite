@@ -6,8 +6,9 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { formatIndianDate } from "@/lib/formatters";
 import { RtiActions } from "../_components/RtiActions";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
-const RTI_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const RTI_ROLES = HR_STAFF_ROLES;
 
 type Detail = {
   id: string;

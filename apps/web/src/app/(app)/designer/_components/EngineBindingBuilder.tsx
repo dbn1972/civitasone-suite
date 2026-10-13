@@ -12,6 +12,7 @@ import {
   type EnginePreviewResultUi,
 } from "@/app/_components/ds/designer/engineBindingTypes";
 import { formatMoney } from "@/lib/formatters";
+import { rupeesInputToMinorNumber } from "@/lib/money";
 import {
   bindingFromDescriptor,
   fetchEngineRegistry,
@@ -132,8 +133,7 @@ export function EngineBindingBuilder({
     if (previewTimer.current) clearTimeout(previewTimer.current);
     const controller = new AbortController();
     previewTimer.current = setTimeout(async () => {
-      const rupees = Number(sampleBaseRupees);
-      const basePrincipalMinor = Number.isFinite(rupees) ? Math.round(rupees * 100) : 0;
+      const basePrincipalMinor = rupeesInputToMinorNumber(sampleBaseRupees);
       try {
         const result = await previewEngineBinding({
           binding: selected,

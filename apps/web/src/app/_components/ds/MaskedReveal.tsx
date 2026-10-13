@@ -11,6 +11,9 @@
  * exists after the server has written its `pii_reveal` audit event. The value
  * re-masks itself after `autoHideMs` and on unmount, and is never stored.
  *
+ * W1 SF-05a: `revealPath` selects the service (default crm; HR employee master uses
+ * `v1/hrms/pii/reveal`, same contract) -- the audited-reveal behaviour is identical.
+ *
  * This mirrors ds/RevealableValue.tsx (the finance audited-reveal control) but
  * targets the CRM reveal contract and the ds `Masked` glyph format, so the
  * citizen-facing CRM detail pages get a reveal that matches `Masked`.
@@ -20,7 +23,10 @@ import { useTranslations } from "next-intl";
 import { browserFetch } from "@/lib/api/browserClient";
 import { ConfirmDialog } from "./ConfirmDialog";
 
-export type PiiResourceType = "grievance" | "rti" | "service_request" | "onboarding" | "contact";
+export type PiiResourceType = "grievance" | "rti" | "service_request" | "onboarding" | "contact" | "employee";
+
+/** Default audited-reveal endpoint (crm). HR passes `v1/hrms/pii/reveal`. */
+export const DEFAULT_PII_REVEAL_PATH = "v1/crm/pii/reveal";
 
 export interface MaskedRevealProps {
   /** The server-masked text to show until a reveal succeeds. */
@@ -31,6 +37,8 @@ export interface MaskedRevealProps {
   field: string;
   /** Accessible label for the value ("citizen phone"). */
   label: string;
+  /** Audited reveal endpoint, relative to /api/proxy. Defaults to the crm one. */
+  revealPath?: string;
   autoHideMs?: number;
   className?: string;
 }
@@ -56,6 +64,7 @@ export function MaskedReveal({
   resourceId,
   field,
   label,
+  revealPath = DEFAULT_PII_REVEAL_PATH,
   autoHideMs = 30_000,
   className,
 }: MaskedRevealProps) {
@@ -81,7 +90,7 @@ export function MaskedReveal({
     setBusy(true);
     setError("");
     try {
-      const res = await browserFetch("v1/crm/pii/reveal", {
+      const res = await browserFetch(revealPath, {
         method: "POST",
         body: JSON.stringify({ resourceType, resourceId, field, reason: r }),
       });

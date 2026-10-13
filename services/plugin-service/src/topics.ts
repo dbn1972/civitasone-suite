@@ -12,6 +12,8 @@ export const COMMANDS = {
   // Marketplace install (GAP-PLUGINS-MARKETPLACE-01 / w0-report): published by
   // POST /v1/plugins/marketplace/:id/install; previously had no subscriber.
   marketplaceInstall: "plugin.marketplace.install",
+  // Marketplace review: published by POST /v1/plugins/marketplace/:id/review.
+  marketplaceReview: "plugin.marketplace.review",
 } as const;
 
 export const EVENTS = {

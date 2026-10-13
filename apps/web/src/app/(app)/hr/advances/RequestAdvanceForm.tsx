@@ -5,6 +5,7 @@ import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
+import { rupeesToMinorString } from "@/lib/money";
 import { Button } from "../../../_components/ds";
 
 const inputStyle: CSSProperties = {
@@ -75,8 +76,8 @@ export function RequestAdvanceForm({ selfServiceOnly = false }: { selfServiceOnl
   function validate(): boolean {
     const errs = new Set<string>();
     if (!selfServiceOnly && !employeeId) errs.add("employee");
-    const amtVal = Number(amount);
-    if (!amount || isNaN(amtVal) || amtVal <= 0) errs.add("amount");
+    const amountMinor = rupeesToMinorString(amount);
+    if (amountMinor === null || !Number.isSafeInteger(Number(amountMinor))) errs.add("amount");
     if (!purpose.trim() || purpose.trim().length < 2) errs.add("purpose");
     const mo = parseInt(months, 10);
     if (!months || isNaN(mo) || mo < 1 || mo > 12) errs.add("months");
@@ -92,7 +93,7 @@ export function RequestAdvanceForm({ selfServiceOnly = false }: { selfServiceOnl
     formError.clear();
     try {
       const body: Record<string, unknown> = {
-        amountMinor: Math.round(Number(amount) * 100),
+        amountMinor: Number(rupeesToMinorString(amount)),
         purpose: purpose.trim(),
         recoveryMonths: parseInt(months, 10),
       };
