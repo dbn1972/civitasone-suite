@@ -306,6 +306,25 @@ describe("BrandingPage", () => {
     expect(screen.queryByRole("button", { name: /✓ saved/i })).not.toBeInTheDocument();
   });
 
+  it("shows the generic message, not the raw body message, on a 500", async () => {
+    mockFetchOk({ appName: "Test Gov Portal" }, []);
+    render(<BrandingPage />);
+    await waitFor(() => expect(screen.getByDisplayValue("Test Gov Portal")).toBeInTheDocument());
+
+    const png = new File([new Uint8Array(1024)], "logo.png", { type: "image/png" });
+    fireEvent.change(document.getElementById("branding-logo-file") as HTMLInputElement, { target: { files: [png] } });
+    await waitFor(() => expect(screen.getByAltText("Logo preview")).toBeInTheDocument());
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ message: "ECONNREFUSED pg-internal:5432 stack trace" }), { status: 500 }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+    fireEvent.click(screen.getByRole("button", { name: /save branding/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(screen.getByRole("alert")).not.toHaveTextContent(/ECONNREFUSED|stack trace/i);
+  });
+
   it("rejects a non-https logo URL (GAP-SETTINGS-BRANDING-04)", async () => {
     mockFetchOk({ appName: "Test Gov Portal" }, []);
     render(<BrandingPage />);
