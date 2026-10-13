@@ -13,7 +13,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
-import { ShiftRequestListResponseSchema, WfhRequestListResponseSchema } from "@civitasone/schemas/web";
+import { AppraisalSummaryListSchema, ShiftRequestListResponseSchema, WfhRequestListResponseSchema } from "@civitasone/schemas/web";
 import { buildApp } from "../app.js";
 import { sqlClient } from "../shared/db.js";
 
@@ -27,6 +27,8 @@ const DESIG = "beef0000-0000-4000-8000-0000000017d1";
 const DESIG_O = "beef0000-0000-4000-8000-0000000017d2";
 const FOREIGN_EMP = "beef0000-0000-4000-8000-0000000017e0";
 const N = 520;
+const LEAVE_TYPE = "beef0000-0000-4000-8000-0000000017c1";
+const LEAVE_ALLOC = "beef0000-0000-4000-8000-0000000017c2";
 
 const hrToken = signToken({ sub: "sf17a-hr", tid: TENANT, roles: ["hr_admin"], sid: "s17a" }, SECRET);
 const auth = { authorization: `Bearer ${hrToken}` };
@@ -38,6 +40,9 @@ const empId = (i: number) => `beef0000-0000-4000-9000-${String(i).padStart(12, "
 
 async function cleanup(): Promise<void> {
   for (const t of [TENANT, OTHER]) {
+    await asT(t, (tx) => tx`DELETE FROM appraisal.hrms_appraisals WHERE tenant_id = ${t}`);
+    await asT(t, (tx) => tx`DELETE FROM leave.hrms_leave_apps WHERE tenant_id = ${t}`);
+    await asT(t, (tx) => tx`DELETE FROM leave.hrms_leave_types WHERE tenant_id = ${t}`);
     await asT(t, (tx) => tx`DELETE FROM attendance.hrms_shift_change_requests WHERE tenant_id = ${t}`);
     await asT(t, (tx) => tx`DELETE FROM attendance.hrms_wfh_requests WHERE tenant_id = ${t}`);
     await asT(t, (tx) => tx`DELETE FROM attendance.hrms_attendance_regularisations WHERE tenant_id = ${t}`);
@@ -84,6 +89,28 @@ beforeAll(async () => {
     await tx`
       INSERT INTO attendance.hrms_shift_change_requests (tenant_id, employee_id, current_shift, requested_shift, effective_date, status, created_at)
       VALUES (${TENANT}, ${FOREIGN_EMP}, 'GEN', 'NIGHT', '2026-06-01', 'pending', now() + interval '1 hour')`;
+    // Appraisals and leave applications for the LAST 20 employees (indexes
+    // 501..520, i.e. outside any 500-row employee window), reviewer = employee 1.
+    await tx`
+      INSERT INTO appraisal.hrms_appraisals (tenant_id, employee_id, appraisal_period, status, reviewer_id, created_by, updated_by)
+      SELECT ${TENANT}, ('beef0000-0000-4000-9000-' || lpad(g::text, 12, '0'))::uuid, '2025-26', 'pending',
+             ('beef0000-0000-4000-9000-' || lpad('1', 12, '0'))::uuid, ${ACTOR}, ${ACTOR}
+      FROM generate_series(501, ${N}) g`;
+    // Row in THIS tenant whose employee AND reviewer belong to another tenant.
+    await tx`
+      INSERT INTO appraisal.hrms_appraisals (tenant_id, employee_id, appraisal_period, status, reviewer_id, created_by, updated_by)
+      VALUES (${TENANT}, ${FOREIGN_EMP}, '2024-25', 'pending', ${FOREIGN_EMP}, ${ACTOR}, ${ACTOR})`;
+    await tx`
+      INSERT INTO leave.hrms_leave_types (id, tenant_id, code, name, created_by, updated_by)
+      VALUES (${LEAVE_TYPE}, ${TENANT}, 'S17CL', 'Casual Leave 17a', ${ACTOR}, ${ACTOR})`;
+    await tx`
+      INSERT INTO leave.hrms_leave_apps (tenant_id, employee_id, leave_type_id, alloc_id, from_date, to_date, days_applied, status, created_by, updated_by, created_at)
+      SELECT ${TENANT}, ('beef0000-0000-4000-9000-' || lpad(g::text, 12, '0'))::uuid, ${LEAVE_TYPE}, ${LEAVE_ALLOC},
+             '2026-07-01', '2026-07-01', 1, 'approved', ${ACTOR}, ${ACTOR}, now() - ((${N} - g) || ' seconds')::interval
+      FROM generate_series(501, ${N}) g`;
+    await tx`
+      INSERT INTO leave.hrms_leave_apps (tenant_id, employee_id, leave_type_id, alloc_id, from_date, to_date, days_applied, status, created_by, updated_by, created_at)
+      VALUES (${TENANT}, ${FOREIGN_EMP}, ${LEAVE_TYPE}, ${LEAVE_ALLOC}, '2026-07-01', '2026-07-01', 1, 'pending', ${ACTOR}, ${ACTOR}, now() + interval '1 hour')`;
   });
   app = await buildApp();
   await app.ready();
@@ -145,9 +172,44 @@ describe("GAP-HR-SF-17a name enrichment beyond the old 500-row window", () => {
     }
   });
 
+  it("GET /appraisals resolves employee, department and reviewer names beyond the old window, and does not leak a foreign tenant", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/hrms/appraisals", headers: auth });
+    expect(res.statusCode).toBe(200);
+    const rows = AppraisalSummaryListSchema.parse(res.json());
+    expect(rows).toHaveLength(21);
+    expect(JSON.stringify(res.json())).not.toContain("Foreign Tenant Person");
+    const foreign = rows.find((r) => r.employeeId === FOREIGN_EMP);
+    expect(foreign?.employeeName).toBe("Unknown employee");
+    expect(foreign?.department).toBe("");
+    expect(foreign?.reviewerName).toBeUndefined();
+    const own = rows.filter((r) => r.employeeId !== FOREIGN_EMP);
+    expect(own).toHaveLength(20);
+    for (const r of own) {
+      expect(Number(r.employeeId.slice(-12))).toBeGreaterThan(500);
+      expect(r.employeeName).toBe(nameOf(Number(r.employeeId.slice(-12))));
+      expect(r.department).toBe("Revenue Dept 17a");
+      expect(r.reviewerName).toBe(nameOf(1));
+    }
+  });
+
+  it("GET /leave-applications names every employee beyond the old window and does not leak a foreign tenant", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/hrms/leave-applications", headers: auth });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { data: Array<{ id: string; employee: string; leaveType: string; status: string }> };
+    expect(body.data).toHaveLength(21);
+    expect(JSON.stringify(body)).not.toContain("Foreign Tenant Person");
+    expect(body.data.filter((r) => r.employee === "Unknown employee")).toHaveLength(1);
+    const names = body.data.filter((r) => r.employee !== "Unknown employee").map((r) => r.employee).sort();
+    expect(names).toEqual(Array.from({ length: 20 }, (_, k) => nameOf(501 + k)));
+    for (const r of body.data) {
+      expect(r.leaveType).toBe("Casual Leave 17a");
+      expect(looksLikeIdFragment(r.employee)).toBe(false);
+    }
+  });
+
   it("is tenant-scoped: another tenant's token sees none of this tenant's rows or names", async () => {
     const otherToken = signToken({ sub: "sf17a-other", tid: OTHER, roles: ["hr_admin"], sid: "s17b" }, SECRET);
-    for (const url of ["/v1/hrms/attendance", "/v1/hrms/shift-requests", "/v1/hrms/wfh-requests", "/v1/hrms/attendance/regularisations"]) {
+    for (const url of ["/v1/hrms/attendance", "/v1/hrms/shift-requests", "/v1/hrms/wfh-requests", "/v1/hrms/attendance/regularisations", "/v1/hrms/appraisals", "/v1/hrms/leave-applications"]) {
       const res = await app.inject({ method: "GET", url, headers: { authorization: `Bearer ${otherToken}` } });
       expect(res.statusCode).toBe(200);
       expect(res.body).not.toContain("Sf17a Person");
