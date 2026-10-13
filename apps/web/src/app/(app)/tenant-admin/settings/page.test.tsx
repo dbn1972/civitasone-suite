@@ -1,13 +1,20 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { screen } from "@testing-library/react";
+import { render } from "@/test-utils/intl-render";
 
-const { getTenantModules } = vi.hoisted(() => ({ getTenantModules: vi.fn() }));
-vi.mock("../../../_data/loaders", () => ({ getTenantModules: () => getTenantModules() }));
+const { getTenantModules, getCurrentTenantOrgType } = vi.hoisted(() => ({ getTenantModules: vi.fn(), getCurrentTenantOrgType: vi.fn() }));
+vi.mock("../../../_data/loaders", () => ({
+  getTenantModules: () => getTenantModules(),
+  getCurrentTenantOrgType: () => getCurrentTenantOrgType(),
+}));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
 
 import TenantSettingsPage from "./page";
 
 afterEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  getCurrentTenantOrgType.mockResolvedValue({ source: "api", data: { tenantId: "t1", orgType: null, settings: {} } });
+});
 
 describe("TenantSettingsPage (GAP-TENANT-ADMIN-SETTINGS-04/05)", () => {
   it("on error shows RefreshErrorState with '—' tiles, no 'No modules' empty state and no Save button", async () => {

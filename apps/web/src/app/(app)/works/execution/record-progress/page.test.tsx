@@ -122,6 +122,21 @@ describe("RecordProgressPage (GAP-WORKS-EXECUTION-RECORD-PROGRESS-01..05)", () =
     expect(screen.queryByText(/No scopes defined for this work/i)).toBeNull();
   });
 
+  it("RP-01: Retry actually refetches the scopes and recovers when the retry succeeds", async () => {
+    mockWorkData({ scopesOk: false });
+    render(<RecordProgressPage />);
+    const retry = await screen.findByRole("button", { name: /Retry/i });
+    const scopeCalls = () => browserFetchMock.mock.calls.filter(([p]) => String(p).endsWith("/scopes") && !String(p).includes("masters")).length;
+    const before = scopeCalls();
+
+    mockWorkData({ scopesOk: true });
+    fireEvent.click(retry);
+
+    await screen.findByRole("option", { name: /Earthwork in excavation/i });
+    expect(scopeCalls()).toBe(before + 1);
+    expect(screen.queryByRole("button", { name: /Retry/i })).toBeNull();
+  });
+
   it("RP: still describes progress as a per-period increment added to the running total", async () => {
     mockWorkData();
     render(<RecordProgressPage />);

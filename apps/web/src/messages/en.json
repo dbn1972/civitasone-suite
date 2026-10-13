@@ -14909,5 +14909,14 @@
     "windowNotePartial": "{base}: {shown} of {total} total — older or additional changes beyond this window are not shown.",
     "windowNoteCapped": "{base}: first {limit} shown — there may be more pending changes beyond this window.",
     "windowNoteShown": "{base}: {shown} shown."
+  },
+  "tenantModulesConfirm": {
+    "title": "Confirm module selection",
+    "help": "Happy with the modules enabled above? Confirm your selection to complete the \"modules\" step of office setup.",
+    "doneHelp": "Your module selection is confirmed. You can still change modules above at any time.",
+    "confirm": "Confirm modules",
+    "confirmed": "Confirmed",
+    "saving": "Saving…",
+    "success": "Module selection confirmed."
   }
 }

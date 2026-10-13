@@ -1,13 +1,14 @@
 import { PageHeader, StatCard, DataTable, Card, RefreshErrorState } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
-import { getTenantModules } from "../../../_data/loaders";
+import { getTenantModules, getCurrentTenantOrgType } from "../../../_data/loaders";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { Breadcrumb } from "../Breadcrumb";
 import { ModuleToggleActions } from "./ModuleToggleActions";
+import { ModulesConfirmCard } from "./ModulesConfirmCard";
 
 export default async function TenantSettingsPage() {
-  const result = await getTenantModules();
+  const [result, tenant] = await Promise.all([getTenantModules(), getCurrentTenantOrgType()]);
   const { data: modules } = result;
   const errored = toResourceState(result).status === "error";
 
@@ -67,6 +68,9 @@ export default async function TenantSettingsPage() {
           </div>
         </div>
       )}
+      {!errored && toResourceState(tenant).status !== "error" ? (
+        <ModulesConfirmCard tenantId={tenant.data.tenantId} settings={tenant.data.settings} />
+      ) : null}
     </div>
   );
 }

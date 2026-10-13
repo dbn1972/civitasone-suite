@@ -8,7 +8,11 @@ import { defaultLoginPath, isDevLoginEnabled } from "@/lib/auth/env";
 // gated inside the route itself via METRICS_TOKEN (fail-closed; see
 // src/app/api/metrics/route.ts), the same "gate at the handler, not the
 // session layer" shape the backend services use for their own /metrics.
-const PUBLIC = ["/auth", "/api/auth", "/api/careers", "/careers", "/verify", "/_next", "/favicon.ico", "/sw.js", "/api/metrics", "/sandbox", "/api/sandbox"];
+// W0: the marketing /contact page, its /api/contact submit route and
+// /.well-known/security.txt (RFC 9116) are meant for anonymous visitors and
+// researchers; the matcher below runs on every non-static path, so anything
+// absent from this list is redirected to login.
+const PUBLIC = ["/auth", "/api/auth", "/api/careers", "/careers", "/verify", "/_next", "/favicon.ico", "/sw.js", "/api/metrics", "/sandbox", "/api/sandbox", "/contact", "/api/contact", "/.well-known"];
 
 // M2: decode JWT payload and check exp claim — does not verify signature
 // (signature is checked by the gateway on every proxied request).
