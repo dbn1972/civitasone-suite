@@ -1035,7 +1035,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-MFA-03  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-08 #2012 (export is permission-gated and fail-closed audited): closed by #1864, verified on main 9c5e9e9e9)
 - **First-pass claim:** Exportable CSV of names, emails and departments with no audit of export or masking; staff email addresses are personal data under DPDP (MfaTable.tsx:31-35).
 - **Verified evidence:** MfaTable.tsx:20-34 shows name, email and department and sets exportable + exportFilename='mfa-status'; ds/DataTable.tsx downloadCsv (~lines 267-292) builds the CSV in the browser (all rows matching filter, not paged) with no audit call, no role check, no masking. Emails are shown unmasked on screen (line 22). CLAUDE.md requires audit events for mutations; export is a read but DPDP guidance expects logging of bulk personal data extraction. No <Masked> component was located in the snapshot (would need to be created).
 - **Files to change:** `apps/web/src/app/_components/ds/DataTable.tsx`, `apps/web/src/app/(app)/tenant-admin/mfa/MfaTable.tsx`, `apps/web/src/app/_components/ds/Masked.tsx`
@@ -1878,7 +1878,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SECURITY-04  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-08 #2012 (export is permission-gated and fail-closed audited): closed by #1864, verified on main 9c5e9e9e9)
 - **First-pass claim:** Actor emails and source IPs are personal data yet are exportable to CSV with no masking or export audit (SecurityTable.tsx:20-38).
 - **Verified evidence:** SecurityTable.tsx:23-24,32-33 shows actor and ipAddress unmasked and DataTable exportable=true exports CSV client-side (ds/DataTable.tsx:311) with no audit call. No <Masked> component exists in ds (only unrelated 'Masked' in admin/integrations). Server-side CSV audit endpoint cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/security/SecurityTable.tsx`, `apps/web/src/app/_components/ds/Masked.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -2230,7 +2230,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SIEM-04  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W1 SF-08: closed by #2012)
 - **W0 note:** partly fixed by #1864 — Export audit beacon added in web, but no siem/alerts/export-audit endpoint found in services
 - **First-pass claim:** Alert titles and source may carry IPs/usernames (personal data under DPDP) and the table exports to CSV with no audit of the export (SiemTable.tsx:31-37).
 - **Verified evidence:** DataTable exportable is on (SiemTable.tsx:39) and downloadCsv (DataTable.tsx:274-287) is a client-side Blob with no audit call. Title and source are rendered raw (line 29,31). No evidence in the snapshot that they contain personal data; that is plausible but unverified. No <Masked> component exists in app/_components. Access to the page itself is presumably role-gated by the tenant-admin layout.
