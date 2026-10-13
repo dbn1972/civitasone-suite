@@ -531,7 +531,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-COURSES-DETAIL-03  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed W1 SF-02/03 (#2010): closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** The course cannot be consumed: lessons are listed without links and no lesson-player or progress route exists in learning/ (POST /learning/lessons/:id/progress is never called from web), so “Enrol to start learning” has no next step.
 - **Verified evidence:** Lesson table (courses/[id]/page.tsx:79-88) has no links; no lesson player route exists (learning/ has assessments, calendar, competency, courses, my-learning, training-plans only) and grep finds no web call to /learning/lessons/:id/progress. The enrol form posts to /api/v1/hrms/learning/courses/:id/enroll (:46); no post-enrol redirect visible. contentUri is in the Lesson type (_data.ts:30) but never displayed. my-learning has resumeLessonId with no destination route.
 - **Files to change:** `apps/web/src/app/(app)/learning/courses/[id]/lessons/[lessonId]/page.tsx`, `apps/web/src/app/(app)/learning/courses/[id]/page.tsx`, `apps/web/src/app/(app)/learning/my-learning/page.tsx`, `apps/web/src/app/(app)/learning/_data.ts`

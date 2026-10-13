@@ -43,7 +43,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was LOADING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W1 SF-02/03 (#2010): closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** not-found.tsx gives no back link or retry — EmptyState only (not-found.tsx:5-8).
 - **Verified evidence:** not-found.tsx:5-8 renders <EmptyState title message/> with no action; ds EmptyState supports an action?: ReactNode prop (EmptyState.tsx:8). It is triggered by notFound() in policies/[id]/page.tsx:11, so a missing document shows a generic 'Page not found' with no way back. error.tsx already uses RouteError with back link, so only not-found is bare.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/not-found.tsx`
@@ -410,7 +410,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-LIST-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [ ] **Status** (W1 SF-02/03 re-check #2010: reopened — list rows (KnowledgeDocsTable) still have no row link although documents/[id] now exists; was: (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f))
 - **First-pass claim:** Dead-end table: rows have no link and no detail route exists (knowledge/ has documents/new only) — a document cannot be opened, downloaded, versioned or archived from any page.
 - **Verified evidence:** list/page.tsx:72 renders KnowledgeDocsTable; its DataTable (KnowledgeDocsTable.tsx:18-36) has no rowLinkKey/rowLinkPrefix (policies/page.tsx:75-76 shows the prop pair). rows.id is the truncated 8-char string (page.tsx:34), so the real id is not even in the row. knowledge/documents contains only new/ (no [id] route), no download/archive/version calls anywhere in apps/web/src knowledge. Backend endpoints for GET/archive/version are not visible (service absent).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/list/page.tsx`, `apps/web/src/app/(app)/knowledge/list/KnowledgeDocsTable.tsx`, `apps/web/src/app/(app)/knowledge/documents/[id]/page.tsx`, `apps/web/src/app/(app)/knowledge/repository/RepositoryClient.tsx`
@@ -551,7 +551,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-06  ·  LOW  ·  partly  ·  theme I18N
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W1 SF-02/03 (#2010): closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Statuses shown lowercase with underscores replaced ("under review"), not sentence-case labels used on the dashboard/list pages (page.tsx:25).
 - **Verified evidence:** toRow makes status 'under review' (policies/page.tsx:25), but the Status column uses cellType 'status' (:69) so the visible pill is passed through StatusPill/humanizeStatus -> 'Under Review' (Title Case), not lowercase. It stays lowercase in CSV export and the filter text, and in the detail StatCard (policies/[id]/page.tsx:34 renders policy.status.replace(/_/g,' ') as plain lowercase). list/page.tsx uses sentence case ('Under review'), so labels are inconsistent.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/page.tsx`, `apps/web/src/app/(app)/knowledge/policies/[id]/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -622,7 +622,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [ ] **Status** (W1 SF-02/03 re-check #2010: reopened — Reject exists, but reviewerId/approverId are still not displayed on policies/[id]/page.tsx; was: (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f))
 - **First-pass claim:** Under review has only Approve — no Reject / return-for-changes path (PolicyActions.tsx:46-53); reviewerId, approverId, authorId and supersedesId are loaded but never displayed (loaders.ts:42-43,71-72), so maker-checker evidence is invisible.
 - **Verified evidence:** PolicyActions.tsx:46-53 shows only Approve for under_review; there is no reject/return action and no reject endpoint call in the web tree. authorId/approverId are mapped in toPolicySummary (loaders.ts:42-43), reviewerId/supersedesId in the detail mapper (loaders.ts:77-78); page.tsx never renders them (only status/effective/review/ack count, :34-37). Line refs in the observation (71-72) are off by a few lines. Existence of a reject endpoint cannot be verified (service absent).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/[id]/PolicyActions.tsx`, `apps/web/src/app/(app)/knowledge/policies/[id]/page.tsx`
@@ -638,7 +638,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-DETAIL-05  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W1 SF-02/03 (#2010): closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** "I have read & understood" stays available while status is published, with no per-user acknowledged state; repeat acknowledgements and the constant note "Read and understood" (PolicyActions.tsx:62-67) are unmanaged.
 - **Verified evidence:** canAcknowledge = status === 'published' (PolicyActions.tsx:32) and the note is the constant 'Read and understood' (:67) - true. But the component cannot know the current employee's ack state: page.tsx:47 passes only policyId/status, the ack list has employee ids only, and the session has no employee id helper. Whether the server ignores duplicate acknowledgements is not visible (service absent).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/[id]/PolicyActions.tsx`, `apps/web/src/app/(app)/knowledge/policies/[id]/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`
