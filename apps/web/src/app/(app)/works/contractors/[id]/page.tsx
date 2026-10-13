@@ -184,7 +184,7 @@ export default async function ContractorDetailPage({
 
   const ratingDisplayRows: RatingDisplayRow[] = ratingHistory.map((r, i) => ({
     id: r.id || `rating-${i}`,
-    ratedAt: r.ratedAt ? new Date(r.ratedAt).toLocaleDateString("en-IN") : "—",
+    ratedAt: r.ratedAt ? formatIndianDate(r.ratedAt) : "—",
     rating: `${r.rating} / 5`,
     // GAP-WORKS-CONTRACTORS-DETAIL-03: show a resolved rater NAME when the
     // backend supplies one; never an opaque 8-char UUID slice.

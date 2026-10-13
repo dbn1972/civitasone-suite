@@ -1,5 +1,6 @@
 "use client";
 
+import { todayIST, formatIndianDateTime } from "@/lib/formatters";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -60,7 +61,7 @@ function formatDate(iso?: string | null): string {
   if (!iso) return "Never";
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+  return formatIndianDateTime(iso);
 }
 
 /**
@@ -89,7 +90,7 @@ function downloadCsv(users: PlatformUser[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `users-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `users-${todayIST()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

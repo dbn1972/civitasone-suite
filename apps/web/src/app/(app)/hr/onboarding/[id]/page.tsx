@@ -4,7 +4,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getEmployeeById } from "@/app/_data/loaders";
 import { fetchJson } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, todayIST } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { JoineeWelcomeHeader } from "../_components/JoineeWelcomeHeader";
@@ -41,7 +41,7 @@ function deriveStatus(task: OnboardingTaskRow, joiningDate: string | null | unde
   if (Number.isNaN(join.getTime())) return "pending";
   const due = new Date(join);
   due.setUTCDate(due.getUTCDate() + task.dueByDay);
-  return due.toISOString().slice(0, 10) < new Date().toISOString().slice(0, 10) ? "overdue" : "pending";
+  return due.toISOString().slice(0, 10) < todayIST() ? "overdue" : "pending";
 }
 
 // Matches GET /v1/hrms/employees/:id/onboarding-documents (hrms-service

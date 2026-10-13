@@ -1,3 +1,4 @@
+import { todayIST } from "@/lib/formatters";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render as rtlRender, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
@@ -142,7 +143,7 @@ describe("WfhPage (/hr/wfh)", () => {
   // weeklyWfhCount at all, so its existing weekly-cap banner/submit-disable
   // could never fire even once the backend started enforcing the cap.
   it("GAP-HR-WFH-01: wires a real weeklyWfhCount into the form so the weekly-cap banner can actually fire", async () => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayIST();
     fetchJsonMock.mockResolvedValue({
       data: [
         { id: "w1", employeeId: "emp-self", employeeName: "Self Employee", fromDate: today, toDate: today, reason: "WFH 1", status: "approved" },

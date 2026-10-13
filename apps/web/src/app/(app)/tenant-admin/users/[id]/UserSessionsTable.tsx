@@ -1,7 +1,7 @@
 "use client";
 
 import { DataTable } from "../../../../_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDateTime } from "@/lib/formatters";
 import { deviceLabel } from "@/lib/sessionLabels";
 import { SessionRevokeCell } from "./SessionRevokeCell";
 
@@ -16,11 +16,7 @@ export type UserSession = {
 
 /** Format an ISO timestamp as a GFR-compliant Indian date plus 24h time. */
 function formatWhen(iso: string): string {
-  const time = new Date(iso);
-  const hhmm = isNaN(time.getTime())
-    ? ""
-    : ` ${time.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false })}`;
-  return `${formatIndianDate(iso)}${hhmm}`;
+  return formatIndianDateTime(iso);
 }
 
 export function UserSessionsTable({ sessions }: { sessions: UserSession[] }) {

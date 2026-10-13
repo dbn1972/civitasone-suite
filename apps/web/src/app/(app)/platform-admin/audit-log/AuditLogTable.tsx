@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { Button } from "@/app/_components/ds";
-import { formatIndianDateTime, istDatePart } from "@/lib/formatters";
+import { formatIndianDateTime, istDatePart, todayIST } from "@/lib/formatters";
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
 export type PlatformAuditEvent = {
@@ -44,7 +44,7 @@ function exportCsv(events: PlatformAuditEvent[]) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `audit-log-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `audit-log-${todayIST()}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

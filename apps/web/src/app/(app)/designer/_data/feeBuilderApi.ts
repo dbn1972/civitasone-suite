@@ -1,5 +1,6 @@
 "use client";
 
+import { todayIST } from "@/lib/formatters";
 import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
 import type { EligibilityOp } from "@/app/_components/ds/designer/eligibilityTypes";
 import type {
@@ -376,7 +377,7 @@ export async function persistFeeDesign(
     }
 
     if (rateHeadId) {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayIST();
       for (const slab of design.slabs) {
         await parseJson(await fetch("/api/proxy/v1/revenue/rate-slabs", {
           method: "POST",

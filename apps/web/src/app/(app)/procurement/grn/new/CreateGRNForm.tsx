@@ -1,5 +1,6 @@
 "use client";
 
+import { todayIST } from "@/lib/formatters";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -48,7 +49,7 @@ export function CreateGRNForm() {
   const [poId, setPoId] = useState("");
   const [poRef, setPoRef] = useState("");
   const [poItems, setPoItems] = useState<POItem[]>([]);
-  const [receivedDate, setReceivedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [receivedDate, setReceivedDate] = useState(todayIST());
   const [lines, setLines] = useState<GRNLine[]>([emptyLine()]);
   const [status, setStatus] = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -297,7 +298,7 @@ export function CreateGRNForm() {
         </div>
         <label className="field" htmlFor="grn-received-date" style={{ background: "#fff", padding: "13px 16px" }}>
           <span className="label">Received date</span>
-          <input id="grn-received-date" type="date" max={new Date().toISOString().slice(0, 10)} value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} style={{ minHeight: 44 }} />
+          <input id="grn-received-date" type="date" max={todayIST()} value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} style={{ minHeight: 44 }} />
         </label>
       </div>
 

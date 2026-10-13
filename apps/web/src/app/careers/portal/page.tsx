@@ -1,3 +1,4 @@
+import { formatIndianDate } from "@/lib/formatters";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -149,7 +150,7 @@ export default async function PortalPage({ searchParams }: { searchParams?: { pa
                       <span style={{ fontSize: 12, color: CAREERS_MUTED }}>
                         <span style={{ fontFamily: "monospace" }}>{app.applicationNo ?? app.id.slice(0, 8).toUpperCase()}</span>
                         {app.appliedAt && !Number.isNaN(Date.parse(app.appliedAt)) && (
-                          <> · Applied on {new Date(app.appliedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</>
+                          <> · Applied on {formatIndianDate(app.appliedAt)}</>
                         )}
                       </span>
                       <span style={{ fontSize: 12, color: "#0e7490", fontWeight: 600 }}>View details →</span>

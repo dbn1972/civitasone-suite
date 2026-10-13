@@ -11,6 +11,7 @@
  * can be posted here, and the stock-service id is what the entry carries. An optional
  * ?itemId= query param (a stock item id, passed from a stock item detail page) preselects it.
  */
+import { todayIST } from "@/lib/formatters";
 import { UserFacingError } from "@/lib/userFacingError";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -38,7 +39,7 @@ export default function NewStockEntryPage() {
   const [picked, setPicked] = useState<PickerEntry | null>(null);
   const [loadError, setLoadError] = useState("");
   const [entryType, setEntryType] = useState<"receipt" | "issue" | "transfer" | "adjustment">("receipt");
-  const [postingDate, setPostingDate] = useState(new Date().toISOString().slice(0, 10));
+  const [postingDate, setPostingDate] = useState(todayIST());
   const [qty, setQty] = useState("");
   const [rate, setRate] = useState("");
   const [warehouseId, setWarehouseId] = useState("");

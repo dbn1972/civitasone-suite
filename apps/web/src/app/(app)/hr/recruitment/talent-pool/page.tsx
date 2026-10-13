@@ -1,3 +1,4 @@
+import { formatIndianDate } from "@/lib/formatters";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState, Button } from "../../../../_components/ds";
@@ -111,7 +112,7 @@ export default async function TalentPoolPage({
     // field in this table uses. Both shapes now render the same placeholder.
     skillsDisplay: c.skills && c.skills.length > 0 ? c.skills.join(", ") : "—",
     expDisplay: c.experienceYears != null ? t("expYearShort", { years: c.experienceYears }) : "—",
-    appliedDate: new Date(c.appliedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+    appliedDate: formatIndianDate(c.appliedAt),
   }));
 
   const pager = pageWindow(total, page, rows.length);

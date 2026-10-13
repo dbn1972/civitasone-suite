@@ -1,5 +1,6 @@
 "use client";
 
+import { todayIST } from "@/lib/formatters";
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -80,7 +81,7 @@ export function ContactToolbar({ canExport = false, exportQuery = {}, initialSea
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `contacts-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `contacts-${todayIST()}.csv`;
       a.click();
       URL.revokeObjectURL(url);
       setExportOpen(false);

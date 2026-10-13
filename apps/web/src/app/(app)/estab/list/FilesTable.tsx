@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { DataTable, Segmented, StatusPill } from "@/app/_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, todayIST } from "@/lib/formatters";
 
 export type FileRow = {
   id: string;
@@ -33,7 +33,7 @@ const CLASSIFICATION_TONE: Record<string, "good" | "info" | "bad" | "mut" | "war
 export function FilesTable({ rows }: { rows: FileRow[] }) {
   const [seg, setSeg] = useState("All");
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIST();
 
   const filtered = rows.filter((r) => {
     switch (seg) {

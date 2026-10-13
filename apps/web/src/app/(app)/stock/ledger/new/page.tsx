@@ -10,6 +10,7 @@
  * Inter-warehouse transfers are intentionally not offered: the service has no
  * warehouse list endpoint yet, so there is nothing honest to pick from.
  */
+import { todayIST } from "@/lib/formatters";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -27,7 +28,7 @@ const ENTRY_TYPES: Array<{ value: string; label: string; help: string }> = [
   { value: "adjustment", label: "Adjustment", help: "Correct the book quantity after a count or write-off." },
 ];
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIST();
 
 const INITIAL = { entryType: "receipt", itemId: "", qty: "", rate: "", postingDate: today(), refNo: "", notes: "" };
 

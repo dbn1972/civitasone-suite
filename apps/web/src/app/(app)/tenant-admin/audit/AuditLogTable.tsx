@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Segmented, DataTable, StatusPill } from "../../../_components/ds";
 import { maskEmail } from "../../../_components/ds/Masked";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDateTime } from "@/lib/formatters";
 
 export type AuditEvent = {
   id: string;
@@ -25,11 +25,7 @@ const FILTERS = ["All", "Failures"] as const;
  * different day/time on a machine in another zone.
  */
 function formatWhen(iso: string): string {
-  const time = new Date(iso);
-  const hhmm = isNaN(time.getTime())
-    ? ""
-    : ` ${time.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" })}`;
-  return `${formatIndianDate(iso)}${hhmm}`;
+  return formatIndianDateTime(iso);
 }
 
 /**

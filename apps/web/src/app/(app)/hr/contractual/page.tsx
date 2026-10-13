@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, todayIST } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 
 type ApiContract = {
@@ -43,7 +43,7 @@ type Row = {
  * source of record instead of never-populated employee fields.
  */
 function mapContracts(apiItems: ApiContract[]): Row[] {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIST();
   return apiItems.map((c) => {
     const end = new Date(c.endDate);
     const now = new Date(today);
