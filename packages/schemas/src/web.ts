@@ -95,6 +95,8 @@ export const vendorSummarySchema = z.object({
   email: z.string().optional(),
   phone: z.string().optional(),
   pan: z.string().optional(),
+  contactPerson: z.string().optional(),
+  address: z.string().optional(),
 });
 
 export const purchaseOrderSchema = z.object({

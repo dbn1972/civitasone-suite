@@ -17,6 +17,7 @@ export function registerVendorConsumers(queue: Queue): void {
       id: string; tenantId: string; name: string; gstin?: string; pan?: string;
       email?: string; phone?: string; mse: boolean; msme: boolean;
       udyamNo?: string; bankAccount?: string; ifsc?: string;
+      category?: string; contactPerson?: string; address?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -26,6 +27,7 @@ export function registerVendorConsumers(queue: Queue): void {
         email: p.email ?? null, phone: p.phone ?? null,
         vendorType: "registered", mse: p.mse, msme: p.msme,
         udyamNo: p.udyamNo ?? null, bankAccount: p.bankAccount ?? null, ifsc: p.ifsc ?? null,
+        category: p.category ?? null, contactPerson: p.contactPerson ?? null, address: p.address ?? null,
         blacklistReason: null, createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "create", "vendor", p.id);

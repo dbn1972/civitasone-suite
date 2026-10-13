@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+// CreatePOForm calls useTranslations() (VENDOR_BLACKLISTED copy), so render through the English intl wrapper.
+import { render, screen, fireEvent, waitFor } from "@/test-utils/intl-render";
 
 const pushMock = vi.fn();
 const refreshMock = vi.fn();
@@ -156,5 +157,26 @@ describe("CreatePOForm — NEW-05 delivery date in the past is blocked", () => {
     const posted = fetchSpy.mock.calls.some(([i, init]) =>
       String(typeof i === "string" ? i : (i as Request).url).includes("/procurement/pos") && (init as RequestInit)?.method === "POST");
     expect(posted).toBe(false);
+  });
+});
+
+describe("CreatePOForm — w0-report: synchronous 422 VENDOR_BLACKLISTED", () => {
+  beforeEach(() => { vi.restoreAllMocks(); pushMock.mockReset(); });
+
+  it("shows the blacklisted-vendor message (not the generic one) and does not navigate", async () => {
+    mockFetch({
+      post: new Response(JSON.stringify({ code: "VENDOR_BLACKLISTED", message: "raw server text xyz" }), { status: 422 }),
+    });
+    render(<CreatePOForm />);
+    await waitFor(() => expect(screen.getByRole("option", { name: "Acme Supplies" })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Vendor *"), { target: { value: "v1" } });
+    fireEvent.change(screen.getByLabelText("Source indent (approved) *"), { target: { value: "i1" } });
+    await fillOneLine();
+    fireEvent.change(screen.getByLabelText(/Unit price, row 1/), { target: { value: "100" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create PO" }));
+
+    await screen.findByText(/This vendor is blacklisted and cannot be used on a purchase order/);
+    expect(screen.queryByText(/raw server text xyz/)).not.toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
   });
 });

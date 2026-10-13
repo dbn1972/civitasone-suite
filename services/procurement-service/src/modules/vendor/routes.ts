@@ -24,9 +24,9 @@ export const PII_AUTHORIZED_ROLES = [
 ] as const;
 
 /** Remove PII fields from a vendor record. */
-export function stripPii<T extends Record<string, unknown>>(vendor: T): Omit<T, "pan" | "email" | "phone" | "bankAccount" | "ifsc"> {
-  const { pan, email, phone, bankAccount, ifsc, ...safe } = vendor as Record<string, unknown>;
-  return safe as Omit<T, "pan" | "email" | "phone" | "bankAccount" | "ifsc">;
+export function stripPii<T extends Record<string, unknown>>(vendor: T): Omit<T, "pan" | "email" | "phone" | "bankAccount" | "ifsc" | "contactPerson" | "address"> {
+  const { pan, email, phone, bankAccount, ifsc, contactPerson, address, ...safe } = vendor as Record<string, unknown>;
+  return safe as Omit<T, "pan" | "email" | "phone" | "bankAccount" | "ifsc" | "contactPerson" | "address">;
 }
 
 /** Check if a user context has PII read access. */
@@ -100,7 +100,7 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    return reply.send({ data: vendor });
+    return reply.send({ data: queries.presentVendor(vendor) });
   });
 
   app.setErrorHandler(errorHandler);

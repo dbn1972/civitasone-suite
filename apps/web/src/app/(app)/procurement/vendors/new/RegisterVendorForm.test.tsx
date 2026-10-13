@@ -68,6 +68,27 @@ describe("RegisterVendorForm", () => {
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/procurement/vendors/veNEW?registered=1"));
   });
 
+  it("w0-report: posts contactPerson, address and the account number under the API's field name `bankAccount`", async () => {
+    const fetchSpy = vi.spyOn(global, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "veNEW" }), { status: 202, headers: { "content-type": "application/json" } }),
+    );
+    render(<RegisterVendorForm />);
+    fill("Vendor name *", "Acme");
+    fireEvent.change(screen.getByLabelText("Category *"), { target: { value: "goods" } });
+    fill("Contact person", "Asha Verma");
+    fill("Address", "12 Sector 5, New Delhi");
+    fill("Bank IFSC", "SBIN0001234");
+    fill("Bank account number", "123456789012");
+    fill("Confirm account number", "123456789012");
+    fireEvent.click(screen.getByRole("button", { name: /Register vendor/ }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.bankAccount).toBe("123456789012");
+    expect(body).not.toHaveProperty("bankAccountNo");
+    expect(body.contactPerson).toBe("Asha Verma");
+    expect(body.address).toBe("12 Sector 5, New Delhi");
+  });
+
   it("NEW-03: a DPDP collection notice is shown", () => {
     render(<RegisterVendorForm />);
     expect(screen.getByText(/collected for vendor onboarding/i)).toBeInTheDocument();

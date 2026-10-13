@@ -7,6 +7,8 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createPoBody, gemOrderBody, dispatchBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as vendorRepo from "../vendor/repo.js";
+import * as blacklistRepo from "../vendor-blacklist/repo.js";
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
@@ -39,6 +41,19 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const body = createPoBody.parse(req.body);
+    // w0-report.md: reject a blacklisted vendor synchronously (422, nothing
+    // enqueued) instead of returning 202 and failing later in the consumer.
+    // Same three clauses as the consumer gate (tenant blacklist, central
+    // debarment by PAN, vendor's own 'blacklisted' type). The consumer keeps
+    // its in-transaction check as defence in depth (races, replayed commands).
+    const vendor = await vendorRepo.findVendorById(body.vendorId, ctx.tenantId);
+    const blacklisted =
+      Boolean(await blacklistRepo.findActive(ctx.tenantId, body.vendorId))
+      || (vendor?.pan ? (await blacklistRepo.findActiveCentralByPan(vendor.pan)) != null : false)
+      || vendor?.vendorType === "blacklisted";
+    if (blacklisted) {
+      throw new HttpError(422, "VENDOR_BLACKLISTED", "vendor is blacklisted and cannot be used on a purchase order");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPo(ctx, body));
   });
 

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { LineItemsEditor, emptyLineItem, lineItemsTotalMinor, lineUnitPriceMinor, isLineUnitPriceInvalid, type LineItem } from "../../_components/LineItemsEditor";
 import { toHumanError } from "@/lib/messages";
 import { useFormError } from "@/lib/useFormError";
@@ -14,8 +15,21 @@ type IndentOption = { id: string; indentNo?: string; department?: string; status
 
 type LoadState = "loading" | "ready" | "error" | "empty";
 
+/** Machine `code` of a JSON error body, or undefined when the body is not JSON. */
+function errorCode(text: string): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (parsed && typeof parsed === "object" && "code" in parsed) {
+      const c = (parsed as { code?: unknown }).code;
+      return typeof c === "string" ? c : undefined;
+    }
+  } catch { /* not JSON */ }
+  return undefined;
+}
+
 export function CreatePOForm() {
   const router = useRouter();
+  const t = useTranslations();
   const [vendors, setVendors] = useState<VendorOption[]>([]);
   const [vendorId, setVendorId] = useState("");
   const [vendorState, setVendorState] = useState<LoadState>("loading");
@@ -42,7 +56,9 @@ export function CreatePOForm() {
         const body = await res.json() as { data?: VendorOption[] } | VendorOption[];
         const rows = Array.isArray(body) ? body : (body.data ?? []);
         // GAP-PROCUREMENT-ORDERS-NEW-01: never offer a blacklisted vendor. The
-        // server also rejects one (422), this just removes the dead option.
+        // server also rejects one synchronously (POST /pos pre-checks the
+        // blacklist and returns 422 VENDOR_BLACKLISTED before queuing anything,
+        // w0-report.md); this just removes the dead option up front.
         const clean = rows.filter((v) => v.id && v.name && !v.blacklisted);
         setVendors(clean);
         setVendorState(clean.length === 0 ? "empty" : "ready");
@@ -129,8 +145,14 @@ export function CreatePOForm() {
       });
       const text = await res.text();
       if (!res.ok) {
-        const human = toHumanError("save", { area: "purchase order" });
         setStatus("error");
+        // 422 VENDOR_BLACKLISTED: the vendor was blacklisted/debarred after this
+        // page loaded. Show a fixed, translated message -- never the raw server text.
+        if (res.status === 422 && errorCode(text) === "VENDOR_BLACKLISTED") {
+          setMessage(t("procurement.poForm.vendorBlacklisted"));
+          return;
+        }
+        const human = toHumanError("save", { area: "purchase order" });
         setMessage(`${human.what} ${human.next}`);
         return;
       }
