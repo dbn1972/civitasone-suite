@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
-import { attendanceSummaryResponseSchema, AttendanceRegularisationListSchema, AttendanceSummaryListSchema } from "@civitasone/schemas/web";
+import { attendanceSummaryResponseSchema, AttendanceRegularisationListSchema, AttendanceSummaryListSchema, ShiftRequestListResponseSchema, WfhRequestListResponseSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -10,8 +10,8 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import { markAttendanceBody, regularisationCreateBody, periodLockBody, createShiftBody, updateShiftBody, type ResolvedRegularisationBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { UNKNOWN_EMPLOYEE } from "./queries.js";
 import * as repo from "./repo.js";
-import * as employeeRepo from "../employee/repo.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { resolveSelfOrReportsScopedEmployeeId } from "../../shared/self-scope.js";
 import { getPolicy } from "../policy-settings/repo.js";
@@ -459,12 +459,14 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
         .orderBy(desc(hrmsShiftChangeRequests.createdAt))
         .limit(200),
     );
-    const employees = await employeeRepo.listByTenant(ctx.tenantId, 500, 0);
-    const empMap = new Map(employees.map((e) => [e.id, e]));
-    return reply.send({ data: rows.map((r) => ({
+    // GAP-HR-SF-17a: batched, tenant-scoped lookup of this page's ids (was an
+    // unordered 500-row window that left names off for everyone outside it).
+    const empMap = await batchEmployees(ctx.tenantId, rows.flatMap((r) => [r.employeeId, r.approvedBy]));
+    return sendValidated(reply, ShiftRequestListResponseSchema, { data: rows.map((r) => ({
       id: r.id,
       employeeId: r.employeeId,
-      employeeName: empMap.get(r.employeeId)?.fullName ?? r.employeeId.slice(0, 8),
+      employeeName: empMap.get(r.employeeId)?.fullName ?? UNKNOWN_EMPLOYEE,
+      approverName: (r.approvedBy && empMap.get(r.approvedBy)?.fullName) || null,
       currentShift: r.currentShift,
       requestedShift: r.requestedShift,
       effectiveDate: r.effectiveDate,
@@ -496,12 +498,14 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
         .orderBy(desc(hrmsWfhRequests.createdAt))
         .limit(200),
     );
-    const employees = await employeeRepo.listByTenant(ctx.tenantId, 500, 0);
-    const empMap = new Map(employees.map((e) => [e.id, e]));
-    return reply.send({ data: rows.map((r) => ({
+    // GAP-HR-SF-17a: batched, tenant-scoped lookup of this page's ids (was an
+    // unordered 500-row window that left names off for everyone outside it).
+    const empMap = await batchEmployees(ctx.tenantId, rows.flatMap((r) => [r.employeeId, r.approvedBy]));
+    return sendValidated(reply, WfhRequestListResponseSchema, { data: rows.map((r) => ({
       id: r.id,
       employeeId: r.employeeId,
-      employeeName: empMap.get(r.employeeId)?.fullName ?? r.employeeId.slice(0, 8),
+      employeeName: empMap.get(r.employeeId)?.fullName ?? UNKNOWN_EMPLOYEE,
+      approverName: (r.approvedBy && empMap.get(r.approvedBy)?.fullName) || null,
       fromDate: r.fromDate,
       toDate: r.toDate,
       reason: r.reason ?? null,

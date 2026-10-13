@@ -49,3 +49,11 @@ describe("AttendanceTable — GAP-HR-ATTENDANCE-04 (empty-state CTA)", () => {
     expect(link).not.toHaveTextContent(/configure/i);
   });
 });
+
+describe("AttendanceTable — GAP-HR-SF-17a (names, not ids)", () => {
+  it("renders the resolved name with the employee id available on hover only", () => {
+    renderTable({ attendance: [{ ...ROW, employeeId: "00000000-aaaa-bbbb-cccc-000000000002", employeeName: "Ravi Menon" }] });
+    expect(screen.getByText("Ravi Menon")).toHaveAttribute("title", "00000000-aaaa-bbbb-cccc-000000000002");
+    expect(screen.queryByText("00000000-aaaa-bbbb-cccc-000000000002")).not.toBeInTheDocument();
+  });
+});

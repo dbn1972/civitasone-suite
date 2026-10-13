@@ -85,7 +85,7 @@ export function RegularisationTable({ regs, source = "api", canApprove = true }:
 
   const columns = useMemo(
     () => [
-      { key: "employeeName" as const, label: t("colEmployee") },
+      { key: "employeeName" as const, label: t("colEmployee"), render: (r: Row) => <span title={r.employeeId}>{r.employeeName}</span> },
       { key: "date" as const, label: t("colDate"), render: (r: Row) => formatIndianDate(r.date) },
       { key: "reason" as const, label: t("colReason") },
       // GAP-HR-ATTENDANCE-REGULARISATION-03: this printed the raw enum
