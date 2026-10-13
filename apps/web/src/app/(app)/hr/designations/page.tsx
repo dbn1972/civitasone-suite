@@ -6,12 +6,13 @@ import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { DesignationsTable } from "./DesignationsTable";
+import { HR_MASTERS_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * Mirrors the HR_ROLES guard on PATCH/DELETE /v1/hrms/designations/:id.
  * Same roles as departments -- only admins may edit or delete designations.
  */
-const DESIGNATION_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
+const DESIGNATION_ADMIN_ROLES = HR_MASTERS_ADMIN_ROLES;
 
 type Designation = { id: string; code: string; name: string; level: number; payGrade: string | null } & Record<string, unknown>;
 

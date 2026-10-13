@@ -6,6 +6,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getTranslations } from "next-intl/server";
 import { formatIndianDate } from "@/lib/formatters";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 type Row = {
   id: string;
@@ -57,7 +58,7 @@ async function getData(): Promise<LoaderResult<Payload>> {
  * Mirrors training/routes.ts: GET /v1/hrms/training/feedback
  * requires HR_ROLES = ["hr_admin", "hr_officer", "super_admin"].
  */
-const TRAINING_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const TRAINING_ADMIN_ROLES = HR_STAFF_ROLES;
 
 export default async function TrainingFeedbackPage() {
   const t = await getTranslations("trainingFeedback");

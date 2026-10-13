@@ -2,11 +2,12 @@ import { PageHeader, Card } from "../../../../_components/ds";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { IssueIdCardForm } from "./IssueIdCardForm";
+import { ID_CARD_ROLES } from "@/lib/auth/workRoles";
 
 // Mirrors the parent /hr/id-cards list's own gate exactly (services/hrms-service/
 // src/modules/id-cards/routes.ts's POST /v1/hrms/id-cards requireRole list) --
 // GAP-HR-ID-CARDS-01.
-const ID_CARDS_ROLES = ["hr_admin", "security_admin", "super_admin"];
+const ID_CARDS_ROLES = ID_CARD_ROLES;
 
 export const metadata = { title: "Issue ID Card — CivitasOne HRMS" };
 

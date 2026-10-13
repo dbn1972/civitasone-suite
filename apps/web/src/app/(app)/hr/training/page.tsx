@@ -7,13 +7,14 @@ import { UpcomingPrograms } from "./_components/UpcomingPrograms";
 import { ProgramCard } from "./_components/ProgramCard";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * Mirrors training/routes.ts: POST /v1/hrms/trainings requires
  * HR_ROLES = ["hr_admin", "hr_officer", "super_admin"].
  * The program list (GET) is available to ALL_ROLES (incl. employee, manager).
  */
-const TRAINING_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const TRAINING_ADMIN_ROLES = HR_STAFF_ROLES;
 
 export default async function TrainingPage() {
   const t = await getTranslations("training");

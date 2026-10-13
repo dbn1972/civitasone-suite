@@ -5,6 +5,7 @@ import { EmployeesTable, type EmpRow } from "./EmployeesTable";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { humanizeStatus } from "@/lib/formatters";
+import { EMPLOYEE_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 const PAGE_SIZE = 50;
 
@@ -37,7 +38,6 @@ function humanizeTypeCode(code: string): string {
  * PermissionDenied wall -- same bug class as hr/departments/new's own doc
  * comment already describes for that module.
  */
-const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 /**
  * GAP-HR-EMPLOYEES-06: canonical lowercase statuses the server-side ?status=

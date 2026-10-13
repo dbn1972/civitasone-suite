@@ -3,12 +3,13 @@ import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { NewTrainingForm } from "./NewTrainingForm";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * Mirrors training/routes.ts: POST /v1/hrms/trainings requires
  * HR_ROLES = ["hr_admin", "hr_officer", "super_admin"].
  */
-const TRAINING_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const TRAINING_ADMIN_ROLES = HR_STAFF_ROLES;
 
 export default async function NewTrainingPage() {
   const t = await getTranslations("trainingNew");

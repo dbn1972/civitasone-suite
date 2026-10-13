@@ -3,6 +3,7 @@ import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { NewTemplateForm } from "../new/NewTemplateForm";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 export const metadata = { title: "Edit JD Template — HR" };
 
@@ -16,7 +17,7 @@ export const metadata = { title: "Edit JD Template — HR" };
  * requires the same HR_ROLES = ["hr_admin", "hr_officer", "super_admin"]
  * as the create route (jd-template-routes.ts).
  */
-const JD_TEMPLATE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const JD_TEMPLATE_ADMIN_ROLES = HR_STAFF_ROLES;
 
 export default async function EditTemplatePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

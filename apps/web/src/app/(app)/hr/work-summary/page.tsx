@@ -5,14 +5,15 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { getTranslations } from "next-intl/server";
+import { HR_SELF_SERVICE_ROLES, HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
-const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const HR_ROLES = HR_STAFF_ROLES;
 // GAP-HR-SF09A-016 / GAP-HR-WORK-SUMMARY-04: GET /v1/hrms/work-summaries
 // (gap-features/routes.ts READER_ROLES) already includes "employee" and
 // self-scopes them server-side (resolveOwnEmployeeIdIfNonHr) -- this array
 // omitted it, so a plain employee got PermissionDenied before the backend's
 // own, already-correct self-service check ever ran.
-const WORK_SUMMARY_ROLES = ["hr_admin", "hr_officer", "manager", "super_admin", "employee"];
+const WORK_SUMMARY_ROLES = HR_SELF_SERVICE_ROLES;
 
 const SERVER_PAGE_SIZE = 500;
 

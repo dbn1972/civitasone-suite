@@ -10,12 +10,13 @@ import { isCaseOwner } from "./_components/caseActions";
 import { PermissionDenied } from "@/app/_components/PermissionDenied";
 import { humanizeStatus } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * Must match the list page at disciplinary/page.tsx and the backend
  * VIGILANCE_ROLES guard on GET /v1/hrms/disciplinary-cases/:caseId.
  */
-const DISCIPLINARY_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const DISCIPLINARY_ROLES = HR_STAFF_ROLES;
 
 function field(data: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {

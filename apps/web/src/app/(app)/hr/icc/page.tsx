@@ -7,6 +7,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
 import { FileIccComplaintAction } from "./_components/FileIccComplaintAction";
+import { ICC_ACCESS_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * POSH Act 2013, §16 — "contents of the complaint made under section 9,
@@ -24,7 +25,7 @@ import { FileIccComplaintAction } from "./_components/FileIccComplaintAction";
  * what it keeps, for the same reason the backend does: an explicit
  * allow-list, not a hope that nothing sensitive is present.
  */
-const ICC_ROLES = ["hr_admin", "super_admin", "icc_member"];
+const ICC_ROLES = ICC_ACCESS_ROLES;
 const PAGE_SIZE = 100;
 
 type Row = {

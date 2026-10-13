@@ -14,6 +14,8 @@
  * case was just sent for).
  */
 
+import { HR_ADMIN_TIER_ROLES, HR_STAFF_ROLES } from "@/lib/auth/workRoles";
+
 export type CaseActionKey =
   | "charge_memo"
   | "inquiry"
@@ -27,8 +29,8 @@ export type CaseActionKey =
 export type ProceedingType = "minor" | "major";
 
 /** Roles of the backend's own HR_ROLES / VIGILANCE_ROLES (disciplinary/routes.ts). */
-export const HR_ONLY_ROLES = ["hr_admin", "super_admin"] as const;
-export const VIGILANCE_ROLES = ["hr_admin", "super_admin", "hr_officer"] as const;
+export const HR_ONLY_ROLES = HR_ADMIN_TIER_ROLES;
+export const VIGILANCE_ROLES = HR_STAFF_ROLES;
 
 /** Per action: the backend route's required role tier. */
 export const ACTION_ROLES: Record<CaseActionKey, readonly string[]> = {

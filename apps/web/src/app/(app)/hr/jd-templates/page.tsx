@@ -5,6 +5,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { ArchiveTemplateButton } from "./JdTemplateActions";
 import { getTranslations } from "next-intl/server";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "JD Template Library — HR" };
@@ -53,7 +54,7 @@ async function fetchTemplates(type?: string): Promise<LoaderResult<JdTemplate[]>
  * Mirrors jd-template-routes.ts: ALL operations require
  * HR_ROLES = ["hr_admin", "hr_officer", "super_admin"].
  */
-const JD_TEMPLATE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const JD_TEMPLATE_ADMIN_ROLES = HR_STAFF_ROLES;
 
 export default async function JdTemplatesPage({ searchParams }: { searchParams: { type?: string } }) {
   const t = await getTranslations("jdTemplates");

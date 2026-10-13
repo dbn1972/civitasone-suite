@@ -1,6 +1,7 @@
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { NewDesignationPageClient } from "./NewDesignationPageClient";
+import { HR_MASTERS_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * Mirrors services/hrms-service/src/modules/employee/masters-routes.ts's
@@ -11,7 +12,7 @@ import { NewDesignationPageClient } from "./NewDesignationPageClient";
  * same underlying finding (a fully working, live-but-doomed admin form with
  * no indication it would be rejected on submit).
  */
-const DESIGNATION_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
+const DESIGNATION_ADMIN_ROLES = HR_MASTERS_ADMIN_ROLES;
 
 export default function NewDesignationPage() {
   const roles = getSessionRoles();

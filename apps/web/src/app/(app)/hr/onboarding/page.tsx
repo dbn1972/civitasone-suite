@@ -7,11 +7,12 @@ import { toHumanError } from "@/lib/messages";
 import { JoineeCard, type JoineeCardData } from "./_components/JoineeCard";
 import { StartOnboardingPicker } from "./_components/StartOnboardingPicker";
 import { getTranslations } from "next-intl/server";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 // Mirrors HR_ROLES in services/hrms-service/src/modules/lifecycle/onboarding-routes.ts
 // (GET /v1/hrms/onboarding) -- kept local rather than shared, matching how
 // the backend itself already re-declares this same list per route file.
-const ONBOARDING_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const ONBOARDING_ROLES = HR_STAFF_ROLES;
 
 const PAGE_SIZE = 20;
 

@@ -4,6 +4,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { DepartmentsTable } from "./DepartmentsTable";
+import { HR_MASTERS_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * Mirrors services/hrms-service/src/modules/employee/masters-routes.ts's
@@ -15,7 +16,7 @@ import { DepartmentsTable } from "./DepartmentsTable";
  * only the Edit/Delete affordances inside DepartmentsTable are restricted
  * to this narrower list.
  */
-const DEPARTMENT_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
+const DEPARTMENT_ADMIN_ROLES = HR_MASTERS_ADMIN_ROLES;
 
 type Dept = {
   id: string;

@@ -1,6 +1,7 @@
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import AparNewForm from "./AparNewForm";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 // GAP-HR-SF09A-010 / GAP-HR-APAR-NEW-01: this page used to render the form
 // (a "use client" component) for every /hr-admitted role with no gate of
@@ -12,7 +13,7 @@ import AparNewForm from "./AparNewForm";
 // renders -- matching the established pattern at hr/training/new/page.tsx.
 // Kept in sync with ../page.tsx's own copy of this same list; see this
 // app's role-matrix contract test for the two backend routes both mirror.
-const APAR_INITIATE_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const APAR_INITIATE_ROLES = HR_STAFF_ROLES;
 
 export default function AparNewPage() {
   const roles = getSessionRoles();

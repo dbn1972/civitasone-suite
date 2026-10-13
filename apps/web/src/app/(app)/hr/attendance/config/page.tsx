@@ -5,6 +5,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { ATTENDANCE_DEFAULTS } from "@/lib/attendanceDefaults";
 import { formatClockTime12h } from "@/lib/formatters";
+import { HR_ADMIN_TIER_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * No backend endpoint serves or accepts attendance-config values (nothing
@@ -17,7 +18,7 @@ import { formatClockTime12h } from "@/lib/formatters";
  * day-to-day attendance operations, since viewing "the rules" is policy
  * visibility, not routine attendance work.
  */
-const ATTENDANCE_CONFIG_ROLES = ["hr_admin", "super_admin"];
+const ATTENDANCE_CONFIG_ROLES = HR_ADMIN_TIER_ROLES;
 
 /**
  * GAP-HR-ATTENDANCE-CONFIG-04: shared row renderer so every card gets the

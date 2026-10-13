@@ -6,6 +6,7 @@ import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { IdCardsTable, type IdCardRow } from "./IdCardsTable";
+import { ID_CARD_ROLES } from "@/lib/auth/workRoles";
 
 // Matches the backend role gate on GET /v1/hrms/id-cards (services/hrms-service/
 // src/modules/id-cards/routes.ts) -- this page had no client-side gate at all,
@@ -18,7 +19,7 @@ import { IdCardsTable, type IdCardRow } from "./IdCardsTable";
 // ("leave all four hr_admin-tier for now — each is either security-sensitive
 // or high-blast-radius"), this stays as-is; the fix is honest messaging
 // (below) instead of a silent dead end, not widening the gate.
-const ID_CARDS_ROLES = ["hr_admin", "security_admin", "super_admin"];
+const ID_CARDS_ROLES = ID_CARD_ROLES;
 
 const PAGE_SIZE = 100;
 
