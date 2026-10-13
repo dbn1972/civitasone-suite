@@ -12,21 +12,20 @@ import { getMyProfile } from "@/app/_data/loaders";
 import { MarkCompleteButton } from "./MarkCompleteButton";
 
 export default async function Page({ params }: { params: { id: string; lessonId: string } }) {
-  const [{ data: course, source }, { data: profile }] = await Promise.all([
+  const [{ data: course, source, status }, { data: profile }] = await Promise.all([
     getCourseDetail(params.id),
     getMyProfile(),
   ]);
 
-  if (source === "error") {
+  // SF-02: only a real 404 is "not found"; other failures are load errors.
+  if (source === "error" && status === 404) notFound();
+  if (source === "error" || !course) {
     return (
       <>
         <PageHeader title="Lesson" back={`/learning/courses/${params.id}`} />
         <RefreshErrorState error={toHumanError("load", { area: "lesson" })} backHref={`/learning/courses/${params.id}`} />
       </>
     );
-  }
-  if (!course) {
-    notFound();
   }
 
   const lesson = course.lessons.find((l) => l.id === params.lessonId);

@@ -6,8 +6,10 @@ import { ChangeActions } from "./ChangeActions";
 import { formatIndianDateTime } from "@/lib/formatters";
 
 export default async function Page({ params }: { params: { id: string } }) {
-  const { data: detail, source } = await getChangeRequest(params.id);
-  if (source === "error") {
+  const { data: detail, source, status } = await getChangeRequest(params.id);
+  // SF-02: only a real 404 is "not found"; other failures are load errors.
+  if (source === "error" && status === 404) notFound();
+  if (source === "error" || !detail) {
     return (
       <>
         <PageHeader title="Change request" back="/change" />
@@ -16,7 +18,6 @@ export default async function Page({ params }: { params: { id: string } }) {
       </>
     );
   }
-  if (!detail) notFound();
   const c = detail.data;
 
   const field = (label: string, value: React.ReactNode) => (

@@ -82,7 +82,8 @@ export default async function AssesseeDetailPage({ params }: { params: { id: str
 
   const assessee = assesseeResult.data;
 
-  if (!assessee && assesseeResult.source !== "error") {
+  // SF-02: only a real 404 is "not found"; other failures render the error state below.
+  if (assesseeResult.source === "error" && assesseeResult.status === 404) {
     notFound();
   }
 

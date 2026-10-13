@@ -23,11 +23,10 @@ const TYPE_LABELS: Record<string, string> = {
  * numbers (flagged as a backend follow-up).
  */
 export default async function GranteeDetailPage({ params }: { params: { id: string } }) {
-  const { data: grantee, source } = await getGranteeById(params.id);
+  const { data: grantee, source, status } = await getGranteeById(params.id);
 
-  if (source !== "error" && !grantee) {
-    notFound();
-  }
+  // SF-02: only a real 404 is "not found"; other failures render the error badge below.
+  if (source === "error" && status === 404) notFound();
 
   const canViewPii = hasAnyRole(getSessionRoles(), GRANTS_MAKER_ROLES);
 
