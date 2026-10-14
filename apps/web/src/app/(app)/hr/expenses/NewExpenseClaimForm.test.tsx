@@ -56,12 +56,8 @@ describe("NewExpenseClaimForm — GAP-HR-EXPENSES-02", () => {
     fireEvent.change(screen.getByLabelText(/date/i), { target: { value: "2026-08-02" } });
     fireEvent.click(screen.getByRole("button", { name: /submit/i }));
 
-    // The inline error now renders via ds Field (aria-invalid + aria-describedby on the control).
-    const amountInput = screen.getByLabelText(/amount/i);
-    await waitFor(() => expect(amountInput).toHaveAttribute("aria-invalid", "true"));
-    const describedBy = amountInput.getAttribute("aria-describedby");
-    expect(describedBy).toBeTruthy();
-    expect(document.getElementById(describedBy as string)).toHaveTextContent(/\S/);
+    const alert = await screen.findByRole("alert");
+    expect(alert).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

@@ -21,6 +21,7 @@ import { useFormError } from "@/lib/useFormError";
 import { useAsyncMutation } from "@/lib/useAsyncMutation";
 import { Button, Field, Input, Select, Textarea } from "../../../_components/ds";
 import { EmployeePicker } from "../../../_components/EmployeePicker";
+import { translateFormErrors } from "./translateFormErrors";
 import { validateShiftChange, type ShiftChangeErrors } from "./shiftChangeSchema";
 
 type CreatedRequest = { id: string };
@@ -46,6 +47,7 @@ export function ShiftChangeRequestForm({
 }: ShiftChangeRequestFormProps) {
   const router = useRouter();
   const t = useTranslations("shiftChangeForm");
+  const tv = useTranslations("hrFormErrors");
   const [state, setState] = useState<SubmitState>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const formError = useFormError("shift-change request");
@@ -138,7 +140,7 @@ export function ShiftChangeRequestForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const errs = validateShiftChange({ employeeId, currentShift, requestedShift, effectiveDate, reason });
+    const errs = translateFormErrors(validateShiftChange({ employeeId, currentShift, requestedShift, effectiveDate, reason }), tv);
     const sameShift = !!currentShift && currentShift === requestedShift;
     if (sameShift) errs.requestedShift = t("errorSameShift");
     setClientErrors(errs);

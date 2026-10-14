@@ -16,8 +16,10 @@
 import { UserFacingError } from "@/lib/userFacingError";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { StatusPill, ConfirmDialog, useConfirmAction, Button, Field, Input, Select } from "@/app/_components/ds";
 import { validateConfirm, validateExtend } from "./probationSchema";
+import { translateFormErrors } from "../../_components/translateFormErrors";
 import { formatIndianDate, daysUntilIST } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
 
@@ -59,6 +61,7 @@ function todayIsoIST(): string {
 function ProbationCard({ row }: { row: ConfirmationRow }) {
   const [action, setAction] = useState<LocalAction>("default");
   const router = useRouter();
+  const tv = useTranslations("hrFormErrors");
   const days = daysUntilIST(row.dueDate);
   const due  = days !== null ? dueMeta(days) : { label: "Date not set", color: "var(--mut)" };
   const rec  = REC_CONFIG[row.managerRecommendation ?? "pending"] ?? REC_CONFIG.pending;
@@ -75,7 +78,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
   // Inline field errors only appear after the first confirm/extend attempt.
   const [confirmTried, setConfirmTried] = useState(false);
   const [extendTried, setExtendTried] = useState(false);
-  const confirmErrs = confirmTried ? validateConfirm({ confirmationDate: confirmDate, orderRef }) : {};
+  const confirmErrs = confirmTried ? translateFormErrors(validateConfirm({ confirmationDate: confirmDate, orderRef }), tv) : {};
 
   const {
     open: confirmOpen, busy: confirmBusy, error: confirmError,
@@ -84,7 +87,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
     onConfirm: async (remark) => {
       setConfirmTried(true);
       if (!orderRef.trim()) throw new Error("Order reference is required.");
-      const schemaErrs = validateConfirm({ confirmationDate: confirmDate, orderRef });
+      const schemaErrs = translateFormErrors(validateConfirm({ confirmationDate: confirmDate, orderRef }), tv);
       if (schemaErrs.orderRef || schemaErrs.confirmationDate) throw new Error((schemaErrs.orderRef ?? schemaErrs.confirmationDate) as string);
       const res = await fetch(`/api/proxy/v1/hrms/employees/${row.id}/confirm`, {
         method: "PATCH",
@@ -117,7 +120,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
   // reason is required and carried through ConfirmDialog's built-in field.
   const [newEndDate, setNewEndDate] = useState(row.probationEnd && row.probationEnd !== "—" ? row.probationEnd : todayIsoIST());
   const [extendOrderRef, setExtendOrderRef] = useState("");
-  const extendErrs = extendTried ? validateExtend({ newEndDate, orderRef: extendOrderRef }) : {};
+  const extendErrs = extendTried ? translateFormErrors(validateExtend({ newEndDate, orderRef: extendOrderRef }), tv) : {};
 
   const {
     open: extendOpen, busy: extendBusy, error: extendError,
@@ -126,7 +129,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
     onConfirm: async (reason) => {
       setExtendTried(true);
       {
-        const schemaErrs = validateExtend({ newEndDate, orderRef: extendOrderRef });
+        const schemaErrs = translateFormErrors(validateExtend({ newEndDate, orderRef: extendOrderRef }), tv);
         if (schemaErrs.newEndDate || schemaErrs.orderRef) throw new Error((schemaErrs.newEndDate ?? schemaErrs.orderRef) as string);
       }
       if (row.probationEnd && row.probationEnd !== "—" && newEndDate <= row.probationEnd) {

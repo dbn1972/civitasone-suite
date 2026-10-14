@@ -116,7 +116,7 @@ export function Field({
       </label>
       <FieldContext.Provider value={ctx}>{children}</FieldContext.Provider>
       {invalid && (
-        <span id={errorId} style={formErrorStyle}>
+        <span id={errorId} role="alert" style={formErrorStyle}>
           {error}
         </span>
       )}

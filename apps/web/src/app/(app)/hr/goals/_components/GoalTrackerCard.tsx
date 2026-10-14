@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Field, Input, Textarea } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { translateFormErrors } from "../../_components/translateFormErrors";
 import { validateCheckin, type CheckinErrors } from "./checkinSchema";
 
 export type GoalStatus = "active" | "on_track" | "at_risk" | "behind" | "achieved" | "completed";
@@ -68,6 +69,7 @@ export function GoalTrackerCard({
   category, dueDate, cascadeLevel = "individual", parentGoalTitle, onCheckin, onEdit,
 }: GoalTrackerCardProps) {
   const t = useTranslations("goals");
+  const tv = useTranslations("hrFormErrors");
   const tAction = useTranslations("action");
   const router = useRouter();
   const [showCheckin, setShowCheckin] = useState(false);
@@ -110,7 +112,7 @@ export function GoalTrackerCard({
    * rather than closing on a request that never actually saved anything.
    */
   async function handleCheckin() {
-    const invalid = validateCheckin({ progress: checkinProgress, note: checkinNote });
+    const invalid = translateFormErrors(validateCheckin({ progress: checkinProgress, note: checkinNote }), tv);
     setFieldErrors(invalid);
     if (Object.keys(invalid).length > 0) return;
     if (onCheckin) {

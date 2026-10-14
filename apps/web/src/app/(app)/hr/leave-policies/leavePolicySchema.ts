@@ -16,15 +16,15 @@ export const EMPLOYEE_TYPES = [
 ] as const;
 
 export const leavePolicySchema = z.object({
-  leaveTypeId: z.string().min(1, "Choose a leave type."),
-  employeeType: z.enum(EMPLOYEE_TYPES, { message: "Choose an employee type." }),
-  maxDaysPerYear: z.number().int("Days per year must be a whole number.").min(0, "Days per year must be 0-730.").max(730, "Days per year must be 0-730."),
-  countMethod: z.enum(["calendar", "working_days"], { message: "Choose a count method." }),
-  maxAccumulation: z.number().int("Maximum accumulation must be a whole number.").min(0, "Maximum accumulation cannot be negative."),
-  maxContinuousDays: z.number().int("Maximum continuous days must be a whole number.").min(1, "Maximum continuous days must be 1-730.").max(730, "Maximum continuous days must be 1-730."),
-  minServiceMonths: z.number().int("Minimum service must be a whole number of months.").min(0, "Minimum service cannot be negative."),
-  genderRestriction: z.enum(["male", "female", ""], { message: "Choose a valid gender restriction." }),
-  requiresMedicalCertAfterDays: z.number().int("Medical certificate threshold must be a whole number of days.").min(1, "Medical certificate threshold must be at least 1 day."),
+  leaveTypeId: z.string().min(1, "leaveTypeRequired"),
+  employeeType: z.enum(EMPLOYEE_TYPES, { message: "employeeTypeRequired" }),
+  maxDaysPerYear: z.number().int("daysPerYearWhole").min(0, "daysPerYearRange").max(730, "daysPerYearRange"),
+  countMethod: z.enum(["calendar", "working_days"], { message: "countMethodRequired" }),
+  maxAccumulation: z.number().int("maxAccumulationWhole").min(0, "maxAccumulationNegative"),
+  maxContinuousDays: z.number().int("maxContinuousWhole").min(1, "maxContinuousRange").max(730, "maxContinuousRange"),
+  minServiceMonths: z.number().int("minServiceWhole").min(0, "minServiceNegative"),
+  genderRestriction: z.enum(["male", "female", ""], { message: "genderInvalid" }),
+  requiresMedicalCertAfterDays: z.number().int("medCertWhole").min(1, "medCertMin"),
 });
 
 export type LeavePolicyErrors = Partial<Record<keyof z.infer<typeof leavePolicySchema>, string>>;

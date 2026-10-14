@@ -14,13 +14,13 @@ import { z } from "zod";
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export const confirmSchema = z.object({
-  confirmationDate: z.string().regex(DATE, "Enter the confirmation date."),
-  orderRef: z.string().trim().min(1, "Enter the order reference.").max(64, "Order reference must be 64 characters or fewer."),
+  confirmationDate: z.string().regex(DATE, "confirmationDateRequired"),
+  orderRef: z.string().trim().min(1, "orderRefRequired").max(64, "orderRefMax64"),
 });
 
 export const extendSchema = z.object({
-  newEndDate: z.string().regex(DATE, "Enter the new probation end date."),
-  orderRef: z.string().trim().max(128, "Order reference must be 128 characters or fewer."),
+  newEndDate: z.string().regex(DATE, "newEndDateRequired"),
+  orderRef: z.string().trim().max(128, "orderRefMax128"),
 });
 
 type Errors<K extends string> = Partial<Record<K, string>>;

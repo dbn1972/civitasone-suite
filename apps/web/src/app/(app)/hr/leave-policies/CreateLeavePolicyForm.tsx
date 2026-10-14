@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Card, ConfirmDialog, Button, Field, Input, Select } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { translateFormErrors } from "../_components/translateFormErrors";
 import { validateLeavePolicy, type LeavePolicyErrors } from "./leavePolicySchema";
 
 type LeaveType = { id: string; code: string; name: string };
@@ -23,6 +24,7 @@ const SR_ONLY: React.CSSProperties = {
 
 export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } = {}) {
   const t = useTranslations("leavePolicyForm");
+  const tv = useTranslations("hrFormErrors");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [leaveTypes, setLeaveTypes] = useState<LeaveType[]>([]);
@@ -98,7 +100,7 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
     e.preventDefault();
     setError(undefined);
     formError.clear();
-    const errs = validateLeavePolicy({
+    const errs = translateFormErrors(validateLeavePolicy({
       leaveTypeId,
       employeeType,
       maxDaysPerYear: Number(maxDaysPerYear),
@@ -108,7 +110,7 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
       minServiceMonths: Number(minServiceMonths),
       genderRestriction,
       requiresMedicalCertAfterDays: Number(requiresMedicalCertAfterDays),
-    });
+    }), tv);
     setClientErrors(errs);
     const msg = validate() ?? (Object.keys(errs).length > 0 ? Object.values(errs)[0]! : null);
     if (msg) { setFieldError(msg); return; }

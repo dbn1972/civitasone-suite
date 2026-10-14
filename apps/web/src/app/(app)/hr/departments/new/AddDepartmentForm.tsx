@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { ErrorSummary } from "@/app/_components/ds/ErrorSummary";
 import { Button, ConfirmDialog, EntityPicker, Field, Input, Select } from "../../../../_components/ds";
+import { translateFormErrors } from "../../_components/translateFormErrors";
 import { validateDepartment, type DepartmentErrors } from "./departmentSchema";
 import { eligibleParentOptions, type MinimalDept } from "@/lib/hr/departmentTree";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
@@ -28,6 +29,7 @@ type GovtTier = (typeof GOVT_TIERS)[number];
 
 export function AddDepartmentForm({ onCancel, onSuccess, departments = [] }: Props) {
   const t = useTranslations("addDepartmentForm");
+  const tv = useTranslations("hrFormErrors");
   const formId = useId();
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
@@ -101,7 +103,7 @@ export function AddDepartmentForm({ onCancel, onSuccess, departments = [] }: Pro
     const trimCode = code.trim();
     const trimName = name.trim();
     const trimType = type.trim();
-    const errs = validateDepartment({ code: trimCode, name: trimName, type: trimType });
+    const errs = translateFormErrors(validateDepartment({ code: trimCode, name: trimName, type: trimType }), tv);
 
     if (Object.keys(errs).length > 0) {
       setClientErrors(errs);

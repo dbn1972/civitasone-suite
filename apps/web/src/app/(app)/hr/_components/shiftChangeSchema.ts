@@ -9,11 +9,11 @@ import { z } from "zod";
  * catches the obvious rejections inline.
  */
 export const shiftChangeSchema = z.object({
-  employeeId: z.string().uuid("Choose an employee before submitting."),
-  currentShift: z.string().min(1, "Choose the current shift.").max(120, "Current shift must be 120 characters or fewer."),
-  requestedShift: z.string().min(1, "Choose the requested shift.").max(120, "Requested shift must be 120 characters or fewer."),
-  effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the effective date."),
-  reason: z.string().max(500, "Reason must be 500 characters or fewer."),
+  employeeId: z.string().uuid("employeeRequired"),
+  currentShift: z.string().min(1, "currentShiftRequired").max(120, "currentShiftMax"),
+  requestedShift: z.string().min(1, "requestedShiftRequired").max(120, "requestedShiftMax"),
+  effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "effectiveDateRequired"),
+  reason: z.string().max(500, "reasonMax500"),
 });
 
 export type ShiftChangeErrors = Partial<Record<keyof z.infer<typeof shiftChangeSchema>, string>>;

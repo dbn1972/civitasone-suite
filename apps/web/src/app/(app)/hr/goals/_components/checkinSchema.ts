@@ -8,11 +8,11 @@ import { z } from "zod";
  */
 export const checkinSchema = z.object({
   progress: z
-    .number({ invalid_type_error: "Enter a whole number from 0 to 100." })
-    .int("Enter a whole number from 0 to 100.")
-    .min(0, "Progress cannot be below 0.")
-    .max(100, "Progress cannot be above 100."),
-  note: z.string().max(500, "Note must be 500 characters or fewer."),
+    .number({ invalid_type_error: "progressWhole" })
+    .int("progressWhole")
+    .min(0, "progressMin")
+    .max(100, "progressMax"),
+  note: z.string().max(500, "noteMax500"),
 });
 
 export type CheckinErrors = Partial<Record<keyof z.infer<typeof checkinSchema>, string>>;
