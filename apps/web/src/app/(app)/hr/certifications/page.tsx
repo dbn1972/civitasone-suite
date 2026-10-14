@@ -5,6 +5,8 @@ import { toHumanError } from "@/lib/messages";
 import { CertificationCard } from "./_components/CertificationCard";
 import { deriveCardStatus, isMandatory, type CertificationStatus } from "@/lib/certifications";
 import { getTranslations } from "next-intl/server";
+import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { HR_SELF_SERVICE_ROLES } from "@/lib/auth/workRoles";
 
 type Row = {
   id: string;
@@ -35,6 +37,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function CertificationsPage() {
+  requireAnyRole(HR_SELF_SERVICE_ROLES);
   const t = await getTranslations("certifications");
   const { data: items, source } = await getData();
 

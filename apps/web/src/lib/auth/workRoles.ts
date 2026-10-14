@@ -247,7 +247,12 @@ export const PAYMENT_WRITE_ROLES = ["finance_officer", "finance_admin", "super_a
  * depends on each; see the inline comment on the entries) and moved it_admin's
  * device-trust routes to their real consumer, /admin/devices.
  */
-export const HR_ROLES = [
+/**
+ * W1 SF-09b: the 14 roles the /hr tree admitted before hiring_manager and
+ * dept_head were added. Mirrors services/hrms-service shared/roles.ts
+ * STAFF_ROLES exactly (the backend's own "any staff member" list).
+ */
+export const HR_BASELINE_ROLES = [
   "hr_admin",
   "hr_officer",
   "payroll_officer",
@@ -268,6 +273,10 @@ export const HR_ROLES = [
   "officer",
   "finance_officer",
   "finance_admin",
+];
+
+export const HR_ROLES = [
+  ...HR_BASELINE_ROLES,
   // W1 SF-09b: the backend admits both, and a web page already depends on
   // each. hiring_manager: hr/recruitment/requisitions/page.tsx lists it in
   // its own gate and requisition-routes.ts admits it on all 7 routes, but
@@ -658,3 +667,14 @@ export const WORKFLOW_TASK_ROLES: readonly string[] = [
   "payroll_admin", "procurement_admin", "procurement_officer",
   "estab_officer", "estab_admin", "estab_section_officer", "estab_under_secretary", "estab_deputy_secretary",
 ];
+
+/**
+ * W1 SF-09b (owner decision 2026-10-14, "allow + guard"): hiring_manager and
+ * dept_head are admitted to the /hr shell, so every page without a gate of
+ * its own gets one that mirrors its backend route. Goals is the only
+ * formerly-ungated page they may reach (performance-dev-routes.ts admits
+ * dept_head for development plans and goal updates); the rest keep them out.
+ */
+export const HR_GOALS_ROLES = [...HR_BASELINE_ROLES, "dept_head"];
+/** workforce-planning/routes.ts READER_ROLES (headcount, forecasts, KPIs, budget, diversity). */
+export const WORKFORCE_READER_ROLES = [...HR_STAFF_MANAGER_ROLES, "finance_officer"];

@@ -7,6 +7,8 @@ import { GoalTrackerCard, type GoalStatus } from "./_components/GoalTrackerCard"
 import { DevelopmentPlanTimeline, type DevActivity } from "./_components/DevelopmentPlanTimeline";
 import type { CascadeLevel } from "./_components/GoalTrackerCard";
 import { getTranslations } from "next-intl/server";
+import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { HR_GOALS_ROLES } from "@/lib/auth/workRoles";
 
 type KeyResult = { title?: string; targetValue?: number; currentValue?: number; unit?: string };
 
@@ -106,6 +108,7 @@ function inferCascade(category: string | undefined): CascadeLevel {
 }
 
 export default async function GoalsPage() {
+  requireAnyRole(HR_GOALS_ROLES);
   const t = await getTranslations("goals");
   const [{ data: items, source }, devPlansResult] = await Promise.all([
     getGoals(),
