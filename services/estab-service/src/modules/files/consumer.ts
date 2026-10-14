@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import pino from "pino";
+import { pino } from "pino";
 import { sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
