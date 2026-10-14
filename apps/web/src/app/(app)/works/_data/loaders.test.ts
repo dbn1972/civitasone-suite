@@ -10,7 +10,7 @@ vi.mock("@/app/_data/apiClient", () => ({
   },
 }));
 
-import { getExecutionProgress, getExecutionIssues } from "./loaders";
+import { getExecutionProgress, getExecutionIssues, getBoqItems, getBoqIndexSummary } from "./loaders";
 
 describe("execution loaders mapping (GAP-WORKS-EXECUTION-01)", () => {
   it("progress rows show the work number + scope description, not UUID prefixes", async () => {
@@ -51,5 +51,34 @@ describe("execution loaders mapping (GAP-WORKS-EXECUTION-01)", () => {
       data: [{ id: "i1", workId: "w", workNumber: "W-2025-099", description: "Crack", status: "open" }],
     }) as Array<Record<string, unknown>>;
     expect(rows[0].work).toBe("W-2025-099");
+  });
+});
+
+describe("BoQ index loaders (GAP-WORKS-BOQ-02 / BOQ-04)", () => {
+  it("BOQ-02: totals come from the list meta (full set), with the fetched page size reported for the 'showing first N' hint", async () => {
+    await getBoqIndexSummary();
+    const map = captured["works.boq.summary"];
+    const rows = Array.from({ length: 100 }, (_v, i) => ({ id: `b${i}`, amountMinor: "1000" }));
+    const out = map({ data: rows, meta: { total: 150, totalAmountMinor: "9007199254740993" } }) as { total: number; totalAmountMinor: string; fetched: number };
+    expect(out.total).toBe(150);
+    expect(out.fetched).toBe(100);
+    // exact bigint string, never a float-rounded sum
+    expect(out.totalAmountMinor).toBe("9007199254740993");
+  });
+
+  it("BOQ-02: without meta it falls back to the BigInt sum of the fetched page", async () => {
+    await getBoqIndexSummary();
+    const map = captured["works.boq.summary"];
+    const out = map({ data: [{ amountMinor: "9007199254740993" }, { amountMinor: "1" }] }) as { total: number; totalAmountMinor: string };
+    expect(out.total).toBe(2);
+    expect(out.totalAmountMinor).toBe("9007199254740994");
+  });
+
+  it("BOQ-04: a row keeps its srItemId so the page can count SR-linked lines", async () => {
+    await getBoqItems();
+    const map = captured["works.boq"];
+    const rows = map({ data: [{ id: "a", srItemId: "sr-1", itemCode: "X" }, { id: "b", itemCode: "Y" }] }) as Array<{ srItemId: string | null }>;
+    expect(rows[0]!.srItemId).toBe("sr-1");
+    expect(rows[1]!.srItemId).toBeNull();
   });
 });

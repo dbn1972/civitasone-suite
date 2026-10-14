@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { renderWithIntl as render } from "@/lib/testUtils/intl";
 
 const pushMock = vi.fn();
 let searchParamsMock = new URLSearchParams();
@@ -27,12 +28,15 @@ const MB = "33333333-3333-3333-3333-333333333333";
 
 /** Mock awards/mbs GETs + the bill-create POST. Returns the spy so tests can
  * inspect the POST specifically. */
-function mockFetch(postStatus = 202) {
+function mockFetch(postStatus = 202, available = "999999999") {
   return vi.spyOn(globalThis, "fetch").mockImplementation(((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = (init?.method ?? "GET").toUpperCase();
     if (method === "GET" && url.endsWith(`/${WORK}/awards`)) {
       return Promise.resolve(new Response(JSON.stringify({ data: [{ id: AWARD, agreementNumber: "AGR/42", contractorName: "Acme", status: "do_finalized" }] }), { status: 200 }));
+    }
+    if (method === "GET" && url.endsWith(`/mb/${MB}/measured-value`)) {
+      return Promise.resolve(new Response(JSON.stringify({ data: { mbId: MB, measuredValueMinor: "1000000000", billedMinor: "1", availableMinor: available } }), { status: 200 }));
     }
     if (method === "GET" && url.endsWith(`/${WORK}/mbs`)) {
       return Promise.resolve(new Response(JSON.stringify({ data: [{ id: MB, mbNumber: "MB/01", status: "do_finalized" }] }), { status: 200 }));
@@ -159,5 +163,31 @@ describe("Generate Bill form — single-option preselect (BILLS-NEW-01)", () => 
     render(<NewBillPage />);
     await waitFor(() => expect(screen.getByLabelText(/^Award/i)).toHaveValue(AWARD));
     await waitFor(() => expect(screen.getByLabelText(/Measurement Book/i)).toHaveValue(MB));
+  });
+});
+
+describe("Generate Bill form - measured-value ceiling (GAP-WORKS-BILLING-BILLS-NEW-02)", () => {
+  it("shows what is measured, already billed and still billable once the MB is chosen, and can prefill the gross", async () => {
+    vi.restoreAllMocks();
+    searchParamsMock = new URLSearchParams(`workId=${WORK}&awardId=${AWARD}&mbId=${MB}`);
+    mockFetch(202, "60000");
+    render(<NewBillPage />);
+    const hint = await screen.findByTestId("mb-position");
+    expect(hint).toHaveTextContent(/Still billable: .*600/);
+    fireEvent.click(screen.getByRole("button", { name: /Use the full amount/i }));
+    expect(screen.getByLabelText(/Gross Amount/i)).toHaveValue(600);
+  });
+
+  it("blocks a gross above the still-billable value before posting (server enforces the same ceiling)", async () => {
+    vi.restoreAllMocks();
+    searchParamsMock = new URLSearchParams(`workId=${WORK}&awardId=${AWARD}&mbId=${MB}`);
+    const fetchSpy = mockFetch(202, "60000"); // 600 rupees available
+    render(<NewBillPage />);
+    await screen.findByTestId("mb-position");
+    fireEvent.change(screen.getByLabelText(/Bill Number/i), { target: { value: "RA/1" } });
+    fireEvent.change(screen.getByLabelText(/Gross Amount/i), { target: { value: "601" } });
+    fireEvent.click(screen.getByRole("button", { name: /Generate Bill/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/more than the value still billable/i);
+    expect(postCall(fetchSpy)).toBeUndefined();
   });
 });

@@ -14882,6 +14882,11 @@
     "statusOffline": "You are currently offline."
   },
   "works": {
+    "billsNew": {
+      "position": "Measured against this MB: {measured}. Already billed: {billed}. Still billable: {available}.",
+      "useAvailable": "Use the full amount",
+      "exceedsAvailable": "The gross amount is more than the value still billable against this measurement book ({available}). Reduce it or measure more work first."
+    },
     "hub": {
       "title": "Works & Billing",
       "subtitle": "Engineering works lifecycle — proposals to bills.",

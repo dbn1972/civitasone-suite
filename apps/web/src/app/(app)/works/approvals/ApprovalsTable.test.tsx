@@ -30,10 +30,11 @@ describe("ApprovalsTable", () => {
     expect(pendingAa?.textContent).toMatch(/1/);
   });
 
-  it("labels the opaque work/authority columns as IDs rather than as a number/name (GAP-WORKS-APPROVALS-01)", () => {
+  it("labels the work/authority columns as a number/name now that works-service joins them (GAP-WORKS-APPROVALS-01)", () => {
     render(<ApprovalsTable aaApprovals={aa} tsApprovals={ts} source="api" />);
-    expect(screen.getByText("Work (ID)")).toBeInTheDocument();
-    expect(screen.getByText("Authority (ID)")).toBeInTheDocument();
+    expect(screen.getByText("Work Number")).toBeInTheDocument();
+    expect(screen.getByText("Authority")).toBeInTheDocument();
+    expect(screen.queryByText("Work (ID)")).not.toBeInTheDocument();
   });
 
   it("switches to the TS register when the second tab is activated", () => {
@@ -68,5 +69,31 @@ describe("ApprovalsTable — GAP2-WORKS-APPROVALS-05 true total + truncation not
   it("no truncation notice when the page holds the whole set (rows == total)", () => {
     render(<ApprovalsTable aaApprovals={aa} tsApprovals={ts} source="api" aaTotal={aa.length} tsTotal={ts.length} />);
     expect(screen.queryByText(/showing the first/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("ApprovalsTable stat cards follow the rows on screen (GAP-WORKS-APPROVALS-03) and rows open their detail (TS-DETAIL-01)", () => {
+  const rows = [
+    { id: "a1", workNumber: "W1", approvalNumber: "AA/1", date: "01 Jan 2026", authority: "X", amount: "100", type: "Original", status: "draft" },
+    { id: "a2", workNumber: "W2", approvalNumber: "AA/2", date: "02 Jan 2026", authority: "X", amount: "100", type: "Original", status: "finalized" },
+  ];
+
+  it("with an error source but cached/seeded rows, Total AA equals the rows shown (not a false 0)", () => {
+    render(<ApprovalsTable aaApprovals={rows} tsApprovals={[]} source="error" />);
+    const total = screen.getByText("Total AA").closest("*")?.parentElement?.textContent ?? "";
+    expect(total).toContain("2");
+  });
+
+  it("with an error source and no rows at all, the cards show an em dash, never 0", () => {
+    render(<ApprovalsTable aaApprovals={[]} tsApprovals={[]} source="error" />);
+    const total = screen.getByText("Total AA").closest("*")?.parentElement?.textContent ?? "";
+    expect(total).toContain("—");
+    expect(total).not.toMatch(/\b0\b/);
+  });
+
+  it("each AA row links to its by-id detail page, so a record beyond the first list page is still reachable", () => {
+    render(<ApprovalsTable aaApprovals={rows} tsApprovals={[]} source="api" />);
+    const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+    expect(hrefs).toContain("/works/approvals/aa/a1");
   });
 });

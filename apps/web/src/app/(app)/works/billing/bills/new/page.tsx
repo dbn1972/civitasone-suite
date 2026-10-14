@@ -1,10 +1,11 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useState, useEffect, Suspense } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader, Button, SkeletonCard } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
-import { rupeesToMinorString } from "@/lib/money";
+import { rupeesToMinorString, minorToRupeesInput } from "@/lib/money";
 import { useFormError } from "@/lib/useFormError";
 import { WorkField, safeWorkId } from "../../WorkField";
 
@@ -20,6 +21,7 @@ function NewBillForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const t = useTranslations("works.billsNew");
 
   const workId = safeWorkId(searchParams.get("workId")) ?? "";
 
@@ -89,6 +91,33 @@ function NewBillForm() {
     };
   }, [chosenWorkId]);
 
+  // GAP-WORKS-BILLING-BILLS-NEW-02: once an MB is chosen, read the value measured against it and what earlier bills
+  // already used, so the clerk sees the ceiling the server will enforce (and can start from the full available
+  // amount) instead of free-typing a figure. Strings are exact bigint minor units; absent/failed -> no hint.
+  const [position, setPosition] = useState<{ measured: string; billed: string; available: string } | null>(null);
+  useEffect(() => {
+    setPosition(null);
+    const mb = form.mbId.trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mb)) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/proxy/v1/works/billing/mb/${mb}/measured-value`);
+        if (!res.ok || cancelled) return;
+        const d = ((await res.json()) as { data?: Record<string, unknown> }).data ?? {};
+        const ok = (v: unknown): v is string => typeof v === "string" && /^\d+$/.test(v);
+        if (ok(d.measuredValueMinor) && ok(d.billedMinor) && ok(d.availableMinor)) {
+          setPosition({ measured: d.measuredValueMinor, billed: d.billedMinor, available: d.availableMinor });
+        }
+      } catch {
+        /* the hint is optional; the server still enforces the ceiling */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [form.mbId]);
+
   function set(field: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
@@ -127,6 +156,10 @@ function NewBillForm() {
     }
     if (BigInt(dedMinor) > BigInt(grossMinor)) {
       setError("Deductions cannot exceed the gross amount.");
+      return;
+    }
+    if (position && BigInt(grossMinor) > BigInt(position.available)) {
+      setError(t("exceedsAvailable", { available: formatMoney(position.available) }));
       return;
     }
 
@@ -271,6 +304,24 @@ function NewBillForm() {
             <div>
               <label style={labelStyle} htmlFor="grossAmount">Gross Amount (₹) *</label>
               <input id="grossAmount" style={inputStyle} type="number" required step="0.01" min="0" value={form.grossAmount} onChange={set("grossAmount")} placeholder="0.00" />
+              {position ? (
+                <p data-testid="mb-position" style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
+                  {t("position", {
+                    measured: formatMoney(position.measured),
+                    billed: formatMoney(position.billed),
+                    available: formatMoney(position.available),
+                  })}{" "}
+                  {position.available !== "0" ? (
+                    <button
+                      type="button"
+                      className="btn ghost sm"
+                      onClick={() => setForm((prev) => ({ ...prev, grossAmount: minorToRupeesInput(position.available) }))}
+                    >
+                      {t("useAvailable")}
+                    </button>
+                  ) : null}
+                </p>
+              ) : null}
             </div>
             <div>
               <label style={labelStyle} htmlFor="deductions">Deductions (₹)</label>

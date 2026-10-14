@@ -134,8 +134,8 @@ function NewBoqItemForm() {
         itemDescription: parsed.data.itemDescription,
         unit: parsed.data.unit,
         rate: minor,
-        // GAP-WORKS-BOQ-NEW-04: quantity sent as a decimal string (not a JS number).
-        quantity: Number(parsed.data.quantity),
+        // GAP-WORKS-BOQ-NEW-04: quantity sent as a decimal string (not a JS number); works-service normalises it.
+        quantity: parsed.data.quantity,
       };
       if (form.itemCode.trim()) body.itemCode = form.itemCode.trim();
       if (srItemId) body.srItemId = srItemId;

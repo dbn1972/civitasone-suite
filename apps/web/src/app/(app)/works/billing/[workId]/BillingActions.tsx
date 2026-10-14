@@ -10,10 +10,11 @@ import {
   nextFinalizeStep,
   billStatusLabel,
 } from "../../_data/format";
-import { BILL_STEP_AUTHORITY, MB_STEP_AUTHORITY, canAdvanceFinalizeStep } from "@/lib/auth/workRoles";
+import Link from "next/link";
+import { BILL_STEP_AUTHORITY, MB_STEP_AUTHORITY, MEASUREMENT_RECORD_ROLES, canAdvanceFinalizeStep } from "@/lib/auth/workRoles";
 
-type BillItem = { id: string; billNo: string; status: string };
-type MbItem = { id: string; mbNumber: string; rawStatus: string };
+type BillItem = { id: string; billNo: string; status: string; createdBy?: string | null };
+type MbItem = { id: string; mbNumber: string; rawStatus: string; makerIds: string[] };
 
 interface BillingActionsProps {
   workId: string;
@@ -31,6 +32,11 @@ interface BillingActionsProps {
    * "Awaiting: <authority>". Omitted → coarse canFinalize only.
    */
   roles?: string[];
+  /**
+   * Maker-checker (owner decision 2026-10-14): the signed-in user's id. The maker of a bill/MB (creator/issuer)
+   * cannot finalize it, so their Advance control is replaced by a note. The server enforces it too (route + consumer).
+   */
+  actorId?: string | null;
   bills: BillItem[];
 }
 
@@ -50,7 +56,7 @@ function stepDescription(
   );
 }
 
-export function BillingActions({ workId, canFinalize, roles, bills }: BillingActionsProps) {
+export function BillingActions({ workId, canFinalize, roles, actorId, bills }: BillingActionsProps) {
   const mayAdvance = (next: string) => roles === undefined || canAdvanceFinalizeStep(roles, next);
   const accepted = useAcceptedWrite();
   const { toast } = useToast();
@@ -126,6 +132,7 @@ export function BillingActions({ workId, canFinalize, roles, bills }: BillingAct
             id: String(row.id ?? ""),
             mbNumber: String(row.mbNumber ?? ""),
             rawStatus: String(row.status ?? "draft"),
+            makerIds: [row.issuedBy, row.createdBy].filter((x): x is string => typeof x === "string" && x.length > 0),
           };
         }),
       );
@@ -218,6 +225,10 @@ export function BillingActions({ workId, canFinalize, roles, bills }: BillingAct
                     <span style={{ fontSize: 12, color: "var(--ink3)" }}>
                       Awaiting: {BILL_STEP_AUTHORITY[next] ?? billStatusLabel(next)}
                     </span>
+                  ) : actorId && bill.createdBy === actorId ? (
+                    <span style={{ fontSize: 12, color: "var(--ink3)" }}>
+                      You created this bill, so another officer must finalize it.
+                    </span>
                   ) : (
                   <Button
                     onClick={() =>
@@ -264,10 +275,25 @@ export function BillingActions({ workId, canFinalize, roles, bills }: BillingAct
                     <span style={{ marginInlineStart: 12, fontSize: 12, color: "var(--ink3)" }}>
                       Current: {billStatusLabel(mb.rawStatus)}
                     </span>
+                    {/* GAP-WORKS-BILLING-MEASUREMENTS-NEW-02: row action with the work and MB pre-chosen. */}
+                    {roles && roles.some((r) => MEASUREMENT_RECORD_ROLES.includes(r)) ? (
+                      <Link
+                        href={`/works/billing/measurements/new?workId=${encodeURIComponent(workId)}&mbId=${encodeURIComponent(mb.id)}`}
+                        className="btn ghost sm"
+                        style={{ marginInlineStart: 12 }}
+                        aria-label={`Record measurement in ${mb.mbNumber}`}
+                      >
+                        Record measurement
+                      </Link>
+                    ) : null}
                   </div>
                   {!mayAdvance(next) ? (
                     <span style={{ fontSize: 12, color: "var(--ink3)" }}>
                       Awaiting: {MB_STEP_AUTHORITY[next] ?? billStatusLabel(next)}
+                    </span>
+                  ) : actorId && mb.makerIds.includes(actorId) ? (
+                    <span style={{ fontSize: 12, color: "var(--ink3)" }}>
+                      You issued this measurement book, so another officer must finalize it.
                     </span>
                   ) : (
                   <Button

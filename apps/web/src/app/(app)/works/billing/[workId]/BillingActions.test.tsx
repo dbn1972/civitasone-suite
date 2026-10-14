@@ -198,3 +198,60 @@ describe("BillingActions — WORKID-03 per-step authority", () => {
     expect(await screen.findByRole("button", { name: /→ Dao finalized/i })).toBeInTheDocument();
   });
 });
+
+describe("BillingActions - maker-checker (owner decision 2026-10-14: the maker cannot finalize)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    refreshMock.mockReset();
+  });
+
+  it("Given the signed-in user created the bill, When the stepper renders, Then no Advance button is offered and the reason is shown", async () => {
+    mockMbList();
+    renderWithToast(
+      <BillingActions
+        workId={WORK}
+        canFinalize
+        roles={["works_admin"]}
+        actorId="user-maker"
+        bills={[{ id: "b1", billNo: "BILL/001", status: "so_finalized", createdBy: "user-maker" }]}
+      />,
+    );
+    expect(await screen.findByText(/You created this bill, so another officer must finalize it/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /→/ })).not.toBeInTheDocument();
+  });
+
+  it("Given a different officer created the bill, When the stepper renders, Then the Advance button is offered", async () => {
+    mockMbList();
+    renderWithToast(
+      <BillingActions
+        workId={WORK}
+        canFinalize
+        roles={["works_admin"]}
+        actorId="user-checker"
+        bills={[{ id: "b1", billNo: "BILL/001", status: "so_finalized", createdBy: "user-maker" }]}
+      />,
+    );
+    expect(await screen.findByRole("button", { name: /→ Sdo finalized/i })).toBeInTheDocument();
+  });
+
+  it("Given the signed-in user issued the MB, When the MB list loads, Then no Advance button is offered for it", async () => {
+    mockMbList([{ id: "mb1", mbNumber: "MB/001", status: "so_finalized", issuedBy: "user-maker", createdBy: "user-maker" }]);
+    renderWithToast(<BillingActions workId={WORK} canFinalize roles={["works_admin"]} actorId="user-maker" bills={[]} />);
+    expect(await screen.findByText(/You issued this measurement book, so another officer must finalize it/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /→/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("BillingActions - MB row action (GAP-WORKS-BILLING-MEASUREMENTS-NEW-02)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    refreshMock.mockReset();
+  });
+
+  it("offers Record measurement on an MB row with the work and MB pre-chosen", async () => {
+    mockMbList([{ id: "mb1", mbNumber: "MB/001", status: "so_finalized", issuedBy: "u-other", createdBy: "u-other" }]);
+    renderWithToast(<BillingActions workId={WORK} canFinalize roles={["works_admin"]} actorId="u-me" bills={[]} />);
+    const link = await screen.findByRole("link", { name: /Record measurement in MB\/001/ });
+    expect(link).toHaveAttribute("href", `/works/billing/measurements/new?workId=${WORK}&mbId=mb1`);
+  });
+});

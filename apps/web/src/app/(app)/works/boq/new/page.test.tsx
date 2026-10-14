@@ -79,6 +79,8 @@ describe("Add BoQ Item form", () => {
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body.rate).toBe("1250"); // ₹12.50 → 1250 paise
     expect(body.workId).toBe(WORK);
+    // GAP-WORKS-BOQ-NEW-04: quantity travels as the typed decimal string, never a JS float.
+    expect(typeof body.quantity).toBe("string");
   });
 
   it("GAP-WORKS-BOQ-NEW-04: maps a 409 duplicate to a clear field message, not the raw status", async () => {
@@ -103,5 +105,48 @@ describe("Add BoQ Item form", () => {
     const alert = await screen.findByRole("alert");
     await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
     expect(alert.textContent).not.toMatch(/\b500\b/);
+  });
+});
+
+describe("Add BoQ Item form - re-check of BOQ-NEW-01 / NEW-03 (work + SR lookup)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    pushMock.mockReset();
+    searchParamsMock = new URLSearchParams();
+  });
+
+  it("GAP-WORKS-BOQ-NEW-03: without ?workId= the work is chosen by number from a search, and its id (never typed) is posted", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 202 }));
+    render(<NewBoqItemPage />);
+    const workBox = screen.getByRole("combobox", { name: "Work" });
+    expect(workBox).not.toBeDisabled();
+    fireEvent.focus(workBox);
+    fireEvent.change(workBox, { target: { value: "WRK" } });
+    fireEvent.mouseDown(await screen.findByText("WRK-1"));
+    fireEvent.change(screen.getByLabelText(/Item description/i), { target: { value: "PCC" } });
+    fireEvent.change(screen.getByLabelText(/^Unit/i), { target: { value: "cum" } });
+    fireEvent.change(screen.getByLabelText(/Quantity/i), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText(/Rate per unit/i), { target: { value: "10" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add BoQ Item" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    expect(JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string).workId).toBe(WORK);
+  });
+
+  it("GAP-WORKS-BOQ-NEW-01: choosing a Schedule-of-Rates item fills unit and rate and posts its srItemId", async () => {
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 202 }));
+    render(<NewBoqItemPage />);
+    const sr = screen.getByRole("combobox", { name: "Schedule of Rates item" });
+    fireEvent.focus(sr);
+    fireEvent.change(sr, { target: { value: "PCC" } });
+    fireEvent.mouseDown(await screen.findByText(/PCC-1-4-8/));
+    await waitFor(() => expect(screen.getByLabelText(/^Unit/i)).toHaveValue("cum"));
+    expect(screen.getByLabelText(/Rate per unit/i)).toHaveValue("450.00");
+    fireEvent.change(screen.getByLabelText(/Quantity/i), { target: { value: "2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add BoQ Item" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.srItemId).toBe("sr-1");
+    expect(body.rate).toBe("45000");
   });
 });

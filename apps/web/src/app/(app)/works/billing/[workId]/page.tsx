@@ -2,8 +2,7 @@ import Link from "next/link";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, Card, DataTable, StatGrid, StatCard } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
-import { getSessionRoles } from "@/lib/auth/roleGuard";
-import { hasAnyRole } from "@/lib/auth/roleGuard";
+import { getSessionRoles, getSessionUserId, hasAnyRole } from "@/lib/auth/roleGuard";
 import { BILLING_FINALIZE_ROLES } from "@/lib/auth/workRoles";
 import { getBillsForWork, type BillRow } from "../../_data/loaders";
 import { billStatusLabel } from "../../_data/format";
@@ -14,8 +13,10 @@ import { BillingActions } from "./BillingActions";
 
 export default async function BillingDetailPage({
   params,
+  searchParams,
 }: {
   params: { workId: string };
+  searchParams?: { bill?: string };
 }) {
   // GAP-WORKS-BILLING-WORKID-01: consume the shared loader (mapBillRow) instead
   // of a local BillRow/pickData that read r.billNo/r.mode/r.stage — fields the
@@ -59,8 +60,13 @@ export default async function BillingDetailPage({
     status: string;
   };
 
-  const tableRows: BillDisplayRow[] = bills.map((b) => ({
-    billNo: b.billNo || "—",
+  // GAP-WORKS-BILLING-02: the register links here with ?bill=<id>; call that bill out and list it first.
+  const focusId = typeof searchParams?.bill === "string" ? searchParams.bill : "";
+  const focusBill = focusId ? bills.find((b) => b.id === focusId) : undefined;
+  const orderedBills = focusBill ? [focusBill, ...bills.filter((b) => b.id !== focusBill.id)] : bills;
+
+  const tableRows: BillDisplayRow[] = orderedBills.map((b) => ({
+    billNo: (b.id === focusBill?.id ? "▶ " : "") + (b.billNo || "—"),
     mode: b.mode || "—",
     grossAmountMinor: b.gross,
     netPayableMinor: b.netPayable,
@@ -107,6 +113,12 @@ export default async function BillingDetailPage({
           </div>
         }
       />
+
+      {focusBill ? (
+        <div role="note" style={{ background: "var(--info-bg, #eff6ff)", color: "var(--info, #1e40af)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
+          Opened from the register: bill {focusBill.billNo || "—"} is listed first below.
+        </div>
+      ) : null}
 
       <StatGrid>
         <StatCard
@@ -165,7 +177,8 @@ export default async function BillingDetailPage({
         workId={params.workId}
         canFinalize={canFinalize}
         roles={sessionRoles}
-        bills={bills.map((b) => ({ id: b.id, billNo: b.billNo, status: b.rawStatus }))}
+        actorId={getSessionUserId()}
+        bills={bills.map((b) => ({ id: b.id, billNo: b.billNo, status: b.rawStatus, createdBy: b.createdBy }))}
       />
 
       <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
