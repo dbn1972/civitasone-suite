@@ -1,19 +1,12 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
-import { Button, Modal, EntityPicker } from "../../../../_components/ds";
+import { Button, Modal, EntityPicker, Field, Input, Select, Textarea } from "../../../../_components/ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { istToday, validateRegularisationForm, friendlyRegularisationError, type RegularisationFormValues } from "./raise";
-
-const inputStyle: React.CSSProperties = {
-  width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 14,
-  border: "1px solid var(--line)", borderRadius: 10, background: "var(--bg2)", color: "var(--ink)", minHeight: 44,
-};
-const errStyle: React.CSSProperties = { color: "var(--bad, #b91c1c)", fontSize: 12, margin: "3px 0 0" };
-const labelStyle: React.CSSProperties = { fontSize: 13, fontWeight: 600, display: "block", marginBottom: 4 };
 
 /**
  * GAP-HR-ATTENDANCE-REGULARISATION-01: the missing "Raise request" flow.
@@ -28,7 +21,6 @@ export function RaiseRegularisation({ canPickEmployee }: { canPickEmployee: bool
   const t = useTranslations("attendanceRegularisation");
   const router = useRouter();
   const formError = useFormError("regularisation request");
-  const uid = useId();
   const [open, setOpen] = useState(false);
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [date, setDate] = useState("");
@@ -92,31 +84,24 @@ export function RaiseRegularisation({ canPickEmployee }: { canPickEmployee: bool
         <form onSubmit={submit} noValidate style={{ display: "grid", gap: 12 }}>
           {serverError ? <p role="alert" className="pill bad" style={{ margin: 0 }}>{serverError}</p> : null}
           {canPickEmployee ? (
-            <div>
-              <label htmlFor={`${uid}-emp`} style={labelStyle}>{t("raiseEmployee")} *</label>
-              <EntityPicker id={`${uid}-emp`} value={employeeId} onChange={(v) => setEmployeeId(Array.isArray(v) ? (v[0] ?? null) : v)}
+            <Field label={t("raiseEmployee")} required error={errors.employee ? t("raiseEmployeeRequired") : formError.fieldError("employeeId")}>
+              <EntityPicker value={employeeId} onChange={(v) => setEmployeeId(Array.isArray(v) ? (v[0] ?? null) : v)}
                 search={searchEmployees} resolve={resolveEmployees} placeholder={t("raiseEmployeePlaceholder")} />
-              {errors.employee ? <p role="alert" style={errStyle}>{t("raiseEmployeeRequired")}</p> : null}
-            </div>
+            </Field>
           ) : null}
-          <div>
-            <label htmlFor={`${uid}-date`} style={labelStyle}>{t("raiseDate")} *</label>
-            <input id={`${uid}-date`} type="date" value={date} max={istToday()} onChange={(e) => setDate(e.target.value)} style={inputStyle} aria-invalid={!!errors.date} />
-            {errors.date ? <p role="alert" style={errStyle}>{t("raiseDateInvalid")}</p> : null}
-          </div>
-          <div>
-            <label htmlFor={`${uid}-status`} style={labelStyle}>{t("raiseStatus")} *</label>
-            <select id={`${uid}-status`} value={requestedStatus} onChange={(e) => setRequestedStatus(e.target.value as RegularisationFormValues["requestedStatus"])} style={inputStyle}>
+          <Field label={t("raiseDate")} required error={errors.date ? t("raiseDateInvalid") : formError.fieldError("date")}>
+            <Input type="date" value={date} max={istToday()} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          <Field label={t("raiseStatus")} required error={formError.fieldError("requestedStatus")}>
+            <Select value={requestedStatus} onChange={(e) => setRequestedStatus(e.target.value as RegularisationFormValues["requestedStatus"])}>
               <option value="present">{t("statusPresent")}</option>
               <option value="half_day">{t("statusHalfDay")}</option>
               <option value="absent">{t("statusAbsent")}</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor={`${uid}-reason`} style={labelStyle}>{t("raiseReason")} *</label>
-            <textarea id={`${uid}-reason`} value={reason} rows={3} maxLength={500} onChange={(e) => setReason(e.target.value)} style={{ ...inputStyle, resize: "vertical" }} aria-invalid={!!errors.reason} />
-            {errors.reason ? <p role="alert" style={errStyle}>{t("raiseReasonRequired")}</p> : null}
-          </div>
+            </Select>
+          </Field>
+          <Field label={t("raiseReason")} required error={errors.reason ? t("raiseReasonRequired") : formError.fieldError("reason")}>
+            <Textarea value={reason} rows={3} maxLength={500} onChange={(e) => setReason(e.target.value)} style={{ resize: "vertical" }} />
+          </Field>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
             <Button type="button" variant="ghost" onClick={() => setOpen(false)} disabled={busy}>{t("raiseCancel")}</Button>
             <Button type="submit" disabled={busy}>{t("raiseSubmit")}</Button>

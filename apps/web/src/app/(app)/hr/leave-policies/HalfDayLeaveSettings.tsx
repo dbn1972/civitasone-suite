@@ -13,6 +13,11 @@ import { Button, Card } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { parseLeaveConfig, NO_PART_DAY_CONFIG, type LeaveTenantConfig } from "../leave/apply/dayPart";
 
+const SR_ONLY: React.CSSProperties = {
+  position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)", whiteSpace: "nowrap", border: 0,
+};
+
 export default function HalfDayLeaveSettings() {
   const t = useTranslations("leavePolicies");
   const [saved, setSaved] = useState<LeaveTenantConfig>(NO_PART_DAY_CONFIG);
@@ -64,6 +69,8 @@ export default function HalfDayLeaveSettings() {
     <Card title={t("halfDayTitle")}>
       <div className="pad" style={{ display: "grid", gap: 10 }}>
         <p style={{ margin: 0, fontSize: 13, color: "var(--ink2)" }}>{t("halfDayHelp")}</p>
+        <fieldset style={{ border: 0, margin: 0, padding: 0, display: "grid", gap: 10, minWidth: 0 }}>
+        <legend style={SR_ONLY}>{t("halfDayTitle")}</legend>
         <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 14 }}>
           <input
             type="checkbox"
@@ -80,6 +87,7 @@ export default function HalfDayLeaveSettings() {
           />
           {t("shortLeaveLabel")}
         </label>
+        </fieldset>
         {err.message && <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--bad, #b91c1c)" }}>{err.message}</p>}
         {note && <p role="status" style={{ margin: 0, fontSize: 13, color: "var(--good, #15803d)" }}>{note}</p>}
         <div>

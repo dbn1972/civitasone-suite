@@ -11,22 +11,13 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
-import { Button, EntityPicker } from "@/app/_components/ds";
+import { Button, EntityPicker, Field, Input, Select, Textarea } from "@/app/_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 
 type Department = { id: string; name: string };
 type RoleOption = { planId: string; roleRef: string };
 type Readiness = "now" | "1yr" | "2yr" | "3yr";
-
-const fieldStyle: React.CSSProperties = {
-  padding: "7px 12px",
-  borderRadius: 6,
-  border: "1px solid var(--line, #e2e8f0)",
-  fontSize: "0.875rem",
-  background: "var(--bg, #fff)",
-  color: "var(--ink)",
-};
 
 export function CreatePlanForm({ departments, roles }: { departments: Department[]; roles: RoleOption[] }) {
   const router = useRouter();
@@ -38,10 +29,12 @@ export function CreatePlanForm({ departments, roles }: { departments: Department
   const [deptId, setDeptId] = useState("");
   const [savingRole, setSavingRole] = useState(false);
   const [roleError, setRoleError] = useState("");
+  const [roleNameError, setRoleNameError] = useState("");
 
   async function submitRole() {
+    setRoleNameError("");
     if (!roleRef.trim()) {
-      setRoleError(t("roleErrorRequired"));
+      setRoleNameError(t("roleErrorRequired"));
       return;
     }
     setSavingRole(true);
@@ -73,10 +66,13 @@ export function CreatePlanForm({ departments, roles }: { departments: Department
   const [developmentPlan, setDevelopmentPlan] = useState("");
   const [savingNominee, setSavingNominee] = useState(false);
   const [nomineeError, setNomineeError] = useState("");
+  const [nomineeRoleError, setNomineeRoleError] = useState("");
 
   async function submitNominee() {
+    setNomineeRoleError("");
     if (!nomineeRole) {
-      setNomineeError(t("nomineeErrorRole"));
+      setNomineeError("");
+      setNomineeRoleError(t("nomineeErrorRole"));
       return;
     }
     if (!employeeId) {
@@ -118,28 +114,25 @@ export function CreatePlanForm({ departments, roles }: { departments: Department
           <h3 style={{ margin: 0, fontSize: "0.9375rem", fontWeight: 600 }}>{t("addCriticalRoleTitle")}</h3>
         </div>
         <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.8125rem", color: "var(--ink2)" }}>
-            {t("roleNameLabel")}
-            <input
+          <Field label={t("roleNameLabel")} required error={roleNameError || formError.fieldError("roleRef")}>
+            <Input
               type="text"
               value={roleRef}
               onChange={(e) => setRoleRef(e.target.value)}
               placeholder={t("roleNamePlaceholder")}
               maxLength={128}
-              style={fieldStyle}
             />
-          </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.8125rem", color: "var(--ink2)" }}>
-            {t("departmentLabel")}
-            <select value={deptId} onChange={(e) => setDeptId(e.target.value)} style={fieldStyle}>
+          </Field>
+          <Field label={t("departmentLabel")} error={formError.fieldError("departmentId")}>
+            <Select value={deptId} onChange={(e) => setDeptId(e.target.value)}>
               <option value="">{t("departmentPlaceholder")}</option>
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </Field>
           {roleError && (
             <p role="alert" style={{ margin: 0, fontSize: "0.8125rem", color: "var(--bad, #dc2626)" }}>
               {roleError}
@@ -156,17 +149,16 @@ export function CreatePlanForm({ departments, roles }: { departments: Department
           <h3 style={{ margin: 0, fontSize: "0.9375rem", fontWeight: 600 }}>{t("addNomineeTitle")}</h3>
         </div>
         <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.8125rem", color: "var(--ink2)" }}>
-            {t("selectRoleLabel")}
-            <select value={nomineeRole} onChange={(e) => setNomineeRole(e.target.value)} style={fieldStyle}>
+          <Field label={t("selectRoleLabel")} required error={nomineeRoleError}>
+            <Select value={nomineeRole} onChange={(e) => setNomineeRole(e.target.value)}>
               <option value="">{t("selectRolePlaceholder")}</option>
               {roles.map((r) => (
                 <option key={r.planId} value={r.planId}>
                   {r.roleRef}
                 </option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </Field>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.8125rem", color: "var(--ink2)" }}>
             {t("nomineeLabel")}
             {/* GAP-HR-SUCCESSION-05: a searchable employee picker (SF-06),
@@ -180,26 +172,24 @@ export function CreatePlanForm({ departments, roles }: { departments: Department
               aria-label={t("nomineeLabel")}
             />
           </div>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.8125rem", color: "var(--ink2)" }}>
-            {t("readinessLabel")}
-            <select value={readiness} onChange={(e) => setReadiness(e.target.value as Readiness)} style={fieldStyle}>
+          <Field label={t("readinessLabel")}>
+            <Select value={readiness} onChange={(e) => setReadiness(e.target.value as Readiness)}>
               <option value="now">{t("readyNow")}</option>
               <option value="1yr">{t("oneTwoYears")}</option>
               <option value="2yr">{t("oneTwoYears")}</option>
               <option value="3yr">{t("threeFiveYears")}</option>
-            </select>
-          </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "0.8125rem", color: "var(--ink2)" }}>
-            {t("developmentPlanLabel")}
-            <textarea
+            </Select>
+          </Field>
+          <Field label={t("developmentPlanLabel")}>
+            <Textarea
               value={developmentPlan}
               onChange={(e) => setDevelopmentPlan(e.target.value)}
               placeholder={t("developmentPlanPlaceholder")}
               maxLength={2000}
               rows={3}
-              style={{ ...fieldStyle, resize: "vertical" }}
+              style={{ resize: "vertical" }}
             />
-          </label>
+          </Field>
           {nomineeError && (
             <p role="alert" style={{ margin: 0, fontSize: "0.8125rem", color: "var(--bad, #dc2626)" }}>
               {nomineeError}

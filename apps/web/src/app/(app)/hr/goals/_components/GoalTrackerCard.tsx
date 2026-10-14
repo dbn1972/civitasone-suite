@@ -3,7 +3,9 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button } from "@/app/_components/ds";
+import { Button, Field, Input, Textarea } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
+import { validateCheckin, type CheckinErrors } from "./checkinSchema";
 
 export type GoalStatus = "active" | "on_track" | "at_risk" | "behind" | "achieved" | "completed";
 export type CascadeLevel = "org" | "dept" | "individual";
@@ -79,6 +81,8 @@ export function GoalTrackerCard({
   const [liveStatus, setLiveStatus] = useState<GoalStatus>(status);
   const [busy, setBusy] = useState(false);
   const [checkinError, setCheckinError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<CheckinErrors>({});
+  const formError = useFormError("goal check-in");
 
   const sc  = STATUS_CONFIG[liveStatus] ?? STATUS_CONFIG.active;
   const cc  = CASCADE_CONFIG[cascadeLevel];
@@ -106,6 +110,9 @@ export function GoalTrackerCard({
    * rather than closing on a request that never actually saved anything.
    */
   async function handleCheckin() {
+    const invalid = validateCheckin({ progress: checkinProgress, note: checkinNote });
+    setFieldErrors(invalid);
+    if (Object.keys(invalid).length > 0) return;
     if (onCheckin) {
       onCheckin(id, checkinProgress, checkinNote);
       setShowCheckin(false);
@@ -125,8 +132,8 @@ export function GoalTrackerCard({
         }),
       });
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({ message: t("checkinSaveFailed") }))) as { message?: string };
-        setCheckinError(err.message ?? t("checkinSaveFailed"));
+        const resolved = await formError.fromResponse(res, "save");
+        setCheckinError(resolved.message || t("checkinSaveFailed"));
         setBusy(false);
         return;
       }
@@ -254,39 +261,29 @@ export function GoalTrackerCard({
             border: "1px solid var(--line, #e2e8f0)", display: "flex", flexDirection: "column", gap: 8,
           }}
         >
-          <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink, #1e293b)" }}>
-            {t("newProgressLabel")}
-            <input
+          <Field label={t("newProgressLabel")} required error={fieldErrors.progress ?? formError.fieldError("progress")}>
+            <Input
               type="number" min={0} max={100}
               value={checkinProgress}
               disabled={busy}
               onChange={(e) => setCheckinProgress(Number(e.target.value))}
-              style={{
-                display: "block", width: "100%", marginTop: 4, padding: "5px 8px",
-                border: "1px solid var(--line, #cbd5e1)", borderRadius: 6, fontSize: 13,
-              }}
             />
-          </label>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink, #1e293b)" }}>
-            {t("noteLabel")}
-            <textarea
+          </Field>
+          <Field label={t("noteLabel")} error={fieldErrors.note ?? formError.fieldError("note")}>
+            <Textarea
               rows={2}
               value={checkinNote}
               disabled={busy}
               onChange={(e) => setCheckinNote(e.target.value)}
               placeholder={t("notePlaceholder")}
-              style={{
-                display: "block", width: "100%", marginTop: 4, padding: "5px 8px",
-                border: "1px solid var(--line, #cbd5e1)", borderRadius: 6, fontSize: 13, resize: "vertical",
-                boxSizing: "border-box",
-              }}
+              style={{ resize: "vertical" }}
             />
-          </label>
+          </Field>
           {checkinError && (
             <p role="alert" style={{ margin: 0, fontSize: 12, color: "var(--bad, #dc2626)" }}>{checkinError}</p>
           )}
           <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-            <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setShowCheckin(false); setCheckinError(""); }}>
+            <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setShowCheckin(false); setCheckinError(""); setFieldErrors({}); }}>
               {tAction("cancel")}
             </Button>
             <Button size="sm" disabled={busy} onClick={handleCheckin}>

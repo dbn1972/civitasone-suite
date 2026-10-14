@@ -143,7 +143,13 @@ describe("Form16Wizard", () => {
     fireEvent.click(screen.getByRole("button", { name: /Generate Form 16/ }));
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("FY not closed yet."));
+    // 422 save failure -> catalogued copy (errorCatalogue.ts), never the raw server message.
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Some details weren't accepted. Check what you entered and try again.",
+      ),
+    );
+    expect(screen.queryByText(/FY not closed yet/)).not.toBeInTheDocument();
     expect(screen.getByText("All employees")).toBeInTheDocument();
   });
 

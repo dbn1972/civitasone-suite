@@ -153,3 +153,31 @@ describe("ShiftChangeRequestForm", () => {
     expect(alert.textContent).not.toMatch(/\b500\b/);
   });
 });
+
+/**
+ * Client-side zod mirror of POST /v1/hrms/shift-requests (shiftChangeSchema.ts):
+ * a blocked submit shows an inline, field-tied error and never POSTs.
+ */
+describe("ShiftChangeRequestForm — inline validation", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    fetchMock.mockRejectedValue(new Error("network"));
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("blocks submit without an employee and ties the message to the employee control", async () => {
+    render(<ShiftChangeRequestForm />);
+    fireEvent.change(screen.getByLabelText(/^current shift/i), { target: { value: "General Duty" } });
+    fireEvent.change(screen.getByLabelText(/^requested shift/i), { target: { value: "Morning Shift" } });
+    fireEvent.change(screen.getByLabelText(/^effective date/i), { target: { value: "2026-10-01" } });
+    await act(async () => {
+      fireEvent.submit(screen.getByRole("form"));
+    });
+    const employee = await screen.findByLabelText(/^employee/i);
+    expect(employee).toHaveAttribute("aria-invalid", "true");
+    expect(document.getElementById(employee.getAttribute("aria-describedby") ?? "")).toHaveTextContent(/choose an employee/i);
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/proxy/v1/hrms/shift-requests", expect.objectContaining({ method: "POST" }));
+  });
+});

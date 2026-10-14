@@ -74,7 +74,7 @@ function renderWidget() {
 // label to match, then clicking the result (same interaction pattern as
 // ds/EntityPicker.test.tsx itself).
 async function pickEntity(fieldLabel: string, query: string, optionText: string) {
-  const input = screen.getByLabelText(fieldLabel);
+  const input = screen.getByLabelText(new RegExp("^" + fieldLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   fireEvent.change(input, { target: { value: query } });
   fireEvent.mouseDown(await screen.findByText(optionText));
 }
@@ -85,7 +85,7 @@ async function openAndFillWizard() {
   await pickEntity("Employee", "Asha", "Asha Verma (E001)");
   await waitFor(() => expect(screen.getByLabelText("Current designation (auto-filled)")).toHaveValue("Section Officer"));
   await pickEntity("Promote to (new designation)", "Under", "Under Secretary");
-  fireEvent.change(screen.getByLabelText("Effective date"), { target: { value: "2026-09-01" } });
+  fireEvent.change(screen.getByLabelText(/^Effective date/), { target: { value: "2026-09-01" } });
   fireEvent.click(screen.getByRole("button", { name: "Next: Approval routing →" }));
 
   await pickEntity("Initiating officer", "Rao", "S. Rao");
@@ -164,12 +164,12 @@ describe("PromoteWithApproval", () => {
     fireEvent.click(screen.getByRole("button", { name: "+ Promotion with approval" }));
     await pickEntity("Employee", "Asha", "Asha Verma (E001)");
     await pickEntity("Promote to (new designation)", "Under", "Under Secretary");
-    fireEvent.change(screen.getByLabelText("Effective date"), { target: { value: "2099-01-01" } });
+    fireEvent.change(screen.getByLabelText(/^Effective date/), { target: { value: "2099-01-01" } });
     fireEvent.click(screen.getByRole("button", { name: "Next: Approval routing →" }));
 
     expect(await screen.findByText(/too far in the future/i)).toBeInTheDocument();
     // Still on step 1 -- never reached the officer-picker step.
-    expect(screen.queryByLabelText("Initiating officer")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Initiating officer/)).not.toBeInTheDocument();
   });
 
   // GAP-HR-PROMOTION-03: wizard button must not even appear for a non-HR

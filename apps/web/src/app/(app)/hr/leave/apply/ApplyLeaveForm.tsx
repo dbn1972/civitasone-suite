@@ -6,7 +6,7 @@ import type { EmployeeSummary } from "@civitasone/types";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
 import { trackActivation } from "@/lib/activation";
 import { useToast } from "@/app/_components/ds/Toast";
-import { ConfirmDialog } from "@/app/_components/ds";
+import { ConfirmDialog, Field, Input, Select, Textarea } from "@/app/_components/ds";
 import { useTranslations } from "next-intl";
 import {
   useFieldValidation,
@@ -52,12 +52,6 @@ type Props = {
    *  message instead of a confusing empty "no employees loaded" dropdown. */
   noLinkedProfile?: boolean;
 };
-
-// Shared field input class
-const fieldCls =
-  "w-full rounded-md border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500";
-const fieldStyle: React.CSSProperties = { background: "var(--panel, #fff)", borderColor: "var(--line, #cbd5e1)", color: "var(--ink)" };
-const errorCls = "mt-1 text-xs text-red-600";
 
 export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noLinkedProfile }: Props) {
   const t = useTranslations("leaveApply");
@@ -390,19 +384,10 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
         noValidate
       >
         {/* Employee selector (not validated — always has a default) */}
-        <div>
-          <label
-            htmlFor="leave-employee"
-            className="block text-sm font-medium text-slate-700 mb-1"
-          >
-            {t("employeeLabel")}
-          </label>
-          <select
-            id="leave-employee"
+        <Field id="leave-employee" label={t("employeeLabel")}>
+          <Select
             value={employeeId}
             onChange={(e) => setEmployeeId(e.target.value)}
-            className={fieldCls}
-            style={fieldStyle}
           >
             {employees.length === 0 ? (
               <option value="">{t("noEmployeesLoaded")}</option>
@@ -413,40 +398,24 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
                 </option>
               ))
             )}
-          </select>
+          </Select>
           {/* GAP-HR-LEAVE-APPLY-03: only shown once there's someone else it
               could possibly mean — employees.length===1 is always the
               self-service case (page.tsx's own single-row fallback). */}
           {employees.length > 1 && employeeId && employeeId !== myEmployeeId && (
-            <p className="mt-1 text-xs" style={{ color: "var(--mut, #94a3b8)" }}>
+            <p className="mt-1 text-xs" style={{ color: "var(--mut, #94a3b8)", margin: 0 }}>
               {t("onBehalfOfNote", { name: employees.find((e) => e.id === employeeId)?.name ?? "" })}
             </p>
           )}
-        </div>
+        </Field>
 
         {/* Leave Type — validated: required */}
-        <div>
-          <label
-            htmlFor="leave-type"
-            className="block text-sm font-medium text-slate-700 mb-1"
-          >
-            {t("leaveTypeLabel")}{" "}
-            <span aria-hidden="true" className="text-red-500">
-              *
-            </span>
-          </label>
-          <select
-            id="leave-type"
+        <Field id="leave-type" label={t("leaveTypeLabel")} required error={fields.allocId.error}>
+          <Select
             value={fields.allocId.value}
             onChange={fields.allocId.onChange}
             onBlur={fields.allocId.onBlur}
             disabled={!leaveContext?.allocations.length}
-            aria-invalid={!!fields.allocId.error}
-            aria-describedby={
-              fields.allocId.error ? "leave-type-error" : undefined
-            }
-            className={`${fieldCls} disabled:opacity-60`}
-            style={fieldStyle}
           >
             {!leaveContext?.allocations.length ? (
               <option value="">{t("noLeaveAllocations")}</option>
@@ -460,96 +429,43 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
                 ))}
               </>
             )}
-          </select>
-          {fields.allocId.error && (
-            <p id="leave-type-error" className={errorCls} role="alert">
-              {fields.allocId.error}
-            </p>
-          )}
-        </div>
+          </Select>
+        </Field>
 
         {/* Date range — both required; toDate must be >= fromDate */}
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label
-              htmlFor="leave-from"
-              className="block text-sm font-medium text-slate-700 mb-1"
-            >
-              {t("fromDateLabel")}{" "}
-              <span aria-hidden="true" className="text-red-500">
-                *
-              </span>
-            </label>
-            <input
-              id="leave-from"
+          <Field id="leave-from" label={t("fromDateLabel")} required error={fields.fromDate.error}>
+            <Input
               type="date"
               value={fields.fromDate.value}
               onChange={fields.fromDate.onChange}
               onBlur={fields.fromDate.onBlur}
-              aria-invalid={!!fields.fromDate.error}
-              aria-describedby={
-                fields.fromDate.error ? "leave-from-error" : undefined
-              }
-              className={fieldCls}
-              style={fieldStyle}
             />
-            {fields.fromDate.error && (
-              <p id="leave-from-error" className={errorCls} role="alert">
-                {fields.fromDate.error}
-              </p>
-            )}
-          </div>
+          </Field>
 
-          <div>
-            <label
-              htmlFor="leave-to"
-              className="block text-sm font-medium text-slate-700 mb-1"
-            >
-              {t("toDateLabel")}{" "}
-              <span aria-hidden="true" className="text-red-500">
-                *
-              </span>
-            </label>
-            <input
-              id="leave-to"
+          <Field id="leave-to" label={t("toDateLabel")} required error={fields.toDate.error}>
+            <Input
               type="date"
               value={fields.toDate.value}
               onChange={fields.toDate.onChange}
               onBlur={fields.toDate.onBlur}
-              aria-invalid={!!fields.toDate.error}
-              aria-describedby={
-                fields.toDate.error ? "leave-to-error" : undefined
-              }
-              className={fieldCls}
-              style={fieldStyle}
             />
-            {fields.toDate.error && (
-              <p id="leave-to-error" className={errorCls} role="alert">
-                {fields.toDate.error}
-              </p>
-            )}
-          </div>
+          </Field>
         </div>
 
         {/* GAP-HR-LEAVE-APPLY-05: only rendered when the tenant enabled half-day /
             short leave AND this is a single-date Casual Leave request. */}
         {dayParts.length > 1 ? (
-          <div>
-            <label htmlFor="leave-day-part" className="block text-sm font-medium text-slate-700 mb-1">
-              {t("dayPartLabel")}
-            </label>
-            <select
-              id="leave-day-part"
+          <Field id="leave-day-part" label={t("dayPartLabel")}>
+            <Select
               value={effectiveDayPart}
               onChange={(e) => setDayPart(e.target.value as LeaveDayPart)}
-              className={fieldCls}
-              style={fieldStyle}
             >
               {dayParts.map((part) => (
                 <option key={part} value={part}>{t(`dayPart_${part}`)}</option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </Field>
         ) : null}
 
         {days > 0 ? (
@@ -582,44 +498,31 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
         ) : null}
 
         {/* Reason — required, min 20 chars */}
-        <div>
-          <label
-            htmlFor="leave-reason"
-            className="block text-sm font-medium text-slate-700 mb-1"
-          >
-            {t("reasonLabel")}{" "}
-            <span aria-hidden="true" className="text-red-500">
-              *
-            </span>
-            <span className="ms-1 font-normal text-slate-500">
-              {t("reasonHint")}
-            </span>
-          </label>
-          <textarea
-            id="leave-reason"
+        <Field
+          id="leave-reason"
+          label={
+            <>
+              {t("reasonLabel")}
+              <span className="ms-1 font-normal text-slate-500">{t("reasonHint")}</span>
+            </>
+          }
+          required
+          error={fields.reason.error}
+        >
+          <Textarea
             value={fields.reason.value}
             onChange={fields.reason.onChange}
             onBlur={fields.reason.onBlur}
             rows={3}
             placeholder={t("reasonPlaceholder")}
-            aria-invalid={!!fields.reason.error}
-            aria-describedby={
-              fields.reason.error ? "leave-reason-error" : undefined
-            }
-            className={`${fieldCls} resize-none`}
-            style={fieldStyle}
+            style={{ resize: "none" }}
           />
-          {fields.reason.error && (
-            <p id="leave-reason-error" className={errorCls} role="alert">
-              {fields.reason.error}
-            </p>
-          )}
           {!fields.reason.error && fields.reason.value.length > 0 && (
-            <p className="mt-1 text-xs text-slate-400">
+            <p className="mt-1 text-xs text-slate-400" style={{ margin: 0 }}>
               {t("charsCount", { count: fields.reason.value.trim().length })}
             </p>
           )}
-        </div>
+        </Field>
 
         <button
           type="submit"

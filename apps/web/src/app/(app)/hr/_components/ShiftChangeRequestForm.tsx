@@ -14,13 +14,14 @@
 "use client";
 
 import { UserFacingError } from "@/lib/userFacingError";
-import { useEffect, useState, useId } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { useAsyncMutation } from "@/lib/useAsyncMutation";
-import { Button } from "../../../_components/ds";
+import { Button, Field, Input, Select, Textarea } from "../../../_components/ds";
 import { EmployeePicker } from "../../../_components/EmployeePicker";
+import { validateShiftChange, type ShiftChangeErrors } from "./shiftChangeSchema";
 
 type CreatedRequest = { id: string };
 type ShiftRequestsList = { data: Array<{ id: string }> };
@@ -57,11 +58,11 @@ export function ShiftChangeRequestForm({
   const [effectiveDate, setEffectiveDate] = useState("");
   const [reason, setReason] = useState("");
 
-  const idEmp = useId();
-  const idCurrent = useId();
-  const idRequested = useId();
-  const idDate = useId();
-  const idReason = useId();
+  const [clientErrors, setClientErrors] = useState<ShiftChangeErrors>({});
+  /** Client validation first, then a backend rejection for the same field. */
+  const errFor = (f: keyof ShiftChangeErrors) => clientErrors[f] ?? formError.fieldError(f);
+  const clearClientError = (f: keyof ShiftChangeErrors) =>
+    setClientErrors((e) => (e[f] ? { ...e, [f]: undefined } : e));
 
   // Same "picker over raw UUID" UX as WFHRequestForm.
   useEffect(() => {
@@ -137,13 +138,22 @@ export function ShiftChangeRequestForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const errs = validateShiftChange({ employeeId, currentShift, requestedShift, effectiveDate, reason });
+    const sameShift = !!currentShift && currentShift === requestedShift;
+    if (sameShift) errs.requestedShift = t("errorSameShift");
+    setClientErrors(errs);
     if (!currentShift || !requestedShift || !effectiveDate) {
       setErrorMsg(t("errorRequiredFields"));
       setState("error");
       return;
     }
-    if (currentShift === requestedShift) {
+    if (sameShift) {
       setErrorMsg(t("errorSameShift"));
+      setState("error");
+      return;
+    }
+    if (Object.keys(errs).length > 0) {
+      setErrorMsg(!employeeId ? t("errorEmployeeRequired") : (Object.values(errs)[0] ?? ""));
       setState("error");
       return;
     }
@@ -174,16 +184,11 @@ export function ShiftChangeRequestForm({
       </div>
 
       {!prefillId && (
-        <div>
-          <label htmlFor={idEmp} style={labelStyle}>{t("labelEmployee")}</label>
+        <Field label={t("labelEmployee")} required error={errFor("employeeId")}>
           {employees.length > 0 ? (
-            <select
-              id={idEmp}
-              style={inputStyle}
+            <Select
               value={employeeId}
-              onChange={(e) => setEmployeeId(e.target.value)}
-              required
-              aria-required="true"
+              onChange={(e) => { setEmployeeId(e.target.value); clearClientError("employeeId"); }}
             >
               <option value="">{t("placeholderEmployee")}</option>
               {employees.map((emp) => (
@@ -191,74 +196,54 @@ export function ShiftChangeRequestForm({
                   {emp.name ?? emp.id}{emp.employeeNo ? ` (${emp.employeeNo})` : ""}
                 </option>
               ))}
-            </select>
+            </Select>
           ) : (
-            <EmployeePicker id={idEmp} value={employeeId || null} onChange={(id) => setEmployeeId(id ?? "")} />
+            <EmployeePicker value={employeeId || null} onChange={(id) => { setEmployeeId(id ?? ""); clearClientError("employeeId"); }} />
           )}
-        </div>
+        </Field>
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <div>
-          <label htmlFor={idCurrent} style={labelStyle}>{t("labelCurrentShift")} <span aria-hidden>*</span></label>
+        <Field label={t("labelCurrentShift")} required error={errFor("currentShift")}>
           {shifts.length > 0 ? (
-            <select id={idCurrent} style={inputStyle} value={currentShift} onChange={(e) => setCurrentShift(e.target.value)} required aria-required="true">
+            <Select value={currentShift} onChange={(e) => { setCurrentShift(e.target.value); clearClientError("currentShift"); }}>
               <option value="">{t("placeholderShift")}</option>
               {shifts.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
-            </select>
+            </Select>
           ) : (
-            <input id={idCurrent} style={inputStyle} value={currentShift} onChange={(e) => setCurrentShift(e.target.value)} required aria-required="true" maxLength={120} />
+            <Input value={currentShift} onChange={(e) => { setCurrentShift(e.target.value); clearClientError("currentShift"); }} maxLength={120} />
           )}
-        </div>
-        <div>
-          <label htmlFor={idRequested} style={labelStyle}>{t("labelRequestedShift")} <span aria-hidden>*</span></label>
+        </Field>
+        <Field label={t("labelRequestedShift")} required error={errFor("requestedShift")}>
           {shifts.length > 0 ? (
-            <select id={idRequested} style={inputStyle} value={requestedShift} onChange={(e) => setRequestedShift(e.target.value)} required aria-required="true">
+            <Select value={requestedShift} onChange={(e) => { setRequestedShift(e.target.value); clearClientError("requestedShift"); }}>
               <option value="">{t("placeholderShift")}</option>
               {shifts.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
-            </select>
+            </Select>
           ) : (
-            <input id={idRequested} style={inputStyle} value={requestedShift} onChange={(e) => setRequestedShift(e.target.value)} required aria-required="true" maxLength={120} />
+            <Input value={requestedShift} onChange={(e) => { setRequestedShift(e.target.value); clearClientError("requestedShift"); }} maxLength={120} />
           )}
-          {formError.fieldError("requestedShift") && (
-            <span role="alert" style={{ display: "block", fontSize: 12, color: "var(--red, #dc2626)", marginTop: 4 }}>
-              {formError.fieldError("requestedShift")}
-            </span>
-          )}
-        </div>
+        </Field>
       </div>
 
-      <div>
-        <label htmlFor={idDate} style={labelStyle}>{t("labelEffectiveDate")} <span aria-hidden>*</span></label>
-        <input
-          id={idDate}
+      <Field label={t("labelEffectiveDate")} required error={errFor("effectiveDate")}>
+        <Input
           type="date"
-          style={inputStyle}
           value={effectiveDate}
-          onChange={(e) => setEffectiveDate(e.target.value)}
-          required
-          aria-required="true"
+          onChange={(e) => { setEffectiveDate(e.target.value); clearClientError("effectiveDate"); }}
           min={new Date().toISOString().split("T")[0]}
-          aria-describedby={formError.fieldError("effectiveDate") ? "shift-date-err" : undefined}
         />
-        {formError.fieldError("effectiveDate") && (
-          <span id="shift-date-err" role="alert" style={{ display: "block", fontSize: 12, color: "var(--red, #dc2626)", marginTop: 4 }}>
-            {formError.fieldError("effectiveDate")}
-          </span>
-        )}
-      </div>
+      </Field>
 
-      <div>
-        <label htmlFor={idReason} style={labelStyle}>{t("labelReason")}</label>
-        <textarea
-          id={idReason}
-          style={{ ...inputStyle, resize: "vertical", minHeight: 80 }}
+      <Field label={t("labelReason")} error={errFor("reason")}>
+        <Textarea
+          style={{ resize: "vertical", minHeight: 80 }}
           value={reason}
-          onChange={(e) => setReason(e.target.value)}
+          onChange={(e) => { setReason(e.target.value); clearClientError("reason"); }}
           placeholder={t("placeholderReason")}
           maxLength={500}
         />
-      </div>
+      </Field>
 
       {displayPhase !== "idle" && displayPhase !== "submitting" && (
         <p
@@ -298,17 +283,3 @@ export function ShiftChangeRequestForm({
     </form>
   );
 }
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: 13,
-  fontWeight: 500,
-  color: "var(--muted, #6b7280)",
-  marginBottom: 5,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  minHeight: 44,
-};

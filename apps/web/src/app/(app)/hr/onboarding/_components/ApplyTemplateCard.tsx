@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
-import { Button, AcceptedNotice } from "../../../../_components/ds";
+import { Button, AcceptedNotice, Field, Select } from "../../../../_components/ds";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 
 type TemplateOption = { id: string; name: string; stepCount: number; isDefault: boolean };
@@ -18,7 +18,6 @@ export function ApplyTemplateCard({ employeeId, hasTasks }: { employeeId: string
   const t = useTranslations("onboardingTemplate");
   const accepted = useAcceptedWrite();
   const formError = useFormError("onboarding template");
-  const selectId = useId();
   const [templates, setTemplates] = useState<TemplateOption[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [templateId, setTemplateId] = useState("default");
@@ -66,13 +65,14 @@ export function ApplyTemplateCard({ employeeId, hasTasks }: { employeeId: string
         <p role="alert" style={{ fontSize: 12, color: "var(--bad, #dc2626)" }}>{t("loadFailed")}</p>
       ) : (
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <label htmlFor={selectId} style={{ fontSize: 12, fontWeight: 600 }}>{t("templateLabel")}</label>
-          <select id={selectId} value={templateId} onChange={(e) => setTemplateId(e.target.value)} disabled={!templates || busy}
-            style={{ padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border, #cbd5e1)", fontSize: 13, minWidth: 220 }}>
-            {(templates ?? [{ id: "default", name: t("defaultTemplate"), stepCount: 0, isDefault: true }]).map((tpl) => (
-              <option key={tpl.id} value={tpl.id}>{tpl.name}{tpl.stepCount ? ` (${t("stepCount", { count: tpl.stepCount })})` : ""}</option>
-            ))}
-          </select>
+          <Field label={t("templateLabel")} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <Select value={templateId} onChange={(e) => setTemplateId(e.target.value)} disabled={!templates || busy}
+              style={{ width: "auto", minWidth: 220 }}>
+              {(templates ?? [{ id: "default", name: t("defaultTemplate"), stepCount: 0, isDefault: true }]).map((tpl) => (
+                <option key={tpl.id} value={tpl.id}>{tpl.name}{tpl.stepCount ? ` (${t("stepCount", { count: tpl.stepCount })})` : ""}</option>
+              ))}
+            </Select>
+          </Field>
           <Button type="button" onClick={() => void apply()} disabled={busy || !templates}>{busy ? t("applying") : t("apply")}</Button>
         </div>
       )}

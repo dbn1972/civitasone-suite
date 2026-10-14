@@ -4,14 +4,9 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
-import { Button, ConfirmDialog, EntityPicker } from "../../../../_components/ds";
+import { Button, ConfirmDialog, EntityPicker, Field, Input, Select } from "../../../../_components/ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { GRIEVANCE_DISPOSITIONS } from "../grievanceModel";
-
-const inputStyle: React.CSSProperties = {
-  width: "100%", boxSizing: "border-box", padding: "8px 12px", fontSize: 14,
-  border: "1px solid var(--line)", borderRadius: 8, background: "var(--bg2)", color: "var(--ink)",
-};
 
 /**
  * GAP-HR-GRIEVANCE-02: Assign (HR officer picked via EntityPicker, never a
@@ -29,6 +24,7 @@ export function GrievanceActions({ id, grievantId }: { id: string; grievantId: s
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [assigneeError, setAssigneeError] = useState<string | undefined>();
   const [dialogError, setDialogError] = useState<string | undefined>();
   const idem = useRef<{ assign?: string; dispose?: string }>({});
   const key = (k: "assign" | "dispose") => (idem.current[k] ??= crypto.randomUUID());
@@ -48,9 +44,9 @@ export function GrievanceActions({ id, grievantId }: { id: string; grievantId: s
   }
 
   async function assign() {
-    if (!assignee) { setError(t("assigneeRequired")); return; }
-    if (assignee === grievantId) { setError(t("assigneeIsGrievant")); return; }
-    setBusy(true); setError("");
+    if (!assignee) { setAssigneeError(t("assigneeRequired")); return; }
+    if (assignee === grievantId) { setAssigneeError(t("assigneeIsGrievant")); return; }
+    setBusy(true); setError(""); setAssigneeError(undefined);
     const err = await call("assign", { assigneeEmployeeId: assignee, ...(note.trim() ? { note: note.trim() } : {}) }, "assign");
     setBusy(false);
     if (err) { setError(err); return; }
@@ -64,21 +60,24 @@ export function GrievanceActions({ id, grievantId }: { id: string; grievantId: s
       {error && <p role="alert" className="pill bad" style={{ margin: 0 }}>{error}</p>}
       <section aria-labelledby={`${uid}-assign`} style={{ display: "grid", gap: 8 }}>
         <h3 id={`${uid}-assign`} style={{ fontSize: 14, margin: 0 }}>{t("assignTitle")}</h3>
-        <label htmlFor={`${uid}-officer`} style={{ fontSize: 13, fontWeight: 600 }}>{t("assignLabel")}</label>
-        <EntityPicker id={`${uid}-officer`} value={assignee} onChange={(v) => setAssignee(Array.isArray(v) ? (v[0] ?? null) : v)}
-          search={searchEmployees} resolve={resolveEmployees} placeholder={t("assignPlaceholder")} />
-        <label htmlFor={`${uid}-note`} style={{ fontSize: 13, fontWeight: 600 }}>{t("assignNoteLabel")}</label>
-        <input id={`${uid}-note`} value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} style={inputStyle} />
+        <Field label={t("assignLabel")} required error={assigneeError}>
+          <EntityPicker value={assignee} onChange={(v) => { setAssignee(Array.isArray(v) ? (v[0] ?? null) : v); setAssigneeError(undefined); }}
+            search={searchEmployees} resolve={resolveEmployees} placeholder={t("assignPlaceholder")} />
+        </Field>
+        <Field label={t("assignNoteLabel")}>
+          <Input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
+        </Field>
         <div><Button type="button" onClick={() => void assign()} disabled={busy}>{t("assignButton")}</Button></div>
       </section>
 
       <section aria-labelledby={`${uid}-dispose`} style={{ display: "grid", gap: 8 }}>
         <h3 id={`${uid}-dispose`} style={{ fontSize: 14, margin: 0 }}>{t("disposeTitle")}</h3>
-        <label htmlFor={`${uid}-disp`} style={{ fontSize: 13, fontWeight: 600 }}>{t("dispositionLabel")}</label>
-        <select id={`${uid}-disp`} value={disposition} onChange={(e) => setDisposition(e.target.value)} style={inputStyle}>
-          <option value="">{t("dispositionPlaceholder")}</option>
-          {GRIEVANCE_DISPOSITIONS.map((d) => <option key={d} value={d}>{t(`disposition_${d}` as never)}</option>)}
-        </select>
+        <Field label={t("dispositionLabel")} required>
+          <Select value={disposition} onChange={(e) => setDisposition(e.target.value)}>
+            <option value="">{t("dispositionPlaceholder")}</option>
+            {GRIEVANCE_DISPOSITIONS.map((d) => <option key={d} value={d}>{t(`disposition_${d}` as never)}</option>)}
+          </Select>
+        </Field>
         <div>
           <Button type="button" variant="ghost" disabled={!disposition || busy}
             onClick={() => { setDialogError(undefined); setConfirmOpen(true); }}>{t("disposeButton")}</Button>

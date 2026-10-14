@@ -67,17 +67,17 @@ function mockFetchRouting(opts: { submitApproval: () => Response; fromModule: ()
 async function openAndFillWizard() {
   fireEvent.click(screen.getByRole("button", { name: "+ Transfer with approval" }));
   await waitFor(() => expect(screen.getByRole("option", { name: /Asha Verma/ })).toBeInTheDocument());
-  fireEvent.change(screen.getByLabelText("Employee"), { target: { value: "emp-1" } });
+  fireEvent.change(screen.getByLabelText(/^Employee/), { target: { value: "emp-1" } });
   await waitFor(() => expect(screen.getByRole("option", { name: "Works" })).toBeInTheDocument());
-  fireEvent.change(screen.getByLabelText("Transfer to (department)"), { target: { value: "dept-2" } });
-  fireEvent.change(screen.getByLabelText("Effective date"), { target: { value: "2026-09-01" } });
+  fireEvent.change(screen.getByLabelText(/^Transfer to \(department\)/), { target: { value: "dept-2" } });
+  fireEvent.change(screen.getByLabelText(/^Effective date/), { target: { value: "2026-09-01" } });
   fireEvent.click(screen.getByRole("button", { name: "Next: Approval routing →" }));
 
   await waitFor(() =>
-    expect(within(screen.getByLabelText("Initiating officer")).getByRole("option", { name: /S\. Rao/ })).toBeInTheDocument(),
+    expect(within(screen.getByLabelText(/^Initiating officer/)).getByRole("option", { name: /S\. Rao/ })).toBeInTheDocument(),
   );
-  fireEvent.change(screen.getByLabelText("Initiating officer"), { target: { value: "off-1" } });
-  fireEvent.change(screen.getByLabelText("Forward to (approving officer)"), { target: { value: "off-2" } });
+  fireEvent.change(screen.getByLabelText(/^Initiating officer/), { target: { value: "off-1" } });
+  fireEvent.change(screen.getByLabelText(/^Forward to \(approving officer\)/), { target: { value: "off-2" } });
   fireEvent.change(screen.getByPlaceholderText(/Why is this transfer being initiated/), {
     target: { value: "Administrative requirement" },
   });
@@ -196,7 +196,7 @@ describe("TransferWithApproval", () => {
 
     // Opens already expanded -- no click on "+ Transfer with approval" needed.
     expect(screen.getByRole("heading", { name: "Raise a transfer for eOffice approval" })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByLabelText("Employee")).toHaveValue("emp-1"));
+    await waitFor(() => expect(screen.getByLabelText(/^Employee/)).toHaveValue("emp-1"));
     await waitFor(() => expect(screen.getByLabelText("Current department (auto-filled)")).toHaveValue("Finance"));
   });
 

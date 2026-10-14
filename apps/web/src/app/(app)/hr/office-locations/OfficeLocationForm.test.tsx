@@ -32,7 +32,11 @@ describe("OfficeLocationForm (GAP-HR-LOCATIONS-NEW-02)", () => {
     renderForm();
     fill("10");
     fireEvent.click(screen.getByRole("button", { name: /add office location/i }));
-    expect(screen.getAllByRole("alert").some((a) => /between 50 and 5000/i.test(a.textContent ?? ""))).toBe(true);
+    // Field renders the message inline (wired via aria-describedby) rather than as its own role="alert".
+    const radius = screen.getByLabelText(/^radius/i);
+    expect(radius).toHaveAttribute("aria-invalid", "true");
+    const describedBy = (radius.getAttribute("aria-describedby") ?? "").split(" ");
+    expect(describedBy.some((id) => /between 50 and 5000/i.test(document.getElementById(id)?.textContent ?? ""))).toBe(true);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

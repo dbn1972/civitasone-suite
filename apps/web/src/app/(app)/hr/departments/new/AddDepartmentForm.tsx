@@ -4,7 +4,8 @@ import { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { ErrorSummary } from "@/app/_components/ds/ErrorSummary";
-import { Button, ConfirmDialog, EntityPicker } from "../../../../_components/ds";
+import { Button, ConfirmDialog, EntityPicker, Field, Input, Select } from "../../../../_components/ds";
+import { validateDepartment, type DepartmentErrors } from "./departmentSchema";
 import { eligibleParentOptions, type MinimalDept } from "@/lib/hr/departmentTree";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 
@@ -25,24 +26,6 @@ interface Props {
 const GOVT_TIERS = ["central", "state", "local_body", "statutory_body", "autonomous_body"] as const;
 type GovtTier = (typeof GOVT_TIERS)[number];
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "10px 12px",
-  fontSize: 14,
-  border: "1px solid var(--line, #cbd5e1)",
-  borderRadius: 10,
-  background: "var(--panel, #fff)",
-  color: "var(--ink, #0f172a)",
-  minHeight: 44,
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 600,
-  color: "var(--ink, #0f172a)",
-};
-
 export function AddDepartmentForm({ onCancel, onSuccess, departments = [] }: Props) {
   const t = useTranslations("addDepartmentForm");
   const formId = useId();
@@ -61,7 +44,7 @@ export function AddDepartmentForm({ onCancel, onSuccess, departments = [] }: Pro
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"success" | "error">("success");
-  const [invalid, setInvalid] = useState<Set<string>>(new Set());
+  const [clientErrors, setClientErrors] = useState<DepartmentErrors>({});
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const formError = useFormError("department");
   const codeInputRef = useRef<HTMLInputElement>(null);
@@ -94,7 +77,7 @@ export function AddDepartmentForm({ onCancel, onSuccess, departments = [] }: Pro
     setGovtTier("");
     setHeadEmployeeId(null);
     setMessage(null);
-    setInvalid(new Set());
+    setClientErrors({});
   }
 
   function handleCancel() {
@@ -118,20 +101,16 @@ export function AddDepartmentForm({ onCancel, onSuccess, departments = [] }: Pro
     const trimCode = code.trim();
     const trimName = name.trim();
     const trimType = type.trim();
-    const errs = new Set<string>();
+    const errs = validateDepartment({ code: trimCode, name: trimName, type: trimType });
 
-    if (!trimCode || trimCode.length > 20) errs.add("code");
-    if (trimName.length < 2 || trimName.length > 200) errs.add("name");
-    if (trimType.length > 40) errs.add("type");
-
-    if (errs.size > 0) {
-      setInvalid(errs);
+    if (Object.keys(errs).length > 0) {
+      setClientErrors(errs);
       setTone("error");
       setMessage(t("statusFixFields"));
       return;
     }
 
-    setInvalid(new Set());
+    setClientErrors({});
     setBusy(true);
     formError.clear();
     try {
@@ -228,118 +207,64 @@ export function AddDepartmentForm({ onCancel, onSuccess, departments = [] }: Pro
           }}
         >
           {/* Code */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={codeId} style={labelStyle}>
-              {t("codeLabel")}{" "}
-              <span aria-hidden="true" style={{ color: "var(--bad, #b91c1c)" }}>
-                *
-              </span>
-            </label>
-            <input
+          <Field id={codeId} label={t("codeLabel")} required error={clientErrors.code ?? formError.fieldError("code")}>
+            <Input
               ref={codeInputRef}
-              id={codeId}
               type="text"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder={t("codePlaceholder")}
               maxLength={20}
-              required
-              aria-required="true"
-              aria-invalid={invalid.has("code")}
-              style={inputStyle}
             />
-            {formError.fieldError("code") && (
-              <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{formError.fieldError("code")}</span>
-            )}
-          </div>
+          </Field>
 
           {/* Name */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={nameId} style={labelStyle}>
-              {t("nameLabel")}{" "}
-              <span aria-hidden="true" style={{ color: "var(--bad, #b91c1c)" }}>
-                *
-              </span>
-            </label>
-            <input
-              id={nameId}
+          <Field id={nameId} label={t("nameLabel")} required error={clientErrors.name ?? formError.fieldError("name")}>
+            <Input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t("namePlaceholder")}
               maxLength={200}
-              required
-              aria-required="true"
-              aria-invalid={invalid.has("name")}
-              style={inputStyle}
             />
-            {formError.fieldError("name") && (
-              <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{formError.fieldError("name")}</span>
-            )}
-          </div>
+          </Field>
 
           {/* Parent department (GAP-HR-DEPARTMENTS-03) */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={parentSelectId} style={labelStyle}>
-              {t("parentLabel")}
-            </label>
-            <select
-              id={parentSelectId}
-              value={parentId}
-              onChange={(e) => setParentId(e.target.value)}
-              aria-invalid={!!formError.fieldError("parentId")}
-              style={inputStyle}
-            >
+          <Field id={parentSelectId} label={t("parentLabel")} error={formError.fieldError("parentId")}>
+            <Select value={parentId} onChange={(e) => setParentId(e.target.value)}>
               <option value="">{t("parentNone")}</option>
               {parentOptions.map((o) => (
                 <option key={o.id} value={o.id}>{o.label}</option>
               ))}
-            </select>
-            {formError.fieldError("parentId") && (
-              <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{formError.fieldError("parentId")}</span>
-            )}
-          </div>
+            </Select>
+          </Field>
 
           {/* Type (GAP-HR-DEPARTMENTS-NEW-01) */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={typeId} style={labelStyle}>
-              {t("typeLabel")}
-            </label>
-            <input
-              id={typeId}
+          <Field id={typeId} label={t("typeLabel")} error={clientErrors.type ?? formError.fieldError("type")}>
+            <Input
               type="text"
               value={type}
               onChange={(e) => setType(e.target.value)}
               placeholder={t("typePlaceholder")}
               maxLength={40}
-              aria-invalid={invalid.has("type")}
-              style={inputStyle}
             />
-          </div>
+          </Field>
 
           {/* Govt tier (GAP-HR-DEPARTMENTS-NEW-01) */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={govtTierId} style={labelStyle}>
-              {t("govtTierLabel")}
-            </label>
-            <select
-              id={govtTierId}
-              value={govtTier}
-              onChange={(e) => setGovtTier(e.target.value as GovtTier | "")}
-              style={inputStyle}
-            >
+          <Field id={govtTierId} label={t("govtTierLabel")} error={formError.fieldError("govtTier")}>
+            <Select value={govtTier} onChange={(e) => setGovtTier(e.target.value as GovtTier | "")}>
               <option value="">{t("govtTierNone")}</option>
               {GOVT_TIERS.map((gt) => (
                 <option key={gt} value={gt}>{t(`govtTier_${gt}`)}</option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </Field>
 
           {/* Head of department (GAP-HR-DEPARTMENTS-NEW-01) -- Location is
               deliberately NOT here: no location-service picker exists in
               this form yet (see the gap's own fix steps). */}
           <div style={{ display: "grid", gap: 6 }}>
-            <label style={labelStyle}>{t("headLabel")}</label>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink, #0f172a)" }}>{t("headLabel")}</span>
             <EntityPicker
               aria-label={t("headLabel")}
               value={headEmployeeId}

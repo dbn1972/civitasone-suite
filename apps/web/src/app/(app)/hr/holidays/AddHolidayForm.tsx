@@ -1,18 +1,11 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
-import { Button, AcceptedNotice } from "../../../_components/ds";
+import { Button, AcceptedNotice, Field, Input, Select } from "../../../_components/ds";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
-
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
-  borderRadius: 8, background: "var(--bg2)", color: "var(--ink)", fontSize: 14,
-};
-const inputErrStyle: React.CSSProperties = { ...inputStyle, border: "1px solid var(--badbd, #ef4444)" };
-const fieldErrStyle: React.CSSProperties = { color: "var(--bad, #b91c1c)", fontSize: 12, margin: "3px 0 0" };
 
 type Fields = { name: string; date: string; type: string; applicableTo: string };
 const INITIAL: Fields = { name: "", date: "", type: "gazetted", applicableTo: "all" };
@@ -24,7 +17,6 @@ interface Props {
 
 export function AddHolidayForm({ year }: Props) {
   const t = useTranslations("holidays");
-  const ids = { name: useId(), date: useId(), type: useId(), applicableTo: useId() };
   const [open, setOpen] = useState(false);
   const [fields, setFields] = useState<Fields>(INITIAL);
   const [invalid, setInvalid] = useState<Set<string>>(new Set());
@@ -115,79 +107,54 @@ export function AddHolidayForm({ year }: Props) {
 
       {open && (
         <form onSubmit={handleSubmit} noValidate style={{ padding: "0 20px 20px", display: "grid", gap: 14 }}>
-          <div>
-            <label htmlFor={ids.name} style={{ fontSize: 13, fontWeight: 500 }}>
-              {t("fieldName")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-            </label>
-            <input
-              id={ids.name}
+          <Field
+            label={t("fieldName")}
+            required
+            error={invalid.has("name") ? t("fieldNameError") : formError.fieldError("name")}
+          >
+            <Input
               ref={nameRef}
               type="text"
               placeholder={t("fieldNamePlaceholder")}
               value={fields.name}
               onChange={(e) => set("name", e.target.value)}
-              style={invalid.has("name") ? inputErrStyle : inputStyle}
-              aria-invalid={invalid.has("name")}
-              aria-describedby={invalid.has("name") ? `${ids.name}-err` : undefined}
               maxLength={120}
             />
-            {invalid.has("name") && (
-              <p id={`${ids.name}-err`} role="alert" style={fieldErrStyle}>
-                {t("fieldNameError")}
-              </p>
-            )}
-          </div>
+          </Field>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <div>
-              <label htmlFor={ids.date} style={{ fontSize: 13, fontWeight: 500 }}>
-                {t("fieldDate")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-              </label>
-              <input
-                id={ids.date}
+            <Field
+              label={t("fieldDate")}
+              required
+              error={invalid.has("date") ? t("fieldDateError") : formError.fieldError("date")}
+            >
+              <Input
                 type="date"
                 min={`${year}-01-01`}
                 max={`${year}-12-31`}
                 value={fields.date}
                 onChange={(e) => set("date", e.target.value)}
-                style={invalid.has("date") ? inputErrStyle : inputStyle}
-                aria-invalid={invalid.has("date")}
-                aria-describedby={invalid.has("date") ? `${ids.date}-err` : undefined}
               />
-              {invalid.has("date") && (
-                <p id={`${ids.date}-err`} role="alert" style={fieldErrStyle}>
-                  {t("fieldDateError")}
-                </p>
-              )}
-            </div>
+            </Field>
 
-            <div>
-              <label htmlFor={ids.type} style={{ fontSize: 13, fontWeight: 500 }}>{t("fieldType")}</label>
-              <select
-                id={ids.type}
-                value={fields.type}
-                onChange={(e) => set("type", e.target.value)}
-                style={inputStyle}
-              >
+            <Field label={t("fieldType")} error={formError.fieldError("type")}>
+              <Select value={fields.type} onChange={(e) => set("type", e.target.value)}>
                 <option value="gazetted">{t("type.gazetted")}</option>
                 <option value="restricted">{t("type.restricted")}</option>
                 <option value="optional">{t("type.optional")}</option>
                 <option value="weekly_off">{t("type.weekly_off")}</option>
-              </select>
-            </div>
+              </Select>
+            </Field>
           </div>
 
-          <div>
-            <label htmlFor={ids.applicableTo} style={{ fontSize: 13, fontWeight: 500 }}>{t("fieldApplicableTo")}</label>
-            <input
-              id={ids.applicableTo}
+          <Field label={t("fieldApplicableTo")} error={formError.fieldError("applicableTo")}>
+            <Input
               type="text"
               placeholder="all"
               value={fields.applicableTo}
               onChange={(e) => set("applicableTo", e.target.value)}
-              style={inputStyle}
             />
-          </div>
+          </Field>
 
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <Button

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button, Field, Input, Select, Textarea } from "../../../../_components/ds";
 import { useTranslations } from "next-intl";
 import { rupeesToMinorString } from "@/lib/money";
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { UserFacingError } from "@/lib/userFacingError";
 
 type EmployeeOption = { id: string; name: string; department: string; status: string };
 
@@ -70,13 +72,12 @@ export function NewMedicalClaimForm({
         }),
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(body?.message ?? t("fileClaimFailedMessage"));
+        throw await userFacingErrorFromResponse(res, "save", "medical claim");
       }
       router.push("/hr/medical");
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("fileClaimFailedMessage"));
+      setError(e instanceof UserFacingError ? e.message : t("fileClaimFailedMessage"));
     } finally {
       setSaving(false);
     }

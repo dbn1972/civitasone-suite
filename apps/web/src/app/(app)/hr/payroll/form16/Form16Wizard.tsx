@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, ConfirmDialog, EntityPicker } from "@/app/_components/ds";
+import { Button, ConfirmDialog, EntityPicker, Field, Input } from "@/app/_components/ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { isValidFy } from "@/lib/validators/fy";
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { UserFacingError } from "@/lib/userFacingError";
 
 type BulkStatus = { status: string } | null;
 
@@ -114,8 +116,6 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
   const [bulkStatus, setBulkStatus] = useState<BulkStatus>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fyId = useId();
-
   const STEP_NAMES = useMemo(
     () => [t("stepSelectFy"), t("stepReview"), t("stepGenerateDownload")],
     [t],
@@ -208,8 +208,7 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const d = await res.json().catch(() => ({})) as { error?: { message?: string } };
-        setError(d?.error?.message ?? t("generationFailedDefault"));
+        setError((await userFacingErrorFromResponse(res, "save", "Form 16")).message);
         setConfirmOpen(false);
         return;
       }
@@ -219,7 +218,7 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
       setConfirmOpen(false);
       setStep(2);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("networkErrorDefault"));
+      setError(err instanceof UserFacingError ? err.message : t("networkErrorDefault"));
       setConfirmOpen(false);
     } finally {
       setBusy(false);
@@ -238,19 +237,17 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
       {step === 0 && (
         <div ref={panelRef} tabIndex={-1} role="group" aria-label={STEP_NAMES[0] ?? ""} style={{ display: "grid", gap: 16 }}>
           <div style={{ maxWidth: 260 }}>
-            <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 }}>{t("financialYearLabel")}</label>
-            <input
-              id={fyId}
-              type="text"
-              className="input"
-              value={fy}
-              onChange={(e) => { setFy(e.target.value); setFyError(false); }}
-              placeholder="2024-25"
-              aria-invalid={fyError || undefined}
-            />
-            <p style={{ fontSize: 11, color: fyError ? "var(--bad, #c0392b)" : "var(--ink2)", marginTop: 4 }}>
-              {fyError ? t("financialYearInvalidError") : t("financialYearFormatHint")}
-            </p>
+            <Field label={t("financialYearLabel")} error={fyError ? t("financialYearInvalidError") : undefined}>
+              <Input
+                type="text"
+                value={fy}
+                onChange={(e) => { setFy(e.target.value); setFyError(false); }}
+                placeholder="2024-25"
+              />
+            </Field>
+            {!fyError && (
+              <p style={{ fontSize: 11, color: "var(--ink2)", marginTop: 4 }}>{t("financialYearFormatHint")}</p>
+            )}
           </div>
           <div>
             <Button onClick={handleNext}>{t("nextBtn")}</Button>

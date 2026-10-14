@@ -11,21 +11,13 @@
  * `Math.round(Number(rupees) * 100)` -- see that module's own doc comment
  * for why.
  */
-import { useId, useState } from "react";
-import type { CSSProperties } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { humanizeStatus } from "@/lib/formatters";
-import { Button } from "../../../_components/ds";
+import { Button, Field, Input, Select } from "../../../_components/ds";
 import { parseRupeesToPaise } from "./parseRupeesToPaise";
-
-const inputStyle: CSSProperties = {
-  width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
-  borderRadius: 8, background: "var(--bg2)", color: "var(--ink)", fontSize: 14,
-};
-const inputErrStyle: CSSProperties = { ...inputStyle, border: "1px solid var(--badbd, #ef4444)" };
-const fieldErrStyle: CSSProperties = { color: "var(--bad, #b91c1c)", fontSize: 12, margin: "3px 0 0" };
 
 // Matches expenseClaimSchema's category enum exactly (services/hrms-service/
 // src/modules/social/routes.ts) -- humanizeStatus gives the same label the
@@ -35,7 +27,6 @@ const CATEGORIES = ["travel", "food", "accommodation", "transport", "medical", "
 
 export function NewExpenseClaimForm() {
   const t = useTranslations("expenses");
-  const ids = { category: useId(), amount: useId(), description: useId(), date: useId() };
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState<string>("travel");
   const [amount, setAmount] = useState("");
@@ -118,52 +109,30 @@ export function NewExpenseClaimForm() {
       {open && (
         <form onSubmit={handleSubmit} noValidate style={{ padding: "0 20px 20px", display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
-            <div>
-              <label htmlFor={ids.category} style={{ fontSize: 13, fontWeight: 500 }}>
-                {t("formLabelCategory")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-              </label>
-              <select id={ids.category} value={category} onChange={(e) => setCategory(e.target.value)} style={inputStyle}>
+            <Field label={t("formLabelCategory")} required>
+              <Select value={category} onChange={(e) => setCategory(e.target.value)}>
                 {CATEGORIES.map((c) => (
                   <option key={c} value={c}>{humanizeStatus(c)}</option>
                 ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor={ids.amount} style={{ fontSize: 13, fontWeight: 500 }}>
-                {t("formLabelAmount")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-              </label>
-              <input id={ids.amount} type="text" inputMode="decimal" value={amount}
+              </Select>
+            </Field>
+            <Field label={t("formLabelAmount")} required
+              error={invalid.has("amount") ? t("formAmountInvalid") : formError.fieldError("amount")}>
+              <Input type="text" inputMode="decimal" value={amount}
                 onChange={(e) => { setAmount(e.target.value); clearErr("amount"); }}
-                placeholder={t("formPlaceholderAmount")}
-                style={invalid.has("amount") ? inputErrStyle : inputStyle}
-                aria-invalid={invalid.has("amount")} />
-              {invalid.has("amount") && <p role="alert" style={fieldErrStyle}>{t("formAmountInvalid")}</p>}
-              {!invalid.has("amount") && formError.fieldError("amount") && (
-                <p role="alert" style={fieldErrStyle}>{formError.fieldError("amount")}</p>
-              )}
-            </div>
-            <div>
-              <label htmlFor={ids.date} style={{ fontSize: 13, fontWeight: 500 }}>
-                {t("formLabelDate")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-              </label>
-              <input id={ids.date} type="date" value={date}
-                onChange={(e) => { setDate(e.target.value); clearErr("date"); }}
-                style={invalid.has("date") ? inputErrStyle : inputStyle}
-                aria-invalid={invalid.has("date")} />
-              {invalid.has("date") && <p role="alert" style={fieldErrStyle}>{t("formDateRequired")}</p>}
-            </div>
+                placeholder={t("formPlaceholderAmount")} />
+            </Field>
+            <Field label={t("formLabelDate")} required error={invalid.has("date") ? t("formDateRequired") : undefined}>
+              <Input type="date" value={date}
+                onChange={(e) => { setDate(e.target.value); clearErr("date"); }} />
+            </Field>
           </div>
 
-          <div>
-            <label htmlFor={ids.description} style={{ fontSize: 13, fontWeight: 500 }}>{t("formLabelDescription")}</label>
-            <input id={ids.description} type="text" maxLength={500} value={description}
+          <Field label={t("formLabelDescription")} error={formError.fieldError("description")}>
+            <Input type="text" maxLength={500} value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder={t("formPlaceholderDescription")}
-              style={inputStyle} />
-            {formError.fieldError("description") && (
-              <p role="alert" style={fieldErrStyle}>{formError.fieldError("description")}</p>
-            )}
-          </div>
+              placeholder={t("formPlaceholderDescription")} />
+          </Field>
 
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <Button type="submit" variant="primary" disabled={busy} style={{ minHeight: 44, minWidth: 160 }}>

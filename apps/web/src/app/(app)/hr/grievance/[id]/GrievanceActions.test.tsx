@@ -34,7 +34,7 @@ describe("GrievanceActions", () => {
     expect(await screen.findByText(/choose the hr officer/i)).toBeInTheDocument();
     expect(f.mock.calls.some(([, i]) => (i as RequestInit | undefined)?.method === "POST")).toBe(false);
 
-    fireEvent.change(screen.getByLabelText("HR officer"), { target: { value: "R." } });
+    fireEvent.change(screen.getByLabelText(/^HR officer/), { target: { value: "R." } });
     fireEvent.mouseDown(await screen.findByText("R. Singh (HR001)"));
     fireEvent.click(screen.getByRole("button", { name: "Assign" }));
     await waitFor(() => expect(refresh).toHaveBeenCalled());
@@ -49,7 +49,7 @@ describe("GrievanceActions", () => {
     vi.stubGlobal("fetch", f);
     renderActions();
     expect(screen.getByRole("button", { name: /Dispose…/ })).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Outcome"), { target: { value: "resolved" } });
+    fireEvent.change(screen.getByLabelText(/^Outcome/), { target: { value: "resolved" } });
     fireEvent.click(screen.getByRole("button", { name: /Dispose…/ }));
     const dialog = await screen.findByRole("alertdialog");
     const confirm = Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Dispose")!;

@@ -311,3 +311,30 @@ describe("WFHRequestForm — server-provided eligibility (GAP-HR-WFH-01)", () =>
     expect(await screen.findByTestId("paylevel-warning")).toBeInTheDocument();
   });
 });
+
+/**
+ * Client-side zod mirror of POST /v1/hrms/wfh-requests (wfhRequestSchema.ts):
+ * a blocked submit shows an inline, field-tied error and never POSTs.
+ */
+describe("WFHRequestForm — inline validation", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    fetchMock.mockRejectedValue(new Error("network"));
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("blocks submit without an employee and ties the message to the employee control", async () => {
+    render(<WFHRequestForm payLevel={5} weeklyWfhCount={0} />);
+    fireEvent.change(screen.getByLabelText(/^from date/i), { target: { value: "2099-01-05" } });
+    fireEvent.change(screen.getByLabelText(/^to date/i), { target: { value: "2099-01-06" } });
+    await act(async () => {
+      fireEvent.submit(screen.getByRole("form"));
+    });
+    const employee = await screen.findByLabelText(/^employee/i);
+    await waitFor(() => expect(employee).toHaveAttribute("aria-invalid", "true"));
+    expect(document.getElementById(employee.getAttribute("aria-describedby") ?? "")).toHaveTextContent(/choose an employee/i);
+    expect(fetchMock).not.toHaveBeenCalledWith("/api/proxy/v1/hrms/wfh-requests", expect.objectContaining({ method: "POST" }));
+  });
+});

@@ -15,10 +15,10 @@
  * resubmitting the same plan/FY intentionally replaces the prior election,
  * matching the backend's existing ON CONFLICT behavior.
  */
-import { useId, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button } from "../../../../_components/ds";
+import { Button, Field, Input, Select } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 
@@ -29,11 +29,6 @@ export type BenefitPlan = {
   components: Array<{ name: string; maxMinor: number; taxExempt: boolean }>;
 };
 
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
-  borderRadius: 8, background: "var(--bg2)", color: "var(--ink)", fontSize: 14,
-};
-const inputErrStyle: React.CSSProperties = { ...inputStyle, border: "1px solid var(--badbd, #ef4444)" };
 const fieldErrStyle: React.CSSProperties = { color: "var(--bad, #b91c1c)", fontSize: 12, margin: "3px 0 0" };
 
 interface Props {
@@ -42,7 +37,6 @@ interface Props {
 
 export function ElectionForm({ plans }: Props) {
   const t = useTranslations("benefits");
-  const ids = { plan: useId() };
   const [open, setOpen] = useState(false);
   const [planId, setPlanId] = useState(plans[0]?.id ?? "");
   const [amounts, setAmounts] = useState<Record<string, string>>({});
@@ -131,48 +125,31 @@ export function ElectionForm({ plans }: Props) {
               </p>
             )}
 
-            <div>
-              <label htmlFor={ids.plan} style={{ fontSize: 13, fontWeight: 500 }}>{t("planLabel")}</label>
-              <select
-                id={ids.plan}
+            <Field label={t("planLabel")}>
+              <Select
                 value={planId}
                 onChange={(e) => { setPlanId(e.target.value); setAmounts({}); setInvalid(new Set()); setOverCap(new Set()); }}
-                style={inputStyle}
               >
                 {plans.map((p) => (
                   <option key={p.id} value={p.id}>{p.name} ({p.fy})</option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </Field>
 
             {selectedPlan?.components.map((c) => (
-              <div key={c.name}>
-                <label htmlFor={`${ids.plan}-${c.name}`} style={{ fontSize: 13, fontWeight: 500 }}>
-                  {c.name}
-                  {c.taxExempt ? ` (${t("taxExempt")})` : ""}
-                </label>
-                <input
-                  id={`${ids.plan}-${c.name}`}
+              <Field
+                key={c.name}
+                label={`${c.name}${c.taxExempt ? ` (${t("taxExempt")})` : ""}`}
+                error={invalid.has(c.name) ? t("invalidAmount") : overCap.has(c.name) ? t("amountOverCap") : undefined}
+              >
+                <Input
                   type="text"
                   inputMode="decimal"
                   placeholder="0.00"
                   value={amounts[c.name] ?? ""}
                   onChange={(e) => setAmount(c.name, e.target.value)}
-                  style={invalid.has(c.name) || overCap.has(c.name) ? inputErrStyle : inputStyle}
-                  aria-invalid={invalid.has(c.name) || overCap.has(c.name)}
-                  aria-describedby={invalid.has(c.name) || overCap.has(c.name) ? `${ids.plan}-${c.name}-err` : undefined}
                 />
-                {invalid.has(c.name) && (
-                  <p id={`${ids.plan}-${c.name}-err`} role="alert" style={fieldErrStyle}>
-                    {t("invalidAmount")}
-                  </p>
-                )}
-                {overCap.has(c.name) && !invalid.has(c.name) && (
-                  <p id={`${ids.plan}-${c.name}-err`} role="alert" style={fieldErrStyle}>
-                    {t("amountOverCap")}
-                  </p>
-                )}
-              </div>
+              </Field>
             ))}
             {invalid.has("__form__") && (
               <p role="alert" style={fieldErrStyle}>{t("noAmountsEntered")}</p>

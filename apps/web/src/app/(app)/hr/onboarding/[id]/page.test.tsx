@@ -148,7 +148,7 @@ describe("OnboardingDetailPage", () => {
     expect(screen.queryByText("Documents Submitted")).not.toBeInTheDocument();
     // GAP-HR-ONBOARDING-02: previously a dead end -- a joinee with zero
     // tasks is now openable (DETAIL-05) AND has a real way to get tasks.
-    expect(screen.getByLabelText("Task title")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Task title/)).toBeInTheDocument();
   });
 
   // GAP-HR-ONBOARDING-DETAIL-05
