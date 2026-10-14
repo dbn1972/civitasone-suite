@@ -58,7 +58,7 @@ describe("ShiftChangeRequestForm", () => {
     await act(async () => {
       fireEvent.submit(screen.getByRole("form"));
     });
-    expect(await screen.findByRole("alert")).toHaveTextContent(/different/i);
+    await waitFor(() => expect(screen.getAllByRole("alert").some((a) => /different/i.test(a.textContent ?? ""))).toBe(true));
     expect(fetchMock).not.toHaveBeenCalledWith("/api/proxy/v1/hrms/shift-requests", expect.anything());
   });
 

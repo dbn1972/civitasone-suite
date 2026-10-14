@@ -14,9 +14,11 @@
  */
 
 import { useState, type FormEvent } from "react";
+import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { AcceptedNotice, Field, Input } from "@/app/_components/ds";
 import { validateAddTask } from "./addTaskSchema";
+import { translateFormErrors } from "../../_components/translateFormErrors";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 
 interface AddTaskFormProps {
@@ -25,6 +27,7 @@ interface AddTaskFormProps {
 
 export function AddTaskForm({ employeeId }: AddTaskFormProps) {
   const accepted = useAcceptedWrite();
+  const tv = useTranslations("hrFormErrors");
   const [title, setTitle] = useState("");
   const [dueByDay, setDueByDay] = useState("7");
   const [submitting, setSubmitting] = useState(false);
@@ -32,7 +35,7 @@ export function AddTaskForm({ employeeId }: AddTaskFormProps) {
   const [localError, setLocalError] = useState<string | null>(null);
   const [touched, setTouched] = useState<{ title?: boolean; dueByDay?: boolean }>({});
   const formError = useFormError("onboarding task");
-  const clientErrors = validateAddTask({ title, dueByDay });
+  const clientErrors = translateFormErrors(validateAddTask({ title, dueByDay }), tv);
   /** Client message once the field has been edited, then a backend rejection for the same field. */
   const errFor = (f: "title" | "dueByDay") => (touched[f] ? clientErrors[f] : undefined) ?? formError.fieldError(f);
 

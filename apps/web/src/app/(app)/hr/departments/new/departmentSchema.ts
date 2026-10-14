@@ -8,9 +8,9 @@ import { z } from "zod";
  * they are not re-validated here. The server stays the authority.
  */
 export const departmentSchema = z.object({
-  code: z.string().trim().min(1, "Department code is required.").max(20, "Code must be 20 characters or fewer."),
-  name: z.string().trim().min(2, "Department name must be at least 2 characters.").max(200, "Name must be 200 characters or fewer."),
-  type: z.string().trim().max(40, "Type must be 40 characters or fewer."),
+  code: z.string().trim().min(1, "deptCodeRequired").max(20, "deptCodeMax"),
+  name: z.string().trim().min(2, "deptNameMin").max(200, "deptNameMax"),
+  type: z.string().trim().max(40, "deptTypeMax"),
 });
 
 export type DepartmentErrors = Partial<Record<keyof z.infer<typeof departmentSchema>, string>>;

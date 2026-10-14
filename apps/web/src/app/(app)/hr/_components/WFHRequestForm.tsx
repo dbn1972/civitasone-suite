@@ -14,6 +14,7 @@ import { useAsyncMutation } from "@/lib/useAsyncMutation";
 import { Button, Field, Input, Select, Textarea } from "../../../_components/ds";
 import { EmployeePicker } from "../../../_components/EmployeePicker";
 import { todayIST } from "@/lib/formatters";
+import { translateFormErrors } from "./translateFormErrors";
 import { validateWfhRequest, type WfhRequestErrors } from "./wfhRequestSchema";
 
 type CreatedRequest = { id: string };
@@ -63,6 +64,7 @@ export function WFHRequestForm({
 }: WFHRequestFormProps) {
   const router = useRouter();
   const t = useTranslations("wfhForm");
+  const tv = useTranslations("hrFormErrors");
   const [state, setState] = useState<SubmitState>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const formError = useFormError("WFH request");
@@ -177,7 +179,7 @@ export function WFHRequestForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (isGazetted || weeklyCapReached) return; // belt-and-suspenders
-    const errs = validateWfhRequest({ employeeId, fromDate, toDate, reason });
+    const errs = translateFormErrors(validateWfhRequest({ employeeId, fromDate, toDate, reason }), tv);
     setClientErrors(errs);
     if (!fromDate || !toDate) {
       setErrorMsg(t("errorBothDatesRequired"));

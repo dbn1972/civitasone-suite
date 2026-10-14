@@ -12,12 +12,12 @@ import { z } from "zod";
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export const separationSchema = z.object({
-  effectiveDate: z.string().regex(DATE, "Enter the effective date."),
+  effectiveDate: z.string().regex(DATE, "effectiveDateRequired"),
   lastWorkingDate: z
     .string()
-    .refine((v) => v === "" || DATE.test(v), "Enter a valid last working date."),
-  encashmentDays: z.number().int("Enter a whole number of days.").nonnegative("Encashment days cannot be negative."),
-  remarks: z.string().max(1000, "Remarks must be 1000 characters or fewer."),
+    .refine((v) => v === "" || DATE.test(v), "lastWorkingDateInvalid"),
+  encashmentDays: z.number().int("encashmentWhole").nonnegative("encashmentNegative"),
+  remarks: z.string().max(1000, "remarksMax1000"),
 });
 
 export type SeparationErrors = Partial<Record<keyof z.infer<typeof separationSchema>, string>>;
@@ -39,7 +39,7 @@ export function validateSeparation(input: {
   const errors: SeparationErrors = {};
   for (const issue of parsed.error.issues) {
     const key = issue.path[0] as keyof SeparationErrors;
-    if (key && !errors[key]) errors[key] = key === "encashmentDays" && issue.code === "invalid_type" ? "Enter a whole number of days." : issue.message;
+    if (key && !errors[key]) errors[key] = key === "encashmentDays" && issue.code === "invalid_type" ? "encashmentWhole" : issue.message;
   }
   return errors;
 }

@@ -52,7 +52,7 @@ describe("OutsourcedRegister (GAP-HR-OUTSOURCED-01)", () => {
     fireEvent.change(within(dialog).getByLabelText(/contract start/i), { target: { value: "2026-05-01" } });
     fireEvent.change(within(dialog).getByLabelText(/contract end/i), { target: { value: "2026-04-01" } });
     fireEvent.click(within(dialog).getByRole("button", { name: /save contract/i }));
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent(/end date cannot be before/i);
+    await waitFor(() => expect(within(dialog).getAllByRole("alert").some((a) => /end date cannot be before/i.test(a.textContent ?? ""))).toBe(true));
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

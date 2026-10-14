@@ -50,6 +50,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, ActionButton, Field, Input, Select, Textarea } from "@/app/_components/ds";
+import { translateFormErrors } from "../../_components/translateFormErrors";
 import { validateSeparation } from "./separationSchema";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
@@ -77,6 +78,7 @@ export function InitiateSeparationAction({
   prefillEmployeeStatus?: string;
 }) {
   const t = useTranslations("initiateSeparation");
+  const tv = useTranslations("hrFormErrors");
   const router = useRouter();
   const { toast } = useToast();
   const formError = useFormError("separation");
@@ -139,7 +141,7 @@ export function InitiateSeparationAction({
   const selectedName = prefillEmployeeName ?? selectedEmployee?.fullName ?? selectedEmployee?.name ?? employeeId;
 
   const encashmentDaysNum = Number(encashmentDays);
-  const schemaErrors = validateSeparation({ effectiveDate, lastWorkingDate, encashmentDays, remarks });
+  const schemaErrors = translateFormErrors(validateSeparation({ effectiveDate, lastWorkingDate, encashmentDays, remarks }), tv);
   // First unmet condition, surfaced as a hint next to the (disabled) submit
   // button -- WCAG: a disabled control with no explanation of why is a real
   // a11y gap in a codebase this deliberate about it elsewhere.

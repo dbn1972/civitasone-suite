@@ -8,11 +8,11 @@ import { z } from "zod";
  * The server stays the authority.
  */
 export const addTaskSchema = z.object({
-  title: z.string().trim().min(1, "Enter a task title.").max(200, "Task title must be 200 characters or fewer."),
+  title: z.string().trim().min(1, "taskTitleRequired").max(200, "taskTitleMax"),
   dueByDay: z
     .string()
     .trim()
-    .refine((v) => /^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= 365, "Due day must be a whole number from 1 to 365."),
+    .refine((v) => /^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= 365, "dueDayRange"),
 });
 
 export type AddTaskErrors = Partial<Record<keyof z.infer<typeof addTaskSchema>, string>>;

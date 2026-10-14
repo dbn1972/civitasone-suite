@@ -50,7 +50,7 @@ describe("NewGrievanceForm", () => {
     renderForm();
     fireEvent.click(screen.getByRole("button", { name: "Register grievance" }));
     expect(await screen.findByText(/choose the employee/i)).toBeInTheDocument();
-    expect(screen.getByText(/choose a category/i, { selector: "span" })).toBeInTheDocument();
+    expect(screen.getByText(/choose a category/i, { selector: "span[role=alert]" })).toBeInTheDocument();
     expect(f.mock.calls.some(([, i]) => (i as RequestInit | undefined)?.method === "POST")).toBe(false);
   });
 

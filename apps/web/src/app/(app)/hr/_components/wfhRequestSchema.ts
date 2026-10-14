@@ -10,12 +10,12 @@ import { z } from "zod";
  */
 export const wfhRequestSchema = z
   .object({
-    employeeId: z.string().uuid("Choose an employee before submitting."),
-    fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the from date."),
-    toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter the to date."),
-    reason: z.string().max(500, "Reason must be 500 characters or fewer."),
+    employeeId: z.string().uuid("employeeRequired"),
+    fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "fromDateRequired"),
+    toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "toDateRequired"),
+    reason: z.string().max(500, "reasonMax500"),
   })
-  .refine((d) => d.toDate >= d.fromDate, { message: "To date must be on or after the from date.", path: ["toDate"] });
+  .refine((d) => d.toDate >= d.fromDate, { message: "toDateBeforeFrom", path: ["toDate"] });
 
 export type WfhRequestErrors = Partial<Record<"employeeId" | "fromDate" | "toDate" | "reason", string>>;
 
