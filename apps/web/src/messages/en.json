@@ -14917,9 +14917,19 @@
       "pendingNote": "Awaiting confirmation"
     },
     "execution": {
+      "attachmentHeading": "Attachment (optional)",
+      "attachmentLabel": "Attach a photo or document",
+      "attachmentRemove": "Remove",
+      "photoPreviewAlt": "Preview of {name}",
       "duplicatePeriodWarning": "An entry for this scope in {month} {year} is already recorded. Submitting adds to it, so check you are not entering the same figure twice."
     },
     "reports": {
+      "chipFrom": "From {date}",
+      "chipTo": "To {date}",
+      "chipDivision": "Division {name}",
+      "chipDivisionSelected": "Division (selected)",
+      "divisionSelectedFallback": "Selected division",
+      "divisionFilterAria": "Filter by division",
       "definitions": "Active works = total works minus closed works. The division filter matches works executed by that exact division; sub-divisions are not included.",
       "chartLabel": "Works by status"
     }

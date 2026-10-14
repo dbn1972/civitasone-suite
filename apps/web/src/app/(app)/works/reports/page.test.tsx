@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { renderWithIntl as render } from "@/lib/testUtils/intl";
+import { screen } from "@testing-library/react";
 
 /**
  * GAP-WORKS-REPORTS-02 (FAILMASK): three independent fetches must not share

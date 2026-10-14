@@ -16,6 +16,7 @@ import {
   SkeletonCard,
   type UploadedFileMeta,
 } from "@/app/_components/ds";
+import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
 import { searchWorkOptions, resolveWorkOptions } from "../../../_data/worksPicker";
@@ -49,6 +50,7 @@ function PhotoForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const t = useTranslations("works.execution");
 
   const prefillWorkId = searchParams.get("workId") ?? "";
 
@@ -190,7 +192,7 @@ function PhotoForm() {
               {previewUrl ? (
                 <img
                   src={previewUrl}
-                  alt={`Preview of ${fileMeta.fileName}`}
+                  alt={t("photoPreviewAlt", { name: fileMeta.fileName })}
                   style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 8, border: "1px solid var(--line)" }}
                 />
               ) : null}
