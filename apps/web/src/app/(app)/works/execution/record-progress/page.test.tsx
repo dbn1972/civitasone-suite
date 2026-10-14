@@ -1,5 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { renderWithIntl as render } from "@/lib/testUtils/intl";
 
 const pushMock = vi.fn();
 let searchParamsMock = new URLSearchParams();
@@ -141,5 +142,54 @@ describe("RecordProgressPage (GAP-WORKS-EXECUTION-RECORD-PROGRESS-01..05)", () =
     mockWorkData();
     render(<RecordProgressPage />);
     expect(screen.getByText(/added to the running\s+cumulative total/i)).toBeInTheDocument();
+  });
+
+  it("RP-03: warns (does not block) when an entry already exists for the same scope, month and year", async () => {
+    const now = new Date();
+    mockWorkData({
+      progress: [{ workScopeId: SCOPE.id, currentAchievement: 10, month: now.getMonth() + 1, year: now.getFullYear() }],
+    });
+    render(<RecordProgressPage />);
+    await screen.findByRole("option", { name: /Earthwork/i });
+    fireEvent.change(screen.getByLabelText(/Work Scope/i), { target: { value: SCOPE.id } });
+    expect(await screen.findByTestId("duplicate-period-warning")).toHaveTextContent(/already recorded/i);
+    // not blocked: the submit button stays enabled
+    expect(screen.getByRole("button", { name: "Record Progress" })).toBeEnabled();
+  });
+
+  it("RP-03: no duplicate warning when the chosen period has no entry yet", async () => {
+    mockWorkData({ progress: [{ workScopeId: SCOPE.id, currentAchievement: 10, month: 1, year: 2020 }] });
+    render(<RecordProgressPage />);
+    await screen.findByRole("option", { name: /Earthwork/i });
+    fireEvent.change(screen.getByLabelText(/Work Scope/i), { target: { value: SCOPE.id } });
+    await screen.findByText(/Recorded so far:/i);
+    expect(screen.queryByTestId("duplicate-period-warning")).not.toBeInTheDocument();
+  });
+});
+
+describe("RecordProgressPage - re-check of RP-04 (back-dated entries are confirmed)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-15T10:00:00+05:30"));
+    pushMock.mockReset();
+    browserFetchMock.mockReset();
+    searchParamsMock = new URLSearchParams("workId=work-123");
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("a period more than a month old only submits after a confirmation that names it back-dated", async () => {
+    mockWorkData();
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 202 }));
+    render(<RecordProgressPage />);
+    await screen.findByRole("option", { name: /Earthwork/i });
+    fireEvent.change(screen.getByLabelText(/Work Scope/i), { target: { value: SCOPE.id } });
+    fireEvent.change(screen.getByLabelText(/^Month/i), { target: { value: "6" } }); // June 2026, 4 months back
+    fireEvent.change(screen.getByLabelText(/Quantity done this period/i), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Progress" }));
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(await screen.findByText(/This is a back-dated entry/i)).toBeInTheDocument();
   });
 });

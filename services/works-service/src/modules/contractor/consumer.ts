@@ -22,6 +22,11 @@ export function registerContractorConsumers(rawQueue: Queue): void {
       };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
+        // GAP-WORKS-CONTRACTORS-NEW-05: re-assert registration-number uniqueness in the writing transaction (two
+        // concurrent creates can both pass the route check).
+        if (p.registrationNo && (await repo.findContractorByRegistrationNoTx(tx, msg.tenantId, p.registrationNo))) {
+          throw new NonRetryableError("DUPLICATE_REGISTRATION_NO: a contractor with this registration number already exists");
+        }
         await repo.insertContractor(tx, {
           id: p.id, tenantId: msg.tenantId, name: p.name,
           registrationNo: p.registrationNo ?? null,
@@ -40,6 +45,8 @@ export function registerContractorConsumers(rawQueue: Queue): void {
       });
     } catch (err) {
       log.error({ err, messageId: msg.messageId }, "contractorCreate processing failed");
+      // A rejected duplicate must be dead-lettered (observable), not silently swallowed like a transient failure.
+      if (err instanceof NonRetryableError) throw err;
     }
   });
 
@@ -54,6 +61,10 @@ export function registerContractorConsumers(rawQueue: Queue): void {
       const p = msg.payload as { id: string; tenantId: string; patch: Record<string, unknown> };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
+        const newRegNo = typeof p.patch.registrationNo === "string" ? p.patch.registrationNo : "";
+        if (newRegNo && (await repo.findContractorByRegistrationNoTx(tx, msg.tenantId, newRegNo, p.id))) {
+          throw new NonRetryableError("DUPLICATE_REGISTRATION_NO: a contractor with this registration number already exists");
+        }
         const applied = await repo.applyContractorUpdate(tx, msg.tenantId, p.id, p.patch, msg.actorId);
         if (!applied) throw new NonRetryableError("CONTRACTOR_NOT_FOUND: contractor not found for update");
         // Record WHICH fields changed, never PII values (pan is reported as a

@@ -63,3 +63,24 @@ describe("GAP-WORKS-REPORTS-01 ReportFilters (division picker)", () => {
     expect(pushMock).toHaveBeenCalledWith("/works/reports");
   });
 });
+
+describe("GAP-WORKS-REPORTS-01 active-filter chip names the division", () => {
+  beforeEach(() => {
+    pushMock.mockReset();
+    vi.restoreAllMocks();
+  });
+
+  it("shows 'Division <name>' and never the raw uuid once the name resolves", async () => {
+    stubFetch();
+    render(<ReportFilters divisionId={DIV_UUID} />);
+    expect(await screen.findByText("Division Nagpur PWD Division")).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(DIV_UUID))).not.toBeInTheDocument();
+  });
+
+  it("falls back to a neutral label (still no uuid) when the name cannot be resolved", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 500 }));
+    render(<ReportFilters divisionId={DIV_UUID} />);
+    expect(await screen.findByText("Division (selected)")).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(DIV_UUID))).not.toBeInTheDocument();
+  });
+});

@@ -69,6 +69,8 @@ describe("ds/FileUpload", () => {
         fileName: "test.pdf",
         size: 7,
         mimeType: "application/pdf",
+        // the File itself is passed along so a caller can render a local preview (GAP-WORKS-EXECUTION-PHOTOS-NEW-03)
+        file,
       });
     });
   });

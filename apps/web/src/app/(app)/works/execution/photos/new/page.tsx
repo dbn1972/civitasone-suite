@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { z } from "zod";
 import { humanZodMessage } from "@/lib/humanZodMessage";
@@ -59,6 +59,21 @@ function PhotoForm() {
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [locBusy, setLocBusy] = useState(false);
+  // GAP-WORKS-EXECUTION-PHOTOS-NEW-02: true only while the coordinates in the form are exactly what the browser's
+  // geolocation returned. Typing into either field flips it, so the stored source reflects how they were obtained.
+  const [coordsFromGps, setCoordsFromGps] = useState(false);
+  // GAP-WORKS-EXECUTION-PHOTOS-NEW-03: local thumbnail of the chosen image (object URL, revoked on change/unmount).
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const file = fileMeta?.file;
+    if (!file || !file.type.startsWith("image/") || typeof URL === "undefined" || typeof URL.createObjectURL !== "function") {
+      setPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [fileMeta]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const formError = useFormError("photo");
@@ -73,6 +88,7 @@ function PhotoForm() {
       (pos) => {
         setLatitude(pos.coords.latitude.toFixed(6));
         setLongitude(pos.coords.longitude.toFixed(6));
+        setCoordsFromGps(true);
         setLocBusy(false);
       },
       () => {
@@ -105,9 +121,10 @@ function PhotoForm() {
       workId: parsed.data.workId,
       fileKey: parsed.data.fileKey,
       // GAP-WORKS-EXECUTION-PHOTOS-NEW-02: distinguish device-captured from
-      // typed coordinates for evidence integrity. DECISION: send "web-gps"
-      // only when the browser filled them via geolocation, else "web".
-      source: "web",
+      // typed coordinates for evidence integrity: "web-gps" only when the
+      // browser filled them via geolocation, "web-manual" when typed, "web"
+      // when there are no coordinates.
+      source: parsed.data.latitude == null ? "web" : coordsFromGps ? "web-gps" : "web-manual",
     };
     if (parsed.data.description) body.description = parsed.data.description;
     if (parsed.data.latitude != null) body.latitude = parsed.data.latitude;
@@ -159,7 +176,8 @@ function PhotoForm() {
             category="photo"
             label="Choose photo to upload"
             accept="image/*"
-            maxSizeMb={20}
+            // admin-service uploads/presign caps the "photo" category at 2 MB; say so up front instead of failing after.
+            maxSizeMb={2}
             onUploaded={(key, meta) => {
               setFileKey(key);
               setFileMeta(meta);
@@ -168,7 +186,14 @@ function PhotoForm() {
           {/* GAP-WORKS-EXECUTION-PHOTOS-NEW-03: confirm the file by name + size,
               not an opaque storage key. */}
           {fileKey && fileMeta && (
-            <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              {previewUrl ? (
+                <img
+                  src={previewUrl}
+                  alt={`Preview of ${fileMeta.fileName}`}
+                  style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 8, border: "1px solid var(--line)" }}
+                />
+              ) : null}
               <span style={{ fontSize: 13 }}>
                 📎 {fileMeta.fileName}{" "}
                 <span style={{ color: "var(--muted)" }}>
@@ -182,6 +207,7 @@ function PhotoForm() {
                 onClick={() => {
                   setFileKey("");
                   setFileMeta(null);
+                  setPreviewUrl(null);
                 }}
               >
                 Choose another
@@ -212,7 +238,10 @@ function PhotoForm() {
               <Input
                 type="number"
                 value={latitude}
-                onChange={(e) => setLatitude(e.target.value)}
+                onChange={(e) => {
+                  setLatitude(e.target.value);
+                  setCoordsFromGps(false);
+                }}
                 step={0.000001}
                 min={-90}
                 max={90}
@@ -223,7 +252,10 @@ function PhotoForm() {
               <Input
                 type="number"
                 value={longitude}
-                onChange={(e) => setLongitude(e.target.value)}
+                onChange={(e) => {
+                  setLongitude(e.target.value);
+                  setCoordsFromGps(false);
+                }}
                 step={0.000001}
                 min={-180}
                 max={180}

@@ -40,6 +40,15 @@ export function closureEligibility(work: WorkWithAgreement): "closed" | "dropped
 }
 
 /**
+ * GAP-WORKS-EXECUTION-PHOTOS-NEW-05: a stored-file reference must be one this tenant's presign endpoint issued
+ * (`uploads/<tenantId>/<category>/<actor>/<uuid>.<ext>`). Otherwise a caller could register another tenant's object, or a
+ * path-traversal string, as evidence on their own work.
+ */
+export function isTenantUploadKey(tenantId: string, key: string): boolean {
+  return key.startsWith(`uploads/${tenantId}/`) && !key.includes("..") && !key.includes("\\");
+}
+
+/**
  * BR-035: Physical completion requires an agreement to exist.
  */
 export function canRecordPhysicalCompletion(hasAgreement: boolean): boolean {

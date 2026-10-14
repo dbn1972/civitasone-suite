@@ -1,6 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState, useTransition, type FormEvent } from "react";
+import { useEffect, useState, useTransition, type FormEvent } from "react";
 import { Button, EntityPicker } from "@/app/_components/ds";
 import { searchDivisions, resolveDivisions } from "@/lib/entityAdapters/division";
 
@@ -24,6 +24,26 @@ export function ReportFilters({ fromDate, toDate, divisionId }: ReportFiltersPro
   // uuid), so divisionId holds a real works.divisions id, never a typed code.
   const [division, setDivision] = useState<string | null>(divisionId ?? null);
   const [error, setError] = useState<string | null>(null);
+  // GAP-WORKS-REPORTS-01: the active-filter chip and the picker's seeded label show the division NAME, not its
+  // uuid. Resolved once for the applied divisionId; until (or unless) it resolves we say "Division" without an id.
+  const [divisionName, setDivisionName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!divisionId) {
+      setDivisionName(null);
+      return;
+    }
+    let active = true;
+    void resolveDivisions([divisionId])
+      .then((opts) => {
+        if (active) setDivisionName(opts[0]?.label && opts[0].label !== divisionId ? opts[0].label : null);
+      })
+      .catch(() => {
+        if (active) setDivisionName(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [divisionId]);
 
   function handleApply(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -64,7 +84,7 @@ export function ReportFilters({ fromDate, toDate, divisionId }: ReportFiltersPro
   const activeChips: { label: string }[] = [];
   if (fromDate) activeChips.push({ label: `From ${fromDate}` });
   if (toDate) activeChips.push({ label: `To ${toDate}` });
-  if (divisionId) activeChips.push({ label: `Division ${divisionId}` });
+  if (divisionId) activeChips.push({ label: divisionName ? `Division ${divisionName}` : "Division (selected)" });
 
   return (
     <div style={{ marginBottom: 24 }}>
@@ -109,7 +129,7 @@ export function ReportFilters({ fromDate, toDate, divisionId }: ReportFiltersPro
               onChange={(v) => setDivision(Array.isArray(v) ? (v[0] ?? null) : v)}
               search={searchDivisions}
               resolve={resolveDivisions}
-              {...(divisionId ? { initialOptions: [{ id: divisionId, label: divisionId }] } : {})}
+              {...(divisionId ? { initialOptions: [{ id: divisionId, label: divisionName ?? "Selected division" }] } : {})}
               disabled={pending}
               minQueryLength={1}
               aria-label="Filter by division"

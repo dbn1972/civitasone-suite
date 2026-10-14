@@ -49,3 +49,26 @@ describe("TendersTable (GAP-WORKS-TENDERS-03 stats, 04 filters)", () => {
     expect(screen.queryByText("W-2")).not.toBeInTheDocument(); // past
   });
 });
+
+describe("TendersTable awarded navigation (GAP-WORKS-TENDERS-05)", () => {
+  const withAwarded = [
+    ...rows,
+    { id: "t4", work: "W-4", tenderType: "Open Tender", amount: "100", openingDate: "q", openingDateIso: iso(-30), authority: "EE", status: "Awarded", statusKey: "awarded" },
+  ];
+
+  it("counts awarded tenders in a stat card", () => {
+    render(<TendersTable tenders={withAwarded} source="api" />);
+    const card = screen
+      .getAllByText("Awarded")
+      .map((el) => el.closest(".stat"))
+      .find((n): n is HTMLElement => n !== null);
+    expect(card?.textContent).toContain("1");
+  });
+
+  it("an awarded tender's row opens at the quotations/award section; the others open the detail page", () => {
+    render(<TendersTable tenders={withAwarded} source="api" />);
+    const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+    expect(hrefs).toContain("/works/tenders/t4#quotations");
+    expect(hrefs).toContain("/works/tenders/t1");
+  });
+});
