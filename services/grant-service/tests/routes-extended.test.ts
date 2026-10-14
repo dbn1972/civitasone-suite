@@ -227,6 +227,15 @@ describe("GET /v1/grants/applications/:id", () => {
 });
 
 describe("PATCH /v1/grants/applications/:id/approve", () => {
+  it("400 — missing sanction reason (GAP-GRANTS-APPLICATIONS-DETAIL-02)", async () => {
+    const res = await app.inject({
+      method: "PATCH", url: "/v1/grants/applications/00000000-0000-4000-8000-000000000001/approve",
+      headers: { authorization: `Bearer ${makeToken()}` },
+      payload: { amountApprovedMinor: 100 },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
   it("400 — missing amount", async () => {
     const res = await app.inject({
       method: "PATCH", url: "/v1/grants/applications/00000000-0000-4000-8000-000000000001/approve",

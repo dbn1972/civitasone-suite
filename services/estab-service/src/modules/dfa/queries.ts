@@ -27,6 +27,8 @@ export type DfaDto = {
   dispatchId: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Drafter (JWT sub). Lets the UI hide Approve/Sign for the maker (GAP-ESTAB-DFA-02). */
+  createdBy: string;
 };
 
 function toDto(r: DfaRow): DfaDto {
@@ -54,6 +56,7 @@ function toDto(r: DfaRow): DfaDto {
     dispatchId: r.dispatchId,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
+    createdBy: r.createdBy,
   };
 }
 

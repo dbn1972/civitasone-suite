@@ -971,7 +971,7 @@ describe("Config-registry routes — happy paths", () => {
     expect(res.json().item).toBeDefined();
   });
   it("POST /v1/visitor/config/presets/:preset → 202", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/visitor/config/presets/secretariat", headers: headers() });
+    const res = await app.inject({ method: "POST", url: "/v1/visitor/config/presets/secretariat", headers: headers(), payload: { reason: "Onboarding a secretariat office" } });
     expect(res.statusCode).toBe(202);
   });
   it("PATCH /v1/visitor/config/:id/deactivate → 202", async () => {

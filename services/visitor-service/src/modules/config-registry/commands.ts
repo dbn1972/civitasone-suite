@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -11,9 +12,13 @@ export type SetConfigResult = { accepted: true; configId: string };
 export type DeactivateConfigResult = { accepted: true; configId: string };
 
 /**
- * Set (create or version-guarded update) a config entry. The messageId/id is
- * deterministic per (tenant, namespace, key) so a redelivery of the SAME
- * (namespace, key) write is idempotent end-to-end.
+ * Set (create or version-guarded update) a config entry. The entry `id` is
+ * deterministic per (tenant, namespace, key) (stable row identity), but the
+ * messageId is minted PER COMMAND: markProcessed() dedupes on messageId, so a
+ * messageId derived from the entry id made every re-write of a key after the
+ * first a silent no-op (the consumer skipped it as "already processed"). A
+ * redelivery of the same published command still carries the same messageId,
+ * so it stays idempotent.
  */
 export async function setConfig(
   ctx: RequestContext, input: SetConfigBody,
@@ -22,7 +27,7 @@ export async function setConfig(
   const configId = deriveConfigId(ctx.tenantId, body.namespace, body.configKey);
 
   await queue.publish(COMMANDS.setConfig, {
-    messageId: configId,
+    messageId: randomUUID(),
     type: COMMANDS.setConfig,
     tenantId: ctx.tenantId,
     actorId: ctx.actorId,

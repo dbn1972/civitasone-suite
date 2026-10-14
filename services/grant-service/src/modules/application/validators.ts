@@ -18,9 +18,10 @@ export type ScoreApplicationBody = z.infer<typeof scoreApplicationBody>;
 
 export const approveApplicationBody = z.object({
   amountApprovedMinor: z.number().int().positive(),
-  // GAP-GRANTS-APPLICATIONS-DETAIL-04/02: an optional sanction reason/remarks,
-  // recorded in the audit trail (parity with reject, which requires a reason).
-  reason: z.string().trim().min(1).max(1000).optional(),
+  // GAP-GRANTS-APPLICATIONS-DETAIL-04/02: the sanction reason/remarks is
+  // REQUIRED (parity with reject) -- a public-money approval must carry a
+  // reason into the audit trail. Enforced here, not just in the dialog.
+  reason: z.string().trim().min(10).max(1000),
 });
 export type ApproveApplicationBody = z.infer<typeof approveApplicationBody>;
 

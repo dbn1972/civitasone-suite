@@ -5,6 +5,11 @@ const getGuesthouseBookingsMock = vi.fn();
 vi.mock("../../../_data/loaders", () => ({
   getGuesthouseBookings: () => getGuesthouseBookingsMock(),
 }));
+let mockRoles: string[] = ["estab_officer"];
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => mockRoles,
+  ESTAB_DFA_DRAFTER_ROLES: ["estab_officer", "estab_admin", "super_admin"],
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
@@ -14,6 +19,7 @@ import GuesthousePage from "./page";
 describe("GuesthousePage — GUESTHOUSE-03/05", () => {
   beforeEach(() => {
     getGuesthouseBookingsMock.mockReset();
+    mockRoles = ["estab_officer"];
   });
 
   it("GUESTHOUSE-05: shows a back-to-hub link and a New Booking action in the empty state", async () => {
@@ -111,5 +117,23 @@ describe("GuesthousePage — GUESTHOUSE-01 (check-in/check-out actions)", () => 
     // A checked-in booking must show the Check-out action.
     expect(screen.getByRole("button", { name: "Check out" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Check in" })).not.toBeInTheDocument();
+  });
+
+  it("GAP-ESTAB-GUESTHOUSE-01: no approvals claim; check-in is offered only to establishment officers", async () => {
+    const row = {
+      id: "b2", bookingNo: "GH/2026/002", guestName: "Smt. B. Rao", designation: null, department: "Law",
+      checkInDate: "2026-10-01T08:30:00.000Z", checkOutDate: "2026-10-03T08:30:00.000Z", roomNo: "102", status: "confirmed",
+    };
+    getGuesthouseBookingsMock.mockResolvedValue({ data: [row], source: "api" });
+
+    mockRoles = ["estab_officer"];
+    const { unmount } = render(await GuesthousePage());
+    expect(screen.queryByText(/approvals/i)).toBeNull();
+    expect(screen.getByRole("button", { name: "Check in" })).toBeInTheDocument();
+    unmount();
+
+    mockRoles = ["employee"];
+    render(await GuesthousePage());
+    expect(screen.queryByRole("button", { name: "Check in" })).toBeNull();
   });
 });

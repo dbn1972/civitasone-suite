@@ -21,6 +21,9 @@ const createBody = z.object({
   entityId: z.string().min(1).max(160).optional(),
 });
 
+/** Modules whose export carries personal data (salary, identity, employment). */
+const PERSONAL_DATA_MODULES = new Set(["payroll", "hrms"]);
+
 const idParam = z.object({ id: z.string().uuid() });
 
 function safeParse<T>(schema: z.ZodSchema<T>, data: unknown): T {
@@ -38,8 +41,11 @@ export async function dataExportRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, [...TENANT_ADMIN_ROLES]);
     const body = safeParse(createBody, req.body);
-    if (body.type === "full" && !body.purpose) {
-      throw new HttpError(400, "PURPOSE_REQUIRED", "purpose is required for a full export");
+    // GAP-TENANT-ADMIN-DATA-EXPORT-02: purpose is required wherever personal data
+    // leaves in bulk -- a full export, or a payroll / HRMS module export. The web
+    // dialog asks for the same; this is the authority.
+    if (!body.purpose && (body.type === "full" || (body.type === "module" && PERSONAL_DATA_MODULES.has(body.moduleFilter ?? "")))) {
+      throw new HttpError(400, "PURPOSE_REQUIRED", "purpose is required for a full export or a payroll/HRMS export");
     }
     if (body.type === "module" && !body.moduleFilter) {
       throw new HttpError(400, "MODULE_REQUIRED", "moduleFilter is required when type is 'module'");
