@@ -31,7 +31,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-HOME-03  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1869, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1869, verified on main 9c5e9e9e9; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** loading.tsx paints a stat-grid + table skeleton for a page that has neither (loading.tsx:7-12), so the hub flashes a wrong layout on navigation.
 - **Verified evidence:** projects/loading.tsx:7-12 renders four stat blocks and a large table block, but the hub (page.tsx, ModuleHub) is a header plus a 3-column LinkTiles grid. It also applies as fallback to child routes without their own loading.tsx (fund-releases and milestones have their own; new and [id]/members etc. rely on it).
 - **Files to change:** `apps/web/src/app/(app)/projects/loading.tsx`
@@ -301,7 +301,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-RISKS-05  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1869, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1869, verified on main 9c5e9e9e9; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** Loading uses the parent detail skeleton (no risks/loading.tsx), causing a layout jump.
 - **Verified evidence:** risks/ contains only page.tsx; [id]/loading.tsx:1-13 is the generic detail skeleton (Tailwind slate min-h-screen blocks) which is used for risks, tasks and members too. Also off the design system tokens.
 - **Files to change:** `apps/web/src/app/(app)/projects/[id]/risks/loading.tsx`, `apps/web/src/app/(app)/projects/[id]/tasks/loading.tsx`, `apps/web/src/app/(app)/projects/[id]/members/loading.tsx`
@@ -576,7 +576,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DELAY-ANALYSIS-04  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1869, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1869, verified on main 9c5e9e9e9; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** Loading is one bare .skeleton block (loading.tsx:4).
 - **Verified evidence:** delay-analysis/loading.tsx:1-7 renders one <div class='skeleton'> in .page-main.wrap; the page has PageHeader, 4-tile StatGrid and a table Card. Compare dashboard/loading.tsx (16 lines). error.tsx exists and is correct.
 - **Files to change:** `apps/web/src/app/(app)/projects/delay-analysis/loading.tsx`
@@ -632,7 +632,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DPR-TRACKING-04  ·  LOW  ·  partly  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1869, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1869, verified on main 9c5e9e9e9; W1 SF-11 #2025 re-confirmed only the loading-skeleton criterion, remaining criteria still PROVISIONAL)
 - **First-pass claim:** Loading is a single bare .skeleton block (loading.tsx:4); submitted date prints as delivered string.
 - **Verified evidence:** loading.tsx:3-5 is one bare .skeleton div, while the page renders header, 4 stat cards and a card table (page.tsx:19-37). Submitted date is a raw string column (DprTrackingTable.tsx:24, no render/formatIndianDate); estimatedCost is also a raw string with '(₹ Cr)' in the label. Error boundary already uses RouteError with retry+back (error.tsx:7-13), so that part of the suggested fix is done; its area 'Projects page' gives clipped copy (see HOME-04).
 - **Files to change:** `apps/web/src/app/(app)/projects/dpr-tracking/loading.tsx`, `apps/web/src/app/(app)/projects/dpr-tracking/DprTrackingTable.tsx`
@@ -702,7 +702,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-ESCALATIONS-04  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1869, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1869, verified on main 9c5e9e9e9; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** Loading is a single bare .skeleton block (loading.tsx:4).
 - **Verified evidence:** escalations/loading.tsx:3-5 is one bare .skeleton div versus header + 4 tiles + table on the page (page.tsx:19-37). error.tsx already has RouteError with retry and back link, so the rest of the suggested fix exists.
 - **Files to change:** `apps/web/src/app/(app)/projects/escalations/loading.tsx`
@@ -787,7 +787,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-FUND-RELEASES-05  ·  MEDIUM  ·  confirmed  ·  theme NAVUX
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1869, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1869, verified on main 9c5e9e9e9; W1 SF-11 #2025 re-confirmed only the loading-skeleton criterion, remaining criteria still PROVISIONAL)
 - **First-pass claim:** No back link in PageHeader (page.tsx:22-25), no project link per row, and RefreshErrorState has no backHref (page.tsx:35); loading shows 3 stat blocks for 4 tiles.
 - **Verified evidence:** page.tsx:22-25 PageHeader has no back prop; :35 RefreshErrorState has no backHref; FundReleasesTable.tsx:23-24 projectName is plain text with no link. loading.tsx:7-10 renders 3 blocks (md:grid-cols-3) while page has 4 StatCards (:27-30). No error.tsx exists in fund-releases (or milestones/list) so it inherits projects/error.tsx.
 - **Files to change:** `apps/web/src/app/(app)/projects/fund-releases/page.tsx`, `apps/web/src/app/(app)/projects/fund-releases/FundReleasesTable.tsx`, `apps/web/src/app/(app)/projects/fund-releases/loading.tsx`
@@ -1063,7 +1063,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-SCHEMES-03  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1869, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1869, verified on main 9c5e9e9e9; W1 SF-11 #2025 re-confirmed only the loading-skeleton criterion, remaining criteria still PROVISIONAL)
 - **First-pass claim:** Empty list shows ₹0.00 for both money tiles instead of “—” (page.tsx:15-16,36-37); loading.tsx omits stat placeholders so the page jumps (loading.tsx).
 - **Verified evidence:** schemes/page.tsx:15-16 reduce over [] gives 0 when not errored, so :36-37 render formatRupees(0) = '₹0.00' for an empty scheme list (only the errored branch shows '—'). schemes/loading.tsx:4-8 renders title bars and one h-80 block, no stat-card placeholders, and uses tailwind min-h-screen unlike sibling loading files.
 - **Files to change:** `apps/web/src/app/(app)/projects/schemes/page.tsx`, `apps/web/src/app/(app)/projects/schemes/loading.tsx`
@@ -1235,7 +1235,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-UTILIZATION-04  ·  LOW  ·  partly  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1869, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1869, verified on main 9c5e9e9e9; W1 SF-11 #2025 re-confirmed only the loading-skeleton criterion, remaining criteria still PROVISIONAL)
 - **First-pass claim:** loading.tsx and error.tsx exist for a page that can never suspend or throw; there is no empty state (utilization/loading.tsx, error.tsx).
 - **Verified evidence:** utilization/loading.tsx and error.tsx exist (error.tsx uses shared RouteError with backHref /projects, fine). The page is currently static so neither can trigger, and it has no empty state, true. Once wired to the API (-01) both become relevant; loading.tsx is a bare .skeleton block.
 - **Files to change:** `apps/web/src/app/(app)/projects/utilization/loading.tsx`
@@ -1301,7 +1301,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-WBS-05  ·  LOW  ·  confirmed  ·  theme STATUS
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1869, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1869, verified on main 9c5e9e9e9; W1 SF-11 #2025 re-confirmed only the loading-skeleton criterion, remaining criteria still PROVISIONAL)
 - **First-pass claim:** StatusPill maps “in progress” but not “in_progress” or “planned” (ds/StatusPill.tsx:6-38), so the same state shows different colours; loading is one bare .skeleton block.
 - **Verified evidence:** ds/StatusPill.tsx:6-38 map has 'in progress' (warn) but not 'in_progress' or 'planned' or 'delayed'; lookup is status.toLowerCase() only (:53), so 'in_progress'/'planned' fall to 'info'. Label goes through humanizeStatus so text is fine. wbs/loading.tsx is a single .skeleton block.
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/app/(app)/projects/wbs/loading.tsx`

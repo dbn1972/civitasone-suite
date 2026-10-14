@@ -31,7 +31,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-HOME-03  ·  MEDIUM  ·  partly  ·  theme EMPTYSTATE (was DEADROUTE)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9; W1 SF-11 #2025 re-confirmed only the loading-skeleton criterion, remaining criteria still PROVISIONAL)
 - **First-pass claim:** loading.tsx is a generic four-stat-and-block skeleton (loading.tsx:7-12) that does not match a tile hub; the not-found EmptyState has no link back (not-found.tsx:5-8).
 - **Verified evidence:** loading.tsx:7-12 is a generic skeleton (h-4, h-9, four h-24 stat blocks, one h-72 block) - accurate, mismatched with a tile hub (and with the list pages). not-found.tsx:5-8 renders EmptyState with title/message and no action/link - accurate. However there is no dead link or dead route here (theme DEADROUTE is wrong): all 11 hub hrefs have a page.tsx (subscriptions dir exists, others verified in tree).
 - **Files to change:** `apps/web/src/app/(app)/tenant/loading.tsx`, `apps/web/src/app/(app)/tenant/not-found.tsx`

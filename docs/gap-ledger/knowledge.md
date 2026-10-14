@@ -56,7 +56,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-HOME-05  ·  LOW  ·  confirmed  ·  theme LOADING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W1 SF-11: closed by #2025)
 - **First-pass claim:** loading.tsx uses hard-coded tailwind slate colours and min-h-screen inside the app shell (loading.tsx:3), which will not follow dark mode and can force double scrolling.
 - **Verified evidence:** loading.tsx:3 uses className 'min-h-screen bg-slate-50 p-6 md:p-8' and bg-slate-200 blocks; dark mode is the .dark class in civitas-ds.css so slate palette will not adapt, and min-h-screen inside the shell can create nested scroll. Same markup in list/loading.tsx:3 and about 120 other loading.tsx files under apps/web/src/app (grep 'min-h-screen bg-slate-50'). ds/Skeleton.tsx exists.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/loading.tsx`, `apps/web/src/app/(app)/knowledge/list/loading.tsx`, `apps/web/src/app/_components/ds/Skeleton.tsx`

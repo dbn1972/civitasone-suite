@@ -1563,7 +1563,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-05  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1867, verified on main 9c5e9e9e9; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** loading.tsx shows four stat blocks; the page renders five StatCards (execution/loading.tsx:5, page.tsx:43-49).
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/loading.tsx:5 maps [1,2,3,4] to four stat blocks while apps/web/src/app/(app)/works/execution/page.tsx:41-47 renders five StatCards (Progress Entries, On Track, Delayed, Completed, Open Issues). Causes layout shift on load.
 - **Files to change:** `apps/web/src/app/(app)/works/execution/loading.tsx`
