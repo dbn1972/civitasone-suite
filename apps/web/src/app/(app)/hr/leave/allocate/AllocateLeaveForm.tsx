@@ -241,7 +241,7 @@ export function AllocateLeaveForm() {
                 own page changes — until that merges this link still opens the
                 balance page, just without preselecting the employee yet. */}
             <div style={{ marginTop: 6 }}>
-              <Link href={`/hr/leave/balance?empId=${employeeId}`} style={{ color: "var(--primary-d)" }}>
+              <Link href={`/hr/leave/balance?empId=${encodeURIComponent(employeeId)}`} style={{ color: "var(--primary-d)" }}>
                 {t("viewFullBalanceLink")}
               </Link>
             </div>

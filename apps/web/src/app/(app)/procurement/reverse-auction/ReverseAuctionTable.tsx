@@ -106,7 +106,7 @@ export function ReverseAuctionTable({ auctions, source = "api" }: { auctions: Re
   const tableRows = useMemo<AuctionRow[]>(
     () =>
       rows.map((a) => {
-        let savings = "0";
+        let savings: string;
         try {
           const sav = BigInt(a.savingsMinor);
           savings = formatMoney(sav.toString());

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeHttpUrl } from "./safeUrl";
+import { safeHttpUrl, safeInternalPath } from "./safeUrl";
 
 describe("safeHttpUrl", () => {
   it("passes an https URL through", () => {
@@ -40,5 +40,20 @@ describe("safeHttpUrl", () => {
 
   it("rejects a javascript: URL with leading whitespace tricks", () => {
     expect(safeHttpUrl("  javascript:alert(1)")).toBeNull();
+  });
+});
+
+describe("safeInternalPath", () => {
+  it("keeps same-origin paths with query and hash", () => {
+    expect(safeInternalPath("/hr/leave/balance?empId=e-1#top")).toBe("/hr/leave/balance?empId=e-1#top");
+    expect(safeInternalPath("/finance")).toBe("/finance");
+  });
+  it("rejects anything that could leave the app or run script", () => {
+    for (const bad of ["//evil.example/x", "/\\evil.example", "javascript:alert(1)", "data:text/html,x", "https://x.gov.in/a", "hr/relative", "", null, undefined]) {
+      expect(safeInternalPath(bad as string)).toBe("/");
+    }
+  });
+  it("uses the caller fallback", () => {
+    expect(safeInternalPath("javascript:x", "/hr")).toBe("/hr");
   });
 });

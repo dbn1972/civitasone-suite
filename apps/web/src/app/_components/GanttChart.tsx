@@ -54,7 +54,6 @@ export function GanttChart({ tasks, startDate, endDate }: GanttChartProps) {
   const ROW_HEIGHT = 36;
   const HEADER_HEIGHT = 28;
   const LEFT_WIDTH = 160;
-  const chartHeight = tasks.length * ROW_HEIGHT + HEADER_HEIGHT + 8;
 
   return (
     <div style={{ width: "100%", overflowX: "auto" }}>
