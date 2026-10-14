@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog, Field, Input, Select } from "../../../../_components/ds";
 import { EmployeePicker } from "../../../../_components/EmployeePicker";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
@@ -22,11 +22,11 @@ type BasicLookup = {
   rule: { wageCeilingMinor: string | null; eligibilityCeilingMinor: string | null } | null;
 };
 
-const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
 
 export function ComputeBonusForm() {
   const t = useTranslations("computeBonusForm");
   const tFallback = useTranslations("employeeFallback");
+  const tv = useTranslations("hrFormErrors2");
   const router = useRouter();
   // GAP-PAYROLL-BONUS-03: the FY is a closed set of well-formed labels
   // (current + 4 previous) -- a free-text "2025-27" can no longer be typed.
@@ -171,10 +171,7 @@ export function ComputeBonusForm() {
       <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("employeeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
+            <Field id={empId} label={t("employeeLabel")} required>
               {/* GAP-PAYROLL-BONUS-01: pick by name/code -- no free-text UUID. */}
               <EmployeePicker
                 id={empId}
@@ -182,58 +179,30 @@ export function ComputeBonusForm() {
                 onChange={(id, option) => { setEmployeeId(id); setEmployeeName(option?.label ?? null); }}
                 clearable
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("financialYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <select
-                id={fyId}
-                ref={fyRef}
-                value={fy}
-                onChange={(e) => setFy(e.target.value)}
-                aria-required="true"
-                aria-invalid={isInvalid("fy") || undefined}
-                aria-describedby={isInvalid("fy") ? errId : undefined}
-                style={inputStyle}
-              >
+            </Field>
+            <Field id={fyId} label={t("financialYearLabel")} required error={isInvalid("fy") ? tv("invalidValue") : undefined}>
+              <Select ref={fyRef} value={fy} onChange={(e) => setFy(e.target.value)}>
                 {fyOptions.map((o) => (
                   <option key={o} value={o}>{o}</option>
                 ))}
-              </select>
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={basicId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("basicSalaryLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={basicId}
+              </Select>
+            </Field>
+            <Field id={basicId} label={t("basicSalaryLabel")} required error={isInvalid("basic") ? tv("fieldRequired") : undefined}>
+              <Input
                 ref={basicRef}
                 inputMode="decimal"
                 value={basic}
                 onChange={(e) => setBasic(e.target.value)}
-                aria-required="true"
-                aria-invalid={isInvalid("basic") || undefined}
-                aria-describedby={isInvalid("basic") ? errId : undefined}
-                style={inputStyle}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={pctId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("bonusPctLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={pctId}
+            </Field>
+            <Field id={pctId} label={t("bonusPctLabel")} required error={isInvalid("bonusPct") ? tv("invalidValue") : undefined}>
+              <Input
                 ref={pctRef}
                 inputMode="decimal"
                 value={bonusPct}
                 onChange={(e) => setBonusPct(e.target.value)}
-                aria-required="true"
-                aria-invalid={isInvalid("bonusPct") || undefined}
-                aria-describedby={isInvalid("bonusPct") ? errId : undefined}
-                style={inputStyle}
               />
-            </div>
+            </Field>
           </div>
 
           <p style={{ fontSize: 12, color: "var(--ink2)", margin: 0 }}>
@@ -244,10 +213,13 @@ export function ComputeBonusForm() {
             <p style={{ fontSize: 12, color: "var(--ink2)", margin: 0 }}>{t("wageCeilingText", { amount: formatMoney(wageCeilingMinor) })}</p>
           )}
           {basicOverridden && (
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={overrideId} style={{ fontSize: 13, fontWeight: 600 }}>{t("overrideReasonLabel")}</label>
-              <input id={overrideId} value={overrideReason} maxLength={256} onChange={(e) => setOverrideReason(e.target.value)} style={inputStyle} />
-            </div>
+            <Field id={overrideId} label={t("overrideReasonLabel")}>
+              <Input
+                value={overrideReason}
+                maxLength={256}
+                onChange={(e) => setOverrideReason(e.target.value)}
+              />
+            </Field>
           )}
 
           {previewAmountMinor !== null && (

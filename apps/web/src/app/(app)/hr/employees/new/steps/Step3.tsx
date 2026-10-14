@@ -9,7 +9,7 @@ import {
   fieldWrap,
   grid2,
 } from "../wizardTypes";
-import { Field, EntityPicker } from "@/app/_components/ds";
+import { Field, EntityPicker, Input, Select } from "@/app/_components/ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { searchCostCenters, resolveCostCenters } from "@/lib/entityAdapters/costCenter";
 import { searchLocations, resolveLocations } from "@/lib/entityAdapters/location";
@@ -80,33 +80,29 @@ export function Step3({ data, errors: _errors, onChange, onBlur: _onBlur }: Prop
             searchingText={t("pickerSearching")}
             noResultsText={t("pickerNoResults")}
           />
-          <label htmlFor="w-location-text" style={{ ...labelStyle, fontWeight: 400, fontSize: 12 }}>{t("workLocationOtherLabel")}</label>
-          <input
-            id="w-location-text"
-            type="text"
-            value={data.locationId ? "" : data.workLocation}
-            disabled={!!data.locationId}
-            onChange={(e) => onChange("workLocation", e.target.value)}
-            placeholder={t("workLocationOtherPlaceholder")}
-            style={inputStyle}
-          />
+          <Field id="w-location-text" label={t("workLocationOtherLabel")}>
+            <Input
+              type="text"
+              value={data.locationId ? "" : data.workLocation}
+              disabled={!!data.locationId}
+              onChange={(e) => onChange("workLocation", e.target.value)}
+              placeholder={t("workLocationOtherPlaceholder")}
+            />
+          </Field>
         </div>
 
         {/* Shift */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-shift" style={labelStyle}>{t("shiftLabel")}</label>
-          <select
-            id="w-shift"
+        <Field id="w-shift" label={t("shiftLabel")} style={fieldWrap}>
+          <Select
             value={data.shift}
             onChange={(e) => onChange("shift", e.target.value as WizardData["shift"])}
-            style={inputStyle}
           >
             <option value="">{t("selectShift")}</option>
             {SHIFTS.map(({ value, label }) => (
               <option key={value} value={value}>{label}</option>
             ))}
-          </select>
-        </div>
+          </Select>
+        </Field>
 
         {/* State of employment (professional tax) */}
         <div style={fieldWrap}>

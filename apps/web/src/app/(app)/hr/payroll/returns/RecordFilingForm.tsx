@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, ConfirmDialog } from "../../../../_components/ds";
+import { Button, ConfirmDialog, Field, Input } from "../../../../_components/ds";
 import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { formatIndianDate } from "@/lib/formatters";
 
@@ -32,6 +32,7 @@ type Props = {
  */
 export function RecordFilingForm({ fy, quarter, currentRevision }: Props) {
   const t = useTranslations("recordFilingForm");
+  const tv = useTranslations("hrFormErrors2");
   const router = useRouter();
   const [filedOn, setFiledOn] = useState("");
   const [receiptNo, setReceiptNo] = useState("");
@@ -92,45 +93,31 @@ export function RecordFilingForm({ fy, quarter, currentRevision }: Props) {
     }
   }
 
-  const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
   return (
     <form onSubmit={openConfirm} noValidate style={{ marginTop: 14 }} aria-label={revision === 0 ? t("title") : t("titleCorrection", { revision })}>
       <h3 style={{ fontSize: 14, margin: "0 0 4px" }}>{revision === 0 ? t("title") : t("titleCorrection", { revision })}</h3>
       <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--ink2)" }}>{t("help")}</p>
       <div style={{ display: "grid", gap: 12, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
-        <div style={{ display: "grid", gap: 6 }}>
-          <label htmlFor={dateField} style={{ fontSize: 13, fontWeight: 600 }}>{t("filedOnLabel")} <span aria-hidden="true">*</span></label>
-          <input
-            id={dateField}
+        <Field id={dateField} label={t("filedOnLabel")} required error={invalid.filedOn ? tv("invalidValue") : undefined}>
+          <Input
             type="date"
             max={today}
             value={filedOn}
             onChange={(e) => { setFiledOn(e.target.value); setInvalid((p) => ({ ...p, filedOn: false })); }}
-            aria-required="true"
-            aria-invalid={invalid.filedOn || undefined}
-            aria-describedby={invalid.filedOn ? errId : undefined}
-            style={inputStyle}
           />
-        </div>
-        <div style={{ display: "grid", gap: 6 }}>
-          <label htmlFor={receiptField} style={{ fontSize: 13, fontWeight: 600 }}>{t("receiptLabel")} <span aria-hidden="true">*</span></label>
-          <input
-            id={receiptField}
+        </Field>
+        <Field id={receiptField} label={t("receiptLabel")} required error={invalid.receiptNo ? tv("fieldRequired") : undefined}>
+          <Input
             inputMode="numeric"
             maxLength={15}
             autoComplete="off"
             value={receiptNo}
             onChange={(e) => { setReceiptNo(e.target.value.replace(/\s/g, "")); setInvalid((p) => ({ ...p, receiptNo: false })); }}
-            aria-required="true"
-            aria-invalid={invalid.receiptNo || undefined}
-            aria-describedby={invalid.receiptNo ? errId : undefined}
-            style={inputStyle}
           />
-        </div>
-        <div style={{ display: "grid", gap: 6 }}>
-          <label htmlFor={noteField} style={{ fontSize: 13, fontWeight: 600 }}>{t("noteLabel")}</label>
-          <input id={noteField} maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} style={inputStyle} />
-        </div>
+        </Field>
+        <Field id={noteField} label={t("noteLabel")}>
+          <Input maxLength={500} value={note} onChange={(e) => setNote(e.target.value)} />
+        </Field>
       </div>
       <div style={{ marginTop: 12 }}>
         <Button type="submit" disabled={busy} style={{ minHeight: 44 }}>{t("saveBtn")}</Button>

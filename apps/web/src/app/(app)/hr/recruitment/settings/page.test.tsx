@@ -36,9 +36,12 @@ describe("Recruitment settings page", () => {
   it("rejects an emblem that is not https before sending anything", async () => {
     const calls = stub();
     renderPage();
-    fireEvent.change(await screen.findByLabelText(/emblem/i), { target: { value: "javascript:alert(1)" } });
+    const emblem = await screen.findByLabelText(/emblem/i);
+    fireEvent.change(emblem, { target: { value: "javascript:alert(1)" } });
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
-    expect(await screen.findByRole("alert")).toHaveTextContent(/https/i);
+    // ds Field wires the inline error to the control: aria-invalid + aria-describedby -> the message.
+    await waitFor(() => expect(emblem).toHaveAttribute("aria-invalid", "true"));
+    expect(document.getElementById(emblem.getAttribute("aria-describedby") ?? "")).toHaveTextContent(/https/i);
     expect(calls).toHaveLength(0);
   });
 

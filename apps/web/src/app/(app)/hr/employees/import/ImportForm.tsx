@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
-import { Button } from "../../../../_components/ds";
+import { Button, Field, Input } from "../../../../_components/ds";
 import { downloadCsvFile } from "@/lib/export/csvExport";
 
 type Row = Record<string, string> & { lineNo: number };
@@ -306,14 +306,10 @@ export function ImportForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <div style={{ display: "grid", gap: 6, marginBottom: 12 }}>
-        <label htmlFor="import-csv-file" style={{ fontSize: 13, fontWeight: 500, color: "var(--fg, #0f172a)" }}>
-          {t("fileLabel")} <span style={{ color: "var(--bad, #ef4444)" }}>*</span>
-        </label>
-        <input
+    <form noValidate onSubmit={handleSubmit}>
+      <Field id="import-csv-file" label={t("fileLabel")} required style={{ marginBottom: 12 }}>
+        <Input
           ref={fileRef}
-          id="import-csv-file"
           type="file"
           accept=".csv,text/csv"
           aria-describedby="import-csv-hint"
@@ -324,7 +320,7 @@ export function ImportForm() {
         <p style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: 0 }}>
           {t("optionalColumnsHint", { columns: OPTIONAL_COLUMNS.join(", ") })}
         </p>
-      </div>
+      </Field>
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         <Button type="submit" variant="primary" disabled={status === "uploading"} style={{ minHeight: 44 }}>
           {status === "uploading" ? t("importingProgress", { success: progress.success, total: progress.total }) : t("uploadBtn")}

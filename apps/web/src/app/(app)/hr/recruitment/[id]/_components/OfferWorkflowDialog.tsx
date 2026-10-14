@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Modal, Button, StatusPill } from "@/app/_components/ds";
+import { Modal, Button, StatusPill, Field, Input } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate, formatShortId } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
 import { useSessionIdentity } from "@/lib/auth/useSessionIdentity";
@@ -12,7 +12,6 @@ import {
 } from "./offerWorkflow";
 
 const inputClass = "w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500";
-const labelClass = "block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1";
 /** Writes are queued (202); re-read once more shortly after the first re-read. */
 const REREAD_MS = 1200;
 
@@ -31,6 +30,7 @@ type Props = {
  */
 export function OfferWorkflowDialog({ applicationId, applicantName, onClose, onChanged }: Props) {
   const t = useTranslations("recruitmentFinish");
+  const tv = useTranslations("hrFormErrors2");
   const formError = useFormError("offer");
   const who = useSessionIdentity();
   const uid = useId();
@@ -158,10 +158,14 @@ export function OfferWorkflowDialog({ applicationId, applicantName, onClose, onC
             {acts.approveBlockedReason === "creator" && <p className="text-xs text-slate-600 dark:text-slate-300">{t("offerYouCreatedThis")}</p>}
             {acts.approveBlockedReason === "role" && acts.awaitingRole && <p className="text-xs text-slate-600 dark:text-slate-300">{t("offerNeedsRole", { role: acts.awaitingRole })}</p>}
             {(acts.canApprove || acts.canReturn) && (
-              <div>
-                <label htmlFor={`${uid}-comments`} className={labelClass}>{t("offerComments")}</label>
-                <input id={`${uid}-comments`} className={inputClass} maxLength={2000} value={comments} onChange={(e) => setComments(e.target.value)} />
-              </div>
+              <Field id={`${uid}-comments`} label={t("offerComments")}>
+                <Input
+                  className={inputClass}
+                  maxLength={2000}
+                  value={comments}
+                  onChange={(e) => setComments(e.target.value)}
+                />
+              </Field>
             )}
             <div className="flex flex-wrap gap-2">
               {acts.canSubmit && <Button disabled={busy} onClick={() => void post(`/v1/hrms/offers/${active.id}/submit`, {}, t("offerSubmitted"))}>{t("offerSubmit")}</Button>}
@@ -176,42 +180,86 @@ export function OfferWorkflowDialog({ applicationId, applicantName, onClose, onC
         {offers && !active && (
           <form onSubmit={createDraft} className="grid grid-cols-2 gap-3" aria-label={t("offerCreate")}>
             <div className="col-span-2 grid grid-cols-3 gap-3">
-              <div>
-                <label htmlFor={`${uid}-level`} className={labelClass}>{t("offerPayLevel")}</label>
-                <input id={`${uid}-level`} type="number" min={1} max={18} inputMode="numeric" className={inputClass} value={form.payLevel} onChange={set("payLevel")} />
-              </div>
-              <div>
-                <label htmlFor={`${uid}-cell`} className={labelClass}>{t("offerPayCell")}</label>
-                <input id={`${uid}-cell`} type="number" min={1} max={40} inputMode="numeric" className={inputClass} value={form.payCell} onChange={set("payCell")} />
-              </div>
+              <Field id={`${uid}-level`} label={t("offerPayLevel")}>
+                <Input
+                  type="number"
+                  min={1}
+                  max={18}
+                  inputMode="numeric"
+                  className={inputClass}
+                  value={form.payLevel}
+                  onChange={set("payLevel")}
+                />
+              </Field>
+              <Field id={`${uid}-cell`} label={t("offerPayCell")}>
+                <Input
+                  type="number"
+                  min={1}
+                  max={40}
+                  inputMode="numeric"
+                  className={inputClass}
+                  value={form.payCell}
+                  onChange={set("payCell")}
+                />
+              </Field>
               <div className="flex items-end">
                 <Button type="button" variant="secondary" onClick={() => void lookupMatrixBasic()}>{t("offerUseMatrix")}</Button>
               </div>
             </div>
-            <div className="col-span-2">
-              <label htmlFor={`${uid}-basic`} className={labelClass}>{t("offerBasic")}</label>
-              <input id={`${uid}-basic`} type="text" inputMode="decimal" className={inputClass} placeholder={t("offerAmountPlaceholder")} value={form.basic} onChange={set("basic")} required aria-invalid={formErr === "basic"} />
-            </div>
-            <div>
-              <label htmlFor={`${uid}-bonus`} className={labelClass}>{t("offerJoiningBonus")}</label>
-              <input id={`${uid}-bonus`} type="text" inputMode="decimal" className={inputClass} value={form.joiningBonus} onChange={set("joiningBonus")} />
-            </div>
-            <div>
-              <label htmlFor={`${uid}-reloc`} className={labelClass}>{t("offerRelocation")}</label>
-              <input id={`${uid}-reloc`} type="text" inputMode="decimal" className={inputClass} value={form.relocation} onChange={set("relocation")} />
-            </div>
-            <div>
-              <label htmlFor={`${uid}-var`} className={labelClass}>{t("offerVariable")}</label>
-              <input id={`${uid}-var`} type="text" inputMode="decimal" className={inputClass} value={form.variablePay} onChange={set("variablePay")} />
-            </div>
-            <div>
-              <label htmlFor={`${uid}-grade`} className={labelClass}>{t("offerGrade")}</label>
-              <input id={`${uid}-grade`} type="text" maxLength={48} className={inputClass} value={form.grade} onChange={set("grade")} />
-            </div>
-            <div className="col-span-2">
-              <label htmlFor={`${uid}-joining`} className={labelClass}>{t("offerJoiningDate")}</label>
-              <input id={`${uid}-joining`} type="date" className={inputClass} value={form.joiningDate} onChange={set("joiningDate")} />
-            </div>
+            <Field id={`${uid}-basic`} label={t("offerBasic")} required error={(formErr === "basic") ? tv("invalidValue") : undefined} className="col-span-2">
+              <Input
+                type="text"
+                inputMode="decimal"
+                className={inputClass}
+                placeholder={t("offerAmountPlaceholder")}
+                value={form.basic}
+                onChange={set("basic")}
+              />
+            </Field>
+            <Field id={`${uid}-bonus`} label={t("offerJoiningBonus")}>
+              <Input
+                type="text"
+                inputMode="decimal"
+                className={inputClass}
+                value={form.joiningBonus}
+                onChange={set("joiningBonus")}
+              />
+            </Field>
+            <Field id={`${uid}-reloc`} label={t("offerRelocation")}>
+              <Input
+                type="text"
+                inputMode="decimal"
+                className={inputClass}
+                value={form.relocation}
+                onChange={set("relocation")}
+              />
+            </Field>
+            <Field id={`${uid}-var`} label={t("offerVariable")}>
+              <Input
+                type="text"
+                inputMode="decimal"
+                className={inputClass}
+                value={form.variablePay}
+                onChange={set("variablePay")}
+              />
+            </Field>
+            <Field id={`${uid}-grade`} label={t("offerGrade")}>
+              <Input
+                type="text"
+                maxLength={48}
+                className={inputClass}
+                value={form.grade}
+                onChange={set("grade")}
+              />
+            </Field>
+            <Field id={`${uid}-joining`} label={t("offerJoiningDate")} className="col-span-2">
+              <Input
+                type="date"
+                className={inputClass}
+                value={form.joiningDate}
+                onChange={set("joiningDate")}
+              />
+            </Field>
             {errText && <p role="alert" className="col-span-2 text-xs text-red-600">{errText}</p>}
             <div className="col-span-2 flex justify-end">
               <Button type="submit" disabled={busy}>{busy ? t("saving") : t("offerCreate")}</Button>

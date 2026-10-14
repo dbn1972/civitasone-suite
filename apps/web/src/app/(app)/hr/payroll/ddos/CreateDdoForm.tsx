@@ -4,8 +4,10 @@ import { useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog, EntityPicker, type EntityOption } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog, EntityPicker, type EntityOption, Field, Input } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { translateHrErrors } from "../../_components/translateHrErrors";
+import { validateDdo, type DdoErrors } from "./ddoSchema";
 import { DDO_CODE_RE, departmentLabel, diffDdoMapping, isUuid, type DdoRecord, type DepartmentOption } from "./ddoData";
 
 type Props = {
@@ -20,6 +22,7 @@ type Props = {
 
 export function CreateDdoForm({ existing, departments, departmentsAvailable, editing }: Props) {
   const t = useTranslations("createDdoForm");
+  const tv = useTranslations("hrFormErrors2");
   const router = useRouter();
   const [ddoCode, setDdoCode] = useState(editing?.ddoCode ?? "");
   const [name, setName] = useState(editing?.name ?? "");
@@ -28,8 +31,7 @@ export function CreateDdoForm({ existing, departments, departmentsAvailable, edi
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
-  const [codeInvalid, setCodeInvalid] = useState(false);
-  const [nameInvalid, setNameInvalid] = useState(false);
+  const [errors, setErrors] = useState<DdoErrors>({});
 
   const codeField = useId();
   const nameField = useId();
@@ -61,8 +63,7 @@ export function CreateDdoForm({ existing, departments, departmentsAvailable, edi
     const codeMissing = !code;
     const codeMalformed = !codeMissing && !DDO_CODE_RE.test(code);
     const nameMissing = !name.trim();
-    setCodeInvalid(codeMissing || codeMalformed);
-    setNameInvalid(nameMissing);
+    setErrors(translateHrErrors(validateDdo({ ddoCode: code, name }, DDO_CODE_RE), tv));
     if (codeMissing || nameMissing) {
       setError(t("codeNameRequiredError"));
       if (codeMissing) codeRef.current?.focus();
@@ -109,7 +110,6 @@ export function CreateDdoForm({ existing, departments, departmentsAvailable, edi
     }
   }
 
-  const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
   const listOrNone = (ids: string[]) => (ids.length ? ids.map(label).join(", ") : t("diffNone"));
 
   return (
@@ -119,41 +119,24 @@ export function CreateDdoForm({ existing, departments, departmentsAvailable, edi
           <p role="alert" className="pill warn" style={{ width: "fit-content", marginTop: 0 }}>{t("departmentsUnavailable")}</p>
         )}
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={codeField} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("ddoCodeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-            </label>
-            <input
-              id={codeField}
+          <Field id={codeField} label={t("ddoCodeLabel")} required error={errors.ddoCode}>
+            <Input
               ref={codeRef}
               value={ddoCode}
-              onChange={(e) => { setDdoCode(e.target.value); setCodeInvalid(false); }}
+              onChange={(e) => { setDdoCode(e.target.value); setErrors((p) => ({ ...p, ddoCode: undefined })); }}
               readOnly={!!editing}
               maxLength={32}
-              aria-required="true"
-              aria-invalid={codeInvalid || undefined}
-              aria-describedby={codeInvalid ? errId : undefined}
-              style={inputStyle}
             />
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={nameField} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("nameLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-            </label>
-            <input
-              id={nameField}
+          </Field>
+          <Field id={nameField} label={t("nameLabel")} required error={errors.name}>
+            <Input
               ref={nameRef}
               value={name}
-              onChange={(e) => { setName(e.target.value); setNameInvalid(false); }}
+              onChange={(e) => { setName(e.target.value); setErrors((p) => ({ ...p, name: undefined })); }}
               maxLength={200}
-              aria-required="true"
-              aria-invalid={nameInvalid || undefined}
-              aria-describedby={nameInvalid ? errId : undefined}
-              style={inputStyle}
             />
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={deptField} style={{ fontSize: 13, fontWeight: 600 }}>{t("departmentsLabel")}</label>
+          </Field>
+          <Field id={deptField} label={t("departmentsLabel")}>
             <EntityPicker
               id={deptField}
               multiple
@@ -167,7 +150,7 @@ export function CreateDdoForm({ existing, departments, departmentsAvailable, edi
               noResultsText={t("departmentsNoResults")}
               removeOptionAriaLabel={(l) => t("removeDepartment", { name: l })}
             />
-          </div>
+          </Field>
         </div>
         <div style={{ marginTop: 14, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Modal, Button, StatusPill } from "@/app/_components/ds";
+import { Modal, Button, StatusPill, Field, Input } from "@/app/_components/ds";
 import { formatMoney, formatIndianDateTime } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
 
@@ -18,8 +18,6 @@ type Fee = {
 };
 
 type Load = { kind: "loading" } | { kind: "none" } | { kind: "error" } | { kind: "ready"; fee: Fee };
-
-const inputClass = "w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500";
 
 /**
  * GAP-RECRUITMENT-DETAIL-13 (application fee status): shows the fee assessed for one application and
@@ -112,11 +110,13 @@ export function ApplicationFeeDialog({ applicationId, applicantName, onClose }: 
             </div>
             {load.fee.status === "pending" && (
               <form
+                noValidate
                 className="flex flex-col gap-2"
                 onSubmit={(e) => { e.preventDefault(); if (paymentRef.trim()) void send("pay", { mode: "manual", paymentRef: paymentRef.trim() }, t("feePaymentRecorded")); }}
               >
-                <label htmlFor={`${uid}-ref`} className="block text-xs font-semibold text-slate-600 dark:text-slate-300">{t("feePaymentRef")}</label>
-                <input id={`${uid}-ref`} className={inputClass} maxLength={128} value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} placeholder={t("feePaymentRefPlaceholder")} required />
+                <Field id={`${uid}-ref`} label={t("feePaymentRef")} required>
+                  <Input maxLength={128} value={paymentRef} onChange={(e) => setPaymentRef(e.target.value)} placeholder={t("feePaymentRefPlaceholder")} />
+                </Field>
                 <p className="text-[11px] text-slate-500">{t("feeOfflineNote")}</p>
                 <div className="flex justify-end">
                   <Button type="submit" disabled={busy || paymentRef.trim() === ""}>{t("feeRecordPayment")}</Button>
