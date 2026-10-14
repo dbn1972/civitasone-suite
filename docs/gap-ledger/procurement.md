@@ -306,6 +306,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-BID-EVALUATION-04  ·  MEDIUM  ·  confirmed  ·  theme MISSING-ACTION (was DEADROUTE)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** Re-verified on main: scores 2dp right-aligned, L1 and tie badges present (BidEvaluationTable.tsx). Still open: technical threshold / weightage marking needs the API to return them, and the award / recommend action needs an owner decision (SoD + audit). No UI added without an API.
 - **W0 note:** partly fixed by #1866 — scores formatted 2dp right-aligned, L1 and tie badges; no threshold/weightage marking and no recommend/award action (needs API)
 - **First-pass claim:** Scores print as String(number) with no decimals, weightage or pass/fail threshold (Table:34-36); rank is a bare number with no tie or L1 cue; there is no action to recommend or award — status is read-only (Table:67-75).
 - **Verified evidence:** BidEvaluationTable.tsx:67-70 (obs said 34-36) turns scores into String(number); no decimals, weights or threshold; rank is String(e.rank) (l.70); status column cellType 'status' (l.107) is read-only and there is no action/recommend/award control on the page.
@@ -343,7 +344,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-CONTRACTS-01  ·  HIGH  ·  confirmed  ·  theme ID-DISPLAY (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: contracts/page.test.tsx: resolves vendorId to the vendor name, unknown vendorId shows a friendly fallback)
 - **First-pass claim:** "Vendor / Counter-party" shows a raw vendor id: the loader maps sublabel = row.vendorId (loaders.ts:1753) and the column prints it (page.tsx:71). Clerks see ids like vnd_0142, not supplier names.
 - **Verified evidence:** loaders.ts:1753 `const sublabel = toText(row.vendorId)` in mapContractsListRows (comment above says vendor name is not available from the contract API); contracts/page.tsx:71 prints it under 'Vendor / Counter-party', so raw ids show. Shared with /contracts/list. Whether GET /contract/contracts can return a vendor name is cannot-verify (contract-service absent).
 - **Files to change:** `apps/web/src/app/(app)/procurement/contracts/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -359,7 +360,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-CONTRACTS-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: contracts/page.test.tsx: no Templates dead-end link remains)
 - **First-pass claim:** "Templates" links to /procurement/contracts/new?template=1 (page.tsx:37) but NewContractPage takes no searchParams and CreateContractForm never reads it (contracts/new/page.tsx:4-13), so the button opens the plain form and no template exists.
 - **Verified evidence:** contracts/page.tsx:37 links '?template=1'; contracts/new/page.tsx:4-13 has no searchParams and CreateContractForm.tsx has no props, so the param is dropped. No template concept exists in the form.
 - **Files to change:** `apps/web/src/app/(app)/procurement/contracts/page.tsx`
@@ -373,7 +374,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-CONTRACTS-03  ·  MEDIUM  ·  partly  ·  theme MISSING-FEATURE (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2041)
 - **W0 note:** partly fixed by #1866 — rowLinkKey/rowLinkPrefix link rows to /contracts/[id]; procurement list still lacks Expiry/Value columns and Expiring card link
 - **First-pass claim:** "Expiring Soon" is a count with no expiry date, value or renewal action: the list has no Expiry / Value columns and rows are not links (page.tsx:69-74, no rowLinkKey); getContractById exists in the loader (loaders.ts:1775) but no route consumes it.
 - **Verified evidence:** True: contracts/page.tsx:69-79 has columns label/sublabel/meta/status only, no Expiry or Value, and DataTable is given no rowLinkKey/rowLinkPrefix (DataTable.tsx:58-59,212 support them); mapContractsListRows (loaders.ts:1740-1760) drops expiry/value. Wrong: getContractById IS consumed, by apps/web/src/app/(app)/contracts/[id]/page.tsx:6,17 (detail route is /contracts/[id], not under /procurement). So rows could link there. 'expiring' is a server-supplied status string (page.tsx:19).
@@ -391,7 +392,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-CONTRACTS-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: contracts/page.test.tsx: failed load shows dashes and a retry error state)
 - **First-pass claim:** Failed fetch: ErrorState is shown but the stats read 0 / 0 / 0 / 0 (page.tsx:44-52), unlike the dashboard which shows "—".
 - **Verified evidence:** contracts/page.tsx:45-48 pass contracts.length/active/expiring/expired to StatCard unconditionally; on source==='error' data is [] so all show 0 while the card body shows ErrorState (line 54). The dashboard gates with `errored ? "—"` (dashboard/page.tsx:24,42-45). Note line 54 uses plain ErrorState (a client component with no working retry from a server page); RefreshErrorState exists at app/_components/ds/RefreshErrorState.tsx.
 - **Files to change:** `apps/web/src/app/(app)/procurement/contracts/page.tsx`
@@ -413,7 +414,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-CONTRACTS-NEW-01  ·  HIGH  ·  confirmed  ·  theme FORM-DEFAULT (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: CreateContractForm.test.tsx: no vendor pre-selected, submit blocked with no POST (against the server-search combobox))
 - **First-pass claim:** Wrong vendor by default: the first fetched vendor is auto-selected (Form:35 setVendorId(clean[0].id)) and the field is labelled required but is never blank, so a hurried clerk can register a contract against an unintended vendor.
 - **Verified evidence:** apps/web/src/app/(app)/procurement/contracts/new/CreateContractForm.tsx:35 does `if (clean[0]?.id) setVendorId(clean[0].id)` after the vendor fetch, so the required select (line 91) is never blank and submit check `!vendorId` (line 47) can never fire. The observation's fix text (i18n) does not match the finding. Page subtitle (new/page.tsx:9) says 'empanelled vendor' but the fetch (line 29) lists all vendors.
 - **Files to change:** `apps/web/src/app/(app)/procurement/contracts/new/CreateContractForm.tsx`
@@ -430,7 +431,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-CONTRACTS-NEW-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: CreateContractForm.test.tsx: vendor-search failure shows error + Try again and keeps submit disabled; Retry restores the options and enables submit)
 - **First-pass claim:** Vendor list failure is silent: the catch is "/* optional */" (Form:36-39), so the select shows "Loading vendors…" indefinitely (Form:92) and submit fails with a generic required-fields message.
 - **Verified evidence:** CreateContractForm.tsx:30 returns silently on !res.ok and lines 36-39 swallow other errors with `/* optional */`; vendors stays [] so the select shows 'Loading vendors…' (line 92) forever. Submit then fails with the generic required-fields text (line 49) because vendorId is empty.
 - **Files to change:** `apps/web/src/app/(app)/procurement/contracts/new/CreateContractForm.tsx`
@@ -446,7 +447,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-CONTRACTS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION (was CAP)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: CreateContractForm.test.tsx: expiry before start blocked with no fetch; 409 shows the inline duplicate error)
 - **First-pass claim:** Dates unchecked: only presence is validated (Form:47) — an expiry before the start date is accepted client-side; there is no duplicate contract-number feedback and contract no is free text.
 - **Verified evidence:** CreateContractForm.tsx:47 validates only presence (`!expiry`) and value>0; nothing compares expiry to startDate (state lines 19-20), so expiry < start posts. contractNo is a plain input (line 98) with no format/uniqueness handling; non-ok POST is mapped to generic toHumanError('save') (lines 70-74) with no 409/duplicate branch. Whether contract-service rejects duplicates or bad date ranges is cannot-verify (service absent from snapshot).
 - **Files to change:** `apps/web/src/app/(app)/procurement/contracts/new/CreateContractForm.tsx`
@@ -462,7 +463,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-CONTRACTS-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: contracts/page.test.tsx: no template=1 link)
 - **First-pass claim:** Entry point mismatch: /contracts "Templates" links here with ?template=1 (contracts/page.tsx:37) but this page ignores it (page.tsx:4-13).
 - **Verified evidence:** contracts/page.tsx:37 links to /procurement/contracts/new?template=1; contracts/new/page.tsx:4 `NewContractPage()` takes no searchParams and CreateContractForm takes no props, so the flag is ignored and no template data exists anywhere in the module.
 - **Files to change:** `apps/web/src/app/(app)/procurement/contracts/page.tsx`
@@ -478,7 +479,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-CONTRACTS-NEW-05  ·  LOW  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2041)
 - **W0 note:** partly fixed by #1866 — value is string via rupeesToMinorString, no 0 hint; vendor cap raised to 500 but still plain select, no SmartCombobox search
 - **First-pass claim:** Contract value defaults to 0 and the hint shows ₹0.00 before any input (Form:18,107); dropdown is capped at 100 vendors (Form:29) with no search.
 - **Verified evidence:** CreateContractForm.tsx:18 `useState(0)` so the hint (line 107) renders formatMoney(0) before input. Money uses float math `Math.round(value * 100)` at lines 46 and 107 (Number(e.target.value) at 106), against the paise rule; lib/money.ts already provides rupeesToMinorString (exact string->paise). Vendor fetch caps `?limit=100` (line 29) and the select is a plain <select> with no search; SmartCombobox exists in app/_components.
@@ -503,7 +504,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-DASHBOARD-01  ·  MEDIUM  ·  partly  ·  theme RESPONSIVE (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: dashboard/page.tsx has no inline gridTemplateColumns (grep clean); tiles render via LinkTiles columns=four)
 - **First-pass claim:** Quick-link grid is hard-coded to repeat(4, 1fr) inline (page.tsx:49): on a 390 px phone eight tiles are squeezed into four narrow columns or overflow; no responsive breakpoint.
 - **Verified evidence:** dashboard/page.tsx:49 sets inline gridTemplateColumns:'repeat(4, 1fr)'. On phones this is overridden: civitas-ds.css:427 (inside @media max-width:768px) has `.g-4{grid-template-columns:1fr !important}` which beats inline style, so 390 px gets one column, not overflow. The real defect is the tablet range 769-1080 px: the .g-4 rule at civitas-ds.css:106 (2 cols) is non-important and loses to the inline style, so 8 tiles stay 4-wide. Theme tag 'PII' is wrong.
 - **Files to change:** `apps/web/src/app/(app)/procurement/dashboard/page.tsx`
@@ -529,7 +530,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-DASHBOARD-04  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: dashboard/page.tsx renders the shared procurementTiles list; dashboard/page.test.tsx passes)
 - **First-pass claim:** Overlaps the /procurement hub: only 8 of 16 modules are linked here (page.tsx:6-15 vs page.tsx:6-23 of the hub).
 - **Verified evidence:** dashboard/page.tsx:6-15 QUICK_LINKS has 8 entries; the hub procurement/page.tsx:6-23 has 16 tiles (adds Dashboard, Annual Plans, Bid Evaluation, Reverse Auction, GeM, EMD & BG, Empanelment, Pre-Bid). Dashboard omits eight modules, incl. GeM/EMD & BG/Empanelment reviewed here.
 - **Files to change:** `apps/web/src/app/(app)/procurement/dashboard/page.tsx`, `apps/web/src/app/(app)/procurement/page.tsx`
@@ -551,7 +552,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-EMD-BG-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: EmdBgTable.test.tsx: one register failing leaves the other visible with a per-register error)
 - **First-pass claim:** Partial failure is mis-reported: EMD and PBG are fetched together and any one failure sets source "error" (page.tsx:6-11). useSeededResource then refuses the live data (resource.ts:232) so the table can show only stale cache or the surviving half under "Couldn't load — showing nothing"; Active Guarantees and Total Active Value silently omit the failed register.
 - **Verified evidence:** emd-bg/page.tsx:6-11 merges EMD and PBG results and sets source='error' if either failed. EmdBgTable.tsx:20-25 passes it to useSeededResource; resource.ts:232 `serverUsable = serverSource==='api' && ...` is false, so it reads cache (242). With no cache, state stays at initialData (the surviving register) but provenance becomes 'error-no-data', so the badge says 'Couldn't load — showing nothing' (EmdBgTable.tsx:48-53) while rows from the other register are shown. Stats (page.tsx:13-17) silently use only the surviving half. If cache exists, cached rows of BOTH registers replace live data.
 - **Files to change:** `apps/web/src/app/(app)/procurement/emd-bg/page.tsx`, `apps/web/src/app/(app)/procurement/emd-bg/EmdBgTable.tsx`
@@ -585,7 +586,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-EMD-BG-03  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: EmdBgTable.test.tsx: 125050 paise renders as 1,250.50 in table and stat)
 - **First-pass claim:** Amounts are formatted ad hoc as ₹${(amount/100).toLocaleString("en-IN")} (Table:33, page.tsx:17) instead of formatMoney: paise trailing zeros are dropped (₹1,250.5) and rounding differs from every other procurement page.
 - **Verified evidence:** EmdBgTable.tsx:33 `₹${(e.amount/100).toLocaleString('en-IN')}` and page.tsx:17 same. toLocaleString defaults to max 3 fraction digits and no minimum, so 125050 paise -> '₹1,250.5'. lib/formatters.ts:90 formatMoney(bigint|number|string) does BigInt paise math with Indian grouping and 2 decimals. The column header 'Amount (₹)' duplicates the symbol. Table export (exportable) will also carry these strings.
 - **Files to change:** `apps/web/src/app/(app)/procurement/emd-bg/EmdBgTable.tsx`, `apps/web/src/app/(app)/procurement/emd-bg/page.tsx`
@@ -600,7 +601,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-EMD-BG-04  ·  MEDIUM  ·  confirmed  ·  theme CACHE-SYNC (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: lib/sync/resource.test.tsx: empty api result is authoritative over cache; EmdBgTable.test.tsx cache path)
 - **First-pass claim:** Stats (server prop) and rows (seeded/cached) can disagree (page.tsx:13-16 vs Table:20-25), and a genuinely empty live response is replaced by stale cached rows (resource.ts:232-249).
 - **Verified evidence:** Stats are computed on the server from `entries` (page.tsx:10-16) while rows come from useSeededResource (EmdBgTable.tsx:20-25). resource.ts:232 treats an empty api result as unusable (`!isEmpty(initialData)`), so a genuine empty response falls to readCache (242) and shows non-empty cached rows; stats stay at server 0. The badge does disclose 'Showing saved data' (DataSourceBadge.tsx:65-69), so it is not silent, but the data is still wrong for a truly empty live register and the cache is never cleared.
 - **Files to change:** `apps/web/src/lib/sync/resource.ts`, `apps/web/src/app/(app)/procurement/emd-bg/EmdBgTable.tsx`, `apps/web/src/app/(app)/procurement/emd-bg/page.tsx`
@@ -617,6 +618,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-EMD-BG-05  ·  MEDIUM  ·  confirmed  ·  theme MISSING-FEATURE (was DEADROUTE)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** W2 #2041 added the expiring-within-30-days filter (with a clear empty state) on top of the existing dd Mon yyyy + expiry chip + read-only subtitle. Still open: release / extend / forfeit actions need a product decision (maker-checker + audit design, money-adjacent) - no buttons added.
 - **W0 note:** partly fixed by #1866 — formatIndianDate + expiry label chip and read-only subtitle; no expiring-within-30-days sort/filter, no release/extend/forfeit (decision)
 - **First-pass claim:** Register is read-only with no expiry warning: Valid Until is a raw string, no days-remaining cue, and no release / extend / forfeit action or audit trail although Forfeited is a tracked status (Table:65-72).
 - **Verified evidence:** EmdBgTable.tsx:65-72 columns are plain text; validity is a raw string (`validity: e.validity`, line 34), no days-remaining or expiry cue, no row actions and no link. Status 'Forfeited' is counted on the page (page.tsx:15) but nothing in the web app lets a user release/extend/forfeit; the procurement-service endpoints for such actions are not in the snapshot (cannot-verify).
@@ -810,6 +812,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-GRN-02  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** Re-verified: the interim 500-row truncation notice and partial-stats label exist (grn/page.tsx). A real fix is server-side pagination with a total and status-count summary (backend + loader + page), not started - scoped for part 2.
 - **W0 note:** partly fixed by #1866 — interim truncation notice at 500-row cap only; no server-side pagination/total/summary counts
 - **First-pass claim:** Hard cap: getProcurementGRNs({ limit: 500 }) (page.tsx:29) with client-side paging and no "showing first 500" cue; stats are computed from the same truncated list (page.tsx:31-34).
 - **Verified evidence:** grn/page.tsx:29 fetches getProcurementGRNs({limit:500}); stats (:31-34, :61-64) are computed from that array; DataTable pageSize={10} filterable (:83-86) filters/paginates client-side, and no truncation notice exists. Whether the API caps below 500 or returns a total count cannot be verified (procurement-service absent); loaders.ts:2498-2514 also filters q client-side.
@@ -964,7 +967,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-DETAIL-SRN-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: srn/page.test.tsx (added in #2041): failed fetch shows a retryable error with no Create SRN link; genuine none shows Create SRN)
 - **First-pass claim:** Failed fetch reads as absence: only data is read from getSrnByGrn (page.tsx:9), so an API error renders "No Store Receipt Note yet" with a Create SRN button — the clerk may create a duplicate for a GRN that already has a signed SRN.
 - **Verified evidence:** srn/page.tsx:8-11 destructures only `data` from getSrnByGrn and getProcurementGRNById; :14-25 renders EmptyState 'No Store Receipt Note yet' + 'Create SRN' whenever !srn. fetchJson (_data/apiClient.ts:105-180) returns {data:null, source:'error', status} on any non-2xx/network/invalid payload, so a 500/timeout is indistinguishable from no SRN. Whether inventory-service returns 404 or 200 {data:null} for 'no SRN' is not visible (service absent from snapshot); mapper getSrnByGrn tolerates both. Server-side duplicate-SRN guard also cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/procurement/grn/[id]/srn/page.tsx`
@@ -983,7 +986,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-DETAIL-SRN-02  ·  MEDIUM  ·  partly  ·  theme WIRING (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: srn/page.test.tsx (added in #2041): officer name or short hint, never the UUID; draft reads Pending - set on signing)
 - **First-pass claim:** Store officer is a raw user id in mono (page.tsx:49) — DPDP-relevant identifier shown instead of a name/designation; received date is "—" for drafts.
 - **Verified evidence:** srn/page.tsx:49 prints srn.storeOfficerId in mono; mapSrnDetail (apiMappers.ts:401-416) passes the id through or '—'. The same raw id is also shown in srn/new/CreateSrnForm.tsx:68 (from JWT sub, new/page.tsx:8-21). It is a UUID rather than a name/designation - a usability/traceability gap; masking (Masked/reveal) is not the right remedy since it is an internal user id of a government officer on an internal record, not a secret. Received date '—' for drafts is correct (receivedAt null until sign; :53). No CSV export on this page.
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/procurement/grn/[id]/srn/page.tsx`, `apps/web/src/app/(app)/procurement/grn/[id]/srn/new/CreateSrnForm.tsx`
@@ -1001,7 +1004,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-DETAIL-SRN-03  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: SignSrnAction.test.tsx + CreateSrnForm.test.tsx: dialog names the GRN, sign body carries receivedAt and remarks)
 - **First-pass claim:** Irreversible signature with thin evidence: the dialog shows no GRN number, items or values, and the optional reason box is reused as free-text remarks (SignSrnAction.tsx:14,23-30); sign does not send receivedAt, unlike the create flow (CreateSrnForm.tsx:42).
 - **Verified evidence:** A confirm dialog DOES exist: SignSrnAction.tsx:28-35 uses ActionButton (ConfirmDialog) with title/description/'Sign' label, irreversibility text at :31. True gaps: dialog does not name the GRN/PO/items (static text), requireReason is not set so the reason box is optional and is sent as `remarks` (:19), overwriting/duplicating the remarks captured at create (CreateSrnForm.tsx:25); the standalone sign sends no receivedAt (SignSrnAction.tsx:19) while the create+sign flow sends it (CreateSrnForm.tsx:42), so a draft signed later has receivedAt unset/server default (server behaviour not verifiable). Maker!=checker and audit emission are server concerns, not visible here.
 - **Files to change:** `apps/web/src/app/(app)/procurement/grn/[id]/srn/SignSrnAction.tsx`, `apps/web/src/app/(app)/procurement/grn/[id]/srn/page.tsx`
@@ -1019,7 +1022,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-DETAIL-SRN-04  ·  LOW  ·  partly  ·  theme WIRING (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: srn/page.test.tsx (added in #2041): GRN number links to the GRN detail; hex fallbacks removed from srn/page.tsx)
 - **First-pass claim:** Header has no link back to the GRN items or the payment it unblocks; status text colours are hard-coded hex (page.tsx:57).
 - **Verified evidence:** srn/page.tsx:57 uses hard-coded '#16a34a'/'#b45309' (true; also GRN detail page.tsx:120 uses hex). A back link to the GRN exists: PageHeader back={`/procurement/grn/${params.id}`} (:12, :35) and the GRN number is plain text (:46-48), not a link. No link to the payment/invoice it unblocks - no payment route/id is available in SrnDetail (apiMappers.ts:401), so that part is cannot-verify. Theme FABRICATED does not apply - no sample data.
 - **Files to change:** `apps/web/src/app/(app)/procurement/grn/[id]/srn/page.tsx`
@@ -1041,7 +1044,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-DETAIL-SRN-NEW-01  ·  HIGH  ·  partly  ·  theme PARTIAL-FAILURE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2041)
 - **W0 note:** partly fixed by #1866 — CreateSrnForm.tsx:67-86 pushes ?signFailed=1 and treats missing id as failure, BUT srn/page.tsx never reads signFailed so no 'saved as Draft, sign again' banner is shown
 - **First-pass claim:** Partial success is silent: create and sign are two non-atomic calls; if sign fails the code just navigates to the SRN page (CreateSrnForm.tsx:46-50) with no error, so the clerk who ticked "Sign now" believes the payment gate is cleared while the SRN is still a Draft.
 - **Verified evidence:** CreateSrnForm.tsx:56-60 POST create then :72-79 PATCH sign; when sign fails (lines 80-86) it router.push('/procurement/grn/<id>/srn') with no message (line numbers in the observation are off). True that no error is shown at that moment. Mitigation: the landing page (srn/page.tsx:35,57-58) shows a 'Draft' pill and 'Draft — not yet signed' plus a SignSrnAction button, so the state is visible, but the clerk is not told signing failed. If create returned no id, `created.id` is falsy and the sign step is silently skipped too (line 71).
@@ -1074,7 +1077,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-DETAIL-SRN-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme FORM-STATE (was DATEFMT)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: CreateSrnForm.test.tsx: date hidden unless signing; sign PATCH body carries receivedAt from the field)
 - **First-pass claim:** Received date is only sent on the sign call (Form:41-44); the create body carries just grnId and remarks (Form:25), so untick "Sign now" and the entered date is discarded without notice.
 - **Verified evidence:** CreateSrnForm.tsx:59 create body is {grnId, remarks}; receivedAt is sent only in the sign PATCH (line 76). With signNow unticked the date input (lines 104-112) remains visible and editable but is discarded. Also SignSrnAction.tsx:19 later signs without any receivedAt. Whether the create endpoint accepts receivedAt is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/procurement/grn/[id]/srn/new/CreateSrnForm.tsx`
@@ -1089,7 +1092,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-DETAIL-SRN-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: srn/new/page.test.tsx (added in #2041): session name, short hint, or You - never the UUID)
 - **First-pass claim:** Store officer is taken from an unverified JWT payload decode (base64 "sub") in the page (page.tsx:8-19) and shown as a raw id; it is not sent, so the server must derive the officer — the displayed value could differ from the recorded one.
 - **Verified evidence:** srn/new/page.tsx:8-21 sessionUserId() base64-decodes the access-token payload with no signature check and returns sub; CreateSrnForm.tsx:102 shows it raw (`<span className="mono">{storeOfficerId}</span>`). The id is not in either request body (lines 59, 75-78), so the server derives the officer; if that differs the display is wrong. The same unverified-decode pattern exists in lib/auth/roleGuard.ts (has getSessionName, name claim).
 - **Files to change:** `apps/web/src/app/(app)/procurement/grn/[id]/srn/new/page.tsx`, `apps/web/src/app/(app)/procurement/grn/[id]/srn/new/CreateSrnForm.tsx`
@@ -1104,7 +1107,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-DETAIL-SRN-NEW-05  ·  LOW  ·  confirmed  ·  theme A11Y-ERRORS (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2041)
 - **W0 note:** partly fixed by #1866 — CreateSrnForm.tsx:11-21 status-branched copy (409/403), :96 network copy, :145 officer label now div, htmlFor ids; missing 422 branch and aria-describedby on message region
 - **First-pass claim:** Error message is the generic save copy for both create and network failure (Form:29-31,55-58); no field-level errors and the store-officer label wraps a non-input span (Form:64-67).
 - **Verified evidence:** CreateSrnForm.tsx:62-66 non-ok create uses toHumanError('save') for any status; the catch (line 91-94) shows err.message ('Network error' or raw text). No field-level errors. The Store officer `<label className="field">` (line 100-103) wraps only spans (no control), and the Received date/Remarks/checkbox labels rely on implicit wrapping. Theme 'PII' is wrong.
@@ -1127,7 +1130,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-NEW-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: tests/gap-b3-grn-backend.test.ts (real DB): sequential server-issued number, client grnNo ignored; CreateGRNForm submit body carries no grnNo)
 - **First-pass claim:** GRN number is generated in the browser: grnNo = GRN/{year}/{Math.floor(Math.random()*900)+100} (CreateGRNForm.tsx:147). Only 900 values per year, collision-prone, and gapped/non-sequential for a numbered government store document — should be server-issued.
 - **Verified evidence:** grn/new/CreateGRNForm.tsx:147 builds grnNo = `GRN/${year}/${String(Math.floor(Math.random()*900)+100)}` and posts it (:149). Only 900 values/year, random, non-sequential; collision produces either a server duplicate error or a duplicate number. Backend procurement service is not in the snapshot (only hrms-service), so whether POST /procurement/grns accepts a missing grnNo or has a sequence generator cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/procurement/grn/new/CreateGRNForm.tsx`, `services/procurement-service (GRN create handler / numbering sequence)`
@@ -1144,7 +1147,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-NEW-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was CAP)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: CreateGRNForm.test.tsx: no PO preselected, PO items laid out with received blank, zero-received submit blocked)
 - **First-pass claim:** Silent full-receipt default: the first PO and first item are auto-selected and Ordered = Received = Accepted are pre-filled (Form:82,113); "Record GRN" with no edits records a complete, fully accepted delivery. Only the first PO item is pre-filled, so other items must be added by hand (Form:113).
 - **Verified evidence:** CreateGRNForm.tsx:82 auto-calls selectPo(clean[0]) and :112-115 sets one line with orderedQty=receivedQty=acceptedQty=items[0].quantity. Submit (:137-161) applies no further confirmation, so 'Record GRN' with no edits records a full, fully accepted delivery of the first item only; other PO items must be added with '+ Add line item' (:124). Vendor also defaulted to first vendor (:68). Note: acceptedQty on a not-yet-inspected GRN is questionable since inspection is a separate step (header comment :25-34).
 - **Files to change:** `apps/web/src/app/(app)/procurement/grn/new/CreateGRNForm.tsx`
@@ -1179,7 +1182,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2041)
 - **W0 note:** partly fixed by #1866 — Vendor locked to PO vendor (CreateGRNForm.tsx:107-121,285) and backend rejects mismatch (grn/commands.ts:34); PO dropdown still capped limit=100 with no search combobox (:84)
 - **First-pass claim:** PO and Vendor are independent selects (Form:190-207): picking a PO sets the vendor only when po.vendorId exists, and the vendor can then be changed to one that does not match the PO; PO dropdown is capped at 100 with no search (Form:76).
 - **Verified evidence:** CreateGRNForm.tsx:190-207 are two independent <select>s. selectPo sets vendor only if po.vendorId (:96); Vendor onChange (:201) can then diverge from the PO's vendor, and body sends both vendorId and poRef (:150-151). Both lists fetched with ?limit=100 and no search (:62, :76), so POs/vendors beyond 100 are unreachable. Server may cross-check PO vs vendor; not verifiable.
@@ -1197,7 +1200,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-NEW-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: CreateGRNForm.test.tsx: PO search failure shows an alert + Retry, Retry repopulates, empty list says No purchase orders found)
 - **First-pass claim:** Load failures are swallowed with no message (Form:69-71,83-85,96-98): selects remain "Loading POs…" / "Loading vendors…" and the clerk cannot tell whether to wait or retry.
 - **Verified evidence:** CreateGRNForm.tsx: vendors fetch `if (!res.ok) return;` (:63) and catch does nothing (:69-72); POs same (:77, :83-86); selectPo sets items [] silently on failure (:99, :116-118). Selects keep the '<option>Loading vendors…/POs…' placeholder forever (:193, :202) because it is conditioned on list length, not on load state. Only the abort case is intentional.
 - **Files to change:** `apps/web/src/app/(app)/procurement/grn/new/CreateGRNForm.tsx`
@@ -1363,6 +1366,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-INDENTS-NEW-01  ·  MEDIUM  ·  confirmed  ·  theme DEFAULT (was OTHER)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** Re-verified: department defaults to empty and is required (CreateIndentForm.tsx). A department picker needs a source of the caller's org units: GET /v1/hrms/departments is HR-role-gated, so procurement officers cannot read it. Decide the source (session org unit claim or a procurement-readable endpoint) before building it.
 - **W0 note:** partly fixed by #1866 — CreateIndentForm.tsx:32 department default now empty and required with per-field error (:91), but still a free-text input; no department picker/session-home default (cf. planning/new EntityPicker)
 - **First-pass claim:** Wrong-department default: Department is a free-text input pre-filled "Finance" (CreateIndentForm.tsx:17) — a Housing & Urban Development officer who does not overwrite it raises the indent under Finance, which drives routing and reporting.
 - **Verified evidence:** CreateIndentForm.tsx:17 useState('Finance') seeds a free-text <input id=department> (l.107-108); submit only checks non-empty (l.50) and posts department.trim() (l.58). Nothing ties it to the user's org unit.
@@ -2908,7 +2912,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-DETAIL-SCORECARD-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: scorecard/page.test.tsx: error shows a retryable state, genuine empty shows No scorecard yet)
 - **First-pass claim:** Failure looks like "no data": a failed scorecard request returns null and renders "No scorecard yet — Performance data will appear after GRN acceptance…" (page.tsx); the error badge exists only in the filled branch (page.tsx), so an outage tells a vendor-manager the vendor has no history.
 - **Verified evidence:** scorecard/page.tsx:81-87 returns EmptyState 'No scorecard yet' whenever scorecard is null, without looking at source. fetchJson (apiClient.ts) returns {data: null, source:'error'} on failure, so an outage renders the empty state. The DataSourceBadge at :109 sits in the non-null branch where source==='error' cannot occur with data present, so it is effectively dead code.
 - **Files to change:** `apps/web/src/app/(app)/procurement/vendors/[id]/scorecard/page.tsx`, `apps/web/src/app/_components/ds/RefreshErrorState.tsx`
@@ -2923,7 +2927,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-DETAIL-SCORECARD-02  ·  HIGH  ·  partly  ·  theme RESPONSIVE (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: scorecard/page.tsx now stacks one full-width breakdown card plus an auto-fill tile grid (no fixed two-column grid); the two-card acceptance is superseded by SCORECARD-04 dropping the radar)
 - **First-pass claim:** The two-column layout is fixed `gridTemplateColumns: "1fr 1fr"` inline (page.tsx) with no breakpoint, so on a phone the breakdown and 240 px radar are squeezed side by side; score bars and chart colours are hard-coded var(--good/warn/bad) instead of the chart palette.
 - **Verified evidence:** scorecard/page.tsx:130 has gridTemplateColumns:'1fr 1fr' inline with no breakpoint (the stat grid above at :114 does use auto-fill), so the two cards stay side by side on phones; the radar SVG is maxWidth 240 (line 51). Colours are CSS design tokens (var(--good/--warn/--bad)), not hard-coded hex, so that claim is overstated. Theme PII is wrong; severity high is overstated (layout only).
 - **Files to change:** `apps/web/src/app/(app)/procurement/vendors/[id]/scorecard/page.tsx`
@@ -2938,6 +2942,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-VENDORS-DETAIL-SCORECARD-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** W2 #2041 aligned the legend and band colours to the backend (A >= 85, B 70-84, C 50-69, D below 50; unrated shows a dash). Still open: picking ONE scale (/100 vs /5) across list, profile and scorecard is an owner decision.
 - **W0 note:** partly fixed by #1866 — Band legend + note that /100 performance score is separate from /5 buyer rating added; no single scale or shared formatVendorRating helper. Legend uses excellent/good/average/poor (>=90/75/50) but API ratingBand is A/B/C/D (>=85/70/50, scorecard-domain.ts) so legend and BAND_COLOR keys do not match backend.
 - **First-pass claim:** Scale mismatch: the scorecard shows "Overall score 86/100" (page.tsx) but the vendor list and profile show rating "n/5" (VendorsTable.tsx, vendors/[id]/page.tsx); ratingBand is server-supplied and not derived from the visible scores, and the thresholds (excellent/good/average/poor) are not explained.
 - **Verified evidence:** scorecard/page.tsx:116 shows overallRating + '/100'; vendors/[id]/page.tsx:42 and VendorsTable.tsx:55 show rating as n/5. Both come from the API (VendorScorecard.overallRating loaders.ts:5502-5514, vendor.rating), so two scales for one vendor. ratingBand is taken from the server (:96, :107), bands not explained on the page. Whether the server derives band from score is cannot-verify.
@@ -2953,7 +2958,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-DETAIL-SCORECARD-04  ·  MEDIUM  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2041)
 - **W0 note:** partly fixed by #1866 — 'As of' added to subtitle but reads scorecard.lastUpdated while API returns computedAt (not mapped), so it always shows a dash; 3-axis radar still kept.
 - **First-pass claim:** Radar with exactly three axes is a triangle that adds nothing over the three bars beside it (RadarChart, page.tsx; returns null under 3); lastUpdated is fetched (loaders.ts:5512) but never shown, so the score has no as-of date.
 - **Verified evidence:** subscores in scorecard/page.tsx:90-94 always has exactly 3 items (Delivery/Quality/SLA), so RadarChart (29-31) always draws a triangle duplicating the ScoreBars: confirmed as low-value. lastUpdated is typed at loaders.ts:5512 (string|null) but never referenced in the page or vendors folder: confirmed, no as-of date. Severity medium is slightly high.
@@ -2968,7 +2973,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-DETAIL-SCORECARD-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2041)
 - **W0 note:** partly fixed by #1866 — Null subscores/counts show a dash with grey bar and radar skips nulls; 'On-time X + Late Y of Z orders' reconciliation caption not added.
 - **First-pass claim:** Missing sub-scores are coerced with ?? 0 (page.tsx) — an unscored dimension renders as a red 0 rather than "—"; on-time / late do not visibly add to total orders.
 - **Verified evidence:** scorecard/page.tsx:91-93 use `?? 0` for delivery/quality/SLA scores; :116 and :118-121 use `?? 0` for overall and counts, so an unscored dimension renders as red 0 (ScoreBar color at :15 -> var(--bad)). totalOrders and on-time/late/rejections are shown as independent tiles without reconciliation. The loader type says number, so nulls depend on the API (cannot-verify).
@@ -3102,7 +3107,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-CONTRACTS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2041)
 - **W0 note:** partly fixed by main — contract-service list is tenant-scoped, role-limited and returns poRef (full row). Remaining: web contracts page has no PO column/link.
 - **First-pass claim:** Data comes from /api/v1/contract/contracts (contract service), not /procurement — contract-to-PO linkage (poRef) and audit are undeterminable; contract service is not in the snapshot.
 - **Service:** `contract-service`  ·  **Endpoint(s):** `['GET /api/v1/contract/contracts']`
@@ -3115,6 +3120,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-CONTRACTS-NEW-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** poRef validation against procurement-service needs a cross-service client in contract-service (none exists); duplicate-number 409 + audit are already done (#1928). Needs a decision on the internal-client pattern before building.
 - **W0 note:** partly fixed by #1928 — Audit event and duplicate contractNo 409 (DUPLICATE_NUMBER) done. Remaining: poRef is optional free text, not validated against an existing PO.
 - **First-pass claim:** Mutation goes to the contract service (/v1/contract/contracts, Form:65) while vendors come from procurement; audit trail, uniqueness and PO linkage (poRef) cannot be determined — services absent from snapshot.
 - **Service:** `contract-service`  ·  **Endpoint(s):** `['POST /api/v1/contract/contracts']`
@@ -3126,7 +3132,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-DASHBOARD-02  ·  MEDIUM  ·  partly  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: dashboard/page.test.tsx: counters are actionable (renewals card still deep-links ?status=renewal_due, now honoured by the contracts page))
 - **First-pass claim:** Counters are not actionable: "Pending Indents" and "Contract Renewals Due" are not links, and the dashboard has no value or aging figures — a "snapshot of pending actions" that cannot be acted on (page.tsx:42-45).
 - **Service:** ``  ·  **Endpoint(s):** `['GET /api/v1/procurement/dashboard']`
 - **Question:** Web-only: counters are plain StatCards and the API returns no value/aging.
@@ -3138,7 +3144,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-DASHBOARD-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2041)
 - **W0 note:** partly fixed by #1866 — grnsThisMonth defined as ACCEPTED GRNs in IST calendar month. Remaining: contractRenewalsDue is hard-coded 0 (dashboard/queries.ts:66, contract data lives in another service) so the card shows a false zero; no window defined or labelled.
 - **First-pass claim:** GET /procurement/dashboard is not in the snapshot; the definition of "GRNs (MTD)" and "renewals due" window is undeterminable.
 - **Service:** `procurement-service`  ·  **Endpoint(s):** `['GET /api/v1/procurement/dashboard']`
@@ -3151,6 +3157,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-EMD-BG-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** Re-verified on main: forfeit / release / refund are role-gated, audited and post GL entries. Capturing a PFMS / treasury reference needs a decision on the field model and who supplies it; not invented here.
 - **W0 note:** partly fixed by main — emd/pbg forfeit/release/refund are role-gated (procurement roles, not finance-only), audited, and post GL entries. Remaining: no PFMS/treasury reference captured or shown.
 - **First-pass claim:** /procurement/emd and /pbg are not in the snapshot: forfeiture workflow, PFMS/treasury linkage and audit undeterminable.
 - **Service:** `procurement-service`  ·  **Endpoint(s):** `['GET /api/v1/procurement/emd', 'GET /api/v1/procurement/pbg']`
@@ -3162,7 +3169,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-EMPANELMENT-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2041)
 - **W0 note:** partly fixed by main — Empanel endpoint role-guarded and blacklisted vendors blocked from empanelment/PO. Remaining: empanelment validUntil is not enforced at PO creation (no expired-empanelment rejection).
 - **First-pass claim:** /procurement/empanelment is not in the snapshot: category master, validity rules and who may empanel undeterminable; overlaps with /procurement/vendors (vendor register) with no cross-link.
 - **Service:** `procurement-service`  ·  **Endpoint(s):** `['GET /api/v1/procurement/empanelment']`
@@ -3174,7 +3181,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GEM-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2041 - ALREADY-FIXED on main: GET /v1/procurement/gem/items (gap/routes.ts:58) is role-guarded and returns an honest empty list with integrationDisabled, never fabricated rows; no manual-upload path exists (tests/gem-items-source.test.ts))
 - **First-pass claim:** /procurement/gem/items is not in the snapshot: how GeM data is imported (API, manual upload) and its authenticity checks are undeterminable.
 - **Service:** `procurement-service`  ·  **Endpoint(s):** `['GET /api/v1/procurement/gem/items']`
 - **Question:** GeM item data import path and authenticity (source, checksum, imported-by) must be recorded.
@@ -3186,6 +3193,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-GRN-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** There is no store / department assignment on GRNs (grn.procurement_grns has neither column), so per-store visibility cannot be enforced. Needs an owner decision on the store model first.
 - **W0 note:** partly fixed by main — GRN list is tenant-scoped and role-limited, but there is no store/department assignment scoping (store A vs B).
 - **First-pass claim:** GET /procurement/grns not in snapshot: visibility scoping per store / department undeterminable.
 - **Service:** `procurement-service`  ·  **Endpoint(s):** `['GET /api/v1/procurement/grns']`
@@ -3197,7 +3205,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-DETAIL-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1111, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1111; W2 procurement re-verified 2026-10-14: tests/dom-002-grn-guards.test.ts + gap-b3-grn-backend.test.ts pass (real DB): SoD on accept/reject, GRN_NOT_INSPECTABLE on a repeat)
 - **First-pass claim:** PATCH /grns/:id/accept|reject and amend are not in the snapshot: audit entry, stock posting on accept, and SoD enforcement are undeterminable.
 - **Service:** `procurement-service`  ·  **Endpoint(s):** `['PATCH /api/v1/procurement/grns/:id/accept|reject', 'PATCH /api/v1/procurement/grns/:id']`
 - **Question:** Accept/reject/amend must audit, post stock only on accept (once), and enforce SoD vs creator.
@@ -3208,7 +3216,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-DETAIL-SRN-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by #1866; W2 procurement re-verified 2026-10-14: services/inventory-service/tests/gap-b3-srn-sign-sod.test.ts passes (real DB): creator cannot sign, a different officer can)
 - **First-pass claim:** PATCH /v1/inventory/srn/:id/sign, SoD (store officer vs GRN creator) and payment-gate consumer are not in the snapshot — undeterminable.
 - **Service:** `inventory-service`  ·  **Endpoint(s):** `['PATCH /api/v1/inventory/srn/:id/sign']`
 - **Question:** Signer must differ from GRN creator (SoD) and must hold store_officer; signing releases the payment gate exactly once.
@@ -3219,7 +3227,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-DETAIL-SRN-NEW-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #644, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 procurement: closed by #2041; was ticked earlier but the second-create 409 was NOT sync before, now POST /v1/inventory/srn returns 409 SRN_ALREADY_EXISTS (commands.ts), consumer check kept)
 - **First-pass claim:** inventory-service SRN endpoints absent from snapshot: idempotency (duplicate SRN per GRN), audit and payment-gate linkage undeterminable.
 - **Service:** `inventory-service`  ·  **Endpoint(s):** `['POST /api/v1/inventory/srn', 'PATCH /api/v1/inventory/srn/:id/sign']`
 - **Question:** Only one SRN may exist per GRN (idempotent or 409) and creation/signing must be audited; the create+sign two-call flow must be atomic-safe.
@@ -3230,7 +3238,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-NEW-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2041)
 - **W0 note:** partly fixed by #1111 — createdBy from authenticated actor, PO/vendor match 404/422, orderedQty re-derived server-side, accepted<=ordered. Remaining: receivedQty not capped against PO open qty (no cumulative over-receipt check).
 - **First-pass claim:** POST /procurement/grns not in the snapshot: creator capture for SoD, stock impact and audit undeterminable.
 - **Service:** `procurement-service`  ·  **Endpoint(s):** `['POST /api/v1/procurement/grns']`
@@ -3342,6 +3350,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-ORDERS-NEW-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** W2 #2041 enforces the empanelment-VALIDITY half server-side (EMPANELMENT-05: lapsed empanelment -> 422 EMPANELMENT_EXPIRED on POST /pos and /purchase-orders, and in the consumer). Whether a PO may go to a vendor with NO empanelment record (e.g. a tender winner) is a procurement-policy decision, so it is not enforced.
 - **W0 note:** partly fixed by #34 — Blacklisted/debarred vendors rejected in PO consumer, poNo server-issued, audited. Remaining: no check that vendor is empanelled / empanelment valid.
 - **First-pass claim:** POST /procurement/pos, vendor status validation and audit are undeterminable (services/procurement-service absent).
 - **Service:** `procurement-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/procurement/pos']`
@@ -3553,7 +3562,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-DETAIL-SCORECARD-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by main, verified on main 9c5e9e9e9)
+- [x] **Status** (closed by main; W2 procurement re-verified 2026-10-14: tests/vendor-scorecard-domain.test.ts passes: weighted 40/40/20 score, 8 accepted of 10 GRNs gives quality 80)
 - **First-pass claim:** Score computation (GRN acceptance, order completion, SLA) and refresh cadence are not in the snapshot (services/procurement-service absent) — undeterminable.
 - **Service:** `procurement-service`  ·  **Endpoint(s):** `['GET /api/v1/procurement/vendors/:id/scorecard']`
 - **Question:** How are the scores (GRN acceptance, completion, SLA) computed, and how often refreshed?
