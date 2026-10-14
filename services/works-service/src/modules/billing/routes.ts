@@ -20,13 +20,51 @@ import { parseMinor } from "@civitasone/schemas";
 import { paginationSchema } from "../masters/validators.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
-// GAP-WORKS-BILLING-WORKID-03: finalize additionally admits "auditor", the
-// officer for auditor_finalized; the per-step check (finalizeStepRoles) then
-// narrows each step. "auditor" gets no other write route.
-const FINALIZE_ROLES = [...WRITE_ROLES, "auditor"];
+// GAP-WORKS-BILLING-WORKID-03 (owner decision 2026-10-14): finalize roles are SO, SDO, estimator, auditor, DAO and
+// DO, with works_admin and super_admin as override. works_operator may create/issue but holds no finalize step.
+// The per-step check (finalizeStepRoles) then narrows each step. "auditor" gets no other write route.
+const FINALIZE_ROLES = ["works_admin", "super_admin", "dao", "do", "sdo", "section_officer", "estimator", "auditor"];
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator", "auditor"];
 
+/**
+ * The value of work measured against an MB and how much of it earlier bills have already consumed (all bigint minor
+ * units). Single source for the create-bill ceiling check and the read-only position endpoint the bill form uses.
+ */
+async function mbBillingPosition(tenantId: string, mbId: string) {
+  const mbMeasurements = await listMeasurementsByMb(tenantId, mbId);
+  const boqItemIds = [...new Set(mbMeasurements.map((m) => m.boqItemId))];
+  const boqItemRows = await listBoqItemsByIds(tenantId, boqItemIds);
+  const rateByBoqItem = new Map(boqItemRows.map((b) => [b.id, b.rate]));
+  const measuredValueMinor = computeMeasuredValueMinor(mbMeasurements, rateByBoqItem);
+  const priorBillsAgainstMb = await listBillsByMb(tenantId, mbId);
+  const priorBilledAgainstMb = priorBillsAgainstMb.reduce((sum, row) => sum + (row.grossAmountMinor ?? 0n), 0n);
+  return { measuredValueMinor, priorBilledAgainstMb };
+}
+
 export async function billingRoutes(app: FastifyInstance): Promise<void> {
+  // GAP-WORKS-BILLING-BILLS-NEW-02: measured value / already billed / still billable for one MB, so the bill form
+  // can show the ceiling and prefill the gross instead of leaving the clerk to guess a free-typed figure.
+  app.get("/v1/works/billing/mb/:mbId/measured-value", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READ_ROLES);
+    const { mbId } = req.params as { mbId: string };
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(mbId)) {
+      throw new HttpError(400, "INVALID_ID", "mbId must be a UUID");
+    }
+    const mb = await getMb(ctx.tenantId, mbId);
+    if (!mb) throw new HttpError(404, "NOT_FOUND", "measurement book not found");
+    const { measuredValueMinor, priorBilledAgainstMb } = await mbBillingPosition(ctx.tenantId, mbId);
+    const available = measuredValueMinor - priorBilledAgainstMb;
+    return reply.send({
+      data: {
+        mbId,
+        measuredValueMinor: measuredValueMinor.toString(),
+        billedMinor: priorBilledAgainstMb.toString(),
+        availableMinor: (available > 0n ? available : 0n).toString(),
+      },
+    });
+  });
+
   // List bills for a work
   app.get("/v1/works/billing/:workId/bills", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -159,11 +197,8 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
       );
     }
 
-    const mbMeasurements = await listMeasurementsByMb(ctx.tenantId, body.mbId);
-    const boqItemIds = [...new Set(mbMeasurements.map((m) => m.boqItemId))];
-    const boqItemRows = await listBoqItemsByIds(ctx.tenantId, boqItemIds);
-    const rateByBoqItem = new Map(boqItemRows.map((b) => [b.id, b.rate]));
-    const measuredValueMinor = computeMeasuredValueMinor(mbMeasurements, rateByBoqItem);
+    // measured value + prior bills against this MB (shared with GET .../mb/:mbId/measured-value)
+    const { measuredValueMinor, priorBilledAgainstMb } = await mbBillingPosition(ctx.tenantId, body.mbId);
 
     // Code-review fix (double-billing gap): the measured-value ceiling is
     // per-MB and cumulative — prior bills already citing this SAME mbId
@@ -172,12 +207,6 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     // route-level read is best-effort (see the locked, authoritative check
     // in billing/consumer.ts billCreate for the real guarantee under
     // concurrency).
-    const priorBillsAgainstMb = await listBillsByMb(ctx.tenantId, body.mbId);
-    const priorBilledAgainstMb = priorBillsAgainstMb.reduce(
-      (sum, row) => sum + (row.grossAmountMinor ?? 0n),
-      0n,
-    );
-
     const newGross = parseMinor(body.grossAmountMinor);
     if (billAmountExceedsMeasuredValue(priorBilledAgainstMb, newGross, measuredValueMinor)) {
       throw new HttpError(

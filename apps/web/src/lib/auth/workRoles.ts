@@ -517,24 +517,22 @@ export const FINALIZED_STATUSES = new Set<string>(["finalized", "approved", "pub
  * for a bill/MB finalize (POST .../finalize). Mirrors billing/routes.ts
  *   WRITE_ROLES = ["works_admin","works_operator","super_admin","dao","do",
  *                  "sdo","section_officer","estimator"]
- * plus "auditor" (finalize + read only; the officer for auditor_finalized), so the UI only offers the irreversible Advance control to a caller
- * the server will actually accept. The server remains the authority (every
+ * narrowed to the owner-decided finalizer set (below), so the UI only offers the irreversible Advance control to a
+ * caller the server will actually accept. The server remains the authority (every
  * finalize route calls requireRole and the consumer re-checks the transition);
  * this gate is defence-in-depth + UX, hiding a control that would otherwise
  * 403.
  *
- * DECISION (conservative, recorded for HUMAN REVIEW): the works-service does
- * NOT today enforce a per-authority step map (SO must do the SO step, DAO the
- * DAO step, …) — every step is gated on the same WRITE_ROLES set and ordered
- * only by the sequence check. So the UI does NOT claim per-step authority
- * enforcement it cannot back; it gates the whole control on this set and names
- * the expected authority in the dialog as guidance only. A true per-authority
- * maker-checker split is flagged as a backend follow-up rather than faked
- * client-side.
+ * OWNER DECISION 2026-10-14: the finalize roles are SO, SDO, estimator, auditor,
+ * DAO and DO, with works_admin and super_admin as override, and the maker
+ * (creator/issuer) can never finalize their own record. The works-service
+ * enforces the per-step authority (finalizeStepRoles, mirrored by
+ * FINALIZE_STEP_OFFICER_ROLE / canAdvanceFinalizeStep below) and the
+ * maker-checker rule in both the route and the consumer. works_operator may
+ * create/issue but holds no finalize step, so it is NOT in this list.
  */
 export const BILLING_FINALIZE_ROLES = [
   "works_admin",
-  "works_operator",
   "super_admin",
   "dao",
   "do",
@@ -544,8 +542,23 @@ export const BILLING_FINALIZE_ROLES = [
   "auditor",
 ];
 
+/**
+ * GAP-WORKS-BILLING-MEASUREMENTS-NEW-02: roles the works-service accepts for POST /v1/works/billing/measurements
+ * (billing/routes.ts WRITE_ROLES). Gates the "Record measurement" row actions on the BoQ and MB lists.
+ */
+export const MEASUREMENT_RECORD_ROLES = [
+  "works_admin",
+  "works_operator",
+  "super_admin",
+  "dao",
+  "do",
+  "sdo",
+  "section_officer",
+  "estimator",
+];
+
 /** Roles that may read the billing registers (billing/routes.ts READ_ROLES). */
-export const BILLING_READ_ROLES = [...BILLING_FINALIZE_ROLES, "works_viewer"];
+export const BILLING_READ_ROLES = [...BILLING_FINALIZE_ROLES, "works_operator", "works_viewer"];
 
 /**
  * The authority conventionally responsible for each finalize step, keyed by

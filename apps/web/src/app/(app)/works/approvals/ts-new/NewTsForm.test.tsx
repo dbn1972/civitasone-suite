@@ -11,7 +11,7 @@ vi.mock("@/app/_components/ds/Toast", () => ({
   }),
 }));
 
-import NewTsPage from "./page";
+import { NewTsForm as NewTsPage } from "./NewTsForm";
 
 const WORK_ID = "123e4567-e89b-12d3-a456-426614174000";
 const AUTH_ID = globalThis.crypto.randomUUID();
@@ -103,5 +103,42 @@ describe("NewTsPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     expect(await screen.findByText(/valid amount in rupees/i)).toBeInTheDocument();
     expect(fetchSpy.mock.calls.filter(([u, i]) => String(u).includes("/approvals/ts") && (i as RequestInit)?.method === "POST")).toHaveLength(0);
+  });
+});
+
+describe("NewTsForm: GAP-WORKS-APPROVALS-TS-NEW-01 DAO-finalized precondition", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("offers only DAO-finalized works in the Work picker", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("/v1/works/proposals")) {
+        return new Response(
+          JSON.stringify({
+            data: [
+              { id: WORK_ID, workNumber: "WK/FINAL/001", status: "dao_finalized" },
+              { id: "223e4567-e89b-12d3-a456-426614174111", workNumber: "WK/DRAFT/002", status: "draft" },
+            ],
+          }),
+          { status: 200 },
+        );
+      }
+      return new Response("{}", { status: 200 });
+    });
+    render(<NewTsPage />);
+    fireEvent.focus(screen.getByLabelText("Work"));
+    fireEvent.change(screen.getByLabelText("Work"), { target: { value: "WK" } });
+    expect(await screen.findByText("WK/FINAL/001")).toBeInTheDocument();
+    expect(screen.queryByText("WK/DRAFT/002")).not.toBeInTheDocument();
+  });
+
+  it("prefills the Work from initialWorkId", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ data: [{ id: WORK_ID, workNumber: "WK/FINAL/001", status: "dao_finalized" }] }), { status: 200 }),
+    );
+    render(<NewTsPage initialWorkId={WORK_ID} />);
+    expect(await screen.findByDisplayValue("WK/FINAL/001")).toBeInTheDocument();
   });
 });

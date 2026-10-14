@@ -60,6 +60,21 @@ describe("AaDetailPage", () => {
     expect(workLink).toHaveAttribute("title", RECORD.workId);
   });
 
+  it("resolves the work number (linked to the proposal) and the officer NAME web-side (GAP-WORKS-APPROVALS-DETAIL-03)", async () => {
+    fetchJsonMock.mockImplementation(async (url: string) => {
+      if (url.includes("/works/proposals/")) return { data: { workNumber: "WK-2026-0042", description: "Canal" }, source: "api" };
+      if (url.includes("/identity/users")) return { data: { [RECORD.approvingAuthorityId]: "Superintending Engineer" }, source: "api" };
+      return { data: RECORD, source: "api" };
+    });
+    const ui = await AaDetailPage({ params: { id: "x-1" } });
+    renderUI(ui);
+    const workLink = screen.getByRole("link", { name: "WK-2026-0042" });
+    expect(workLink).toHaveAttribute("href", `/works/proposals/${RECORD.workId}`);
+    expect(workLink).toHaveAttribute("title", RECORD.workId);
+    expect(screen.getByText("Superintending Engineer")).toBeInTheDocument();
+    expect(screen.queryByText(/Authority \(ID\)/)).not.toBeInTheDocument();
+  });
+
   it("calls notFound() only for a definitive 404", async () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error", status: 404 });
     await expect(AaDetailPage({ params: { id: "missing" } })).rejects.toBeInstanceOf(NotFoundError);

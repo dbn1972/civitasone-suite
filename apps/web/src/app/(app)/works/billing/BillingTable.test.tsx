@@ -53,3 +53,20 @@ describe("BillingTable", () => {
     expect(screen.getByText("No bills found")).toBeInTheDocument();
   });
 });
+
+describe("BillingTable row link (GAP-WORKS-BILLING-02)", () => {
+  it("opens the work's bills page with THIS bill called out, so sibling bills of one work have distinct targets", () => {
+    render(
+      <BillingTable
+        bills={[
+          { ...rows[0]!, workId: "w-1" },
+          { ...rows[1]!, workId: "w-1" },
+        ]}
+        source="api"
+      />,
+    );
+    const hrefs = screen.getAllByRole("link").map((a) => a.getAttribute("href"));
+    expect(hrefs).toContain("/works/billing/w-1?bill=b1");
+    expect(hrefs).toContain("/works/billing/w-1?bill=b2");
+  });
+});

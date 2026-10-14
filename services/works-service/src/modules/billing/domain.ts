@@ -46,8 +46,8 @@ export function billFinalizationSequence(): string[] {
  * TARGET status. Each step may only be advanced by the officer it represents
  * (or a tenant admin override). The blanket WRITE_ROLES gate let any role
  * drive the whole chain; this narrows each step.
- * NEEDS OWNER DECISION: the "auditor" role name for auditor_finalized and
- * whether works_operator should retain a step are product choices.
+ * OWNER DECISION 2026-10-14: finalize roles are SO, SDO, estimator, auditor, DAO and DO, with works_admin and
+ * super_admin as override; the maker cannot finalize (isSelfFinalization). works_operator holds no finalize step.
  */
 const ADMIN_STEP_ROLES = ["works_admin", "super_admin"];
 const STEP_OFFICER_ROLE: Record<string, string> = {

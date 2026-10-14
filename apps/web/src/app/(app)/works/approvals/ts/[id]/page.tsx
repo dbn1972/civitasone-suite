@@ -7,6 +7,7 @@ import { formatMoney, formatIndianDate, formatShortId } from "@/lib/formatters";
 import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
 import { APPROVAL_FINALIZE_ROLES } from "@/lib/auth/workRoles";
 import { ApprovalFinalizeButton } from "../ApprovalFinalizeButton";
+import { getOfficerNameMap, getWorkHeader } from "../../../_data/loaders";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -18,6 +19,9 @@ type TsRaw = {
   tsNumber: string | null;
   tsDate: string | null;
   tsAuthorityId: string | null;
+  /** Resolved server-side (works-service joins work_proposals / authorities). */
+  workNumber: string | null;
+  authorityName: string | null;
   tsAmountMinor: string | null;
   sanctionType: string | null;
   status: string;
@@ -40,6 +44,8 @@ function mapRawTs(r: unknown): TsRaw | null {
     workId: typeof r.workId === "string" ? r.workId : null,
     tsNumber: typeof r.tsNumber === "string" ? r.tsNumber : null,
     tsDate: typeof r.tsDate === "string" ? r.tsDate : null,
+    workNumber: typeof r.workNumber === "string" ? r.workNumber : null,
+    authorityName: typeof r.authorityName === "string" ? r.authorityName : null,
     tsAuthorityId: typeof r.tsAuthorityId === "string" ? r.tsAuthorityId : null,
     tsAmountMinor: typeof r.tsAmountMinor === "string" ? r.tsAmountMinor : null,
     sanctionType: typeof r.sanctionType === "string" ? r.sanctionType : null,
@@ -123,24 +129,32 @@ export default async function TsDetailPage({
 
   const canFinalize = hasAnyRole(getSessionRoles(), APPROVAL_FINALIZE_ROLES);
 
+  // The API returns opaque ids only; resolve the work number and officer name web-side (degrades to a short id).
+  const [workHeader, officerNames] = await Promise.all([
+    ts.workId ? getWorkHeader(ts.workId) : null,
+    getOfficerNameMap(),
+  ]);
+  const workNumber = ts.workNumber ?? workHeader?.data.workNumber ?? null;
+  const authorityName = ts.authorityName ?? (ts.tsAuthorityId ? officerNames.data[ts.tsAuthorityId] : undefined) ?? null;
+
   const detailRows: Array<[string, React.ReactNode]> = [
     ["TS Number", ts.tsNumber ?? "—"],
     ["Sanction Type", humanize(ts.sanctionType)],
     [
       "Work",
       ts.workId != null ? (
-        <Link href={`/works/billing/${ts.workId}`} title={ts.workId}>
-          {ts.workId.slice(0, 8) + "…"}
+        <Link href={`/works/proposals/${ts.workId}`} title={ts.workId}>
+          {workNumber ?? ts.workId.slice(0, 8) + "…"}
         </Link>
       ) : (
         "—"
       ),
     ],
     [
-      "TS Authority (ID)",
+      "TS Authority",
       ts.tsAuthorityId != null ? (
-        <span title={ts.tsAuthorityId} style={{ fontFamily: "var(--font-mono, monospace)" }}>
-          {ts.tsAuthorityId.slice(0, 8) + "…"}
+        <span title={ts.tsAuthorityId} style={{ fontFamily: authorityName ? undefined : "var(--font-mono, monospace)" }}>
+          {authorityName ?? ts.tsAuthorityId.slice(0, 8) + "…"}
         </span>
       ) : (
         "—"

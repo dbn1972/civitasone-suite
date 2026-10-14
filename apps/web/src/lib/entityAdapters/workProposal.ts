@@ -35,8 +35,16 @@ async function fetchAll(signal?: AbortSignal): Promise<ProposalRow[]> {
   return Array.isArray(body) ? body : (body.data ?? []);
 }
 
-export async function searchWorkProposals(query: string, signal: AbortSignal): Promise<EntityOption[]> {
-  const rows = await fetchAll(signal);
+/** Proposal status after DAO finalization - the precondition for a technical sanction. */
+export const DAO_FINALIZED = "dao_finalized";
+
+export async function searchWorkProposals(
+  query: string,
+  signal: AbortSignal,
+  opts?: { status?: string },
+): Promise<EntityOption[]> {
+  const all = await fetchAll(signal);
+  const rows = opts?.status ? all.filter((r) => r.status === opts.status) : all;
   const q = query.trim().toLowerCase();
   const filtered = q
     ? rows.filter(

@@ -73,6 +73,8 @@ export interface BillRow extends Record<string, unknown> {
    * while the table pill uses the coarse `status` bucket above.
    */
   rawStatus: BillStatus | string;
+  /** Maker (bill creator) id - the maker cannot finalize their own bill. */
+  createdBy: string | null;
 }
 
 function mapBillRow(r: Row): BillRow {
@@ -90,6 +92,7 @@ function mapBillRow(r: Row): BillRow {
     stage: humanize(status),
     status: billBucket(status),
     rawStatus: status,
+    createdBy: strOrNull(r.createdBy),
   };
 }
 
@@ -322,6 +325,9 @@ export function resolveTenderNames(
 /** Display-ready shape mapAaRow() produces for ApprovalsTable (AA tab). */
 export interface AaRow extends Record<string, unknown> {
   id: string;
+  /** Raw ids kept for web-side name resolution (GAP-WORKS-APPROVALS-01). */
+  workId: string | null;
+  authorityId: string | null;
   workNumber: string;
   approvalNumber: string;
   date: string;
@@ -334,6 +340,8 @@ export interface AaRow extends Record<string, unknown> {
 /** Display-ready shape mapTsRow() produces for ApprovalsTable (TS tab). */
 export interface TsRow extends Record<string, unknown> {
   id: string;
+  workId: string | null;
+  authorityId: string | null;
   workNumber: string;
   approvalNumber: string;
   date: string;
@@ -346,6 +354,8 @@ export interface TsRow extends Record<string, unknown> {
 function mapAaRow(r: Row): AaRow {
   return {
     id: str(r.id),
+    workId: strOrNull(r.workId),
+    authorityId: strOrNull(r.approvingAuthorityId),
     // Prefer a real work number / authority name if the list API ever supplies
     // one; today the approvals list (works-service approval/repo.ts listAa)
     // returns only the opaque ids (no cross-module join to work_proposals /
@@ -365,6 +375,8 @@ function mapAaRow(r: Row): AaRow {
 function mapTsRow(r: Row): TsRow {
   return {
     id: str(r.id),
+    workId: strOrNull(r.workId),
+    authorityId: strOrNull(r.tsAuthorityId),
     workNumber: str(r.workNumber) || shortId(strOrNull(r.workId)),
     approvalNumber: str(r.tsNumber),
     date: fmtDate(strOrNull(r.tsDate)),
@@ -375,20 +387,88 @@ function mapTsRow(r: Row): TsRow {
   };
 }
 
-/** Tenant-wide AA register — backs the /works/approvals list page. */
-export function getApprovalsAa(): Promise<LoaderResult<AaRow[]>> {
-  return fetchJson<unknown, AaRow[]>("/api/v1/works/approvals/aa?pageSize=100", [], {
-    telemetryKey: "works.approvals.aa",
-    mapResponse: (p) => pickItems(p).map(mapAaRow),
+/**
+ * GAP-WORKS-APPROVALS-01 / AA-DETAIL-03 / TS-DETAIL-03: the approvals API returns only opaque ids (modules may not
+ * join each other's schemas), so the readable work number and the officer name are resolved web-side, like the
+ * tender masters. The "authority" on an AA/TS is chosen from the identity user picker, so it resolves against the
+ * identity directory. Both lookups degrade to {} on any failure (the row then shows a short id, never an error).
+ */
+export async function getWorkNumberMap(ids: string[]): Promise<LoaderResult<Record<string, string>>> {
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (unique.length === 0) return { data: {}, source: "api" };
+  // The proposals endpoint resolves at most 50 ids per call -> batch.
+  const batches: string[][] = [];
+  for (let i = 0; i < unique.length; i += 50) batches.push(unique.slice(i, i + 50));
+  const results = await Promise.all(
+    batches.map((batch) =>
+      fetchJson<unknown, Record<string, string>>(
+        `/api/v1/works/proposals?ids=${encodeURIComponent(batch.join(","))}`,
+        {},
+        {
+          telemetryKey: "works.approvals.workNumbers",
+          mapResponse: (p) => {
+            const map: Record<string, string> = {};
+            for (const row of pickItems(p)) {
+              const id = strOrNull(row.id);
+              const wn = strOrNull(row.workNumber);
+              if (id && wn) map[id] = wn;
+            }
+            return map;
+          },
+        },
+      ),
+    ),
+  );
+  return {
+    data: Object.assign({}, ...results.map((r) => r.data)),
+    source: results.some((r) => r.source === "error") ? "error" : "api",
+  };
+}
+
+export function getOfficerNameMap(): Promise<LoaderResult<Record<string, string>>> {
+  return fetchJson<unknown, Record<string, string>>("/api/v1/identity/users?limit=200", {}, {
+    telemetryKey: "works.approvals.officerNames",
+    mapResponse: (p) => {
+      const map: Record<string, string> = {};
+      for (const row of pickItems(p)) {
+        const id = strOrNull(row.id);
+        const name = strOrNull(row.name);
+        if (id && name) map[id] = name;
+      }
+      return map;
+    },
   });
 }
 
+async function resolveApprovalNames<T extends AaRow | TsRow>(rows: T[]): Promise<T[]> {
+  if (rows.length === 0) return rows;
+  const [works, officers] = await Promise.all([
+    getWorkNumberMap(rows.map((r) => r.workId ?? "")),
+    getOfficerNameMap(),
+  ]);
+  return rows.map((r) => ({
+    ...r,
+    workNumber: (r.workId && works.data[r.workId]) || r.workNumber,
+    authority: (r.authorityId && officers.data[r.authorityId]) || r.authority,
+  }));
+}
+
+/** Tenant-wide AA register — backs the /works/approvals list page. */
+export async function getApprovalsAa(): Promise<LoaderResult<AaRow[]>> {
+  const res = await fetchJson<unknown, AaRow[]>("/api/v1/works/approvals/aa?pageSize=100", [], {
+    telemetryKey: "works.approvals.aa",
+    mapResponse: (p) => pickItems(p).map(mapAaRow),
+  });
+  return res.source === "error" ? res : { ...res, data: await resolveApprovalNames(res.data) };
+}
+
 /** Tenant-wide TS register — backs the /works/approvals list page. */
-export function getApprovalsTs(): Promise<LoaderResult<TsRow[]>> {
-  return fetchJson<unknown, TsRow[]>("/api/v1/works/approvals/ts?pageSize=100", [], {
+export async function getApprovalsTs(): Promise<LoaderResult<TsRow[]>> {
+  const res = await fetchJson<unknown, TsRow[]>("/api/v1/works/approvals/ts?pageSize=100", [], {
     telemetryKey: "works.approvals.ts",
     mapResponse: (p) => pickItems(p).map(mapTsRow),
   });
+  return res.source === "error" ? res : { ...res, data: await resolveApprovalNames(res.data) };
 }
 
 // ─── Execution (progress + issues) ──────────────────────────────────────────

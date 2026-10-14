@@ -1,6 +1,16 @@
 import { z } from "zod";
 import { zMoneyMinorString } from "@civitasone/schemas";
 
+/**
+ * GAP-WORKS-BOQ-NEW-04: a quantity may arrive as a decimal STRING (up to 4 dp, matching numeric(18,4)) so the browser
+ * never round-trips it through a JS float; a plain positive number is still accepted for existing callers. Either form
+ * is normalised to a number for the domain layer.
+ */
+export const boqQuantitySchema = z
+  .union([z.number().positive(), z.string().regex(/^\d{1,14}(\.\d{1,4})?$/, "quantity must be a decimal with up to 4 places")])
+  .transform((v) => (typeof v === "string" ? Number(v) : v))
+  .refine((n) => n > 0, "quantity must be positive");
+
 export const addBoqItemSchema = z.object({
   workId: z.string().uuid(),
   srItemId: z.string().uuid().optional(),
@@ -8,7 +18,7 @@ export const addBoqItemSchema = z.object({
   itemCode: z.string().max(64).optional(),
   unit: z.string().min(1).max(64),
   rate: zMoneyMinorString,
-  quantity: z.number().positive(),
+  quantity: boqQuantitySchema,
   numberVal: z.number().optional(),
   lengthVal: z.number().optional(),
   breadthVal: z.number().optional(),

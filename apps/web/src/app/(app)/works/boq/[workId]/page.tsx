@@ -1,8 +1,12 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { fetchJson } from "@/app/_data/apiClient";
-import { PageHeader, Card, DataTable, StatGrid, StatCard, RefreshErrorState } from "@/app/_components/ds";
+import { PageHeader, Card, StatGrid, StatCard, RefreshErrorState } from "@/app/_components/ds";
+import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
+import { MEASUREMENT_RECORD_ROLES } from "@/lib/auth/workRoles";
+import { BoqItemsTable } from "./BoqItemsTable";
 import { formatMoney, sumMinor } from "@/lib/formatters";
+import { getWorkHeader } from "../../_data/loaders";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -115,7 +119,7 @@ export default async function BoqDetailPage({
 }) {
   const { workId } = params;
 
-  const [itemsResult, recapResult] = await Promise.all([
+  const [itemsResult, recapResult, headerResult] = await Promise.all([
     fetchJson<unknown, BoqItem[]>(
       `/api/v1/works/boq/${workId}`,
       [],
@@ -135,7 +139,15 @@ export default async function BoqDetailPage({
         },
       },
     ),
+    getWorkHeader(workId),
   ]);
+
+  // GAP-WORKS-BOQ-WORKID-04: subtitle shows the real work number + description; if the header cannot be loaded
+  // fall back to a neutral label, never a truncated UUID.
+  const header = headerResult.data;
+  const subtitle = header.workNumber
+    ? `${header.workNumber}${header.description ? ` — ${header.description}` : ""}`
+    : "Work";
 
   // GAP-WORKS-BOQ-WORKID-02: a 404 on the ITEMS call means this work genuinely
   // doesn't exist (the backend 404s a bogus workId) — that is the only case
@@ -178,10 +190,7 @@ export default async function BoqDetailPage({
     <div className="page-main wrap">
       <PageHeader
         title="Bill of Quantities"
-        // GAP-WORKS-BOQ-WORKID-04: no human work number is on the BoQ item type,
-        // so keep the short id but mark it clearly as a reference and give the
-        // full id as a tooltip rather than a bare truncated UUID.
-        subtitle={`Work ref ${params.workId.slice(0, 8)}…`}
+        subtitle={subtitle}
         back="/works/boq"
         backLabel="BoQ Register"
         actions={
@@ -215,24 +224,10 @@ export default async function BoqDetailPage({
           </StatGrid>
 
           <Card title="BoQ Items">
-            <DataTable
-              columns={[
-                { key: "itemCode",        label: "Item Code" },
-                { key: "itemDescription", label: "Description" },
-                { key: "unit",            label: "Unit" },
-                { key: "rate",            label: "Rate ₹",   cellType: "amount", align: "right" },
-                { key: "quantity",        label: "Qty",       align: "right" },
-                { key: "amountMinor",     label: "Amount ₹", cellType: "amount", align: "right" },
-              ]}
-              rows={boqRows}
-              emptyIcon="📋"
-              emptyTitle="No BoQ items"
-              emptyMessage="No bill of quantities items have been added for this work yet."
-              emptyAction={
-                <Link href={`/works/boq/new?workId=${workId}`} className="btn primary">
-                  + Add first item
-                </Link>
-              }
+            <BoqItemsTable
+              rows={boqRows as Array<Record<string, unknown> & { id: string }>}
+              workId={workId}
+              canRecordMeasurement={hasAnyRole(getSessionRoles(), MEASUREMENT_RECORD_ROLES)}
             />
           </Card>
 

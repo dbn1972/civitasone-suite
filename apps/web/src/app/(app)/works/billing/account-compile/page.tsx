@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { PageHeader, Card, Button, ConfirmDialog } from "@/app/_components/ds";
+import { PageHeader, Card, Button, ConfirmDialog, AcceptedNotice } from "@/app/_components/ds";
+import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
 
@@ -76,32 +77,40 @@ export default function AccountCompilePage() {
   // GAP-WORKS-BILLING-ACCOUNT-COMPILE-03: check whether the chosen month/year
   // was already compiled, so the clerk is warned before a duplicate treasury
   // submission (which must then be an explicit, informed confirm).
+  const fetchPrior = useCallback(async (): Promise<PriorCompile[]> => {
+    const res = await fetch(
+      `/api/proxy/v1/works/billing/account-compile?month=${encodeURIComponent(month)}&year=${encodeURIComponent(year)}`,
+    );
+    if (!res.ok) throw new Error("not available");
+    const body = (await res.json()) as { data?: unknown };
+    const rows = Array.isArray(body.data) ? body.data : [];
+    return rows.map((r) => {
+      const row = r as Record<string, unknown>;
+      return {
+        id: String(row.id ?? ""),
+        status: String(row.status ?? ""),
+        submittedTo: row.submittedTo == null ? null : String(row.submittedTo),
+        submittedAt: row.submittedAt == null ? null : String(row.submittedAt),
+      };
+    });
+  }, [month, year]);
+
   const checkPrior = useCallback(async () => {
     try {
-      const res = await fetch(
-        `/api/proxy/v1/works/billing/account-compile?month=${encodeURIComponent(month)}&year=${encodeURIComponent(year)}`,
-      );
-      if (!res.ok) {
-        setPrior([]);
-        return;
-      }
-      const body = (await res.json()) as { data?: unknown };
-      const rows = Array.isArray(body.data) ? body.data : [];
-      setPrior(
-        rows.map((r) => {
-          const row = r as Record<string, unknown>;
-          return {
-            id: String(row.id ?? ""),
-            status: String(row.status ?? ""),
-            submittedTo: row.submittedTo == null ? null : String(row.submittedTo),
-            submittedAt: row.submittedAt == null ? null : String(row.submittedAt),
-          };
-        }),
-      );
+      setPrior(await fetchPrior());
     } catch {
       setPrior([]);
     }
-  }, [month, year]);
+  }, [fetchPrior]);
+
+  // GAP-WORKS-BILLING-ACCOUNT-COMPILE-03: the compile is an async job (202). After submit, follow it through the
+  // same GET until the compilation is recorded, instead of leaving the clerk with a bare "submitted".
+  const [recorded, setRecorded] = useState<PriorCompile | null>(null);
+  const accepted = useAcceptedWrite<number, PriorCompile[]>({
+    poll: () => fetchPrior(),
+    isDone: (rows, baseline) => rows.length > baseline,
+    onConfirmed: (rows) => setRecorded(rows[0] ?? null),
+  });
 
   useEffect(() => {
     if (!done) void checkPrior();
@@ -159,6 +168,7 @@ export default function AccountCompilePage() {
       setReference(ref);
       setConfirmOpen(false);
       setDone(true);
+      void accepted.accept(prior.length);
       toast.success("Account compile initiated.");
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
@@ -200,6 +210,13 @@ export default function AccountCompilePage() {
             {reference ? (
               <span style={{ fontWeight: 400 }}>
                 Reference: <code>{reference}</code>
+              </span>
+            ) : null}
+            <AcceptedNotice {...accepted.noticeProps} />
+            {recorded ? (
+              <span style={{ fontWeight: 400 }}>
+                Recorded status: <strong>{recorded.status || "recorded"}</strong>
+                {recorded.submittedTo ? ` (submitted to ${recorded.submittedTo})` : ""}.
               </span>
             ) : null}
             <Link href="/works/billing" className="btn ghost" style={{ alignSelf: "flex-start", minHeight: 36 }}>

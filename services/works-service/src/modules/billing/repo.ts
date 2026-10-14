@@ -151,6 +151,9 @@ export async function listMbsForWork(tenantId: string, workId: string) {
         mbNumber: measurementBooks.mbNumber,
         status: measurementBooks.status,
         issuedAt: measurementBooks.issuedAt,
+        // Maker identity so the UI can hide Advance from the maker (maker-checker; the consumer enforces it too).
+        issuedBy: measurementBooks.issuedBy,
+        createdBy: measurementBooks.createdBy,
         version: measurementBooks.version,
       })
       .from(measurementBooks)
