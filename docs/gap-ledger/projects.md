@@ -1185,7 +1185,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-UTILIZATION-01  ·  HIGH  ·  confirmed  ·  theme FABRICATED
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 PQ-D #2036: still open - page shows honest 'not available yet' state, no fabricated rows; NEEDS OWNER DECISION: project-service has no fund-utilization aggregate endpoint)
 - **W0 note:** partly fixed by #1869 — fabricated Lucknow/Dehradun/... literals and typed tiles removed, page now shows a 'not available yet' EmptyState; remaining: no getProjectUtilization() loader or project-service aggregate endpoint, so the table/tiles are never populated from real data (rows is a hard-coded empty array).
 - **First-pass claim:** Fabricated data presented as live: the page never fetches; eight rows and every stat tile are hard-coded literals (page.tsx:4-19) — including projects in other states — so a Government user reads sample numbers as the department’s own fund position.
 - **Verified evidence:** utilization/page.tsx:4-13 hard-codes eight rows (Lucknow, Dehradun, Jaipur, Patna...) and :16-19 hard-codes the tile strings; no loader call; page is a non-async function. Linked from projects/page.tsx:16 as 'Fund utilization monitoring'. No utilization loader for projects exists in loaders.ts (only grants/finance UC ones), so backend availability is unverified.
