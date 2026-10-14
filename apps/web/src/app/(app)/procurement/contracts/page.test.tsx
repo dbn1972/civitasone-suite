@@ -52,7 +52,7 @@ describe("ProcurementContractsPage (GAP-PROCUREMENT-CONTRACTS-01/02/03/04)", () 
 
   it("GAP-CONTRACTS-01: resolves vendorId to the vendor name (never the raw id)", async () => {
     route({ contracts: CONTRACTS, vendors: VENDORS });
-    render(await ProcurementContractsPage());
+    render(await ProcurementContractsPage({}));
     expect(screen.getByText("Acme Supplies")).toBeInTheDocument();
     expect(screen.queryByText("v1")).not.toBeInTheDocument();
   });
@@ -62,14 +62,14 @@ describe("ProcurementContractsPage (GAP-PROCUREMENT-CONTRACTS-01/02/03/04)", () 
       contracts: { data: { data: [{ id: "c2", title: "T", vendorId: "ghost", contractNo: "CON-2", status: "active" }] }, source: "api" },
       vendors: VENDORS,
     });
-    render(await ProcurementContractsPage());
+    render(await ProcurementContractsPage({}));
     expect(screen.getByText("Unknown vendor")).toBeInTheDocument();
     expect(screen.queryByText("ghost")).not.toBeInTheDocument();
   });
 
   it("GAP-CONTRACTS-02: no 'Templates' dead-end link remains", async () => {
     route({ contracts: CONTRACTS, vendors: VENDORS });
-    render(await ProcurementContractsPage());
+    render(await ProcurementContractsPage({}));
     const hrefs = Array.from(document.querySelectorAll("a")).map((a) => a.getAttribute("href"));
     expect(hrefs.some((h) => h?.includes("template=1"))).toBe(false);
     expect(screen.queryByText("Templates")).not.toBeInTheDocument();
@@ -77,14 +77,14 @@ describe("ProcurementContractsPage (GAP-PROCUREMENT-CONTRACTS-01/02/03/04)", () 
 
   it("GAP-CONTRACTS-03: contract rows link to the detail route /contracts/[id]", async () => {
     route({ contracts: CONTRACTS, vendors: VENDORS });
-    render(await ProcurementContractsPage());
+    render(await ProcurementContractsPage({}));
     const hrefs = Array.from(document.querySelectorAll("a")).map((a) => a.getAttribute("href"));
     expect(hrefs).toContain("/contracts/c1");
   });
 
   it("GAP-CONTRACTS-04: on a failed load, stats show '—' and a retry error state (not 0s)", async () => {
     route({ contracts: { data: {}, source: "error" }, vendors: VENDORS });
-    render(await ProcurementContractsPage());
+    render(await ProcurementContractsPage({}));
     expect(screen.getByText("Total Contracts").closest(".stat")).toHaveTextContent("—");
     expect(screen.getByText("Active").closest(".stat")).toHaveTextContent("—");
     // RefreshErrorState renders a Try again action (button).
@@ -93,7 +93,7 @@ describe("ProcurementContractsPage (GAP-PROCUREMENT-CONTRACTS-01/02/03/04)", () 
 
   it("GAP-CONTRACTS-01: a vendors fetch failure does not blank the contracts list", async () => {
     route({ contracts: CONTRACTS, vendors: { data: {}, source: "error" } });
-    render(await ProcurementContractsPage());
+    render(await ProcurementContractsPage({}));
     // Contract still shown; vendor falls back.
     expect(screen.getByText("Annual AMC")).toBeInTheDocument();
     expect(screen.getByText("Unknown vendor")).toBeInTheDocument();
@@ -112,7 +112,7 @@ describe("ProcurementContractsPage (GAP-PROCUREMENT-CONTRACTS-01/02/03/04)", () 
 
   it("GAP-CONTRACTS-03: shows Expiry and Value columns (paise formatted) and a dash when absent", async () => {
     route({ contracts: RICH, vendors: VENDORS });
-    render(await ProcurementContractsPage());
+    render(await ProcurementContractsPage({}));
     expect(screen.getByRole("columnheader", { name: /Expires/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /Value/i })).toBeInTheDocument();
     const row1 = screen.getByText("Annual AMC").closest("tr")!;
@@ -133,7 +133,7 @@ describe("ProcurementContractsPage (GAP-PROCUREMENT-CONTRACTS-01/02/03/04)", () 
 
   it("GAP-CONTRACTS-05: a uuid poRef links to the order; free text is shown as typed", async () => {
     route({ contracts: RICH, vendors: VENDORS });
-    render(await ProcurementContractsPage());
+    render(await ProcurementContractsPage({}));
     expect(screen.getByRole("columnheader", { name: "PO" })).toBeInTheDocument();
     const link = screen.getByRole("link", { name: "View PO" });
     expect(link).toHaveAttribute("href", "/procurement/orders/33333333-3333-4333-8333-333333333333");

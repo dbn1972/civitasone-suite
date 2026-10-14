@@ -5614,7 +5614,8 @@
       "retry": "Retry",
       "clear": "Clear purchase order",
       "vendorFromPo": "Set from the purchase order",
-      "vendorPending": "Choose a purchase order. The vendor is set from it."
+      "vendorPending": "Choose a purchase order. The vendor is set from it.",
+      "overReceipt": "Received quantity exceeds the open quantity on the purchase order. Reduce it to what is still pending and try again."
     },
     "dashboard": {
       "grnsMtdHint": "Accepted GRNs received in the current calendar month (IST).",

@@ -221,6 +221,13 @@ export function CreateGRNForm() {
       });
       const text = await res.text();
       if (!res.ok) {
+        let errCode = "";
+        try { errCode = (JSON.parse(text) as { code?: string }).code ?? ""; } catch { /* non-JSON error body */ }
+        if (errCode === "OVER_RECEIPT") {
+          setStatus("error");
+          setMessage(t("overReceipt"));
+          return;
+        }
         const human = toHumanError("save", { area: "goods receipt note" });
         setStatus("error");
         setMessage(`${human.what} ${human.next}`);

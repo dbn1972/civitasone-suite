@@ -116,6 +116,24 @@ describe("CreateGRNForm - GRN-NEW-02/03/04/05", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/received quantity for at least one item/i));
   });
 
+  it("shows a specific over-receipt message when the server returns OVER_RECEIPT (422)", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes("/grns") && init?.method === "POST") {
+        return Promise.resolve(new Response(JSON.stringify({ code: "OVER_RECEIPT", message: "x" }), { status: 422 }));
+      }
+      if (url.includes(`/pos/${PO.id}`)) return Promise.resolve(new Response(JSON.stringify(PO_DETAIL), { status: 200 }));
+      if (url.includes("/pos")) return Promise.resolve(new Response(JSON.stringify({ data: [PO] }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    });
+    render(<CreateGRNForm />);
+    await pickPo(/PO\/2026\/0001/);
+    await waitFor(() => expect(screen.getByText("reams")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Received qty row 1"), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record GRN" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/exceeds the open quantity on the purchase order/i));
+  });
+
   it("blocks submit when received exceeds ordered (NEW-03)", async () => {
     mockRoutes();
     render(<CreateGRNForm />);

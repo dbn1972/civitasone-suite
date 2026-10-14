@@ -10,7 +10,7 @@ export default async function ProcurementContractsPage({
   searchParams,
 }: {
   searchParams?: { status?: string };
-} = {}) {
+}) {
   const t = await getTranslations("procurement.contractsPage");
   // GAP-PROCUREMENT-CONTRACTS-01: the contract list only carries a raw
   // vendorId, so resolve ids to names via the procurement vendor directory.
