@@ -168,7 +168,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-IDENTITY-05  ·  LOW  ·  partly  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W1 SF-11: closed by #2025)
 - **First-pass claim:** Loading heading 'Identity Graph' differs from page title 'CDP — Identity Graph' (loading.tsx:8).
 - **Verified evidence:** identity/loading.tsx:6 heading is 'Identity' (not 'Identity Graph' as stated); page title is 'CDP — Identity Graph' (page.tsx:15), so the mismatch is real. Loading also uses hard-coded #f1f5f9 skeleton blocks (l.12,15) and a 4-stat skeleton although the page has no stat cards. error.tsx exists in the folder.
 - **Files to change:** `apps/web/src/app/(app)/cdp/identity/loading.tsx`

@@ -2473,7 +2473,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-USAGE-05  ·  LOW  ·  partly  ·  theme A11Y (was LOADING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9; W1 SF-11 #2025 re-confirmed only the loading-skeleton criterion, remaining criteria still PROVISIONAL)
 - **First-pass claim:** White 11px percent label on amber/green bars has low contrast and disappears near 0 %; page lacks the Breadcrumb its siblings have and has no loading.tsx/error.tsx (UsageDisplay.tsx:96-108).
 - **Verified evidence:** UsageDisplay.tsx:108-113 white 11px label inside the fill div; on #f59e0b and #10b981 contrast is roughly 2-2.5:1 (fails 4.5:1) and at ~0% the label is clipped (width 0 inside overflow:hidden parent). usage/page.tsx has no Breadcrumb (siblings do). usage/ has no loading.tsx or error.tsx, but the parent tenant-admin folder has both, so Next inherits them; only the page-specific skeleton is missing.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/usage/UsageDisplay.tsx`, `apps/web/src/app/(app)/tenant-admin/usage/page.tsx`, `apps/web/src/app/(app)/tenant-admin/usage/loading.tsx`

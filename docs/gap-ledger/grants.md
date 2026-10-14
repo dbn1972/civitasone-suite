@@ -659,7 +659,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-GRANTEES-05  ·  LOW  ·  confirmed  ·  theme LOADING (was STATUS)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1865, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1865, verified on main 9c5e9e9e9; W1 SF-11 #2025 re-confirmed only the loading-skeleton criterion, remaining criteria still PROVISIONAL)
 - **First-pass claim:** loading.tsx draws no stat blocks (loading.tsx:4-9) although four StatCards render; the type pill prints the raw enum uppercased (GranteesTable.tsx:20).
 - **Verified evidence:** grantees/loading.tsx:4-9 has title bar and one 80-high block, no stat grid, while page renders four StatCards. GranteesTable.tsx:20 shows StatusPill label=row.type.toUpperCase() (raw enum e.g. SOCIETY).
 - **Files to change:** `apps/web/src/app/(app)/grants/grantees/loading.tsx`, `apps/web/src/app/(app)/grants/grantees/GranteesTable.tsx`

@@ -44,7 +44,7 @@ Counts: ACTION 18, BACKEND-VERIFY 5
 
 ### GAP-CONTRACTS-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1928, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1928, verified on main 9c5e9e9e9; W1 SF-11 #2025 re-confirmed only the loading-skeleton criterion, remaining criteria still PROVISIONAL)
 - **First-pass claim:** loading.tsx renders an 8-row table skeleton (loading.tsx:25-30) for a hub with two tiles, and not-found.tsx has no back action (not-found.tsx:3-8).
 - **Verified evidence:** contracts/loading.tsx:24-29 draws a card with 8 shimmer rows for a page that is two link tiles (ModuleHub); it is shared with /contracts/list and [id] via the segment. not-found.tsx:3-9 renders EmptyState without the supported `action` prop (EmptyState.tsx:8) so no back link.
 - **Files to change:** `apps/web/src/app/(app)/contracts/loading.tsx`, `apps/web/src/app/(app)/contracts/not-found.tsx`
