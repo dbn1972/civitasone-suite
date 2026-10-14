@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { getMunicipalService } from "./services";
-import { parseListPayload, pickField, toMunicipalRecordRow, countInProgress, isInProgressStatus, detailEntries, statusFilterOptions } from "./records";
+import { getMunicipalService, MUNICIPAL_SERVICE_CATALOG } from "./services";
+import { parseListPayload, pickField, toMunicipalRecordRow, countInProgress, isInProgressStatus, detailEntries, omittedFieldCount, statusFilterOptions } from "./records";
 
 describe("municipal record parsing", () => {
   const trade = getMunicipalService("trade")!;
@@ -229,5 +229,56 @@ describe("municipal record parsing", () => {
     expect(byKey.remarks.value).not.toContain("a.b@example.com");
     expect(byKey.siteAddress.value).toContain("MG Road");
     expect(byKey.siteAddress.value).not.toContain("9876543210");
+  });
+
+  // W2 PQ-C round 2: the allow-list must not silently drop a service's real
+  // operational columns. Columns below are the user-facing fields of each
+  // service's drizzle table (services/<svc>-service/.../schema.ts), minus
+  // blobs/photos/actor-ids/system columns which are intentionally not shown.
+  const SERVICE_COLUMNS: Record<string, string[]> = {
+    advertisement: ["applicationNumber", "status", "advertiserName", "advertiserOrg", "advertisementType", "location", "dimensions", "structuralDetails", "feeMinor", "feePaid", "submittedAt"],
+    animal: ["complaintNumber", "location", "animalType", "complaintType", "description", "severity", "status", "assignedTeam", "resolvedAt", "resolution"],
+    building: ["applicationNumber", "status", "siteAddress", "plotArea", "builtUpArea", "proposedFloors", "fsiRequested", "farComputed", "architectName", "architectLicenceNo", "structuralEngineer", "feeMinor", "feePaid"],
+    crematorium: ["bookingNumber", "applicantName", "applicantRelation", "deceasedName", "deceasedAge", "deceasedGender", "serviceType", "requestedDate", "requestedSlot", "status", "slotNumber", "feeMinor", "feePaid", "paymentRef"],
+    drainage: ["complaintNumber", "location", "complaintType", "description", "severity", "status", "resolvedAt", "resolution"],
+    event: ["applicationNumber", "status", "organiserName", "organiserOrg", "eventType", "venueName", "venueAddress", "startDate", "endDate", "expectedAttendance", "temporaryStructures", "soundPermission", "feeMinor", "depositMinor"],
+    fire: ["applicationNumber", "status", "buildingName", "buildingAddress", "occupancyType", "buildingHeight", "numberOfFloors", "builtUpArea", "fireSafetyMeasures", "feeMinor", "feePaid"],
+    market: ["allotmentNumber", "allotteeName", "allotmentType", "allotmentDate", "agreementStartDate", "agreementEndDate", "monthlyRentMinor", "securityDepositMinor", "status"],
+    parking: ["bookingNumber", "vehicleNumber", "vehicleType", "entryTime", "exitTime", "durationMinutes", "amountMinor", "status", "paymentRef", "spaceNumber"],
+    parks: ["requestNumber", "requestType", "location", "treeSpecies", "reason", "status", "inspectionReport"],
+    refund: ["requestNumber", "status", "applicantName", "originalServiceType", "originalTransactionRef", "originalAmountMinor", "refundAmountMinor", "refundReason", "description"],
+    roadcut: ["applicationNumber", "status", "applicantName", "applicantOrg", "purpose", "location", "roadType", "cuttingLength", "cuttingWidth", "cuttingDepth", "feeMinor", "depositMinor"],
+    sewerage: ["bookingNumber", "address", "tankCapacityLitres", "requestedDate", "requestedSlot", "status", "feeMinor", "feePaid"],
+    shop: ["applicationNumber", "status", "establishmentName", "establishmentType", "ownerName", "ownerType", "premisesAddress", "activityDescription", "activityCategory", "employeeCount", "capacityDetails", "feeAmountMinor", "feePaid"],
+    swm: ["registrationNumber", "generatorName", "generatorType", "address", "estimatedWasteKgPerDay", "category", "status", "feeMinor"],
+    trade: ["applicationNumber", "status", "businessName", "tradeCategory", "subCategory", "ownerName", "premisesAddress", "areaInSqft", "employeeCount", "feeMinor", "feePaid"],
+    vendor: ["registrationNumber", "status", "vendorName", "category", "preferredZone", "allocatedZone", "allocatedSpot", "feeMinor", "feePaid"],
+  };
+
+  it("detailEntries: every catalog service keeps its operational columns visible (PQ-C r2)", () => {
+    const configs = MUNICIPAL_SERVICE_CATALOG;
+    for (const cfg of configs) {
+      const cols = SERVICE_COLUMNS[cfg.serviceKey];
+      expect(cols, `columns map missing for ${cfg.serviceKey}`).toBeDefined();
+      const record: Record<string, unknown> = { id: "r1", tenantId: "t1", documents: [{ n: 1 }], photo: "p.jpg" };
+      for (const c of cols) record[c] = "x1";
+      const shown = new Set(detailEntries(record, cfg).map((e) => e.key));
+      const missing = cols.filter((c) => !shown.has(c));
+      expect(missing, `${cfg.serviceKey}: operational fields silently dropped`).toEqual([]);
+      // blobs stay out, and the panel can report them instead of hiding silently
+      expect(shown.has("documents")).toBe(false);
+      expect(omittedFieldCount(record, cfg)).toBe(2);
+    }
+  });
+
+  it("omittedFieldCount: counts populated non-allow-listed keys only (PQ-C r2)", () => {
+    expect(
+      omittedFieldCount({ id: "a", status: "x", documentNumber: "D1", internalNotesBlob: { a: 1 }, emptyThing: null }, trade),
+    ).toBe(2);
+  });
+
+  it("detailEntries: address strings are identifier-masked (PQ-C r2)", () => {
+    const e = detailEntries({ status: "s", venueAddress: "Hall 3, call 9876543210" }, getMunicipalService("event")!);
+    expect(e.find((x) => x.key === "venueAddress")!.value).not.toContain("9876543210");
   });
 });
