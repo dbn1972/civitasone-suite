@@ -380,7 +380,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-AUDIT-02  ·  HIGH  ·  partly  ·  theme DEADCTL (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — no Filter control (page.test 'no dead Filter control'); home link is /tenant-admin/audit with no ?export param (tenant-admin/page.tsx:84))
 - **First-pass claim:** The header 'Filter' is a PlaceholderButton with no behaviour, and the Export href on the home page (?export=true) is ignored — the two advertised controls for an audit screen are not functional beyond print (audit/page.tsx:28-29).
 - **Verified evidence:** Filter: <PlaceholderButton label='Filter'> (audit/page.tsx:29) renders a disabled 'coming soon' Button (PlaceholderButton.tsx) - confirmed non-functional (though honest). Export: header 'Export' is PrintExportButton (:28) which calls window.print(), so it works but as browser print only; the home tenant-admin/page.tsx:30 links to /tenant-admin/audit?export=true, and audit/page.tsx never reads searchParams, so that param is ignored (confirmed). The table already has a working text filter (AuditLogTable.tsx:73 filterable) plus All/Failures segmented filter (:17,40). Theme PII/masking fix in the input does not apply. No CSV/audited export exists.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/audit/page.tsx`, `apps/web/src/app/(app)/tenant-admin/page.tsx`, `apps/web/src/app/_components/PlaceholderButton.tsx`
@@ -396,6 +396,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 ### GAP-TENANT-ADMIN-AUDIT-03  ·  MEDIUM  ·  partly  ·  theme PII
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 INTERIM (needs owner decision):** emails/IPs are masked by default and exports are now audited, but a click-to-reveal with an audited reveal and a server-side audit.viewed event are NOT built: they need a policy decision (may tenant admins reveal? an audit.viewed per list read doubles the log volume and appears in the log itself). Note also: audit-service /v1/audit/events allows audit_officer|audit_admin|super_admin|platform_admin — NOT tenant_admin — so confirm who this page is meant for.
 - **W0 note:** partly fixed by #1864 — Emails/IPs masked by default (maskEmail/maskIp); no reveal control or audit.viewed logging
 - **First-pass claim:** DPDP: actor identifiers (emails) and source IPs are shown in clear to every role in the layout with no masking or view-audit; reading the audit log is itself not evidenced as audited (AuditLogTable.tsx:51-56).
 - **Verified evidence:** Confirmed in UI: AuditLogTable.tsx:48-56 prints e.actor (email/identifier) and ipAddress in clear; page mapping at audit/page.tsx:41-49. Access to the page is limited by tenant-admin/layout.tsx requireAnyRole(tenant_admin, platform_admin, super_admin), so 'every role' is overstated; these are the roles entitled to see the audit log. No shared <Masked> component exists (grep finds none; only Step4 MaskedInput). Whether reads of the audit log are themselves audited is cannot-verify (audit service /api/v1/audit/events not in snapshot).
@@ -411,7 +412,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-AUDIT-04  ·  MEDIUM  ·  partly  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #2038)
+- **W2 note:** server-side totals: audit-service GET /v1/audit/events/summary (events/routes.ts, repo.ts summarizeEvents) + getTenantAuditSummary loader; the page shows Total/24h/Success/Failures from the server and keeps an honest 'Loaded events' tile for the table rows; '—' when the summary is unavailable. Tests: audit-service tests/events-summary.test.ts, audit/page.test.tsx. Filter/cursor params remain future work (list still paginates client-side over a bounded fetch).
 - **W0 note:** partly fixed by #1864 — KPI relabelled 'Loaded events'; no server-side summary endpoint/cursor filters
 - **First-pass claim:** KPIs are computed client-side from whatever the list endpoint returns (no total/count from API), so 'Total Events' equals the returned page size, not the tenant's history (audit/page.tsx:14-17).
 - **Verified evidence:** Confirmed client-side: audit/page.tsx:14-17 derive Total/Success/Failure/24h from events.length of whatever getTenantAuditLog returns (loaders.ts:4352 GET /api/v1/audit/events?tenantScoped=true, getArrayPayload discards any envelope such as total/next), and AuditLogTable paginates only client-side (pageSize=15, :75). Page-size cap and existence of a total field in the audit service are cannot-verify (service and @civitasone/types not in snapshot). The 'Failures' filter also runs only on the fetched subset.
@@ -429,7 +431,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-AUDIT-05  ·  LOW  ·  partly  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — RefreshErrorState + '—' KPIs on error and 'Denied' outcome humanised — audit/page.test.tsx + AuditLogTable.test.tsx pass)
 - **First-pass claim:** No EmptyState for zero events; failed load shows 0s (page.tsx:39). Outcome other than success/failure falls to an untranslated info pill (AuditLogTable.tsx:68).
 - **Verified evidence:** Failed load: page does render <DataSourceBadge source='error'> (audit/page.tsx:39) but stat cards still show 0 (:34-37) and the table shows the generic DataTable 'No records found' - so 'shows 0s' confirmed, 'no error' partly (small amber badge only). No custom empty state: DataTable default EmptyState appears for zero rows (ds/DataTable.tsx:320). Unknown outcome falls to <span className='pill info'>{e.outcome}</span> at AuditLogTable.tsx:68 - raw un-humanised value (confirmed).
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/audit/page.tsx`, `apps/web/src/app/(app)/tenant-admin/audit/AuditLogTable.tsx`
@@ -618,7 +620,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-COMPLIANCE-01  ·  MEDIUM  ·  partly  ·  theme A11Y (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — results render via StatusPill (token classes) — compliance/page.test.tsx 'renders results as StatusPills'; remediation link is conditional on an API field that does not exist)
 - **First-pass claim:** Result is conveyed by emoji plus coloured text (#16a34a/#d97706/#dc2626 hex) — amber text on white is below 4.5:1 and 'fail' never links to remediation or the failing resource (page.tsx:8-19,63).
 - **Verified evidence:** Lines 8-18 map result to hex colours (#16a34a pass, #d97706 warn, #dc2626 fail) and emoji; line 63 renders the result as coloured text. Contrast: #d97706 on white is about 3.2:1 (fails 4.5:1 for 12px text) - confirmed; #16a34a about 3.3:1 also fails - understated. Not colour-only: the text word (Pass/Warn/Fail) and emoji are both shown (:56,63). 'fail' cannot link to remediation because ComplianceCheck has only id, timestamp, title, result (loaders.ts ComplianceCheck) - no resource or href field; adding one is a backend change.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/compliance/page.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -633,7 +635,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-COMPLIANCE-03  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — FOUND UNMET: body {} parsed as a valid empty overview; schema now requires retentionStatus/checks so {} -> error, real 0 stays 0 — loaders.tenantAdminW2.test.ts)
 - **First-pass claim:** Fallback loader yields retentionStatus 'Unknown' and 0% scores; only the errored branch hides them, so an empty-but-successful response shows '0%' DPDP (loaders.ts getComplianceOverview).
 - **Verified evidence:** getComplianceOverview (loaders.ts ~4741) returns the zero fallback {dpdpScore:0,certInReadiness:0,retentionStatus:'Unknown',checks:[]} only when the fetch fails, and compliance/page.tsx:24,37-40 already replaces those with '—' when resource.status==='error' and shows RefreshErrorState (:43-46) - so the described failure case is handled. The real gap: no responseSchema, mapResponse accepts any record (`isRecord(p) ? p as ComplianceOverview`), so a 200 with missing fields renders 'undefined%' and `overview.checks.filter` would throw (page crash to error.tsx). A genuine 0 from the API shows '0%' correctly. toResourceState treats checks.length===0 as 'empty' but the KPIs still render as if data exist.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/compliance/page.tsx`, `apps/web/src/app/_data/loaders.ts`, `packages/schemas (web schemas, not in snapshot)`
@@ -648,7 +650,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-COMPLIANCE-04  ·  LOW  ·  partly  ·  theme POLISH (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #2038)
+- **W2 note:** timeline replaced by a sortable, paginated DataTable (ComplianceChecksTable.tsx, pageSize 10); single error message on failure. Tests: compliance/page.test.tsx (30 checks -> 10 rows; one error message).
 - **W0 note:** partly fixed by #1864 — DataSourceBadge dropped (single error msg); timeline still unpaginated <ol> with inline styles.
 - **First-pass claim:** DataSourceBadge rendered unconditionally above KPIs (null when healthy); timeline is a list with inline styles, no table for many checks (page.tsx:34,52).
 - **Verified evidence:** Line 34 renders <DataSourceBadge source={result.source}/> unconditionally; it returns null when source!=='error' (DataSourceBadge.tsx), so healthy pages are unaffected - not a defect, but on error the badge and RefreshErrorState (:45) show two messages. Timeline (:53-68) is an <ol> with inline styles and no pagination/filter; adequate for a short list, a limitation for many checks (confirmed, minor).
@@ -1424,7 +1427,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-PLANS-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — no fake success path: confirm only closes an honest 'contact administrator' dialog — PlansClient.test.tsx (-01/-04 tests))
 - **First-pass claim:** Upgrade is simulated: confirmUpgrade() does setUpgradeStep(2) then setTimeout 2000 ms → step 3 'Upgrade Successful!' and mutates local currentPlanId; no payment or billing request is made (PlansClient.tsx:55-61).
 - **Verified evidence:** PlansClient.tsx:55-61 confirmUpgrade(): setUpgradeStep(2); setTimeout(2000) -> setUpgradeStep(3) and setCurrentPlanId(targetPlanId). No fetch. UI shows 'Processing payment...' (178) and 'Upgrade Successful! Changes take effect immediately.' (184-185) although nothing is charged or changed server side. The only billing call in the app is the read GET /api/v1/billing/plans (loaders.ts:4598); write endpoints unverified.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/plans/PlansClient.tsx`, `apps/web/src/app/(app)/tenant-admin/plans/page.tsx`, `billing service (not in snapshot)`
@@ -1440,7 +1443,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-PLANS-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 reopened:** the provisional re-check failed its criteria — the downgrade flow shows only a 'contact your administrator' dialog: no required reason, no usage-vs-target-limit blocking, no pending state/audit row (acceptance unmet). Tenant-self-serve plan change needs an owner decision (tenant-service has /v1/tenant/subscription/downgrade; billing-service is super-admin-only) — INTERIM only.
 - **First-pass claim:** Downgrade 'Confirm Downgrade' only sets local state and closes — no API call, no audit reason, no check that current users/data exceed the target plan's limits beyond a warning line (PlansClient.tsx:212).
 - **Verified evidence:** PlansClient.tsx:212 (line 243 by file) 'Confirm Downgrade' runs setCurrentPlanId(targetPlanId!) and closes the modal; no request, no reason, no audit. The only guard is a static warning comparing plan maxUsers (197-201), not actual active users/storage, which the page does not load.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/plans/PlansClient.tsx`, `billing service (not in snapshot)`
@@ -1457,7 +1461,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-PLANS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — header tile and highlighted card both derive from one dataset — new plans/page.test.tsx)
 - **First-pass claim:** Header StatCards are rendered by the server page from the original currentPlanId; after a (simulated) plan change they stay stale while cards below show the new plan (page.tsx:26-31 vs PlansClient.tsx:20,94).
 - **Verified evidence:** plans/page.tsx:11,21-26 StatCards derive currentPlan from server plansData.currentPlanId; PlansClient.tsx:17 holds its own currentPlanId state initialised from data (also not resynced on refresh), so after a plan change the cards below show the new plan while the header keeps the old one.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/plans/page.tsx`, `apps/web/src/app/(app)/tenant-admin/plans/PlansClient.tsx`
@@ -1473,6 +1477,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 ### GAP-TENANT-ADMIN-PLANS-04  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 INTERIM (needs owner decision):** Razorpay checkout and the dead PDF button are gone; GST invoice columns and the Govt payment-mode (PO/GeM/treasury) choice need billing-API fields + a product decision.
 - **W0 note:** partly fixed by #1864 — Razorpay checkout and dead PDF button removed; GST invoice columns still absent (awaiting billing API)
 - **First-pass claim:** 'Pay via Razorpay' presents a card-gateway checkout to a Government department whose payments run through PO/GeM/treasury; GST invoice details are absent from the invoice table and the 📥 PDF button has no handler (PlansClient.tsx:171,145).
 - **Verified evidence:** PlansClient.tsx:171 (line 202 by file) primary button reads 'Pay via Razorpay'. Invoice table (166-169 in original numbering; columns Date/Amount/Status/Action) has no invoice number, GSTIN, tax split or SAC, and the '📥 PDF' Button (176) has no onClick. Whether Razorpay is the intended gateway for Govt customers is a product decision.
@@ -1489,7 +1494,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-PLANS-05  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — price-ranked Upgrade/Downgrade test + new Escape-closes/aria-modal test in PlansClient.test.tsx; ConfirmDialog owns focus trap (ds/ConfirmDialog.test.tsx))
 - **First-pass claim:** Modals use hard-coded #fff and hex borders (no dark mode), lack focus trap/escape handling; isUpgrade is inferred from array order so an unsorted API response mislabels Upgrade/Downgrade (PlansClient.tsx:90,156,195).
 - **Verified evidence:** PlansClient.tsx modals (line 156/195 in the finding's numbering): both dialogs use role=dialog aria-modal with inline background #fff and hex borders, no Escape handler, no focus move/trap, no overlay-click handling (no keydown or ref code in file). isUpgrade at line 121 is `plans.indexOf(plan) > plans.findIndex(current)`, order-dependent, so an unsorted API response mislabels Upgrade/Downgrade. Trial banner (112) and card borders also hard-code hex.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/plans/PlansClient.tsx`
@@ -1618,7 +1623,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-READINESS-02  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — readiness/page.test.tsx 'passed + failed === total' passes)
 - **First-pass claim:** KPI counts disagree with the list: Passed is derived from overall% (round(overall/100*8)) while In Progress and Failed count the constant, so with overall 75 the tiles show 6+2+1=9 of 8 checks (page.tsx:38-41,55-58).
 - **Verified evidence:** readiness/page.tsx:38-40 passed = round(overall/100*8) when readiness exists; l.57-58 count in-progress (2) and fail (1) from the constant. overall=75 -> 6+2+1 = 9 vs total 8. Also passed is not the count of pass rows (constant has 5).
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/readiness/page.tsx`
@@ -1635,6 +1640,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 ### GAP-TENANT-ADMIN-READINESS-03  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 INTERIM (needs owner decision):** the readiness gates are platform-engineering gates (queue-first writes, k6, contract tests...) with no tenant-fixable screen, so there is no honest Fix target; GATE_META has no href by design. Decide whether tenant admins should see these gates at all.
 - **W0 note:** partly fixed by #1864 — Fix-link logic exists but GATE_META entries define no href, so no Fix link ever renders
 - **First-pass claim:** Rows are not actionable: a failing "Compliance Verified" or "Security Hardened" has no link to the screen that fixes it (page.tsx:79-89).
 - **Verified evidence:** readiness/page.tsx:79-89 li rows contain icon, text and StatusPill only; no anchor. Existing target routes: tenant-admin/compliance, mfa, settings, sso, idp, install, org-hierarchy, users, etc.
@@ -1651,7 +1657,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-READINESS-04  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — readiness/page.test.tsx go-live text banner + null-readiness tests pass)
 - **First-pass claim:** productionReady and allGreen from the API are typed but never shown, so "go-live" readiness is not stated (loaders.ts:829-833, page.tsx:36).
 - **Verified evidence:** loaders.ts TenantAdminReadiness {overall, productionReady, allGreen} (~l.829-833); page.tsx uses only readiness.overall (l.39,42). productionReady is used only in the hub KPI note (loaders ~l.54 'Production ready'/'Gates pending').
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/readiness/page.tsx`
@@ -1666,7 +1672,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-READINESS-05  ·  LOW  ·  partly  ·  theme A11Y (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — ProgressBar exposes role=progressbar + aria-valuenow/min/max, ds/ProgressBar.test.tsx 'exposes role=progressbar…')
 - **First-pass claim:** Status carried by emoji with aria-hidden plus a pill; progress bar uses DS ProgressBar without a text label beyond the percentage (page.tsx:26-30,72).
 - **Verified evidence:** page.tsx:82 emoji is aria-hidden and every row also has StatusPill with text label (l.87), so status is not emoji/colour-only: overstated. Real gaps: ProgressBar (ds/ProgressBar.tsx) renders plain div with no role=progressbar/aria-valuenow, the percentage text is adjacent only; strings hard-coded; StatCard icons are emoji.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/readiness/page.tsx`, `apps/web/src/app/_components/ds/ProgressBar.tsx`
@@ -2085,6 +2091,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 ### GAP-TENANT-ADMIN-SETTINGS-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 INTERIM (needs owner decision):** the direct toggle + confirm + required reason + server audit is what exists; there is NO workflow module-change-requests endpoint, so an approval flow cannot be built without a product decision (maker-checker for module changes?). Backend TENANT_ADMIN gate is admin-service config/routes.ts. Found+fixed while verifying: the Settings page could never load real data (loader schema vs admin-service shape) — GET /v1/admin/tenant/modules?detail=1 + envelope-tolerant loader.
 - **W0 note:** partly fixed by #1864 — Dead banner removed; decision recorded that no workflow endpoint exists, direct toggle with confirm+reason; no approval flow
 - **First-pass claim:** ModuleApprovalBanner (tenant_admin "Approval required", workflow-service request) is dead code; the page lets a tenant_admin toggle modules directly with no approval or confirmation, contradicting the documented workflow (ModuleApprovalBanner.tsx:8-15, ModuleToggleActions.tsx:44-52).
 - **Verified evidence:** grep finds no import of ModuleApprovalBanner anywhere in apps/web/src (only its own file), so it is dead. Its doc (ModuleApprovalBanner.tsx:18-26) says tenant_admin must POST /api/proxy/v1/workflow/module-change-requests, but ModuleToggleActions.save (46-70) POSTs /api/proxy/v1/admin/tenant/modules/{key}/toggle directly for any role; ModuleToggleActions never receives roles. Whether workflow-service or the admin toggle endpoint enforces approval server-side is not in the snapshot (cannot verify backend).
@@ -2103,7 +2110,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SETTINGS-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — ModuleToggleActions.test.tsx 'Save opens a confirm dialog that requires a reason before any request' passes; server writes reason into the audit event (module-toggle.test.ts))
 - **First-pass claim:** Disabling a module (Finance, HR) applies on "Save changes" with no confirm dialog and no reason field; other destructive admin actions require an audited reason (ModuleToggleActions.tsx:44-63).
 - **Verified evidence:** ModuleToggleActions.tsx:46-70 save() loops dirtyKeys and POSTs {enabled} only; there is no ConfirmDialog and no reason field. Contrast: sessions/SessionsTable.tsx:140-157 uses ConfirmDialog with requireReason. Audit is claimed server-side (file comment lines 20-22), not verifiable here. Maker!=checker is only meaningful with the approval flow in SETTINGS-01.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/settings/ModuleToggleActions.tsx`
@@ -2120,7 +2127,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SETTINGS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — ModuleToggleActions.test.tsx 'reports partial failure and still refreshes' passes)
 - **First-pass claim:** Save loops over changed modules and stops at the first failure, leaving earlier toggles applied while the UI shows only the error text (ModuleToggleActions.tsx:44-58).
 - **Verified evidence:** ModuleToggleActions.tsx:52-62: sequential fetch per key; on the first !res.ok it sets error and returns (finally resets busy) without router.refresh(), so earlier toggles are persisted server-side while local `pending` state still shows all intended toggles and `initial` is stale; no list of which succeeded.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/settings/ModuleToggleActions.tsx`
@@ -2135,7 +2142,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SETTINGS-04  ·  MEDIUM  ·  confirmed  ·  theme STATUS
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — settings/page.test.tsx 'exactly three tiles… Enabled' + vocabulary test pass)
 - **First-pass claim:** Status vocabulary is inconsistent: toggle pill "Active/Disabled", details table "Active/Inactive", tile "Disabled"; "Configured" always equals Total Modules so it carries no information (ModuleToggleActions.tsx:98, page.tsx:31,50).
 - **Verified evidence:** Toggle pill text 'Active'/'Disabled' (ModuleToggleActions.tsx:100), details table 'Active'/'Inactive' (page.tsx:50), tile 'Disabled' (page.tsx:31). 'Configured' tile is value={total} (page.tsx:32, not 31), identical to Total Modules. StatusPill maps 'inactive' to mut (StatusPill.tsx:22) but 'disabled' is not in STATUS_MAP.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/settings/page.tsx`, `apps/web/src/app/(app)/tenant-admin/settings/ModuleToggleActions.tsx`
@@ -2149,7 +2156,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SETTINGS-05  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — settings/page.test.tsx 'on error shows RefreshErrorState… no Save button' passes)
 - **First-pass claim:** Failed fetch resolves to [], so tiles show 0 and the card says "No modules"; only a badge distinguishes outage from empty (page.tsx:9-12,34).
 - **Verified evidence:** getTenantModules (loaders.ts:4190) presumably falls back to []; page.tsx:9-13 does no error check, tiles 29-32 read 0, ModuleToggleActions shows EmptyState 'No modules' (line 106), and only DataSourceBadge at page.tsx:34 signals failure.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/settings/page.tsx`, `apps/web/src/app/(app)/tenant-admin/settings/ModuleToggleActions.tsx`
@@ -2165,7 +2172,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SETTINGS-06  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #2038; ALREADY-FIXED on main)
+- **W2 note:** Switch is a track+thumb control with Enabled/Disabled text (settings/ModuleToggleActions.tsx); link renamed 'View audit log' (settings/page.tsx:27) because the audit page takes no resource filter. Test: ModuleToggleActions.test.tsx 'Enabled/Disabled vocabulary'.
 - **W0 note:** partly fixed by #1864 — Switch now track+thumb with state text; audit link still unfiltered (audit page has no filter params)
 - **First-pass claim:** Toggle is a pill-styled button (role=switch) whose text is the state, not the action; the "Audit changes" link is to the whole audit log, not filtered to module changes (page.tsx:24).
 - **Verified evidence:** Switch is <button role=switch> with aria-label reflecting state (ModuleToggleActions.tsx:90-101), visible text is the current state, which is valid switch semantics though not action-labelled; a11y is acceptable but visually ambiguous. 'Audit changes' href=/tenant-admin/audit (page.tsx:24) is unfiltered; the audit page (audit/page.tsx) takes no searchParams and has only a PlaceholderButton Filter, so a filtered link is not possible today.
@@ -2187,7 +2195,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SIEM-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #2038; ALREADY-FIXED on main)
+- **W2 note:** subtitle is honest (siem/page.tsx: 'Security alerts detected for this tenant…', test 'subtitle no longer promises blocked IPs'). Ack/resolve actions are NOT built: the transition endpoint (POST /v1/admin/security-incidents/:id/transition) is gated to security_admin+, tenant_admin cannot call it — owner decision (see PR).
 - **W0 note:** partly fixed by #1864 — Subtitle made honest; still no blocked-IP list or ack/resolve actions
 - **First-pass claim:** Subtitle promises "blocked IPs … and security alert management" but the page is a read-only list: no blocked-IP list, no acknowledge/resolve/assign action and rows are not clickable (page.tsx:19-23; SiemTable.tsx:20-37).
 - **Verified evidence:** siem/page.tsx:22 subtitle promises blocked IPs and alert management. Page only renders four stat cards and SiemTable (DataTable with sort/filter/export, SiemTable.tsx:26-41): no blocked-IP data source, no row click or action. loaders.ts only exposes getSiemAlerts (/api/v1/admin/siem/alerts).
@@ -2202,7 +2211,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SIEM-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — FOUND UNMET: critical and high shared identical classes; critical now carries pill-critical (+ existing 🔴/weight) — SiemTable.test.tsx 'different classes'; rank sort test in siemHelpers.test.tsx)
 - **First-pass claim:** Critical and high alerts share the same red pill, so the most urgent severity cannot be told apart by colour (SiemTable.tsx:9-12).
 - **Verified evidence:** SiemTable.tsx:9-10 both critical and high return 'bad'. The pill still prints the word (line 30) so it is distinguishable by text, but not by colour/weight.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/siem/SiemTable.tsx`
@@ -2216,7 +2225,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SIEM-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — siemHelpers.test.tsx 'maps known statuses… unknown to neutral' + open-state count tests pass)
 - **First-pass claim:** Status pill treats any unknown status as amber "warn" and only "active" as red; "investigating" and "new" look identical, and KPI "Active Alerts" counts only active+investigating (SiemTable.tsx:29; page.tsx:14).
 - **Verified evidence:** SiemTable.tsx:32 (not 29): good for resolved/mitigated/blocked, bad only for 'active', everything else (investigating, new, unknown) warn. page.tsx:14 activeAlerts counts active|investigating, excluding 'new'/'open'. SiemAlert.status is an open string (loaders.ts:4562).
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/siem/SiemTable.tsx`, `apps/web/src/app/(app)/tenant-admin/siem/page.tsx`
@@ -2247,7 +2256,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SIEM-05  ·  LOW  ·  confirmed  ·  theme COPY (was VALIDATION)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — siem/page.test.tsx subtitle test + SiemTable humanised-label test pass)
 - **First-pass claim:** "Real-time" in the subtitle contradicts a 30 s revalidate window and no refresh control; severity and status are raw lowercase strings (loaders.ts:4566-4570).
 - **Verified evidence:** Subtitle 'Real-time' at siem/page.tsx:22 while getSiemAlerts uses revalidateSeconds:30 (loaders.ts:4568) and there is no refresh control. Severity/status rendered raw lowercase (SiemTable.tsx:30,32). Not a validation issue.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/siem/page.tsx`, `apps/web/src/app/(app)/tenant-admin/siem/SiemTable.tsx`
@@ -2270,6 +2279,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 ### GAP-TENANT-ADMIN-SSO-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 INTERIM (needs owner decision):** admin-service GET /v1/admin/sso/providers and /idp/providers still answer 501 (no provider store; identity-service saml/config is an unfinished stub) — an add/edit form would POST to nothing. Pages stay honestly read-only with no circular links.
 - **W0 note:** partly fixed by #1864 — Circular links removed, page documented read-only; no add/edit provider (backend 501)
 - **First-pass claim:** The two provider screens point at each other: "Configure IDP" here opens /tenant-admin/idp and that page's "Add Provider" opens /tenant-admin/sso, so no screen actually adds or edits a provider (page.tsx:24,46; idp/page.tsx:24).
 - **Verified evidence:** sso/page.tsx:24 'Configure IDP' -> /tenant-admin/idp and :46 empty-state action -> /tenant-admin/idp; idp/page.tsx:23 'Add Provider' -> /tenant-admin/sso and :50 likewise. The idp folder contains only IdpTable/page/loading/error and no create/edit form, so no screen adds a provider.
@@ -2301,7 +2311,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SSO-03  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #2038; ALREADY-FIXED on main)
+- **W2 note:** unused totalUsers/imports removed and icon fixed (sso/page.tsx; test 'does not use a users icon or compute totalUsers'); page + subtitle state read-only since no provider mutation endpoints exist (admin-service /v1/admin/sso/providers answers 501). Row actions need those endpoints — see SSO-01.
 - **W0 note:** partly fixed by #1864 — Icon/unused vars cleaned; rows still have no edit/disable/test actions
 - **First-pass claim:** Rows carry no actions (edit, disable, test connection, delete) and are not links; "Total Providers" uses a users icon and totalUsers is computed but never used (page.tsx:14,31).
 - **Verified evidence:** SsoTable.tsx:11-26 columns are Name, Protocol, Entity ID, Status, Last Sync only; no actions or links. sso/page.tsx:31 'Total Providers' uses icon 👥; line 14 totalUsers is computed but unused; DataTable, StatusPill and SsoProvider imports at line 1/3 are unused.
@@ -2317,7 +2328,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SSO-04  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — SsoTable.test.tsx missing/invalid -> '—', valid -> IST passes)
 - **First-pass claim:** lastSync is formatted with new Date(row.lastSync) unguarded, so a provider never synced renders "Invalid Date" (SsoTable.tsx:22).
 - **Verified evidence:** SsoTable.tsx:17 (not 22): new Date(row.lastSync).toLocaleString(...) with no guard. undefined/'' -> 'Invalid Date'; null -> 1 Jan 1970. SsoProvider.lastSync is typed string but backend may omit it.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/sso/SsoTable.tsx`, `apps/web/src/lib/formatters.ts`
@@ -2331,7 +2342,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SSO-05  ·  LOW  ·  partly  ·  theme STATUS
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — sso/page.test.tsx 'derives the Protocols tile from configured providers' passes)
 - **First-pass claim:** "Protocols: SAML / OIDC" is a static tile not reflecting configured protocols; Status via StatusPill prints the raw status string (page.tsx:32; SsoTable.tsx:21).
 - **Verified evidence:** Protocols tile is static 'SAML / OIDC' (sso/page.tsx:32) - true. Status uses StatusPill (SsoTable.tsx:16), which now humanizes via humanizeStatus (StatusPill.tsx:61), so it does not print the raw string; but unknown statuses fall to 'info' tone.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/sso/page.tsx`
@@ -2351,7 +2362,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SUBSCRIPTION-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — subscription/page.test.tsx error + api-null tests pass)
 - **First-pass claim:** A failed fetch (data null) renders the same "No subscription data — unavailable" card as a tenant with no subscription; the only difference is a small badge, and both header actions stay live (page.tsx:33-34,84-88).
 - **Verified evidence:** subscription/page.tsx:33 badge only when source==='error'; :84-88 the else branch shows EmptyState 'No subscription data / unavailable' for both null-on-error and genuine none. Header actions (28-29) always render.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/subscription/page.tsx`
@@ -2366,7 +2377,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SUBSCRIPTION-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — subscription/page.test.tsx 'Upgrade links to /tenant-admin/plans' passes)
 - **First-pass claim:** Two different upgrade destinations: this page sends to /billing/plans while the Usage page sends to /tenant-admin/plans (page.tsx:29; usage/UsageDisplay.tsx:88).
 - **Verified evidence:** subscription/page.tsx:29 -> /billing/plans, which (billing/plans/page.tsx) is the platform 'Billing - Plans' admin list with '+ New Plan'; usage/UsageDisplay.tsx:86 -> /tenant-admin/plans, the tenant compare/upgrade page (tenant-admin/plans/page.tsx). The tenant-admin one is the right target.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/subscription/page.tsx`, `apps/web/src/app/(app)/tenant-admin/usage/UsageDisplay.tsx`
@@ -2381,6 +2392,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 ### GAP-TENANT-ADMIN-SUBSCRIPTION-04  ·  MEDIUM  ·  partly  ·  theme WIRING (was DATEFMT)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 INTERIM (needs owner decision):** the 'Download invoice' link targeted /v1/billing/invoices/latest?format=pdf which NO service implements (billing-service has GET /invoices/:id with a uuid id and no PDF renderer) — it was a dead control, removed (subscription/page.tsx). An invoice list + PDF download needs a billing-service invoice-PDF endpoint.
 - **W0 note:** partly fixed by #1864 — Download routed via /api/proxy; still latest-only link, no invoice list
 - **First-pass claim:** "Download invoice" is a plain link to the "latest" invoice with no invoice list, date or amount, and goes to /api/v1 directly rather than through the proxy used by mutations (page.tsx:28).
 - **Verified evidence:** Line 28 is an <a download> to /api/v1/billing/invoices/latest?format=pdf, no invoice list/date/amount. apps/web/src/app/api contains only proxy, auth, etc. (no /api/v1 route) and next.config is absent from the snapshot, so whether /api/v1 is rewritten to the gateway with auth cannot be verified. Not a date-format issue.
@@ -2496,7 +2508,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-USERS-01  ·  HIGH  ·  confirmed  ·  theme WIRING (was DEADROUTE)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — UsersTable.test.tsx 'has no Department column header' passes (column absent: identity exposes no department))
 - **First-pass claim:** The Department column is a stub that returns "—" for every row, so a directory of a department shows no department (UsersTable.tsx:104).
 - **Verified evidence:** UsersTable.tsx:105 column {key:'department', render: () => '—'} returns a hardcoded dash for every row; the AdminUser type (lines 10-17) has no department field, though it's Record<string,unknown>. Header shows a column that never has data.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/users/UsersTable.tsx`
@@ -2510,7 +2522,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-USERS-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — FOUND untested: new users/page.test.tsx covers error -> '—' + retry state, real empty -> zeros)
 - **First-pass claim:** Failed fetch yields zero KPIs (computed from [] at page level) plus a generic empty table; only the badge inside the table signals the outage, so tiles read as a real 0 (page.tsx:8-13,34-39).
 - **Verified evidence:** users/page.tsx:8-13 computes total/active/suspended/mfaEnabled from users which is [] on error (loader returns data empty, source 'error'); StatCards at 35-38 show 0. The source is passed to UsersTable (line 44), where DataSourceBadge alone signals the failure. RefreshErrorState is not used (it is used on users/[id]).
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/users/page.tsx`
@@ -2525,7 +2537,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-USERS-03  ·  MEDIUM  ·  partly  ·  theme WIRING (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #2038)
+- **W2 note:** success toast present (UsersTable.tsx onCreated; test 'shows a success toast…'). Role-at-invite is deliberately NOT offered: POST /identity/users takes no role by design (least privilege, tests/invite-least-privilege.test.ts) — role grants go through the audited RBAC flow. Duplicate invite now 409 (USERS-07).
 - **W0 note:** partly fixed by #1864 — Success toast added; invite still collects no role
 - **First-pass claim:** Invite collects no role, so every invitee lands role-less, and success just closes the dialog with no confirmation; the directory is filled by an async projection so the new row may not appear after refresh (UsersTable.tsx:117-140,189-232).
 - **Verified evidence:** Invite dialog (UsersTable.tsx:155-241) collects name, email, optional empCode; body (181-189) has no role - true. On success submit() resets and onCreated closes dialog and router.refresh() (149) with no toast/confirmation - true. The dialog itself is a ConfirmDialog ('Send invite'), so confirmation before sending exists. Comment at lines 39-63 confirms directory is filled by async projection, so new row may not appear - true (documented in code). Whether the API accepts a role field is unknown.
@@ -2541,7 +2554,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-USERS-04  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant-admin: closed by #1864; provisional marker cleared in #2038 — UsersTable.test.tsx '+N' role badge and 'MFA' header tests pass)
 - **First-pass claim:** Role column shows only roles[0]; multi-role users are under-reported, and the header "SSO / MFA" shows MFA only (UsersTable.tsx:105-110).
 - **Verified evidence:** UsersTable.tsx:106 renders user.roles[0] only; header at 109 'SSO / MFA' but render (110-111) only shows MFA on/off; no SSO data.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/users/UsersTable.tsx`
@@ -2556,7 +2569,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-USERS-05  ·  MEDIUM  ·  partly  ·  theme CONFIRM (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #2038)
+- **W2 note:** export is now the audited DataTable CSV export (audit awaited, fail-closed) on users/UsersTable.tsx instead of window.print() of the unmasked page (PrintExportButton removed from users/page.tsx); suspend/reactivate with a required reason already exists on the user detail page (users/[id]/UserSecurityActions.tsx, USERS-DETAIL-03) which every row links to. Admin-directory emails are left unmasked (admin-only page; see PR NEEDS OWNER DECISION). Tests: users/page.test.tsx, UsersTable.test.tsx.
 - **First-pass claim:** No suspend/reactivate action in the list although Suspended is a filter and KPI; emails exportable with no masking (DPDP) or export audit (page.tsx:32; UsersTable.tsx:80-81).
 - **Verified evidence:** No suspend/reactivate control in UsersTable columns (91-122) - true; Suspended is a filter (20) and KPI (page.tsx:37). Export is PrintExportButton (page.tsx:32), which prints the page; emails are shown unmasked in the table (UsersTable.tsx:100). No export audit call in the code read; PrintExportButton internals not inspected. Emails on an admin user directory for an admin role are normally legitimate, so 'PII' severity is arguable.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/users/page.tsx`, `apps/web/src/app/(app)/tenant-admin/users/UsersTable.tsx`, `apps/web/src/app/_components/PrintExportButton.tsx`
@@ -2817,7 +2831,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-AUDIT-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #2038)
+- **W2 note:** verified in audit-service: limit is bounded (listQuerySchema max 500, default 50) with offset paging; there was no total -> added GET /v1/audit/events/summary (see AUDIT-04). Test: events-summary.test.ts (summary counts whole history with list capped at 2).
 - **First-pass claim:** Audit service backend is not in this snapshot; pagination/limit of /api/v1/audit/events undeterminable.
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/events?tenantScoped=true']`
 - **Question:** Does the events endpoint paginate with a bounded limit and a cursor/offset and return total/hasMore?
@@ -2839,7 +2854,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-COMPLIANCE-02  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #2038)
+- **W2 note:** admin-service /v1/admin/compliance already returned provenance {method, scope, asOf, complete}; now also returns null (not a fabricated 0) scores when nothing is testable and a per-check evidenceCount (gap/routes.ts, security-compliance/repo.ts). Web renders method/as-of and per-check evidence (compliance/page.tsx, ComplianceChecksTable.tsx). Tests: admin-service tests/gap-routes.test.ts, compliance/page.test.tsx.
 - **First-pass claim:** Scores are opaque percentages with no method, scope or as-of date, and the check list has no link to evidence; a DPDP score shown to the board needs provenance (page.tsx:37-40). Backend absent — undeterminable.
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/compliance (loaders.ts getComplianceOverview ~L4743)']`
 - **Question:** Does each compliance score in the response carry method, scope and asOf (computed-at) fields plus per-check evidence reference?
@@ -2850,7 +2866,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-COMPLIANCE-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #2038; ALREADY-FIXED on main)
+- **W2 note:** route exists with role guard ROLES=[tenant_admin, platform_admin, super_admin] (admin-service gap/routes.ts:33,141); 200/401/403 covered by tests/gap-routes.test.ts 'returns 401 without auth, 403 for an unrelated role'.
 - **First-pass claim:** admin-service /api/v1/admin/compliance is not in this snapshot.
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/compliance']`
 - **Question:** Does admin-service expose GET /v1/admin/compliance, restricted to tenant_admin/platform_admin, returning the shape web's getComplianceOverview maps?
@@ -2983,7 +3000,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-PLANS-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #2038; ALREADY-FIXED on main)
+- **W2 note:** billing-service returns priceMinor as an integer string + ISO currency (plans/repo.ts toView; bigint column price_minor); web uses the single formatMoney helper (plans/page.tsx, PlansClient.tsx) — no paise/100 float division. NOTE: the web plans loader and billing-service return DIFFERENT shapes (bare plan array vs {plans,currentPlanId,invoices}); the loader now rejects a mismatch (PlansDataSchema) instead of crashing — wiring is an owner decision (see PR).
 - **First-pass claim:** Money handled as paise then formatCurrency(paise/100).toLocaleString('en-IN') — correct lakh grouping but floating division and duplicated in page.tsx and PlansClient.tsx; billing-service is not in this snapshot (undeterminable).
 - **Service:** `billing-service`  ·  **Endpoint(s):** `['GET /api/v1/billing/plans (loaders.ts getPlansData ~L4600)']`
 - **Question:** Are plan prices and invoice amounts returned as integer paise (bigint minor units) with an ISO currency code?
@@ -3060,7 +3078,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SETTINGS-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #2038)
+- **W2 note:** tenant toggle route now 404s for a module the tenant is not provisioned with (admin-service config/routes.ts, queries.ts, repo.ts moduleConfigured); audit already written by config/consumer.ts (module_toggle: actor, moduleKey, enabled, reason, same tx as markProcessed). Tests: tests/module-toggle.test.ts (404 + no row inserted).
 - **First-pass claim:** admin-service toggle endpoint and audit emission are claimed in a code comment but the service is absent from this snapshot (ModuleToggleActions.tsx:16-18).
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/admin/tenant/modules/:key/toggle (ModuleToggleActions.tsx:53)']`
 - **Question:** Does the toggle endpoint require tenant_admin, validate key against known modules, enforce approval/maker-checker when required, and emit an audit event?
@@ -3071,7 +3090,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SIEM-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #2038; ALREADY-FIXED on main)
+- **W2 note:** lifecycle verified in admin-service: detected|triaged|contained|resolved|closed; transition endpoint exists with INVALID_TRANSITION on skips (tests/security-incident.test.ts:172); web maps every state (siem/siemHelpers.ts, test 'maps known statuses…').
 - **First-pass claim:** SIEM ingestion/alerting service is not in this snapshot; alert lifecycle is undeterminable.
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/siem/alerts (loaders.ts:4567)']`
 - **Question:** What are the alert lifecycle states (open, acknowledged, resolved, suppressed) and is there an endpoint to transition them?
@@ -3083,6 +3103,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 ### GAP-TENANT-ADMIN-SSO-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 INTERIM (needs owner decision):** today the endpoint is a 501 with no body data, so no secret can leak; the real check (response omits clientSecret/signing keys, hasSecret flag) must be written WITH the provider store — kept open for that.
 - **First-pass claim:** Identity backend not in this snapshot; provider secrets handling and status values are undeterminable.
 - **Service:** `identity-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/sso/providers (loaders.ts:4532)']`
 - **Question:** Does the response omit provider secrets (clientSecret, signing keys) and what status values exist?
@@ -3093,7 +3114,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SUBSCRIPTION-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #2038; ALREADY-FIXED on main)
+- **W2 note:** billing /v1/billing/subscriptions returns NO amount at all (nothing invented); web formats any amount as minor units via formatMoney (subscription/page.tsx; test 'formats amount as paise money').
 - **First-pass claim:** Amount is formatted as ₹ + toLocaleString with no paise conversion; product rules say money is paise bigint, so the unit returned by billing is undeterminable and may display 100x too high (page.tsx:7-10).
 - **Service:** `billing-service`  ·  **Endpoint(s):** `['GET /api/v1/billing/subscriptions (loaders.ts:4308)']`
 - **Question:** Is subscription amount returned in paise (minor units) or rupees?
@@ -3104,7 +3126,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SUBSCRIPTION-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #2038)
+- **W2 note:** GET /v1/billing/subscriptions is now readable by tenant_admin/billing_admin for the caller's own tenant (was super-admin only, so a tenant admin always got 403 on their own page) and a `suspended` subscription is reported as suspended, not folded into `trial` (subscriptions/routes.ts, schemas/web.ts). Statuses: trial|active|past_due|cancelled|suspended. Test: billing-service tests/subscription-summary-route.test.ts.
 - **First-pass claim:** Billing backend is not in this snapshot; subscription status values and limits semantics are undeterminable.
 - **Service:** `billing-service`  ·  **Endpoint(s):** `['GET /api/v1/billing/subscriptions', 'GET /api/v1/billing/invoices/latest?format=pdf']`
 - **Question:** What are the subscription status values (trialing, active, past_due, cancelled) and what do limit fields mean (hard cap vs soft, unit)?
@@ -3126,7 +3149,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-USERS-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #2038)
+- **W2 note:** POST /identity/users now answers 409 DUPLICATE_EMAIL (case-insensitive, tenant-scoped) instead of 202 + async unique-index failure (users/commands.ts, repo.ts emailExists). Already verified: no elevated role granted on invite + user.created/audit create emitted (tests/invite-least-privilege.test.ts). Test: tests/invite-duplicate-email.test.ts. NOT built: an invitation email is only sent via the best-effort Keycloak provisioning path — no dedicated invite-mail/outbox exists (part of the NEEDS OWNER DECISION list in the PR).
 - **First-pass claim:** Identity service not in this snapshot; invitation email, role default and audit are undeterminable.
 - **Service:** `identity-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/admin/users (UsersTable.tsx:181)', 'GET /api/identity/users']`
 - **Question:** Does creating/inviting a user send an invitation email, apply a least-privilege default role, and emit an audit event?
