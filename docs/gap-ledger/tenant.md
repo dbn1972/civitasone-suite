@@ -715,7 +715,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-QUOTAS-01  ·  HIGH  ·  confirmed  ·  theme WIRING (was MONEY)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: already fixed on main - tenant/_data.ts mapQuotaRows maps used/limit/percent from /api/v1/tenant/usage, tests in tenant/_data.test.ts; tenant-service returns no unit field so none is shown; verified in #2036)
 - **W0-10 note:** review found the W0 tick partly — mapQuotaRows (tenant/_data.ts:111-139) maps used/limit/percent with zod, shows "40 / 100" + "40%" and "—" when unknown; but no progress bar (fix step 2) and unit is dropped (schema :97-107 has no unit, so "40 / 100 GB" acceptance not met).
 - **First-pass claim:** The page exists to show consumption vs limit, but the mapper picks meta = code ?? unit ?? usagePercent ?? limit ?? currency (tenant/_data.ts:60-65): whenever a unit is present, usagePercent and limit are dropped, and 'used' is never mapped. The table can list resource names with no numbers at all.
 - **Verified evidence:** _data.ts:60-65: meta = toText(row.code) ?? toText(row.unit) ?? (number usagePercent -> 'N%') ?? (number limit -> 'limit N') ?? toText(row.currency). Since toText stringifies numbers, first defined of code/unit wins and usagePercent/limit are dropped when unit is present; 'used'/'consumed' is never read. Not really MONEY (quota counts, not currency) though a unit can be storage. Real fields of /api/v1/tenant/usage (_data.ts:88) cannot be verified: tenant-service absent (tenant-admin/usage uses getUsageQuotas with UsageResource, loaders.ts:4549, /api/v1/admin/usage).

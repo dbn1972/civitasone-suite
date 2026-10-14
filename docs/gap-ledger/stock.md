@@ -320,7 +320,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2036)
 - **First-pass claim:** On fetch failure the page shows the amber badge and then zero totals plus the normal 'No ledger entries' empty state (ledger/page.tsx:16, StockLedgerClient.tsx:61-62): an outage is presented as a genuinely empty ledger and ₹0.00 balances. The list page handles this correctly with '—' and RefreshErrorState (list/page.tsx:36-39).
 - **Verified evidence:** ledger/page.tsx:9-16,29-31 - getStockLedger() returns data [] on error (loaders.ts:3907-3913); page only adds DataSourceBadge, then computes totals from [] and calls formatMoney(0) for Receipts/Issues/Net, and StockLedgerClient.tsx:61-62 renders EmptyState 'No ledger entries'. Contrast list/page.tsx:12-15,31-38 which uses errored -> '-' and RefreshErrorState.
 - **Files to change:** `apps/web/src/app/(app)/stock/ledger/page.tsx`, `apps/web/src/app/(app)/stock/ledger/StockLedgerClient.tsx`
@@ -592,7 +592,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LIST-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2036)
 - **First-pass claim:** Raw ids leak into cells: UOM falls back to uomId.slice(0,4) and Category to categoryId.slice(0,8) when the API returns ids not names (apiMappers.ts:1013-1014); item code falls back to the record id (apiMappers.ts:1005). A clerk sees 'a3f9' as a unit.
 - **Verified evidence:** apiMappers.ts:1005 itemCode falls back to record id; :1013 category falls back to categoryId.slice(0,8); :1014 unit falls back to uomId.slice(0,4), else 'EA'. These reach StockListClient COLUMNS (unit, itemCode) directly.
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/stock/list/StockListClient.tsx`
