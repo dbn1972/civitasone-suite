@@ -33,9 +33,9 @@ export async function selfServiceRoutes(app: FastifyInstance): Promise<void> {
     // full value (e.g. to verify it against a physical document) while
     // every other caller still sees it masked -- UIDAI mandates partial-
     // reveal masking for Aadhaar regardless of role, so this ships ahead of
-    // the pending PII-visibility decision packet. pan/bankAccountNo/
-    // bankIfsc/mobile are UNCHANGED: maskPii below still masks them
-    // unconditionally, exactly as before -- those wait on that decision.
+    // the pending PII-visibility decision packet. pan/bankAccountNo/mobile are
+    // UNCHANGED: maskPii below still masks them unconditionally, exactly as
+    // before. bankIfsc is returned in full (owner decision 3, 2026-10-14).
     // Restoring the raw aadhaarRef before re-applying maskEmployeeRecord is
     // safe because applyMasking only ever touches keys present in its
     // policy (here, only "aadhaarRef"); every other already-masked field

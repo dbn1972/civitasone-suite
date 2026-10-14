@@ -11,6 +11,7 @@ import { DomainError, daysUntilExpiry } from "./domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 import { hrmsEmployees } from "../employee/schema.js";
+import { canReadEmployeeRecord, resolveManagerScopeIds } from "../../shared/self-scope.js";
 import { batchEmployees, batchDepartments, batchDesignations } from "../../shared/batch-resolve.js";
 import {
   createContractBody,
@@ -99,9 +100,13 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const query = listContractsQuery.parse(req.query);
-    const filters: { employeeId?: string; status?: string } = {};
+    const filters: { employeeId?: string; employeeIds?: string[]; status?: string } = {};
     if (query.employeeId) filters.employeeId = query.employeeId;
     if (query.status) filters.status = query.status;
+    // Owner decision 2 (2026-10-14): a manager sees self + direct reports only;
+    // HR stays tenant-wide. Empty scope (unlinked actor) matches nothing.
+    const scopeIds = await resolveManagerScopeIds(ctx);
+    if (scopeIds) filters.employeeIds = scopeIds;
     const result = await repo.listContracts(ctx.tenantId, filters, { limit: query.limit, offset: query.offset });
     const data = await enrichWithEmployee(ctx.tenantId, result.data);
     return reply.send({ ...result, data });
@@ -113,6 +118,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const contract = await repo.getContractById(ctx.tenantId, id);
     if (!contract) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
+    if (!(await canReadEmployeeRecord(ctx, contract.employeeId))) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
     return reply.send({ data: contract });
   });
 
@@ -120,6 +126,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const { employeeId } = employeeIdParam.parse(req.params);
+    if (!(await canReadEmployeeRecord(ctx, employeeId))) throw new HttpError(403, "FORBIDDEN", "you may only view contracts of yourself or your direct reports");
     const history = await repo.getContractHistory(ctx.tenantId, employeeId);
     return reply.send({ data: history });
   });
@@ -144,6 +151,7 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     // Check contract exists
     const contract = await repo.getContractById(ctx.tenantId, id);
     if (!contract) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
+    if (!(await canReadEmployeeRecord(ctx, contract.employeeId))) throw new HttpError(403, "FORBIDDEN", "you may only renew contracts of yourself or your direct reports");
 
     // Check status valid for renewal (must be active or expiring)
     if (contract.status !== "active" && contract.status !== "expiring") {
@@ -172,10 +180,12 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const query = listRenewalsQuery.parse(req.query);
-    const filters: { contractId?: string; employeeId?: string; status?: string } = {};
+    const filters: { contractId?: string; employeeId?: string; employeeIds?: string[]; status?: string } = {};
     if (query.contractId) filters.contractId = query.contractId;
     if (query.employeeId) filters.employeeId = query.employeeId;
     if (query.status) filters.status = query.status;
+    const scopeIds = await resolveManagerScopeIds(ctx);
+    if (scopeIds) filters.employeeIds = scopeIds;
     const result = await repo.listRenewals(ctx.tenantId, filters, { limit: query.limit, offset: query.offset });
     return reply.send(result);
   });
@@ -186,6 +196,8 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const renewal = await repo.getRenewalById(ctx.tenantId, id);
     if (!renewal) throw new HttpError(404, "RENEWAL_NOT_FOUND", "renewal not found");
+    const owner = await repo.getContractById(ctx.tenantId, renewal.contractId);
+    if (!owner || !(await canReadEmployeeRecord(ctx, owner.employeeId))) throw new HttpError(404, "RENEWAL_NOT_FOUND", "renewal not found");
     return reply.send({ data: renewal });
   });
 

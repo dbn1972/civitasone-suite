@@ -91,6 +91,23 @@ vi.mock("../src/shared/db.js", () => {
   };
 });
 
+// Owner decision 2 (2026-10-14): a manager's access is narrowed to self + direct
+// reports by shared/self-scope. The DB-backed behaviour (report allowed, non-report /
+// unlinked denied) is covered in src/__tests__/manager-direct-report-scope-w1d2-real-db.test.ts;
+// this mock-DB file cannot resolve an employee link, so it stubs only the manager
+// predicate (HR roles still short-circuit inside the real implementation).
+const SS = vi.hoisted(() => ({ managerCanRead: false }));
+vi.mock("../src/shared/self-scope.js", async (orig) => {
+  const actual = await orig<typeof import("../src/shared/self-scope.js")>();
+  return {
+    ...actual,
+    canReadEmployeeRecord: (ctx: { roles: string[] }, ...rest: [string, readonly string[]?]) =>
+      SS.managerCanRead && ctx.roles.includes("manager") && !ctx.roles.includes("hr_admin")
+        ? Promise.resolve(true)
+        : actual.canReadEmployeeRecord(ctx as never, ...(rest as [string])),
+  };
+});
+
 vi.mock("../src/shared/infra.js", () => ({
   cache: { invalidate: async () => {}, makeKey: (...a: string[]) => a.join(":"), getOrLoad: async (_k: string, fn: () => Promise<unknown>) => fn() },
   queue: Q.queue,
@@ -676,6 +693,7 @@ describe("POST /v1/hrms/contracts/:id/renew", () => {
   });
 
   it("allows manager role to initiate renewal", async () => {
+    SS.managerCanRead = true; // the manager is linked to the contract holder (own / direct report)
     const contract = [{ id: CONTRACT_ID, tenantId: TENANT, status: "active", endDate: "2027-01-01" }];
     H.selectFrom
       .mockResolvedValueOnce(contract)
@@ -689,6 +707,7 @@ describe("POST /v1/hrms/contracts/:id/renew", () => {
       headers: auth(USER, ["manager"]),
       payload: { newEndDate: "2028-01-01" },
     });
+    SS.managerCanRead = false;
     expect(r.statusCode).toBe(202);
     await app.close();
   });

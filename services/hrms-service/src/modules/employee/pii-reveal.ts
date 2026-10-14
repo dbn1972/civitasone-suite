@@ -5,11 +5,12 @@
  *
  * Same request/response contract as crm-service `POST /v1/crm/pii/reveal`, so the
  * web `MaskedReveal` control drives either with only a path change. Every read
- * path of the employee master returns pan / bankAccountNo / bankIfsc / phone
- * MASKED (queries.ts maskValue); this is the only way to see a clear value.
+ * path of the employee master returns pan / bankAccountNo / phone MASKED
+ * (queries.ts maskValue); this is the only way to see a clear value. (bankIfsc
+ * is returned in full, so it is not revealable -- owner decision 3.)
  *
  * Guarantees, in order:
- *  1. Role gate (fail closed 403): PAN, Aadhaar, bank account and IFSC are
+ *  1. Role gate (fail closed 403): PAN, Aadhaar and bank account are
  *     hr_admin / super_admin only; the phone number also admits hr_officer.
  *  2. The field must be on a server-side allow-list (never a client column name).
  *  3. The employee must exist in the caller's tenant (RLS-scoped read), else 404.
@@ -35,14 +36,15 @@ import * as repo from "./repo.js";
 
 export const EMPLOYEE_PII_REVEAL_OP = "employee_pii_reveal__0";
 
-type EmployeeColumn = "pan" | "aadhaarRef" | "mobile" | "bankAccountNo" | "bankIfsc";
+type EmployeeColumn = "pan" | "aadhaarRef" | "mobile" | "bankAccountNo";
 
 /** API field name -> employee row column + roles allowed to reveal it. */
 export const REVEALABLE_EMPLOYEE_FIELDS: Record<string, { column: EmployeeColumn; roles: string[] }> = {
   pan: { column: "pan", roles: ["hr_admin", "super_admin"] },
   aadhaarRef: { column: "aadhaarRef", roles: ["hr_admin", "super_admin"] },
   bankAccountNo: { column: "bankAccountNo", roles: ["hr_admin", "super_admin"] },
-  bankIfsc: { column: "bankIfsc", roles: ["hr_admin", "super_admin"] },
+  // bankIfsc is intentionally absent (owner decision 3, 2026-10-14): the IFSC is a
+  // public branch code returned in full, so there is nothing to reveal (422).
   phone: { column: "mobile", roles: ["hr_admin", "hr_officer", "super_admin"] },
 };
 

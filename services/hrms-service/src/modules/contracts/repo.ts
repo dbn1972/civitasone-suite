@@ -130,12 +130,15 @@ export async function getContractHistoryTx(tx: any, tenantId: string, employeeId
 
 export async function listContracts(
   tenantId: string,
-  filters: { employeeId?: string; status?: string },
+  filters: { employeeId?: string; employeeIds?: string[]; status?: string },
   pagination: { limit: number; offset: number },
 ) {
   const conds = [eq(hrmsContracts.tenantId, tenantId)];
   if (filters.employeeId)
     conds.push(eq(hrmsContracts.employeeId, filters.employeeId));
+  // Manager scope (W1 owner decision 2): an empty set matches nothing.
+  if (filters.employeeIds)
+    conds.push(filters.employeeIds.length > 0 ? inArray(hrmsContracts.employeeId, filters.employeeIds) : sql`false`);
   if (filters.status) conds.push(eq(hrmsContracts.status, filters.status));
 
   const rows = await scopedRead((tx) =>
@@ -237,10 +240,18 @@ export async function getPendingRenewalForContractTx(tx: any, tenantId: string, 
 
 export async function listRenewals(
   tenantId: string,
-  filters: { contractId?: string; employeeId?: string; status?: string },
+  filters: { contractId?: string; employeeId?: string; employeeIds?: string[]; status?: string },
   pagination: { limit: number; offset: number },
 ) {
   const conds = [eq(hrmsContractRenewals.tenantId, tenantId)];
+  // Renewals carry no employee_id: scope through the owning contract.
+  const scopeIds = filters.employeeId
+    ? (filters.employeeIds && !filters.employeeIds.includes(filters.employeeId) ? [] : [filters.employeeId])
+    : filters.employeeIds;
+  if (scopeIds)
+    conds.push(scopeIds.length > 0
+      ? inArray(hrmsContractRenewals.contractId, sql`(select id from contracts.hrms_contracts where tenant_id = ${tenantId} and employee_id in (${sql.join(scopeIds.map((i) => sql`${i}`), sql`, `)}))`)
+      : sql`false`);
   if (filters.contractId)
     conds.push(eq(hrmsContractRenewals.contractId, filters.contractId));
   if (filters.status)

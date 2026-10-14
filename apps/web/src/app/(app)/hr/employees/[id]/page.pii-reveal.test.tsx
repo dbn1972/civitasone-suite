@@ -19,7 +19,7 @@ const EMP_ID = "8cf7f7eb-1de6-4a31-b48c-1f598ecf33c0";
 const EMP = {
   id: EMP_ID, employeeId: "EMP001", name: "Priya Sharma", department: "Finance", designation: "Section Officer",
   joiningDate: "2020-01-15", status: "confirmed", phone: "******3210", pan: "******234F",
-  bankAccountNo: "********7890", bankIfsc: "*******1234",
+  bankAccountNo: "********7890", bankIfsc: "SBIN0001234",
 };
 
 async function renderPage(roles: string[]) {
@@ -36,13 +36,16 @@ describe("EmployeeDetailPage PII: masked by default, audited reveal (W1 SF-05a)"
   beforeEach(() => { getEmployeeByIdMock.mockReset(); vi.restoreAllMocks(); });
   afterEach(() => { vi.useRealTimers(); });
 
-  it("hr_admin sees every value masked and nothing is fetched until a reveal is confirmed", async () => {
+  // Policy change (owner decision 3, 2026-10-14): IFSC is a public branch code and
+  // is shown in full with no reveal control. Phone, PAN and bank account stay masked.
+  it("hr_admin sees phone/PAN/account masked and the IFSC in full; nothing is fetched until a reveal is confirmed", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     await renderPage(["hr_admin"]);
-    for (const masked of ["******3210", "******234F", "********7890", "*******1234"]) {
+    for (const masked of ["******3210", "******234F", "********7890"]) {
       expect(screen.getByText(masked)).toBeInTheDocument();
     }
-    expect(revealButtons()).toHaveLength(4);
+    expect(screen.getByText("SBIN0001234")).toBeInTheDocument();
+    expect(revealButtons()).toHaveLength(3);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -50,7 +53,7 @@ describe("EmployeeDetailPage PII: masked by default, audited reveal (W1 SF-05a)"
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(JSON.stringify({ data: { value: "ABCDE1234F" } }), { status: 200 }));
     await renderPage(["hr_admin"]);
-    // buttons render in page order: phone, PAN, bank account, IFSC
+    // buttons render in page order: phone, PAN, bank account
     fireEvent.click(revealButtons()[1]!);
     fireEvent.change(await screen.findByLabelText(/Reason for revealing/i), { target: { value: "verify PAN for Form 16" } });
     fireEvent.click(screen.getAllByRole("button", { name: "Reveal" }).pop()!);
@@ -74,11 +77,12 @@ describe("EmployeeDetailPage PII: masked by default, audited reveal (W1 SF-05a)"
     expect(screen.getByText("******3210")).toBeInTheDocument();
   });
 
-  it("hr_officer may reveal the phone only; PAN / bank / IFSC stay masked with no reveal control", async () => {
+  it("hr_officer may reveal the phone only; PAN / bank account stay masked with no reveal control; IFSC is shown in full", async () => {
     await renderPage(["hr_officer"]);
     expect(revealButtons()).toHaveLength(1);
     expect(screen.getByText("******234F")).toBeInTheDocument();
     expect(screen.getByText("********7890")).toBeInTheDocument();
+    expect(screen.getByText("SBIN0001234")).toBeInTheDocument();
   });
 
   it("a manager sees the phone masked with no reveal control and no bank card", async () => {

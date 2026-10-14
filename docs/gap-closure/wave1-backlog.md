@@ -29,3 +29,21 @@ Order: shared fixes that close data-correctness or security items first, then co
 | 17 | SF-18 Route-existence | Measure the allowlist and cover runtime-built row links. | Dead links |
 
 Large SFs (01, 11, 13, 14) are split into several PRs by module group, so no PR exceeds about 40 files. All Wave 1 PRs merge in bundles, per the owner bundle-merge rule.
+
+## Owner decisions (2026-10-14)
+
+The orchestrator put three questions to the owner. The owner answered in chat on 2026-10-14, verbatim: "continue  approved 1 2 3". All three recommendations were approved. Implemented in one PR: #PRNUM.
+
+| # | Question | Decision | Verbatim reply | PR |
+|---|---|---|---|---|
+| 1 | Should commissioners keep access to workflow-task Approvals? | Yes, leave as is. No code change. | "approved 1 2 3" | #PRNUM (record only) |
+| 2 | Should managers be limited to their direct reports for contracts, AI predictions and training-progress updates? | Yes. A manager sees self plus direct reports only. HR and admin roles stay tenant-wide. An actor with no linked employee record fails closed. | "approved 1 2 3" | #PRNUM |
+| 3 | Should IFSC codes be shown unmasked everywhere? | Yes. An IFSC is a public bank-branch code, not personal data. Bank account number, PAN, Aadhaar and phone stay masked. | "approved 1 2 3" | #PRNUM |
+
+Decision 2 covers: GET /v1/hrms/contracts (list, detail, employee history, renewals list and detail), POST /v1/hrms/contracts/:id/renew, GET /v1/hrms/ai/attrition-risk, GET /v1/hrms/ai/succession and PATCH /v1/hrms/learning/enrollments/:id/progress. List routes filter, detail routes return 404, the employee-keyed history route and writes return 403. The aggregate-only AI routes (workforce-insights, leave-prediction) carry no per-employee rows and are unchanged.
+
+Decision 3 is a policy change, not a weakening: the IFSC is returned in full by the employee API, rendered plainly on the hr employee page and in report columns, removed from the pii/reveal allow-list (the reveal now answers 422) and removed from the hr PII render guard. Tests that asserted a masked or revealable IFSC were changed to assert the approved behaviour, and the account-number and PAN masking assertions were kept.
+
+Not changed under decision 3 (flagged for the owner): finance-service bank-account and vendor responses still return the IFSC as a 4-letter prefix plus XXXXXXX, and the audit-trail diff for an employee bank edit still stores masked old and new IFSC.
+
+Ledger: no open ledger item is closed by this PR. No PROVISIONAL tick covers a file this PR changes (the two learning PROVISIONAL items, GAP-LEARNING-HOME-03 and GAP-LEARNING-CALENDAR-03, are about learning/repo.ts, learning/page.tsx and learning/calendar/page.tsx, none of which change here).

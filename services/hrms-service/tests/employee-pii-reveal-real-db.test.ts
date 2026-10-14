@@ -3,7 +3,9 @@
  *  - a permitted role gets the CLEAR value (decrypted from the encrypted-at-rest column) and exactly one
  *    audit row (actor, subject, field, reason; never the value) is written by the consumer;
  *  - a reason is required; a forbidden role gets 403 with no value and NO audit row;
- *  - phone also admits hr_officer, PAN/bank/IFSC/Aadhaar do not;
+ *  - phone also admits hr_officer, PAN/bank/Aadhaar do not;
+ *  - owner decision 3 (2026-10-14): IFSC is a public branch code, returned in full by the read API and NOT
+ *    revealable (POST reveal -> 422 FIELD_NOT_REVEALABLE, no audit row); account number / PAN stay masked;
  *  - tenant isolation: another tenant's caller gets 404 for this employee, no audit row;
  *  - redelivery of the same command messageId writes the audit row once (markProcessed in the same tx).
  */
@@ -84,6 +86,10 @@ describe("employee PII reveal (audited)", () => {
     expect(read.statusCode, read.body).toBe(200);
     expect(read.body).not.toContain(PAN);
     expect((read.json().data ?? read.json()).pan).toBe("******234F");
+    // Policy change (owner decision 3): account number stays masked, IFSC is returned in full.
+    expect((read.json().data ?? read.json()).bankAccountNo).toBe("********9012");
+    expect(read.body).not.toContain(ACCOUNT);
+    expect((read.json().data ?? read.json()).bankIfsc).toBe(IFSC);
 
     expect(await audits()).toHaveLength(0);
     const res = await reveal(as(U.admin, ["hr_admin"]), body("pan", "verify PAN against Form 16 before filing"));
@@ -98,17 +104,29 @@ describe("employee PII reveal (audited)", () => {
     expect(JSON.stringify(rows[0])).not.toContain(PAN);
   });
 
-  it("reveals bank account, IFSC and phone for hr_admin, one audit row each, none containing a value", async () => {
+  it("reveals bank account and phone for hr_admin, one audit row each, none containing a value", async () => {
     const before = (await audits()).length;
-    for (const [field, value] of [["bankAccountNo", ACCOUNT], ["bankIfsc", IFSC], ["phone", MOBILE]] as const) {
+    for (const [field, value] of [["bankAccountNo", ACCOUNT], ["phone", MOBILE]] as const) {
       const r = await reveal(as(U.admin, ["hr_admin"]), body(field));
       expect(r.statusCode, r.body).toBe(200);
       expect(r.json().data.value).toBe(value);
     }
     await drain();
     const rows = await audits();
-    expect(rows.length - before).toBe(3);
-    for (const v of [ACCOUNT, IFSC, MOBILE]) expect(JSON.stringify(rows)).not.toContain(v);
+    expect(rows.length - before).toBe(2);
+    for (const v of [ACCOUNT, MOBILE]) expect(JSON.stringify(rows)).not.toContain(v);
+  });
+
+  it("bankIfsc is not revealable for any role (owner decision 3): 422, no value, no audit row", async () => {
+    const before = (await audits()).length;
+    for (const roles of [["hr_admin"], ["super_admin"], ["hr_officer"], ["manager"]]) {
+      const r = await reveal(as(U.admin, roles), body("bankIfsc"));
+      expect(r.statusCode, roles.join()).toBe(422);
+      expect(r.json().code).toBe("FIELD_NOT_REVEALABLE");
+      expect(r.body).not.toContain(IFSC);
+    }
+    await drain();
+    expect((await audits()).length).toBe(before);
   });
 
   it("a reason is required (>= 10 chars): 400, no value, no audit row", async () => {
@@ -128,7 +146,7 @@ describe("employee PII reveal (audited)", () => {
     const before = (await audits()).length;
     const cases: Array<[string, string[], string]> = [
       ["employee", ["employee"], "pan"], ["employee", ["employee"], "phone"],
-      ["manager", ["manager"], "bankAccountNo"], ["officer", ["hr_officer"], "pan"], ["officer", ["hr_officer"], "bankIfsc"], ["officer", ["hr_officer"], "aadhaarRef"],
+      ["manager", ["manager"], "bankAccountNo"], ["officer", ["hr_officer"], "pan"], ["officer", ["hr_officer"], "aadhaarRef"],
     ];
     for (const [who, roles, field] of cases) {
       const sub = who === "employee" ? U.employee : who === "officer" ? U.officer : U.other;

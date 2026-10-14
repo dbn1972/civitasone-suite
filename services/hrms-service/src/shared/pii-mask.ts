@@ -1,7 +1,7 @@
 /**
  * PII masking utility — strips or masks sensitive fields before API responses.
  *
- * SECURITY: PII columns (pan, aadhaarRef, bankAccountNo, bankIfsc, mobile) must
+ * SECURITY: PII columns (pan, aadhaarRef, bankAccountNo, mobile) must
  * NEVER be returned in full in any API response. This module provides:
  *   - maskValue: masks all but last 4 chars (e.g. "ABCDE1234F" → "******1234F")
  *   - stripPii: removes PII fields entirely from an employee record
@@ -12,7 +12,10 @@
  */
 
 /** PII field keys that must be masked or stripped in API responses. */
-const PII_FIELDS = ["pan", "aadhaarRef", "bankAccountNo", "bankIfsc", "mobile"] as const;
+// bankIfsc is deliberately NOT here: owner decision 3 (2026-10-14) -- an IFSC is
+// a public RBI bank-branch routing code, not personal data, so it is returned
+// in full. The bank account number, PAN, Aadhaar and phone stay masked.
+const PII_FIELDS = ["pan", "aadhaarRef", "bankAccountNo", "mobile"] as const;
 
 /**
  * Mask a string value, showing only the last `visibleChars` characters.
@@ -48,7 +51,7 @@ export function isMaskedValue(value: string | null | undefined, visibleChars = 4
 
 /**
  * Strip all PII fields from an employee record. Returns a new object
- * without pan, aadhaarRef, bankAccountNo, bankIfsc, mobile.
+ * without pan, aadhaarRef, bankAccountNo, mobile.
  * Safe for list endpoints and non-privileged access.
  */
 export function stripPii<T extends Record<string, unknown>>(record: T): Omit<T, typeof PII_FIELDS[number]> {

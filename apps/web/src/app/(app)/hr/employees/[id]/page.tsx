@@ -473,8 +473,8 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
               <div className="fld">
                 <span className="l">{t("fieldBankIfsc")}</span>
                 <span className="v">
-                  <Masked kind="last4" value={employee.bankIfsc} ariaLabel={t("maskedAriaLabel")}
-                    onReveal={revealFor("bankIfsc", t("fieldBankIfsc"), canRevealPii)} />
+                  {/* IFSC is a public bank-branch code, not PII: shown in full (owner decision 3). */}
+                  {employee.bankIfsc}
                 </span>
               </div>
             )}

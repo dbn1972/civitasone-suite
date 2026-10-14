@@ -206,3 +206,22 @@ export async function canReadEmployeeRecord(
     .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.id, targetEmployeeId), eq(hrmsEmployees.managerId, actorEmp.id))));
   return rows.length > 0;
 }
+
+/**
+ * W1 owner decision 2 (2026-10-14): managers see their direct reports only.
+ * Returns `undefined` for an HR-privileged caller (tenant-wide), otherwise the
+ * concrete set of employee ids the caller may see: [self, ...directReports],
+ * or [] when the actor is not linked to an employee (fail CLOSED -- callers
+ * must treat an empty set as "nothing", never as "no filter").
+ */
+export async function resolveManagerScopeIds(
+  ctx: RequestContext,
+  hrRoles: readonly string[] = HR_ROLES,
+): Promise<string[] | undefined> {
+  if (hrRoles.some((r) => ctx.roles.includes(r))) return undefined;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+  if (!actorEmp) return [];
+  const reports = await scopedRead((tx) => tx.select({ id: hrmsEmployees.id }).from(hrmsEmployees)
+    .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.managerId, actorEmp.id))));
+  return [actorEmp.id, ...reports.map((r) => r.id)];
+}
