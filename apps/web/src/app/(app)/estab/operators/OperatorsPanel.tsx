@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, DataTable, StatusPill, ActionButton, ErrorState, EntityPicker, Field, Input, Select } from "../../../_components/ds";
@@ -45,6 +46,7 @@ const EMPTY = { employeeId: "", division: "", section: "", deskRole: "dealing_ha
 const MESSAGE_DISMISS_MS = 5000;
 
 export function OperatorsPanel({ canAdminister }: { canAdminister: boolean }) {
+  const tFallback = useTranslations("employeeFallback");
   const [operators, setOperators] = useState<Operator[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -101,8 +103,8 @@ export function OperatorsPanel({ canAdminister }: { canAdminister: boolean }) {
     if (o.employeeName) {
       return o.departmentName ? `${o.employeeName} · ${o.departmentName}` : o.employeeName;
     }
-    return `Unresolved (${o.employeeId.slice(0, 8)}…)`;
-  }, []);
+    return tFallback("unknownEmployee");
+  }, [tFallback]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Operator[]>();

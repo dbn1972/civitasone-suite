@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, ActionButton, Card, ConfirmDialog } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { browserJson } from "@/lib/api/browserClient";
@@ -12,7 +13,8 @@ type Props = {
   status: string;
   version: number;
   quarterNo: string;
-  employeeRef: string;
+  /** Kept for callers; never rendered (SF-17b: a person is shown by name, never by id). */
+  employeeRef?: string;
   employeeName: string | null;
   monthlyLicenceFeeMinor: string | null;
   licenceFeeSource: "api" | "error";
@@ -27,7 +29,6 @@ export function AllotmentDetailActions({
   status,
   version,
   quarterNo,
-  employeeRef,
   employeeName,
   monthlyLicenceFeeMinor,
   licenceFeeSource,
@@ -47,8 +48,8 @@ export function AllotmentDetailActions({
   }
 
   // GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-03: use the employee name.
-  const employeeShort = `${employeeRef.slice(0, 8)}…`;
-  const employeeLabel = employeeName ?? employeeShort;
+  const tFallback = useTranslations("employeeFallback");
+  const employeeLabel = employeeName ?? tFallback("unknownEmployee");
 
   const licenceFeeErrored = licenceFeeSource === "error";
 

@@ -3,6 +3,7 @@
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, useConfirmAction, ConfirmDialog } from "../../../../_components/ds";
 import { EmployeePicker } from "../../../../_components/EmployeePicker";
 import { loadMaps, resolveLabel, type OfficerMaps } from "./OfficerName";
@@ -45,6 +46,7 @@ export function isFileReadOnly(status: string): boolean {
 }
 
 export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
+  const unknownEmployee = useTranslations("employeeFallback")("unknownEmployee");
   const router = useRouter();
   const [noteBody, setNoteBody] = useState("");
   const [referRemarks, setReferRemarks] = useState("");
@@ -85,13 +87,13 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
   // GAP-ESTAB-FILES-DETAIL-07: prefer the resolved "Name · Role" label from the
   // shared maps; fall back to the division + role when no name is known.
   const operatorLabel = (o: Operator) => {
-    const resolved = resolveLabel(o.employeeId, officerMaps);
+    const resolved = resolveLabel(o.employeeId, officerMaps, unknownEmployee);
     const roleName = ROLE_LABEL[o.deskRole] ?? o.deskRole;
-    // When resolveLabel already produced a real name (not the "Officer <id>"
-    // fallback), use it as-is (it already carries the desk role); otherwise
-    // show division + role so the option is still distinguishable.
-    if (!resolved.startsWith("Officer ")) return resolved;
-    return `${resolved} · ${o.division} · ${roleName}`;
+    // When the roster resolved a real name, use the label as-is (it already
+    // carries the desk role); otherwise show "Unknown employee" with division +
+    // role so the option is still distinguishable.
+    if (officerMaps?.names.has(o.employeeId)) return resolved;
+    return `${unknownEmployee} · ${o.division} · ${roleName}`;
   };
 
   async function addYellowNote() {
@@ -198,7 +200,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
   const referTargetOperator = operators.find((o) => o.employeeId === referTarget);
   const referTargetLabel = referTargetOperator
     ? operatorLabel(referTargetOperator)
-    : `officer ${referTarget.slice(0, 8)}…`;
+    : unknownEmployee;
 
   // Validate before opening the confirm dialog so we never confirm an invalid id.
   function onReferBackClick() {

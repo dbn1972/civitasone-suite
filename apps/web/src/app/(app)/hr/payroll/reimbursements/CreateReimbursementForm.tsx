@@ -28,6 +28,7 @@ const fieldStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid 
 
 export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) {
   const t = useTranslations("createReimbursementForm");
+  const tFallback = useTranslations("employeeFallback");
   const router = useRouter();
   const [pickedEmployeeId, setPickedEmployeeId] = useState<string | null>(null);
   const [pickedName, setPickedName] = useState<string | null>(null);
@@ -57,7 +58,7 @@ export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) 
   const periodRef = useRef<HTMLInputElement>(null);
 
   const employeeId = subject.mode === "self" ? subject.employeeId : pickedEmployeeId;
-  const employeeLabel = subject.mode === "self" ? subject.label : pickedName ?? pickedEmployeeId ?? "";
+  const employeeLabel = subject.mode === "self" ? subject.label : pickedName ?? tFallback("unknownEmployee");
   const amountMinor = rupeesToMinorString(amount);
   const isInvalid = (f: Exclude<InvalidField, null>) => tone === "bad" && invalidField === f;
   const categoryLabel = (c: string) => {

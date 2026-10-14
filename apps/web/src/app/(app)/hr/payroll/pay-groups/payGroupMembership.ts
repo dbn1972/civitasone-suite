@@ -31,7 +31,8 @@ export type MemberRow = {
   assignmentId: string;
   employeeId: string;
   employeeNo: string;
-  fullName: string;
+  /** null when the HRMS lookup could not resolve the employee (rendered as "Unknown employee"). */
+  fullName: string | null;
   departmentName: string | null;
   effectiveFrom: string;
   effectiveTo: string | null;
@@ -42,7 +43,8 @@ export type MemberRow = {
 export type UnassignedRow = {
   employeeId: string;
   employeeNo: string;
-  fullName: string;
+  /** null when the HRMS lookup could not resolve the employee (rendered as "Unknown employee"). */
+  fullName: string | null;
   departmentName: string | null;
 } & Record<string, unknown>;
 

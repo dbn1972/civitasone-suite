@@ -19,6 +19,9 @@ export type AnalyticsDashboardRow = {
   // (resolving it to a display name needs a cross-service call to identity and
   // is out of proportion here); null when the API omits it.
   ownerId: string | null;
+  // SF-17b: the owner's resolved name (analytics-service enriches it through
+  // hrms-service). null = not resolvable; the UI renders "Unknown employee".
+  ownerName: string | null;
 };
 
 export type AnalyticsResultRow = Record<string, string | number>;
@@ -78,6 +81,7 @@ export async function getAnalyticsDashboards(): Promise<LoaderResult<AnalyticsDa
           visibility: typeof d.visibility === "string" && d.visibility ? d.visibility : "unknown",
           version: typeof d.version === "number" ? d.version : 1,
           ownerId: typeof d.ownerId === "string" ? d.ownerId : null,
+          ownerName: typeof d.ownerName === "string" && d.ownerName.trim() ? d.ownerName : null,
         }));
       },
     },
@@ -103,6 +107,7 @@ export type AnalyticsDashboardDetail = {
   status: string;
   visibility: string;
   ownerId: string | null;
+  ownerName: string | null;
   version: number;
   widgets: AnalyticsDashboardWidget[];
   shareCount: number;
@@ -136,6 +141,7 @@ export async function getAnalyticsDashboardById(
           visibility:
             typeof payload.visibility === "string" && payload.visibility ? payload.visibility : "unknown",
           ownerId: typeof payload.ownerId === "string" ? payload.ownerId : null,
+          ownerName: typeof payload.ownerName === "string" && payload.ownerName.trim() ? payload.ownerName : null,
           version: typeof payload.version === "number" ? payload.version : 1,
           widgets: widgets.sort((a, b) => a.position - b.position),
           shareCount,

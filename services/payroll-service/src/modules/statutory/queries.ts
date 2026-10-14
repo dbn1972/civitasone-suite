@@ -9,10 +9,8 @@ export async function listPfReport(tenantId: string, limit: number, period?: str
   // fetchEmployeeSummaries fails open to an empty Map on an unreachable
   // HRMS, so this never gates the report; null just means the frontend
   // falls back to the employeeId it already shows.
-  const [rows, empMap] = await Promise.all([
-    repo.listPfByTenant(tenantId, limit, period),
-    fetchEmployeeSummaries(tenantId),
-  ]);
+  const rows = await repo.listPfByTenant(tenantId, limit, period);
+  const empMap = await fetchEmployeeSummaries(tenantId, rows.map((r) => r.employeeId));
   return rows.map((r) => ({
     id: r.id,
     employeeId: r.employeeId,
@@ -26,10 +24,8 @@ export async function listPfReport(tenantId: string, limit: number, period?: str
 
 export async function listEsiReport(tenantId: string, limit: number, period?: string) {
   // GAP-PAYROLL-STATUTORY-ESI-02: same enrichment as listPfReport above.
-  const [rows, empMap] = await Promise.all([
-    repo.listEsiByTenant(tenantId, limit, period),
-    fetchEmployeeSummaries(tenantId),
-  ]);
+  const rows = await repo.listEsiByTenant(tenantId, limit, period);
+  const empMap = await fetchEmployeeSummaries(tenantId, rows.map((r) => r.employeeId));
   return rows.map((r) => ({
     id: r.id,
     employeeId: r.employeeId,
@@ -56,10 +52,8 @@ export async function listGratuityReport(tenantId: string, limit: number) {
   // GAP-PAYROLL-STATUTORY-GRATUITY-06: same best-effort employeeName
   // enrichment as listGpfReport below (fails open to null on an unreachable
   // HRMS; the page then falls back to the employeeId).
-  const [rows, empMap] = await Promise.all([
-    repo.listGratuityByTenant(tenantId, limit),
-    fetchEmployeeSummaries(tenantId),
-  ]);
+  const rows = await repo.listGratuityByTenant(tenantId, limit);
+  const empMap = await fetchEmployeeSummaries(tenantId, rows.map((r) => r.employeeId));
   return rows.map((r) => ({
     id: r.id,
     employeeId: r.employeeId,
@@ -81,9 +75,9 @@ export async function listGpfReport(tenantId: string, limit: number) {
   // an empty Map on an unreachable HRMS, so this never gates the report.
   // null here just means the frontend falls back to the employeeId it
   // already shows (see hr/payroll/gpf/page.tsx).
-  const [rows, empMap, accounts] = await Promise.all([
-    repo.listGpfByTenant(tenantId, limit),
-    fetchEmployeeSummaries(tenantId),
+  const rows = await repo.listGpfByTenant(tenantId, limit);
+  const [empMap, accounts] = await Promise.all([
+    fetchEmployeeSummaries(tenantId, rows.map((r) => r.employeeId)),
     fetchRetirementAccounts(tenantId),
   ]);
   return rows.map((r) => ({
@@ -107,9 +101,9 @@ export async function listGpfReport(tenantId: string, limit: number) {
 
 export async function listNpsReport(tenantId: string, limit: number) {
   // UX-021: see listGpfReport above -- same best-effort employeeName enrichment.
-  const [rows, empMap, pranMap, accounts] = await Promise.all([
-    repo.listNpsByTenant(tenantId, limit),
-    fetchEmployeeSummaries(tenantId),
+  const rows = await repo.listNpsByTenant(tenantId, limit);
+  const [empMap, pranMap, accounts] = await Promise.all([
+    fetchEmployeeSummaries(tenantId, rows.map((r) => r.employeeId)),
     fetchNpsPranLast4(tenantId),
     fetchRetirementAccounts(tenantId),
   ]);

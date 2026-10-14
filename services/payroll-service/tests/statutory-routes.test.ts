@@ -488,7 +488,8 @@ describe("PF/ESI report employeeName enrichment (GAP-PAYROLL-STATUTORY-PF-04, ES
 
       expect(res.statusCode).toBe(200);
       expect(res.json()[0]).toMatchObject({ employeeId: "emp-1", employeeName: "Asha Rao" });
-      expect(H.fetchEmployeeSummariesMock).toHaveBeenCalledWith(TENANT);
+      // SF-17b: asks for exactly the page's employees, not the whole (capped) directory.
+      expect(H.fetchEmployeeSummariesMock).toHaveBeenCalledWith(TENANT, ["emp-1"]);
     });
 
     it(`${path}: an unreachable HRMS (empty map) still returns the row, with employeeName null`, async () => {

@@ -9475,7 +9475,7 @@
     "noneMessage": "No corrections are waiting for a decision.",
     "checkerNote": "A correction must be approved or rejected by a payroll user other than the one who created it.",
     "summary": "from {from}: {oldValue} → {newValue}, arrears {arrears}",
-    "employeeLabel": "Employee {id}",
+    "employeeLabel": "Employee {name}",
     "approveBtn": "Approve",
     "rejectBtn": "Reject",
     "approveAriaLabel": "Approve {component} correction",
@@ -15058,5 +15058,8 @@
     "encashmentWhole": "Enter a whole number of days.",
     "encashmentNegative": "Encashment days cannot be negative.",
     "remarksMax1000": "Remarks must be 1000 characters or fewer."
+  },
+  "employeeFallback": {
+    "unknownEmployee": "Unknown employee"
   }
 }

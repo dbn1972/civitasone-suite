@@ -317,7 +317,7 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "settlement not found");
     }
 
-    const empMap = await fetchEmployeeSummaries(ctx.tenantId);
+    const empMap = await fetchEmployeeSummaries(ctx.tenantId, [rows[0]!.employeeId]);
     return reply.send({ data: serializeSettlement(rows[0]!, empMap) });
   });
 
@@ -348,7 +348,7 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
     // fetchEmployeeSummaries fails open to an empty Map on an unreachable
     // HRMS, so this never gates the list (the card then shows a neutral
     // "Unknown employee" label, never the raw UUID).
-    const empMap = await fetchEmployeeSummaries(ctx.tenantId);
+    const empMap = await fetchEmployeeSummaries(ctx.tenantId, rows.map((r) => r.employeeId));
     return reply.send({ data: rows.map((r) => serializeSettlement(r, empMap)), meta: { limit: q.limit, offset: q.offset } });
   });
 

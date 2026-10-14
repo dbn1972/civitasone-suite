@@ -58,6 +58,7 @@ export function hasSameTypeAndPeriod(
 
 export function CreateOffCycleForm({ existingRuns = [] }: { existingRuns?: ReadonlyArray<{ run_type: string; period: string }> }) {
   const t = useTranslations("createOffCycleForm");
+  const tFallback = useTranslations("employeeFallback");
   const router = useRouter();
   const [runType, setRunType] = useState<RunType>("bonus");
   const [period, setPeriod] = useState("");
@@ -324,7 +325,7 @@ export function CreateOffCycleForm({ existingRuns = [] }: { existingRuns?: Reado
             <ul style={{ margin: "10px 0 0", paddingLeft: 18, maxHeight: 200, overflowY: "auto" }} aria-label={t("confirmItemsAriaLabel")}>
               {items.map((it) => (
                 <li key={it._key}>
-                  {it.employeeName ?? it.employeeId} — {formatMoney(itemMinor(it) ?? 0n)}
+                  {it.employeeName ?? tFallback("unknownEmployee")} — {formatMoney(itemMinor(it) ?? 0n)}
                 </li>
               ))}
             </ul>

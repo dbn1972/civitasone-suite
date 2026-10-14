@@ -62,11 +62,13 @@ describe("EsiStatutoryPage", () => {
     expect(screen.getByText("Total ESI contribution — 2026-08")).toBeInTheDocument();
   });
 
-  it("GAP-PAYROLL-STATUTORY-ESI-02: without a name, shows an 8-character code, never the full UUID", async () => {
+  it("GAP-PAYROLL-STATUTORY-ESI-02 / SF-17b: without a name, shows 'Unknown employee', never the UUID or an id fragment", async () => {
     mockLedger(summary(), [row()]);
     renderPage(await EsiStatutoryPage({}));
-    expect(screen.getByText("3F2A9C1E")).toBeInTheDocument();
+    expect(screen.getByText("Unknown employee")).toBeInTheDocument();
     expect(screen.queryByText(UUID)).not.toBeInTheDocument();
+    expect(screen.queryByText("3F2A9C1E")).not.toBeInTheDocument();
+    expect(screen.queryByText(/3f2a9c1e/i)).not.toBeInTheDocument();
   });
 
   it("renders an empty state when the ledger has no periods (and skips the row fetch)", async () => {

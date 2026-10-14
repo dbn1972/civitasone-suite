@@ -831,7 +831,9 @@ export function mapEstabFileSummaries(payload: unknown): EstabFileSummary[] | nu
       subject,
       classification,
       department: toText(row.dept) ?? toText(row.department) ?? undefined,
-      createdBy: toText(row.createdBy) ?? "—",
+      // SF-17b: the service sends the creator's resolved name as createdByName; the raw
+      // createdBy id is never shown. "" = unresolved (the list renders "Unknown employee").
+      createdBy: toText(row.createdByName) ?? "",
       createdDate: toText(row.createdDate) ?? toText(row.createdAt)?.slice(0, 10) ?? "—",
       currentHolder: toText(row.currentWith) ?? toText(row.currentHolder) ?? undefined,
       status,

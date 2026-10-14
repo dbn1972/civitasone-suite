@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { IntlWrapper } from "@/lib/testUtils/intl";
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: IntlWrapper });
 
 import { MovementTimeline, type FileMovement } from "./MovementTimeline";
 

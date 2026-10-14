@@ -26,6 +26,7 @@ const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid 
 
 export function ComputeBonusForm() {
   const t = useTranslations("computeBonusForm");
+  const tFallback = useTranslations("employeeFallback");
   const router = useRouter();
   // GAP-PAYROLL-BONUS-03: the FY is a closed set of well-formed labels
   // (current + 4 previous) -- a free-text "2025-27" can no longer be typed.
@@ -163,7 +164,7 @@ export function ComputeBonusForm() {
     }
   }
 
-  const employeeLabel = employeeName ?? pending?.employeeId ?? "";
+  const employeeLabel = employeeName ?? tFallback("unknownEmployee");
 
   return (
     <form onSubmit={handleSubmit} noValidate style={{ marginBottom: 16 }}>

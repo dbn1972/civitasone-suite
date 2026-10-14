@@ -4,6 +4,7 @@ import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useCallback, useEffect, useState } from "react";
 import { Button, DataTable, StatusPill, ConfirmDialog, useConfirmAction, ErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
+import { useTranslations } from "next-intl";
 import { loadMaps, resolveLabel, type OfficerMaps } from "../files/[id]/OfficerName";
 
 type Operator = { id: string; employeeId: string; division: string; deskRole: string; active: boolean };
@@ -47,6 +48,7 @@ export function HandoverPanel() {
   const [operatorsFailed, setOperatorsFailed] = useState(false);
   // GAP-ESTAB-HANDOVER-01: resolved officer name maps for readable labels.
   const [officerMaps, setOfficerMaps] = useState<OfficerMaps | null>(null);
+  const tFallback = useTranslations("employeeFallback");
   // GAP-ESTAB-HANDOVER-03: file count preview for the selected from-officer.
   const [fileCount, setFileCount] = useState<number | null>(null);
 
@@ -118,12 +120,12 @@ export function HandoverPanel() {
     if (!empId) return "—";
     const o = operators.find((x) => x.employeeId === empId);
     const inactive = o && !o.active ? " (inactive)" : "";
-    const resolved = resolveLabel(empId, officerMaps);
+    const resolved = resolveLabel(empId, officerMaps, tFallback("unknownEmployee"));
     // resolveLabel already appends the desk role when known; add the division
     // and the inactive marker for the handover audit trail.
     if (o) return `${resolved} · ${o.division}${inactive}`;
     return `${resolved}${inactive}`;
-  }, [operators, officerMaps]);
+  }, [operators, officerMaps, tFallback]);
 
   // The actual reassignment — moves every file on the outgoing officer's desk.
   // Irreversible, so it runs only after the ConfirmDialog (handoverConfirm).

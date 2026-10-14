@@ -356,7 +356,10 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     // GAP-PAYROLL-LOANS-01: optional server-side filters so payroll's name
     // lookup is not limited to the first 2000 rows of a large tenant. Both are
     // additive; with neither the response is exactly what it always was.
-    const f = z.object({ q: z.string().trim().max(100).optional(), ids: z.string().max(2000).optional() }).parse(req.query ?? {});
+    // SF-17b: `actorIds` resolves identity-provider subjects (hrms_employees.user_ref,
+    // the already-linked employee<->login bridge) to names, for services whose
+    // "created by" / "owner" columns hold an actor id rather than an employee id.
+    const f = z.object({ q: z.string().trim().max(100).optional(), ids: z.string().max(2000).optional(), actorIds: z.string().max(2000).optional() }).parse(req.query ?? {});
     const { ilike, inArray, or } = await import("drizzle-orm");
     const conds = [eq(hrmsEmployees.tenantId, ctx.tenantId)];
     if (f.q) {
@@ -367,8 +370,12 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
       const idList = f.ids.split(",").map((s) => s.trim()).filter((s) => z.string().uuid().safeParse(s).success).slice(0, 50);
       conds.push(inArray(hrmsEmployees.id, idList.length > 0 ? idList : ["00000000-0000-0000-0000-000000000000"]));
     }
+    if (f.actorIds) {
+      const actorList = f.actorIds.split(",").map((s) => s.trim()).filter((s) => z.string().uuid().safeParse(s).success).slice(0, 50);
+      conds.push(inArray(hrmsEmployees.userRef, actorList.length > 0 ? actorList : ["00000000-0000-0000-0000-000000000000"]));
+    }
     const employees = await scopedRead((tx) =>
-      tx.select({ id: hrmsEmployees.id, fullName: hrmsEmployees.fullName, employeeNo: hrmsEmployees.employeeNo, departmentId: hrmsEmployees.departmentId })
+      tx.select({ id: hrmsEmployees.id, fullName: hrmsEmployees.fullName, employeeNo: hrmsEmployees.employeeNo, departmentId: hrmsEmployees.departmentId, userRef: hrmsEmployees.userRef })
         .from(hrmsEmployees)
         .where(and(...conds))
         .orderBy(hrmsEmployees.fullName, hrmsEmployees.id)
@@ -383,7 +390,7 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     // code, not PII) is added so payroll's statutory ledgers and F&F cards
     // can show a real code instead of a fabricated UUID prefix. Additive --
     // every existing caller ignores unknown fields.
-    return reply.send(employees.map((e) => ({ id: e.id, fullName: e.fullName, employeeNo: e.employeeNo, departmentName: deptMap.get(e.departmentId) ?? "" })));
+    return reply.send(employees.map((e) => ({ id: e.id, fullName: e.fullName, employeeNo: e.employeeNo, departmentName: deptMap.get(e.departmentId) ?? "", ...(e.userRef ? { userRef: e.userRef } : {}) })));
   });
 
   // GAP-PAYROLL-FNF-03: HR-record-derived F&F inputs (completed years of

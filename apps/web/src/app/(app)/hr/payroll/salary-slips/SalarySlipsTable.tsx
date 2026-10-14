@@ -12,6 +12,7 @@ type Row = SalarySlipSummary & { printHref: string } & Record<string, unknown>;
 
 export function SalarySlipsTable({ slips }: { slips: SalarySlipSummary[] }) {
   const t = useTranslations("salarySlipsTable");
+  const tFallback = useTranslations("employeeFallback");
   const columns: {
     key: keyof Row & string;
     label: string;
@@ -25,7 +26,7 @@ export function SalarySlipsTable({ slips }: { slips: SalarySlipSummary[] }) {
       label: t("colEmployee"),
       render: (r) => (
         <Link href={`/hr/employees/${r.employeeId}`} style={{ color: "var(--primary-d)", fontWeight: 600 }} tabIndex={-1}>
-          {r.employeeName}
+          {r.employeeName?.trim() || tFallback("unknownEmployee")}
         </Link>
       ),
     },

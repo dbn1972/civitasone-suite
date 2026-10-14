@@ -47,14 +47,19 @@ const FETCH_TIMEOUT_MS = 2000;
 const CACHE_TTL_SECONDS = 30;
 
 export type EmployeeDisplay = { fullName: string; departmentName: string };
-type EmployeeSummary = { id: string; fullName: string; departmentName: string };
+type EmployeeSummary = { id: string; fullName: string; departmentName: string; userRef?: string | null };
 
 /**
  * Best-effort, tenant-scoped id → display-name/department map. Never throws:
  * an empty map (falling back to id truncation at the call site) is always a
  * safe degradation — display enrichment must never break a file/noting read.
  */
-export async function getEmployeeDisplayMap(tenantId: string): Promise<Map<string, EmployeeDisplay>> {
+export async function getEmployeeDisplayMap(tenantId: string, ids?: readonly string[]): Promise<Map<string, EmployeeDisplay>> {
+  // SF-17b: callers that know which ids they are about to render pass them, so
+  // the lookup is exact (batched, tenant-scoped on the hrms side) instead of
+  // depending on the 2000-row unfiltered feed, which silently drops anyone
+  // beyond the cap on a larger tenant.
+  if (ids) return getEmployeeDisplayMapByIds(tenantId, ids);
   const rows = await cache.getOrLoad<EmployeeSummary[]>(
     cache.makeKey(tenantId, "hrms-employee-summaries", "v1"),
     () => fetchEmployeeSummaries(tenantId),
@@ -67,14 +72,45 @@ export async function getEmployeeDisplayMap(tenantId: string): Promise<Map<strin
   return map;
 }
 
-async function fetchEmployeeSummaries(tenantId: string): Promise<EmployeeSummary[]> {
+const IDS_PER_REQUEST = 40;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Exactly the given ids, in bounded parallel chunks. An id may be an hrms
+ * employee id OR an identity-provider actor id (estab stores both: officers
+ * routed to are employee ids, authors/creators are actor ids), so each chunk is
+ * asked both ways and both keys are mapped to the same display. Never throws; an
+ * unresolvable id has no entry (callers show "Unknown employee").
+ */
+export async function getEmployeeDisplayMapByIds(tenantId: string, ids: readonly string[]): Promise<Map<string, EmployeeDisplay>> {
+  const unique = [...new Set(ids.filter((i) => typeof i === "string" && UUID_RE.test(i)))];
+  const map = new Map<string, EmployeeDisplay>();
+  for (let i = 0; i < unique.length; i += IDS_PER_REQUEST * 8) {
+    const wave: string[][] = [];
+    for (let j = i; j < Math.min(unique.length, i + IDS_PER_REQUEST * 8); j += IDS_PER_REQUEST) wave.push(unique.slice(j, j + IDS_PER_REQUEST));
+    const parts = await Promise.all(wave.flatMap((chunk) => [
+      fetchEmployeeSummaries(tenantId, { ids: chunk }),
+      fetchEmployeeSummaries(tenantId, { actorIds: chunk }),
+    ]));
+    for (const rows of parts) {
+      for (const e of rows) {
+        const d = { fullName: e.fullName, departmentName: e.departmentName };
+        map.set(e.id, d);
+        if (e.userRef) map.set(e.userRef, d);
+      }
+    }
+  }
+  return map;
+}
+
+async function fetchEmployeeSummaries(tenantId: string, filter?: { ids?: readonly string[]; actorIds?: readonly string[] }): Promise<EmployeeSummary[]> {
   const serviceSecret = process.env.INTERNAL_SERVICE_SECRET;
   if (!serviceSecret) return [];
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const res = await fetch(`${HRMS_URL}/v1/hrms/internal/employee-summaries`, {
+    const res = await fetch(`${HRMS_URL}/v1/hrms/internal/employee-summaries${filter?.ids ? `?ids=${filter.ids.map(encodeURIComponent).join(",")}` : filter?.actorIds ? `?actorIds=${filter.actorIds.map(encodeURIComponent).join(",")}` : ""}`, {
       headers: {
         "x-internal": "1",
         "x-service-secret": serviceSecret,

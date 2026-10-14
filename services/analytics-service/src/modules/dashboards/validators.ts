@@ -60,6 +60,8 @@ export const dashboardViewSchema = z.object({
   description: z.string().nullable(),
   status: z.string(),
   ownerId: z.string().uuid().nullable(),
+  // SF-17b: the owner's display name (null = not resolvable; the UI shows "Unknown employee").
+  ownerName: z.string().nullable().optional(),
   visibility: z.string(),
   layout: z.record(z.unknown()),
   version: z.number().int(),

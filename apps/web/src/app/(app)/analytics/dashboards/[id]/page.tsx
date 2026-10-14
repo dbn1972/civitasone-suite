@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader, StatGrid, StatCard, Card, StatusPill, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getAnalyticsDashboardById } from "../../_data";
@@ -11,6 +12,7 @@ import { toHumanError } from "@/lib/messages";
 // it), so this page just renders it. Private-visibility rows a caller cannot
 // see come back as 404 server-side — we never widen access here.
 export default async function AnalyticsDashboardDetailPage({ params }: { params: { id: string } }) {
+  const tFallback = await getTranslations("employeeFallback");
   const { data: dashboard, source, status } = await getAnalyticsDashboardById(params.id);
 
   // A real 404 ("doesn't exist / not visible to you") is distinct from a
@@ -53,7 +55,7 @@ export default async function AnalyticsDashboardDetailPage({ params }: { params:
           <dt>Visibility</dt>
           <dd><StatusPill status={dashboard.visibility} /></dd>
           <dt>Owner</dt>
-          <dd>{dashboard.ownerId ? <span className="mono" title={dashboard.ownerId}>{dashboard.ownerId.slice(0, 8)}</span> : "—"}</dd>
+          <dd>{dashboard.ownerId ? (dashboard.ownerName ?? tFallback("unknownEmployee")) : "—"}</dd>
         </dl>
       </Card>
 

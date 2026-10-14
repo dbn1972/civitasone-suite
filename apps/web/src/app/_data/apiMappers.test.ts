@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccountNodes, mapSrnDetail, mapGoodsReturnDetail, mapCycleCountDetail, mapPurchaseOrderSummaries } from "./apiMappers";
+import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccountNodes, mapSrnDetail, mapGoodsReturnDetail, mapCycleCountDetail, mapPurchaseOrderSummaries, mapEstabFileSummaries } from "./apiMappers";
 
 describe("mapCrmAccounts", () => {
   it("maps the accounts payload including hierarchy and contact count", () => {
@@ -657,5 +657,19 @@ describe("mapPurchaseOrderSummaries", () => {
   it("returns null for invalid input", () => {
     expect(mapPurchaseOrderSummaries(null)).toBeNull();
     expect(mapPurchaseOrderSummaries("not a list")).toBeNull();
+  });
+});
+
+describe("mapEstabFileSummaries — creator name (SF-17b)", () => {
+  const base = { id: "f1", fileNo: "F-1", subject: "S", classification: "unclassified", status: "active", createdBy: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d" };
+
+  it("uses the service-resolved createdByName and never the raw createdBy id", () => {
+    const [row] = mapEstabFileSummaries([{ ...base, createdByName: "Asha Rao" }]) ?? [];
+    expect(row?.createdBy).toBe("Asha Rao");
+  });
+
+  it("maps an unresolved creator to an empty string (the list then renders 'Unknown employee'), not the id", () => {
+    const [row] = mapEstabFileSummaries([{ ...base, createdByName: null }]) ?? [];
+    expect(row?.createdBy).toBe("");
   });
 });

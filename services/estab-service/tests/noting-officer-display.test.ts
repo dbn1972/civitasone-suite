@@ -215,12 +215,13 @@ describe("getFileDetail — officer labels resolve via hrms-service where the id
     expect(detail!.dispatchHistory[0]?.dispatchedBy).toBe("Anita Desai");
     // ...while an id hrms-service genuinely has no record of (the common
     // self-authored case) still degrades safely to the pre-existing
-    // truncated-id fallback, exactly as before — not a regression, not a
+    // "Unknown employee" label (SF-17b: never an id fragment) — not a
     // crash, not a misleading label.
-    expect(detail!.noteSheets[0]?.author).toBe(SELF_ACTOR_ID.slice(0, 8));
+    expect(detail!.noteSheets[0]?.author).toBe("Unknown employee");
+    expect(detail!.noteSheets[0]?.author).not.toContain(SELF_ACTOR_ID.slice(0, 8));
   });
 
-  it("degrades every label to truncated ids (not an error) when hrms-service is unreachable", async () => {
+  it("degrades every label to \"Unknown employee\" (not an error, no id fragment) when hrms-service is unreachable", async () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new Error("ECONNREFUSED")) as unknown as typeof fetch;
     await runWithTenant(TENANT_HRMS_DOWN, () =>
       db.transaction(async (tx) => {
@@ -236,6 +237,7 @@ describe("getFileDetail — officer labels resolve via hrms-service where the id
     const detail = await runWithTenant(TENANT_HRMS_DOWN, () => getFileDetail(TENANT_HRMS_DOWN, FILE_ID_HRMS_DOWN));
 
     expect(detail).not.toBeNull();
-    expect(detail!.currentHolder).toBe(KNOWN_EMPLOYEE_ID.slice(0, 8));
+    expect(detail!.currentHolder).toBe("Unknown employee");
+    expect(detail!.currentHolder).not.toContain(KNOWN_EMPLOYEE_ID.slice(0, 8));
   });
 });

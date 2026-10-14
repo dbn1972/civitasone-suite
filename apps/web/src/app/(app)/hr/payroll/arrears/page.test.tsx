@@ -106,10 +106,12 @@ describe("ArrearsPage", () => {
     render(ui);
 
     // GAP-PAYROLL-ARREARS-01: names (with employee code), never the raw UUID;
-    // an id the directory didn't return renders "Unknown employee" + short id.
+    // an id the directory didn't return renders "Unknown employee" only.
     expect(screen.getByText("Asha Rao (EMP-101)")).toBeInTheDocument();
     expect(screen.getByText("Vikram Singh")).toBeInTheDocument();
-    expect(screen.getByText(`Unknown employee · ${E3.slice(0, 8)}`)).toBeInTheDocument();
+    expect(screen.getByText("Unknown employee")).toBeInTheDocument();
+    // SF-17b: never an id fragment, not even next to "Unknown employee".
+    expect(screen.queryByText(new RegExp(E3.slice(0, 8)))).not.toBeInTheDocument();
     expect(screen.queryByText(E1)).not.toBeInTheDocument();
     // One batched directory lookup for all three ids, not one per row.
     const dirCalls = fetchJsonMock.mock.calls.filter(([p]) => String(p).startsWith("/api/v1/hrms/employees"));
