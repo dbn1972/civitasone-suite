@@ -2989,14 +2989,15 @@ export async function getFinanceFiscalYears(): Promise<LoaderResult<FinanceFisca
 
 /**
  * GET /v1/finance/bank-accounts never returns the full number: it sends
- * `accountNoLast4` and a masked `ifscPrefix` (masters/bank-routes.ts).
+ * `accountNoLast4` and the full `ifsc` (a public branch code, owner decision 3,
+ * 2026-10-14) (masters/bank-routes.ts).
  */
 export type FinanceBankAccount = {
   id: string;
   bankName: string;
   branchName: string | null;
   accountNoLast4: string;
-  ifscPrefix: string;
+  ifsc: string;
   accountType: string;
   purpose: string | null;
   status: string;
@@ -3015,7 +3016,7 @@ export function mapBankAccounts(payload: unknown): FinanceBankAccount[] | null {
       bankName: raw.bankName,
       branchName: typeof raw.branchName === "string" ? raw.branchName : null,
       accountNoLast4: str(raw.accountNoLast4),
-      ifscPrefix: str(raw.ifscPrefix),
+      ifsc: str(raw.ifsc),
       accountType: str(raw.accountType),
       purpose: typeof raw.purpose === "string" ? raw.purpose : null,
       status: str(raw.status, "unknown"),

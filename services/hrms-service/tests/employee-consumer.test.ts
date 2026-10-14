@@ -468,6 +468,23 @@ describe("employeeUpdate command", () => {
     await q.stop();
   });
 
+  it("audit diff stores the IFSC in full and keeps the bank account number masked (owner decision 3, 2026-10-14)", async () => {
+    const q = await buildQueue();
+    const empId = randomUUID();
+    findByIdMock.mockResolvedValue({ id: empId, tenantId: TENANT, status: "confirmed", bankAccountNo: "11112222333344", bankIfsc: "HDFC0004321" });
+    await q.publish(COMMANDS.employeeUpdate, makeMsg(COMMANDS.employeeUpdate, {
+      id: empId, tenantId: TENANT, bankAccountNo: "55556666777788", bankIfsc: "SBIN0001234", reason: "salary account moved to SBI",
+    }));
+    await drainOrFail(q);
+    const audit = enqueuedMessages.find((m) => m.topic === "audit.event.record" && (m.payload as any).action === "update");
+    expect(audit).toBeDefined();
+    const diff = (audit!.payload as any).sensitiveOldNew;
+    expect(diff.bankIfsc).toEqual({ old: "HDFC0004321", new: "SBIN0001234" });
+    expect(diff.bankAccountNo).toEqual({ old: "**********3344", new: "**********7788" });
+    expect(JSON.stringify(audit!.payload)).not.toContain("55556666777788");
+    await q.stop();
+  });
+
   it("routes a basicMinor change through the optimistic-concurrency guard", async () => {
     // Guards against the basicMinor race this consumer shares with the
     // pay-matrix annual-increment consumer and both promotion consumers

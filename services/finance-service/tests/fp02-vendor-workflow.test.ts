@@ -221,6 +221,7 @@ describe("masked reads and audited reveal", () => {
     const body = res.json();
     expect(body.pan).toMatch(/^FPZZZ\*\*\*\*F$/);
     expect(body.bankAccount).toBe("********9012");
+    expect(body.ifsc).toBe("TEST0123456"); // owner decision 3 (2026-10-14): IFSC shown in full
     expect(body.phone).toBe("******3210");
     expect(body.email).toBe("a***@vendor.example");
     expect(JSON.stringify(body)).not.toContain("123456789012");
@@ -290,7 +291,7 @@ describe("bank-detail change request (maker != checker)", () => {
   };
   const pendingId = async (id: string) => {
     const d = await app.inject({ method: "GET", url: `/v1/finance/vendors/${id}`, headers: admin(CHECKER) });
-    return d.json().pendingBankChange as { id: string; proposedBy: string; accountMasked: string } | null;
+    return d.json().pendingBankChange as { id: string; proposedBy: string; accountMasked: string; ifsc: string } | null;
   };
   const decideChange = async (id: string, changeId: string, action: "approve" | "reject", who: string, payload: object = {}) => {
     const res = await app.inject({ method: "POST", url: `/v1/finance/vendors/${id}/bank-change/${changeId}/${action}`, headers: admin(who), payload });
@@ -311,7 +312,7 @@ describe("bank-detail change request (maker != checker)", () => {
     const prop = await propose(id);
     expect(prop.statusCode).toBe(202);
     const pending = (await pendingId(id))!;
-    expect(pending).toMatchObject({ proposedBy: MAKER, accountMasked: "********5544" });
+    expect(pending).toMatchObject({ proposedBy: MAKER, accountMasked: "********5544", ifsc: "NEWB0654321" });
     const detail = await app.inject({ method: "GET", url: `/v1/finance/vendors/${id}`, headers: admin(CHECKER) });
     expect(JSON.stringify(detail.json())).not.toContain("998877665544");
 

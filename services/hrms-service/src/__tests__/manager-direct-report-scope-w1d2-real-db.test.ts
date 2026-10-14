@@ -19,9 +19,9 @@ const TENANT = "facade00-d2d2-4000-8000-000000000b01";
 const SEED = "facade00-d2d2-4000-8000-0000000001ff";
 const id = (n: number): string => `facade00-d2d2-4000-8000-00000000${String(n).padStart(4, "0")}`;
 const DEPT = id(0x1d1), DESIG_HI = id(0x1d2), DESIG_MID = id(0x1d3);
-const MGR = id(0x1e1), REPORT = id(0x1e2), OTHER = id(0x1e3);
+const MGR = id(0x1e1), REPORT = id(0x1e2), OTHER = id(0x1e3), HREMP = id(0x1e4);
 const SUB = { mgr: "w1d2-mgr", report: "w1d2-report", other: "w1d2-other", hr: "w1d2-hr", unlinked: "w1d2-unlinked" };
-const K_REPORT = id(0x2a1), K_OTHER = id(0x2a2), K_MGR = id(0x2a3);
+const K_REPORT = id(0x2a1), K_OTHER = id(0x2a2), K_MGR = id(0x2a3), K_HR = id(0x2a4);
 const R_REPORT = id(0x2b1), R_OTHER = id(0x2b2);
 const COURSE = id(0x3a1), E_REPORT = id(0x3a2), E_OTHER = id(0x3a3), E_MGR = id(0x3a4);
 
@@ -41,11 +41,11 @@ beforeAll(async () => {
   await asTenant((tx) => tx`INSERT INTO employee.hrms_departments (id, tenant_id, code, name, created_by, updated_by) VALUES (${DEPT}, ${TENANT}, 'W1D2', 'W1D2 Dept', ${SEED}, ${SEED})`);
   await asTenant((tx) => tx`INSERT INTO employee.hrms_designations (id, tenant_id, code, name, level, created_by, updated_by) VALUES (${DESIG_HI}, ${TENANT}, 'W1D2H', 'W1D2 Senior', 6, ${SEED}, ${SEED})`);
   await asTenant((tx) => tx`INSERT INTO employee.hrms_designations (id, tenant_id, code, name, level, created_by, updated_by) VALUES (${DESIG_MID}, ${TENANT}, 'W1D2M', 'W1D2 Mid', 5, ${SEED}, ${SEED})`);
-  for (const [eid, no, sub, mgr, desig] of [[MGR, "D2-M", SUB.mgr, null, DESIG_HI], [REPORT, "D2-R", SUB.report, MGR, DESIG_MID], [OTHER, "D2-O", SUB.other, null, DESIG_MID]] as const) {
+  for (const [eid, no, sub, mgr, desig] of [[MGR, "D2-M", SUB.mgr, null, DESIG_HI], [REPORT, "D2-R", SUB.report, MGR, DESIG_MID], [OTHER, "D2-O", SUB.other, null, DESIG_MID], [HREMP, "D2-H", SUB.hr, null, DESIG_MID]] as const) {
     await asTenant((tx) => tx`INSERT INTO employee.hrms_employees (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, user_ref, manager_id, created_by, updated_by)
       VALUES (${eid}, ${TENANT}, ${no}, ${"W1D2 " + no}, ${DEPT}, ${desig}, '2026-01-01', ${sub}, ${mgr}, ${SEED}, ${SEED})`);
   }
-  for (const [kid, emp, no] of [[K_REPORT, REPORT, "KR"], [K_OTHER, OTHER, "KO"], [K_MGR, MGR, "KM"]] as const) {
+  for (const [kid, emp, no] of [[K_REPORT, REPORT, "KR"], [K_OTHER, OTHER, "KO"], [K_MGR, MGR, "KM"], [K_HR, HREMP, "KH"]] as const) {
     await asTenant((tx) => tx`INSERT INTO contracts.hrms_contracts (id, tenant_id, employee_id, contract_no, start_date, end_date, status, created_by, updated_by)
       VALUES (${kid}, ${TENANT}, ${emp}, ${"W1D2-" + no}, '2026-01-01', '2027-01-01', 'active', ${SEED}, ${SEED})`);
   }
@@ -67,7 +67,7 @@ const ids = (r: { json: () => unknown }): string[] => ((r.json() as { data: Arra
 describe("contracts — manager scope", () => {
   it("list: manager sees own + report contracts only; HR sees all three; unlinked sees none", async () => {
     expect(ids(await get("/v1/hrms/contracts", ["manager"], SUB.mgr))).toEqual([K_REPORT, K_MGR].sort());
-    expect(ids(await get("/v1/hrms/contracts", ["hr_admin"], SUB.hr))).toEqual([K_REPORT, K_OTHER, K_MGR].sort());
+    expect(ids(await get("/v1/hrms/contracts", ["hr_admin"], SUB.hr))).toEqual([K_REPORT, K_OTHER, K_MGR, K_HR].sort());
     expect(ids(await get("/v1/hrms/contracts", ["manager"], SUB.unlinked))).toEqual([]);
   });
   it("list: asking for a non-report by employeeId yields nothing for a manager", async () => {
@@ -101,6 +101,18 @@ describe("contracts — manager scope", () => {
     expect((await renew(K_REPORT, ["manager"], SUB.unlinked)).statusCode).toBe(403);
     // Allowed: authorization passes (202 queued, or a business-rule status -- never 403/404).
     expect([202, 409, 422]).toContain((await renew(K_REPORT, ["manager"], SUB.mgr)).statusCode);
+  });
+  it("POST renew: segregation of duties -- nobody renews their own contract (manager or HR); HR may renew another's", async () => {
+    const renew = (k: string, roles: string[], sub: string) =>
+      app.inject({ method: "POST", url: `/v1/hrms/contracts/${k}/renew`, headers: h(roles, sub), payload: { newEndDate: "2029-01-01" } });
+    const mine = await renew(K_MGR, ["manager"], SUB.mgr);
+    expect(mine.statusCode).toBe(403);
+    expect(mine.json().code).toBe("SELF_RENEWAL_FORBIDDEN");
+    const hrMine = await renew(K_HR, ["hr_admin"], SUB.hr);
+    expect(hrMine.statusCode).toBe(403);
+    expect(hrMine.json().code).toBe("SELF_RENEWAL_FORBIDDEN");
+    // HR renewing someone else's contract is still allowed (authorization passes: 202, or a business-rule status).
+    expect([202, 409, 422]).toContain((await renew(K_OTHER, ["hr_admin"], SUB.hr)).statusCode);
   });
 });
 

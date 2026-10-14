@@ -108,6 +108,11 @@ vi.mock("../src/shared/self-scope.js", async (orig) => {
   };
 });
 
+// The renew route also resolves the actor's own employee link (self-renewal block); this
+// mock-DB file has no employee rows, so the actor is simply unlinked here. The real
+// self-renewal behaviour is covered by the real-DB suite.
+vi.mock("../src/modules/employee/actor-link.js", () => ({ resolveEmployeeForActor: async () => null }));
+
 vi.mock("../src/shared/infra.js", () => ({
   cache: { invalidate: async () => {}, makeKey: (...a: string[]) => a.join(":"), getOrLoad: async (_k: string, fn: () => Promise<unknown>) => fn() },
   queue: Q.queue,
