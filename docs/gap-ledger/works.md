@@ -1868,7 +1868,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-PHOTOS-NEW-02  ·  HIGH  ·  confirmed  ·  theme VALIDATION (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2035)
 - **W0 note:** partly fixed by #1867 — Done: zod lat/long range + both-or-neither, min/max attrs, Use my location button. Remains: source still hard-coded "web" (no web-gps/web-manual), backend range validation unverifiable (works-service not in snapshot)
 - **First-pass claim:** Photo evidence with GPS has no range validation: latitude/longitude accept any number and are not checked against -90..90 / -180..180 (page.tsx:186-205), and source is hard-coded "web" so the coordinates are typed, not device-captured — weak as verification evidence.
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/photos/new/page.tsx:157-182 latitude/longitude are type=number with step only (no min/max), the form is noValidate (line 92) so even native constraints don't run, and submit parses parseFloat (lines 56-57) with no range check; source is hard-coded "web" (line 53) and coordinates are typed in, not captured via navigator.geolocation. Server-side range validation/source enum is cannot-verify (works-service is not in the snapshot (only services/hrms-service), so server behaviour is cannot-verify;). Theme 'PII' is wrong - this is validation/evidence integrity.

@@ -2322,7 +2322,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-RFQ-NEW-01  ·  HIGH  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2035)
 - **W0 note:** partly fixed by #1866 — CreateRFQForm.tsx:44 status=approved fetch, no auto-select, ?indent deep-link done; server POST /rfqs does not reject non-approved indent; picker not server-searchable
 - **First-pass claim:** Subtitle says "against an approved indent" but the indent list is unfiltered (GET /indents?limit=100, CreateRFQForm.tsx) and pre-selects the first row (setIndentId(clean[0].id), Form) — an RFQ can be raised on a draft, rejected or already-ordered indent.
 - **Verified evidence:** CreateRFQForm.tsx:157 fetches /procurement/indents?limit=100 with no status filter; :163 preselects clean[0].id; options (:243) show only indentNo/department, no status. Subtitle in rfq/new/page.tsx:294 says 'approved indent'. IndentOption has no status field, so client filtering is impossible until the API returns it; a status query param on the endpoint is cannot-verify.
