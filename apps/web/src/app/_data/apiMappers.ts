@@ -862,7 +862,8 @@ export function mapEstabFileDetail(payload: unknown): import("@civitasone/types"
     if (!nid) return [];
     return [{
       id: nid,
-      author: toText(row.author) ?? "—",
+      // SF-17b: the service sends the resolved name; "" = unresolved (web shows the localised fallback).
+      author: toText(row.author) ?? "",
       content: toText(row.content) ?? toText(row.body) ?? "",
       timestamp: toText(row.timestamp) ?? toText(row.createdAt) ?? "",
       type: (toText(row.type) ?? "note") as "note" | "order" | "remark",
@@ -920,6 +921,9 @@ export function mapEstabFileDetail(payload: unknown): import("@civitasone/types"
 
   return {
     ...base,
+    // SF-17b: the detail view shows the service-resolved holder name (the summary
+    // mapper above keeps the id for list rows that resolve it client-side).
+    currentHolder: toText(payload.currentHolder) ?? "",
     dakNo: toText(payload.dakNo) ?? undefined,
     dueBy: toText(payload.dueBy) ?? undefined,
     noteSheets,

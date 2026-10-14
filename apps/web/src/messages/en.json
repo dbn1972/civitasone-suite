@@ -15010,6 +15010,9 @@
     "dismiss": "Dismiss",
     "continue": "Continue"
   },
+  "estabMigrationPanel": {
+    "openEfile": "Open eFile"
+  },
   "employeeFallback": {
     "unknownEmployee": "Unknown employee"
   }

@@ -14510,6 +14510,9 @@
     "dismiss": "हटाएं",
     "continue": "आगे बढ़ें"
   },
+  "estabMigrationPanel": {
+    "openEfile": "ई-फ़ाइल खोलें"
+  },
   "employeeFallback": {
     "unknownEmployee": "अज्ञात कर्मचारी"
   }
