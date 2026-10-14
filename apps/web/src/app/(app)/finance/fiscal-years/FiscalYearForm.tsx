@@ -159,7 +159,7 @@ export function FiscalYearForm({ rows = [], createsAsDraft = true }: { rows?: Fi
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={codeId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Code <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Code <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={codeId}
@@ -173,12 +173,12 @@ export function FiscalYearForm({ rows = [], createsAsDraft = true }: { rows?: Fi
                 aria-describedby={errors.code ? codeErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.code && <p id={codeErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.code}</p>}
+              {errors.code && <p id={codeErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.code}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={labelId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Label <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Label <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={labelId}
@@ -191,12 +191,12 @@ export function FiscalYearForm({ rows = [], createsAsDraft = true }: { rows?: Fi
                 aria-describedby={errors.label ? labelErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.label && <p id={labelErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.label}</p>}
+              {errors.label && <p id={labelErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.label}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={startId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Start Date <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Start Date <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={startId}
@@ -210,12 +210,12 @@ export function FiscalYearForm({ rows = [], createsAsDraft = true }: { rows?: Fi
                 aria-describedby={errors.startDate ? startErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.startDate && <p id={startErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.startDate}</p>}
+              {errors.startDate && <p id={startErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.startDate}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={endId} style={{ fontSize: 13, fontWeight: 600 }}>
-                End Date <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                End Date <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={endId}
@@ -229,7 +229,7 @@ export function FiscalYearForm({ rows = [], createsAsDraft = true }: { rows?: Fi
                 aria-describedby={errors.endDate ? endErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.endDate && <p id={endErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.endDate}</p>}
+              {errors.endDate && <p id={endErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.endDate}</p>}
             </div>
           </div>
 

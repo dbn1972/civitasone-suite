@@ -44,13 +44,13 @@ export function GLTable({ entries, pagination, totals, view }: GLTableProps) {
   return (
     <>
       <StatGrid>
-        <StatCard icon="📒" iconBg="#e7edfd" label="Vouchers" value={totals ? totals.vouchers : "—"} />
-        <StatCard icon="🧾" iconBg="#f4f3ff" label="Entry lines" value={totals ? totals.entryLines : "—"} />
-        <StatCard icon="🏛️" iconBg="#eff6ff" label="Accounts Active" value={totals ? totals.accountsActive : "—"} />
-        <StatCard icon="📤" iconBg="#fef3f2" label="Ledger Total Debit" value={debit !== null ? formatMoney(debit) : "—"} />
+        <StatCard icon="📒" tone="info" label="Vouchers" value={totals ? totals.vouchers : "—"} />
+        <StatCard icon="🧾" tone="neutral" label="Entry lines" value={totals ? totals.entryLines : "—"} />
+        <StatCard icon="🏛️" tone="info" label="Accounts Active" value={totals ? totals.accountsActive : "—"} />
+        <StatCard icon="📤" tone="bad" label="Ledger Total Debit" value={debit !== null ? formatMoney(debit) : "—"} />
         <StatCard
           icon="📥"
-          iconBg="#ecfdf3"
+          tone="good"
           label="Ledger Total Credit"
           value={credit !== null ? formatMoney(credit) : "—"}
           {...(balance === null ? {} : { delta: balance === "balanced" ? "Balanced" : "Unbalanced", up: balance === "balanced" })}

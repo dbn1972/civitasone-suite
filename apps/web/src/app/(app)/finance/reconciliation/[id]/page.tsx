@@ -81,13 +81,13 @@ export default async function ReconciliationRunDetailPage({ params }: { params: 
       )}
 
       <StatGrid>
-        <StatCard icon="📥" iconBg="#eff6ff" label="Source Count" value={run.sourceCount} />
-        <StatCard icon="📤" iconBg="#ecfdf3" label="Target Count" value={run.targetCount} />
-        <StatCard icon="✅" iconBg="#fffaeb" label="Matched" value={run.matchedCount} />
+        <StatCard icon="📥" tone="info" label="Source Count" value={run.sourceCount} />
+        <StatCard icon="📤" tone="good" label="Target Count" value={run.targetCount} />
+        <StatCard icon="✅" tone="warn" label="Matched" value={run.matchedCount} />
         {/* While a run is still moving, "Unbalanced" is not a verdict yet. */}
         <StatCard
           icon="⚠️"
-          iconBg="#fef3f2"
+          tone="bad"
           label="Breaks"
           value={run.breakCount}
           {...(inProgress ? {} : { delta: run.balanced ? "Balanced" : "Unbalanced", up: run.balanced })}

@@ -125,8 +125,8 @@ export default async function RecurringEntriesPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🔁" iconBg="#e6f0ff" label="Total Templates" value={entries.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
+        <StatCard icon="🔁" tone="info" label="Total Templates" value={entries.length} />
+        <StatCard icon="✅" tone="good" label="Active" value={active} />
       </StatGrid>
 
       <RecurringEntryForm accounts={accounts} accountsError={accountsSource === "error"} />

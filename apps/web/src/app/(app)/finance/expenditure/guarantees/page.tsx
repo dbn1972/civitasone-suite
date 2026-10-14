@@ -26,11 +26,11 @@ export default async function GuaranteesPage() {
         }
       />
       <StatGrid>
-        <StatCard icon="🛡️" iconBg="#e7edfd" label={t("statTotal")} value={failed ? null : stats.total} />
-        <StatCard icon="📈" iconBg="#ecfdf3" label={t("statActive")} value={failed ? null : stats.active} />
-        <StatCard icon="✅" iconBg="#fffaeb" label={t("statReleased")} value={failed ? null : stats.released} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label={t("statExpiringSoon", { days: GUARANTEE_EXPIRY_WINDOW_DAYS })} value={failed ? null : stats.expiringSoon} />
-        <StatCard icon="⚠️" iconBg="#fce7ee" label={t("statLapsed")} value={failed ? null : stats.lapsed} />
+        <StatCard icon="🛡️" tone="info" label={t("statTotal")} value={failed ? null : stats.total} />
+        <StatCard icon="📈" tone="good" label={t("statActive")} value={failed ? null : stats.active} />
+        <StatCard icon="✅" tone="warn" label={t("statReleased")} value={failed ? null : stats.released} />
+        <StatCard icon="⏳" tone="warn" label={t("statExpiringSoon", { days: GUARANTEE_EXPIRY_WINDOW_DAYS })} value={failed ? null : stats.expiringSoon} />
+        <StatCard icon="⚠️" tone="bad" label={t("statLapsed")} value={failed ? null : stats.lapsed} />
       </StatGrid>
       {/* GAP2-FINANCE-GUARANTEES-COPY-08: make the read-only, Procurement-managed
           nature unambiguous — no guarantee lifecycle action happens in Finance. */}

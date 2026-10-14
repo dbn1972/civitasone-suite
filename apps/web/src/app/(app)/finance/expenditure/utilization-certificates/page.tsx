@@ -41,12 +41,12 @@ export default async function UCsPage({ searchParams }: { searchParams?: { schem
       />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e7edfd" label={t("statTotal")} value={failed ? null : stats.total} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label={t("statSubmittedVerified")} value={failed ? null : stats.submittedVerified} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label={t("statPendingSubmission")} value={failed ? null : stats.pending} />
-        <StatCard icon="↩️" iconBg="#fef3f2" label={t("statRejected")} value={failed ? null : stats.rejected} />
-        <StatCard icon="💰" iconBg="#eff6ff" label={t("statCoveredAmount")} value={failed ? null : formatMoney(stats.covered)} />
-        <StatCard icon="🕒" iconBg="#fffaeb" label={t("statPendingAmount")} value={failed ? null : formatMoney(stats.pendingAmount)} />
+        <StatCard icon="📋" tone="info" label={t("statTotal")} value={failed ? null : stats.total} />
+        <StatCard icon="✅" tone="good" label={t("statSubmittedVerified")} value={failed ? null : stats.submittedVerified} />
+        <StatCard icon="⏳" tone="warn" label={t("statPendingSubmission")} value={failed ? null : stats.pending} />
+        <StatCard icon="↩️" tone="bad" label={t("statRejected")} value={failed ? null : stats.rejected} />
+        <StatCard icon="💰" tone="info" label={t("statCoveredAmount")} value={failed ? null : formatMoney(stats.covered)} />
+        <StatCard icon="🕒" tone="warn" label={t("statPendingAmount")} value={failed ? null : formatMoney(stats.pendingAmount)} />
       </StatGrid>
 
       {/* UX-012: the data-source badge now lives inside UCsTable, driven by

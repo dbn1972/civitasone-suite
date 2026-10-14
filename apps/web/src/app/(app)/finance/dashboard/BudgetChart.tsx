@@ -35,29 +35,29 @@ export function BudgetChart({ utilisationPct, expenditure, sanctionedMinor }: Bu
     );
   } else if (split.kind === "overspent") {
     donut = [
-      { label: `Within estimate (${formatMoney(split.sanctionedMinor)})`, value: paiseToRupeesForChart(split.sanctionedMinor), color: "var(--chart-1, #4f46e5)" },
-      { label: `Over estimate (${formatMoney(split.overspentMinor)})`, value: paiseToRupeesForChart(split.overspentMinor), color: "var(--chart-warn, #b42318)" },
+      { label: `Within estimate (${formatMoney(split.sanctionedMinor)})`, value: paiseToRupeesForChart(split.sanctionedMinor), color: "var(--chart-1)" },
+      { label: `Over estimate (${formatMoney(split.overspentMinor)})`, value: paiseToRupeesForChart(split.overspentMinor), color: "var(--chart-warn)" },
     ];
     banner = (
-      <p role="status" style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--chart-warn, #b42318)" }}>
+      <p role="status" style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--chart-warn)" }}>
         <span aria-hidden="true">⚠ </span>Over budget estimate by {formatMoney(split.overspentMinor)}
       </p>
     );
   } else if (split.kind === "over-budget") {
     // Older API: no exact estimate, so no amount (D1).
-    donut = [{ label: `Utilized (${formatMoney(split.expenditureMinor)})`, value: paiseToRupeesForChart(split.expenditureMinor), color: "var(--chart-warn, #b42318)" }];
+    donut = [{ label: `Utilized (${formatMoney(split.expenditureMinor)})`, value: paiseToRupeesForChart(split.expenditureMinor), color: "var(--chart-warn)" }];
     banner = (
-      <p role="status" style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--chart-warn, #b42318)" }}>
+      <p role="status" style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--chart-warn)" }}>
         <span aria-hidden="true">⚠ </span>Over budget
       </p>
     );
   } else {
     donut = [
-      { label: `Utilized (${formatMoney(split.expenditureMinor)})`, value: paiseToRupeesForChart(split.expenditureMinor), color: "var(--chart-1, #4f46e5)" },
+      { label: `Utilized (${formatMoney(split.expenditureMinor)})`, value: paiseToRupeesForChart(split.expenditureMinor), color: "var(--chart-1)" },
       {
         label: `Remaining (${split.remainingMinor === null ? "—" : formatMoney(split.remainingMinor)})`,
         value: split.remainingMinor === null ? 0 : paiseToRupeesForChart(split.remainingMinor),
-        color: "var(--chart-neutral, #e5e7eb)",
+        color: "var(--chart-neutral)",
       },
     ];
   }

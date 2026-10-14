@@ -11,7 +11,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, ConfirmDialog } from "@/app/_components/ds";
+import { Alert, Button, ConfirmDialog } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { formatMoney } from "@/lib/formatters";
 import { buildCreateBillRequest, type BillFormInput } from "@/lib/finance/billForm";
@@ -22,7 +22,7 @@ export interface BillFormOption {
 }
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
-const errStyle = { fontSize: 12, color: "#b91c1c" } as const;
+const errStyle = { fontSize: 12, color: "var(--bad)" } as const;
 
 export function BillForm({
   vendors,
@@ -101,7 +101,7 @@ export function BillForm({
 
   return (
     <>
-      {message ? <div role="status" className="banner" style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div> : null}
+      {message ? <Alert variant="success" role="status">{message}</Alert> : null}
       <div className="card">
         <form onSubmit={onSubmit} className="pad" noValidate>
           <div className="fields">
