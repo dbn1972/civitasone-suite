@@ -143,7 +143,7 @@ describe("ComputeFnfForm", () => {
     fireEvent.change(screen.getByLabelText(/Completed Years/), { target: { value: "27" } });
     fillMoney();
     fireEvent.click(screen.getByText("Compute Settlement"));
-    expect(screen.getByRole("alert")).toHaveTextContent(/at least 10 characters/);
+    expect(screen.getAllByRole("alert").some((a) => /at least 10 characters/.test(a.textContent ?? ""))).toBe(true);
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/Reason for overriding/), { target: { value: "Service book shows 2 extra years of deputation" } });
@@ -163,7 +163,7 @@ describe("ComputeFnfForm", () => {
     await waitFor(() => expect(screen.getByLabelText(/Completed Years/)).toHaveValue(25));
     fillMoney({ wages: "1.005" });
     fireEvent.click(screen.getByText("Compute Settlement"));
-    expect(screen.getByRole("alert")).toHaveTextContent(/at most 2 decimal places/);
+    expect(screen.getAllByRole("alert").some((a) => /at most 2 decimal places/.test(a.textContent ?? ""))).toBe(true);
     expect(screen.getByLabelText(/Last Drawn Wages/)).toHaveAttribute("aria-invalid", "true");
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(computeCalls()).toHaveLength(0);

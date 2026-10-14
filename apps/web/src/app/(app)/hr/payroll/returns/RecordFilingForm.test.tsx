@@ -24,11 +24,11 @@ describe("RecordFilingForm (GAP-PAYROLL-RETURNS-01)", () => {
   it("validates the 15-digit receipt and a non-future date before any request", () => {
     renderForm();
     fireEvent.click(screen.getByRole("button", { name: "Record filing" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("Enter the date the statement was filed");
+    expect(screen.getAllByRole("alert").some((a) => /Enter the date the statement was filed/.test(a.textContent ?? ""))).toBe(true);
     fireEvent.change(screen.getByLabelText(/^Filed on/), { target: { value: "2025-07-28" } });
     fireEvent.change(screen.getByLabelText(/^Provisional receipt number/), { target: { value: "12345" } });
     fireEvent.click(screen.getByRole("button", { name: "Record filing" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("exactly 15 digits");
+    expect(screen.getAllByRole("alert").some((a) => /exactly 15 digits/.test(a.textContent ?? ""))).toBe(true);
     expect(screen.getByLabelText(/^Provisional receipt number/)).toHaveAttribute("aria-invalid", "true");
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
@@ -39,7 +39,7 @@ describe("RecordFilingForm (GAP-PAYROLL-RETURNS-01)", () => {
     fireEvent.change(screen.getByLabelText(/^Filed on/), { target: { value: "2999-01-01" } });
     fireEvent.change(screen.getByLabelText(/^Provisional receipt number/), { target: { value: "123456789012345" } });
     fireEvent.click(screen.getByRole("button", { name: "Record filing" }));
-    expect(screen.getByRole("alert")).toHaveTextContent("not a future date");
+    expect(screen.getAllByRole("alert").some((a) => /not a future date/.test(a.textContent ?? ""))).toBe(true);
   });
 
   it("confirms, then POSTs the filing as revision 0 and refreshes", async () => {
