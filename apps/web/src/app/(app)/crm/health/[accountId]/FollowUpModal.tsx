@@ -11,29 +11,11 @@ import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
-import { Button, Modal } from "@/app/_components/ds";
+import { Button, Field, Input, Modal, Select, Textarea } from "@/app/_components/ds";
+import { validateFollowUp, type FollowUpErrors } from "./followUpSchema";
 
 const DIALOG: React.CSSProperties = {
   padding: 0,
-};
-
-const FIELD: React.CSSProperties = {
-  padding: "8px 12px",
-  border: "1px solid var(--line)",
-  borderRadius: "var(--r)",
-  background: "var(--bg)",
-  color: "var(--ink)",
-  fontSize: 14,
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const LABEL: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 4,
-  fontSize: 14,
-  color: "var(--ink)",
 };
 
 interface Props {
@@ -60,18 +42,31 @@ export function FollowUpModal({ accountId, accountName, onClose, defaultOpen = f
   const [open, setOpen] = useState(defaultOpen);
   const [saving, setSaving] = useState(false);
   const formError = useFormError("service request");
+  const [clientErrors, setClientErrors] = useState<FollowUpErrors>({});
+  /** Client validation first, then a backend rejection for the same field. */
+  const errFor = (f: keyof FollowUpErrors) => clientErrors[f] ?? formError.fieldError(f);
 
   function openModal() {
     formError.clear();
+    setClientErrors({});
     setOpen(true);
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setSaving(true);
     formError.clear();
 
     const fd = new FormData(e.currentTarget);
+    const invalid = validateFollowUp({
+      citizenName: String(fd.get("citizenName") ?? ""),
+      citizenPhone: String(fd.get("citizenPhone") ?? ""),
+      serviceType: String(fd.get("serviceType") ?? ""),
+      subject: String(fd.get("subject") ?? ""),
+      description: String(fd.get("description") ?? ""),
+    });
+    setClientErrors(invalid);
+    if (Object.keys(invalid).length > 0) return;
+    setSaving(true);
     const body = {
       citizenName: fd.get("citizenName"),
       citizenPhone: (fd.get("citizenPhone") as string)?.trim() || undefined,
@@ -165,46 +160,19 @@ export function FollowUpModal({ accountId, accountName, onClose, defaultOpen = f
 
             <form
               onSubmit={handleSubmit}
+              noValidate
               style={{ display: "flex", flexDirection: "column", gap: 14 }}
             >
-              <label style={LABEL}>
-                <span>
-                  {t("contactName")}{" "}
-                  <span aria-hidden="true" style={{ color: "var(--bad)" }}>
-                    *
-                  </span>
-                </span>
-                <input
-                  name="citizenName"
-                  required
-                  maxLength={200}
-                  placeholder={t("contactNamePlaceholder")}
-                  style={FIELD}
-                />
-                {formError.fieldError("citizenName") && (
-                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("citizenName")}</span>
-                )}
-              </label>
+              <Field label={t("contactName")} required error={errFor("citizenName")}>
+                <Input name="citizenName" maxLength={200} placeholder={t("contactNamePlaceholder")} />
+              </Field>
 
-              <label style={LABEL}>
-                <span>{t("phone")}</span>
-                <input
-                  name="citizenPhone"
-                  type="tel"
-                  maxLength={32}
-                  placeholder={t("phonePlaceholder")}
-                  style={FIELD}
-                />
-              </label>
+              <Field label={t("phone")} error={errFor("citizenPhone")}>
+                <Input name="citizenPhone" type="tel" maxLength={32} placeholder={t("phonePlaceholder")} />
+              </Field>
 
-              <label style={LABEL}>
-                <span>
-                  {t("serviceType")}{" "}
-                  <span aria-hidden="true" style={{ color: "var(--bad)" }}>
-                    *
-                  </span>
-                </span>
-                <select name="serviceType" required style={FIELD}>
+              <Field label={t("serviceType")} required error={errFor("serviceType")}>
+                <Select name="serviceType">
                   <option value="">{t("selectServiceType")}</option>
                   {/* GAP-CRM-HEALTH-ACCOUNTID-03: only account-relevant follow-up
                       types belong here. "New Water Connection" / "New Electricity
@@ -216,54 +184,35 @@ export function FollowUpModal({ accountId, accountName, onClose, defaultOpen = f
                   <option value="Renewal Support">{t("typeRenewalSupport")}</option>
                   <option value="Escalation">{t("typeEscalation")}</option>
                   <option value="Other">{t("typeOther")}</option>
-                </select>
-                {formError.fieldError("serviceType") && (
-                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("serviceType")}</span>
-                )}
-              </label>
+                </Select>
+              </Field>
 
-              <label style={LABEL}>
-                <span>
-                  {t("subject")}{" "}
-                  <span aria-hidden="true" style={{ color: "var(--bad)" }}>
-                    *
-                  </span>
-                </span>
-                <input
+              <Field label={t("subject")} required error={errFor("subject")}>
+                <Input
                   name="subject"
-                  required
                   maxLength={500}
                   defaultValue={t("defaultSubject", { account: accountName ?? t("thisAccount") })}
-                  style={FIELD}
                 />
-                {formError.fieldError("subject") && (
-                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("subject")}</span>
-                )}
-              </label>
+              </Field>
 
-              <label style={LABEL}>
-                <span>{t("description")}</span>
-                <textarea
+              <Field label={t("description")} error={errFor("description")}>
+                <Textarea
                   name="description"
                   rows={3}
                   maxLength={5000}
                   placeholder={t("descriptionPlaceholder")}
-                  style={{ ...FIELD, resize: "vertical" }}
+                  style={{ resize: "vertical" }}
                 />
-                {formError.fieldError("description") && (
-                  <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("description")}</span>
-                )}
-              </label>
+              </Field>
 
-              <label style={LABEL}>
-                <span>{t("priority")}</span>
-                <select name="priority" defaultValue="normal" style={FIELD}>
+              <Field label={t("priority")}>
+                <Select name="priority" defaultValue="normal">
                   <option value="low">{t("priorityLow")}</option>
                   <option value="normal">{t("priorityNormal")}</option>
                   <option value="high">{t("priorityHigh")}</option>
                   <option value="urgent">{t("priorityUrgent")}</option>
-                </select>
-              </label>
+                </Select>
+              </Field>
 
               <div
                 style={{

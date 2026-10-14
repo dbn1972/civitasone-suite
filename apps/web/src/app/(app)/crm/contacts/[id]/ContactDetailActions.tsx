@@ -3,13 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useFormError } from "@/lib/useFormError";
-import { ActionButton, Button } from "../../../../_components/ds";
+import { ActionButton, Button, Field, Input, Select, Textarea } from "../../../../_components/ds";
+import { validateActivityForm, type ActivityFormErrors } from "../../activities/activityFormSchema";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 type Props = { contactId: string; name: string; canDelete?: boolean };
 
-const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
-const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
+const fieldGap = { marginBottom: 8 } as const;
 
 export function ContactDetailActions({ contactId, name, canDelete = false }: Props) {
   const router = useRouter();
@@ -17,14 +17,18 @@ export function ContactDetailActions({ contactId, name, canDelete = false }: Pro
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const formError = useFormError("activity");
+  const [fieldErrors, setFieldErrors] = useState<ActivityFormErrors>({});
   const [showActivity, setShowActivity] = useState(false);
   const [activity, setActivity] = useState({ type: "call", subject: "", text: "" });
 
   async function logActivity(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
     setMessage("");
     setError("");
+    const invalid = validateActivityForm({ subject: activity.subject, text: activity.text });
+    setFieldErrors(invalid);
+    if (Object.keys(invalid).length > 0) return;
+    setBusy(true);
     try {
       const res = await browserFetch("v1/crm/activities", {
         method: "POST",
@@ -96,20 +100,23 @@ export function ContactDetailActions({ contactId, name, canDelete = false }: Pro
       ) : null}
       {showActivity ? (
         <div className="card" style={{ marginTop: 16 }}>
-          <form onSubmit={logActivity} className="pad" style={{ maxWidth: 520 }}>
+          <form onSubmit={logActivity} noValidate className="pad" style={{ maxWidth: 520 }}>
             <h4 style={{ marginTop: 0 }}>Log activity for {name}</h4>
-            <label htmlFor="contact-activity-type" style={labelStyle}>Type</label>
-            <select id="contact-activity-type" value={activity.type} onChange={(e) => setActivity({ ...activity, type: e.target.value })} style={inputStyle}>
-              <option value="call">Call</option>
-              <option value="meeting">Meeting</option>
-              <option value="email">Email</option>
-              <option value="task">Task</option>
-              <option value="note">Note</option>
-            </select>
-            <label htmlFor="contact-activity-subject" style={labelStyle}>Subject</label>
-            <input id="contact-activity-subject" value={activity.subject} onChange={(e) => setActivity({ ...activity, subject: e.target.value })} placeholder="Short summary" style={inputStyle} />
-            <label htmlFor="contact-activity-notes" style={labelStyle}>Notes</label>
-            <textarea id="contact-activity-notes" required value={activity.text} onChange={(e) => setActivity({ ...activity, text: e.target.value })} placeholder="What happened?" rows={3} style={{ ...inputStyle, minHeight: undefined }} />
+            <Field label="Type" style={fieldGap}>
+              <Select value={activity.type} onChange={(e) => setActivity({ ...activity, type: e.target.value })}>
+                <option value="call">Call</option>
+                <option value="meeting">Meeting</option>
+                <option value="email">Email</option>
+                <option value="task">Task</option>
+                <option value="note">Note</option>
+              </Select>
+            </Field>
+            <Field label="Subject" error={fieldErrors.subject} style={fieldGap}>
+              <Input value={activity.subject} onChange={(e) => setActivity({ ...activity, subject: e.target.value })} placeholder="Short summary" />
+            </Field>
+            <Field label="Notes" required error={fieldErrors.text} style={fieldGap}>
+              <Textarea value={activity.text} onChange={(e) => setActivity({ ...activity, text: e.target.value })} placeholder="What happened?" rows={3} />
+            </Field>
             <Button type="submit" disabled={busy} loading={busy} style={{ minHeight: 44 }}>{busy ? "Saving…" : "Save activity"}</Button>
             <Button type="button" variant="ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setShowActivity(false)}>Cancel</Button>
           </form>

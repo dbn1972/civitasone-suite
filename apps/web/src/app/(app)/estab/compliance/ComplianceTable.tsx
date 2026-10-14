@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DataTable, Segmented, ActionButton, StatusPill } from "@/app/_components/ds";
 import { humanizeStatus } from "@/lib/formatters";
-import { UserFacingError } from "@/lib/userFacingError";
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 
 export type ComplianceRow = {
   id: string;
@@ -42,8 +42,8 @@ export function ComplianceTable({ rows }: { rows: ComplianceRow[] }) {
         body: JSON.stringify({ remarks: reason }),
       });
       if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        throw UserFacingError.from({ message: body || "Failed to mark complied" });
+        // Never surface the raw response body: map status/code to the standard copy.
+        throw await userFacingErrorFromResponse(res, "save", "compliance item");
       }
       setError("");
       router.refresh();

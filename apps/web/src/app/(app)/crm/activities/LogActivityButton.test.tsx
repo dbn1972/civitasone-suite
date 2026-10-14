@@ -63,8 +63,8 @@ describe("LogActivityButton save failures use the shared human error", () => {
     browserFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ data: [] }) }); // contacts
     renderWithIntl(<LogActivityButton />);
     fireEvent.click(screen.getByRole("button", { name: "+ Log Activity" }));
-    await waitFor(() => expect(screen.getByLabelText("Notes")).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText("Notes"), { target: { value: "Called the ward office" } });
+    await waitFor(() => expect(screen.getByLabelText(/^Notes/)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/^Notes/), { target: { value: "Called the ward office" } });
   }
 
   it("never shows a raw network exception (Failed to fetch)", async () => {

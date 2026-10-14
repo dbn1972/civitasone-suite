@@ -3,16 +3,10 @@
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 import { Card, ActionButton, EmptyState } from "../../../_components/ds";
 
 type Row = { id: string; label: string; status?: string };
-
-type FieldError = { field: string; message: string };
-type ErrorEnvelope = {
-  code?: string;
-  message?: string;
-  fieldErrors?: FieldError[];
-};
 
 const LOCATION_TYPES = [
   { value: "state", label: "State" },
@@ -44,18 +38,6 @@ const fieldErrorStyle = {
   color: "var(--danger, #b91c1c)",
 } as const;
 
-/** Parse the standard backend error envelope; fall back to raw text. */
-async function parseError(res: Response): Promise<ErrorEnvelope> {
-  const text = await res.text();
-  try {
-    const body = JSON.parse(text) as ErrorEnvelope;
-    if (body && (body.message || body.code || body.fieldErrors)) return body;
-  } catch {
-    // not JSON
-  }
-  return { message: text || "Failed to add branch office. Please try again." };
-}
-
 export function LocationActions({ rows }: { rows: Row[] }) {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -64,6 +46,7 @@ export function LocationActions({ rows }: { rows: Row[] }) {
   const [parentId, setParentId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const formError = useFormError("branch office");
   const [success, setSuccess] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -91,13 +74,9 @@ export function LocationActions({ rows }: { rows: Row[] }) {
         }),
       });
       if (!res.ok) {
-        const env = await parseError(res);
-        if (env.fieldErrors?.length) {
-          setFieldErrors(
-            Object.fromEntries(env.fieldErrors.map((f) => [f.field, f.message]))
-          );
-        }
-        setError(env.message ?? "Failed to add branch office. Please try again.");
+        const resolved = await formError.fromResponse(res, "save");
+        setFieldErrors(resolved.fieldErrors);
+        setError(resolved.message);
         return;
       }
       setName("");
@@ -106,8 +85,8 @@ export function LocationActions({ rows }: { rows: Row[] }) {
       setType("office");
       setSuccess("Branch office added");
       router.refresh();
-    } catch {
-      setError("Network error — could not reach the locations service. Please try again.");
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

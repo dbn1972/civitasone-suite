@@ -96,3 +96,19 @@ describe("ComplianceTable — GAP-ESTAB-COMPLIANCE-03 (mark complied)", () => {
     );
   });
 });
+
+describe("ComplianceTable — SF-14a (no raw response text on a failed comply)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("does not render the raw failure body", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("Traceback: psycopg at db-9.internal", { status: 500 }));
+    render(<ComplianceTable rows={ROWS} />);
+    fireEvent.click(screen.getAllByRole("button", { name: /mark complied/i })[0]);
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(dialog.querySelector("textarea")!, { target: { value: "Filed on time" } });
+    const confirmBtn = Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Mark complied");
+    fireEvent.click(confirmBtn!);
+    await waitFor(() => expect(document.body.textContent).toMatch(/couldn.t|try again|save/i));
+    expect(document.body.textContent).not.toContain("db-9.internal");
+  });
+});

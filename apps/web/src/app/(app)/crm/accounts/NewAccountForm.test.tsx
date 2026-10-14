@@ -43,7 +43,7 @@ const accounts = [
 
 function openAndFill(name = "New Dept", parent = "") {
   fireEvent.click(screen.getByRole("button", { name: "New Account" }));
-  fireEvent.change(screen.getByLabelText("Account name"), { target: { value: name } });
+  fireEvent.change(screen.getByLabelText(/^Account name/), { target: { value: name } });
   if (parent) fireEvent.change(screen.getByLabelText("Reports to"), { target: { value: parent } });
 }
 
@@ -93,7 +93,7 @@ describe("NewAccountForm", () => {
     expect(alert.textContent).toMatch(/parent/i);
     expect(screen.getByRole("button", { name: "Retry setting parent" })).toBeInTheDocument();
     // The form was reset + closed, so the name field is gone (no re-create path).
-    expect(screen.queryByLabelText("Account name")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Account name/)).not.toBeInTheDocument();
   });
 
   // GAP-CRM-ACCOUNTS-03: Retry re-sends ONLY the PATCH (no second POST).
@@ -149,5 +149,19 @@ describe("NewAccountForm", () => {
     const post = browserFetchMock.mock.calls.find((c) => c[0] === "v1/crm/accounts");
     const body = JSON.parse((post![1] as { body: string }).body) as { ownerId?: string };
     expect(body.ownerId).toBeUndefined();
+  });
+
+  // SF-14a: ds/Field wiring -- label tied to input, required marked, errors announced.
+  it("wires aria-required, aria-invalid and aria-describedby to the name field", () => {
+    render(<NewAccountForm accounts={accounts} />);
+    fireEvent.click(screen.getByRole("button", { name: "New Account" }));
+    const name = screen.getByLabelText(/^Account name/);
+    expect(name).toHaveAttribute("aria-required", "true");
+    expect(name).not.toHaveAttribute("aria-invalid");
+    fireEvent.click(screen.getByRole("button", { name: "Create account" }));
+    expect(name).toHaveAttribute("aria-invalid", "true");
+    const describedBy = name.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(document.getElementById(describedBy!)?.textContent).toMatch(/account name/i);
   });
 });

@@ -12,7 +12,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
-import { Button, Card } from "../../../../_components/ds";
+import { Button, Card, Field, Input } from "../../../../_components/ds";
 import {
   postCampaignPeriod,
   CampaignPeriodValidationError,
@@ -66,38 +66,25 @@ export function PostPeriodForm({ campaignId, currency }: { campaignId: string; c
     }
   }
 
-  const inputStyle = {
-    padding: 6,
-    minHeight: 40,
-    borderRadius: 8,
-    border: "1px solid var(--line)",
-    width: "100%",
-  } as const;
-
   return (
     <Card title={t("title")}>
       <form className="pad" style={{ display: "grid", gap: 12 }} onSubmit={(e) => void onSubmit(e)} aria-label={t("title")}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-          <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
-            <span>{t("periodStart")}</span>
-            <input type="date" required value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} style={inputStyle} />
-          </label>
-          <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
-            <span>{t("periodEnd")}</span>
-            <input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} style={inputStyle} />
-          </label>
-          <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
-            <span>{t("spend", { currency })}</span>
-            <input inputMode="decimal" placeholder="0.00" value={costRupees} onChange={(e) => setCostRupees(e.target.value)} style={inputStyle} />
-          </label>
-          <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
-            <span>{t("revenue", { currency })}</span>
-            <input inputMode="decimal" placeholder="0.00" value={revenueRupees} onChange={(e) => setRevenueRupees(e.target.value)} style={inputStyle} />
-          </label>
-          <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
-            <span>{t("responses")}</span>
-            <input type="number" min={0} max={MAX_RESPONSES} step={1} value={responses} onChange={(e) => setResponses(e.target.value)} style={inputStyle} />
-          </label>
+          <Field label={t("periodStart")} required>
+            <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+          </Field>
+          <Field label={t("periodEnd")}>
+            <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+          </Field>
+          <Field label={t("spend", { currency })}>
+            <Input inputMode="decimal" placeholder="0.00" value={costRupees} onChange={(e) => setCostRupees(e.target.value)} />
+          </Field>
+          <Field label={t("revenue", { currency })}>
+            <Input inputMode="decimal" placeholder="0.00" value={revenueRupees} onChange={(e) => setRevenueRupees(e.target.value)} />
+          </Field>
+          <Field label={t("responses")}>
+            <Input type="number" min={0} max={MAX_RESPONSES} step={1} value={responses} onChange={(e) => setResponses(e.target.value)} />
+          </Field>
         </div>
         {error ? (
           <p role="alert" style={{ fontSize: 13, color: "var(--bad)", margin: 0 }}>{error}</p>
