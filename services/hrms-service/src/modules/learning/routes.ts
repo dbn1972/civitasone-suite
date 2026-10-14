@@ -4,6 +4,7 @@ import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
+  canReadEmployeeRecord,
   resolveLearningReadTarget,
   resolveOwnEmployeeIdIfNonHr,
 } from "../../shared/self-scope.js";
@@ -432,11 +433,12 @@ export async function learningRoutes(app: FastifyInstance): Promise<void> {
     if (!existing) throw new HttpError(404, "NOT_FOUND", "enrollment not found");
     // GAP2-LEARNING-ENROLLMENTS-IDOR-01: a bare employee may only write
     // progress on their OWN enrolment; otherwise an employee could overwrite a
-    // colleague's progress/status to completed. HR/manager pass through.
-    const isPrivileged = ["hr_admin", "hr_officer", "super_admin", "manager"].some((r) => ctx.roles.includes(r));
-    if (!isPrivileged) {
-      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
-      if (!actorEmp || actorEmp.id !== existing.employeeId) throw new HttpError(404, "NOT_FOUND", "enrollment not found");
+    // colleague's progress/status to completed. HR passes through. Owner
+    // decision 2 (2026-10-14): a manager may write only their own or a direct
+    // report's enrolment (403 otherwise); an unlinked actor fails closed.
+    if (!HR_ROLES.some((r) => ctx.roles.includes(r)) && !(await canReadEmployeeRecord(ctx, existing.employeeId))) {
+      if (ctx.roles.includes("manager")) throw new HttpError(403, "FORBIDDEN", "you may only update progress for yourself or your direct reports");
+      throw new HttpError(404, "NOT_FOUND", "enrollment not found");
     }
     const pct = body.percentComplete;
     const status = pct >= 100 ? "completed" : pct > 0 ? "in_progress" : "enrolled";

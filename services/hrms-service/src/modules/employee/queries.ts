@@ -100,7 +100,8 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
     // contract regardless of whether a given employee has bank/PAN on file
     // yet (e.g. a fresh hire before onboarding paperwork is complete).
     bankAccountNo: emp.bankAccountNo ? maskValue(emp.bankAccountNo)! : null,
-    bankIfsc: emp.bankIfsc ? maskValue(emp.bankIfsc)! : null,
+    // Owner decision 3 (2026-10-14): IFSC is a public branch code -- shown in full.
+    bankIfsc: emp.bankIfsc ? emp.bankIfsc : null,
     pan: emp.pan ? maskValue(emp.pan)! : null,
     ...(desig?.payGrade    ? { grade: desig.payGrade }                : {}),
     ...(emp.station        ? { postingLocation: emp.station }         : {}),
