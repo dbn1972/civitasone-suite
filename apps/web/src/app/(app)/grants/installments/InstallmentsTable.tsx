@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { DataTable, StatusPill, ActionButton, Select } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
-import { toHumanError } from "@/lib/messages";
 import type { GrantInstallmentSummary } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
+import { postDisburse } from "@/app/(app)/grants/postDisburse";
 
 type Col = {
   key: keyof GrantInstallmentSummary & string;
@@ -15,29 +15,6 @@ type Col = {
   align?: "left" | "right" | "center";
   render?: (row: GrantInstallmentSummary) => ReactNode;
 };
-
-/**
- * Plain-language failure message for a failed installment disbursement.
- * postAction is a plain async helper, not a component or hook, so it can't
- * call the useFormError hook; toHumanError is the same catalogued-message
- * building block that hook is built on -- never the backend's own
- * message/error text or the raw HTTP status.
- */
-function grantActionError(): string {
-  const human = toHumanError("save", { area: "grant action" });
-  return `${human.what} ${human.next}`;
-}
-
-async function postAction(url: string, body: unknown): Promise<void> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    throw new Error(grantActionError());
-  }
-}
 
 const STATUS_FILTER_OPTIONS = [
   { value: "", label: "All statuses" },
@@ -136,10 +113,7 @@ export function InstallmentsTable({
               // `reason` (audited), NOT as beneficiaryBankRef. The payee bank
               // reference is resolved server-side from the grantee master; it
               // must never carry a free-text clerk reason.
-              await postAction(`/api/proxy/v1/grants/installments/${row.id}/disburse`, {
-                mode: "PFMS",
-                reason,
-              });
+              await postDisburse(row.id, reason);
               router.refresh();
             }}
           />

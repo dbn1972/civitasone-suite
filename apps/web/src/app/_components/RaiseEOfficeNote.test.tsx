@@ -92,7 +92,7 @@ describe("RaiseEOfficeNote", () => {
     });
   });
 
-  it("requires both officers to be chosen before submitting (GAP-HR-DISCIPLINARY-DETAIL-05)", async () => {
+  it("requires the forward-to officer to be chosen before submitting (GAP-HR-DISCIPLINARY-DETAIL-05)", async () => {
     render(<RaiseEOfficeNote {...baseProps} />);
     await waitFor(() => {
       expect(screen.getByText("Raise for approval")).toBeInTheDocument();
@@ -101,45 +101,53 @@ describe("RaiseEOfficeNote", () => {
     await waitFor(() => {
       expect(screen.getByText("Submit to eOffice")).toBeInTheDocument();
     });
-    // Try to submit without choosing either officer
     fireEvent.click(screen.getByText("Submit to eOffice"));
     await waitFor(() => {
-      expect(screen.getByText(/Choose the initiating officer/i)).toBeInTheDocument();
+      expect(screen.getByText(/Choose who to forward to/i)).toBeInTheDocument();
     });
   });
 
   it("no longer accepts a raw pasted UUID with nothing selected from the picker", async () => {
-    // Regression guard for the original bug: typing text into the search
-    // box (even a well-formed UUID) is a QUERY, not a selection -- only
-    // choosing a result from the dropdown sets the picker's value. Typing
-    // alone must not satisfy the "officer chosen" validation.
+    // Typing text (even a well-formed UUID) into the search box is a QUERY, not a selection.
     mockFetch();
     render(<RaiseEOfficeNote {...baseProps} />);
     await waitFor(() => expect(screen.getByText("Raise for approval")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Raise for approval"));
 
-    const initiatingInput = screen.getByLabelText("Initiating officer");
-    fireEvent.change(initiatingInput, { target: { value: "12345678-1234-1234-1234-123456789012" } });
+    fireEvent.change(screen.getByLabelText("Forward to officer"), { target: { value: "12345678-1234-1234-1234-123456789012" } });
     await screen.findByText("Asha Rao (E-001)");
     // Deliberately do NOT click the result -- just typed, nothing selected.
 
     fireEvent.click(screen.getByText("Submit to eOffice"));
     await waitFor(() => {
-      expect(screen.getByText(/Choose the initiating officer/i)).toBeInTheDocument();
+      expect(screen.getByText(/Choose who to forward to/i)).toBeInTheDocument();
     });
   });
 
-  it("submits successfully once both officers are chosen from the picker", async () => {
+  // GAP-GRANTS-DISBURSEMENTS-DETAIL-03: the initiator is the signed-in user, shown read-only, never a picker.
+  it("shows the initiating officer read-only (no picker) and sends no initiator when the profile is unavailable", async () => {
+    const fetchMock = mockFetch();
+    render(<RaiseEOfficeNote {...baseProps} />);
+    await waitFor(() => expect(screen.getByText("Raise for approval")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Raise for approval"));
+    const initiator = screen.getByLabelText("Initiating officer") as HTMLInputElement;
+    expect(initiator.readOnly).toBe(true);
+    fireEvent.change(screen.getByLabelText("Forward to officer"), { target: { value: "Ben" } });
+    fireEvent.mouseDown(await screen.findByText("Ben Iyer (E-002)"));
+    await screen.findByDisplayValue("Ben Iyer (E-002)");
+    fireEvent.change(screen.getByPlaceholderText(/Justification/i), { target: { value: "Please approve this." } });
+    fireEvent.click(screen.getByText("Submit to eOffice"));
+    await screen.findByText(/Raised eFile/);
+    const call = fetchMock.mock.calls.find(([i]) => String(typeof i === "string" ? i : (i as Request).url).includes("from-module"))!;
+    expect(JSON.parse((call[1] as RequestInit).body as string)).not.toHaveProperty("initiatedBy");
+  });
+
+  it("submits successfully once the forward-to officer is chosen from the picker", async () => {
     const fetchMock = mockFetch();
 
     render(<RaiseEOfficeNote {...baseProps} />);
     await waitFor(() => expect(screen.getByText("Raise for approval")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Raise for approval"));
-
-    const initiatingInput = screen.getByLabelText("Initiating officer");
-    fireEvent.change(initiatingInput, { target: { value: "Asha" } });
-    fireEvent.mouseDown(await screen.findByText("Asha Rao (E-001)"));
-    expect(await screen.findByDisplayValue("Asha Rao (E-001)")).toBeInTheDocument();
 
     const forwardInput = screen.getByLabelText("Forward to officer");
     fireEvent.change(forwardInput, { target: { value: "Ben" } });
@@ -161,7 +169,7 @@ describe("RaiseEOfficeNote", () => {
     });
     expect(submitCall).toBeTruthy();
     const body = JSON.parse((submitCall![1] as RequestInit).body as string);
-    expect(body.initiatedBy).toBe("12345678-1234-1234-1234-123456789012");
+    expect(body).not.toHaveProperty("initiatedBy");
     expect(body.currentWith).toBe("abcdefab-abcd-abcd-abcd-abcdefabcdef");
   });
 });
@@ -207,15 +215,15 @@ describe("RaiseEOfficeNote defaults the initiating officer to the signed-in user
     expect(body.currentWith).toBe("abcdefab-abcd-abcd-abcd-abcdefabcdef");
   });
 
-  it("a user with no employee record (404) simply starts with an empty initiating officer", async () => {
+  it("a user with no employee record (404) still raises, leaving the server to derive the initiator", async () => {
     mockWithProfile(new Response(null, { status: 404 }));
     render(<RaiseEOfficeNote {...props} />);
     await waitFor(() => expect(screen.getByText("Raise for approval")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Raise for approval"));
     await waitFor(() => expect(screen.getByLabelText("Initiating officer")).toBeInTheDocument());
-    expect((screen.getByLabelText("Initiating officer") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("Initiating officer") as HTMLInputElement).value).toBe("You (the signed-in officer)");
     fireEvent.click(screen.getByText("Submit to eOffice"));
-    expect(await screen.findByText(/Choose the initiating officer/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Choose who to forward to/i)).toBeInTheDocument();
   });
 
   it("does not look the profile up until the form is opened", async () => {
@@ -251,9 +259,6 @@ describe("RaiseEOfficeNote classification, error mapping and notify warning", ()
       await waitFor(() => expect(screen.getByText("Raise for approval")).toBeInTheDocument());
       fireEvent.click(screen.getByText("Raise for approval"));
     }
-    fireEvent.change(screen.getByLabelText("Initiating officer"), { target: { value: "Asha" } });
-    fireEvent.mouseDown(await screen.findByText("Asha Rao (E-001)"));
-    await screen.findByDisplayValue("Asha Rao (E-001)");
     fireEvent.change(screen.getByLabelText("Forward to officer"), { target: { value: "Ben" } });
     fireEvent.mouseDown(await screen.findByText("Ben Iyer (E-002)"));
     await screen.findByDisplayValue("Ben Iyer (E-002)");

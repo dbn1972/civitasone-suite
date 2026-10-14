@@ -311,7 +311,7 @@ describe("POST /v1/estab/files/from-module — valid payload", () => {
       },
     });
     await app.close();
-    expect([200, 201, 202, 400, 409, 422, 500]).toContain(r.statusCode);
+    expect([200, 201, 202, 400, 409, 422, 500, 503]).toContain(r.statusCode); // 503: identity lookup fails closed when HRMS is unreachable
   });
 });
 

@@ -90,3 +90,13 @@ describe("InstallmentsTable", () => {
     expect(refreshMock).not.toHaveBeenCalled();
   });
 });
+
+describe("postDisburse validation (GAP-GRANTS-DETAIL-03)", () => {
+  it("rejects a too-short reason without calling the API", async () => {
+    const { postDisburse } = await import("../postDisburse");
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    fetchSpy.mockClear();
+    await expect(postDisburse("inst-1", "ab")).rejects.toThrow(/at least 3/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

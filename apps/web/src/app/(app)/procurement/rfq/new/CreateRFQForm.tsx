@@ -45,7 +45,7 @@ export function CreateRFQForm() {
         if (res.ok) {
           const body = await res.json() as { data?: IndentOption[] } | IndentOption[];
           const rows = Array.isArray(body) ? body : (body.data ?? []);
-          const clean = rows.filter((i) => i.id && (i.status === undefined || i.status === "approved"));
+          const clean = rows.filter((i) => i.id && i.status === "approved");
           setIndents(clean);
           // GAP-PROCUREMENT-RFQ-NEW-01: no auto-select. Only preselect when the
           // page was deep-linked with ?indent=<id> AND that indent is approved.
@@ -161,7 +161,7 @@ export function CreateRFQForm() {
           <select className="inp" value={indentId} onChange={(e) => setIndentId(e.target.value)} required style={{ minHeight: 44 }}>
             {/* GAP-PROCUREMENT-RFQ-NEW-01: placeholder, no auto-selected indent. */}
             <option value="">{indents.length === 0 ? "No approved indents available" : "Select an approved indent"}</option>
-            {indents.map((i) => <option key={i.id} value={i.id}>{i.indentNo ?? i.id}{i.department ? ` — ${i.department}` : ""}</option>)}
+            {indents.map((i) => <option key={i.id} value={i.id}>{i.indentNo ?? i.id}{i.department ? ` — ${i.department}` : ""} ({i.status ?? "approved"})</option>)}
           </select>
         </label>
         <label className="field">

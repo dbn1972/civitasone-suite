@@ -819,6 +819,16 @@ function ApproveIssueDialog({
           </span>
         )}
       </div>
+      {/* GAP-COURT-ORDERS-02 interim: be honest that a pasted blob is only as strong as the trust store. */}
+      {verification?.ok && !verification.chainTrusted && (
+        <p role="alert" data-testid="dsc-untrusted-warning" style={errStyle}>
+          The signature is mathematically valid, but the signer&apos;s certificate is not checked
+          against a trusted certifying authority
+          {verification.trustStoreConfigured ? " (it does not chain to the configured trust store)" : " (no trust store is configured on the server)"}.
+          This is not proof of a legally valid DSC. Direct token or eSign signing is not yet
+          available in this console.
+        </p>
+      )}
       {verifyError && (
         <p role="alert" style={errStyle}>
           {verifyError}

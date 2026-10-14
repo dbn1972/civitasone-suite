@@ -8,6 +8,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createRfqBody, rfqRespondBody, awardRfqBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as indentRepo from "../indent/repo.js";
 import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
 
@@ -34,6 +35,19 @@ export async function rfqRoutes(app: FastifyInstance): Promise<void> {
         || vendor?.vendorType === "blacklisted";
       if (blacklisted) {
         throw new HttpError(422, "VENDOR_BLACKLISTED", `vendor ${vendorId} is blacklisted and cannot be invited to an RFQ`);
+      }
+    }
+    // GAP-PROCUREMENT-RFQ-NEW-01: an RFQ may only be raised against an APPROVED indent of this tenant.
+    // The web picker is filtered, but the server is the real control. Only the structured
+    // "procurement_indent:<uuid>" reference is checked (free-text legacy refs are left as before).
+    const indentMatch = /^procurement_indent:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(body.indentRef ?? "");
+    if (indentMatch) {
+      const indent = await indentRepo.findIndentById(indentMatch[1]!);
+      if (!indent || indent.tenantId !== ctx.tenantId) {
+        throw new HttpError(422, "INDENT_NOT_FOUND", "the source indent was not found");
+      }
+      if (indent.status !== "approved") {
+        throw new HttpError(422, "INDENT_NOT_APPROVED", `an RFQ requires an approved indent; this indent is '${indent.status}'`);
       }
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createRfq(ctx, body));

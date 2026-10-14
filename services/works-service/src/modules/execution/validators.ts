@@ -28,6 +28,10 @@ export const uploadPhotoSchema = z.object({
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
   source: z.enum(["mobile", "web"]).optional(),
+}).refine((d) => (d.latitude === undefined) === (d.longitude === undefined), {
+  // A lone coordinate is not a location: both or neither (mirrors the web form).
+  message: "latitude and longitude must be supplied together",
+  path: ["latitude"],
 });
 
 export const createIssueSchema = z.object({
