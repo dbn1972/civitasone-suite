@@ -5,12 +5,12 @@ import { useTranslations } from "next-intl";
 import type { WizardData, FieldErrors } from "../wizardTypes";
 import {
   inputStyle,
-  inputErrorStyle,
   labelStyle,
   fieldWrap,
   grid2,
 } from "../wizardTypes";
 import { serviceGroup, type ServiceGroup } from "@/lib/payLevels";
+import { Field, Select, Input } from "@/app/_components/ds";
 
 type Dept = { id: string; name: string };
 type Desig = { id: string; name: string; level?: number | null };
@@ -106,105 +106,51 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
       </h2>
       <div style={grid2}>
         {/* Employee ID */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-empNo" style={labelStyle}>
-            {t("employeeIdFieldLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span>
-          </label>
-          <input
-            id="w-empNo"
+        <Field id="w-empNo" label={<>{t("employeeIdFieldLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.employeeNo} style={fieldWrap}>
+          <Input
             type="text"
             value={data.employeeNo}
             onChange={(e) => onChange("employeeNo", e.target.value)}
             onBlur={() => onBlur("employeeNo")}
             placeholder={t("employeeIdPlaceholder")}
-            aria-required="true"
-            aria-invalid={!!errors.employeeNo}
-            aria-describedby={errors.employeeNo ? "w-empNo-err" : undefined}
-            style={errors.employeeNo ? inputErrorStyle : inputStyle}
           />
-          {errors.employeeNo && (
-            <span id="w-empNo-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
-              {errors.employeeNo}
-            </span>
-          )}
-        </div>
+        </Field>
 
         {/* Date of Joining */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-doj" style={labelStyle}>
-            {t("dateOfJoiningLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span>
-          </label>
-          <input
-            id="w-doj"
+        <Field id="w-doj" label={<>{t("dateOfJoiningLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.dateOfJoining} style={fieldWrap}>
+          <Input
             type="date"
             value={data.dateOfJoining}
             onChange={(e) => onChange("dateOfJoining", e.target.value)}
             onBlur={() => onBlur("dateOfJoining")}
-            aria-required="true"
-            aria-invalid={!!errors.dateOfJoining}
-            aria-describedby={errors.dateOfJoining ? "w-doj-err" : undefined}
-            style={errors.dateOfJoining ? inputErrorStyle : inputStyle}
           />
-          {errors.dateOfJoining && (
-            <span id="w-doj-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
-              {errors.dateOfJoining}
-            </span>
-          )}
-        </div>
+        </Field>
 
         {/* Department */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-dept" style={labelStyle}>
-            {t("departmentLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span>
-          </label>
-          <select
-            id="w-dept"
+        <Field id="w-dept" label={<>{t("departmentLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.departmentId} style={fieldWrap}>
+          <Select
             value={data.departmentId}
             onChange={(e) => onChange("departmentId", e.target.value)}
-            onBlur={() => onBlur("departmentId")}
-            aria-required="true"
-            aria-invalid={!!errors.departmentId}
-            aria-describedby={errors.departmentId ? "w-dept-err" : undefined}
-            style={errors.departmentId ? inputErrorStyle : inputStyle}
-          >
+            onBlur={() => onBlur("departmentId")}>
             <option value="">{t("selectDepartment")}</option>
             {departments.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
-          </select>
-          {errors.departmentId && (
-            <span id="w-dept-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
-              {errors.departmentId}
-            </span>
-          )}
-        </div>
+          </Select>
+        </Field>
 
         {/* Designation */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-desig" style={labelStyle}>
-            {t("designationLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span>
-          </label>
-          <select
-            id="w-desig"
+        <Field id="w-desig" label={<>{t("designationLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.designationId} style={fieldWrap}>
+          <Select
             value={data.designationId}
             onChange={(e) => onChange("designationId", e.target.value)}
-            onBlur={() => onBlur("designationId")}
-            aria-required="true"
-            aria-invalid={!!errors.designationId}
-            aria-describedby={errors.designationId ? "w-desig-err" : undefined}
-            style={errors.designationId ? inputErrorStyle : inputStyle}
-          >
+            onBlur={() => onBlur("designationId")}>
             <option value="">{t("selectDesignation")}</option>
             {designations.map((d) => (
               <option key={d.id} value={d.id}>{d.name}</option>
             ))}
-          </select>
-          {errors.designationId && (
-            <span id="w-desig-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
-              {errors.designationId}
-            </span>
-          )}
-        </div>
+          </Select>
+        </Field>
 
         {/* Grade / Service Group */}
         <div style={fieldWrap}>
@@ -221,31 +167,25 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
               <span style={{ fontSize: 11, color: "var(--mut, #94a3b8)" }}>{t("gradeComputedNote")}</span>
             </>
           ) : (
-            <select
+            <Select
               id="w-grade"
               aria-labelledby="w-grade-label"
               value={data.grade}
               onChange={(e) => onChange("grade", e.target.value)}
-              style={inputStyle}
             >
               <option value="">{t("selectGrade")}</option>
               <option value="MTS">{t("gradeMts")}</option>
               <option value="Contractual">{t("gradeContractual")}</option>
-            </select>
+            </Select>
           )}
         </div>
 
         {/* Employment Type */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-empType" style={labelStyle}>{t("employmentTypeLabel")}</label>
-          <select
-            id="w-empType"
+        <Field id="w-empType" label={t("employmentTypeLabel")} error={typesLoadFailed ? t("employmentTypeLoadError") : undefined} style={fieldWrap}>
+          <Select
             value={data.employeeType}
             onChange={(e) => onChange("employeeType", e.target.value)}
             disabled={typesLoadFailed}
-            aria-invalid={typesLoadFailed}
-            aria-describedby={typesLoadFailed ? "w-empType-err" : undefined}
-            style={inputStyle}
           >
             {typesLoadFailed
               ? <option value={data.employeeType}>{data.employeeType}</option>
@@ -254,13 +194,8 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
                   {LEGACY_LABEL_KEY[o.code] ? t(LEGACY_LABEL_KEY[o.code]) : o.name}
                 </option>
               ))}
-          </select>
-          {typesLoadFailed && (
-            <span id="w-empType-err" role="status" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
-              {t("employmentTypeLoadError")}
-            </span>
-          )}
-        </div>
+          </Select>
+        </Field>
 
         {/* GAP-HR-EMPLOYEES-NEW-02: Basic Pay -- every new employee used to
             be created at basicMinor 0 with no way to set it anywhere in
@@ -268,31 +203,19 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
             pay-structure assignment on the profile after creation, see
             EditEmployeeForm.tsx's EntityPicker) -- but if entered, must be
             a valid decimal-safe rupee amount (validateStep). */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-basicPay" style={labelStyle}>
-            {t("basicPayLabel")}
+        <Field id="w-basicPay" label={<>{t("basicPayLabel")}
             <span style={{ fontWeight: 400, color: "var(--mut, #64748b)", marginInlineStart: 6, fontSize: 11 }}>
               {t("basicPayHint")}
-            </span>
-          </label>
-          <input
-            id="w-basicPay"
+            </span></>} error={errors.basicPay} style={fieldWrap}>
+          <Input
             type="text"
             inputMode="decimal"
             value={data.basicPay}
             onChange={(e) => onChange("basicPay", e.target.value)}
             onBlur={() => onBlur("basicPay")}
             placeholder={t("basicPayPlaceholder")}
-            aria-invalid={!!errors.basicPay}
-            aria-describedby={errors.basicPay ? "w-basicPay-err" : undefined}
-            style={errors.basicPay ? inputErrorStyle : inputStyle}
           />
-          {errors.basicPay && (
-            <span id="w-basicPay-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
-              {errors.basicPay}
-            </span>
-          )}
-        </div>
+        </Field>
       </div>
     </>
   );

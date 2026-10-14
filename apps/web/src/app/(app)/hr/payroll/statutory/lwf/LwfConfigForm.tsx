@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog } from "../../../../../_components/ds";
+import { Button, Card, ConfirmDialog, Field, Input, Select } from "../../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatRupees } from "@/lib/formatters";
 import { nonNegativeRupeesToMinorString } from "@/lib/money";
@@ -50,6 +50,7 @@ type ExistingLwfConfig = { state_code: string };
  */
 export function LwfConfigForm({ existingConfigs = [] }: { existingConfigs?: ExistingLwfConfig[] }) {
   const t = useTranslations("lwfConfigForm");
+  const tv = useTranslations("hrFormErrors2");
   const router = useRouter();
   const [stateCode, setStateCode] = useState("");
   const [empContrib, setEmpContrib] = useState("");
@@ -121,64 +122,48 @@ export function LwfConfigForm({ existingConfigs = [] }: { existingConfigs?: Exis
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
+    <form noValidate onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
       <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))" }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={stateId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("stateCodeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={stateId}
+            <Field id={stateId} label={t("stateCodeLabel")} required error={stateInvalid ? tv("fieldRequired") : undefined}>
+              <Input
                 ref={stateRef}
                 value={stateCode}
                 onChange={(e) => setStateCode(e.target.value)}
                 maxLength={4}
                 placeholder={t("stateCodePlaceholder")}
-                aria-required="true"
-                aria-invalid={stateInvalid || undefined}
-                aria-describedby={stateInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 600 }}>{t("employeeContributionLabel")}</label>
-              <input
-                id={empId}
-                type="number" min="0" step="0.01"
-                aria-describedby={hintId}
+            </Field>
+            <Field id={empId} label={t("employeeContributionLabel")}>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
                 value={empContrib}
                 onChange={(e) => setEmpContrib(e.target.value)}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={erId} style={{ fontSize: 13, fontWeight: 600 }}>{t("employerContributionLabel")}</label>
-              <input
-                id={erId}
-                type="number" min="0" step="0.01"
-                aria-describedby={hintId}
+            </Field>
+            <Field id={erId} label={t("employerContributionLabel")}>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
                 value={erContrib}
                 onChange={(e) => setErContrib(e.target.value)}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={freqId} style={{ fontSize: 13, fontWeight: 600 }}>{t("frequencyLabel")}</label>
-              <select
-                id={freqId}
+            </Field>
+            <Field id={freqId} label={t("frequencyLabel")}>
+              <Select
                 value={frequency}
                 onChange={(e) => setFrequency(e.target.value as Frequency | "")}
-                aria-describedby={hintId}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               >
                 <option value="">{t("frequencyKeepCurrent")}</option>
                 {FREQUENCIES.map((f) => (
                   <option key={f} value={f}>{t(FREQUENCY_LABEL_KEY[f])}</option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </Field>
           </div>
           <p id={hintId} style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>{t("blankKeepsCurrentHint")}</p>
 

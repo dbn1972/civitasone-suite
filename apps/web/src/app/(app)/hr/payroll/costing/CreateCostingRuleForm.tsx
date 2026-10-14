@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog, Field, Input, Select } from "../../../../_components/ds";
 import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { percentToBps } from "@/lib/money";
 import { formatSplitPct, projectedGroupTotal, type CostCenterOption, type CostingRule } from "./costingShared";
@@ -26,6 +26,7 @@ export function parseSplitPct(raw: string): number | null {
 
 export function CreateCostingRuleForm({ costCenters, costCentersAvailable, rules }: Props) {
   const t = useTranslations("createCostingRuleForm");
+  const tv = useTranslations("hrFormErrors2");
   const router = useRouter();
   const [employeeGroup, setEmployeeGroup] = useState("");
   const [costCenterId, setCostCenterId] = useState("");
@@ -111,7 +112,6 @@ export function CreateCostingRuleForm({ costCenters, costCentersAvailable, rules
     }
   }
 
-  const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
 
   return (
     <form onSubmit={openConfirm} noValidate style={{ marginBottom: 16 }}>
@@ -122,51 +122,31 @@ export function CreateCostingRuleForm({ costCenters, costCentersAvailable, rules
           </p>
         )}
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={groupField} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("employeeGroupLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-            </label>
-            <input
-              id={groupField}
+          <Field id={groupField} label={t("employeeGroupLabel")} required error={groupInvalid ? tv("fieldRequired") : undefined}>
+            <Input
               ref={groupRef}
               value={employeeGroup}
               onChange={(e) => { setEmployeeGroup(e.target.value); setGroupInvalid(false); }}
               maxLength={64}
-              aria-required="true"
-              aria-invalid={groupInvalid || undefined}
-              aria-describedby={groupInvalid ? errId : undefined}
-              style={inputStyle}
             />
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={centerField} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("costCenterLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-            </label>
+          </Field>
+          <Field id={centerField} label={t("costCenterLabel")} required error={centerInvalid ? tv("fieldRequired") : undefined}>
             {/* GAP-PAYROLL-COSTING-02: pick from the finance cost-centre master
                 instead of typing a raw UUID. */}
-            <select
-              id={centerField}
+            <Select
               ref={centerRef}
               value={costCenterId}
               onChange={(e) => { setCostCenterId(e.target.value); setCenterInvalid(false); }}
               disabled={!costCentersAvailable || costCenters.length === 0}
-              aria-required="true"
-              aria-invalid={centerInvalid || undefined}
-              aria-describedby={centerInvalid ? errId : undefined}
-              style={{ ...inputStyle, background: "var(--panel, #fff)" }}
             >
               <option value="">{t("costCenterPlaceholder")}</option>
               {costCenters.map((c) => (
                 <option key={c.id} value={c.id}>{`${c.code} — ${c.name}`}</option>
               ))}
-            </select>
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={splitField} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("splitPctLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-            </label>
-            <input
-              id={splitField}
+            </Select>
+          </Field>
+          <Field id={splitField} label={t("splitPctLabel")} required error={splitInvalid ? tv("invalidValue") : undefined}>
+            <Input
               ref={splitRef}
               type="number"
               inputMode="decimal"
@@ -175,12 +155,8 @@ export function CreateCostingRuleForm({ costCenters, costCentersAvailable, rules
               step={0.01}
               value={splitPct}
               onChange={(e) => { setSplitPct(e.target.value); setSplitInvalid(false); }}
-              aria-required="true"
-              aria-invalid={splitInvalid || undefined}
-              aria-describedby={[splitInvalid ? errId : "", projected !== null ? totalId : ""].filter(Boolean).join(" ") || undefined}
-              style={inputStyle}
             />
-          </div>
+          </Field>
         </div>
         {projected !== null && (
           <p

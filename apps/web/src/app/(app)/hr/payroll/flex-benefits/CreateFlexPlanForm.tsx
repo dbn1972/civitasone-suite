@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Card, ConfirmDialog, Button } from "../../../../_components/ds";
+import { Card, ConfirmDialog, Button, Field, Input } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import { currentFinancialYear, isValidFinancialYearLabel } from "@/lib/fiscalYear";
@@ -22,6 +22,7 @@ const emptyComponent = (): PlanComponent => ({ name: "", maxAmount: "", taxExemp
 
 export function CreateFlexPlanForm() {
   const t = useTranslations("createFlexPlanForm");
+  const tv = useTranslations("hrFormErrors2");
   const router = useRouter();
   const [name, setName] = useState("");
   // Default to the current FY so the common case needs no typing — the field
@@ -174,60 +175,36 @@ export function CreateFlexPlanForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
+    <form noValidate onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
       <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={nameId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("planNameLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={nameId}
+            <Field id={nameId} label={t("planNameLabel")} required error={nameInvalid ? tv("fieldRequired") : undefined}>
+              <Input
                 ref={nameRef}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 maxLength={128}
-                aria-required="true"
-                aria-invalid={nameInvalid || undefined}
-                aria-describedby={nameInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("financialYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={fyId}
+            </Field>
+            <Field id={fyId} label={t("financialYearLabel")} required error={fyInvalid ? tv("invalidValue") : undefined}>
+              <Input
                 ref={fyRef}
                 value={fy}
                 onChange={(e) => setFy(e.target.value)}
                 placeholder="2025-26"
-                aria-required="true"
-                aria-invalid={fyInvalid || undefined}
-                aria-describedby={fyInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={budgetId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("totalBudgetLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={budgetId}
+            </Field>
+            <Field id={budgetId} label={t("totalBudgetLabel")} required error={budgetInvalid ? tv("invalidValue") : undefined}>
+              <Input
                 ref={budgetRef}
                 type="number"
                 min="0"
                 step="0.01"
                 value={totalBudget}
                 onChange={(e) => setTotalBudget(e.target.value)}
-                aria-required="true"
-                aria-invalid={budgetInvalid || undefined}
-                aria-describedby={budgetInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-            </div>
+            </Field>
           </div>
 
           <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12 }}>
@@ -242,40 +219,32 @@ export function CreateFlexPlanForm() {
                 const rowInvalid = isComponentInvalid(c);
                 return (
                   <div key={componentKeyFor(idx)} style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr auto auto", alignItems: "end" }}>
-                    <div style={{ display: "grid", gap: 4 }}>
-                      <label htmlFor={compNameId} style={{ fontSize: 12 }}>{t("componentNameLabel")}</label>
-                      <input
-                        id={compNameId}
+                    <Field id={compNameId} label={t("componentNameLabel")} error={rowInvalid ? tv("invalidValue") : undefined}>
+                      <Input
                         ref={(el) => { componentNameRefs.current[idx] = el; }}
                         value={c.name}
-                        aria-invalid={rowInvalid || undefined}
-                        aria-describedby={rowInvalid ? errId : undefined}
                         onChange={(e) => updateComponent(idx, { name: e.target.value })}
-                        style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40 }}
                       />
-                    </div>
-                    <div style={{ display: "grid", gap: 4 }}>
-                      <label htmlFor={compMaxId} style={{ fontSize: 12 }}>{t("maxAmountLabel")}</label>
-                      <input
-                        id={compMaxId}
+                    </Field>
+                    <Field id={compMaxId} label={t("maxAmountLabel")} error={rowInvalid ? tv("invalidValue") : undefined}>
+                      <Input
                         type="number"
                         min="0"
                         step="0.01"
                         value={c.maxAmount}
-                        aria-invalid={rowInvalid || undefined}
-                        aria-describedby={rowInvalid ? errId : undefined}
                         onChange={(e) => updateComponent(idx, { maxAmount: e.target.value })}
-                        style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40 }}
                       />
-                    </div>
+                    </Field>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <input
-                        id={compExemptId}
-                        type="checkbox"
-                        checked={c.taxExempt}
-                        onChange={(e) => updateComponent(idx, { taxExempt: e.target.checked })}
-                      />
-                      <label htmlFor={compExemptId} style={{ fontSize: 12 }}>{t("taxExemptLabel")}</label>
+                      <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                        <input
+                          id={compExemptId}
+                          type="checkbox"
+                          checked={c.taxExempt}
+                          onChange={(e) => updateComponent(idx, { taxExempt: e.target.checked })}
+                        />
+                        {t("taxExemptLabel")}
+                      </label>
                     </div>
                     <Button
                       variant="ghost"

@@ -4,12 +4,10 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import type { WizardData, FieldErrors } from "../wizardTypes";
 import {
-  inputStyle,
-  inputErrorStyle,
-  labelStyle,
   fieldWrap,
   grid2,
 } from "../wizardTypes";
+import { Field, Input } from "@/app/_components/ds";
 
 interface Props {
   data: WizardData;
@@ -26,8 +24,6 @@ function MaskedInput({
   onBlur,
   placeholder,
   maxLength,
-  hasError,
-  errorId,
   hideValueLabel,
   showValueLabel,
   hideBtn,
@@ -39,8 +35,6 @@ function MaskedInput({
   onBlur?: () => void;
   placeholder?: string;
   maxLength?: number;
-  hasError?: boolean;
-  errorId?: string;
   hideValueLabel: string;
   showValueLabel: string;
   hideBtn: string;
@@ -50,7 +44,7 @@ function MaskedInput({
 
   return (
     <div style={{ position: "relative" }}>
-      <input
+      <Input
         id={id}
         type={reveal ? "text" : "password"}
         autoComplete="off"
@@ -59,12 +53,7 @@ function MaskedInput({
         onBlur={onBlur}
         placeholder={placeholder}
         maxLength={maxLength}
-        aria-invalid={hasError}
-        aria-describedby={errorId}
-        style={{
-          ...(hasError ? inputErrorStyle : inputStyle),
-          paddingInlineEnd: 44,
-        }}
+        style={{ paddingInlineEnd: 44 }}
       />
       <button
         type="button"
@@ -101,13 +90,10 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
 
       <div style={grid2}>
         {/* PAN */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-pan" style={labelStyle}>
-            {t("panLabel")}
+        <Field id="w-pan" label={<>{t("panLabel")}
             <span style={{ fontWeight: 400, color: "var(--mut, #64748b)", marginInlineStart: 6, fontSize: 11 }}>
               {t("storedEncrypted")}
-            </span>
-          </label>
+            </span></>} error={errors.pan} style={fieldWrap}>
           <MaskedInput
             id="w-pan"
             value={data.pan}
@@ -115,83 +101,58 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
             onBlur={() => onBlur("pan")}
             placeholder={t("panPlaceholder")}
             maxLength={10}
-            hasError={!!errors.pan}
-            errorId={errors.pan ? "w-pan-err" : undefined}
             hideValueLabel={t("hideValue")}
             showValueLabel={t("showValue")}
             hideBtn={t("hideBtn")}
             showBtn={t("showBtn")}
           />
-          {errors.pan && (
-            <span id="w-pan-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
-              {errors.pan}
-            </span>
-          )}
-        </div>
+        </Field>
 
         {/* Aadhaar */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-aadhaar" style={labelStyle}>
-            {t("aadhaarRefLabel")}
+        <Field id="w-aadhaar" label={<>{t("aadhaarRefLabel")}
             <span style={{ fontWeight: 400, color: "var(--mut, #64748b)", marginInlineStart: 6, fontSize: 11 }}>
               {t("aadhaarHint")}
-            </span>
-          </label>
+            </span></>} style={fieldWrap}>
           <MaskedInput
             id="w-aadhaar"
             value={data.aadhaarRef}
             onChange={(v) => onChange("aadhaarRef", v)}
             placeholder={t("aadhaarPlaceholder")}
-            hasError={false}
             hideValueLabel={t("hideValue")}
             showValueLabel={t("showValue")}
             hideBtn={t("hideBtn")}
             showBtn={t("showBtn")}
           />
-        </div>
+        </Field>
 
         {/* Bank Account */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-bank" style={labelStyle}>
-            {t("bankAccountNoLabel")}
+        <Field id="w-bank" label={<>{t("bankAccountNoLabel")}
             <span style={{ fontWeight: 400, color: "var(--mut, #64748b)", marginInlineStart: 6, fontSize: 11 }}>
               {t("storedEncrypted")}
-            </span>
-          </label>
+            </span></>} style={fieldWrap}>
           <MaskedInput
             id="w-bank"
             value={data.bankAccountNo}
             onChange={(v) => onChange("bankAccountNo", v)}
             placeholder={t("bankAccountPlaceholder")}
-            hasError={false}
             hideValueLabel={t("hideValue")}
             showValueLabel={t("showValue")}
             hideBtn={t("hideBtn")}
             showBtn={t("showBtn")}
           />
-        </div>
+        </Field>
 
         {/* IFSC */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-ifsc" style={labelStyle}>{t("ifscCodeLabel")}</label>
-          <input
-            id="w-ifsc"
+        <Field id="w-ifsc" label={t("ifscCodeLabel")} error={errors.bankIfsc} style={fieldWrap}>
+          <Input
             type="text"
             value={data.bankIfsc}
             onChange={(e) => onChange("bankIfsc", e.target.value.toUpperCase())}
             onBlur={() => onBlur("bankIfsc")}
             placeholder={t("ifscPlaceholder")}
             maxLength={11}
-            aria-invalid={!!errors.bankIfsc}
-            aria-describedby={errors.bankIfsc ? "w-ifsc-err" : undefined}
-            style={errors.bankIfsc ? inputErrorStyle : inputStyle}
           />
-          {errors.bankIfsc && (
-            <span id="w-ifsc-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
-              {errors.bankIfsc}
-            </span>
-          )}
-        </div>
+        </Field>
       </div>
       {/* GAP-HR-EMPLOYEES-NEW-01: the PF/ESI/PT opt-in toggles that used to
           sit here were removed, not just left unsent -- they're already

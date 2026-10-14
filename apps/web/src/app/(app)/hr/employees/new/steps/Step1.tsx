@@ -3,12 +3,10 @@
 import { useTranslations } from "next-intl";
 import type { WizardData, FieldErrors } from "../wizardTypes";
 import {
-  inputStyle,
-  inputErrorStyle,
-  labelStyle,
   fieldWrap,
   grid2,
 } from "../wizardTypes";
+import { Field, Input, Select } from "@/app/_components/ds";
 
 interface Props {
   data: WizardData;
@@ -26,149 +24,97 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
       </h2>
       <div style={grid2}>
         {/* Full Name */}
-        <div style={{ ...fieldWrap, gridColumn: "span 2" }}>
-          <label htmlFor="w-fullName" style={labelStyle}>
-            {t("fullNameLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span>
-          </label>
-          <input
-            id="w-fullName"
+        <Field id="w-fullName" label={<>{t("fullNameLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.fullName} style={{ ...fieldWrap, gridColumn: "span 2" }}>
+          <Input
             type="text"
             autoComplete="name"
             value={data.fullName}
             onChange={(e) => onChange("fullName", e.target.value)}
             onBlur={() => onBlur("fullName")}
             placeholder={t("fullNamePlaceholder")}
-            aria-required="true"
-            aria-invalid={!!errors.fullName}
-            aria-describedby={errors.fullName ? "w-fullName-err" : undefined}
-            style={errors.fullName ? inputErrorStyle : inputStyle}
           />
-          {errors.fullName && (
-            <span id="w-fullName-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
-              {errors.fullName}
-            </span>
-          )}
-        </div>
+        </Field>
 
         {/* Date of Birth */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-dob" style={labelStyle}>{t("dobLabel")}</label>
+        <Field id="w-dob" label={t("dobLabel")} error={errors.dateOfBirth} style={fieldWrap}>
           {/* GAP-HR-EMPLOYEES-NEW-08: `max` is an HTML-only guard -- it
               constrains the native date picker but a typed/pasted date
               bypassed it entirely, since nothing here re-checked it in JS.
               validateStep(1, ...) now enforces the same 18-year minimum
               server-side of this component (see wizardTypes.ts); this is
               just wiring its result up to a visible, announced error. */}
-          <input
-            id="w-dob"
+          <Input
             type="date"
             value={data.dateOfBirth}
             onChange={(e) => onChange("dateOfBirth", e.target.value)}
             onBlur={() => onBlur("dateOfBirth")}
-            aria-invalid={!!errors.dateOfBirth}
-            aria-describedby={errors.dateOfBirth ? "w-dob-err" : undefined}
-            style={errors.dateOfBirth ? inputErrorStyle : inputStyle}
             max={new Date(Date.now() - 18 * 365.25 * 24 * 3600 * 1000).toISOString().split("T")[0]}
           />
-          {errors.dateOfBirth && (
-            <span id="w-dob-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
-              {errors.dateOfBirth}
-            </span>
-          )}
-        </div>
+        </Field>
 
         {/* Gender */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-gender" style={labelStyle}>{t("genderLabel")}</label>
-          <select
-            id="w-gender"
+        <Field id="w-gender" label={t("genderLabel")} style={fieldWrap}>
+          <Select
             value={data.gender}
             onChange={(e) => onChange("gender", e.target.value as WizardData["gender"])}
-            style={inputStyle}
           >
             <option value="">{t("selectGender")}</option>
             <option value="male">{t("male")}</option>
             <option value="female">{t("female")}</option>
             <option value="other">{t("otherPreferNot")}</option>
-          </select>
-        </div>
+          </Select>
+        </Field>
 
         {/* Marital Status */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-marital" style={labelStyle}>{t("maritalStatusLabel")}</label>
-          <select
-            id="w-marital"
+        <Field id="w-marital" label={t("maritalStatusLabel")} style={fieldWrap}>
+          <Select
             value={data.maritalStatus}
             onChange={(e) => onChange("maritalStatus", e.target.value as WizardData["maritalStatus"])}
-            style={inputStyle}
           >
             <option value="">{t("selectStatus")}</option>
             <option value="single">{t("single")}</option>
             <option value="married">{t("married")}</option>
             <option value="divorced">{t("divorced")}</option>
             <option value="widowed">{t("widowed")}</option>
-          </select>
-        </div>
+          </Select>
+        </Field>
 
         {/* Blood Group */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-blood" style={labelStyle}>{t("bloodGroupLabel")}</label>
-          <select
-            id="w-blood"
+        <Field id="w-blood" label={t("bloodGroupLabel")} style={fieldWrap}>
+          <Select
             value={data.bloodGroup}
             onChange={(e) => onChange("bloodGroup", e.target.value as WizardData["bloodGroup"])}
-            style={inputStyle}
           >
             <option value="">{t("selectBloodGroup")}</option>
             {(["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"] as const).map((bg) => (
               <option key={bg} value={bg}>{bg}</option>
             ))}
-          </select>
-        </div>
+          </Select>
+        </Field>
 
         {/* Official Email */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-email" style={labelStyle}>{t("officialEmailLabel")}</label>
-          <input
-            id="w-email"
+        <Field id="w-email" label={t("officialEmailLabel")} error={errors.email} style={fieldWrap}>
+          <Input
             type="email"
             autoComplete="email"
             value={data.email}
             onChange={(e) => onChange("email", e.target.value)}
             onBlur={() => onBlur("email")}
             placeholder={t("emailPlaceholder")}
-            aria-invalid={!!errors.email}
-            aria-describedby={errors.email ? "w-email-err" : undefined}
-            style={errors.email ? inputErrorStyle : inputStyle}
           />
-          {errors.email && (
-            <span id="w-email-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
-              {errors.email}
-            </span>
-          )}
-        </div>
+        </Field>
 
         {/* Mobile */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-mobile" style={labelStyle}>{t("mobileLabel")}</label>
-          <input
-            id="w-mobile"
+        <Field id="w-mobile" label={t("mobileLabel")} error={errors.mobile} style={fieldWrap}>
+          <Input
             type="tel"
             autoComplete="tel"
             value={data.mobile}
             onChange={(e) => onChange("mobile", e.target.value)}
             onBlur={() => onBlur("mobile")}
             placeholder="+91 98765 43210"
-            aria-invalid={!!errors.mobile}
-            aria-describedby={errors.mobile ? "w-mobile-err" : undefined}
-            style={errors.mobile ? inputErrorStyle : inputStyle}
           />
-          {errors.mobile && (
-            <span id="w-mobile-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
-              {errors.mobile}
-            </span>
-          )}
-        </div>
+        </Field>
       </div>
     </>
   );

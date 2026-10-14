@@ -2,7 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Button, Card } from "../../../../_components/ds";
+import { Button, Card, Field, Input } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type VerifyResponse = {
@@ -33,6 +33,7 @@ function fileToBase64(file: File): Promise<string> {
 
 export function VerifyForm16Form() {
   const t = useTranslations("verifyForm16Form");
+  const tv = useTranslations("hrFormErrors2");
   const fileRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
   const errId = useId();
@@ -82,24 +83,12 @@ export function VerifyForm16Form() {
   }
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} style={{ marginTop: 16 }}>
+    <form noValidate onSubmit={(e) => void handleSubmit(e)} style={{ marginTop: 16 }}>
       <Card title={t("cardTitle")} padding>
         <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={inputId} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("fileLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-            </label>
-            <input
-              id={inputId}
-              ref={fileRef}
-              type="file"
-              accept="application/pdf"
-              aria-required="true"
-              aria-invalid={!!error || undefined}
-              aria-describedby={error ? errId : undefined}
-              style={{ fontSize: 13 }}
-            />
-          </div>
+          <Field id={inputId} label={t("fileLabel")} required error={error ? tv("fieldRequired") : undefined}>
+            <Input ref={fileRef} type="file" accept="application/pdf" />
+          </Field>
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>

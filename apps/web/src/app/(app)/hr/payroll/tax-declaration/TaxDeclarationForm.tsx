@@ -6,7 +6,7 @@ import { currentFinancialYear } from "@/lib/fiscalYear";
 import { useFormError } from "@/lib/useFormError";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
-import { Button, ConfirmDialog, StatusPill } from "../../../../_components/ds";
+import { Button, ConfirmDialog, StatusPill, Field, Input } from "../../../../_components/ds";
 
 type AmountField =
   | "section80c"
@@ -426,10 +426,8 @@ export function TaxDeclarationForm() {
 
         {/* Amount fields */}
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={s80cId} style={{ fontSize: 13, fontWeight: 600 }}>{t("section80cLabel")}</label>
-            <input
-              id={s80cId}
+          <Field id={s80cId} label={t("section80cLabel")}>
+            <Input
               type="number"
               min="0"
               step="0.01"
@@ -437,13 +435,10 @@ export function TaxDeclarationForm() {
               placeholder={t("section80cPlaceholder")}
               value={section80c}
               onChange={(e) => setSection80c(e.target.value)}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={s80dId} style={{ fontSize: 13, fontWeight: 600 }}>{t("section80dLabel")}</label>
-            <input
-              id={s80dId}
+          </Field>
+          <Field id={s80dId} label={t("section80dLabel")}>
+            <Input
               type="number"
               min="0"
               step="0.01"
@@ -451,13 +446,10 @@ export function TaxDeclarationForm() {
               placeholder={t("section80dPlaceholder")}
               value={section80d}
               onChange={(e) => setSection80d(e.target.value)}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={otherId} style={{ fontSize: 13, fontWeight: 600 }}>{t("otherDeductionsLabel")}</label>
-            <input
-              id={otherId}
+          </Field>
+          <Field id={otherId} label={t("otherDeductionsLabel")}>
+            <Input
               type="number"
               min="0"
               step="0.01"
@@ -465,13 +457,10 @@ export function TaxDeclarationForm() {
               placeholder={t("otherDeductionsPlaceholder")}
               value={otherDeductions}
               onChange={(e) => setOtherDeductions(e.target.value)}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={rentId} style={{ fontSize: 13, fontWeight: 600 }}>{t("rentPaidLabel")}</label>
-            <input
-              id={rentId}
+          </Field>
+          <Field id={rentId} label={t("rentPaidLabel")}>
+            <Input
               type="number"
               min="0"
               step="0.01"
@@ -479,68 +468,62 @@ export function TaxDeclarationForm() {
               placeholder={t("rentPaidPlaceholder")}
               value={rentPaid}
               onChange={(e) => setRentPaid(e.target.value)}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={prevSalId} style={{ fontSize: 13, fontWeight: 600 }}>{t("prevEmployerSalaryLabel")}</label>
-            <input
-              id={prevSalId}
+          </Field>
+          <Field id={prevSalId} label={t("prevEmployerSalaryLabel")}>
+            <Input
               type="number"
               min="0"
               step="0.01"
               placeholder={t("optionalPlaceholder")}
               value={prevEmployerSalary}
               onChange={(e) => setPrevEmployerSalary(e.target.value)}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={otherIncId} style={{ fontSize: 13, fontWeight: 600 }}>{t("otherSourcesIncomeLabel")}</label>
-            <input
-              id={otherIncId}
+          </Field>
+          <Field id={otherIncId} label={t("otherSourcesIncomeLabel")}>
+            <Input
               type="number"
               min="0"
               step="0.01"
               placeholder={t("optionalPlaceholder")}
               value={otherSourcesIncome}
               onChange={(e) => setOtherSourcesIncome(e.target.value)}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={perqId} style={{ fontSize: 13, fontWeight: 600 }}>{t("perquisitesLabel")}</label>
-            <input
-              id={perqId}
+          </Field>
+          <Field id={perqId} label={t("perquisitesLabel")}>
+            <Input
               type="number"
               min="0"
               step="0.01"
               placeholder={t("optionalPlaceholder")}
               value={perquisites}
               onChange={(e) => setPerquisites(e.target.value)}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
-          </div>
+          </Field>
         </div>
 
         {showLandlord && (
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={landlordNameId} style={{ fontSize: 13, fontWeight: 600 }}>{t("landlordNameLabel")}</label>
-              <input id={landlordNameId} value={landlordName} maxLength={128} onChange={(e) => setLandlordName(e.target.value)}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={landlordPanId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("landlordPanLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input id={landlordPanId} value={landlordPan} maxLength={10} autoCapitalize="characters" onChange={(e) => setLandlordPan(e.target.value.toUpperCase())}
-                aria-required="true" aria-describedby={landlordPanHelpId}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, textTransform: "uppercase" }} />
+            <Field id={landlordNameId} label={t("landlordNameLabel")}>
+              <Input
+                value={landlordName}
+                maxLength={128}
+                onChange={(e) => setLandlordName(e.target.value)}
+              />
+            </Field>
+            <Field id={landlordPanId} label={t("landlordPanLabel")} required>
+              <Input
+                value={landlordPan}
+                maxLength={10}
+                autoCapitalize="characters"
+                onChange={(e) => setLandlordPan(e.target.value.toUpperCase())}
+                aria-describedby={landlordPanHelpId}
+                style={{ textTransform: "uppercase" }}
+              />
               <span id={landlordPanHelpId} style={{ fontSize: 12, color: "var(--ink2)" }}>
                 {landlordPanMasked ? t("landlordPanKeepHelp", { masked: landlordPanMasked }) : t("landlordPanHelp")}
               </span>
-            </div>
+            </Field>
           </div>
         )}
 
