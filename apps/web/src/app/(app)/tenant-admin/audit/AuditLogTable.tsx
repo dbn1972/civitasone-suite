@@ -70,6 +70,9 @@ export function AuditLogTable({ events }: { events: AuditEvent[] }) {
           {
             key: "actor",
             label: "Actor",
+            // The audited CSV export must carry the same masked form as the screen,
+            // otherwise export is a PII bypass (DPDP).
+            csv: (e) => (e.actor.includes("@") ? maskEmail(e.actor) : e.actor),
             render: (e) => {
               // GAP-TENANT-ADMIN-AUDIT-03: actor identifiers are often emails
               // (PII); mask them by default. Non-email identifiers (service

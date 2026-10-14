@@ -1,6 +1,13 @@
-import { describe, it, expect } from "vitest";
-import { screen } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import { render } from "@/test-utils/intl-render";
+const downloadCsvFile = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/export/csvExport", async (orig) => ({
+  ...(await orig<typeof import("@/lib/export/csvExport")>()),
+  downloadCsvFile,
+  tableExportGuard: () => async () => ({ ok: true as const }),
+}));
+
 import { AuditLogTable, type AuditEvent } from "./AuditLogTable";
 
 const ev = (o: Partial<AuditEvent>): AuditEvent => ({
@@ -41,5 +48,19 @@ describe("AuditLogTable — GAP-TENANT-ADMIN-AUDIT-05 (outcome + empty)", () => 
     render(<AuditLogTable events={[]} />);
     expect(screen.getByText(/No audit events yet/i)).toBeInTheDocument();
     expect(screen.queryByText(/No records found/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("AuditLogTable — exported CSV masks PII", () => {
+  beforeEach(() => { downloadCsvFile.mockClear(); });
+
+  it("writes the masked actor email, not the raw one, to the CSV", async () => {
+    render(<AuditLogTable events={[ev({}), ev({ id: "e2", actor: "svc-indexer" })]} />);
+    fireEvent.click(screen.getByTitle(/recorded in the audit log/i));
+    await waitFor(() => expect(downloadCsvFile).toHaveBeenCalledTimes(1));
+    const csv = downloadCsvFile.mock.calls[0]![1] as string;
+    expect(csv).not.toContain("asha@dept.gov.in");
+    expect(csv).toMatch(/a\*\*\*@/);
+    expect(csv).toContain("svc-indexer");
   });
 });
