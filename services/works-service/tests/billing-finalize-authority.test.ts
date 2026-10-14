@@ -98,6 +98,23 @@ describe("billing finalize authority + maker-checker", () => {
     expect((await finalizeBill(roleAuth(["estimator"]), "dao_finalized")).statusCode).toBe(403);
   });
 
+  it("an auditor-only actor may advance sdo_finalized to auditor_finalized (202)", async () => {
+    getBill.mockResolvedValue({ id: BILL_ID, status: "sdo_finalized", createdBy: ACTOR_A });
+    expect((await finalizeBill(roleAuth(["auditor"]), "auditor_finalized")).statusCode).toBe(202);
+  });
+
+  it("an auditor-only actor cannot advance any other bill step (403)", async () => {
+    getBill.mockResolvedValue({ id: BILL_ID, status: "auditor_finalized", createdBy: ACTOR_A });
+    expect((await finalizeBill(roleAuth(["auditor"]), "dao_finalized")).statusCode).toBe(403);
+  });
+
+  it("a role holding the blanket gate cannot take a step it does not own: DO attempting so_finalized (403)", async () => {
+    getBill.mockResolvedValue({ id: BILL_ID, status: "draft", createdBy: ACTOR_A });
+    expect((await finalizeBill(roleAuth(["do"]), "so_finalized")).statusCode).toBe(403);
+    getMb.mockResolvedValue({ id: MB_ID, status: "draft", issuedBy: ACTOR_A, createdBy: ACTOR_A });
+    expect((await finalizeMb(roleAuth(["do"]), "so_finalized")).statusCode).toBe(403);
+  });
+
   it("a DAO may advance auditor_finalized to dao_finalized (202)", async () => {
     getBill.mockResolvedValue({ id: BILL_ID, status: "auditor_finalized", createdBy: ACTOR_A });
     expect((await finalizeBill(roleAuth(["dao"]), "dao_finalized")).statusCode).toBe(202);

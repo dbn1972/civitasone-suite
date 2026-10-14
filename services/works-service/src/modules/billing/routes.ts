@@ -20,7 +20,11 @@ import { parseMinor } from "@civitasone/schemas";
 import { paginationSchema } from "../masters/validators.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
-const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
+// GAP-WORKS-BILLING-WORKID-03: finalize additionally admits "auditor", the
+// officer for auditor_finalized; the per-step check (finalizeStepRoles) then
+// narrows each step. "auditor" gets no other write route.
+const FINALIZE_ROLES = [...WRITE_ROLES, "auditor"];
+const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator", "auditor"];
 
 export async function billingRoutes(app: FastifyInstance): Promise<void> {
   // List bills for a work
@@ -99,7 +103,7 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
   // Finalize MB
   app.post("/v1/works/billing/mb/:id/finalize", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, WRITE_ROLES);
+    requireRole(ctx, FINALIZE_ROLES);
     const body = v.finalizeMbSchema.parse({ ...(req.body as object), id: (req.params as { id: string }).id });
     const mb = await getMb(ctx.tenantId, body.id);
     if (!mb) throw new HttpError(404, "NOT_FOUND", "measurement book not found");
@@ -202,7 +206,7 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
   // Finalize bill
   app.post("/v1/works/billing/bills/:id/finalize", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, WRITE_ROLES);
+    requireRole(ctx, FINALIZE_ROLES);
     const body = v.finalizeBillSchema.parse({ ...(req.body as object), id: (req.params as { id: string }).id });
     const bill = await getBill(ctx.tenantId, body.id);
     if (!bill) throw new HttpError(404, "NOT_FOUND", "bill not found");

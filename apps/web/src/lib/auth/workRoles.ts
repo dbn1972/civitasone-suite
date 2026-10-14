@@ -482,7 +482,7 @@ export const FINALIZED_STATUSES = new Set<string>(["finalized", "approved", "pub
  * for a bill/MB finalize (POST .../finalize). Mirrors billing/routes.ts
  *   WRITE_ROLES = ["works_admin","works_operator","super_admin","dao","do",
  *                  "sdo","section_officer","estimator"]
- * exactly, so the UI only offers the irreversible Advance control to a caller
+ * plus "auditor" (finalize + read only; the officer for auditor_finalized), so the UI only offers the irreversible Advance control to a caller
  * the server will actually accept. The server remains the authority (every
  * finalize route calls requireRole and the consumer re-checks the transition);
  * this gate is defence-in-depth + UX, hiding a control that would otherwise
@@ -506,6 +506,7 @@ export const BILLING_FINALIZE_ROLES = [
   "sdo",
   "section_officer",
   "estimator",
+  "auditor",
 ];
 
 /** Roles that may read the billing registers (billing/routes.ts READ_ROLES). */
