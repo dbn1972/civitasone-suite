@@ -22,7 +22,10 @@
  *     `rowLinkPrefix`, and `router.push`/`router.replace`/`redirect`
  *     targets, but only for links starting with `/crm`.
  *
- * This analyzer runs those same three link-construction patterns
+ * This analyzer runs those same link-construction patterns (plus tile-style
+ * `path:`/`ctaHref:` data fields, `rowLinkPrefix` in both JSX-attribute and
+ * object-literal form across line breaks, and the path literals a row field
+ * supplies when `rowLinkPrefix=""`; comments are never scanned)
  * platform-wide (every module, not just CRM), PLUS a fourth pattern neither
  * existing script covers: a helper FUNCTION whose name maps a type/status/
  * key to a URL and returns it (e.g. `buildApprovalLink`, `subjectHref`,
@@ -302,34 +305,128 @@ function isExcludedFile(relPath) {
 const LINK_PATTERNS = [
   // href="/hr/..." | href={"/hr/..."} | href={`/hr/${id}`} | object-literal `href: "/hr/..."` nav entries
   { re: /\bhref\s*[:=]\s*\{?\s*["'`](\/[^"'`]*)["'`]/g, kind: "href" },
-  // <DataTable rowLinkKey="id" rowLinkPrefix="/hr/employees/" /> — DataTable.tsx's
-  // resolveHref appends `${row[rowLinkKey]}` directly to this prefix.
-  { re: /\browLinkPrefix\s*=\s*\{?\s*["'`](\/[^"'`]*)["'`]/g, kind: "rowLinkPrefix" },
   // router.push("/hr/...") / router.replace("/hr/...") / redirect("/hr/...")
   { re: /\b(?:router\.push|router\.replace|redirect)\(\s*["'`](\/[^"'`]*)["'`]/g, kind: "navigate" },
+  // Tile / card / nav-entry data objects whose link property is not named `href`:
+  // `{ title: "Foo", path: "/x/y" }`, `ctaHref: "/x"`, `detailUrl: `/x/${id}``, `link:`, `route:`, `to:`.
+  // Property names are an explicit list (ending in Href/Path/Url/Link/Route, or exactly
+  // path/link/route/to/url/target) so unrelated string fields are never read as links.
+  { re: /(?<![.\w])(?:[a-z][A-Za-z0-9]*(?:Href|Path|Url|Link|Route)|path|link|route|to|url|target|redirectTo)\s*:\s*["'`](\/[^"'`]*)["'`]/g, kind: "linkField" },
 ];
+
+// <DataTable rowLinkKey="id" rowLinkPrefix="/hr/employees/" /> -- DataTable.tsx's
+// resolveHref appends `${row[rowLinkKey]}` directly to this prefix. Matched in
+// JSX-attribute form (`rowLinkPrefix="..."`, `rowLinkPrefix={`...`}`) AND in
+// object-literal form (`{ rowLinkKey: "id", rowLinkPrefix: "/x/" }`, used when
+// the link is spread conditionally), across line breaks. The type declaration
+// `rowLinkPrefix?: string` and a pass-through `rowLinkPrefix={rowLinkPrefix}`
+// are not literals and never match; they are checked at the CALL site that
+// finally supplies the literal.
+const ROW_LINK_PREFIX_RE = /\browLinkPrefix\s*[=:]\s*\{?\s*(["'`])((?:\\.|(?!\1)[^\\])*)\1/g;
+
+/**
+ * Blank out `//` and block comments line by line (line numbers preserved).
+ * Deliberately conservative vs stripComments(): a stray apostrophe in JSX text
+ * can only leave a comment UNstripped (a possible false DEAD that is visible
+ * and fixable), never swallow real code (a false OK).
+ */
+function blankComments(src) {
+  let inBlock = false;
+  return src
+    .split("\n")
+    .map((line) => {
+      let out = "";
+      let i = 0;
+      let q = null;
+      while (i < line.length) {
+        if (inBlock) {
+          const e = line.indexOf("*/", i);
+          if (e === -1) return out;
+          inBlock = false;
+          i = e + 2;
+          continue;
+        }
+        const c = line[i];
+        if (q) {
+          out += c;
+          if (c === "\\") { out += line[i + 1] ?? ""; i += 2; continue; }
+          if (c === q) q = null;
+          i++;
+          continue;
+        }
+        if (c === '"' || c === "'" || c === "`") { q = c; out += c; i++; continue; }
+        if (c === "/" && line[i + 1] === "/" && (i === 0 || line[i - 1] !== ":")) return out;
+        if (c === "/" && line[i + 1] === "*") { inBlock = true; i += 2; continue; }
+        out += c;
+        i++;
+      }
+      return out;
+    })
+    .join("\n");
+}
+
+/**
+ * Resolve the full-path target a rowLinkPrefix produces for a row, or null when
+ * the prefix is "" (the row key itself holds a full path -- not statically
+ * knowable). A prefix with a query/hash (`/hr/payroll/ddos?edit=`) targets that
+ * path itself; a prefix ending in "/" gets an `[id]` segment appended.
+ */
+function resolveRowLinkPrefix(raw) {
+  if (raw === "") return null;
+  if (/[?#]/.test(raw)) return stripQueryAndHash(raw);
+  return raw.endsWith("/") ? `${raw.replace(/\/$/, "")}/\${rowId}` : `${raw}\${rowId}`;
+}
 
 function collectLiteralLinks() {
   const links = [];
+  const unresolved = [];
   for (const file of listFiles(WEB_SRC_DIR, [], { filePattern: /\.(tsx|ts|jsx|js)$/, excludePattern: SOURCE_EXCLUDE, skipPrivate: false })) {
     const rel = relative(ROOT, file);
     if (isExcludedFile(rel)) continue;
-    const lines = readFileSync(file, "utf8").split("\n");
-    lines.forEach((line, i) => {
+    const text = blankComments(readFileSync(file, "utf8"));
+    text.split("\n").forEach((line, i) => {
       for (const { re, kind } of LINK_PATTERNS) {
         re.lastIndex = 0;
         let m;
         while ((m = re.exec(line)) !== null) {
           const raw = m[1];
           if (!isRoutePath(raw)) continue;
-          let resolved = stripQueryAndHash(raw);
-          if (kind === "rowLinkPrefix") resolved = `${resolved.replace(/\/$/, "")}/\${rowId}`;
-          links.push({ file: rel, line: i + 1, kind, target: raw, resolved });
+          // `url: `/${path}`` / `url: `/api${x}`` are request builders, not page links.
+          if (kind === "linkField" && (/^\/\$\{/.test(raw) || raw.startsWith("/api"))) continue;
+          links.push({ file: rel, line: i + 1, kind, target: raw, resolved: stripQueryAndHash(raw) });
         }
       }
     });
+    ROW_LINK_PREFIX_RE.lastIndex = 0;
+    let rm;
+    while ((rm = ROW_LINK_PREFIX_RE.exec(text)) !== null) {
+      const raw = rm[2];
+      const line = lineAt(text, rm.index);
+      const resolved = resolveRowLinkPrefix(raw);
+      if (resolved === null) {
+        // rowLinkPrefix="" means the row's key field holds the full href. Find
+        // that key on the same element and check every path literal the same
+        // file assigns to a field of that name (`editHref: `/x/${id}/edit``).
+        const keys = [...text.slice(Math.max(0, rm.index - 400), rm.index + 400).matchAll(/\browLinkKey\s*=\s*["'`](\w+)["'`]/g)];
+        const key = keys.length ? keys[keys.length - 1][1] : null;
+        let found = 0;
+        if (key) {
+          const fieldRe = new RegExp(`\\b${key}\\s*:\\s*[^"'\`;{}]*?(["'\`])(\\/(?:\\\\.|(?!\\1)[^\\\\])*)\\1`, "g");
+          let fm;
+          while ((fm = fieldRe.exec(text)) !== null) {
+            if (!isRoutePath(fm[2])) continue;
+            found++;
+            links.push({ file: rel, line: lineAt(text, fm.index), kind: "rowLinkKeyField", target: fm[2], resolved: stripQueryAndHash(fm[2]) });
+          }
+        }
+        if (!found) unresolved.push({ file: rel, line, kind: "rowLinkPrefix", target: raw, reason: key ? `empty prefix: no path literal assigned to \`${key}\` in this file` : "empty prefix: row key not found" });
+        continue;
+      }
+      if (!isRoutePath(raw)) continue;
+      links.push({ file: rel, line, kind: "rowLinkPrefix", target: raw, resolved });
+    }
   }
-  return links;
+  return { links, unresolved };
 }
 
 // A helper function whose NAME suggests it maps something to a URL and
@@ -418,7 +515,7 @@ function collectHelperReturnLinks() {
 function analyse() {
   const routeTemplates = collectRouteTemplates();
 
-  const literalLinks = collectLiteralLinks();
+  const { links: literalLinks, unresolved: unresolvedRowLinks } = collectLiteralLinks();
   const helperLinks = collectHelperReturnLinks();
   const allLinks = [...literalLinks, ...helperLinks].map((link) => {
     const targetSegs = toSegments(link.resolved);
@@ -439,9 +536,11 @@ function analyse() {
       totalLinks: allLinks.length,
       byKind,
       dead: dead.length,
+      unresolvedRowLinks: unresolvedRowLinks.length,
     },
     links: allLinks,
     dead,
+    unresolvedRowLinks,
   };
 }
 
@@ -453,6 +552,7 @@ if (process.argv.includes("--report")) {
   console.log(`Real routes discovered      : ${c.realRoutes}`);
   console.log(`Link candidates checked     : ${c.totalLinks}  (by kind: ${JSON.stringify(c.byKind)})`);
   console.log(`Dead links                  : ${c.dead}`);
+  console.log(`Unresolvable rowLinkPrefix=\"\"  : ${c.unresolvedRowLinks}  (row key holds a full path; not statically checkable)`);
   for (const d of result.dead) {
     console.log(`  [DEAD] ${d.file}:${d.line} (${d.kind}${d.fn ? " " + d.fn : ""}) ${d.target} -> ${d.resolved}`);
   }
@@ -467,4 +567,4 @@ if (!isMain) {
   // matching screen-map.mjs's own convention.
 }
 
-export { routeSegmentType, toSegments, segsMatchRoute, isRoutePath, collectRouteTemplates };
+export { blankComments, resolveRowLinkPrefix, routeSegmentType, toSegments, segsMatchRoute, isRoutePath, collectRouteTemplates };
