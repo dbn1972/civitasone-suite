@@ -676,6 +676,9 @@ describe("audited bank-account reveal (GAP-FINANCE-CONFIG-02)", () => {
     const m = (masked.json().data as Array<Record<string, any>>).find((r) => r.id === id)!;
     expect(m.accountNoLast4).toBe("9012");
     expect(JSON.stringify(masked.json())).not.toContain("123456789012");
+    // Owner decision 3 (2026-10-14): the IFSC is shown in full, no longer a 4-letter prefix.
+    expect(m.ifsc).toBe("SBIN0001234");
+    expect(m).not.toHaveProperty("ifscPrefix");
 
     expect((await inject("POST", `/v1/finance/bank-accounts/${id}/reveal`, as(MAKER, ["audit_officer"]), { reason: "Quarterly confirmation" })).statusCode).toBe(403);
     expect((await inject("POST", `/v1/finance/bank-accounts/${id}/reveal`, as(MAKER), {})).statusCode).toBe(400);

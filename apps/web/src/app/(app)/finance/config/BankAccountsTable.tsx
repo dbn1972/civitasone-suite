@@ -18,7 +18,7 @@ export type BankAccountRow = {
   bankName: string;
   branchName?: string | null;
   accountNoLast4?: string | null;
-  ifscPrefix?: string | null;
+  ifsc?: string | null;
   accountType?: string | null;
   purpose?: string | null;
   status?: string | null;
@@ -84,7 +84,7 @@ export function BankAccountsTable({ rows, canReveal }: { rows: BankAccountRow[];
         { key: "bankName", label: t("colBank") },
         { key: "branchName", label: t("colBranch") },
         { key: "accountNo", label: t("colAccount"), render: (r) => <AccountNumberCell row={r} canReveal={canReveal} /> },
-        { key: "ifscPrefix", label: t("colIfsc") },
+        { key: "ifsc", label: t("colIfsc") },
         { key: "accountType", label: t("colType") },
         { key: "status", label: t("colStatus"), cellType: "status" },
       ]}

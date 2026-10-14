@@ -44,6 +44,8 @@ Decision 2 covers: GET /v1/hrms/contracts (list, detail, employee history, renew
 
 Decision 3 is a policy change, not a weakening: the IFSC is returned in full by the employee API, rendered plainly on the hr employee page and in report columns, removed from the pii/reveal allow-list (the reveal now answers 422) and removed from the hr PII render guard. Tests that asserted a masked or revealable IFSC were changed to assert the approved behaviour, and the account-number and PAN masking assertions were kept.
 
-Not changed under decision 3 (flagged for the owner): finance-service bank-account and vendor responses still return the IFSC as a 4-letter prefix plus XXXXXXX, and the audit-trail diff for an employee bank edit still stores masked old and new IFSC.
+Decision 3 was extended (orchestrator follow-up, same approval "approved 1 2 3") to finance: finance-service bank-account list, vendor detail and the pending vendor bank change now return the IFSC in full (the bank-account list key is now `ifsc`, replacing the masked `ifscPrefix`), the web finance config table and mappers follow, and the employee bank-edit audit diff stores the IFSC in full. Account numbers stay masked everywhere.
+
+Also in this PR (orchestrator follow-up): segregation of duties on `POST /v1/hrms/contracts/:id/renew`. Nobody, manager or HR, may initiate the renewal of the contract that belongs to their own linked employee record (403 SELF_RENEWAL_FORBIDDEN). Before this change HR self-renewal was not blocked either.
 
 Ledger: no open ledger item is closed by this PR. No PROVISIONAL tick covers a file this PR changes (the two learning PROVISIONAL items, GAP-LEARNING-HOME-03 and GAP-LEARNING-CALENDAR-03, are about learning/repo.ts, learning/page.tsx and learning/calendar/page.tsx, none of which change here).

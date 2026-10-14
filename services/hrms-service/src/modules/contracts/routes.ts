@@ -11,6 +11,7 @@ import { DomainError, daysUntilExpiry } from "./domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 import { hrmsEmployees } from "../employee/schema.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { canReadEmployeeRecord, resolveManagerScopeIds } from "../../shared/self-scope.js";
 import { batchEmployees, batchDepartments, batchDesignations } from "../../shared/batch-resolve.js";
 import {
@@ -151,7 +152,13 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     // Check contract exists
     const contract = await repo.getContractById(ctx.tenantId, id);
     if (!contract) throw new HttpError(404, "CONTRACT_NOT_FOUND", "contract not found");
-    if (!(await canReadEmployeeRecord(ctx, contract.employeeId))) throw new HttpError(403, "FORBIDDEN", "you may only renew contracts of yourself or your direct reports");
+    if (!(await canReadEmployeeRecord(ctx, contract.employeeId))) throw new HttpError(403, "FORBIDDEN", "you may only renew contracts of your direct reports");
+    // Segregation of duties (owner follow-up 2026-10-14): an actor never acts on their own
+    // record -- nobody, manager or HR, may initiate the renewal of their own contract.
+    const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+    if (actorEmp && actorEmp.id === contract.employeeId) {
+      throw new HttpError(403, "SELF_RENEWAL_FORBIDDEN", "you cannot renew your own contract; another approver must initiate it");
+    }
 
     // Check status valid for renewal (must be active or expiring)
     if (contract.status !== "active" && contract.status !== "expiring") {

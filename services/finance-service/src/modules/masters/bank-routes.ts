@@ -54,7 +54,10 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
         bankName: r.bankName,
         branchName: r.branchName,
         accountNoLast4: String(r.accountNo).slice(-4),
-        ifscPrefix: String(r.ifsc).slice(0, 4) + "XXXXXXX",
+        // Owner decision 3 (2026-10-14, "approved 1 2 3"): an IFSC is a public
+        // bank-branch code, not PII -- returned in full. The account number
+        // stays last-4 only (clear value via the audited reveal route).
+        ifsc: String(r.ifsc),
         accountType: r.accountType,
         purpose: r.purpose,
         status: r.status,

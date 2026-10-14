@@ -17,9 +17,9 @@ describe("mapFiscalYears (GAP-FINANCE-CONFIG-05: one mapper for /finance/config 
 
 describe("mapBankAccounts", () => {
   it("keeps only the masked fields and accepts both payload shapes", () => {
-    const b = { id: "b1", bankName: "SBI", branchName: null, accountNoLast4: "1234", ifscPrefix: "SBINXXXXXXX", accountType: "current", purpose: null, status: "active", accountNo: "999999999999" };
+    const b = { id: "b1", bankName: "SBI", branchName: null, accountNoLast4: "1234", ifsc: "SBIN0001234", accountType: "current", purpose: null, status: "active", accountNo: "999999999999" };
     const out = mapBankAccounts({ data: [b] });
-    expect(out).toEqual([{ id: "b1", bankName: "SBI", branchName: null, accountNoLast4: "1234", ifscPrefix: "SBINXXXXXXX", accountType: "current", purpose: null, status: "active" }]);
+    expect(out).toEqual([{ id: "b1", bankName: "SBI", branchName: null, accountNoLast4: "1234", ifsc: "SBIN0001234", accountType: "current", purpose: null, status: "active" }]);
     expect(mapBankAccounts([b])).toHaveLength(1);
     expect(mapBankAccounts("x")).toBeNull();
   });

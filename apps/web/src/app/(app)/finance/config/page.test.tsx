@@ -18,7 +18,7 @@ const render = (ui: React.ReactElement) =>
 const SETTINGS = { makerCheckerEnabled: true, blockFyActivationOpenPeriods: true, requireOpeningBalancesForActivation: false, fyCreateAsDraft: true, debtLoanLiabilityHeadId: null, debtInterestExpenseHeadId: null, debtBankHeadId: null, updatedAt: null };
 
 const FY = { id: "f1", code: "2026-27", label: "FY 2026-27", startDate: "2026-04-01", endDate: "2027-03-31", status: "active" };
-const BANK = { id: "b1", bankName: "State Bank of India", branchName: "Sansad Marg", accountNoLast4: "1234", ifscPrefix: "SBINXXXXXXX", accountType: "current", purpose: null, status: "active" };
+const BANK = { id: "b1", bankName: "State Bank of India", branchName: "Sansad Marg", accountNoLast4: "1234", ifsc: "SBIN0001234", accountType: "current", purpose: null, status: "active" };
 
 function respond(fy: unknown, bank: unknown, settings: unknown = { data: SETTINGS, source: "api" }) {
   fetchJsonMock.mockImplementation(async (url: string) => {
@@ -83,6 +83,14 @@ describe("FinanceConfigPage (GAP-FINANCE-CONFIG-01/-02)", () => {
     expect(screen.getByText("01 Apr 2026")).toBeInTheDocument();
     expect(screen.getByText("31 Mar 2027")).toBeInTheDocument();
     expect(screen.queryByText("2026-04-01")).not.toBeInTheDocument();
+  });
+
+  // Owner decision 3 (2026-10-14): IFSC is a public branch code -- shown in full; the account number stays masked.
+  it("shows the IFSC in full in the bank table while the account number stays masked", async () => {
+    respond({ data: [FY], source: "api" }, { data: [BANK], source: "api" });
+    render(await FinanceConfigPage());
+    expect(screen.getByText("SBIN0001234")).toBeInTheDocument();
+    expect(screen.queryByText("123456789012")).not.toBeInTheDocument();
   });
 
   // GAP-FINANCE-CONFIG-06

@@ -88,12 +88,13 @@ function toVendorSummary(r: VendorRow) {
 // for a create/update echo. The GET /:id route fetches it separately (via
 // findBillsByVendorAndTenant + toVendorBillHistory, below) and spreads it
 // into the response it sends.
-// showFullBankDetails gates the cleartext account number/IFSC to
-// WRITER_ROLES (finance_admin/super_admin — the roles that actually submit
-// PFMS payments and need the real value); finance_officer/audit_officer get
-// the same masked shape masters/bank-routes.ts uses for the org's own
-// accounts. Keys stay ifsc/bankAccount either way so the frontend's
-// field() probes keep working unchanged — only the value is masked.
+// showFullBankDetails gates the cleartext ACCOUNT NUMBER to WRITER_ROLES
+// (finance_admin/super_admin — the roles that actually submit PFMS payments
+// and need the real value); finance_officer/audit_officer get the same
+// masked shape masters/bank-routes.ts uses for the org's own accounts. The
+// IFSC is NOT gated (owner decision 3, 2026-10-14: a public branch code, shown
+// in full to everyone). Keys stay ifsc/bankAccount so the frontend's
+// field() probes keep working unchanged.
 // GAP-FINANCE-VENDORS-DETAIL-01: the READ shape never carries the clear PAN,
 // account number, phone or email, whatever the caller's role -- those are
 // available only through the audited reveal endpoint (vendor-workflow-routes.ts).
@@ -113,7 +114,8 @@ function toVendorDetail(r: VendorRow, showFullBankDetails: boolean, mode: "read"
     email: read ? maskEmail(r.email) : r.email,
     phone: read ? maskPhone(r.phone) : r.phone,
     bankName: r.bankName,
-    ifsc: showFullBankDetails ? r.ifsc : r.ifsc.slice(0, 4) + "XXXXXXX",
+    // Owner decision 3 (2026-10-14): the IFSC is a public branch code -- shown in full to every reader.
+    ifsc: r.ifsc,
     bankAccount: read || !showFullBankDetails ? maskAccountNo(r.bankAccountNo) : r.bankAccountNo,
     isActive: r.isActive,
     version: r.version,

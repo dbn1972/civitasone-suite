@@ -12,7 +12,7 @@ function render(ui: React.ReactElement) {
   return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 }
 const pending = (over: Partial<PendingBankChange> = {}): PendingBankChange => ({
-  id: "c1", bankName: "SBI", ifsc: "SBINXXXXXXX", accountMasked: "********5544", reason: "Moved banks",
+  id: "c1", bankName: "SBI", ifsc: "SBIN0001234", accountMasked: "********5544", reason: "Moved banks",
   proposedByName: "Asha Rao", proposedAtLabel: "02 Jul 2026", proposedByMe: false, ...over,
 });
 

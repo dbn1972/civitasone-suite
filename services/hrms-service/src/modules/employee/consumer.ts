@@ -459,7 +459,8 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       // computed above (for the domain event) but never reached the audit
       // payload. Sensitive fields (bank/UAN/ESIC/PRAN) get masked old->new
       // (last 4 digits only, via the same maskValue used on every read path
-      // -- the full number is never written to the audit log); non-sensitive
+      // -- the full number is never written to the audit log; the IFSC is the
+      // exception, a public branch code stored in full); non-sensitive
       // changed fields (mobile/email/managerId/...) are named but not
       // valued, since audit readers don't need the old value for those and
       // this keeps the payload small. `reason` is routes.ts-enforced
@@ -467,7 +468,9 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       // matters and simply omitted otherwise.
       const sensitiveOldNew: Record<string, { old: string | undefined; new: string | undefined }> = {};
       if (p.bankAccountNo !== undefined) sensitiveOldNew.bankAccountNo = { old: maskValue(emp.bankAccountNo ?? undefined), new: maskValue(p.bankAccountNo) };
-      if (p.bankIfsc !== undefined) sensitiveOldNew.bankIfsc = { old: maskValue(emp.bankIfsc ?? undefined), new: maskValue(p.bankIfsc) };
+      // Owner decision 3 (2026-10-14): an IFSC is a public branch code -- stored in full
+      // in the audit diff (the account number above stays masked).
+      if (p.bankIfsc !== undefined) sensitiveOldNew.bankIfsc = { old: emp.bankIfsc ?? undefined, new: p.bankIfsc };
       if (p.uanNumber !== undefined) sensitiveOldNew.uanNumber = { old: maskValue(emp.uanNumber ?? undefined), new: maskValue(p.uanNumber) };
       if (p.esicIpNumber !== undefined) sensitiveOldNew.esicIpNumber = { old: maskValue(emp.esicIpNumber ?? undefined), new: maskValue(p.esicIpNumber) };
       if (p.pran !== undefined) sensitiveOldNew.pran = { old: maskValue(emp.pran ?? undefined), new: maskValue(p.pran) };
