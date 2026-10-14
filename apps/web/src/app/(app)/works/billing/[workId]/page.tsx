@@ -28,7 +28,8 @@ export default async function BillingDetailPage({
   // GAP-WORKS-BILLING-WORKID-03: server-side role check (never read cookies
   // client-side). Pass a single canFinalize flag to BillingActions; the server
   // billing routes remain the real authority.
-  const canFinalize = hasAnyRole(getSessionRoles(), BILLING_FINALIZE_ROLES);
+  const sessionRoles = getSessionRoles();
+  const canFinalize = hasAnyRole(sessionRoles, BILLING_FINALIZE_ROLES);
 
   // ── Stats ──────────────────────────────────────────────────────────────────
 
@@ -163,6 +164,7 @@ export default async function BillingDetailPage({
       <BillingActions
         workId={params.workId}
         canFinalize={canFinalize}
+        roles={sessionRoles}
         bills={bills.map((b) => ({ id: b.id, billNo: b.billNo, status: b.rawStatus }))}
       />
 

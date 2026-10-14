@@ -3,9 +3,13 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 let searchParamsMock = new URLSearchParams();
 const pushMock = vi.fn();
+const suspendSearchParams = { on: false };
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
-  useSearchParams: () => searchParamsMock,
+  useSearchParams: () => {
+    if (suspendSearchParams.on) throw new Promise(() => {}); // never resolves -> Suspense fallback stays
+    return searchParamsMock;
+  },
 }));
 
 vi.mock("@/app/_components/ds/Toast", () => ({
@@ -48,7 +52,7 @@ describe("RecordMeasurementPage — computed quantity (MEASUREMENTS-NEW-01)", ()
     const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: {} }), { status: 202 }));
     render(<RecordMeasurementPage />);
     setMb(MB);
-    fireEvent.change(screen.getByLabelText(/BoQ Item ID/i), { target: { value: BOQ } });
+    fireEvent.change(screen.getByLabelText(/^BoQ Item/i), { target: { value: BOQ } });
     fireEvent.change(screen.getByLabelText(/^Length/i), { target: { value: "2" } });
     fireEvent.change(screen.getByLabelText(/^Breadth/i), { target: { value: "3" } });
     fireEvent.change(screen.getByLabelText(/^Quantity/i), { target: { value: "9" } }); // computed = 6
@@ -83,7 +87,7 @@ describe("RecordMeasurementPage — validation (MEASUREMENTS-NEW-03/04)", () => 
     const spy = vi.spyOn(globalThis, "fetch");
     render(<RecordMeasurementPage />);
     setMb(MB);
-    fireEvent.change(screen.getByLabelText(/BoQ Item ID/i), { target: { value: BOQ } });
+    fireEvent.change(screen.getByLabelText(/^BoQ Item/i), { target: { value: BOQ } });
     fireEvent.change(screen.getByLabelText(/^Quantity/i), { target: { value: "0" } });
     fireEvent.click(screen.getByRole("button", { name: "Record Measurement" }));
     expect(screen.getByRole("alert")).toHaveTextContent(/positive number/i);
@@ -94,7 +98,7 @@ describe("RecordMeasurementPage — validation (MEASUREMENTS-NEW-03/04)", () => 
     const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: {} }), { status: 202 }));
     render(<RecordMeasurementPage />);
     setMb(MB);
-    fireEvent.change(screen.getByLabelText(/BoQ Item ID/i), { target: { value: BOQ } });
+    fireEvent.change(screen.getByLabelText(/^BoQ Item/i), { target: { value: BOQ } });
     fireEvent.change(screen.getByLabelText(/^Quantity/i), { target: { value: "12.345" } });
     fireEvent.click(screen.getByRole("button", { name: "Record Measurement" }));
     await waitFor(() => expect(postCall(spy)).toBeTruthy());
@@ -115,12 +119,70 @@ describe("RecordMeasurementPage — UX-016 clerk-safe errors", () => {
 
     render(<RecordMeasurementPage />);
     setMb(MB);
-    fireEvent.change(screen.getByLabelText(/BoQ Item ID/i), { target: { value: BOQ } });
+    fireEvent.change(screen.getByLabelText(/^BoQ Item/i), { target: { value: BOQ } });
     fireEvent.change(screen.getByLabelText(/^Quantity/i), { target: { value: "12.5" } });
     fireEvent.click(screen.getByRole("button", { name: "Record Measurement" }));
 
     const alert = await screen.findByRole("alert");
     await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
     expect(alert.textContent).not.toMatch(/\b500\b/);
+  });
+});
+
+describe("RecordMeasurementPage — BoQ picker + unit (MEASUREMENTS-NEW-02/03)", () => {
+  const WORK_ID = "11111111-1111-1111-1111-111111111111";
+  it("offers the work's BoQ items as a select, shows the unit, and sends 12.345 unchanged", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if ((init?.method ?? "GET") === "GET" && url.endsWith(`/billing/${WORK_ID}/mbs`)) {
+        return Promise.resolve(new Response(JSON.stringify({ data: [{ id: MB, mbNumber: "MB/1" }] }), { status: 200 }));
+      }
+      if ((init?.method ?? "GET") === "GET" && url.endsWith(`/boq/${WORK_ID}`)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ data: [{ id: BOQ, itemCode: "2.1", itemDescription: "Earthwork", unit: "cum" }] }), { status: 200 }),
+        );
+      }
+      return Promise.resolve(new Response(JSON.stringify({ data: {} }), { status: 202 }));
+    }) as typeof fetch);
+    searchParamsMock = new URLSearchParams(`workId=${WORK_ID}`);
+    render(<RecordMeasurementPage />);
+    await waitFor(() => expect((screen.getByLabelText(/^BoQ Item/i) as HTMLElement).tagName).toBe("SELECT"));
+    await waitFor(() => expect((screen.getByLabelText(/Measurement Book/i) as HTMLElement).tagName).toBe("SELECT"));
+    fireEvent.change(screen.getByLabelText(/Measurement Book/i), { target: { value: MB } });
+    fireEvent.change(screen.getByLabelText(/^BoQ Item/i), { target: { value: BOQ } });
+    expect(await screen.findByLabelText(/^Quantity.*\(cum\)/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/^Quantity/i), { target: { value: "12.345" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Measurement" }));
+    await waitFor(() => expect(postCall(spy)).toBeTruthy());
+    expect((postCall(spy)![1] as RequestInit).body as string).toContain('"quantity":12.345');
+  });
+});
+
+describe("Suspense fallback (BILLS-NEW-04 / MEASUREMENTS-NEW-04 / NEW-MB-04)", () => {
+  it("renders a skeleton, not an empty page, while useSearchParams() suspends", () => {
+    suspendSearchParams.on = true;
+    try {
+      const { container } = render(<RecordMeasurementPage />);
+      expect(container.querySelector('[aria-hidden="true"]')).not.toBeNull();
+      expect(screen.queryByRole("button", { name: /submit|generate bill|record measurement/i })).not.toBeInTheDocument();
+    } finally {
+      suspendSearchParams.on = false;
+    }
+  });
+});
+
+describe("RecordMeasurementPage — negative dimension (MEASUREMENTS-NEW-04)", () => {
+  it("shows an error and does not POST when a dimension is negative", async () => {
+    const spy = vi.spyOn(globalThis, "fetch");
+    searchParamsMock = new URLSearchParams();
+    render(<RecordMeasurementPage />);
+    fireEvent.change(screen.getByLabelText(/Measurement Book/i), { target: { value: MB } });
+    fireEvent.change(screen.getByLabelText(/^BoQ Item/i), { target: { value: BOQ } });
+    fireEvent.change(screen.getByLabelText(/^Quantity/i), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText(/^Length/i), { target: { value: "-1" } });
+    // Programmatic submit: bypasses the native min=0 constraint, so the JS guard is what is proven.
+    fireEvent.submit(screen.getByRole("button", { name: "Record Measurement" }).closest("form")!);
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/Length must be a non-negative number/i));
+    expect(spy.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === "POST")).toBe(false);
   });
 });

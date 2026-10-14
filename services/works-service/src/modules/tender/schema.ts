@@ -50,6 +50,8 @@ export const quotations = works.table("quotations", {
   tenantId: uuid("tenant_id").notNull(),
   tenderId: uuid("tender_id").notNull(),
   contractorName: varchar("contractor_name", { length: 256 }).notNull(),
+  // GAP-WORKS-TENDERS-DETAIL-01: structured link to works.contractors.
+  contractorId: uuid("contractor_id").references(() => contractors.id),
   method: varchar("method", { length: 32 }).notNull(), // percentage_rate | item_rate
   quotedAmountMinor: bigint("quoted_amount_minor", { mode: "bigint" }),
   quotedPercentage: varchar("quoted_percentage", { length: 16 }),

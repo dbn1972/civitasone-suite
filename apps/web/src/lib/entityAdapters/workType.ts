@@ -24,18 +24,23 @@ function toOption(row: WorkTypeRow): EntityOption {
  * uses — no new backend route, same role/tenant scoping) in the shared
  * search(q)/resolve(ids) contract, so a clerk picks a work type BY NAME
  * instead of hand-copying a UUID from a table that only shows the first 8
- * characters of the id. Returns [] on any non-ok response (the picker then
- * shows an honest "No matches" / error, never a silent empty free-text box).
+ * characters of the id. search() throws on a non-ok response so the picker shows its error text,
+ * never a misleading "No matches"; resolve() stays fail-soft.
  */
-async function fetchAll(signal?: AbortSignal): Promise<WorkTypeRow[]> {
+async function fetchAll(signal?: AbortSignal, strict = false): Promise<WorkTypeRow[]> {
   const res = await fetch("/api/proxy/v1/works/masters/work-types?pageSize=200", { signal });
-  if (!res.ok) return [];
+  // GAP-WORKS-PROPOSALS-NEW-01: a failing SEARCH must throw so the picker shows
+  // its error state, never "No matches" (which reads as "no such work type").
+  if (!res.ok) {
+    if (strict) throw new Error("work-types fetch failed");
+    return [];
+  }
   const body = (await res.json()) as { data?: WorkTypeRow[] } | WorkTypeRow[];
   return Array.isArray(body) ? body : (body.data ?? []);
 }
 
 export async function searchWorkTypes(query: string, signal: AbortSignal): Promise<EntityOption[]> {
-  const rows = await fetchAll(signal);
+  const rows = await fetchAll(signal, true);
   const active = rows.filter((r) => r.active !== false);
   const q = query.trim().toLowerCase();
   const filtered = q

@@ -27,6 +27,9 @@ export const createTenderSchema = z.object({
 export const addQuotationSchema = z.object({
   tenderId: z.string().uuid(),
   contractorName: z.string().min(1).max(256),
+  // GAP-WORKS-TENDERS-DETAIL-01: when supplied, must resolve to a registered
+  // contractor whose name matches contractorName (checked in routes/consumer).
+  contractorId: z.string().uuid().optional(),
   method: z.enum(["percentage_rate", "item_rate"]),
   quotedAmountMinor: zMoneyMinorString.optional(),
   quotedPercentage: z.string().max(16).optional(),

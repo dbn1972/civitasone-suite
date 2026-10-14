@@ -13,6 +13,19 @@ export async function countBills(tenantId: string): Promise<number> {
   });
 }
 
+/** GAP-WORKS-BILLING-NEW-MB-03: an MB number is unique within a work. */
+export async function getMbByNumber(tenantId: string, workId: string, mbNumber: string) {
+  return scopedRead(async (tx) => {
+    const rows = await tx.select().from(measurementBooks)
+      .where(and(
+        eq(measurementBooks.tenantId, tenantId),
+        eq(measurementBooks.workId, workId),
+        eq(measurementBooks.mbNumber, mbNumber),
+      ));
+    return rows[0] ?? null;
+  });
+}
+
 export async function getMb(tenantId: string, id: string) {
   return scopedRead(async (tx) => {
     const rows = await tx.select().from(measurementBooks)

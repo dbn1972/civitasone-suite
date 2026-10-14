@@ -296,6 +296,16 @@ export default async function TenderDetailPage({
         <Link href="/works/tenders" className="btn ghost">
           ← All tenders
         </Link>
+        {/* GAP-WORKS-BILLING-NEW-MB-01: once an award exists, Issue MB opens
+            prefilled with the work and the award — no UUID to find or type. */}
+        {isAwarded && tender?.workId && /^[0-9a-f-]{36}$/i.test(tender.workId) ? (
+          <Link
+            href={`/works/billing/new-mb?workId=${tender.workId}&awardId=${quotations.find((q) => q.awardId !== null)?.awardId ?? ""}`}
+            className="btn ghost"
+          >
+            Issue MB
+          </Link>
+        ) : null}
         <Link href="/works/tenders/new" className="btn primary">
           + Add pre-tender
         </Link>

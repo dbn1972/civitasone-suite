@@ -1,8 +1,9 @@
 "use client";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { z } from "zod";
 import { useToast } from "@/app/_components/ds/Toast";
-import { PageHeader, Button, EntityPicker } from "@/app/_components/ds";
+import { PageHeader, Button, EntityPicker, SkeletonCard } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { searchWorkProposals, resolveWorkProposals } from "@/lib/entityAdapters/workProposal";
@@ -17,10 +18,17 @@ interface TenderTypeOption {
   code?: string | null;
 }
 
-export default function NewTenderPage() {
+/** GAP-WORKS-TENDERS-NEW-01: submit-time schema — a real work UUID is required. */
+const preTenderSchema = z.object({ workId: z.string().uuid() });
+
+function NewTenderForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
-  const [workId, setWorkId] = useState<string | null>(null);
+  // GAP-WORKS-TENDERS-NEW-01: "Add pre-tender" from a work prefills the work
+  // via ?workId= (only a well-formed UUID is accepted).
+  const paramWorkId = z.string().uuid().safeParse(searchParams.get("workId")).data ?? null;
+  const [workId, setWorkId] = useState<string | null>(paramWorkId);
   const [form, setForm] = useState({
     referenceNumber: "",
     tenderType: "",
@@ -64,7 +72,7 @@ export default function NewTenderPage() {
     setError("");
     formError.clear();
     // GAP-WORKS-TENDERS-NEW-01: a work must be chosen from the register.
-    if (!workId) {
+    if (!workId || !preTenderSchema.safeParse({ workId }).success) {
       setError("Select the work this tender belongs to.");
       return;
     }
@@ -190,5 +198,14 @@ export default function NewTenderPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function NewTenderPage() {
+  // useSearchParams() needs a Suspense boundary (visible skeleton fallback).
+  return (
+    <Suspense fallback={<SkeletonCard />}>
+      <NewTenderForm />
+    </Suspense>
   );
 }

@@ -10,7 +10,7 @@ import {
   nextFinalizeStep,
   billStatusLabel,
 } from "../../_data/format";
-import { BILL_STEP_AUTHORITY, MB_STEP_AUTHORITY } from "@/lib/auth/workRoles";
+import { BILL_STEP_AUTHORITY, MB_STEP_AUTHORITY, canAdvanceFinalizeStep } from "@/lib/auth/workRoles";
 
 type BillItem = { id: string; billNo: string; status: string };
 type MbItem = { id: string; mbNumber: string; rawStatus: string };
@@ -24,6 +24,13 @@ interface BillingActionsProps {
    * server stays the authority, this is defence-in-depth + honest UX.
    */
   canFinalize: boolean;
+  /**
+   * GAP-WORKS-BILLING-WORKID-03: the viewer's roles (server-derived). When
+   * given, each step's Advance button shows only if the viewer holds that
+   * step's authority (backend finalizeStepRoles); otherwise the row shows
+   * "Awaiting: <authority>". Omitted → coarse canFinalize only.
+   */
+  roles?: string[];
   bills: BillItem[];
 }
 
@@ -43,7 +50,8 @@ function stepDescription(
   );
 }
 
-export function BillingActions({ workId, canFinalize, bills }: BillingActionsProps) {
+export function BillingActions({ workId, canFinalize, roles, bills }: BillingActionsProps) {
+  const mayAdvance = (next: string) => roles === undefined || canAdvanceFinalizeStep(roles, next);
   const accepted = useAcceptedWrite();
   const { toast } = useToast();
 
@@ -206,6 +214,11 @@ export function BillingActions({ workId, canFinalize, bills }: BillingActionsPro
                       Current: {billStatusLabel(bill.status)}
                     </span>
                   </div>
+                  {!mayAdvance(next) ? (
+                    <span style={{ fontSize: 12, color: "var(--ink3)" }}>
+                      Awaiting: {BILL_STEP_AUTHORITY[next] ?? billStatusLabel(next)}
+                    </span>
+                  ) : (
                   <Button
                     onClick={() =>
                       setBillDialog({
@@ -220,6 +233,7 @@ export function BillingActions({ workId, canFinalize, bills }: BillingActionsPro
                   >
                     → {billStatusLabel(next)}
                   </Button>
+                  )}
                 </div>
               );
             })}
@@ -251,6 +265,11 @@ export function BillingActions({ workId, canFinalize, bills }: BillingActionsPro
                       Current: {billStatusLabel(mb.rawStatus)}
                     </span>
                   </div>
+                  {!mayAdvance(next) ? (
+                    <span style={{ fontSize: 12, color: "var(--ink3)" }}>
+                      Awaiting: {MB_STEP_AUTHORITY[next] ?? billStatusLabel(next)}
+                    </span>
+                  ) : (
                   <Button
                     onClick={() =>
                       setMbDialog({
@@ -265,6 +284,7 @@ export function BillingActions({ workId, canFinalize, bills }: BillingActionsPro
                   >
                     → {billStatusLabel(next)}
                   </Button>
+                  )}
                 </div>
               );
             })}

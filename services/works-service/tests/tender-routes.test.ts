@@ -30,6 +30,13 @@ const tenderById: Record<string, unknown> = {
   },
 };
 
+// GAP-WORKS-TENDERS-NEW-06: the TS gate is driven per test (default: sanctioned).
+const tsByWork: Record<string, boolean> = {};
+vi.mock("../src/modules/approval/repo.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../src/modules/approval/repo.js")>();
+  return { ...orig, hasFinalizedTsForWork: vi.fn(async (_t: string, w: string) => tsByWork[w] ?? true) };
+});
+
 vi.mock("../src/modules/tender/repo.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../src/modules/tender/repo.js")>();
   return {
@@ -39,6 +46,7 @@ vi.mock("../src/modules/tender/repo.js", async (importOriginal) => {
     getTenderById: vi.fn(async (_t: string, id: string) => tenderById[id] ?? null),
     getAwardById: vi.fn(async (_t: string, id: string) => awardStore[id] ?? null),
     listQuotations: vi.fn(async () => []),
+    preTenderReferenceExists: vi.fn(async (_t: string, ref: string) => ref === "DUP/1"),
     tenderOrPreTenderExists: vi.fn(async () => true),
   };
 });
@@ -194,5 +202,37 @@ describe("POST /v1/works/tenders/pre-tender — GAP-WORKS-TENDERS-NEW-06 gate", 
       payload: { workId: "00000000-1111-4000-8000-000000000001", openingDate: "not-a-date" },
     });
     expect([400, 422]).toContain(res.statusCode);
+  });
+});
+
+describe("POST /v1/works/tenders/pre-tender — TS + duplicate guards (GAP-WORKS-TENDERS-NEW-06)", () => {
+  const WORK = "00000000-1111-4000-8000-0000000000aa";
+
+  it("422 TS_REQUIRED when the work has no finalized technical sanction", async () => {
+    tsByWork[WORK] = false;
+    const res = await app.inject({
+      method: "POST", url: "/v1/works/tenders/pre-tender", headers: authHeader(["works_admin"]),
+      payload: { workId: WORK },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe("TS_REQUIRED");
+    delete tsByWork[WORK];
+  });
+
+  it("409 DUPLICATE_REFERENCE when the reference number is already used", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/works/tenders/pre-tender", headers: authHeader(["works_admin"]),
+      payload: { workId: WORK, referenceNumber: "DUP/1" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("DUPLICATE_REFERENCE");
+  });
+
+  it("202 for a sanctioned work with a fresh reference", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/works/tenders/pre-tender", headers: authHeader(["works_admin"]),
+      payload: { workId: WORK, referenceNumber: "NEW/1" },
+    });
+    expect(res.statusCode).toBe(202);
   });
 });

@@ -16,6 +16,14 @@ export function registerTenderConsumers(q: Queue): void {
       if (!ok) return;
 
       const p = msg.payload as Record<string, unknown>;
+      // GAP-WORKS-TENDERS-NEW-06: duplicate reference re-checked in the same
+      // transaction as the insert (the route pre-check can race).
+      if (p.referenceNumber) {
+        const dup = await tx.select({ id: preTenders.id }).from(preTenders)
+          .where(and(eq(preTenders.tenantId, msg.tenantId), eq(preTenders.referenceNumber, (p.referenceNumber as string).trim())))
+          .limit(1);
+        if (dup.length > 0) throw new NonRetryableError("DUPLICATE_REFERENCE: a pre-tender with this reference number already exists");
+      }
       await tx.insert(preTenders).values({
         id: p.id as string,
         tenantId: msg.tenantId,
@@ -131,11 +139,25 @@ export function registerTenderConsumers(q: Queue): void {
         }
       }
 
+      // GAP-WORKS-TENDERS-DETAIL-01 (defense-in-depth): re-validate a supplied
+      // contractorId against works.contractors inside the same transaction.
+      const quotContractorId = p.contractorId as string | undefined;
+      if (quotContractorId) {
+        const cRows = await tx.select().from(contractors)
+          .where(and(eq(contractors.tenantId, msg.tenantId), eq(contractors.id, quotContractorId)))
+          .limit(1);
+        if (!cRows[0]) throw new NonRetryableError("CONTRACTOR_NOT_FOUND: contractor not found for contractorId");
+        if (cRows[0].name.trim().toLowerCase() !== (p.contractorName as string).trim().toLowerCase()) {
+          throw new NonRetryableError("CONTRACTOR_NAME_MISMATCH: contractorName does not match the registered contractor record");
+        }
+      }
+
       await tx.insert(quotations).values({
         id: p.id as string,
         tenantId: msg.tenantId,
         tenderId,
         contractorName: p.contractorName as string,
+        contractorId: quotContractorId ?? null,
         method: p.method as string,
         quotedAmountMinor: p.quotedAmountMinor !== undefined ? BigInt(p.quotedAmountMinor as string | number) : null,
         quotedPercentage: (p.quotedPercentage as string) ?? null,

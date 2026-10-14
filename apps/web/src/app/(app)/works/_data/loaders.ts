@@ -233,6 +233,42 @@ export function getTenders(): Promise<LoaderResult<TenderRow[]>> {
   });
 }
 
+/** Page size of the tender register. One constant for list + pager. */
+export const TENDER_PAGE_SIZE = 50;
+
+export interface TenderPage {
+  rows: TenderRow[];
+  /** Real tenant-wide total from the server's meta.total (not rows.length). */
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/** Clamp an untrusted ?page= query value to a positive integer (default 1). */
+export function parsePageParam(raw: string | string[] | undefined): number {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  const n = v ? Number.parseInt(v, 10) : 1;
+  return Number.isInteger(n) && n >= 1 && n <= 100000 ? n : 1;
+}
+
+/**
+ * GAP-WORKS-TENDERS-DETAIL-03: server-paged tender register so the list can
+ * reach every tender (the old fixed pageSize=100 stopped at 100, while the
+ * detail page resolves any id). Carries the real meta.total for the pager.
+ */
+export function getTendersPage(page: number, pageSize: number = TENDER_PAGE_SIZE): Promise<LoaderResult<TenderPage>> {
+  const empty: TenderPage = { rows: [], total: 0, page, pageSize };
+  return fetchJson<unknown, TenderPage>(`/api/v1/works/tenders?page=${page}&pageSize=${pageSize}`, empty, {
+    telemetryKey: "works.tenders.page",
+    mapResponse: (p) => {
+      const rows = pickItems(p).map(mapTenderRow);
+      const meta = p && typeof p === "object" && "meta" in p ? (p as { meta?: { total?: unknown } }).meta : undefined;
+      const t = Number(meta?.total);
+      return { rows, total: Number.isFinite(t) && t >= 0 ? t : rows.length, page, pageSize };
+    },
+  });
+}
+
 /**
  * GAP-WORKS-TENDERS-02 / NEW-03: id -> name maps for the tender-type and
  * approving-authority masters, so the tenders register can show real names
