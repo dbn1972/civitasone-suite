@@ -2,19 +2,19 @@
 
 Total: **689 open**, 3958 closed, 4 blocked or obsolete.
 
-Priority queue: 26 open, 193 closed (3 entries ticked by W0-07 to match closed module items).
+Priority queue: 26 open, 193 closed (0 entries ticked by W0-07 to match closed module items).
 
 | Module | Open | Closed | Blocked/obsolete |
 |---|---|---|---|
 | tenant-admin | 55 | 140 | 0 |
 | works | 47 | 153 | 0 |
 | procurement | 44 | 172 | 0 |
-| estab | 32 | 131 | 0 |
 | analytics | 30 | 49 | 0 |
+| estab | 30 | 133 | 0 |
 | locations | 30 | 6 | 0 |
 | tenant | 29 | 44 | 0 |
+| audit | 28 | 47 | 0 |
 | knowledge | 28 | 41 | 0 |
-| audit | 26 | 49 | 0 |
 | citizen | 26 | 108 | 0 |
 | stock | 26 | 20 | 0 |
 | revenue | 23 | 56 | 0 |
