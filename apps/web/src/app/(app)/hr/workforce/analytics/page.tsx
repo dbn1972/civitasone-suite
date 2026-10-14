@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { WORKFORCE_READER_ROLES } from "@/lib/auth/workRoles";
 import { getTranslations } from 'next-intl/server'
 import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from '../../../../_components/ds'
 import { DataSourceBadge } from '../../../../_components/DataSourceBadge'
@@ -18,7 +19,7 @@ import {
 // this gate a plain `employee` session got a page that LOOKED broken (every
 // loader 403ing, read as a generic failure) instead of an honest "Access
 // restricted" message.
-const WORKFORCE_ANALYTICS_ROLES = ['hr_admin', 'hr_officer', 'super_admin', 'manager', 'finance_officer']
+const WORKFORCE_ANALYTICS_ROLES = WORKFORCE_READER_ROLES
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 

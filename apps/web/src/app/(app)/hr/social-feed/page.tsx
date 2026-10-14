@@ -4,6 +4,8 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDate } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 import { GiveKudosButton } from "./GiveKudosButton";
+import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { HR_SELF_SERVICE_ROLES } from "@/lib/auth/workRoles";
 
 type FeedItem = {
   type: string;
@@ -70,6 +72,7 @@ async function getData(): Promise<LoaderResult<FeedData>> {
 }
 
 export default async function SocialFeedPage() {
+  requireAnyRole(HR_SELF_SERVICE_ROLES);
   const t = await getTranslations("socialFeed");
   const { data: page, source, status, errorMessage } = await getData();
   const feed = page.items;
