@@ -121,3 +121,27 @@ describe("middleware CSP style policy (GAP2-SHELL-CSP-01)", () => {
     expect(csp).not.toMatch(/script-src[^;]*'unsafe-inline'/);
   });
 });
+
+// GAP-LOCATIONS-MAPS-02: the map iframe is a sandboxed srcdoc document, so its
+// requests for the self-hosted Leaflet bundle carry no session cookie. They must
+// not be bounced to the login page, and the CSP must allow the base-map tiles.
+describe("middleware map assets", () => {
+  it.each(["/vendor/leaflet/leaflet.js", "/vendor/leaflet/leaflet.css", "/vendor/leaflet/images/marker-icon.png", "/maps/civitas-map.js"])(
+    "lets an anonymous request for %s through",
+    (path) => {
+      const res = middleware(anonReq(path));
+      expect(res.status).toBe(200);
+      expect(res.headers.get("location")).toBeNull();
+    },
+  );
+
+  it("does not make other /vendor or /maps paths public", () => {
+    for (const path of ["/vendor/other/x.js", "/maps/secret"]) expect(middleware(anonReq(path)).status).toBe(307);
+  });
+
+  it("allows the configured base-map tile origin in img-src", () => {
+    const csp = middleware(anonReq("/auth/login")).headers.get("content-security-policy") ?? "";
+    expect(csp).toMatch(/img-src 'self' data: blob: https:\/\/[^;]*tile/);
+  });
+});
+

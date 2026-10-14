@@ -6,14 +6,22 @@
  * Renders the full-page CivitasMap with a GIS layer panel. Consumes
  * `GET /api/proxy/v1/locations/map-layers` and (for admins) creates, edits and
  * deletes layers via POST/PATCH/DELETE on the same endpoint. Layer visibility
- * can be toggled locally to control what is drawn on the map.
+ * can be toggled locally to control what is drawn on the map; that choice is a
+ * browser-local preference (localStorage) that survives layer reloads and page
+ * visits, and is NOT shared with other users or devices.
+ *
+ * Deleting a layer is destructive for every user, so it goes through a
+ * ConfirmDialog that requires a reason; the reason is sent with the request and
+ * recorded in the audit event.
  *
  * Accessible (labelled controls, keyboard toggles), responsive and theme-aware
  * via civitas-ds classes.
  */
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { PageHeader } from "@/app/_components/ds/PageHeader";
+import { ConfirmDialog } from "@/app/_components/ds/ConfirmDialog";
 import { EmptyState } from "@/app/_components/ds/EmptyState";
 import { CivitasMap, type MapLayer, type MapLayerSourceType } from "@/app/_components/maps";
 import { useFormError } from "@/lib/useFormError";
@@ -21,6 +29,28 @@ import { useFormError } from "@/lib/useFormError";
 const API = "/api/proxy/v1/locations/map-layers";
 
 const SOURCE_TYPES: MapLayerSourceType[] = ["tile", "wms", "geojson"];
+const SOURCE_LABEL_KEY = { tile: "srcTile", wms: "srcWms", geojson: "srcGeojson" } as const;
+
+/** Browser-local layer visibility overrides: layer id -> shown (true) / hidden (false). */
+const VISIBILITY_KEY = "civitas.maps.layerVisibility";
+
+function readVisibility(): Record<string, boolean> {
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(VISIBILITY_KEY) ?? "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed).filter(([, v]) => typeof v === "boolean")) as Record<string, boolean>;
+  } catch {
+    return {};
+  }
+}
+
+function writeVisibility(next: Record<string, boolean>): void {
+  try {
+    window.localStorage.setItem(VISIBILITY_KEY, JSON.stringify(next));
+  } catch {
+    // Storage unavailable (private window, blocked): the toggle still works for this visit.
+  }
+}
 
 type DraftLayer = {
   name: string;
@@ -60,8 +90,13 @@ function normalizeLayers(body: unknown): MapLayer[] {
   }));
 }
 
-export function MapViewer({ canManage = false }: { canManage?: boolean }) {
+export function MapViewer({ canManage = false, tileUrl }: { canManage?: boolean; tileUrl?: string }) {
+  const t = useTranslations("locationsMaps");
   const [layers, setLayers] = useState<MapLayer[]>([]);
+  const [overrides, setOverrides] = useState<Record<string, boolean>>({});
+  const [pendingDelete, setPendingDelete] = useState<MapLayer | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftLayer>(EMPTY_DRAFT);
@@ -79,7 +114,15 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
         return;
       }
       const body = await res.json();
-      setLayers(normalizeLayers(body));
+      const next = normalizeLayers(body);
+      setLayers(next);
+      // Drop saved choices for layers that no longer exist.
+      setOverrides((prev) => {
+        const ids = new Set(next.map((l) => l.id));
+        const kept = Object.fromEntries(Object.entries(prev).filter(([id]) => ids.has(id)));
+        if (Object.keys(kept).length !== Object.keys(prev).length) writeVisibility(kept);
+        return kept;
+      });
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
       setError(formError.fromException("load", err).message);
@@ -93,21 +136,40 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
   }, []);
 
   useEffect(() => {
+    setOverrides(readVisibility());
+  }, []);
+
+  useEffect(() => {
     const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
 
-  const visibleLayers = useMemo(() => layers.filter((l) => l.visible), [layers]);
+  const isShown = useCallback((l: MapLayer) => overrides[l.id] ?? l.visible, [overrides]);
 
-  const toggleVisibility = useCallback((id: string) => {
-    setLayers((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, visible: !l.visible } : l)),
-    );
-  }, []);
+  const visibleLayers = useMemo(
+    () => layers.filter(isShown).map((l) => ({ ...l, visible: true })),
+    [layers, isShown],
+  );
+
+  const toggleVisibility = useCallback(
+    (layer: MapLayer) => {
+      setOverrides((prev) => {
+        const next = { ...prev, [layer.id]: !(prev[layer.id] ?? layer.visible) };
+        writeVisibility(next);
+        return next;
+      });
+    },
+    [],
+  );
 
   const createLayer = useCallback(async () => {
     if (!draft.name.trim() || !draft.url.trim()) return;
+    // The service enforces this too; checking here gives an immediate, clear message.
+    if (!/^https:\/\//i.test(draft.url.trim())) {
+      setError(t("httpsOnly"));
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -129,20 +191,26 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
       setSaving(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
-  }, [draft, load]);
+  }, [draft, load, t]);
 
   const deleteLayer = useCallback(
-    async (id: string) => {
+    async (id: string, reason?: string) => {
       setError(null);
+      setDeleteError(undefined);
+      setDeleting(true);
       try {
-        const res = await fetch(`${API}/${encodeURIComponent(id)}`, { method: "DELETE" });
+        const qs = reason ? `?reason=${encodeURIComponent(reason)}` : "";
+        const res = await fetch(`${API}/${encodeURIComponent(id)}${qs}`, { method: "DELETE" });
         if (!res.ok) {
-          setError((await formError.fromResponse(res, "save")).message);
+          setDeleteError((await formError.fromResponse(res, "save")).message);
           return;
         }
+        setPendingDelete(null);
         await load();
       } catch (caught) {
-        setError(formError.fromException("save", caught).message);
+        setDeleteError(formError.fromException("save", caught).message);
+      } finally {
+        setDeleting(false);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
@@ -209,9 +277,9 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
                 }
                 aria-label="Layer source type"
               >
-                {SOURCE_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
+                {SOURCE_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {t(SOURCE_LABEL_KEY[type])}
                   </option>
                 ))}
               </select>
@@ -253,16 +321,8 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
         </div>
       )}
 
-      <div
-        style={{
-          display: "grid",
-          gap: 16,
-          gridTemplateColumns: "minmax(0, 1fr) minmax(240px, 320px)",
-          alignItems: "start",
-        }}
-        className="map-layout"
-      >
-        <CivitasMap layers={visibleLayers} height="70vh" />
+      <div className="map-layout">
+        <CivitasMap layers={visibleLayers} height="clamp(320px, 60vh, 800px)" {...(tileUrl ? { tileUrl } : {})} />
 
         <div className="card" role="region" aria-label="Layers panel">
           <div className="card-h">
@@ -296,8 +356,8 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
                 >
                   <input
                     type="checkbox"
-                    checked={layer.visible}
-                    onChange={() => toggleVisibility(layer.id)}
+                    checked={isShown(layer)}
+                    onChange={() => toggleVisibility(layer)}
                     id={`layer-${layer.id}`}
                     aria-label={`Toggle ${layer.name}`}
                   />
@@ -309,7 +369,7 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
                     <span
                       style={{ marginLeft: 6, fontSize: 11, color: "var(--ink2)" }}
                     >
-                      {layer.sourceType}
+                      {t(SOURCE_LABEL_KEY[layer.sourceType])}
                     </span>
                   </label>
                   {canManage && (
@@ -317,7 +377,10 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
                       type="button"
                       className="btn ghost"
                       style={{ padding: "2px 8px", fontSize: 12 }}
-                      onClick={() => void deleteLayer(layer.id)}
+                      onClick={() => {
+                        setDeleteError(undefined);
+                        setPendingDelete(layer);
+                      }}
                       aria-label={`Delete ${layer.name}`}
                     >
                       Delete
@@ -329,6 +392,26 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        danger
+        requireReason
+        maxReasonLength={500}
+        title={t("deleteTitle")}
+        description={pendingDelete ? t("deleteDescription", { name: pendingDelete.name }) : undefined}
+        reasonLabel={t("deleteReasonLabel")}
+        confirmLabel={t("deleteConfirm")}
+        busy={deleting}
+        {...(deleteError ? { errorMessage: deleteError } : {})}
+        onConfirm={(reason) => {
+          if (pendingDelete) void deleteLayer(pendingDelete.id, reason);
+        }}
+        onCancel={() => {
+          setPendingDelete(null);
+          setDeleteError(undefined);
+        }}
+      />
     </div>
   );
 }

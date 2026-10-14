@@ -114,14 +114,29 @@ export type GeofenceRow = {
   type: string;
   shape: string;
   radius: string;
+  /** Centre point "lat, lng" to 4 decimals (the geofence has no linked-location FK). */
+  center?: string;
   status: string;
 };
 
 export type JurisdictionRow = {
   id: string;
   level: string;
+  /** Resolved office name; "" when the name could not be resolved (never a raw id). */
   office: string;
+  /** Resolved administrative-unit name; "" when it could not be resolved. */
   unit: string;
+  primary?: boolean;
+};
+
+/** A row of the /locations/list register (GAP-LOCATIONS-LIST-02). */
+export type LocationRow = {
+  id: string;
+  name: string;
+  type: string;
+  parentName: string;
+  lgdCode: string;
+  status: string;
 };
 
 function toNum(value: unknown): number | undefined {
@@ -146,6 +161,12 @@ function mapInfrastructure(payload: unknown): InfrastructureRow[] {
   return out;
 }
 
+function formatCentre(lat: unknown, lng: unknown): string {
+  const la = toNum(lat);
+  const ln = toNum(lng);
+  return la !== undefined && ln !== undefined ? `${la.toFixed(4)}, ${ln.toFixed(4)}` : "—";
+}
+
 function mapGeofences(payload: unknown): GeofenceRow[] {
   const out: GeofenceRow[] = [];
   for (const [i, row] of extractRows(payload).entries()) {
@@ -159,24 +180,64 @@ function mapGeofences(payload: unknown): GeofenceRow[] {
       type: toText(row.type) ?? "—",
       shape: hasPolygon ? "polygon" : radius !== undefined ? "circle" : "—",
       radius: radius !== undefined ? `${radius} m` : "—",
+      center: formatCentre(row.centerLat, row.centerLng),
       status: active === false ? "inactive" : active === true ? "active" : (toText(row.status) ?? "—"),
     });
   }
   return out;
 }
 
-function mapJurisdictions(payload: unknown): JurisdictionRow[] {
+type NameIndex = Map<string, string>;
+
+/** Flattens a `{ id, name, children? }` tree (or flat list) into an id -> name index. */
+function indexNames(payload: unknown, into: NameIndex = new Map()): NameIndex {
+  for (const row of extractRows(payload)) {
+    if (!isRecord(row)) continue;
+    const id = toText(row.id);
+    const name = toText(row.name);
+    if (id && name) into.set(id, name);
+    if (Array.isArray(row.children)) indexNames(row.children, into);
+  }
+  return into;
+}
+
+function mapJurisdictions(payload: unknown, names: NameIndex): JurisdictionRow[] {
   const out: JurisdictionRow[] = [];
   for (const [i, row] of extractRows(payload).entries()) {
     if (!isRecord(row)) continue;
+    const officeId = toText(row.officeId);
+    const unitId = toText(row.unitId);
     out.push({
       id: toText(row.id) ?? `row-${i + 1}`,
       level: toText(row.level) ?? "—",
-      office: toText(row.officeId) ?? "—",
-      unit: toText(row.unitId) ?? "—",
+      // The register stores ids; show names, never the raw id. Unresolved -> "".
+      office: (officeId && names.get(officeId)) || "",
+      unit: (unitId && names.get(unitId)) || "",
+      primary: row.isPrimary === true,
     });
   }
   return out;
+}
+
+function mapLocations(payload: unknown): LocationRow[] {
+  const raw = extractRows(payload).filter(isRecord);
+  const nameById = new Map<string, string>();
+  for (const r of raw) {
+    const id = toText(r.id);
+    const name = toText(r.name);
+    if (id && name) nameById.set(id, name);
+  }
+  return raw.map((r, i) => {
+    const parentId = toText(r.parentId);
+    return {
+      id: toText(r.id) ?? `row-${i + 1}`,
+      name: toText(r.name) ?? "—",
+      type: toText(r.type) ?? "—",
+      parentName: (parentId && nameById.get(parentId)) || "",
+      lgdCode: toText(r.lgdCode) ?? "",
+      status: toText(r.status) ?? "active",
+    };
+  });
 }
 
 export function getLocationInfrastructureTyped(): Promise<LoaderResult<InfrastructureRow[]>> {
@@ -195,10 +256,36 @@ export function getLocationGeofencesTyped(): Promise<LoaderResult<GeofenceRow[]>
   });
 }
 
-export function getLocationJurisdictionsTyped(): Promise<LoaderResult<JurisdictionRow[]>> {
-  return fetchJson<unknown, JurisdictionRow[]>("/api/v1/jurisdictions", [], {
+export async function getLocationJurisdictionsTyped(): Promise<LoaderResult<JurisdictionRow[]>> {
+  // Name lookups are best-effort: a failure leaves the names unresolved
+  // (shown as "Not available") but never fails the register itself.
+  const [main, units, offices] = await Promise.all([
+    fetchJson<unknown, unknown>("/api/v1/jurisdictions", [], {
+      revalidateSeconds: 30,
+      telemetryKey: "locations.jurisdictions.typed",
+      mapResponse: (p) => p,
+    }),
+    fetchJson<unknown, NameIndex>("/api/v1/hierarchy", new Map(), {
+      revalidateSeconds: 60,
+      telemetryKey: "locations.jurisdictions.units",
+      mapResponse: (p) => indexNames(p),
+    }),
+    fetchJson<unknown, NameIndex>("/api/v1/locations?limit=500", new Map(), {
+      revalidateSeconds: 60,
+      telemetryKey: "locations.jurisdictions.offices",
+      mapResponse: (p) => indexNames(p),
+    }),
+  ]);
+  const names: NameIndex = new Map([...offices.data, ...units.data]);
+  const { data, ...rest } = main;
+  return { ...rest, data: mapJurisdictions(data, names) };
+}
+
+/** Typed loader for the /locations/list register (name, type, parent, LGD code, status). */
+export function getLocationsTyped(): Promise<LoaderResult<LocationRow[]>> {
+  return fetchJson<unknown, LocationRow[]>("/api/v1/locations?limit=500", [], {
     revalidateSeconds: 30,
-    telemetryKey: "locations.jurisdictions.typed",
-    mapResponse: mapJurisdictions,
+    telemetryKey: "locations.list.typed",
+    mapResponse: mapLocations,
   });
 }

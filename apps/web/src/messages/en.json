@@ -14912,11 +14912,93 @@
       }
     }
   },
+  "mapsCommon": {
+    "loadFailed": "The map could not be loaded. Check your connection, or ask an administrator to check the map tile server, then try again.",
+    "retry": "Retry"
+  },
+  "locationsHub": {
+    "title": "Locations",
+    "description": "Offices and branches, geofences, jurisdictions, infrastructure and map tools.",
+    "listLabel": "Offices & branches",
+    "listNote": "All offices, branches and facilities",
+    "geofencesLabel": "Geofences",
+    "geofencesNote": "Geofence definitions (read-only)",
+    "jurisdictionsLabel": "Jurisdictions",
+    "jurisdictionsNote": "Which offices cover which administrative units",
+    "infrastructureLabel": "Infrastructure",
+    "infrastructureNote": "Infrastructure assets and facilities",
+    "mapLabel": "Map viewer",
+    "mapNote": "Interactive map workspace",
+    "monitoringLabel": "Map monitoring",
+    "monitoringNote": "Markers for infrastructure, land parcels and geofences",
+    "notFoundTitle": "Page not found",
+    "notFoundMessage": "This page does not exist or has been moved.",
+    "notFoundAction": "Back to Locations"
+  },
+  "locationsList": {
+    "pageTitle": "Offices & branches",
+    "pageDescription": "Your head office and its branches. Add a location below, or switch on example offices from <link>Getting Started</link> to explore.",
+    "area": "offices and branches",
+    "cardTitle": "All locations",
+    "colName": "Name",
+    "colType": "Type",
+    "colParent": "Parent",
+    "colLgd": "LGD code",
+    "colStatus": "Status",
+    "statusActive": "Active",
+    "statusArchived": "Archived",
+    "filterPlaceholder": "Filter locations…",
+    "emptyTitle": "No locations yet",
+    "emptyMessage": "Locations you add will appear here.",
+    "types": {
+      "state": "State",
+      "district": "District",
+      "block": "Block",
+      "ward": "Ward",
+      "office": "Office",
+      "facility": "Facility",
+      "branch": "Branch"
+    },
+    "formTitle": "Add a location",
+    "nameLabel": "Location name",
+    "typeLabel": "Location type",
+    "parentLabel": "Parent location (optional)",
+    "parentNone": "— None (top-level) —",
+    "lgdLabel": "LGD code (optional)",
+    "submit": "Add location",
+    "saving": "Saving…",
+    "added": "Location added"
+  },
+  "locationsMaps": {
+    "deleteTitle": "Delete this map layer?",
+    "deleteDescription": "“{name}” will be removed from the map for all users. This cannot be undone.",
+    "deleteReasonLabel": "Reason for deleting",
+    "deleteConfirm": "Delete layer",
+    "httpsOnly": "The source URL must start with https://.",
+    "srcTile": "Tile (XYZ)",
+    "srcWms": "WMS",
+    "srcGeojson": "GeoJSON",
+    "monitoringSubtitle": "Geospatial view of infrastructure, land parcels and geofences. Filter, then select a marker to open its record.",
+    "updatedAt": "Updated {time}",
+    "statsNote": "Active and alert counts cover every status for the selected domain.",
+    "domainAll": "All domains",
+    "domainInfrastructure": "Infrastructure",
+    "domainParcel": "Land parcel",
+    "domainGeofence": "Geofence",
+    "statusAll": "All statuses",
+    "statusActive": "Active",
+    "statusInactive": "Inactive",
+    "statusAlert": "Alert",
+    "statusMaintenance": "Maintenance",
+    "asOfLabel": "As of date",
+    "asOfUnavailable": "A historical (as-of) view is not available yet.",
+    "truncated": "Showing the first {shown} markers. Narrow the filters to see the rest."
+  },
   "locationsOps": {
     "backLabel": "Locations",
     "infra": {
-      "pageTitle": "Locations — Infrastructure",
-      "pageSubtitle": "Infrastructure assets from location-service.",
+      "pageTitle": "Infrastructure",
+      "pageSubtitle": "Roads, bridges, buildings and other infrastructure assets. This register is read-only: there is no in-app editor.",
       "area": "infrastructure assets",
       "cardTitle": "Infrastructure assets",
       "emptyTitle": "No assets",
@@ -14928,8 +15010,8 @@
       "colStatus": "Status"
     },
     "geofences": {
-      "pageTitle": "Locations — Geofences",
-      "pageSubtitle": "Geofence definitions from location-service.",
+      "pageTitle": "Geofences",
+      "pageSubtitle": "Circular and polygon boundaries used for site and attendance checks. This register is read-only: there is no in-app editor.",
       "area": "geofences",
       "cardTitle": "Geofences",
       "emptyTitle": "No geofences",
@@ -14939,11 +15021,12 @@
       "colType": "Type",
       "colShape": "Shape",
       "colRadius": "Radius",
-      "colStatus": "Status"
+      "colStatus": "Status",
+      "colCenter": "Centre"
     },
     "jurisdictions": {
-      "pageTitle": "Locations — Jurisdictions",
-      "pageSubtitle": "Jurisdiction records from location-service.",
+      "pageTitle": "Jurisdictions",
+      "pageSubtitle": "Which offices cover which administrative units. This register is read-only: there is no in-app editor.",
       "area": "jurisdictions",
       "cardTitle": "Jurisdictions",
       "emptyTitle": "No jurisdictions",
@@ -14951,7 +15034,11 @@
       "filterPlaceholder": "Filter jurisdictions…",
       "colLevel": "Level",
       "colOffice": "Office",
-      "colUnit": "Unit"
+      "colUnit": "Unit",
+      "colPrimary": "Primary",
+      "yes": "Yes",
+      "no": "No",
+      "unresolved": "Not available"
     }
   },
   "fieldSync": {

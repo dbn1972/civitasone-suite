@@ -1,18 +1,20 @@
+import { getTranslations } from "next-intl/server";
 import { ModuleHub } from "../../_components/ModuleHub";
 
-export default function Page() {
+export default async function Page() {
+  const t = await getTranslations("locationsHub");
   return (
     <ModuleHub
-      title="Locations"
-      description="Location master, geofences, jurisdictions, infrastructure and map tooling."
+      title={t("title")}
+      description={t("description")}
       help="locations"
       links={[
-        { href: "/locations/list", label: "Locations", note: "Location master list from location-service" },
-        { href: "/locations/geofences", label: "Geofences", note: "Geofence definitions and checks" },
-        { href: "/locations/jurisdictions", label: "Jurisdictions", note: "Administrative jurisdiction boundaries" },
-        { href: "/locations/infrastructure", label: "Infrastructure", note: "Infrastructure assets and facilities" },
-        { href: "/locations/maps", label: "Map Viewer", note: "Interactive map workspace" },
-        { href: "/locations/maps/monitoring", label: "Map Monitoring", note: "Live monitoring overlay" },
+        { href: "/locations/list", label: t("listLabel"), note: t("listNote") },
+        { href: "/locations/geofences", label: t("geofencesLabel"), note: t("geofencesNote") },
+        { href: "/locations/jurisdictions", label: t("jurisdictionsLabel"), note: t("jurisdictionsNote") },
+        { href: "/locations/infrastructure", label: t("infrastructureLabel"), note: t("infrastructureNote") },
+        { href: "/locations/maps", label: t("mapLabel"), note: t("mapNote") },
+        { href: "/locations/maps/monitoring", label: t("monitoringLabel"), note: t("monitoringNote") },
       ]}
     />
   );
