@@ -342,15 +342,26 @@ export default function DakRegistryPage() {
             <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
               <span>{t("dept")} <span style={{ color: "var(--bad)" }}>*</span></span>
               {/* GAP-ESTAB-FILES-NEW-03: a pick-list of real departments, never free text. */}
-              <select
-                value={openFileDialog.dept}
-                onChange={(e) => setOpenFileDialog({ ...openFileDialog, dept: e.target.value })}
-                required
-                disabled={!depts.loaded || depts.divisions.length === 0 /* ux-001-ok: a failed load is told apart below by depts.failed */}
-              >
-                <option value="">{t("deptSelect")}</option>
-                {depts.divisions.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
+              {depts.loaded && depts.divisions.length === 0 /* ux-001-ok: depts.failed is surfaced by the note below; both states fall back to typed entry */ ? (
+                /* No pick-list available (list not readable by this role, or no operators enrolled yet): type it. */
+                <input
+                  type="text"
+                  value={openFileDialog.dept}
+                  onChange={(e) => setOpenFileDialog({ ...openFileDialog, dept: e.target.value })}
+                  required
+                  maxLength={100}
+                />
+              ) : (
+                <select
+                  value={openFileDialog.dept}
+                  onChange={(e) => setOpenFileDialog({ ...openFileDialog, dept: e.target.value })}
+                  required
+                  disabled={!depts.loaded}
+                >
+                  <option value="">{t("deptSelect")}</option>
+                  {depts.divisions.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              )}
               {depts.loaded && depts.divisions.length === 0 /* ux-001-ok: depts.failed picks the failure message */ ? (
                 <span role="note" style={{ color: "var(--mut)", fontSize: 12 }}>{depts.failed ? t("deptLoadFailed") : t("deptNone")}</span>
               ) : null}

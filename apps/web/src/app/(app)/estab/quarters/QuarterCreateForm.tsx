@@ -214,16 +214,26 @@ export function QuarterCreateForm() {
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={orgUnitField} style={{ fontSize: 13, fontWeight: 600 }}>{t("quarterOrgUnit")}</label>
-              <select
-                id={orgUnitField}
-                value={orgUnit}
-                onChange={(e) => setOrgUnit(e.target.value)}
-                disabled={!depts.loaded || depts.divisions.length === 0}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              >
-                <option value="">{t("quarterOrgUnitNone")}</option>
-                {depts.divisions.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
+              {depts.loaded && depts.divisions.length === 0 ? (
+                <input
+                  id={orgUnitField}
+                  value={orgUnit}
+                  onChange={(e) => setOrgUnit(e.target.value)}
+                  maxLength={100}
+                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                />
+              ) : (
+                <select
+                  id={orgUnitField}
+                  value={orgUnit}
+                  onChange={(e) => setOrgUnit(e.target.value)}
+                  disabled={!depts.loaded}
+                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                >
+                  <option value="">{t("quarterOrgUnitNone")}</option>
+                  {depts.divisions.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              )}
               {depts.loaded && depts.divisions.length === 0 ? (
                 <span role="note" style={{ fontSize: 12, color: "var(--mut)" }}>{depts.failed ? t("deptLoadFailed") : t("deptNone")}</span>
               ) : null}

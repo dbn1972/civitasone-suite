@@ -210,14 +210,22 @@ describe("NewFilePage (estab) — department is a pick-list, never free text or 
     await waitFor(() => expect(postBody(fetchSpy)?.dept).toBe("Finance"));
   });
 
-  it("Given no departments exist, Then the select is disabled with an explanation and there is no free-text fallback", () => {
-    depts.value = { loaded: true, failed: false, divisions: [] };
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+  it.each([
+    ["no operators are enrolled (empty list)", { loaded: true, failed: false, divisions: [] as string[] }, /No department list is available/i],
+    ["the operators list is not readable for the role (403)", { loaded: true, failed: true, divisions: [] as string[] }, /could not be loaded/i],
+  ])("Given %s, Then Department is a typed field with an explanation, and the typed value is posted", async (_n, value, note) => {
+    depts.value = value;
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((_i: RequestInfo | URL, init?: RequestInit) =>
+      Promise.resolve(new Response(JSON.stringify(init?.method === "POST" ? { id: "f1" } : { data: [] }), { status: init?.method === "POST" ? 201 : 200 })));
     render(<NewFilePage />);
-    const dept = screen.getByLabelText("Department") as HTMLSelectElement;
-    expect(dept.tagName).toBe("SELECT");
-    expect(dept.disabled).toBe(true);
-    expect(screen.getByRole("note").textContent).toMatch(/No departments are available/i);
+    const dept = screen.getByLabelText("Department") as HTMLInputElement;
+    expect(dept.tagName).toBe("INPUT");
+    expect(dept.disabled).toBe(false);
+    expect(screen.getByRole("note").textContent).toMatch(note);
+    fill();
+    fireEvent.change(dept, { target: { value: "Legal" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create File" }));
+    await waitFor(() => expect(postBody(fetchSpy)?.dept).toBe("Legal"));
   });
 });
 

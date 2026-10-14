@@ -181,6 +181,28 @@ describe("the files consumer — two simultaneous openings of one DAK produce on
     expect((await inwardRow(LINKED))?.fileId).toBe(LINKED_FILE);
   });
 
+  it("a dropped command leaves a failure audit row, never a silent no-op (create for a linked DAK, open-file for a linked and a missing DAK)", async () => {
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerFilesConsumers(q);
+    await q.start();
+    const create = env(COMMANDS.fileCreate, { id: randomUUID(), tenantId: TENANT, section: "ADMIN", subject: "Dup", dept: "ADMIN", priority: "normal", classification: "public", currentWith: ACTOR, inwardId: LINKED });
+    const openLinked = env(COMMANDS.inwardOpenFile, { id: randomUUID(), inwardId: LINKED, tenantId: TENANT, dept: "ADMIN", currentWith: ACTOR, classification: "public" });
+    const openMissing = env(COMMANDS.inwardOpenFile, { id: randomUUID(), inwardId: MISSING, tenantId: TENANT, dept: "ADMIN", currentWith: ACTOR, classification: "public" });
+    await q.publish(COMMANDS.fileCreate, create);
+    await q.publish(COMMANDS.inwardOpenFile, openLinked);
+    await q.publish(COMMANDS.inwardOpenFile, openMissing);
+    await Promise.all([create, openLinked, openMissing].map((m) => waitProcessed(m.messageId)));
+    await q.stop();
+    const rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.execute(sql`SELECT payload FROM _outbox.messages WHERE tenant_id = ${TENANT} AND topic = 'audit.event.record'`)));
+    const ids = [create, openLinked, openMissing].map((m) => (m.payload as { id: string }).id);
+    const skipped = (rows as unknown as Array<{ payload: { action: string; outcome: string; resourceId: string; metadata: { reason: string } } }>)
+      .map((r) => r.payload).filter((p) => p.action === "create_skipped" && ids.includes(p.resourceId));
+    expect(skipped).toHaveLength(3);
+    expect(skipped.every((p) => p.outcome === "failure")).toBe(true);
+    expect(skipped.map((p) => p.metadata.reason).sort()).toEqual(["dak_already_linked", "dak_already_linked", "dak_not_found"]);
+    expect(skipped.map((p) => p.resourceId).sort()).toEqual([...ids].sort());
+  });
+
   it("a normal create for an available DAK still opens the file and links the DAK", async () => {
     const q = wireTenantAwareQueue(new MemoryQueue());
     registerFilesConsumers(q);
