@@ -72,6 +72,26 @@ describe("DAK-01: open-file requires classification dialog", () => {
     });
   });
 
+  it("when the department list is unavailable (403 or none enrolled), Department is a typed field and its value is posted", async () => {
+    divisions.value = { loaded: true, failed: true, divisions: [] };
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      if (String(input).includes("open-file")) return Promise.resolve(jsonResponse({ id: "file-new" }));
+      return Promise.resolve(jsonResponse({ data: [RECEIVED_ROW] }));
+    });
+    render(<DakRegistryPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Open file" }));
+    await screen.findByText(/Open file from DAK DAK\/2026\/001/i);
+    const dept = screen.getByLabelText(/Department/i) as HTMLInputElement;
+    expect(dept.tagName).toBe("INPUT");
+    fireEvent.change(dept, { target: { value: "Legal" } });
+    fireEvent.change(screen.getByLabelText(/Classification/i), { target: { value: "confidential" } });
+    fireEvent.click(screen.getByRole("button", { name: /Open the file/i }));
+    await waitFor(() => {
+      const call = fetchSpy.mock.calls.find((c) => String(c[0]).includes("open-file"));
+      expect(JSON.parse((call![1] as RequestInit).body as string).dept).toBe("Legal");
+    });
+  });
+
   it("GAP-ESTAB-FILES-NEW-03: the department is a pick-list of real departments, with no free-text input", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [RECEIVED_ROW] }));
     render(<DakRegistryPage />);
@@ -82,14 +102,16 @@ describe("DAK-01: open-file requires classification dialog", () => {
     expect(screen.queryByPlaceholderText(/ADMIN/i)).not.toBeInTheDocument();
   });
 
-  it("GAP-ESTAB-FILES-NEW-03: with no departments available the pick-list is disabled and says why", async () => {
+  it("GAP-ESTAB-FILES-NEW-03: with no departments enrolled Department is an enabled typed field and says why", async () => {
     divisions.value = { loaded: true, failed: false, divisions: [] };
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [RECEIVED_ROW] }));
     render(<DakRegistryPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Open file" }));
     await screen.findByText(/Open file from DAK/i);
-    expect((screen.getByLabelText(/Department/i) as HTMLSelectElement).disabled).toBe(true);
-    expect(screen.getByRole("note").textContent).toMatch(/No departments are available/i);
+    const dept = screen.getByLabelText(/Department/i) as HTMLInputElement;
+    expect(dept.tagName).toBe("INPUT");
+    expect(dept.disabled).toBe(false);
+    expect(screen.getByRole("note").textContent).toMatch(/No department list is available/i);
   });
 
   it("GAP-ESTAB-DAK-01: an audit officer sees the register but no Open file button and no register form", async () => {
