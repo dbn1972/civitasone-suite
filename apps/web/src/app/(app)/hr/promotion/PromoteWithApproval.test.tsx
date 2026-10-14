@@ -95,7 +95,7 @@ async function openAndFillWizard() {
   fireEvent.click(screen.getByRole("button", { name: "Next: Approval routing →" }));
 
   // The initiator is the signed-in employee, shown read-only (the estab route rejects any other initiator).
-  await waitFor(() => expect(screen.getByLabelText("Initiating officer")).toHaveValue("Meera Self (E-009)"));
+  await waitFor(() => expect(screen.getByLabelText(/^Initiating officer/)).toHaveValue("Meera Self (E-009)"));
   await pickEntity("Forward to (approving officer)", "Iyer", "P. Iyer (E-020)");
   fireEvent.change(screen.getByPlaceholderText(/Why is this promotion being recommended/), {
     target: { value: "Meets DPC criteria" },
@@ -152,7 +152,7 @@ describe("PromoteWithApproval", () => {
     });
     renderWidget();
     await openAndFillWizard();
-    expect(screen.getByLabelText("Initiating officer")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText(/^Initiating officer/)).toHaveAttribute("readonly");
     await submitAndConfirm();
     await waitFor(() => expect(fromModuleCalls).toHaveLength(1));
     expect(fromModuleCalls[0]!.body).toMatchObject({ initiatedBy: ME.id, currentWith: "emp-off-2" });

@@ -20,7 +20,6 @@ import { useToast } from "@/app/_components/ds/Toast";
 import { Button, Field, Input, Select, Textarea } from "@/app/_components/ds";
 import { EmployeePicker } from "@/app/_components/EmployeePicker";
 import { useFormError } from "@/lib/useFormError";
-import { EmployeePicker } from "@/app/_components/EmployeePicker";
 import { useSelfEmployee } from "@/app/_components/useSelfEmployee";
 
 type Employee = { id: string; name?: string; designation?: string; departmentId?: string; department?: string };
@@ -390,6 +389,7 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
                 <Field label={tr("initiator")} required error={fieldErrors.initiatedBy}>
                   <Input readOnly value={self?.label ?? ""} placeholder={tr("loadingOfficers")} />
+                </Field>
 
                 <Field label={tr("approver")} required error={fieldErrors.currentWith}>
                   <EmployeePicker
