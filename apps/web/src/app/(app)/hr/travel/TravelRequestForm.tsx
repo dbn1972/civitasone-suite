@@ -1,19 +1,11 @@
 "use client";
 
-import { useId, useState } from "react";
-import type { CSSProperties } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
-import { Button } from "../../../_components/ds";
+import { Button, Field, Input, Select } from "../../../_components/ds";
 import { rupeesToMinorString } from "@/lib/money";
-
-const inputStyle: CSSProperties = {
-  width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
-  borderRadius: 8, background: "var(--bg2)", color: "var(--ink)", fontSize: 14,
-};
-const inputErrStyle: CSSProperties = { ...inputStyle, border: "1px solid var(--badbd, #ef4444)" };
-const fieldErrStyle: CSSProperties = { color: "var(--bad, #b91c1c)", fontSize: 12, margin: "3px 0 0" };
 
 type Fields = {
   purpose: string;
@@ -31,10 +23,6 @@ const INITIAL: Fields = {
 
 export function TravelRequestForm() {
   const t = useTranslations("travelForm");
-  const ids = {
-    purpose: useId(), destination: useId(), fromDate: useId(),
-    toDate: useId(), mode: useId(), advanceRequired: useId(),
-  };
   const [open, setOpen] = useState(false);
   const [fields, setFields] = useState<Fields>(INITIAL);
   const [invalid, setInvalid] = useState<Set<string>>(new Set());
@@ -135,56 +123,29 @@ export function TravelRequestForm() {
       {open && (
         <form onSubmit={handleSubmit} noValidate style={{ padding: "0 20px 20px", display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            <div>
-              <label htmlFor={ids.purpose} style={{ fontSize: 13, fontWeight: 500 }}>
-                {t("labelPurpose")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-              </label>
-              <input id={ids.purpose} type="text" maxLength={500} value={fields.purpose}
+            <Field label={t("labelPurpose")} required error={invalid.has("purpose") ? t("purposeInvalid") : undefined}>
+              <Input type="text" maxLength={500} value={fields.purpose}
                 onChange={(e) => set("purpose", e.target.value)}
-                placeholder={t("placeholderPurpose")}
-                style={invalid.has("purpose") ? inputErrStyle : inputStyle}
-                aria-invalid={invalid.has("purpose")}
-                aria-describedby={invalid.has("purpose") ? `${ids.purpose}-err` : undefined} />
-              {invalid.has("purpose") && <p id={`${ids.purpose}-err`} role="alert" style={fieldErrStyle}>{t("purposeInvalid")}</p>}
-            </div>
-            <div>
-              <label htmlFor={ids.destination} style={{ fontSize: 13, fontWeight: 500 }}>
-                {t("labelDestination")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-              </label>
-              <input id={ids.destination} type="text" maxLength={200} value={fields.destination}
+                placeholder={t("placeholderPurpose")} />
+            </Field>
+            <Field label={t("labelDestination")} required error={invalid.has("destination") ? t("destinationInvalid") : undefined}>
+              <Input type="text" maxLength={200} value={fields.destination}
                 onChange={(e) => set("destination", e.target.value)}
-                placeholder={t("placeholderDestination")}
-                style={invalid.has("destination") ? inputErrStyle : inputStyle}
-                aria-invalid={invalid.has("destination")}
-                aria-describedby={invalid.has("destination") ? `${ids.destination}-err` : undefined} />
-              {invalid.has("destination") && <p id={`${ids.destination}-err`} role="alert" style={fieldErrStyle}>{t("destinationInvalid")}</p>}
-            </div>
+                placeholder={t("placeholderDestination")} />
+            </Field>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14 }}>
-            <div>
-              <label htmlFor={ids.fromDate} style={{ fontSize: 13, fontWeight: 500 }}>
-                {t("labelFromDate")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-              </label>
-              <input id={ids.fromDate} type="date" value={fields.fromDate}
-                onChange={(e) => set("fromDate", e.target.value)}
-                style={invalid.has("fromDate") ? inputErrStyle : inputStyle}
-                aria-invalid={invalid.has("fromDate")} />
-              {invalid.has("fromDate") && <p role="alert" style={fieldErrStyle}>{t("fromDateRequired")}</p>}
-            </div>
-            <div>
-              <label htmlFor={ids.toDate} style={{ fontSize: 13, fontWeight: 500 }}>
-                {t("labelToDate")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-              </label>
-              <input id={ids.toDate} type="date" value={fields.toDate}
-                onChange={(e) => set("toDate", e.target.value)}
-                style={invalid.has("toDate") ? inputErrStyle : inputStyle}
-                aria-invalid={invalid.has("toDate")} />
-              {invalid.has("toDate") && <p role="alert" style={fieldErrStyle}>{t("toDateInvalid")}</p>}
-            </div>
-            <div>
-              <label htmlFor={ids.mode} style={{ fontSize: 13, fontWeight: 500 }}>{t("labelMode")}</label>
-              <select id={ids.mode} value={fields.mode} onChange={(e) => set("mode", e.target.value)} style={inputStyle}>
+            <Field label={t("labelFromDate")} required error={invalid.has("fromDate") ? t("fromDateRequired") : undefined}>
+              <Input type="date" value={fields.fromDate}
+                onChange={(e) => set("fromDate", e.target.value)} />
+            </Field>
+            <Field label={t("labelToDate")} required error={invalid.has("toDate") ? t("toDateInvalid") : undefined}>
+              <Input type="date" value={fields.toDate}
+                onChange={(e) => set("toDate", e.target.value)} />
+            </Field>
+            <Field label={t("labelMode")}>
+              <Select value={fields.mode} onChange={(e) => set("mode", e.target.value)}>
                 <option value="road">{t("modeRoad")}</option>
                 <option value="rail">{t("modeRail")}</option>
                 <option value="air">{t("modeAir")}</option>
@@ -192,17 +153,13 @@ export function TravelRequestForm() {
                     travelRequestSchema) has always accepted own_vehicle;
                     this option simply never existed here. */}
                 <option value="own_vehicle">{t("modeOwnVehicle")}</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor={ids.advanceRequired} style={{ fontSize: 13, fontWeight: 500 }}>{t("labelAdvance")}</label>
-              <input id={ids.advanceRequired} type="number" min={0} step="0.01" value={fields.advanceRequired}
+              </Select>
+            </Field>
+            <Field label={t("labelAdvance")} error={invalid.has("advanceRequired") ? t("advanceInvalid") : undefined}>
+              <Input type="number" min={0} step="0.01" value={fields.advanceRequired}
                 onChange={(e) => set("advanceRequired", e.target.value)}
-                placeholder="0"
-                style={invalid.has("advanceRequired") ? inputErrStyle : inputStyle}
-                aria-invalid={invalid.has("advanceRequired")} />
-              {invalid.has("advanceRequired") && <p role="alert" style={fieldErrStyle}>{t("advanceInvalid")}</p>}
-            </div>
+                placeholder="0" />
+            </Field>
           </div>
 
           <div style={{ display: "flex", justifyContent: "flex-end" }}>

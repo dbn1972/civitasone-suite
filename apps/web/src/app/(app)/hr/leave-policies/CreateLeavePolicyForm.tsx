@@ -3,8 +3,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Card, ConfirmDialog, Button } from "../../../_components/ds";
+import { Card, ConfirmDialog, Button, Field, Input, Select } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { validateLeavePolicy, type LeavePolicyErrors } from "./leavePolicySchema";
 
 type LeaveType = { id: string; code: string; name: string };
 
@@ -14,6 +15,11 @@ const EMPLOYEE_TYPE_VALUES = [
 ];
 
 const COUNT_METHOD_VALUES = ["calendar", "working_days"];
+
+const SR_ONLY: React.CSSProperties = {
+  position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden",
+  clip: "rect(0, 0, 0, 0)", whiteSpace: "nowrap", border: 0,
+};
 
 export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } = {}) {
   const t = useTranslations("leavePolicyForm");
@@ -47,16 +53,10 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
   const employeeTypeOptions = EMPLOYEE_TYPE_VALUES.map((value) => ({ value, label: t(`employeeTypes.${value}`) }));
   const countMethodOptions = COUNT_METHOD_VALUES.map((value) => ({ value, label: t(`countMethods.${value}`) }));
 
-  const ltField = useId();
-  const empField = useId();
-  const daysField = useId();
   const errId = useId();
-  const countMethodField = useId();
-  const maxAccumField = useId();
-  const maxContField = useId();
-  const minServiceField = useId();
-  const genderField = useId();
-  const medCertDaysField = useId();
+  const [clientErrors, setClientErrors] = useState<LeavePolicyErrors>({});
+  /** Client validation first, then a backend rejection for the same field. */
+  const errFor = (f: keyof LeavePolicyErrors) => clientErrors[f] ?? formError.fieldError(f);
   const ltRef = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
@@ -97,7 +97,20 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
   function openConfirm(e: React.FormEvent) {
     e.preventDefault();
     setError(undefined);
-    const msg = validate();
+    formError.clear();
+    const errs = validateLeavePolicy({
+      leaveTypeId,
+      employeeType,
+      maxDaysPerYear: Number(maxDaysPerYear),
+      countMethod,
+      maxAccumulation: Number(maxAccumulation),
+      maxContinuousDays: Number(maxContinuousDays),
+      minServiceMonths: Number(minServiceMonths),
+      genderRestriction,
+      requiresMedicalCertAfterDays: Number(requiresMedicalCertAfterDays),
+    });
+    setClientErrors(errs);
+    const msg = validate() ?? (Object.keys(errs).length > 0 ? Object.values(errs)[0]! : null);
     if (msg) { setFieldError(msg); return; }
     setFieldError(null);
     setConfirmOpen(true);
@@ -167,72 +180,46 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
             )}
 
             <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-              <div style={{ display: "grid", gap: 6 }}>
-                <label htmlFor={ltField} style={{ fontSize: 13, fontWeight: 600 }}>
-                  {t("leaveTypeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-                </label>
-                {ltLoading ? (
-                  <p style={{ fontSize: 13, color: "var(--mut)" }}>{t("loadingLeaveTypes")}</p>
-                ) : (
-                  <select
-                    id={ltField}
-                    ref={ltRef}
-                    value={leaveTypeId}
-                    onChange={(e) => setLeaveTypeId(e.target.value)}
-                    style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
-                  >
-                    {leaveTypes.length === 0 && <option value="">{t("noLeaveTypesAvailable")}</option>}
-                    {leaveTypes.map((lt) => (
-                      <option key={lt.id} value={lt.id}>{lt.code} — {lt.name}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-
-              <div style={{ display: "grid", gap: 6 }}>
-                <label htmlFor={empField} style={{ fontSize: 13, fontWeight: 600 }}>
-                  {t("employeeTypeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-                </label>
-                <select
-                  id={empField}
-                  value={employeeType}
-                  onChange={(e) => setEmployeeType(e.target.value)}
-                  style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
+              <Field label={t("leaveTypeLabel")} required error={errFor("leaveTypeId")}>
+                <Select
+                  ref={ltRef}
+                  value={leaveTypeId}
+                  disabled={ltLoading}
+                  onChange={(e) => setLeaveTypeId(e.target.value)}
                 >
+                  {ltLoading && <option value="">{t("loadingLeaveTypes")}</option>}
+                  {!ltLoading && leaveTypes.length === 0 && <option value="">{t("noLeaveTypesAvailable")}</option>}
+                  {leaveTypes.map((lt) => (
+                    <option key={lt.id} value={lt.id}>{lt.code} — {lt.name}</option>
+                  ))}
+                </Select>
+              </Field>
+
+              <Field label={t("employeeTypeLabel")} required error={errFor("employeeType")}>
+                <Select value={employeeType} onChange={(e) => setEmployeeType(e.target.value)}>
                   {employeeTypeOptions.map((et) => (
                     <option key={et.value} value={et.value}>{et.label}</option>
                   ))}
-                </select>
-              </div>
+                </Select>
+              </Field>
 
-              <div style={{ display: "grid", gap: 6 }}>
-                <label htmlFor={daysField} style={{ fontSize: 13, fontWeight: 600 }}>
-                  {t("daysPerYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-                </label>
-                <input
-                  id={daysField}
+              <Field label={t("daysPerYearLabel")} required error={errFor("maxDaysPerYear")}>
+                <Input
                   type="number"
                   min={0}
                   max={730}
                   value={maxDaysPerYear}
                   onChange={(e) => setMaxDaysPerYear(e.target.value)}
-                  style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
                 />
-              </div>
+              </Field>
 
-              <div style={{ display: "grid", gap: 6 }}>
-                <label htmlFor={countMethodField} style={{ fontSize: 13, fontWeight: 600 }}>{t("countMethodLabel")}</label>
-                <select
-                  id={countMethodField}
-                  value={countMethod}
-                  onChange={(e) => setCountMethod(e.target.value)}
-                  style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
-                >
+              <Field label={t("countMethodLabel")} error={errFor("countMethod")}>
+                <Select value={countMethod} onChange={(e) => setCountMethod(e.target.value)}>
                   {countMethodOptions.map((m) => (
                     <option key={m.value} value={m.value}>{m.label}</option>
                   ))}
-                </select>
-              </div>
+                </Select>
+              </Field>
             </div>
 
             <details style={{ marginTop: 16 }}>
@@ -240,62 +227,48 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
                 {t("advancedSettings")}
               </summary>
               <div style={{ marginTop: 12, display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label htmlFor={maxAccumField} style={{ fontSize: 13, fontWeight: 600 }}>{t("maxAccumulationLabel")}</label>
-                  <input
-                    id={maxAccumField}
+                <Field label={t("maxAccumulationLabel")} error={errFor("maxAccumulation")}>
+                  <Input
                     type="number" min={0}
                     value={maxAccumulation}
                     onChange={(e) => setMaxAccumulation(e.target.value)}
-                    style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
                   />
-                </div>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label htmlFor={maxContField} style={{ fontSize: 13, fontWeight: 600 }}>{t("maxContinuousLabel")}</label>
-                  <input
-                    id={maxContField}
+                </Field>
+                <Field label={t("maxContinuousLabel")} error={errFor("maxContinuousDays")}>
+                  <Input
                     type="number" min={1} max={730}
                     value={maxContinuousDays}
                     onChange={(e) => setMaxContinuousDays(e.target.value)}
-                    style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
                   />
-                </div>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label htmlFor={minServiceField} style={{ fontSize: 13, fontWeight: 600 }}>{t("minServiceLabel")}</label>
-                  <input
-                    id={minServiceField}
+                </Field>
+                <Field label={t("minServiceLabel")} error={errFor("minServiceMonths")}>
+                  <Input
                     type="number" min={0}
                     value={minServiceMonths}
                     onChange={(e) => setMinServiceMonths(e.target.value)}
-                    style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
                   />
-                </div>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label htmlFor={genderField} style={{ fontSize: 13, fontWeight: 600 }}>{t("genderRestrictionLabel")}</label>
-                  <select
-                    id={genderField}
+                </Field>
+                <Field label={t("genderRestrictionLabel")} error={errFor("genderRestriction")}>
+                  <Select
                     value={genderRestriction}
                     onChange={(e) => setGenderRestriction(e.target.value as "" | "male" | "female")}
-                    style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
                   >
                     <option value="">{t("genderNone")}</option>
                     <option value="female">{t("genderFemaleOnly")}</option>
                     <option value="male">{t("genderMaleOnly")}</option>
-                  </select>
-                </div>
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label htmlFor={medCertDaysField} style={{ fontSize: 13, fontWeight: 600 }}>{t("medCertDaysLabel")}</label>
-                  <input
-                    id={medCertDaysField}
+                  </Select>
+                </Field>
+                <Field label={t("medCertDaysLabel")} error={errFor("requiresMedicalCertAfterDays")}>
+                  <Input
                     type="number" min={1}
                     value={requiresMedicalCertAfterDays}
                     onChange={(e) => setRequiresMedicalCertAfterDays(e.target.value)}
-                    style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13 }}
                   />
-                </div>
+                </Field>
               </div>
 
-              <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 20 }}>
+              <fieldset style={{ display: "flex", flexWrap: "wrap", gap: 20, border: 0, margin: "12px 0 0", padding: 0, minWidth: 0 }}>
+                <legend style={SR_ONLY}>{t("advancedSettings")}</legend>
                 {[
                   { id: "carryForward", label: t("checkCarryForward"), value: carryForward, set: setCarryForward },
                   { id: "encashable", label: t("checkEncashable"), value: encashable, set: setEncashable },
@@ -314,7 +287,7 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
                     {label}
                   </label>
                 ))}
-              </div>
+              </fieldset>
             </details>
 
             <div style={{ display: "flex", gap: 8, marginTop: 16 }}>

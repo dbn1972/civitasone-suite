@@ -17,7 +17,7 @@ import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
-import { Button } from "@/app/_components/ds";
+import { Button, Field, Input, Select, Textarea } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Employee = { id: string; name?: string; designation?: string; departmentId?: string; department?: string };
@@ -57,6 +57,8 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
   const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Per-field validation messages (same tr() copy the old banner showed), surfaced via Field `error`.
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<"employeeId" | "toDeptId" | "effectiveDate" | "initiatedBy" | "currentWith" | "note", string>>>({});
   const { toast } = useToast();
   const formError = useFormError("transfer request");
 
@@ -160,19 +162,23 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
   const selectedEmployee = employees.find((e) => e.id === employeeId) ?? (prefillEmployee && prefillEmployee.id === employeeId ? { id: prefillEmployee.id, name: prefillEmployee.name } : undefined);
 
   const validateStep1 = (): boolean => {
-    if (!employeeId) { setError(tr("errSelectEmployee")); return false; }
-    if (!toDeptId) { setError(tr("errSelectDest")); return false; }
-    if (!effectiveDate) { setError(tr("errEffectiveDate")); return false; }
+    const errs: typeof fieldErrors = {};
+    if (!employeeId) errs.employeeId = tr("errSelectEmployee");
+    if (!toDeptId) errs.toDeptId = tr("errSelectDest");
+    if (!effectiveDate) errs.effectiveDate = tr("errEffectiveDate");
+    setFieldErrors(errs);
     setError("");
-    return true;
+    return Object.keys(errs).length === 0;
   };
 
   const validateStep2 = (): boolean => {
-    if (!initiatedBy) { setError(tr("errSelectInitiator")); return false; }
-    if (!currentWith) { setError(tr("errSelectApprover")); return false; }
-    if (note.trim().length < 3) { setError(tr("errNote")); return false; }
+    const errs: typeof fieldErrors = {};
+    if (!initiatedBy) errs.initiatedBy = tr("errSelectInitiator");
+    if (!currentWith) errs.currentWith = tr("errSelectApprover");
+    if (note.trim().length < 3) errs.note = tr("errNote");
+    setFieldErrors(errs);
     setError("");
-    return true;
+    return Object.keys(errs).length === 0;
   };
 
   const submit = useCallback(async () => {
@@ -274,9 +280,8 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                 {tr("step1Intro")}
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
-                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>{tr("employee")}</span>
-                  <select
+                <Field label={tr("employee")} required error={fieldErrors.employeeId}>
+                  <Select
                     value={employeeId}
                     onChange={(e) => {
                       const id = e.target.value;
@@ -287,7 +292,6 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                         setFromDeptName(emp.department ?? departments.find((d) => d.id === emp.departmentId)?.name ?? "");
                       }
                     }}
-                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                   >
                     <option value="">{tr("selectEmployee")}</option>
                     {/* GAP-HR-TRANSFER-09: the prefilled employee must always
@@ -301,21 +305,19 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                         {e.name ?? e.id}{e.designation ? ` · ${e.designation}` : ""}{e.department ? ` (${e.department})` : ""}
                       </option>
                     ))}
-                  </select>
-                </label>
+                  </Select>
+                </Field>
 
-                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>{tr("fromDept")}</span>
-                  <input
+                <Field label={tr("fromDept")} disabled>
+                  <Input
                     value={fromDeptName || (departments.find((d) => d.id === fromDeptId)?.name ?? fromDeptId)}
-                    disabled
-                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44, background: "#f9fafb", color: "var(--ink2)" }}
+                    readOnly
+                    style={{ color: "var(--ink2)" }}
                     aria-label={tr("fromDeptAria")}
                   />
-                </label>
+                </Field>
 
-                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>{tr("toDept")}</span>
+                <Field label={tr("toDept")} required error={fieldErrors.toDeptId}>
                   {/* GAP-HR-TRANSFER-06: a failed departments fetch used to
                       silently swap in a raw "Department ID" text box --
                       asking a clerk to type a UUID with no guidance on
@@ -328,44 +330,39 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                       <Button type="button" variant="ghost" style={{ fontSize: 12 }} onClick={() => setReloadKey((k) => k + 1)}>{tr("retry")}</Button>
                     </div>
                   ) : (
-                    <select
+                    <Select
                       value={toDeptId}
                       onChange={(e) => setToDeptId(e.target.value)}
                       disabled={deptStatus === "loading"}
-                      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                     >
                       <option value="">{deptStatus === "loading" ? tr("loadingDepts") : tr("selectDest")}</option>
                       {departments.filter((d) => d.id !== fromDeptId).map((d) => (
                         <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
-                    </select>
+                    </Select>
                   )}
-                </label>
+                </Field>
 
-                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>{tr("effectiveDate")}</span>
-                  <input
+                <Field label={tr("effectiveDate")} required error={fieldErrors.effectiveDate}>
+                  <Input
                     type="date"
                     value={effectiveDate}
                     onChange={(e) => setEffectiveDate(e.target.value)}
-                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                   />
-                </label>
+                </Field>
 
-                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>{tr("payStructure")}</span>
-                  <select
+                <Field label={tr("payStructure")}>
+                  <Select
                     value={payStructureId}
                     onChange={(e) => setPayStructureId(e.target.value)}
                     disabled={payStructureStatus === "loading"}
-                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                   >
                     <option value="">{tr("noChange")}</option>
                     {payStructures.map((ps) => (
                       <option key={ps.id} value={ps.id}>{ps.name ?? ps.code ?? ps.id}</option>
                     ))}
-                  </select>
-                </label>
+                  </Select>
+                </Field>
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
@@ -396,58 +393,53 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
               </p>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
-                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>{tr("initiator")}</span>
+                <Field label={tr("initiator")} required error={fieldErrors.initiatedBy}>
                   {officerStatus === "error" ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <span style={{ color: "var(--bad, #b91c1c)", fontSize: "0.75rem" }}>{tr("officersLoadFailed")}</span>
                       <Button type="button" variant="ghost" style={{ fontSize: 12 }} onClick={() => setReloadKey((k) => k + 1)}>{tr("retry")}</Button>
                     </div>
                   ) : (
-                    <select
+                    <Select
                       value={initiatedBy}
                       onChange={(e) => setInitiatedBy(e.target.value)}
                       disabled={officerStatus === "loading"}
-                      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                     >
                       <option value="">{officerStatus === "loading" ? tr("loadingOfficers") : tr("selectInitiator")}</option>
                       {officers.map((o) => (
                         <option key={o.id} value={o.id}>{o.name}{o.designation ? ` · ${o.designation}` : ""}</option>
                       ))}
-                    </select>
+                    </Select>
                   )}
-                </label>
+                </Field>
 
-                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>{tr("approver")}</span>
+                <Field label={tr("approver")} required error={fieldErrors.currentWith}>
                   {officerStatus === "error" ? (
                     <span style={{ color: "var(--bad, #b91c1c)", fontSize: "0.75rem" }}>{tr("officersLoadFailed")}</span>
                   ) : (
-                    <select
+                    <Select
                       value={currentWith}
                       onChange={(e) => setCurrentWith(e.target.value)}
                       disabled={officerStatus === "loading"}
-                      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                     >
                       <option value="">{officerStatus === "loading" ? tr("loadingOfficers") : tr("selectApprover")}</option>
                       {officers.filter((o) => o.id !== initiatedBy).map((o) => (
                         <option key={o.id} value={o.id}>{o.name}{o.designation ? ` · ${o.designation}` : ""}</option>
                       ))}
-                    </select>
+                    </Select>
                   )}
-                </label>
+                </Field>
               </div>
 
-              <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                <span style={{ fontWeight: 600 }}>{tr("note")}</span>
-                <textarea
+              <Field label={tr("note")} required error={fieldErrors.note}>
+                <Textarea
                   rows={3}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder={tr("notePlaceholder")}
-                  style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", resize: "vertical" }}
+                  style={{ resize: "vertical" }}
                 />
-              </label>
+              </Field>
 
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                 <Button variant="ghost" onClick={() => setStep(1)}>{tr("back")}</Button>

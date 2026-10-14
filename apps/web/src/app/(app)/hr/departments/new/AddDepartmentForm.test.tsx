@@ -191,3 +191,22 @@ describe("AddDepartmentForm — success message stays visible after a 202", () =
     expect(screen.getByText(/Finance Department/)).toBeInTheDocument();
   });
 });
+
+describe("AddDepartmentForm — client validation mirrors the service schema", () => {
+  it("blocks submit and shows inline messages on the empty required fields", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AddDepartmentForm onCancel={vi.fn()} />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /add department/i }));
+
+    expect(screen.getByText("Department code is required.")).toBeInTheDocument();
+    expect(screen.getByText("Department name must be at least 2 characters.")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^name/i)).toHaveAttribute("aria-invalid", "true");
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+});

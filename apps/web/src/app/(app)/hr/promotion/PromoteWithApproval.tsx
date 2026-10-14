@@ -34,7 +34,7 @@ import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
-import { Button, Field, EntityPicker, ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
+import { Button, Field, Input, Textarea, EntityPicker, ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { searchDesignations, resolveDesignations } from "@/lib/entityAdapters/designation";
 import { searchIdentityUsers, resolveIdentityUsers } from "@/lib/entityAdapters/identityUser";
@@ -72,7 +72,8 @@ export function PromoteWithApproval() {
   const [currentWith, setCurrentWith] = useState<string | null>(null);
   const [approverName, setApproverName] = useState("");
   const [note, setNote] = useState("");
-  const [stepError, setStepError] = useState("");
+  type FieldKey = "employeeId" | "toDesigId" | "effectiveDate" | "initiatedBy" | "currentWith" | "note";
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
   // Set once step 1 (create the pending_approval promotion request) succeeds.
   // Retrying after a step-2 (eFile) failure must resume from here instead of
   // re-running step 1 — submit-approval has no idempotency key, so restarting
@@ -84,7 +85,7 @@ export function PromoteWithApproval() {
     setEmployeeId(null); setEmployeeName(""); setCurrentDesignation(null);
     setToDesigId(null); setToDesigName("");
     setEffectiveDate(""); setOrderRef(""); setInitiatedBy(null); setCurrentWith(null);
-    setApproverName(""); setNote(""); setStepError("");
+    setApproverName(""); setNote(""); setFieldErrors({});
     setSubmittedPromotionId(null);
     setStep(1);
   };
@@ -150,26 +151,28 @@ export function PromoteWithApproval() {
   }, [currentWith]);
 
   const validateStep1 = (): boolean => {
-    if (!employeeId) { setStepError(t("errSelectEmployee")); return false; }
-    if (!toDesigId) { setStepError(t("errSelectDesignation")); return false; }
-    if (!effectiveDate) { setStepError(t("errEffectiveDateRequired")); return false; }
-    const max = new Date();
-    max.setFullYear(max.getFullYear() + MAX_FUTURE_YEARS);
-    if (effectiveDate > max.toISOString().slice(0, 10)) {
-      setStepError(t("errEffectiveDateTooFar"));
-      return false;
+    const errs: Partial<Record<FieldKey, string>> = {};
+    if (!employeeId) errs.employeeId = t("errSelectEmployee");
+    if (!toDesigId) errs.toDesigId = t("errSelectDesignation");
+    if (!effectiveDate) {
+      errs.effectiveDate = t("errEffectiveDateRequired");
+    } else {
+      const max = new Date();
+      max.setFullYear(max.getFullYear() + MAX_FUTURE_YEARS);
+      if (effectiveDate > max.toISOString().slice(0, 10)) errs.effectiveDate = t("errEffectiveDateTooFar");
     }
-    setStepError("");
-    return true;
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
   };
 
   const validateStep2 = (): boolean => {
-    if (!initiatedBy) { setStepError(t("errSelectInitiator")); return false; }
-    if (!currentWith) { setStepError(t("errSelectApprover")); return false; }
-    if (currentWith === initiatedBy) { setStepError(t("errInitiatorEqualsApprover")); return false; }
-    if (note.trim().length < 3) { setStepError(t("errJustificationNote")); return false; }
-    setStepError("");
-    return true;
+    const errs: Partial<Record<FieldKey, string>> = {};
+    if (!initiatedBy) errs.initiatedBy = t("errSelectInitiator");
+    if (!currentWith) errs.currentWith = t("errSelectApprover");
+    else if (currentWith === initiatedBy) errs.currentWith = t("errInitiatorEqualsApprover");
+    if (note.trim().length < 3) errs.note = t("errJustificationNote");
+    setFieldErrors(errs);
+    return Object.keys(errs).length === 0;
   };
 
   const doSubmit = useCallback(async () => {
@@ -266,19 +269,13 @@ export function PromoteWithApproval() {
             <span style={{ fontSize: "0.75rem", color: "var(--ink2)" }}>{t("stepIndicator", { step })}</span>
           </div>
 
-          {stepError && (
-            <div role="alert" aria-live="assertive">
-              <p className="pad" style={{ color: "var(--bad, #b91c1c)", fontSize: "0.8125rem", paddingBottom: 0 }}>⚠ {stepError}</p>
-            </div>
-          )}
-
           {step === 1 && (
             <div className="pad" style={{ display: "grid", gap: 16 }}>
               <p style={{ fontSize: "0.8125rem", color: "var(--ink2)", margin: 0 }}>
                 {t("step1Intro")}
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
-                <Field label={t("employeeLabel")}>
+                <Field label={t("employeeLabel")} required error={fieldErrors.employeeId}>
                   <EntityPicker
                     value={employeeId}
                     onChange={(v) => {
@@ -292,17 +289,17 @@ export function PromoteWithApproval() {
                   />
                 </Field>
 
-                <Field label={t("currentDesignationLabel")}>
-                  <input
+                <Field label={t("currentDesignationLabel")} disabled>
+                  <Input
                     value={currentDesignationLoading ? t("designationIdLoadingPlaceholder") : (currentDesignation ?? "")}
                     disabled
                     readOnly
-                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44, background: "#f9fafb", color: "var(--ink2)", width: "100%" }}
+                    style={{ color: "var(--ink2)" }}
                     aria-label={t("currentDesignationAutoFilledAria")}
                   />
                 </Field>
 
-                <Field label={t("promoteToLabel")}>
+                <Field label={t("promoteToLabel")} required error={fieldErrors.toDesigId}>
                   <EntityPicker
                     value={toDesigId}
                     onChange={(v) => {
@@ -316,28 +313,26 @@ export function PromoteWithApproval() {
                   />
                 </Field>
 
-                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>{t("effectiveDateLabel")}</span>
-                  <input
-                    type="date"
-                    value={effectiveDate}
-                    onChange={(e) => setEffectiveDate(e.target.value)}
-                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
-                  />
+                <div style={{ display: "grid", gap: 4 }}>
+                  <Field label={t("effectiveDateLabel")} required error={fieldErrors.effectiveDate}>
+                    <Input
+                      type="date"
+                      value={effectiveDate}
+                      onChange={(e) => setEffectiveDate(e.target.value)}
+                    />
+                  </Field>
                   {effectiveDate && effectiveDate < todayIsoIST() && (
                     <span style={{ fontSize: "0.75rem", color: "var(--warn, #b45309)" }}>{t("effectiveDateBackdatedNotice")}</span>
                   )}
-                </label>
+                </div>
 
-                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>{t("orderRefLabel")}</span>
-                  <input
+                <Field label={t("orderRefLabel")}>
+                  <Input
                     value={orderRef}
                     placeholder={t("orderRefPlaceholder")}
                     onChange={(e) => setOrderRef(e.target.value)}
-                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                   />
-                </label>
+                </Field>
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
@@ -368,7 +363,7 @@ export function PromoteWithApproval() {
               </p>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
-                <Field label={t("initiatingOfficerLabel")}>
+                <Field label={t("initiatingOfficerLabel")} required error={fieldErrors.initiatedBy}>
                   <EntityPicker
                     value={initiatedBy}
                     onChange={(v) => setInitiatedBy(Array.isArray(v) ? (v[0] ?? null) : v)}
@@ -378,7 +373,7 @@ export function PromoteWithApproval() {
                   />
                 </Field>
 
-                <Field label={t("forwardToLabel")}>
+                <Field label={t("forwardToLabel")} required error={fieldErrors.currentWith}>
                   <EntityPicker
                     value={currentWith}
                     onChange={(v) => {
@@ -392,16 +387,15 @@ export function PromoteWithApproval() {
                 </Field>
               </div>
 
-              <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                <span style={{ fontWeight: 600 }}>{t("justificationNoteLabel")}</span>
-                <textarea
+              <Field label={t("justificationNoteLabel")} required error={fieldErrors.note}>
+                <Textarea
                   rows={3}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   placeholder={t("justificationPlaceholder")}
-                  style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", resize: "vertical" }}
+                  style={{ resize: "vertical" }}
                 />
-              </label>
+              </Field>
 
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                 <Button variant="ghost" onClick={() => setStep(1)}>{t("backBtn")}</Button>

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, useId } from "react";
 import { useRouter } from "next/navigation";
-import { PageHeader, Card, Button, ConfirmDialog } from "../../../../_components/ds";
+import { PageHeader, Card, Button, ConfirmDialog, Field, Input, Select, Textarea } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { useTranslations } from "next-intl";
 
@@ -138,59 +138,43 @@ export default function OvertimeNewPage() {
       <div style={{ maxWidth: 520, marginTop: 20 }}>
       <Card title={t("cardTitle")}>
         <form onSubmit={handleSubmit} noValidate style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>
-          <div>
-            <label htmlFor={empId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>{t("labelEmployee")}</label>
-            {mode === "loading" && <p style={{ fontSize: 13, color: "var(--mut)" }}>{tMsg("loading")}</p>}
-            {mode === "self-locked" && selfProfile && (
-              <input id={empId} value={`${selfProfile.name} (${selfProfile.employeeNo})`} disabled readOnly />
-            )}
-            {mode === "picker" && (
-              <select id={empId} value={employeeId}
+          <Field
+            id={empId}
+            label={t("labelEmployee")}
+            required={mode === "picker"}
+            error={(invalid.has("employeeId") || employeeFieldError) ? (employeeFieldError || t("employeeRequired")) : undefined}
+          >
+            {mode === "self-locked" && selfProfile ? (
+              <Input value={`${selfProfile.name} (${selfProfile.employeeNo})`} disabled readOnly />
+            ) : (
+              <Select value={employeeId}
                 onChange={(e) => { setEmployeeId(e.target.value); clearErr("employeeId"); }}
-                required aria-required="true"
-                aria-invalid={invalid.has("employeeId") || !!employeeFieldError}
-                aria-describedby={(invalid.has("employeeId") || employeeFieldError) ? `${empId}-error` : undefined}>
+                disabled={mode !== "picker"}>
                 <option value="">{t("selectEmployee")}</option>
                 {employees.map((emp) => (
                   <option key={emp.id} value={emp.id}>{emp.name} ({emp.employeeNo})</option>
                 ))}
-              </select>
+              </Select>
             )}
-            {mode === "unavailable" && <p role="alert" style={{ color: "var(--red, #c00)", fontSize: 12 }}>{t("employeeListUnavailable")}</p>}
-            {(invalid.has("employeeId") || employeeFieldError) && (
-              <p id={`${empId}-error`} role="alert" style={{ color: "var(--red, #c00)", fontSize: 12, margin: "4px 0 0" }}>
-                {employeeFieldError || t("employeeRequired")}
-              </p>
-            )}
-          </div>
-          <div>
-            <label htmlFor={dateId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>{t("labelDate")}</label>
-            <input id={dateId} type="date" value={requestDate} max={today}
-              onChange={(e) => { setRequestDate(e.target.value); clearErr("requestDate"); }}
-              required aria-required="true"
-              aria-invalid={!!dateFieldError}
-              aria-describedby={dateFieldError ? `${dateId}-error` : undefined} />
-            {dateFieldError && <p id={`${dateId}-error`} role="alert" style={{ color: "var(--red, #c00)", fontSize: 12, margin: "4px 0 0" }}>{dateFieldError}</p>}
-          </div>
-          <div>
-            <label htmlFor={hrsId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>{t("labelHours")}</label>
-            <input id={hrsId} type="number" step="0.5" min="0.5" max="24"
+          </Field>
+          {mode === "loading" && <p style={{ fontSize: 13, color: "var(--mut)", margin: 0 }}>{tMsg("loading")}</p>}
+          {mode === "unavailable" && <p role="alert" style={{ color: "var(--red, #c00)", fontSize: 12, margin: 0 }}>{t("employeeListUnavailable")}</p>}
+          <Field id={dateId} label={t("labelDate")} required error={dateFieldError}>
+            <Input type="date" value={requestDate} max={today}
+              onChange={(e) => { setRequestDate(e.target.value); clearErr("requestDate"); }} />
+          </Field>
+          <Field id={hrsId} label={t("labelHours")} required error={hoursFieldError}>
+            <Input type="number" step="0.5" min="0.5" max="24"
               value={hours} onChange={(e) => { setHours(e.target.value); clearErr("hours"); }}
-              placeholder={t("placeholderHours")} required aria-required="true"
-              aria-invalid={!!hoursFieldError}
-              aria-describedby={hoursFieldError ? `${hrsId}-error` : undefined} />
-            {hoursFieldError && <p id={`${hrsId}-error`} role="alert" style={{ color: "var(--red, #c00)", fontSize: 12, margin: "4px 0 0" }}>{hoursFieldError}</p>}
-          </div>
-          <div>
-            <label htmlFor={reasonId} style={{ fontSize: 13, color: "var(--mut)", display: "block", marginBottom: 4 }}>{t("labelReason")}</label>
-            <textarea id={reasonId} rows={3} style={{ resize: "vertical" }} maxLength={500}
+              placeholder={t("placeholderHours")} />
+          </Field>
+          <Field id={reasonId} label={t("labelReason")} error={reasonFieldError}>
+            <Textarea rows={3} style={{ resize: "vertical" }} maxLength={500}
               value={reason} onChange={(e) => { setReason(e.target.value); clearErr("reason"); }}
               placeholder={t("placeholderReason")}
-              aria-invalid={!!reasonFieldError}
               aria-describedby={`${reasonId}-count${reasonFieldError ? ` ${reasonId}-error` : ""}`} />
             <p id={`${reasonId}-count`} style={{ fontSize: 11, color: "var(--mut)", margin: "3px 0 0" }}>{t("charCount", { count: reason.length })}</p>
-            {reasonFieldError && <p id={`${reasonId}-error`} role="alert" style={{ color: "var(--red, #c00)", fontSize: 12, margin: "4px 0 0" }}>{reasonFieldError}</p>}
-          </div>
+          </Field>
           {/* GAP-HR-WORKFORCE-OVERTIME-NEW-02: the retired workforce/overtime/new
               form let the claimant name a specific duty-officer approver; the
               canonical POST /v1/hrms/overtime-requests schema has no such field

@@ -49,7 +49,8 @@ import { UserFacingError } from "@/lib/userFacingError";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, ActionButton } from "@/app/_components/ds";
+import { Button, ActionButton, Field, Input, Select, Textarea } from "@/app/_components/ds";
+import { validateSeparation } from "./separationSchema";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
 // GAP-HR-RETIREMENT-03: single source of truth for this enum, now also used
@@ -138,7 +139,7 @@ export function InitiateSeparationAction({
   const selectedName = prefillEmployeeName ?? selectedEmployee?.fullName ?? selectedEmployee?.name ?? employeeId;
 
   const encashmentDaysNum = Number(encashmentDays);
-  const validEncashmentDays = Number.isFinite(encashmentDaysNum) && encashmentDaysNum >= 0;
+  const schemaErrors = validateSeparation({ effectiveDate, lastWorkingDate, encashmentDays, remarks });
   // First unmet condition, surfaced as a hint next to the (disabled) submit
   // button -- WCAG: a disabled control with no explanation of why is a real
   // a11y gap in a codebase this deliberate about it elsewhere.
@@ -146,10 +147,9 @@ export function InitiateSeparationAction({
     ? t("errSelectEmployee")
     : !effectiveDate
     ? t("errEffectiveDate")
-    : !validEncashmentDays
-    ? t("errEncashmentDays")
     : null;
-  const canSubmit = validationHint === null;
+  // Schema failures (encashment/last working date/remarks) show inline on their own Field, not in the hint.
+  const canSubmit = validationHint === null && Object.keys(schemaErrors).length === 0;
 
   async function doSeparate() {
     const res = await fetch(`/api/proxy/v1/hrms/employees/${employeeId}/separate`, {
@@ -186,19 +186,18 @@ export function InitiateSeparationAction({
 
           <div className="pad" style={{ display: "grid", gap: 16 }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
-              <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                <span style={{ fontWeight: 600 }}>{t("fieldEmployee")}</span>
+              <Field label={t("fieldEmployee")} required disabled={!!prefillEmployeeId}>
                 {prefillEmployeeId ? (
-                  <input
+                  <Input
                     value={prefillEmployeeName ?? prefillEmployeeId}
                     disabled
-                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44, background: "#f9fafb", color: "var(--ink2)" }}
+                    readOnly
+                    style={{ color: "var(--ink2)" }}
                   />
                 ) : (
-                  <select
+                  <Select
                     value={employeeId}
                     onChange={(e) => setEmployeeId(e.target.value)}
-                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                   >
                     <option value="">{employeesLoaded ? t("selectEmployeePlaceholder") : t("loadingEmployees")}</option>
                     {employees.map((e) => (
@@ -206,65 +205,57 @@ export function InitiateSeparationAction({
                         {(e.fullName ?? e.name ?? e.id)}{e.employeeNo ? ` (${e.employeeNo})` : ""}{e.department ? ` · ${e.department}` : ""}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 )}
-              </label>
+              </Field>
 
-              <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                <span style={{ fontWeight: 600 }}>{t("fieldSeparationType")}</span>
-                <select
+              <Field label={t("fieldSeparationType")} required>
+                <Select
                   value={separationType}
                   onChange={(e) => setSeparationType(e.target.value as SeparationType)}
-                  style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                 >
                   {SEPARATION_TYPES.map((st) => (
                     <option key={st} value={st}>{t(`separationType_${st}`)}</option>
                   ))}
-                </select>
-              </label>
+                </Select>
+              </Field>
 
-              <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                <span style={{ fontWeight: 600 }}>{t("fieldEffectiveDate")}</span>
-                <input
+              {/* An empty effective date is explained by the hint beside the submit button (unchanged); only a malformed value gets an inline error. */}
+              <Field label={t("fieldEffectiveDate")} required error={effectiveDate ? schemaErrors.effectiveDate : undefined}>
+                <Input
                   type="date"
                   value={effectiveDate}
                   onChange={(e) => setEffectiveDate(e.target.value)}
-                  style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                 />
-              </label>
+              </Field>
 
-              <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                <span style={{ fontWeight: 600 }}>{t("fieldLastWorkingDate")}</span>
-                <input
+              <Field label={t("fieldLastWorkingDate")} error={schemaErrors.lastWorkingDate}>
+                <Input
                   type="date"
                   value={lastWorkingDate}
                   onChange={(e) => setLastWorkingDate(e.target.value)}
-                  style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                 />
-              </label>
+              </Field>
 
-              <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                <span style={{ fontWeight: 600 }}>{t("fieldEncashmentDays")}</span>
-                <input
+              <Field label={t("fieldEncashmentDays")} error={schemaErrors.encashmentDays}>
+                <Input
                   type="number"
                   min={0}
                   value={encashmentDays}
                   onChange={(e) => setEncashmentDays(e.target.value)}
-                  style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                 />
-              </label>
+              </Field>
             </div>
 
-            <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-              <span style={{ fontWeight: 600 }}>{t("fieldRemarks")}</span>
-              <textarea
+            <Field label={t("fieldRemarks")} error={schemaErrors.remarks}>
+              <Textarea
                 rows={2}
                 value={remarks}
                 onChange={(e) => setRemarks(e.target.value)}
                 placeholder={t("remarksPlaceholder")}
-                style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", resize: "vertical" }}
+                style={{ resize: "vertical" }}
               />
-            </label>
+            </Field>
 
             <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10 }}>
               {validationHint && (

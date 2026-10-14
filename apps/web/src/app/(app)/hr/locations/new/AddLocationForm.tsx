@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
-import { Button, ConfirmDialog, HelpTip } from "../../../../_components/ds";
+import { Button, ConfirmDialog, Field, HelpTip, Input, Select } from "../../../../_components/ds";
 import { buildLocationPatch, type EditableFields } from "../locationTree";
 
 function editableBefore(e: { name: string; type: string; parentId: string | null; addressLine: string | null; city: string | null; postalCode: string | null; lgdCode: string | null }): EditableFields {
@@ -82,26 +82,6 @@ const ELIGIBLE_PARENT_TYPES: Record<LocationType, readonly LocationType[]> = {
   branch: ["state", "district", "block", "ward", "office"],
 };
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "10px 12px",
-  fontSize: 14,
-  border: "1px solid var(--line, #cbd5e1)",
-  borderRadius: 10,
-  background: "var(--panel, #fff)",
-  color: "var(--ink, #0f172a)",
-  minHeight: 44,
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 600,
-  color: "var(--ink, #0f172a)",
-};
-
-const fieldErrorStyle: React.CSSProperties = { fontSize: 12, color: "var(--bad, #b91c1c)" };
-
 export function AddLocationForm({ onCancel, onSuccess, locations = [], editing }: Props) {
   const t = useTranslations("addLocationForm");
   const formId = useId();
@@ -127,11 +107,6 @@ export function AddLocationForm({ onCancel, onSuccess, locations = [], editing }
   const postalCodeId = `${formId}-postalCode`;
   const lgdCodeId = `${formId}-lgdCode`;
   const statusId = `${formId}-status`;
-  const nameErrId = `${nameId}-err`;
-  const addressLineErrId = `${addressLineId}-err`;
-  const cityErrId = `${cityId}-err`;
-  const postalCodeErrId = `${postalCodeId}-err`;
-  const lgdCodeErrId = `${lgdCodeId}-err`;
 
   const typeLabels: Record<LocationType, string> = {
     state: t("typeState"),
@@ -148,6 +123,11 @@ export function AddLocationForm({ onCancel, onSuccess, locations = [], editing }
   const eligibleParentTypes = ELIGIBLE_PARENT_TYPES[type];
   const showParentField = type !== "state";
   const parentOptions = locations.filter((l) => eligibleParentTypes.includes(l.type as LocationType));
+
+  /** Client-side message first, then a backend rejection for the same field. */
+  function errFor(field: string): string | undefined {
+    return fieldErrorText(field) ?? formError.fieldError(field);
+  }
 
   function fieldErrorText(field: string): string | undefined {
     if (!invalid.has(field)) return undefined;
@@ -347,103 +327,50 @@ export function AddLocationForm({ onCancel, onSuccess, locations = [], editing }
           }}
         >
           {/* Name */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={nameId} style={labelStyle}>
-              {t("nameLabel")}{" "}
-              <span aria-hidden="true" style={{ color: "var(--bad, #b91c1c)" }}>
-                *
-              </span>
-            </label>
-            <input
-              id={nameId}
+          <Field id={nameId} label={t("nameLabel")} required error={errFor("name")}>
+            <Input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder={t("namePlaceholder")}
               maxLength={200}
-              required
-              aria-required="true"
-              aria-invalid={invalid.has("name")}
-              aria-describedby={fieldErrorText("name") ? nameErrId : undefined}
-              style={inputStyle}
             />
-            {fieldErrorText("name") && (
-              <span id={nameErrId} role="alert" style={fieldErrorStyle}>{fieldErrorText("name")}</span>
-            )}
-            {formError.fieldError("name") && (
-              <span style={fieldErrorStyle}>{formError.fieldError("name")}</span>
-            )}
-          </div>
+          </Field>
 
           {/* Type */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={typeId} style={labelStyle}>
-              {t("typeLabel")}{" "}
-              <span aria-hidden="true" style={{ color: "var(--bad, #b91c1c)" }}>
-                *
-              </span>
-            </label>
-            <select
-              id={typeId}
-              value={type}
-              onChange={(e) => handleTypeChange(e.target.value as LocationType)}
-              required
-              aria-required="true"
-              style={inputStyle}
-            >
+          <Field id={typeId} label={t("typeLabel")} required>
+            <Select value={type} onChange={(e) => handleTypeChange(e.target.value as LocationType)}>
               {LOCATION_TYPES.map((lt) => (
                 <option key={lt} value={lt}>
                   {typeLabels[lt]}
                 </option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </Field>
 
           {/* Parent location (GAP-HR-LOCATIONS-NEW-01) */}
           {showParentField && (
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={parentSelectId} style={labelStyle}>
-                {t("parentLabel")}
-              </label>
-              <select
-                id={parentSelectId}
-                value={parentId}
-                onChange={(e) => setParentId(e.target.value)}
-                aria-invalid={!!formError.fieldError("parentId")}
-                style={inputStyle}
-              >
+            <Field id={parentSelectId} label={t("parentLabel")} error={formError.fieldError("parentId")}>
+              <Select value={parentId} onChange={(e) => setParentId(e.target.value)}>
                 <option value="">{t("parentNone")}</option>
                 {parentOptions.map((o) => (
                   <option key={o.id} value={o.id}>{o.name}</option>
                 ))}
-              </select>
-              {formError.fieldError("parentId") && (
-                <span style={fieldErrorStyle}>{formError.fieldError("parentId")}</span>
-              )}
-            </div>
+              </Select>
+            </Field>
           )}
         </div>
 
         {/* Address Line */}
-        <div style={{ display: "grid", gap: 6 }}>
-          <label htmlFor={addressLineId} style={labelStyle}>
-            {t("addressLineLabel")}
-          </label>
-          <input
-            id={addressLineId}
+        <Field id={addressLineId} label={t("addressLineLabel")} error={errFor("addressLine")}>
+          <Input
             type="text"
             value={addressLine}
             onChange={(e) => setAddressLine(e.target.value)}
             placeholder={t("addressLinePlaceholder")}
             maxLength={500}
-            aria-invalid={invalid.has("addressLine")}
-            aria-describedby={fieldErrorText("addressLine") ? addressLineErrId : undefined}
-            style={inputStyle}
           />
-          {fieldErrorText("addressLine") && (
-            <span id={addressLineErrId} role="alert" style={fieldErrorStyle}>{fieldErrorText("addressLine")}</span>
-          )}
-        </div>
+        </Field>
 
         <div
           style={{
@@ -453,70 +380,48 @@ export function AddLocationForm({ onCancel, onSuccess, locations = [], editing }
           }}
         >
           {/* City */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={cityId} style={labelStyle}>
-              {t("cityLabel")}
-            </label>
-            <input
-              id={cityId}
+          <Field id={cityId} label={t("cityLabel")} error={errFor("city")}>
+            <Input
               type="text"
               value={city}
               onChange={(e) => setCity(e.target.value)}
               placeholder={t("cityPlaceholder")}
               maxLength={120}
-              aria-invalid={invalid.has("city")}
-              aria-describedby={fieldErrorText("city") ? cityErrId : undefined}
-              style={inputStyle}
             />
-            {fieldErrorText("city") && (
-              <span id={cityErrId} role="alert" style={fieldErrorStyle}>{fieldErrorText("city")}</span>
-            )}
-          </div>
+          </Field>
 
           {/* Postal Code */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={postalCodeId} style={labelStyle}>
-              {t("postalCodeLabel")}
-            </label>
-            <input
-              id={postalCodeId}
+          <Field id={postalCodeId} label={t("postalCodeLabel")} error={errFor("postalCode")}>
+            <Input
               type="text"
               inputMode="numeric"
               value={postalCode}
               onChange={(e) => setPostalCode(e.target.value)}
               placeholder={t("postalCodePlaceholder")}
               maxLength={6}
-              aria-invalid={invalid.has("postalCode")}
-              aria-describedby={fieldErrorText("postalCode") ? postalCodeErrId : undefined}
-              style={inputStyle}
             />
-            {fieldErrorText("postalCode") && (
-              <span id={postalCodeErrId} role="alert" style={fieldErrorStyle}>{fieldErrorText("postalCode")}</span>
-            )}
-          </div>
+          </Field>
 
           {/* LGD Code */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={lgdCodeId} style={labelStyle}>
-              {t("lgdCodeLabel")}
-              <HelpTip term={t("lgdCodeLabel")}>{t("lgdCodeHelp")}</HelpTip>
-            </label>
-            <input
-              id={lgdCodeId}
+          <Field
+            id={lgdCodeId}
+            label={
+              <>
+                {t("lgdCodeLabel")}
+                <HelpTip term={t("lgdCodeLabel")}>{t("lgdCodeHelp")}</HelpTip>
+              </>
+            }
+            error={errFor("lgdCode")}
+          >
+            <Input
               type="text"
               inputMode="numeric"
               value={lgdCode}
               onChange={(e) => setLgdCode(e.target.value)}
               placeholder={t("lgdCodePlaceholder")}
               maxLength={32}
-              aria-invalid={invalid.has("lgdCode")}
-              aria-describedby={fieldErrorText("lgdCode") ? lgdCodeErrId : undefined}
-              style={inputStyle}
             />
-            {fieldErrorText("lgdCode") && (
-              <span id={lgdCodeErrId} role="alert" style={fieldErrorStyle}>{fieldErrorText("lgdCode")}</span>
-            )}
-          </div>
+          </Field>
         </div>
 
         {/* Actions */}

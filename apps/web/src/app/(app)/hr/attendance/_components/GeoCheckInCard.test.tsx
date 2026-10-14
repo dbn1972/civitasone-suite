@@ -113,4 +113,21 @@ describe("GeoCheckInCard", () => {
     expect(await screen.findByText(/User denied Geolocation/)).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalledWith("/api/proxy/v1/hrms/attendance/geo-check-in", expect.anything());
   });
+
+  it("never shows the raw server message when the check-in is rejected (SF-14b)", async () => {
+    getCurrentPosition.mockImplementation((success: PositionCallback) =>
+      success({ coords: { latitude: 1, longitude: 2, accuracy: 3 } } as GeolocationPosition),
+    );
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("geo-check-in")) {
+        return Promise.resolve(jsonResponse({ message: "pg: duplicate key violates uq_geo_punch", code: "X" }, 500));
+      }
+      return Promise.resolve(jsonResponse({ data: [] }));
+    });
+    renderCard();
+    fireEvent.click(screen.getByRole("button", { name: /Check In/ }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/proxy/v1/hrms/attendance/geo-check-in", expect.anything()));
+    await waitFor(() => expect(screen.getByText(/couldn.t/i)).toBeInTheDocument());
+    expect(screen.queryByText(/duplicate key/)).toBeNull();
+  });
 });

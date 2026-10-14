@@ -1,19 +1,11 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
-import type { CSSProperties } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
-import { Button } from "../../../_components/ds";
-
-const inputStyle: CSSProperties = {
-  width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
-  borderRadius: 8, background: "var(--bg2)", color: "var(--ink)", fontSize: 14,
-};
-const inputErrStyle: CSSProperties = { ...inputStyle, border: "1px solid var(--badbd, #ef4444)" };
-const fieldErrStyle: CSSProperties = { color: "var(--bad, #b91c1c)", fontSize: 12, margin: "3px 0 0" };
+import { Button, Field, Input, Select } from "../../../_components/ds";
 
 type EmployeeOption = { id: string; name: string; employeeNo: string };
 
@@ -26,10 +18,6 @@ type EmployeeOption = { id: string; name: string; employeeNo: string };
  */
 export function RequestAdvanceForm({ selfServiceOnly = false }: { selfServiceOnly?: boolean }) {
   const t = useTranslations("advances");
-  const ids = {
-    employee: useId(), amount: useId(), purpose: useId(),
-    months: useId(), date: useId(),
-  };
   const [open, setOpen] = useState(false);
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [employeeId, setEmployeeId] = useState("");
@@ -144,78 +132,55 @@ export function RequestAdvanceForm({ selfServiceOnly = false }: { selfServiceOnl
       {open && (
         <form onSubmit={handleSubmit} noValidate style={{ padding: "0 20px 20px", display: "grid", gap: 14 }}>
           {!selfServiceOnly && (
-            <div>
-              <label htmlFor={ids.employee} style={{ fontSize: 13, fontWeight: 500 }}>
-                {t("formLabelEmployee")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-              </label>
-              <select id={ids.employee} value={employeeId}
+            <Field
+              label={t("formLabelEmployee")}
+              required
+              error={
+                employeeFetchError === "forbidden" ? t("formEmployeeListForbidden")
+                : employeeFetchError === "other" ? t("formEmployeeListError")
+                : invalid.has("employee") ? t("formEmployeeRequired")
+                : undefined
+              }
+            >
+              <Select value={employeeId}
                 onChange={(e) => { setEmployeeId(e.target.value); clearErr("employee"); }}
-                disabled={employeeFetchError !== "none"}
-                style={invalid.has("employee") ? inputErrStyle : inputStyle}
-                aria-invalid={invalid.has("employee")}>
+                disabled={employeeFetchError !== "none"}>
                 <option value="">{t("formSelectEmployee")}</option>
                 {employees.map((emp) => (
                   <option key={emp.id} value={emp.id}>{emp.name} ({emp.employeeNo})</option>
                 ))}
-              </select>
-              {employeeFetchError === "forbidden" && <p role="alert" style={fieldErrStyle}>{t("formEmployeeListForbidden")}</p>}
-              {employeeFetchError === "other" && <p role="alert" style={fieldErrStyle}>{t("formEmployeeListError")}</p>}
-              {employeeFetchError === "none" && invalid.has("employee") && <p role="alert" style={fieldErrStyle}>{t("formEmployeeRequired")}</p>}
-            </div>
+              </Select>
+            </Field>
           )}
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14 }}>
-            <div>
-              <label htmlFor={ids.amount} style={{ fontSize: 13, fontWeight: 500 }}>
-                {t("formLabelAmount")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-              </label>
-              <input id={ids.amount} type="number" min={1} step={1} value={amount}
+            <Field label={t("formLabelAmount")} required
+              error={invalid.has("amount") ? t("formAmountInvalid") : formError.fieldError("amountMinor")}>
+              <Input type="number" min={1} step={1} value={amount}
                 onChange={(e) => { setAmount(e.target.value); clearErr("amount"); }}
-                placeholder={t("formPlaceholderAmount")}
-                style={invalid.has("amount") ? inputErrStyle : inputStyle}
-                aria-invalid={invalid.has("amount")} />
-              {invalid.has("amount") && <p role="alert" style={fieldErrStyle}>{t("formAmountInvalid")}</p>}
-              {!invalid.has("amount") && formError.fieldError("amountMinor") && (
-                <p role="alert" style={fieldErrStyle}>{formError.fieldError("amountMinor")}</p>
-              )}
-            </div>
+                placeholder={t("formPlaceholderAmount")} />
+            </Field>
             <div>
-              <label htmlFor={ids.months} style={{ fontSize: 13, fontWeight: 500 }}>
-                {t("formLabelMonths")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-              </label>
-              <input id={ids.months} type="number" min={1} max={12} step={1} value={months}
-                onChange={(e) => { setMonths(e.target.value); clearErr("months"); }}
-                style={invalid.has("months") ? inputErrStyle : inputStyle}
-                aria-invalid={invalid.has("months")} />
-              {invalid.has("months") ? (
-                <p role="alert" style={fieldErrStyle}>{t("formMonthsInvalid")}</p>
-              ) : (
+              <Field label={t("formLabelMonths")} required error={invalid.has("months") ? t("formMonthsInvalid") : undefined}>
+                <Input type="number" min={1} max={12} step={1} value={months}
+                  onChange={(e) => { setMonths(e.target.value); clearErr("months"); }} />
+              </Field>
+              {!invalid.has("months") && (
                 <p style={{ fontSize: 11, color: "var(--mut)", margin: "3px 0 0" }}>{t("formMonthsHint")}</p>
               )}
             </div>
-            <div>
-              <label htmlFor={ids.date} style={{ fontSize: 13, fontWeight: 500 }}>{t("formLabelDate")}</label>
-              <input id={ids.date} type="date" value={requestDate}
-                onChange={(e) => setRequestDate(e.target.value)}
-                style={inputStyle} />
-            </div>
+            <Field label={t("formLabelDate")}>
+              <Input type="date" value={requestDate}
+                onChange={(e) => setRequestDate(e.target.value)} />
+            </Field>
           </div>
 
-          <div>
-            <label htmlFor={ids.purpose} style={{ fontSize: 13, fontWeight: 500 }}>
-              {t("formLabelPurpose")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-            </label>
-            <input id={ids.purpose} type="text" minLength={2} maxLength={200} value={purpose}
+          <Field label={t("formLabelPurpose")} required
+            error={invalid.has("purpose") ? t("formPurposeInvalid") : formError.fieldError("purpose")}>
+            <Input type="text" minLength={2} maxLength={200} value={purpose}
               onChange={(e) => { setPurpose(e.target.value); clearErr("purpose"); }}
-              placeholder={t("formPlaceholderPurpose")}
-              style={invalid.has("purpose") ? inputErrStyle : inputStyle}
-              aria-invalid={invalid.has("purpose")}
-              aria-describedby={invalid.has("purpose") ? `${ids.purpose}-err` : undefined} />
-            {invalid.has("purpose") && <p id={`${ids.purpose}-err`} role="alert" style={fieldErrStyle}>{t("formPurposeInvalid")}</p>}
-            {!invalid.has("purpose") && formError.fieldError("purpose") && (
-              <p role="alert" style={fieldErrStyle}>{formError.fieldError("purpose")}</p>
-            )}
-          </div>
+              placeholder={t("formPlaceholderPurpose")} />
+          </Field>
 
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
             <Button type="submit" variant="primary" disabled={busy || employeeFetchError !== "none"} style={{ minHeight: 44, minWidth: 160 }}>

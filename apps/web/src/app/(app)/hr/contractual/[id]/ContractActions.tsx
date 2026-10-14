@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, ConfirmDialog, Field } from "../../../../_components/ds";
+import { Button, ConfirmDialog, Field, Input } from "../../../../_components/ds";
 import { canRenew, canTerminate, validateNewEndDate } from "../contractRules";
 
 /**
@@ -101,7 +101,7 @@ export function ContractActions({
         title={t("renewTitle")}
         description={
           <Field label={t("newEndDateLabel")} required error={dateError}>
-            <input type="date" className="inp" value={newEndDate} min={currentEndDate} onChange={(e) => setNewEndDate(e.target.value)} />
+            <Input type="date" value={newEndDate} min={currentEndDate} onChange={(e) => setNewEndDate(e.target.value)} />
           </Field>
         }
         confirmLabel={t("renewConfirm")}

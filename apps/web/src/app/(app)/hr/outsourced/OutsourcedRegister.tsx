@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog, DataTable, Drawer, StatusPill } from "../../../_components/ds";
+import { Button, Card, ConfirmDialog, DataTable, Drawer, Field, Input, StatusPill } from "../../../_components/ds";
 import { parseRupeesToPaise } from "@/lib/money";
 import { useFormError } from "@/lib/useFormError";
 import type { ContractRow } from "./outsourcedModel";
@@ -14,11 +14,6 @@ import type { ContractRow } from "./outsourcedModel";
  * than claiming the change has already landed. The backend enforces the HR role
  * gate, validation and the audit trail; canManage only decides which buttons show.
  */
-const inputStyle: React.CSSProperties = {
-  width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 14, minHeight: 44,
-  border: "1px solid var(--line, #cbd5e1)", borderRadius: 10, background: "var(--panel, #fff)", color: "var(--ink, #0f172a)",
-};
-
 export function OutsourcedRegister({
   rows, canManage, emptyTitle, emptyMessage, cardTitle,
 }: { rows: ContractRow[]; canManage: boolean; emptyTitle: string; emptyMessage: string; cardTitle: string }) {
@@ -38,18 +33,34 @@ export function OutsourcedRegister({
   const [contractStart, setContractStart] = useState("");
   const [contractEnd, setContractEnd] = useState("");
   const [valueRupees, setValueRupees] = useState("");
+  const [fieldErr, setFieldErr] = useState<Record<string, string>>({});
+  /** Client-side message first, then a backend rejection for the same field. */
+  const errFor = (f: string) => fieldErr[f] ?? formError.fieldError(f === "valueRupees" ? "contractValueMinor" : f);
 
   function resetForm() {
     setVendorName(""); setServiceCategory(""); setContractRef(""); setHeadcount("");
     setContractStart(""); setContractEnd(""); setValueRupees(""); setError(undefined);
+    setFieldErr({}); formError.clear();
   }
 
   async function submitNew() {
     const paise = valueRupees.trim() === "" ? "0" : parseRupeesToPaise(valueRupees, { allowZero: true });
-    if (paise === null) { setError(t("errValue")); return; }
-    if (!vendorName.trim() || !serviceCategory.trim()) { setError(t("errRequired")); return; }
-    if (!/^\d+$/.test(headcount)) { setError(t("errHeadcount")); return; }
-    if (!contractStart || !contractEnd || contractEnd < contractStart) { setError(t("errDates")); return; }
+    const fail = (field: string | string[], message: string) => {
+      setFieldErr(Object.fromEntries((Array.isArray(field) ? field : [field]).map((f) => [f, message])));
+      setError(message);
+    };
+    formError.clear();
+    setFieldErr({});
+    if (paise === null) { fail("valueRupees", t("errValue")); return; }
+    if (!vendorName.trim() || !serviceCategory.trim()) {
+      fail([!vendorName.trim() ? "vendorName" : "", !serviceCategory.trim() ? "serviceCategory" : ""].filter(Boolean), t("errRequired"));
+      return;
+    }
+    if (!/^\d+$/.test(headcount)) { fail("headcount", t("errHeadcount")); return; }
+    if (!contractStart || !contractEnd || contractEnd < contractStart) {
+      fail(!contractStart ? "contractStart" : "contractEnd", t("errDates"));
+      return;
+    }
     setBusy(true);
     setError(undefined);
     try {
@@ -146,20 +157,27 @@ export function OutsourcedRegister({
       >
         {error && <p role="alert" className="pill bad" style={{ margin: 0 }}>{error}</p>}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-          <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>{t("fVendor")}
-            <input style={inputStyle} value={vendorName} maxLength={200} onChange={(e) => setVendorName(e.target.value)} /></label>
-          <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>{t("fService")}
-            <input style={inputStyle} value={serviceCategory} maxLength={120} onChange={(e) => setServiceCategory(e.target.value)} /></label>
-          <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>{t("fRef")}
-            <input style={inputStyle} value={contractRef} maxLength={64} onChange={(e) => setContractRef(e.target.value)} /></label>
-          <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>{t("fHeadcount")}
-            <input style={inputStyle} inputMode="numeric" value={headcount} onChange={(e) => setHeadcount(e.target.value)} /></label>
-          <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>{t("fStart")}
-            <input style={inputStyle} type="date" value={contractStart} onChange={(e) => setContractStart(e.target.value)} /></label>
-          <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>{t("fEnd")}
-            <input style={inputStyle} type="date" value={contractEnd} onChange={(e) => setContractEnd(e.target.value)} /></label>
-          <label style={{ display: "grid", gap: 4, fontSize: 13, fontWeight: 600 }}>{t("fValue")}
-            <input style={inputStyle} inputMode="decimal" value={valueRupees} onChange={(e) => setValueRupees(e.target.value)} /></label>
+          <Field label={t("fVendor")} required error={errFor("vendorName")}>
+            <Input value={vendorName} maxLength={200} onChange={(e) => setVendorName(e.target.value)} />
+          </Field>
+          <Field label={t("fService")} required error={errFor("serviceCategory")}>
+            <Input value={serviceCategory} maxLength={120} onChange={(e) => setServiceCategory(e.target.value)} />
+          </Field>
+          <Field label={t("fRef")} error={errFor("contractRef")}>
+            <Input value={contractRef} maxLength={64} onChange={(e) => setContractRef(e.target.value)} />
+          </Field>
+          <Field label={t("fHeadcount")} required error={errFor("headcount")}>
+            <Input inputMode="numeric" value={headcount} onChange={(e) => setHeadcount(e.target.value)} />
+          </Field>
+          <Field label={t("fStart")} required error={errFor("contractStart")}>
+            <Input type="date" value={contractStart} onChange={(e) => setContractStart(e.target.value)} />
+          </Field>
+          <Field label={t("fEnd")} required error={errFor("contractEnd")}>
+            <Input type="date" value={contractEnd} onChange={(e) => setContractEnd(e.target.value)} />
+          </Field>
+          <Field label={t("fValue")} error={errFor("valueRupees")}>
+            <Input inputMode="decimal" value={valueRupees} onChange={(e) => setValueRupees(e.target.value)} />
+          </Field>
         </div>
       </Drawer>
 

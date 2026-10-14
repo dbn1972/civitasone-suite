@@ -62,7 +62,7 @@ describe("InitiateSeparationAction", () => {
       expect.anything(),
     ));
 
-    const select = await screen.findByLabelText("Employee", { selector: "select" });
+    const select = await screen.findByLabelText(/^Employee/, { selector: "select" });
     expect(within(select).getByText(/Asha Verma/)).toBeInTheDocument();
     expect(within(select).getByText(/Ravi Kumar/)).toBeInTheDocument();
     expect(within(select).queryByText(/Already Gone/)).not.toBeInTheDocument();
@@ -118,7 +118,7 @@ describe("InitiateSeparationAction", () => {
     fireEvent.click(screen.getByRole("button", { name: "+ Initiate Separation" }));
     await screen.findByDisplayValue("Asha Verma");
 
-    fireEvent.change(screen.getByLabelText("Effective date"), { target: { value: "2026-12-31" } });
+    fireEvent.change(screen.getByLabelText(/^Effective date/), { target: { value: "2026-12-31" } });
     const submit = screen.getByRole("button", { name: "Initiate separation" });
     await waitFor(() => expect(submit).not.toBeDisabled());
     fireEvent.click(submit);
@@ -139,5 +139,18 @@ describe("InitiateSeparationAction", () => {
       }),
     ));
     await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Separation recorded for Asha Verma."));
+  });
+
+  it("blocks submit and shows an inline error for a fractional encashment-days value (mirrors separateBody int())", async () => {
+    renderAction({ prefillEmployeeId: "emp-1", prefillEmployeeName: "Asha Verma" });
+    fireEvent.click(screen.getByRole("button", { name: "+ Initiate Separation" }));
+    await screen.findByDisplayValue("Asha Verma");
+
+    fireEvent.change(screen.getByLabelText(/^Effective date/), { target: { value: "2026-12-31" } });
+    fireEvent.change(screen.getByLabelText(/^Leave encashment days/), { target: { value: "1.5" } });
+
+    expect(await screen.findByText("Enter a whole number of days.")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Leave encashment days/)).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByRole("button", { name: "Initiate separation" })).toBeDisabled();
   });
 });
