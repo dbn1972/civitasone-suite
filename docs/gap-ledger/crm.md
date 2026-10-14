@@ -2929,7 +2929,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-04  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** dueAt is mapped by the loader but no column, overdue marker or sort exposes it, so a clerk cannot see which grievances are near or past their disposal deadline (app/_data/loaders.ts:1539; GrievancesTable.tsx:50-98).
 - **Verified evidence:** loaders.ts:1539 maps dueAt into CrmGrievanceRow, but GrievancesTable.tsx columns (lines 50-98 of the file) are Ref, Citizen, Category, Subject, Priority, Status, Logged, View; dueAt and assignedTo (also mapped) are not shown, no overdue marker and no sort on due date. The detail page shows 'Due By' only after opening each record (page.tsx:~171).
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/GrievancesTable.tsx`, `apps/web/src/app/(app)/crm/grievances/page.tsx`
@@ -3261,7 +3261,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed load the page prints the badge but Critical and At risk show 0 and the table says 'Every scored account is currently healthy or thriving', a false all-clear on the one screen meant to surface risk; the tiles have no '—' guard like Grievances / Lead Forms (health/page.tsx:13-14, 29-41; WatchlistTable.tsx:47-49).
 - **Verified evidence:** health/page.tsx:8-14 derives source='error' when either loader fails (loaders return [] on failure, loaders.ts:1422,2990), but only renders <DataSourceBadge> (:28). Critical/At risk tiles (:30-41) show summary counts of 0 and WatchlistTable (WatchlistTable.tsx:47-49) shows 'Every scored account is currently healthy or thriving'. Correction: Average Score (:46) already shows '—' when total==0 and Call First falls back to '—', so only the two count tiles and the empty table lack a guard.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/page.tsx`, `apps/web/src/app/(app)/crm/health/WatchlistTable.tsx`
@@ -3313,7 +3313,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-04  ·  MEDIUM  ·  confirmed  ·  theme I18N
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The empty-state copy hard-codes 'falls to 50 or below' as the at-risk rule although banding is owned by the recommendation-service; if thresholds change the message goes stale (WatchlistTable.tsx:49).
 - **Verified evidence:** WatchlistTable.tsx:49 hard-codes 'falls to 50 or below'; health.ts:4 states banding is owned by recommendation-service and the client has no threshold constant. Also all page strings (title, subtitle, labels, filterPlaceholder) are literals, no next-intl.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/WatchlistTable.tsx`, `apps/web/src/app/(app)/crm/health/page.tsx`, `apps/web/messages/en.json`, `apps/web/messages/hi.json`
@@ -3455,7 +3455,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-ACCOUNTID-07  ·  LOW  ·  partly  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The 'Score Recomputed From Signals' card exposes a stored-vs-computed discrepancy as an explanation paragraph with no action or timestamp of the last recompute (page.tsx:116-124).
 - **Verified evidence:** page.tsx:116-124 shows the 'Score Recomputed From Signals' card when storedScore !== score, as text only: 'A recompute will bring the stored value back in line.' There is no recompute button or link (whether a recompute endpoint exists is cannot-verify). Overstated: a scored timestamp is present in the header subtitle (line 51, breakdown.computedAt), though it is not in the card and it is not labelled as the last recompute. Also the paragraph uses hard-coded color #475569 (line 118) instead of a token, poor in dark mode (same for iconBg hex on lines 61-69).
 - **Files to change:** `apps/web/src/app/(app)/crm/health/[accountId]/page.tsx`

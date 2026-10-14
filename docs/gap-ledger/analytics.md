@@ -569,7 +569,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-ANOMALIES-03  ·  MEDIUM  ·  partly  ·  theme CHART (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Trend bars are scaled to the series maximum, not 0-100% (AccuracyTrendChart.tsx:23,29), and coloured green/amber/red at fixed 0.7/0.4 cut-offs (AccuracyTrendChart.tsx:36); x labels are MM-DD only (slice(5), :55) with no year; per-bar aria-label sits on role='presentation' nodes (:44-45).
 - **Verified evidence:** AccuracyTrendChart.tsx: bars scale to the series max (maxAccuracy :22, heightPct :28) so a flat 40% series looks full-height; colour thresholds hard-coded 0.7/0.4 (:42); x labels are point.date.slice(5) = MM-DD, no year (:53-54); per-bar aria-label is on a div with role='presentation' (:44-45) inside a role='img' parent (:25) whose label is only 'Accuracy trend over N data points', so per-point values are not exposed to screen readers (visible % labels at :36 are text but colour is the only good/bad cue). Earlier line numbers were off by 1-2. The suggested i18n fix does not match: the problem is chart semantics/a11y, not translation (the file has no hard-coded translated keys beyond a few English strings). For anomaly precision the 0.7/0.4 thresholds are arbitrary.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/AccuracyTrendChart.tsx`
@@ -718,7 +718,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-INVENTORY-04  ·  MEDIUM  ·  partly  ·  theme CHART (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Trend bars are scaled to the series maximum, not 0-100% (AccuracyTrendChart.tsx:23,29), and coloured green/amber/red at fixed 0.7/0.4 cut-offs (AccuracyTrendChart.tsx:36); x labels are MM-DD only (slice(5), :55) with no year; per-bar aria-label sits on role='presentation' nodes (:44-45).
 - **Verified evidence:** AccuracyTrendChart.tsx: bars scale to the series max (maxAccuracy :22, heightPct :28) so a flat 40% series looks full-height; colour thresholds hard-coded 0.7/0.4 (:42); x labels are point.date.slice(5) = MM-DD, no year (:53-54); per-bar aria-label is on a div with role='presentation' (:44-45) inside a role='img' parent (:25) whose label is only 'Accuracy trend over N data points', so per-point values are not exposed to screen readers (visible % labels at :36 are text but colour is the only good/bad cue). Earlier line numbers were off by 1-2. The suggested i18n fix does not match: the problem is chart semantics/a11y, not translation (the file has no hard-coded translated keys beyond a few English strings).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/AccuracyTrendChart.tsx`
@@ -815,7 +815,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-LEADS-02  ·  MEDIUM  ·  partly  ·  theme CHART (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Trend bars are scaled to the series maximum, not 0-100% (AccuracyTrendChart.tsx:23,29), and coloured green/amber/red at fixed 0.7/0.4 cut-offs (AccuracyTrendChart.tsx:36); x labels are MM-DD only (slice(5), :55) with no year; per-bar aria-label sits on role='presentation' nodes (:44-45).
 - **Verified evidence:** AccuracyTrendChart.tsx: bars scale to the series max (maxAccuracy :22, heightPct :28) so a flat 40% series looks full-height; colour thresholds hard-coded 0.7/0.4 (:42); x labels are point.date.slice(5) = MM-DD, no year (:53-54); per-bar aria-label is on a div with role='presentation' (:44-45) inside a role='img' parent (:25) whose label is only 'Accuracy trend over N data points', so per-point values are not exposed to screen readers (visible % labels at :36 are text but colour is the only good/bad cue). Earlier line numbers were off by 1-2. The suggested i18n fix does not match: the problem is chart semantics/a11y, not translation (the file has no hard-coded translated keys beyond a few English strings).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/AccuracyTrendChart.tsx`
@@ -929,7 +929,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-03  ·  MEDIUM  ·  partly  ·  theme CHART (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Trend bars are scaled to the series maximum, not 0-100% (AccuracyTrendChart.tsx:23,29), and coloured green/amber/red at fixed 0.7/0.4 cut-offs (AccuracyTrendChart.tsx:36); x labels are MM-DD only (slice(5), :55) with no year; per-bar aria-label sits on role='presentation' nodes (:44-45).
 - **Verified evidence:** AccuracyTrendChart.tsx: bars scale to the series max (maxAccuracy :22, heightPct :28) so a flat 40% series looks full-height; colour thresholds hard-coded 0.7/0.4 (:42); x labels are point.date.slice(5) = MM-DD, no year (:53-54); per-bar aria-label is on a div with role='presentation' (:44-45) inside a role='img' parent (:25) whose label is only 'Accuracy trend over N data points', so per-point values are not exposed to screen readers (visible % labels at :36 are text but colour is the only good/bad cue). Earlier line numbers were off by 1-2. The suggested i18n fix does not match: the problem is chart semantics/a11y, not translation (the file has no hard-coded translated keys beyond a few English strings).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/AccuracyTrendChart.tsx`

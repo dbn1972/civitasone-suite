@@ -177,7 +177,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1871, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Scheduled at goes through formatIndianDate (CampaignDetail.tsx; formatters.ts) which returns dd/mm/yyyy with no time, so a scheduled send at 10:00 vs 23:00 is indistinguishable — for the one field where the hour matters.
 - **Verified evidence:** CampaignDetail.tsx:154 uses formatIndianDate(campaign.scheduledAt); lib/formatters.ts:2-7 uses toLocaleDateString en-IN with day/month/year only - no time, no explicit IST timeZone. A datetime-local value is submitted in CampaignList.tsx:257 as an ISO instant, so the hour is lost on display. Only formatIndianDate exists in formatters.ts; lib/admin/sftpIngestion.ts:280 has a local formatDateTime.
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/notifications/campaigns/_components/CampaignDetail.tsx`

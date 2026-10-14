@@ -1663,7 +1663,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-04  ·  MEDIUM  ·  partly  ·  theme I18N (was MONEY)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1870, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** Hard-coded English outside next-intl: 'working day(s)' (ServicePageClient.tsx:84), 'Continue where you left off —' (ServicePageClient.tsx:159), 'from ₹' / 'Fee on approval' (runtimeApi.ts:243-247) on a page that is otherwise translated and aimed at Odia/Hindi-speaking citizens.
 - **Verified evidence:** Hard-coded English confirmed: ServicePageClient.tsx:84 `${slaDays} working day(s)`, :159 'Continue where you left off —', runtimeApi.ts:243-247 formatFee 'Fee on approval' and 'from ₹'. Also channelDisabledMessage (runtimeApi.ts) is English, and :42 uses fallback hex. Theme MONEY is wrong (I18N) but formatFee does divide minor by 100 with toLocaleString - float division of a number, only display; acceptable but should use shared formatINR/paise helper. Other translated keys exist (slaPromise, resumeDraft).
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/_components/ServicePageClient.tsx`, `apps/web/src/app/(app)/citizen/services/_data/runtimeApi.ts`, `apps/web/src/messages/en.json`, `apps/web/src/messages/hi.json`
@@ -1914,7 +1914,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-TRACK-TRACKINGNO-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1870, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1870, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Tracking unavailable' and the 'Check the tracking number…' sentence are hard-coded outside next-intl (TrackClient.tsx:60-62); the error back link goes to the catalogue, not the service (TrackClient.tsx:66).
 - **Verified evidence:** TrackClient.tsx:60-62 hard-codes 'Tracking unavailable' and 'Check the tracking number and try again, or ask at the counter with your receipt.' outside next-intl (also the 'Not found' fallback at :39 and runtimeApi.ts:231 message). :64 backHref='/citizen/catalogue' rather than the service, though the page header (track/[trackingNo]/page.tsx:19) already has a back-to-service button. Theme is I18N, not FABRICATED.
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/_components/TrackClient.tsx`, `apps/web/src/app/(app)/citizen/services/_data/runtimeApi.ts`, `apps/web/src/messages/en.json`, `apps/web/src/messages/hi.json`

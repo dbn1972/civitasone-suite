@@ -282,7 +282,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-INVOICES-05  ·  LOW  ·  partly  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1873, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Period and Issued are printed raw (ISO timestamps, blank when null for drafts) — cellValue falls to String(value ?? '') (page.tsx:45,49; DataTable.tsx:127-142).
 - **Verified evidence:** invoices/page.tsx:43,48 'Period' (periodMonth) and 'Issued' (issuedAt) have no cellType; DataTable.tsx:125-140 cellValue returns String(row[key] ?? ''), so issuedAt prints as raw ISO and null prints blank (not '—'). periodMonth is probably 'YYYY-MM' rather than a full ISO timestamp (format not verifiable). formatIndianDate exists (formatters.ts:2-7) but has no timeZone and outputs dd/mm/yyyy; no DataTable date cellType.
 - **Files to change:** `apps/web/src/app/_components/ds/DataTable.tsx`, `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/billing/invoices/page.tsx`
@@ -373,7 +373,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-INVOICES-DETAIL-06  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1873, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1873, verified on main 9c5e9e9e9)
 - **First-pass claim:** Approvals table prints raw requestedBy / decidedBy ids and a raw ISO decidedAt (page.tsx:167-172); issuedBy / cancelledBy fields do the same (page.tsx:133,136) — ids instead of names on a maker-checker trail.
 - **Verified evidence:** page.tsx:167-174 Approvals DataTable prints requestedBy, decidedBy, decidedAt with no cellType (DataTable cellValue falls to String(), DataTable.tsx:125-140); Details card prints issuedAt/paidAt/cancelledAt raw (134,136,137,138 region: lines 134-138) and issuedBy/cancelledBy ids (135,138). No user-name resolver exists in apps/web (grep). Observation's 133,136 are off by ~2. Backend field content (uuid vs name) cannot be verified.
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/_components/ds/DataTable.tsx`, `apps/web/src/app/(app)/billing/invoices/[id]/page.tsx`
