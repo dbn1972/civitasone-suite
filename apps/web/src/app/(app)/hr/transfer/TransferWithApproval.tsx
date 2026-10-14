@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
 import { Button, Field, Input, Select, Textarea } from "@/app/_components/ds";
+import { EmployeePicker } from "@/app/_components/EmployeePicker";
 import { useFormError } from "@/lib/useFormError";
 import { EmployeePicker } from "@/app/_components/EmployeePicker";
 import { useSelfEmployee } from "@/app/_components/useSelfEmployee";
@@ -170,6 +171,7 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
     else if (currentWith === initiatedBy) errs.currentWith = tr("errInitiatorEqualsApprover");
     if (note.trim().length < 3) errs.note = tr("errNote");
     setFieldErrors(errs);
+    // Both ids are HRMS employee ids (self from /hrms/me/profile, forward-to from the employee picker).
     setError("");
     return Object.keys(errs).length === 0;
   };
