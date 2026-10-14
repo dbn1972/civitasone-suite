@@ -1,6 +1,5 @@
-import { getTranslations } from "next-intl/server";
+import { RouteSkeleton } from "@/app/_components/RouteSkeleton";
 
-export default async function Loading() {
-  const t = await getTranslations("payrollLoans");
-  return <div className="page-main wrap"><div className="skeleton" aria-label={t("loadingAriaLabel")} /></div>;
+export default function Loading() {
+  return <RouteSkeleton />;
 }

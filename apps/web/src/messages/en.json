@@ -4828,6 +4828,7 @@
   "msg": {
     "noRecords": "No records found",
     "loading": "Loading…",
+    "loadingData": "Loading data…",
     "offline": "You're offline",
     "offlineDetail": "You can keep viewing saved information. We'll reconnect when your internet is back.",
     "feedbackPrompt": "Was this helpful?",

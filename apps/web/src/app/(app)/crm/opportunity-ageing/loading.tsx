@@ -1,3 +1,4 @@
+import { SkeletonBar } from "@/app/_components/ds/Skeleton";
 import { useTranslations } from "next-intl";
 export default function Loading() {
   const t = useTranslations("crm.loading");
@@ -14,8 +15,8 @@ export default function Loading() {
       {/* The page renders two cards (breaches + stage day limits), not a stat-tile
           grid — mirror that shape so there is no layout shift on load. */}
       <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>
-        <div style={{ height: 220, borderRadius: 12, background: "#f1f5f9" }} />
-        <div style={{ height: 260, borderRadius: 12, background: "#f1f5f9" }} />
+        <SkeletonBar h={220} style={{ borderRadius: 12 }} />
+        <SkeletonBar h={260} style={{ borderRadius: 12 }} />
       </div>
     </div>
   );

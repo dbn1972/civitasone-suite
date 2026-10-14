@@ -26,7 +26,7 @@ export default async function Loading() {
 
       <div
         style={{
-          border: "1px solid var(--line, #e2e8f0)",
+          border: "1px solid var(--line)",
           borderRadius: 10,
           padding: 24,
           display: "flex",

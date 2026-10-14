@@ -18,7 +18,7 @@ export default async function Loading() {
       <section className="mx-auto max-w-2xl">
         <div
           className="space-y-4 rounded-xl border p-6 shadow-sm"
-          style={{ background: "var(--panel, #fff)", borderColor: "var(--line, #e2e8f0)", display: "grid", gap: 16 }}
+          style={{ background: "var(--panel)", borderColor: "var(--line)", display: "grid", gap: 16 }}
           aria-hidden="true"
         >
           <SkeletonBar h={38} />

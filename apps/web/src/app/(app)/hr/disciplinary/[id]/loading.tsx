@@ -1,3 +1,4 @@
+import { SkeletonBar } from "@/app/_components/ds/Skeleton";
 import { getTranslations } from "next-intl/server";
 
 // GAP-HR-DISCIPLINARY-DETAIL-07 (I18N): was hard-coded English while the
@@ -14,13 +15,13 @@ export default async function Loading() {
         </div>
       </div>
       <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>
-        <div style={{ height: 120, borderRadius: 12, background: "var(--bg, #f1f5f9)" }} />
+        <SkeletonBar h={120} style={{ borderRadius: 12 }} />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} style={{ height: 80, borderRadius: 12, background: "var(--bg, #f1f5f9)" }} />
+            <div key={i} style={{ height: 80, borderRadius: 12, background: "var(--line2)" }} />
           ))}
         </div>
-        <div style={{ height: 240, borderRadius: 12, background: "var(--bg, #f1f5f9)" }} />
+        <SkeletonBar h={240} style={{ borderRadius: 12 }} />
       </div>
     </div>
   );

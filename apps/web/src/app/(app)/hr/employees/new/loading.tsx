@@ -1,3 +1,4 @@
+import { SkeletonBar } from "@/app/_components/ds/Skeleton";
 import { PageHeader } from "../../../../_components/ds";
 import { getTranslations } from "next-intl/server";
 
@@ -12,12 +13,12 @@ export default async function NewEmployeeLoading() {
     <div className="page-main wrap">
       <PageHeader title={t("pageTitle")} subtitle={t("pageSubtitle")} />
       <div className="skeleton" style={{ height: 32, borderRadius: 8, marginBottom: 20 }} aria-label={t("loadingLabel")} />
-      <div style={{ border: "1px solid var(--line, #e2e8f0)", borderRadius: 8, padding: 24, display: "grid", gap: 16 }}>
+      <div style={{ border: "1px solid var(--line)", borderRadius: 8, padding: 24, display: "grid", gap: 16 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px 24px" }}>
           {[1, 2, 3, 4].map((i) => (
             <div key={i} style={{ display: "grid", gap: 6 }}>
-              <div className="skeleton" style={{ height: 13, width: "40%", borderRadius: 4 }} />
-              <div className="skeleton" style={{ height: 44, borderRadius: 8 }} />
+              <SkeletonBar w="40%" h={13} style={{ borderRadius: 4 }} />
+              <SkeletonBar h={44} style={{ borderRadius: 8 }} />
             </div>
           ))}
         </div>
