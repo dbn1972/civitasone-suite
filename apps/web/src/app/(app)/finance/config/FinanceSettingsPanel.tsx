@@ -139,7 +139,7 @@ export function FinanceSettingsPanel({ settings, heads }: { settings: FinanceSet
               </div>
             );
           })}
-          {headsPartial ? <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--bad, #c0392b)" }}>{t("glIncomplete")}</p> : null}
+          {headsPartial ? <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--bad)" }}>{t("glIncomplete")}</p> : null}
         </div>
         <div>
           <Button type="button" disabled={!dirty || busy} onClick={() => { setError(undefined); setOpen(true); }}>{t("save")}</Button>

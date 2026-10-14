@@ -47,7 +47,7 @@ export function VendorsTable({ vendors, source = "api", canExport = false }: { v
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {canExport ? (
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center", marginBottom: 8 }}>
-          {exportError ? <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{exportError}</span> : null}
+          {exportError ? <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{exportError}</span> : null}
           <Button variant="ghost" size="sm" onClick={() => void exportRegister()} disabled={exporting} aria-busy={exporting}>
             {exporting ? t("exporting") : t("button")}
           </Button>

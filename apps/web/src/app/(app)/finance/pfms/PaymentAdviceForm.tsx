@@ -355,7 +355,7 @@ export function PaymentAdviceForm({ bills = [], onModeObserved }: PaymentAdviceF
                   aria-describedby={errors.amountMinor ? `${amountId}-error` : undefined}
                   style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
                 />
-                {previewAmount && <span style={{ fontSize: 12, color: "var(--muted, #666)" }}>{previewAmount}</span>}
+                {previewAmount && <span style={{ fontSize: 12, color: "var(--muted)" }}>{previewAmount}</span>}
                 {errors.amountMinor && (
                   <p id={`${amountId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
                     {errors.amountMinor}

@@ -31,10 +31,10 @@ export default async function VendorsPage() {
         actions={canCreate ? <Link href="/finance/vendors/new" className="btn primary">New vendor</Link> : null}
       />
       <StatGrid>
-        <StatCard icon="🏢" iconBg="#e7edfd" label="Total Vendors" value={stats.total} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={stats.active} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending Approval" value={stats.pending} />
-        <StatCard icon="📊" iconBg="#eff6ff" label="Categories" value={stats.categories} />
+        <StatCard icon="🏢" tone="info" label="Total Vendors" value={stats.total} />
+        <StatCard icon="✅" tone="good" label="Active" value={stats.active} />
+        <StatCard icon="⏳" tone="warn" label="Pending Approval" value={stats.pending} />
+        <StatCard icon="📊" tone="info" label="Categories" value={stats.categories} />
       </StatGrid>
       <Card title="Vendors">
         {/* PAN is masked HERE, on the server, so the full PAN never reaches the client table

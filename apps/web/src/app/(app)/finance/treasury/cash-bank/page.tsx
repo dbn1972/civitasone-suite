@@ -54,15 +54,15 @@ export default async function CashBankPage({
         {query.type || query.from || query.to ? <a href="/finance/treasury/cash-bank" className="btn ghost">Clear</a> : null}
       </form>
       <StatGrid>
-        <StatCard icon="📖" iconBg="#e7edfd" label="Total Entries" value={entries.length} />
-        <StatCard icon="📥" iconBg="#ecfdf3" label={`Receipts (${totals.receiptCount} entries)`} value={formatMoney(totals.receiptTotal)} />
-        <StatCard icon="📤" iconBg="#fce7ee" label={`Payments (${totals.paymentCount} entries)`} value={formatMoney(totals.paymentTotal)} />
+        <StatCard icon="📖" tone="info" label="Total Entries" value={entries.length} />
+        <StatCard icon="📥" tone="good" label={`Receipts (${totals.receiptCount} entries)`} value={formatMoney(totals.receiptTotal)} />
+        <StatCard icon="📤" tone="bad" label={`Payments (${totals.paymentCount} entries)`} value={formatMoney(totals.paymentTotal)} />
         {/* IST, not UTC: an entry genuinely dated "today" in India would be
             excluded from 00:00-05:30 IST every day if compared against
             new Date().toISOString(), which is always UTC. */}
-        <StatCard icon="📊" iconBg="#fffaeb" label="Today" value={countToday(entries)} />
-        {balances ? <StatCard icon="🔓" iconBg="#eff6ff" label="Opening balance" value={formatMoney(balances.opening)} /> : null}
-        {balances ? <StatCard icon="🔒" iconBg="#eff6ff" label="Closing balance" value={formatMoney(balances.closing)} /> : null}
+        <StatCard icon="📊" tone="warn" label="Today" value={countToday(entries)} />
+        {balances ? <StatCard icon="🔓" tone="info" label="Opening balance" value={formatMoney(balances.opening)} /> : null}
+        {balances ? <StatCard icon="🔒" tone="info" label="Closing balance" value={formatMoney(balances.closing)} /> : null}
       </StatGrid>
       {/* UX-012: the data-source badge now lives inside CashBankTable, driven
           by the same useSeededResource call that produces its rows — not a

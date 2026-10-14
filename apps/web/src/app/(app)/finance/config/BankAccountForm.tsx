@@ -75,7 +75,7 @@ export function BankAccountForm() {
     <div style={{ display: "grid", gap: 6 }}>
       <label htmlFor={`${base}-${k}`} style={{ fontSize: 13, fontWeight: 600 }}>{label}</label>
       {input}
-      {errors[k] && <p id={`${base}-${k}-err`} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors[k]}</p>}
+      {errors[k] && <p id={`${base}-${k}-err`} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors[k]}</p>}
     </div>
   );
   const common = (k: Field) => ({
@@ -111,7 +111,7 @@ export function BankAccountForm() {
             </Button>
           </div>
           {message && <p role="status" className="pill good" style={{ width: "fit-content" }}>{message}</p>}
-          {submitError && <p role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 13, margin: 0 }}>{submitError}</p>}
+          {submitError && <p role="alert" style={{ color: "var(--bad)", fontSize: 13, margin: 0 }}>{submitError}</p>}
         </div>
       </Card>
     </form>

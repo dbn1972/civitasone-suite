@@ -83,10 +83,10 @@ export default async function ChequeDetailPage({ params }: { params: { id: strin
         }
       />
       <StatGrid>
-        <StatCard icon="₹" iconBg="#ecfdf3" label="Amount" value={formatMoney(cheque.amountMinor)} />
-        <StatCard icon="🏦" iconBg="#e7edfd" label="Bank" value={cheque.bankName} />
-        <StatCard icon="📅" iconBg="#fffaeb" label="Issue Date" value={formatIndianDate(cheque.issueDate)} />
-        <StatCard icon={chequeStatusIcon(cheque.status)} iconBg="#ecfdf3" label="Status" value={chequeStatusLabel(cheque.status)} />
+        <StatCard icon="₹" tone="good" label="Amount" value={formatMoney(cheque.amountMinor)} />
+        <StatCard icon="🏦" tone="info" label="Bank" value={cheque.bankName} />
+        <StatCard icon="📅" tone="warn" label="Issue Date" value={formatIndianDate(cheque.issueDate)} />
+        <StatCard icon={chequeStatusIcon(cheque.status)} tone="good" label="Status" value={chequeStatusLabel(cheque.status)} />
       </StatGrid>
 
       <Card title="Cheque Details" padding>
