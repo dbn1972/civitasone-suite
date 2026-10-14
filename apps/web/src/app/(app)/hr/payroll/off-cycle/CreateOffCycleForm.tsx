@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Card, ConfirmDialog, Button } from "../../../../_components/ds";
+import { Card, ConfirmDialog, Button, Field, Input, Select } from "../../../../_components/ds";
 import { EmployeePicker } from "../../../../_components/EmployeePicker";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney, formatPeriod } from "@/lib/formatters";
@@ -41,7 +41,6 @@ export function duplicateEmployeeRows(items: ReadonlyArray<{ employeeId: string 
   return dupes;
 }
 
-const fieldStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
 
 /**
  * GAP-PAYROLL-OFF-CYCLE-05: a run of the same type for the same period already
@@ -58,6 +57,7 @@ export function hasSameTypeAndPeriod(
 
 export function CreateOffCycleForm({ existingRuns = [] }: { existingRuns?: ReadonlyArray<{ run_type: string; period: string }> }) {
   const t = useTranslations("createOffCycleForm");
+  const tv = useTranslations("hrFormErrors2");
   const router = useRouter();
   const [runType, setRunType] = useState<RunType>("bonus");
   const [period, setPeriod] = useState("");
@@ -162,53 +162,28 @@ export function CreateOffCycleForm({ existingRuns = [] }: { existingRuns?: Reado
       <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={runTypeId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("runTypeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <select
-                id={runTypeId}
-                value={runType}
-                onChange={(e) => setRunType(e.target.value as RunType)}
-                aria-required="true"
-                style={fieldStyle}
-              >
+            <Field id={runTypeId} label={t("runTypeLabel")} required>
+              <Select value={runType} onChange={(e) => setRunType(e.target.value as RunType)}>
                 <option value="bonus">{t("runTypeBonusOption")}</option>
                 <option value="incentive">{t("runTypeIncentiveOption")}</option>
                 <option value="adhoc">{t("runTypeAdhocOption")}</option>
-              </select>
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={periodId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("periodLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={periodId}
+              </Select>
+            </Field>
+            <Field id={periodId} label={t("periodLabel")} required error={periodInvalid ? tv("invalidValue") : periodHasRun ? t("existingRunWarning", { period: formatPeriod(period.trim()) }) : undefined}>
+              <Input
                 ref={periodRef}
                 type="month"
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
-                aria-required="true"
-                aria-invalid={periodInvalid || undefined}
-                aria-describedby={periodInvalid ? errId : undefined}
-                style={fieldStyle}
               />
-              {periodHasRun && (
-                <span role="status" className="pill warn" style={{ width: "fit-content", margin: 0 }}>
-                  {t("existingRunWarning", { period: formatPeriod(period.trim()) })}
-                </span>
-              )}
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={descId} style={{ fontSize: 13, fontWeight: 600 }}>{t("descriptionLabel")}</label>
-              <input
-                id={descId}
+            </Field>
+            <Field id={descId} label={t("descriptionLabel")}>
+              <Input
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 maxLength={256}
-                style={fieldStyle}
               />
-            </div>
+            </Field>
           </div>
 
           <div style={{ display: "grid", gap: 8 }}>
@@ -223,28 +198,21 @@ export function CreateOffCycleForm({ existingRuns = [] }: { existingRuns?: Reado
               return (
                 <div key={it._key} style={{ display: "grid", gap: 4 }}>
                   <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr auto", alignItems: "end" }}>
-                    <div style={{ display: "grid", gap: 6 }}>
-                      <label htmlFor={empFieldId} style={{ fontSize: 12, fontWeight: 600 }}>{t("employeeLabel")}</label>
+                    <Field id={empFieldId} label={t("employeeLabel")}>
                       {/* GAP-PAYROLL-OFF-CYCLE-02: pick by name/code, never a raw UUID. */}
                       <EmployeePicker
                         id={empFieldId}
                         value={it.employeeId}
                         onChange={(id, option) => updateItem(index, { employeeId: id, employeeName: option?.label ?? null })}
                       />
-                    </div>
-                    <div style={{ display: "grid", gap: 6 }}>
-                      <label htmlFor={amtFieldId} style={{ fontSize: 12, fontWeight: 600 }}>{t("amountLabel")}</label>
-                      <input
-                        id={amtFieldId}
+                    </Field>
+                    <Field id={amtFieldId} label={t("amountLabel")} required error={amountBad ? tv("invalidValue") : undefined}>
+                      <Input
                         inputMode="decimal"
                         value={it.amountRupees}
                         onChange={(e) => updateItem(index, { amountRupees: e.target.value })}
-                        aria-required="true"
-                        aria-invalid={amountBad || undefined}
-                        aria-describedby={amountBad ? errId : undefined}
-                        style={fieldStyle}
                       />
-                    </div>
+                    </Field>
                     <Button
                       variant="ghost"
                       onClick={() => removeItem(index)}

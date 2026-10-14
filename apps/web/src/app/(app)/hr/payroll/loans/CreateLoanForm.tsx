@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog, Field, type EntityOption } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog, Field, type EntityOption, Input, Select } from "../../../../_components/ds";
 import { EmployeePicker } from "../../../../_components/EmployeePicker";
 import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
@@ -20,7 +20,6 @@ const ERROR_KEYS: Record<LoanFormErrorCode, string> = {
 
 const FIELD_ORDER: LoanFormField[] = ["loanNo", "employeeId", "principal", "emi", "tenure", "interestRate"];
 
-const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
 
 function newIdempotencyKey(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -35,6 +34,7 @@ function newIdempotencyKey(): string {
  */
 export function CreateLoanForm({ currentEmpId = "" }: { currentEmpId?: string }) {
   const t = useTranslations("createLoanForm");
+  const tv = useTranslations("hrFormErrors2");
   const router = useRouter();
   const [loanNo, setLoanNo] = useState("");
   const [employeeId, setEmployeeId] = useState<string | null>(null);
@@ -80,13 +80,12 @@ export function CreateLoanForm({ currentEmpId = "" }: { currentEmpId?: string })
     });
   }
 
-  function invalidProps(field: LoanFormField) {
-    const invalid = !!fieldErrors[field];
-    return {
-      "aria-invalid": invalid || undefined,
-      "aria-describedby": invalid ? errId : undefined,
-    };
-  }
+  // Inline copy per field; the generic "required" sentence stays in the summary line only.
+  const fe = (f: LoanFormField) => {
+    const code = fieldErrors[f];
+    if (!code) return undefined;
+    return code === "required" ? tv("fieldRequired") : t(ERROR_KEYS[code]);
+  };
 
   function openConfirm(e: React.FormEvent) {
     e.preventDefault();
@@ -95,7 +94,7 @@ export function CreateLoanForm({ currentEmpId = "" }: { currentEmpId?: string })
     if (!validation.ok) {
       setFieldErrors(validation.errors);
       const codes = new Set(Object.values(validation.errors));
-      setError([...codes].map((c) => t(ERROR_KEYS[c])).join(" "));
+      setError(codes.has("required") ? t(ERROR_KEYS.required) : undefined);
       const first = FIELD_ORDER.find((f) => validation.errors[f]);
       if (first) document.getElementById(fieldIds[first])?.focus();
       return;
@@ -162,21 +161,15 @@ export function CreateLoanForm({ currentEmpId = "" }: { currentEmpId?: string })
     <form onSubmit={openConfirm} style={{ marginBottom: 16 }} noValidate>
       <Card title={t("cardTitle")} padding>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={loanNoField} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("loanNoLabel")}
-            </label>
-            <input
-              id={loanNoField}
+          <Field id={loanNoField} label={t("loanNoLabel")} error={fe("loanNo")}>
+            <Input
               value={loanNo}
               onChange={(e) => { setLoanNo(e.target.value); clearFieldError("loanNo"); }}
               maxLength={64}
-              aria-describedby={fieldErrors.loanNo ? errId : `${loanNoField}-hint`}
-              aria-invalid={fieldErrors.loanNo ? true : undefined}
-              style={inputStyle}
+              aria-describedby={fieldErrors.loanNo ? `${loanNoField}-error` : `${loanNoField}-hint`}
             />
             <span id={`${loanNoField}-hint`} style={{ fontSize: 12, color: "var(--ink2)" }}>{t("loanNoHint")}</span>
-          </div>
+          </Field>
           <Field
             id={empIdField}
             label={t("employeeLabel")}
@@ -193,68 +186,42 @@ export function CreateLoanForm({ currentEmpId = "" }: { currentEmpId?: string })
               }}
             />
           </Field>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={typeField} style={{ fontSize: 13, fontWeight: 600 }}>{t("loanTypeLabel")}</label>
-            <select id={typeField} value={loanType} onChange={(e) => setLoanType(e.target.value)} style={inputStyle}>
+          <Field id={typeField} label={t("loanTypeLabel")}>
+            <Select value={loanType} onChange={(e) => setLoanType(e.target.value)}>
               <option value="personal">{t("optionPersonal")}</option>
               <option value="vehicle">{t("optionVehicle")}</option>
               <option value="house_building">{t("optionHouseBuilding")}</option>
               <option value="festival">{t("optionFestival")}</option>
-            </select>
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={principalField} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("principalLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-            </label>
-            <input
-              id={principalField}
+            </Select>
+          </Field>
+          <Field id={principalField} error={fe("principal")} label={t("principalLabel")} required>
+            <Input
               inputMode="decimal"
               value={principalRupees}
               onChange={(e) => { setPrincipalRupees(e.target.value); clearFieldError("principal"); }}
-              aria-required="true"
-              {...invalidProps("principal")}
-              style={inputStyle}
             />
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={emiField} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("emiLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-            </label>
-            <input
-              id={emiField}
+          </Field>
+          <Field id={emiField} error={fe("emi")} label={t("emiLabel")} required>
+            <Input
               inputMode="decimal"
               value={emiRupees}
               onChange={(e) => { setEmiRupees(e.target.value); clearFieldError("emi"); }}
-              aria-required="true"
-              {...invalidProps("emi")}
-              style={inputStyle}
             />
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={tenureField} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("tenureLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-            </label>
-            <input
-              id={tenureField}
+          </Field>
+          <Field id={tenureField} error={fe("tenure")} label={t("tenureLabel")} required>
+            <Input
               inputMode="numeric"
               value={tenureMonths}
               onChange={(e) => { setTenureMonths(e.target.value); clearFieldError("tenure"); }}
-              aria-required="true"
-              {...invalidProps("tenure")}
-              style={inputStyle}
             />
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={rateField} style={{ fontSize: 13, fontWeight: 600 }}>{t("interestRateLabel")}</label>
-            <input
-              id={rateField}
+          </Field>
+          <Field id={rateField} error={fe("interestRate")} label={t("interestRateLabel")}>
+            <Input
               inputMode="decimal"
               value={interestRatePct}
               onChange={(e) => { setInterestRatePct(e.target.value); clearFieldError("interestRate"); }}
-              {...invalidProps("interestRate")}
-              style={inputStyle}
             />
-          </div>
+          </Field>
         </div>
         <div style={{ marginTop: 14 }}>
           <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>

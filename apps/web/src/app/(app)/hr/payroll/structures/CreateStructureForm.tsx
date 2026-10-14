@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 // next-intl / ICU MessageFormat: `select` compares the interpolated value
 // after string coercion, so passing the raw `isDefault` boolean works with
@@ -8,14 +8,17 @@ import { useRouter } from "next/navigation";
 // translatable unit instead of concatenating a fixed-position suffix, so a
 // Hindi (or any other locale) translation can reorder the clause naturally.
 import { useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog, AcceptedNotice } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog, AcceptedNotice, Field, Input } from "../../../../_components/ds";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { browserJson } from "@/lib/api/browserClient";
+import { translateHrErrors } from "../../_components/translateHrErrors";
+import { validateStructure, type StructureErrors } from "./structureSchema";
 
 type AcceptedResponse = { id: string; status: string; correlationId?: string };
 
 export function CreateStructureForm() {
   const t = useTranslations("createStructureForm");
+  const tv = useTranslations("hrFormErrors2");
   const router = useRouter();
   const accepted = useAcceptedWrite();
   const [name, setName] = useState("");
@@ -32,14 +35,16 @@ export function CreateStructureForm() {
   const defaultId = useId();
   const errId = useId();
   const nameRef = useRef<HTMLInputElement>(null);
-  const nameInvalid = tone === "bad" && !!message && !name.trim();
+  const [errors, setErrors] = useState<StructureErrors>({});
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-    if (!name.trim()) {
+    const errs = translateHrErrors(validateStructure({ name, description }), tv);
+    setErrors(errs);
+    if (errs.name || errs.description) {
       setTone("bad");
-      setMessage(t("nameRequiredError"));
+      setMessage(name.trim() ? null : t("nameRequiredError"));
       nameRef.current?.focus();
       return;
     }
@@ -81,46 +86,37 @@ export function CreateStructureForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
+    <form noValidate onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
       <AcceptedNotice {...accepted.noticeProps} />
       <Card title={t("formTitle")} padding>
       <div style={{ display: "grid", gap: 14 }}>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={nameId} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("nameLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-            </label>
-            <input
-              id={nameId}
+          <Field id={nameId} label={t("nameLabel")} required error={errors.name}>
+            <Input
               ref={nameRef}
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={128}
-              aria-required="true"
-              aria-invalid={nameInvalid || undefined}
-              aria-describedby={nameInvalid ? errId : undefined}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={descId} style={{ fontSize: 13, fontWeight: 600 }}>{t("descriptionLabel")}</label>
-            <input
-              id={descId}
+          </Field>
+          <Field id={descId} label={t("descriptionLabel")} error={errors.description}>
+            <Input
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               maxLength={500}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
-          </div>
+          </Field>
           <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 22 }}>
-            <input
-              id={defaultId}
-              type="checkbox"
-              checked={isDefault}
-              onChange={(e) => setIsDefault(e.target.checked)}
-              style={{ width: 18, height: 18 }}
-            />
-            <label htmlFor={defaultId} style={{ fontSize: 13, fontWeight: 600 }}>{t("setAsDefaultLabel")}</label>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600 }}>
+              <input
+                id={defaultId}
+                type="checkbox"
+                checked={isDefault}
+                onChange={(e) => setIsDefault(e.target.checked)}
+                style={{ width: 18, height: 18 }}
+              />
+              {t("setAsDefaultLabel")}
+            </label>
           </div>
         </div>
 

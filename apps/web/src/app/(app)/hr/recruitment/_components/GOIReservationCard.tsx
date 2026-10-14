@@ -10,6 +10,7 @@ import {
 } from "./reservationCategories";
 import { ReservationShortlistPanel } from "./ReservationShortlistPanel";
 import type { ShortlistCandidate } from "./reservationShortlist";
+import { Field, Input } from "@/app/_components/ds";
 
 // Re-exported so existing imports from this module keep working.
 export { ROSTER_CATEGORIES, GOI_RESERVATION_QUOTA_PCT, categoryOfApplication };
@@ -50,6 +51,7 @@ const COLORS: Record<RosterCategory, string> = {
 
 export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCategory = {}, categoryDataAvailable = true, candidates }: GOIReservationCardProps) {
   const t = useTranslations("recruitmentGoiCard");
+  const tv = useTranslations("hrFormErrors2");
   const formError = useFormError("reservation roster");
   const [open, setOpen] = useState(false);
   const [loadState, setLoadState] = useState<"idle" | "loading" | "none" | "error" | "ready">("idle");
@@ -250,30 +252,34 @@ export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCatego
                 <form onSubmit={saveRoster} className="mt-4 grid gap-3" aria-label={t("setRoster")}>
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     {ROSTER_CATEGORIES.map((c) => (
-                      <div key={c}>
-                        <label htmlFor={`${formId}-${c}`} className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">{t("rosterFieldLabel", { category: c })}</label>
-                        <input
-                          id={`${formId}-${c}`}
-                          type="number" min={0} step={1} inputMode="numeric"
+                      <Field id={`${formId}-${c}`} label={t("rosterFieldLabel", { category: c })} key={c}>
+                        <Input
+                          type="number"
+                          min={0}
+                          step={1}
+                          inputMode="numeric"
                           value={draft[c]}
                           onChange={(e) => setDraft((d) => ({ ...d, [c]: e.target.value }))}
                           className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-gray-900 px-2 py-1.5 text-sm"
                         />
-                      </div>
+                      </Field>
                     ))}
                   </div>
                   <fieldset className="grid grid-cols-3 gap-3">
                     <legend className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">{t("horizontalLegend")}</legend>
                     {HORIZONTAL_CATEGORIES.map((k) => (
-                      <div key={k}>
-                        <label htmlFor={`${formId}-h-${k}`} className="block text-xs text-slate-600 dark:text-slate-300 mb-1">{t(`horizontal_${k}`)}</label>
-                        <input
-                          id={`${formId}-h-${k}`} type="number" min={0} max={totalVacancies} step={1} inputMode="numeric"
-                          value={hDraft[k]} aria-invalid={hErrors.includes(k)}
+                      <Field id={`${formId}-h-${k}`} label={t(`horizontal_${k}`)} error={hErrors.includes(k) ? tv("invalidValue") : undefined} key={k}>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={totalVacancies}
+                          step={1}
+                          inputMode="numeric"
+                          value={hDraft[k]}
                           onChange={(e) => setHDraft((d) => ({ ...d, [k]: e.target.value }))}
                           className="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-gray-900 px-2 py-1.5 text-sm"
                         />
-                      </div>
+                      </Field>
                     ))}
                     <p className="col-span-3 text-[11px] text-slate-500">{t("horizontalHelp")}</p>
                   </fieldset>

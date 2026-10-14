@@ -1,4 +1,4 @@
-import { Button } from "../../../../_components/ds";
+import { Button, Field, Input, Select } from "../../../../_components/ds";
 
 // key: any -- see TaxReturnsSummary.tsx's own comment on this exact type.
 // key/values: any -- see TaxReturnsSummary.tsx's own comment on this exact type.
@@ -28,36 +28,22 @@ export function QuarterLookupForm({
 }) {
   return (
     <form method="GET" style={{ display: "flex", alignItems: "flex-end", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-      <div style={{ display: "grid", gap: 6 }}>
-        <label htmlFor="ret-fy" style={{ fontSize: 13, fontWeight: 600 }}>
-          {t("financialYearLabel")}
-        </label>
-        <input
-          id="ret-fy"
+      <Field id="ret-fy" label={t("financialYearLabel")}>
+        <Input
           name="fy"
           defaultValue={defaultFy}
           pattern="\d{4}-\d{2}"
           title={t("fyFormatHint")}
           placeholder="2025-26"
-          aria-describedby="ret-fy-hint"
-          style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, width: 140 }}
         />
-      </div>
-      <div style={{ display: "grid", gap: 6 }}>
-        <label htmlFor="ret-quarter" style={{ fontSize: 13, fontWeight: 600 }}>
-          {t("quarterLabel")}
-        </label>
-        <select
-          id="ret-quarter"
-          name="quarter"
-          defaultValue={defaultQuarter}
-          style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "#fff" }}
-        >
+      </Field>
+      <Field id="ret-quarter" label={t("quarterLabel")}>
+        <Select name="quarter" defaultValue={defaultQuarter}>
           {quarters.map((q) => (
             <option key={q} value={q}>{q}</option>
           ))}
-        </select>
-      </div>
+        </Select>
+      </Field>
       <Button type="submit" variant="ghost" style={{ minHeight: 44 }}>
         {t("viewReturnsBtn")}
       </Button>

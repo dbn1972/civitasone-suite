@@ -19,7 +19,9 @@
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button } from "../../../../_components/ds";
+import { Button, Field, Input, Select, Textarea } from "../../../../_components/ds";
+import { translateHrErrors } from "../../_components/translateHrErrors";
+import { validateEmployeeType, type EmployeeTypeErrors } from "./employeeTypeSchema";
 import { useFormError } from "@/lib/useFormError";
 
 export type EmployeeTypeFormValues = {
@@ -52,13 +54,6 @@ const DEFAULTS: EmployeeTypeFormValues = {
   eligibleForLeave: true, eligibleForPayroll: true, eligibleForAppraisal: true,
 };
 
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
-  borderRadius: 8, background: "var(--bg2)", color: "var(--ink)", fontSize: 14,
-};
-const inputErrStyle: React.CSSProperties = { ...inputStyle, border: "1px solid var(--badbd, #ef4444)" };
-const fieldErrStyle: React.CSSProperties = { color: "var(--bad, #b91c1c)", fontSize: 12, margin: "3px 0 0" };
-const labelStyle: React.CSSProperties = { fontSize: 13, fontWeight: 500, display: "block", marginBottom: 4 };
 const checkboxRow: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8, fontSize: 13.5 };
 
 interface Props {
@@ -69,9 +64,13 @@ interface Props {
 
 export function EmployeeTypeForm({ mode, id, initial }: Props) {
   const t = useTranslations("employeeTypes");
-  const ids = { code: useId(), name: useId() };
+  const tv = useTranslations("hrFormErrors2");
+  const ids = {
+    code: useId(), name: useId(), description: useId(), payMode: useId(), category: useId(),
+    paymentRoute: useId(), taxSection: useId(), probation: useId(), maxContract: useId(),
+  };
   const [fields, setFields] = useState<EmployeeTypeFormValues>({ ...DEFAULTS, ...initial });
-  const [invalid, setInvalid] = useState<Set<string>>(new Set());
+  const [errors, setErrors] = useState<EmployeeTypeErrors>({});
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const router = useRouter();
@@ -79,15 +78,13 @@ export function EmployeeTypeForm({ mode, id, initial }: Props) {
 
   function set<K extends keyof EmployeeTypeFormValues>(key: K, value: EmployeeTypeFormValues[K]) {
     setFields((f) => ({ ...f, [key]: value }));
-    setInvalid((s) => { const n = new Set(s); n.delete(key as string); return n; });
+    setErrors((e) => { if (!(key in e)) return e; const n = { ...e }; delete n[key as keyof EmployeeTypeErrors]; return n; });
   }
 
   function validate(): boolean {
-    const errs = new Set<string>();
-    if (!fields.code.trim() || fields.code.length > 24) errs.add("code");
-    if (fields.name.trim().length < 2 || fields.name.length > 120) errs.add("name");
-    setInvalid(errs);
-    return errs.size === 0;
+    const errs = translateHrErrors(validateEmployeeType(fields), tv);
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -144,98 +141,75 @@ export function EmployeeTypeForm({ mode, id, initial }: Props) {
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 14 }}>
-        <div>
-          <label htmlFor={ids.code} style={labelStyle}>
-            {t("fieldCode")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-          </label>
-          <input
-            id={ids.code}
+        <Field id={ids.code} label={t("fieldCode")} required error={errors.code}>
+          <Input
             value={fields.code}
             onChange={(e) => set("code", e.target.value)}
             maxLength={24}
             disabled={mode === "edit"}
-            style={invalid.has("code") ? inputErrStyle : inputStyle}
-            aria-invalid={invalid.has("code")}
           />
-          {invalid.has("code") && <p role="alert" style={fieldErrStyle}>{t("fieldCodeError")}</p>}
-        </div>
-        <div>
-          <label htmlFor={ids.name} style={labelStyle}>
-            {t("fieldName")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-          </label>
-          <input
-            id={ids.name}
+        </Field>
+        <Field id={ids.name} label={t("fieldName")} required error={errors.name}>
+          <Input
             value={fields.name}
             onChange={(e) => set("name", e.target.value)}
             maxLength={120}
-            style={invalid.has("name") ? inputErrStyle : inputStyle}
-            aria-invalid={invalid.has("name")}
           />
-          {invalid.has("name") && <p role="alert" style={fieldErrStyle}>{t("fieldNameError")}</p>}
-        </div>
+        </Field>
       </div>
 
-      <div>
-        <label style={labelStyle}>{t("fieldDescription")}</label>
-        <textarea
+      <Field id={ids.description} label={t("fieldDescription")} error={errors.description}>
+        <Textarea
           value={fields.description}
           onChange={(e) => set("description", e.target.value)}
           maxLength={500}
           rows={2}
-          style={{ ...inputStyle, resize: "vertical" }}
+          style={{ resize: "vertical" }}
         />
-      </div>
+      </Field>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 14 }}>
-        <div>
-          <label style={labelStyle}>{t("fieldPayMode")}</label>
-          <select value={fields.payMode} onChange={(e) => set("payMode", e.target.value)} style={inputStyle}>
+        <Field id={ids.payMode} label={t("fieldPayMode")}>
+          <Select value={fields.payMode} onChange={(e) => set("payMode", e.target.value)}>
             {["monthly", "hourly", "consolidated", "stipend", "none"].map((v) => (
               <option key={v} value={v}>{t(`payMode${v.charAt(0).toUpperCase()}${v.slice(1)}`)}</option>
             ))}
-          </select>
-        </div>
-        <div>
-          <label style={labelStyle}>{t("fieldCategory")}</label>
-          <select value={fields.category} onChange={(e) => set("category", e.target.value)} style={inputStyle}>
+          </Select>
+        </Field>
+        <Field id={ids.category} label={t("fieldCategory")}>
+          <Select value={fields.category} onChange={(e) => set("category", e.target.value)}>
             {["pay_scale", "contractual", "consultant", "third_party", "apprentice", "other"].map((v) => (
               <option key={v} value={v}>{t(`category.${v}`)}</option>
             ))}
-          </select>
-        </div>
-        <div>
-          <label style={labelStyle}>{t("fieldPaymentRoute")}</label>
-          <select value={fields.paymentRoute} onChange={(e) => set("paymentRoute", e.target.value)} style={inputStyle}>
+          </Select>
+        </Field>
+        <Field id={ids.paymentRoute} label={t("fieldPaymentRoute")}>
+          <Select value={fields.paymentRoute} onChange={(e) => set("paymentRoute", e.target.value)}>
             {["payroll", "invoice", "agency", "stipend", "none"].map((v) => (
               <option key={v} value={v}>{t(`paymentRoute.${v}`)}</option>
             ))}
-          </select>
-        </div>
-        <div>
-          <label style={labelStyle}>{t("fieldTaxSection")}</label>
-          <select value={fields.taxSection} onChange={(e) => set("taxSection", e.target.value)} style={inputStyle}>
+          </Select>
+        </Field>
+        <Field id={ids.taxSection} label={t("fieldTaxSection")}>
+          <Select value={fields.taxSection} onChange={(e) => set("taxSection", e.target.value)}>
             {["192", "194J", "194C", "stipend", "none"].map((v) => (
               <option key={v} value={v}>{v === "none" ? t("none") : v}</option>
             ))}
-          </select>
-        </div>
-        <div>
-          <label style={labelStyle}>{t("fieldProbationMonths")}</label>
-          <input
+          </Select>
+        </Field>
+        <Field id={ids.probation} label={t("fieldProbationMonths")} error={errors.defaultProbationMonths}>
+          <Input
             type="number" min={0} value={fields.defaultProbationMonths}
             onChange={(e) => set("defaultProbationMonths", Math.max(0, Number(e.target.value) || 0))}
-            style={inputStyle}
           />
-        </div>
-        <div>
-          <label style={labelStyle}>{t("fieldMaxContractMonths")}</label>
-          <input
+        </Field>
+        <Field id={ids.maxContract} label={t("fieldMaxContractMonths")} error={errors.maxContractMonths}>
+          <Input
             type="number" min={1} value={fields.maxContractMonths ?? ""}
             placeholder={t("contractUnlimited")}
             onChange={(e) => set("maxContractMonths", e.target.value ? Math.max(1, Number(e.target.value)) : null)}
-            style={inputStyle}
           />
-        </div>
+        </Field>
       </div>
 
       <fieldset style={{ border: "1px solid var(--line)", borderRadius: 8, padding: 12 }}>
