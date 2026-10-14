@@ -11,9 +11,9 @@
  *   2) POST /v1/estab/files/from-module -> raises the eFile against that id (refType "finance_reappropriation");
  *      on approval the finance reappropriation eoffice-consumer applies the transfer.
  * The "from" (savings) and "to" budgets are chosen from the allocations on the page, never typed as UUIDs, and
- * the officers are picked by name (the signed-in user defaults as the initiator).
+ * the forward-to officer is picked by name; the initiator is always the signed-in user (read-only).
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button, ConfirmDialog, Field, Input, Select, Textarea, type EntityOption } from "@/app/_components/ds";
 import { EmployeePicker } from "@/app/_components/EmployeePicker";
@@ -33,8 +33,6 @@ export function ReappropriateWithApproval({ allocations }: { allocations: Alloca
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState("");
-  const [initiatedBy, setInitiatedBy] = useState<string | null>(null);
-  const [initiated, setInitiated] = useState<EntityOption | null>(null);
   const [currentWith, setCurrentWith] = useState<string | null>(null);
   const [forwardedTo, setForwardedTo] = useState<EntityOption | null>(null);
   const [note, setNote] = useState("");
@@ -43,13 +41,10 @@ export function ReappropriateWithApproval({ allocations }: { allocations: Alloca
   // The first step is idempotent on that id; remember it succeeded so a retry only repeats the eFile step.
   const created = useRef(false);
 
+  // The initiating officer is always the signed-in employee (the estab route rejects any other initiator).
   const self = useSelfEmployee(open);
-  useEffect(() => {
-    if (self) {
-      setInitiatedBy((cur) => cur ?? self.id);
-      setInitiated((cur) => cur ?? self);
-    }
-  }, [self]);
+  const initiatedBy = self?.id ?? null;
+  const initiated = self;
 
   const optionLabel = (id: string) => allocations.find((a) => a.id === id)?.label ?? "";
   const review = (e: React.FormEvent) => {
@@ -135,13 +130,7 @@ export function ReappropriateWithApproval({ allocations }: { allocations: Alloca
               <Input inputMode="decimal" autoComplete="off" value={form.amount} placeholder="e.g. 50000.00" onChange={(e) => setForm({ ...form, amount: e.target.value })} />
             </Field>
             <Field label={t("initiator")} {...(errors.initiatedBy ? { error: errors.initiatedBy } : {})}>
-              <EmployeePicker
-                key={self?.id ?? "none"}
-                value={initiatedBy}
-                onChange={(id, opt) => { setInitiatedBy(id); setInitiated(opt); }}
-                {...(self ? { initialOption: self } : {})}
-                placeholder={t("searchOfficer")}
-              />
+              <Input readOnly value={self?.label ?? ""} />
             </Field>
             <Field label={t("forwardTo")} {...(errors.currentWith ? { error: errors.currentWith } : {})}>
               <EmployeePicker value={currentWith} onChange={(id, opt) => { setCurrentWith(id); setForwardedTo(opt); }} placeholder={t("searchOfficer")} />

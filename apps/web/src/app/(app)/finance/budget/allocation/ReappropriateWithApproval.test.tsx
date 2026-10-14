@@ -85,6 +85,19 @@ describe("ReappropriateWithApproval (GAP-FINANCE-BUDGET-ALLOCATION-03)", () => {
     expect(body.context).toEqual({ fromBudgetId: BUDGETS[0]!.id, toBudgetId: BUDGETS[1]!.id, amountMinor: "100050" });
   });
 
+  it("the initiator is read-only (the signed-in employee) and is what the eFile payload carries", async () => {
+    const calls = mockApi();
+    render(<ReappropriateWithApproval allocations={BUDGETS} />);
+    await fillForm();
+    const initiator = await screen.findByDisplayValue("Meera Self (E-009)");
+    expect(initiator).toHaveAttribute("readonly");
+    fireEvent.click(screen.getByRole("button", { name: "Review and submit" }));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Submit to eOffice" }));
+    await screen.findByText(/Re-appropriation raised for approval/);
+    const raise = calls.find((c) => c.url.includes("/estab/files/from-module"))!;
+    expect(JSON.parse(raise.init.body as string).initiatedBy).toBe(ME.id);
+  });
+
   it("validates before anything is sent: a bad amount and an amount above the source balance", async () => {
     const calls = mockApi();
     render(<ReappropriateWithApproval allocations={BUDGETS} />);
