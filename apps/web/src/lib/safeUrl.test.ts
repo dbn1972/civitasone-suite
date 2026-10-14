@@ -53,6 +53,11 @@ describe("safeInternalPath", () => {
       expect(safeInternalPath(bad as string)).toBe("/");
     }
   });
+  it("keeps encoded characters and query values intact", () => {
+    expect(safeInternalPath("/docs/a%2Fb/view?q=a%26b&x=1")).toBe("/docs/a%2Fb/view?q=a%26b&x=1");
+    expect(safeInternalPath("/search?q=two words")).toBe("/search?q=two%20words");
+    expect(safeInternalPath("/a/<script>")).toBe("/a/%3Cscript%3E");
+  });
   it("uses the caller fallback", () => {
     expect(safeInternalPath("javascript:x", "/hr")).toBe("/hr");
   });

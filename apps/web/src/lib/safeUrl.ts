@@ -54,5 +54,24 @@ export function safeInternalPath(path: string | null | undefined, fallback = "/"
     return fallback;
   }
   if (parsed.origin !== base) return fallback;
-  return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  // Rebuild the path from URI-encoded parts so nothing from the input reaches
+  // the href unescaped. Decoding then re-encoding each part is lossless
+  // (an encoded "/" inside a segment stays %2F).
+  const path_ = parsed.pathname
+    .split("/")
+    .map((seg) => encodeURIComponent(safeDecode(seg)))
+    .join("/");
+  const query = [...parsed.searchParams]
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join("&");
+  const hash = parsed.hash ? encodeURIComponent(safeDecode(parsed.hash.slice(1))) : "";
+  return `${path_}${query ? `?${query}` : ""}${hash ? `#${hash}` : ""}`;
+}
+
+function safeDecode(part: string): string {
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    return part;
+  }
 }
