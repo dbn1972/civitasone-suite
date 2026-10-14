@@ -73,4 +73,21 @@ describe("EstabInboxPage", () => {
     expect(getEstabFilesMock).toHaveBeenCalledTimes(1);
     expect(screen.getByText("My pending file")).toBeInTheDocument();
   });
+
+  it("GAP-ESTAB-DASHBOARD-01: the overdue tile is labelled 'on my desk' and counts open files past due, never closed ones", async () => {
+    getEstabFilesMock.mockResolvedValueOnce({
+      data: [
+        file({ id: "o1", status: "active", dueDate: "2020-01-01" }),
+        file({ id: "o2", status: "draft", dueDate: "2020-01-01" }),
+        file({ id: "c1", status: "closed", dueDate: "2020-01-01" }),
+        file({ id: "a1", status: "archived", dueDate: "2020-01-01" }),
+        file({ id: "f1", status: "active", dueDate: "2999-01-01" }),
+      ],
+      source: "api",
+    });
+    render(await EstabInboxPage());
+    const tile = screen.getByText("Overdue on my desk").closest("div") as HTMLElement;
+    expect(tile.parentElement?.textContent).toContain("2");
+    expect(screen.queryByText(/^Overdue$/)).not.toBeInTheDocument();
+  });
 });

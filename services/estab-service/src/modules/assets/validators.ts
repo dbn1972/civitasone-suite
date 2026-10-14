@@ -1,13 +1,10 @@
 import { z } from "zod";
+import { EstabCreateVehicleBodySchema } from "@civitasone/schemas/web";
 
 export const idParam = z.object({ id: z.string().uuid() });
 
-export const createVehicleBody = z.object({
-  regNo:       z.string().min(1),
-  makeModel:   z.string().min(1),
-  fuelType:    z.enum(["petrol", "diesel", "cng", "ev"]).default("petrol"),
-  allocatedTo: z.string().uuid().optional(),
-});
+// The create-vehicle request contract lives in @civitasone/schemas so the web form builds against the same schema.
+export const createVehicleBody = EstabCreateVehicleBodySchema;
 export type CreateVehicleBody = z.infer<typeof createVehicleBody>;
 
 export const bookVehicleBody = z.object({

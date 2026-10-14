@@ -5,17 +5,13 @@ import { useRef, useState } from "react";
 import { Button, EntityPicker, Field, Input, PageHeader, Select } from "@/app/_components/ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { useFormError } from "@/lib/useFormError";
-
-const FUEL_TYPES = [
-  { value: "petrol", label: "Petrol" },
-  { value: "diesel", label: "Diesel" },
-  { value: "cng", label: "CNG" },
-  { value: "ev", label: "Electric (EV)" },
-] as const;
+import { useEstabT } from "@/lib/estab/useEstabT";
+import { buildVehiclePayload, VEHICLE_FUEL_OPTIONS } from "@/lib/estab/vehiclePayload";
 
 type FieldErrors = { regNo?: string; makeModel?: string };
 
 export default function NewVehiclePage() {
+  const t = useEstabT();
   const router = useRouter();
   const [regNo, setRegNo] = useState("");
   const [makeModel, setMakeModel] = useState("");
@@ -60,12 +56,8 @@ export default function NewVehiclePage() {
     setSubmitting(true);
     formError.clear();
     try {
-      const payload = {
-        regNo: normalisedRegNo,
-        makeModel: makeModel.trim(),
-        fuelType,
-        ...(allocatedTo ? { allocatedTo } : {}),
-      };
+      // Built and checked against the schema estab-service validates with (shared contract).
+      const payload = buildVehiclePayload({ regNo: normalisedRegNo, makeModel, fuelType, allocatedTo });
       const res = await fetch("/api/proxy/v1/estab/vehicles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -146,11 +138,11 @@ export default function NewVehiclePage() {
                 placeholder="e.g. Toyota Innova Crysta"
               />
             </Field>
-            <Field label="Fuel type">
+            <Field label={t("fuelType")}>
               <Select value={fuelType} onChange={(e) => setFuelType(e.target.value)}>
-                {FUEL_TYPES.map((f) => (
+                {VEHICLE_FUEL_OPTIONS.map((f) => (
                   <option key={f.value} value={f.value}>
-                    {f.label}
+                    {t(f.labelKey)}
                   </option>
                 ))}
               </Select>

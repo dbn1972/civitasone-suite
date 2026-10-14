@@ -8,6 +8,7 @@ import { toHumanError } from "@/lib/messages";
 import { formatMoney } from "@/lib/formatters";
 import { nonNegativeRupeesToMinorString } from "@/lib/money";
 import { labelForSourceType, validateBands, parseRoleTokens, type BandInput } from "./bands";
+import { useEstabT } from "@/lib/estab/useEstabT";
 
 type Step = { role: string; label: string };
 
@@ -58,6 +59,7 @@ const MAX_POLLS = 5;
 const POLL_INTERVAL_MS = 1000;
 
 export function ApprovalMatrixPanel() {
+  const t = useEstabT();
   const [rules, setRules] = useState<Rule[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -318,7 +320,7 @@ export function ApprovalMatrixPanel() {
                 { key: "minAmountMinor", label: "From", render: (r) => <span className="mono">{formatMoney(r.minAmountMinor)}</span> },
                 { key: "maxAmountMinor", label: "To", render: (r) => <span className="mono">{r.maxAmountMinor === null ? "∞" : formatMoney(r.maxAmountMinor)}</span> },
                 { key: "steps", label: "Approvers", render: (r) => <>{r.steps.map((s) => s.label).join(" → ")}</> },
-                { key: "workflowDefinitionCode", label: "Workflow", render: (r) => <span className="mono">{r.workflowDefinitionCode}</span> },
+                { key: "workflowDefinitionCode", label: t("matrixWorkflowCode"), render: (r) => <span className="mono">{r.workflowDefinitionCode}</span> },
                 { key: "active", label: "Status", render: (r) => <StatusPill status={r.pending ? "pending" : r.active ? "active" : "inactive"} /> },
                 {
                   key: "id",

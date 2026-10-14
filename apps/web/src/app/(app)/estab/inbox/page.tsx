@@ -3,10 +3,12 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getEstabDeskFiles } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
-import { daysLeft } from "@/lib/estab/sla";
+import { daysLeft, isClosedStatus, isOverdue } from "@/lib/estab/sla";
+import { getTranslations } from "next-intl/server";
 import { InboxPanel, type InboxRow } from "./InboxPanel";
 
 export default async function EstabInboxPage() {
+  const t = await getTranslations("estabW2");
   const { data: files, source } = await getEstabDeskFiles();
   // A failed fetch must NOT read as "nothing on your desk" (GAP-ESTAB-INBOX-02):
   // show "—" stats and a retryable error state instead of fabricated zeros.
@@ -28,11 +30,11 @@ export default async function EstabInboxPage() {
   let overdue = 0;
   let dueSoon = 0;
   for (const f of files) {
-    if (f.status === "archived" || f.status === "disposed") continue;
+    if (isClosedStatus(f.status)) continue;
+    // One overdue definition for the whole module (lib/estab/sla.ts); the dashboard counts the same rule office-wide.
+    if (isOverdue(f)) { overdue += 1; continue; }
     const d = daysLeft(f.dueDate);
-    if (d === null) continue;
-    if (d < 0) overdue += 1;
-    else if (d <= 3) dueSoon += 1;
+    if (d !== null && d <= 3) dueSoon += 1;
   }
 
   const stat = (n: number) => (errored ? "—" : n.toLocaleString("en-IN"));
@@ -49,7 +51,7 @@ export default async function EstabInboxPage() {
       <StatGrid>
         <StatCard icon="📥" iconBg="#e6f7f5" label="Active on desk" value={stat(active)} />
         <StatCard icon="⏳" iconBg="#fffaeb" label="Due ≤ 3 days" value={stat(dueSoon)} />
-        <StatCard icon="🔴" iconBg="#fef3f2" label="Overdue" value={stat(overdue)} />
+        <StatCard icon="🔴" iconBg="#fef3f2" label={t("inboxOverdue")} hint={t("inboxOverdueHint")} value={stat(overdue)} />
         <StatCard icon="📨" iconBg="#eff6ff" label="Awaiting receipt" value={stat(awaitingReceipt)} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>

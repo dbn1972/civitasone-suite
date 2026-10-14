@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getVehicles } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
+import { FUEL_LABEL_KEY } from "@/lib/estab/vehiclePayload";
 import { VehiclesTable, type VehicleRow } from "./VehiclesTable";
 
 // GAP-ESTAB-VEHICLES-02/NEW-01: show the resolved officer name (never the raw
@@ -12,6 +14,7 @@ function allocatedLabel(v: { assignedTo?: string; assignedToName?: string }): st
 }
 
 export default async function VehiclesPage() {
+  const t = await getTranslations("estabW2");
   const { data: vehicles, source } = await getVehicles();
   const errored = source === "error";
   const total = vehicles.length;
@@ -26,9 +29,10 @@ export default async function VehiclesPage() {
   const rows: VehicleRow[] = vehicles.map((v) => ({
     id: v.id,
     vehicleNo: v.vehicleNo,
-    model: `${v.make} ${v.model}`.trim(),
+    // A one-word make/model has an empty model: join what exists, never repeat or pad it.
+    model: [v.make, v.model].filter(Boolean).join(" "),
     allocatedTo: allocatedLabel(v),
-    fuel: v.fuelType ? v.fuelType.replace(/_/g, " ") : "—",
+    fuel: v.fuelType ? (FUEL_LABEL_KEY[v.fuelType] ? t(FUEL_LABEL_KEY[v.fuelType]!) : v.fuelType.replace(/_/g, " ")) : "—",
     // NEW-01: guard against a missing odometer so a null never throws on
     // .toLocaleString(); show "—" instead of a fabricated 0.
     odometer: typeof v.odometerKm === "number" ? `${v.odometerKm.toLocaleString("en-IN")} km` : "—",

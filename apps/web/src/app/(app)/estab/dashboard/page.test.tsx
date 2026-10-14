@@ -53,13 +53,18 @@ describe("EstabDashboardPage — GAP-ESTAB-DASHBOARD-02 (label matches field)", 
     getEstabFiles.mockReset();
   });
 
-  it("labels the filesPending tile 'Files Pending' (not the ambiguous 'Active Files')", async () => {
+  it("GAP-ESTAB-DASHBOARD-02: the service counts status='active', so the tile is 'Active Files' (what the register's tile counts), not 'Files Pending'", async () => {
     getEstabDashboard.mockResolvedValue({ data: DASH, source: "api" });
     getEstabFiles.mockResolvedValue({ data: [], source: "api" });
     const ui = await EstabDashboardPage();
     render(ui);
-    expect(screen.getByText("Files Pending")).toBeInTheDocument();
-    expect(screen.queryByText("Active Files")).not.toBeInTheDocument();
+    expect(screen.getByText("Active Files")).toBeInTheDocument();
+    expect(screen.queryByText("Files Pending")).not.toBeInTheDocument();
+    const tile = screen.getByText("Active Files").closest("a") as HTMLElement;
+    expect(tile.textContent).toContain("12");
+    expect(tile).toHaveAttribute("href", "/estab/list");
+    const snapshot = screen.getByRole("heading", { name: /Pendency snapshot/i }).closest(".card") as HTMLElement;
+    expect(within(snapshot).getByText("Active files")).toBeInTheDocument();
   });
 });
 

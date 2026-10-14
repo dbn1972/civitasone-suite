@@ -1,4 +1,4 @@
-import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { eq, and, desc, asc, sql, ilike, or } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import {
   estabFiles, estabNotings, estabDispatch, estabInward, estabFileMovements, estabFileAttachments,
@@ -141,6 +141,16 @@ export async function findInwardByIdTx(tx: Writer, id: string, tenantId: string)
   return rows[0] ?? null;
 }
 
+/**
+ * GAP-ESTAB-FILES-NEW-02: findInwardByIdTx() that also row-locks the inward entry for the rest of the
+ * transaction, so two file-opening writes for one DAK serialise: the second sees the first's fileId.
+ */
+export async function lockInwardByIdTx(tx: Writer, id: string, tenantId: string) {
+  const rows = await tx.select().from(estabInward)
+    .where(and(eq(estabInward.id, id), eq(estabInward.tenantId, tenantId))).limit(1).for("update");
+  return rows[0] ?? null;
+}
+
 // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
 // before this read — a bare db.select() runs with no RLS GUC set.
 export async function findNotingsByFile(fileId: string): Promise<NotingRow[]> {
@@ -254,16 +264,53 @@ export async function listNotingsByTenant(tenantId: string, limit: number): Prom
     .orderBy(desc(estabNotings.createdAt)).limit(limit));
 }
 
-export async function listInwardByTenant(tenantId: string, limit: number) {
-  return db.transaction((tx) => tx.select().from(estabInward).where(eq(estabInward.tenantId, tenantId))
-    .orderBy(desc(estabInward.receivedAt)).limit(limit));
+export type RegisterPage = { q?: string | undefined; offset?: number | undefined };
+
+/** `%q%` for ILIKE with the LIKE metacharacters in the user's text escaped. */
+function containsPattern(q: string): string {
+  return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+}
+
+function inwardWhere(tenantId: string, q?: string) {
+  const p = q ? containsPattern(q) : null;
+  return and(
+    eq(estabInward.tenantId, tenantId),
+    p
+      ? or(ilike(estabInward.dakNo, p), ilike(estabInward.barcode, p), ilike(estabInward.subject, p), ilike(estabInward.fromAddress, p))
+      : undefined,
+  );
+}
+
+export async function listInwardByTenant(tenantId: string, limit: number, page: RegisterPage = {}) {
+  return db.transaction((tx) => tx.select().from(estabInward).where(inwardWhere(tenantId, page.q))
+    .orderBy(desc(estabInward.receivedAt), desc(estabInward.id)).limit(limit).offset(page.offset ?? 0));
+}
+
+export async function countInwardByTenant(tenantId: string, q?: string): Promise<number> {
+  const [row] = await db.transaction((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(estabInward)
+    .where(inwardWhere(tenantId, q)));
+  return row?.n ?? 0;
 }
 
 // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
 // before this read — a bare db.select() runs with no RLS GUC set.
-export async function listDispatchByTenant(tenantId: string, limit: number) {
-  return db.transaction((tx) => tx.select().from(estabDispatch).where(eq(estabDispatch.tenantId, tenantId))
-    .orderBy(desc(estabDispatch.dispatchedAt)).limit(limit));
+function dispatchWhere(tenantId: string, q?: string) {
+  const p = q ? containsPattern(q) : null;
+  return and(
+    eq(estabDispatch.tenantId, tenantId),
+    p ? or(ilike(estabDispatch.dispatchNo, p), ilike(estabDispatch.toAddress, p), ilike(estabDispatch.subject, p)) : undefined,
+  );
+}
+
+export async function listDispatchByTenant(tenantId: string, limit: number, page: RegisterPage = {}) {
+  return db.transaction((tx) => tx.select().from(estabDispatch).where(dispatchWhere(tenantId, page.q))
+    .orderBy(desc(estabDispatch.dispatchedAt), desc(estabDispatch.id)).limit(limit).offset(page.offset ?? 0));
+}
+
+export async function countDispatchByTenant(tenantId: string, q?: string): Promise<number> {
+  const [row] = await db.transaction((tx) => tx.select({ n: sql<number>`count(*)::int` }).from(estabDispatch)
+    .where(dispatchWhere(tenantId, q)));
+  return row?.n ?? 0;
 }
 
 // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id

@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button, PageHeader, Term, ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
-import { formatShortId } from "@/lib/formatters";
+import { useEstabT } from "@/lib/estab/useEstabT";
+import { useEstabDivisions } from "@/lib/estab/useEstabDivisions";
 
 // Classification options are exactly the four tiers the estab-service actually
 // stores and enforces as an ordered clearance lattice
@@ -28,12 +29,18 @@ export default function NewFilePage() {
   const router = useRouter();
   const [subject, setSubject] = useState("");
   const [classification, setClassification] = useState("public");
-  const [department, setDepartment] = useState("ADMIN");
-  // GAP-ESTAB-FILES-NEW-03: load operator divisions for a department dropdown.
-  const [divisions, setDivisions] = useState<string[]>([]);
+  const t = useEstabT();
+  // GAP-ESTAB-FILES-NEW-03: the department is chosen from the real departments (enrolled
+  // operator divisions), never typed and never silently defaulted to "ADMIN".
+  const [department, setDepartment] = useState("");
+  const depts = useEstabDivisions();
+  const divisions = depts.divisions;
   const [initialNote, setInitialNote] = useState("");
   const [dakNo, setDakNo] = useState("");
   const [parentFileId, setParentFileId] = useState("");
+  // The chosen parent's file number, kept apart from the (cleared) search results so the
+  // field never has to fall back to an id fragment.
+  const [parentFileNo, setParentFileNo] = useState("");
   // GAP-ESTAB-FILES-NEW-02: parent-file search results + DAK list for pickers.
   const [parentQuery, setParentQuery] = useState("");
   const [parentResults, setParentResults] = useState<Array<{ id: string; fileNo: string; subject: string }>>([]);
@@ -67,28 +74,10 @@ export default function NewFilePage() {
     }
   }, [toast]);
 
-  // GAP-ESTAB-FILES-NEW-03: load divisions for department dropdown.
+  // With exactly one department there is nothing to choose: select it.
   useEffect(() => {
-    const controller = new AbortController();
-    (async () => {
-      try {
-        const res = await fetch("/api/proxy/v1/estab/operators?activeOnly=true&limit=500", { signal: controller.signal });
-        if (res.ok) {
-          const body = (await res.json()) as { data?: Array<{ division: string }> };
-          const divs = [...new Set((body.data ?? []).map((o) => o.division).filter(Boolean))].sort();
-          setDivisions(divs);
-          // Default to the first division instead of hard-coded "ADMIN".
-          if (divs.length > 0 && department === "ADMIN" && !divs.includes("ADMIN")) {
-            setDepartment(divs[0]);
-          }
-        }
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return;
-      }
-    })();
-    return () => controller.abort();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (depts.divisions.length === 1) setDepartment((cur) => cur || depts.divisions[0]!);
+  }, [depts.divisions]);
 
   // GAP-ESTAB-FILES-NEW-02: load unlinked DAK items for the DAK picker.
   useEffect(() => {
@@ -97,11 +86,16 @@ export default function NewFilePage() {
       try {
         const res = await fetch("/api/proxy/v1/estab/dak?limit=200", { signal: controller.signal });
         if (res.ok) {
-          const body = (await res.json()) as { data?: Array<{ id: string; dakNo?: string; receiptNo?: string }> };
+          const body = (await res.json()) as { data?: Array<{ id: string; dakNo?: string; receiptNo?: string; fileId?: string | null; status?: string }> };
           setDakOptions(
             (body.data ?? [])
-              .filter((d) => d.dakNo || d.receiptNo)
-              .map((d) => ({ id: d.id, dakNo: d.dakNo ?? d.receiptNo ?? formatShortId(d.id) })),
+              // Only a DAK that is received and not yet linked to a file can start a new one (one DAK, one file).
+              .filter((d) => !d.fileId && (d.status === undefined || d.status === "received"))
+              .flatMap((d) => {
+                // A DAK with no number cannot be told apart by the clerk; never label it with an id fragment.
+                const no = d.dakNo ?? d.receiptNo;
+                return no ? [{ id: d.id, dakNo: no }] : [];
+              }),
           );
         }
       } catch (err) {
@@ -139,6 +133,17 @@ export default function NewFilePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting || created) return;
+    if (!department) {
+      setToast({ type: "error", message: t("errDeptRequired") });
+      return;
+    }
+    // GAP-ESTAB-FILES-NEW-02: the DAK must be one of the unlinked entries offered, not typed text;
+    // its id (not just the number) is sent so the service links it and refuses a second file for it.
+    const dakChoice = dakNo.trim() ? dakOptions.find((d) => d.dakNo === dakNo.trim()) : undefined;
+    if (dakNo.trim() && !dakChoice) {
+      setToast({ type: "error", message: t("errDakUnknown") });
+      return;
+    }
     setSubmitting(true);
     formError.clear();
     setToast(null);
@@ -152,14 +157,15 @@ export default function NewFilePage() {
       // one both showed the officer a wrong number and risked persisting it.
       const payload = {
         subject,
-        dept: department || "ADMIN",
+        dept: department,
         // Send the selected tier verbatim — no lossy remap (NEW-01).
         classification,
         // SECURITY: no officer placeholder — currentWith is intentionally
         // omitted so the server defaults it to the authenticated actor
         // creating this file (never a client-suppliable id).
         initialNote: initialNote || undefined,
-        dakNo: dakNo || undefined,
+        dakNo: dakChoice?.dakNo,
+        inwardId: dakChoice?.id,
         parentFileId: parentFileId.trim() || undefined,
       };
       const res = await fetch("/api/proxy/v1/estab/files", {
@@ -323,9 +329,10 @@ export default function NewFilePage() {
               <input
                 id="parentFileId"
                 type="text"
-                value={parentFileId ? `${parentResults.find((r) => r.id === parentFileId)?.fileNo ?? ""} — selected` : parentQuery}
+                value={parentFileId ? `${parentFileNo} — ${t("parentSelected")}` : parentQuery}
                 onChange={(e) => {
                   setParentFileId("");
+                  setParentFileNo("");
                   setParentQuery(e.target.value);
                 }}
                 placeholder="Search by subject or file no…"
@@ -343,7 +350,7 @@ export default function NewFilePage() {
                     <li key={r.id}>
                       <button
                         type="button"
-                        onClick={() => { setParentFileId(r.id); setParentQuery(r.fileNo); setParentResults([]); }}
+                        onClick={() => { setParentFileId(r.id); setParentFileNo(r.fileNo); setParentQuery(r.fileNo); setParentResults([]); }}
                         style={{ display: "block", width: "100%", textAlign: "start", padding: "6px 10px", border: "none", background: "transparent", cursor: "pointer", font: "inherit" }}
                       >
                         {r.fileNo} — {r.subject}
@@ -353,7 +360,7 @@ export default function NewFilePage() {
                 </ul>
               )}
               {parentFileId && (
-                <span className="sub" style={{ fontSize: 12 }}>Selected: {parentResults.find((r) => r.id === parentFileId)?.fileNo ?? parentFileId.slice(0, 8)}</span>
+                <span className="sub" style={{ fontSize: 12 }}>{t("parentSelected")}: {parentFileNo}</span>
               )}
             </div>
             <div
@@ -393,40 +400,30 @@ export default function NewFilePage() {
               }}
             >
               <label htmlFor="department" className="l">
-                Department
+                {t("dept")}
               </label>
-              {divisions.length > 0 ? (
-                <select
-                  id="department"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "8px 12px",
-                    border: "1px solid var(--line)",
-                    borderRadius: 8,
-                    fontSize: 13,
-                  }}
-                >
-                  {divisions.map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  id="department"
-                  type="text"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "8px 12px",
-                    border: "1px solid var(--line)",
-                    borderRadius: 8,
-                    fontSize: 13,
-                  }}
-                />
-              )}
+              <select
+                id="department"
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                aria-required="true"
+                disabled={!depts.loaded || divisions.length === 0 /* ux-001-ok: a failed load is told apart below by depts.failed */}
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  border: "1px solid var(--line)",
+                  borderRadius: 8,
+                  fontSize: 13,
+                }}
+              >
+                <option value="">{t("deptSelect")}</option>
+                {divisions.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+              {depts.loaded && divisions.length === 0 /* ux-001-ok: depts.failed picks the failure message */ ? (
+                <span role="note" className="sub" style={{ fontSize: 12 }}>{depts.failed ? t("deptLoadFailed") : t("deptNone")}</span>
+              ) : null}
             </div>
             <div
               className="fld"

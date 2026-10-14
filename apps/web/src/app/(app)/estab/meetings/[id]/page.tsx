@@ -4,7 +4,8 @@ import { PageHeader, RefreshErrorState, StatusPill } from "../../../../_componen
 import { formatIndianDate } from "@/lib/formatters";
 import { ActionPointsTable, AttendeesTable } from "./MeetingDetailTables";
 import { MeetingActions } from "./MeetingActions";
-import { ArrowLeft } from "lucide-react";
+import { MeetingTimeline } from "./MeetingTimeline";
+import { getTranslations } from "next-intl/server";
 
 export default async function MeetingDetailPage({
   params,
@@ -13,6 +14,7 @@ export default async function MeetingDetailPage({
   params: { id: string };
   searchParams?: { tab?: string };
 }) {
+  const t = await getTranslations("estabW2");
   const { data: meeting, source } = await getMeetingById(params.id);
   const onAgendaTab = searchParams?.tab === "agenda";
 
@@ -40,18 +42,12 @@ export default async function MeetingDetailPage({
 
   return (
     <>
-      <a className="back" href="/estab/meetings"><ArrowLeft aria-hidden="true" size={14} /> Back</a>
-      <div className="ph" style={{ marginTop: 6 }}>
-        <div>
-          <h1>
-            {meeting.title}{" "}
-            <StatusPill status={meeting.status.replace(/_/g, " ")} label={meeting.status.replace(/_/g, " ")} />
-          </h1>
-        </div>
-        <div className="ph-act">
-          <MeetingActions meetingId={params.id} />
-        </div>
-      </div>
+      {/* GAP-ESTAB-MEETINGS-DETAIL-05: the shared PageHeader carries the title, status and actions. */}
+      <PageHeader
+        title={<>{meeting.title}{" "}<StatusPill status={meeting.status.replace(/_/g, " ")} label={meeting.status.replace(/_/g, " ")} /></>}
+        back="/estab/meetings"
+        actions={<MeetingActions meetingId={params.id} />}
+      />
 
       <div className="tabs" role="tablist" style={{ marginBottom: 14 }}>
         <Link
@@ -145,19 +141,23 @@ export default async function MeetingDetailPage({
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">
-            <div className="card-h"><h3>Workflow / movement</h3></div>
+            <div className="card-h"><h3>{t("meetingWorkflowHeading")}</h3></div>
             <div className="pad">
-              <ul className="tl">
-                <li className="done"><div className="t">Scheduled</div><div className="d">{formatIndianDate(meeting.scheduledDate)}</div></li>
-                {/* GAP-ESTAB-MEETINGS-DETAIL-02: cancelled does NOT imply agenda was circulated */}
-                <li className={meeting.status === "scheduled" || meeting.status === "cancelled" ? "todo" : "done"}><div className="t">Agenda circulated</div><div className="d"></div></li>
-                <li className={meeting.status === "in_progress" ? "cur" : meeting.status === "completed" ? "done" : "todo"}><div className="t">Meeting held</div><div className="d"></div></li>
-                <li className={meeting.status === "completed" && meeting.minutes ? "done" : "todo"}><div className="t">MOM issued</div><div className="d"></div></li>
-                {/* GAP-ESTAB-MEETINGS-DETAIL-01: empty actionPoints.every() is
-                    vacuously true — require status===completed AND at least
-                    one action point that is all completed. */}
-                <li className={meeting.status === "completed" && meeting.actionPoints.length > 0 && meeting.actionPoints.every((a) => a.status === "completed") ? "done" : "todo"}><div className="t">Actions closed</div><div className="d"></div></li>
-              </ul>
+              <MeetingTimeline
+                status={meeting.status}
+                scheduledDate={meeting.scheduledDate ? formatIndianDate(meeting.scheduledDate) : ""}
+                hasMinutes={Boolean(meeting.minutes)}
+                actionPointStatuses={meeting.actionPoints.map((a) => a.status)}
+                labels={{
+                  scheduled: t("tlScheduled"),
+                  agendaCirculated: t("tlAgendaCirculated"),
+                  held: t("tlHeld"),
+                  momIssued: t("tlMomIssued"),
+                  actionsClosed: t("tlActionsClosed"),
+                }}
+              />
+              {/* The service keeps a status, not an event log: say so rather than imply recorded events. */}
+              <p className="sub" style={{ marginTop: 10, fontSize: 12 }}>{t("meetingStageNote")}</p>
             </div>
           </div>
           {meeting.attendees.length > 0 ? (
