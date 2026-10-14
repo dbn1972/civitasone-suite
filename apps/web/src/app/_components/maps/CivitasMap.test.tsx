@@ -8,7 +8,7 @@
  * - Handles keyboard focus states
  */
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@/test-utils/intl-render";
 import { CivitasMap, type MapMarker } from "./CivitasMap";
 
 // Minimal test environment — jsdom doesn't run iframe scripts, but we can test
@@ -114,8 +114,10 @@ describe("CivitasMap", () => {
     const onMarkerClick = vi.fn();
     render(<CivitasMap onMarkerClick={onMarkerClick} />);
 
-    // Simulate postMessage from iframe
+    // Simulate postMessage from the map iframe
+    const iframe = screen.getByTitle("Interactive map showing locations") as HTMLIFrameElement;
     const event = new MessageEvent("message", {
+      source: iframe.contentWindow,
       data: { type: "marker-click", marker: { id: "1", lat: 28.6, lng: 77.2, label: "Delhi" } },
     });
     window.dispatchEvent(event);
@@ -138,5 +140,48 @@ describe("CivitasMap", () => {
     window.dispatchEvent(event);
 
     expect(onMarkerClick).not.toHaveBeenCalled();
+  });
+
+  it("ignores marker clicks that do not come from the map iframe", () => {
+    const onMarkerClick = vi.fn();
+    render(<CivitasMap onMarkerClick={onMarkerClick} />);
+    window.dispatchEvent(
+      new MessageEvent("message", { data: { type: "marker-click", marker: { id: "x", lat: 1, lng: 2 } } }),
+    );
+    expect(onMarkerClick).not.toHaveBeenCalled();
+  });
+
+  // GAP-LOCATIONS-MAPS-02
+  it("self-hosts Leaflet and never loads it from a third-party CDN", () => {
+    render(<CivitasMap />);
+    const doc = (screen.getByTitle("Interactive map showing locations") as HTMLIFrameElement).getAttribute("srcdoc") ?? "";
+    expect(doc).toContain(`${window.location.origin}/vendor/leaflet/leaflet.js`);
+    expect(doc).not.toContain("unpkg.com");
+  });
+
+  it("passes the tile URL and marker labels as inert JSON data, never as executable script", () => {
+    const tricky = "https://tiles.internal/{z}/{x}/{y}.png?a=');alert(1);//</script><img src=x>";
+    render(<CivitasMap tileUrl={tricky} markers={[{ id: "1", lat: 1, lng: 2, label: "</script><b>x</b>" }]} />);
+    const doc = (screen.getByTitle("Interactive map showing locations") as HTMLIFrameElement).getAttribute("srcdoc") ?? "";
+    const m = doc.match(/<script type="application\/json" id="civitas-map-config">([\s\S]*?)<\/script>/);
+    expect(m).toBeTruthy();
+    expect(JSON.parse(m![1]!).tileUrl).toBe(tricky);
+    expect(m![1]).not.toContain("<");
+    // No inline executable script: the page CSP forbids it. Only external same-origin scripts.
+    const executable = [...doc.matchAll(/<script(?![^>]*type="application\/json")[^>]*>([\s\S]*?)<\/script>/g)];
+    for (const e of executable) expect(e[1]!.trim()).toBe("");
+    expect(doc).toContain(`${window.location.origin}/maps/civitas-map.js`);
+  });
+
+  it("shows a visible, retryable error when the map reports it could not load", () => {
+    render(<CivitasMap />);
+    const iframe = screen.getByTitle("Interactive map showing locations") as HTMLIFrameElement;
+    expect(screen.queryByRole("alert")).toBeNull();
+    act(() => {
+      window.dispatchEvent(new MessageEvent("message", { source: iframe.contentWindow, data: { type: "map-error", reason: "tiles" } }));
+    });
+    expect(screen.getByRole("alert").textContent).toContain("The map could not be loaded");
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });

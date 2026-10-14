@@ -66,7 +66,7 @@ export async function mapLayerUpdate(ctx: RequestContext, id: string, body: Upda
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function mapLayerDelete(ctx: RequestContext, id: string): Promise<Accepted> {
+export async function mapLayerDelete(ctx: RequestContext, id: string, reason?: string): Promise<Accepted> {
   await queue.publish(COMMANDS.mapLayerDelete, {
     messageId: randomUUID(),
     type: COMMANDS.mapLayerDelete,
@@ -74,7 +74,7 @@ export async function mapLayerDelete(ctx: RequestContext, id: string): Promise<A
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { id },
+    payload: { id, ...(reason ? { reason } : {}) },
   });
 
   return { id, status: "accepted", correlationId: ctx.correlationId };

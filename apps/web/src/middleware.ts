@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { COOKIE } from "@/lib/auth/config";
 import { defaultLoginPath, isDevLoginEnabled } from "@/lib/auth/env";
+import { tileImgSource } from "@/lib/mapTiles";
 
 // SEC-029: /api/metrics is public HERE (no session cookie) because a
 // Prometheus scrape carries no browser session to check -- access is instead
@@ -21,7 +22,7 @@ import { defaultLoginPath, isDevLoginEnabled } from "@/lib/auth/env";
 // route that merely starts with the same letters stays private.
 const PUBLIC_EXACT = ["/"];
 const PUBLIC_SEGMENT = ["/pricing", "/docs"];
-const PUBLIC = ["/auth", "/api/auth", "/api/careers", "/careers", "/verify", "/_next", "/favicon.ico", "/sw.js", "/api/metrics", "/sandbox", "/api/sandbox", "/contact", "/api/contact", "/.well-known"];
+const PUBLIC = ["/auth", "/api/auth", "/api/careers", "/careers", "/verify", "/_next", "/favicon.ico", "/sw.js", "/vendor/leaflet/", "/maps/civitas-map.js", "/api/metrics", "/sandbox", "/api/sandbox", "/contact", "/api/contact", "/.well-known"];
 
 // M2: decode JWT payload and check exp claim — does not verify signature
 // (signature is checked by the gateway on every proxied request).
@@ -92,7 +93,9 @@ function buildNextResponse(req: NextRequest): NextResponse {
     "style-src 'self' 'unsafe-inline'",
     "style-src-elem 'self' 'unsafe-inline'",
     "style-src-attr 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    // Map base-map tiles (MAP_TILE_URL, default OpenStreetMap) -- the map iframe is a
+    // srcdoc document and inherits this policy.
+    `img-src 'self' data: blob: ${tileImgSource()}`,
     `connect-src 'self'${KEYCLOAK_ORIGIN ? ` ${KEYCLOAK_ORIGIN}` : ''}`,
     "font-src 'self'",
     "frame-ancestors 'none'",

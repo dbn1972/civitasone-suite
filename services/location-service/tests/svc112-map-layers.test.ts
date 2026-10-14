@@ -93,3 +93,56 @@ describe("SVC-112 map-layers CRUD", () => {
     expect(patch.statusCode).toBe(404);
   });
 });
+
+describe("GAP-LOCATIONS-MAPS-03 layer source URL must be https", () => {
+  it("rejects http:// and non-http schemes on create", async () => {
+    for (const url of ["http://tiles.example.gov.in/{z}/{x}/{y}.png", "javascript:alert(1)", "file:///etc/passwd"]) {
+      const res = await req("POST", "/v1/locations/map-layers", admin(TENANT_A), { name: `bad-${Date.now()}`, sourceType: "tile", url });
+      expect(res.statusCode, url).toBe(400);
+      expect(res.json().code).toBe("VALIDATION_FAILED");
+    }
+  });
+
+  it("rejects an http:// URL on update", async () => {
+    const created = await req("POST", "/v1/locations/map-layers", admin(TENANT_A), { name: `ok-${Date.now()}`, sourceType: "tile", url: "https://tiles.example.gov.in/{z}/{x}/{y}.png" });
+    expect(created.statusCode).toBe(202);
+    await drain();
+    const res = await req("PATCH", `/v1/locations/map-layers/${created.json().id}`, admin(TENANT_A), { url: "http://tiles.example.gov.in/{z}/{x}/{y}.png" });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("a non-admin still gets 403 before validation runs", async () => {
+    const res = await req("POST", "/v1/locations/map-layers", reader(TENANT_A), { name: "x", sourceType: "tile", url: "http://x.example.gov.in" });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe("GAP-LOCATIONS-HOME-01 monitoring + master data reject a basic employee token", () => {
+  const employee = (tid: string) => signToken({ sub: ACTOR, tid, roles: ["employee"], sid: "s" }, SECRET, 3600);
+  it("returns 403 on map-markers, geofences, infrastructure and map-layers", async () => {
+    for (const url of ["/v1/locations/map-markers", "/v1/geofences", "/v1/locations/infrastructure", "/v1/locations/map-layers"]) {
+      const res = await req("GET", url, employee(TENANT_A));
+      expect(res.statusCode, url).toBe(403);
+    }
+  });
+});
+
+describe("GAP-LOCATIONS-MAPS-01 delete records the stated reason in the audit row", () => {
+  it("persists ?reason= as audit metadata and rejects an over-long reason", async () => {
+    const created = await req("POST", "/v1/locations/map-layers", admin(TENANT_A), { name: `del-${Date.now()}`, sourceType: "tile", url: "https://tiles.example.gov.in/{z}/{x}/{y}.png" });
+    const id: string = created.json().id;
+    await drain();
+    const tooLong = await req("DELETE", `/v1/locations/map-layers/${id}?reason=${"x".repeat(501)}`, admin(TENANT_A));
+    expect(tooLong.statusCode).toBe(400);
+    const res = await req("DELETE", `/v1/locations/map-layers/${id}?reason=${encodeURIComponent("Superseded by the 2026 basemap")}`, admin(TENANT_A));
+    expect(res.statusCode).toBe(202);
+    await drain();
+    const rows = await sqlClient.unsafe(
+      `SELECT payload FROM _outbox.messages WHERE tenant_id = $1 AND topic = 'audit.event.record' AND payload->>'resourceId' = $2`,
+      [TENANT_A, id],
+    ) as unknown as Array<{ payload: { action: string; metadata?: { reason?: string } } }>;
+    const del = rows.map((r) => r.payload).find((p) => p.action === "delete");
+    expect(del?.metadata?.reason).toBe("Superseded by the 2026 basemap");
+  });
+});
+
