@@ -5,7 +5,7 @@
  * - Dashboard: expiring contracts
  * - Config: get, patch
  */
-import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest";
 import { createMockSqlClient } from "./fixtures/mock-sql-client.js";
 import { signToken } from "@civitasone/auth";
 
@@ -560,6 +560,8 @@ describe("POST /v1/hrms/contracts/:id/terminate", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/hrms/contracts/:id/renew", () => {
+  afterEach(() => { SS.managerCanRead = false; });
+
   it("initiates renewal for active contract (202)", async () => {
     // Each scopedRead chain calls H.selectFrom twice (where + limit), so we need 4 values:
     // getContractById: 2 calls, getPendingRenewalForContract: 2 calls
@@ -712,7 +714,6 @@ describe("POST /v1/hrms/contracts/:id/renew", () => {
       headers: auth(USER, ["manager"]),
       payload: { newEndDate: "2028-01-01" },
     });
-    SS.managerCanRead = false;
     expect(r.statusCode).toBe(202);
     await app.close();
   });
