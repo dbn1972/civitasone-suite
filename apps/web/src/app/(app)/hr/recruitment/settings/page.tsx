@@ -73,13 +73,13 @@ export default function RecruitmentSettingsPage() {
           <fieldset className="flex flex-col gap-3 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
             <legend className="px-1 text-sm font-semibold">{t("setIdentity")}</legend>
             <p className="text-xs text-slate-500">{t("setIdentityHelp")}</p>
-            <Field id={`${uid}-org`} label={t("setOrgName")} error={err("organisationName") ?? undefined}>
+            <Field id={`${uid}-org`} label={t("setOrgName")} error={err("organisationName") ?? undefined} announce>
               <Input maxLength={200} value={form.organisationName} onChange={(e) => set("organisationName", e.target.value)} />
             </Field>
-            <Field id={`${uid}-dept`} label={t("setDeptName")} error={err("departmentName") ?? undefined}>
+            <Field id={`${uid}-dept`} label={t("setDeptName")} error={err("departmentName") ?? undefined} announce>
               <Input maxLength={200} value={form.departmentName} onChange={(e) => set("departmentName", e.target.value)} />
             </Field>
-            <Field id={`${uid}-emblem`} label={t("setEmblem")} error={err("emblemUrl") ?? undefined}>
+            <Field id={`${uid}-emblem`} label={t("setEmblem")} error={err("emblemUrl") ?? undefined} announce>
               <Input value={form.emblemUrl} onChange={(e) => set("emblemUrl", e.target.value)} placeholder="https://" />
             </Field>
           </fieldset>
@@ -95,7 +95,7 @@ export default function RecruitmentSettingsPage() {
 
           <fieldset className="flex flex-col gap-2 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
             <legend className="px-1 text-sm font-semibold">{t("setPrivacy")}</legend>
-            <Field id={`${uid}-note`} label={t("setPurposeNote")} error={err("applicantPurposeNote") ?? undefined}>
+            <Field id={`${uid}-note`} label={t("setPurposeNote")} error={err("applicantPurposeNote") ?? undefined} announce>
               <Textarea rows={4} maxLength={2000} value={form.applicantPurposeNote} onChange={(e) => set("applicantPurposeNote", e.target.value)} />
               <p className="text-xs text-slate-500">{t("setPurposeNoteHelp")}</p>
             </Field>

@@ -64,4 +64,21 @@ describe("VerifyForm16Form", () => {
     });
     expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
+
+  it("an upload/request failure does not mark the file field invalid", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
+    renderForm();
+    const input = screen.getByLabelText(/Form-16 PDF/) as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [makePdfFile()] } });
+    fireEvent.click(screen.getByRole("button", { name: "Verify signature" }));
+    await screen.findAllByRole("alert");
+    expect(input).not.toHaveAttribute("aria-invalid");
+    expect(screen.queryByText("This field is required.")).not.toBeInTheDocument();
+  });
+
+  it("a missing file marks the file field invalid", () => {
+    renderForm();
+    fireEvent.click(screen.getByRole("button", { name: "Verify signature" }));
+    expect(screen.getByLabelText(/Form-16 PDF/)).toHaveAttribute("aria-invalid", "true");
+  });
 });

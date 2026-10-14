@@ -46,6 +46,11 @@ export interface FieldProps {
    * control and wires `aria-invalid` / `aria-describedby` onto it.
    */
   error?: string;
+  /**
+   * Announce the inline error to assistive tech (renders it with `role="alert"`). Opt in for forms that have no
+   * separate summary/banner alert of their own -- otherwise the same failure is read out twice.
+   */
+  announce?: boolean;
   /** Disables the wrapped control (and dims the label). A control can still override this itself. */
   disabled?: boolean;
   /** The form control -- normally a single Input, Select, or Textarea. */
@@ -83,6 +88,7 @@ export function Field({
   label,
   required = false,
   error,
+  announce = false,
   disabled = false,
   children,
   className,
@@ -116,7 +122,7 @@ export function Field({
       </label>
       <FieldContext.Provider value={ctx}>{children}</FieldContext.Provider>
       {invalid && (
-        <span id={errorId} style={formErrorStyle}>
+        <span id={errorId} role={announce ? "alert" : undefined} style={formErrorStyle}>
           {error}
         </span>
       )}

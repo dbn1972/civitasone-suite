@@ -106,7 +106,7 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
       </h2>
       <div style={grid2}>
         {/* Employee ID */}
-        <Field id="w-empNo" label={<>{t("employeeIdFieldLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.employeeNo} style={fieldWrap}>
+        <Field id="w-empNo" label={<>{t("employeeIdFieldLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.employeeNo} announce style={fieldWrap}>
           <Input
             type="text"
             value={data.employeeNo}
@@ -117,7 +117,7 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
         </Field>
 
         {/* Date of Joining */}
-        <Field id="w-doj" label={<>{t("dateOfJoiningLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.dateOfJoining} style={fieldWrap}>
+        <Field id="w-doj" label={<>{t("dateOfJoiningLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.dateOfJoining} announce style={fieldWrap}>
           <Input
             type="date"
             value={data.dateOfJoining}
@@ -127,7 +127,7 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
         </Field>
 
         {/* Department */}
-        <Field id="w-dept" label={<>{t("departmentLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.departmentId} style={fieldWrap}>
+        <Field id="w-dept" label={<>{t("departmentLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.departmentId} announce style={fieldWrap}>
           <Select
             value={data.departmentId}
             onChange={(e) => onChange("departmentId", e.target.value)}
@@ -140,7 +140,7 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
         </Field>
 
         {/* Designation */}
-        <Field id="w-desig" label={<>{t("designationLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.designationId} style={fieldWrap}>
+        <Field id="w-desig" label={<>{t("designationLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.designationId} announce style={fieldWrap}>
           <Select
             value={data.designationId}
             onChange={(e) => onChange("designationId", e.target.value)}
@@ -181,7 +181,7 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
         </div>
 
         {/* Employment Type */}
-        <Field id="w-empType" label={t("employmentTypeLabel")} error={typesLoadFailed ? t("employmentTypeLoadError") : undefined} style={fieldWrap}>
+        <Field id="w-empType" label={t("employmentTypeLabel")} error={typesLoadFailed ? t("employmentTypeLoadError") : undefined} announce style={fieldWrap}>
           <Select
             value={data.employeeType}
             onChange={(e) => onChange("employeeType", e.target.value)}
@@ -206,7 +206,7 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
         <Field id="w-basicPay" label={<>{t("basicPayLabel")}
             <span style={{ fontWeight: 400, color: "var(--mut, #64748b)", marginInlineStart: 6, fontSize: 11 }}>
               {t("basicPayHint")}
-            </span></>} error={errors.basicPay} style={fieldWrap}>
+            </span></>} error={errors.basicPay} announce style={fieldWrap}>
           <Input
             type="text"
             inputMode="decimal"

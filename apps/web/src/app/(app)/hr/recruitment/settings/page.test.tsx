@@ -39,8 +39,9 @@ describe("Recruitment settings page", () => {
     const emblem = await screen.findByLabelText(/emblem/i);
     fireEvent.change(emblem, { target: { value: "javascript:alert(1)" } });
     fireEvent.click(screen.getByRole("button", { name: "Save settings" }));
-    // ds Field wires the inline error to the control: aria-invalid + aria-describedby -> the message.
-    await waitFor(() => expect(emblem).toHaveAttribute("aria-invalid", "true"));
+    // The inline error is announced (ds Field renders role="alert") and wired to the control.
+    expect(await screen.findByRole("alert")).toHaveTextContent(/https/i);
+    expect(emblem).toHaveAttribute("aria-invalid", "true");
     expect(document.getElementById(emblem.getAttribute("aria-describedby") ?? "")).toHaveTextContent(/https/i);
     expect(calls).toHaveLength(0);
   });

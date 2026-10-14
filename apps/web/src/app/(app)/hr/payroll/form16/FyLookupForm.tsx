@@ -33,6 +33,7 @@ export function FyLookupForm({
       <Field id="fy-lookup" label={financialYearLabel}>
         <Input
           name="fy"
+          aria-describedby="fy-lookup-hint"
           defaultValue={defaultFy}
           pattern="\d{4}-\d{2}"
           placeholder="2025-26"

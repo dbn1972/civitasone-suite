@@ -31,6 +31,7 @@ export function QuarterLookupForm({
       <Field id="ret-fy" label={t("financialYearLabel")}>
         <Input
           name="fy"
+          aria-describedby="ret-fy-hint"
           defaultValue={defaultFy}
           pattern="\d{4}-\d{2}"
           title={t("fyFormatHint")}
