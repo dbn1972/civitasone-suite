@@ -15,6 +15,7 @@ type Props = {
 
 export function ExceptionPanel({ exceptions }: Props) {
   const t = useTranslations("exceptionPanel");
+  const tFallback = useTranslations("employeeFallback");
   if (exceptions.length === 0) return null;
 
   return (
@@ -58,7 +59,7 @@ export function ExceptionPanel({ exceptions }: Props) {
             }}
           >
             <span style={{ fontWeight: 700, color: "var(--warn, #78350f)", minWidth: 140, flexShrink: 0 }}>
-              {ex.employeeName}
+              {ex.employeeName?.trim() || tFallback("unknownEmployee")}
             </span>
             <span style={{ flex: 1, color: "var(--warn, #92400e)" }}>{ex.issue}</span>
             <Link

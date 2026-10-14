@@ -8969,7 +8969,7 @@
     "noneMessage": "कोई सुधार निर्णय की प्रतीक्षा में नहीं है।",
     "checkerNote": "किसी सुधार को उसे बनाने वाले के अलावा किसी अन्य पेरोल उपयोगकर्ता द्वारा अनुमोदित या अस्वीकृत किया जाना चाहिए।",
     "summary": "{from} से: {oldValue} → {newValue}, बकाया {arrears}",
-    "employeeLabel": "कर्मचारी {id}",
+    "employeeLabel": "कर्मचारी {name}",
     "approveBtn": "अनुमोदित करें",
     "rejectBtn": "अस्वीकार करें",
     "approveAriaLabel": "{component} सुधार अनुमोदित करें",
@@ -14558,5 +14558,8 @@
     "encashmentWhole": "कृपया दिनों की पूर्ण संख्या दर्ज करें।",
     "encashmentNegative": "नकदीकरण के दिन ऋणात्मक नहीं हो सकते।",
     "remarksMax1000": "टिप्पणियाँ 1000 वर्णों या उससे कम होनी चाहिए।"
+  },
+  "employeeFallback": {
+    "unknownEmployee": "अज्ञात कर्मचारी"
   }
 }

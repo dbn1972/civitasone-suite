@@ -39,6 +39,7 @@ const row: AnalyticsDashboardRow = {
   visibility: "shared",
   version: 3,
   ownerId: "22222222-2222-2222-2222-222222222222",
+  ownerName: "Asha Rao",
 };
 
 describe("DashboardsTable", () => {
@@ -51,10 +52,19 @@ describe("DashboardsTable", () => {
     expect(link).toHaveAttribute("href", `/analytics/dashboards/${row.id}`);
   });
 
-  it("GAP-ANALYTICS-DASHBOARDS-03: shows the owner (shortened), not a dropped field", () => {
+  it("GAP-ANALYTICS-DASHBOARDS-03 / SF-17b: shows the owner by name, never an id", () => {
     seed([row]);
     render(<DashboardsTable dashboards={[row]} source="api" />);
-    expect(screen.getByText("22222222")).toBeInTheDocument();
+    expect(screen.getByText("Asha Rao")).toBeInTheDocument();
+    expect(screen.queryByText(/22222222/)).not.toBeInTheDocument();
+  });
+
+  it("SF-17b: an unresolved owner (other tenant / unlinked login) renders 'Unknown employee', not an id fragment", () => {
+    const unresolved = { ...row, ownerName: null };
+    seed([unresolved]);
+    render(<DashboardsTable dashboards={[unresolved]} source="api" />);
+    expect(screen.getByText("Unknown employee")).toBeInTheDocument();
+    expect(screen.queryByText(/22222222/)).not.toBeInTheDocument();
   });
 
   it("GAP-ANALYTICS-DASHBOARDS-03: owner shows '—' when unknown", () => {

@@ -15,6 +15,7 @@ const FREQUENCIES = ["monthly", "quarterly", "yearly", "one-time"] as const;
 
 export function NachMandateForm() {
   const t = useTranslations("nachMandateForm");
+  const tFallback = useTranslations("employeeFallback");
   // GAP-PAYROLL-DISBURSEMENT-08: picked from the employee directory (the
   // backend requires an employee UUID) instead of a free-text UUID box.
   const [employeeRef, setEmployeeRef] = useState<string | null>(null);
@@ -306,7 +307,7 @@ export function NachMandateForm() {
           description={t.rich("submitConfirmDescription", {
             frequency,
             amount: formatMoney(rupeesToMinorString(amountRupees)),
-            employeeId: (employeeRef && employeeLabels.current.get(employeeRef)) ?? employeeRef ?? "",
+            employeeId: (employeeRef && employeeLabels.current.get(employeeRef)) || tFallback("unknownEmployee"),
             start: startDate,
             end: endDate,
             strong: (chunks) => <strong>{chunks}</strong>,

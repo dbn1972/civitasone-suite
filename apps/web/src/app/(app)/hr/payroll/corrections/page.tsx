@@ -116,7 +116,7 @@ export default async function CorrectionsPage() {
           than the correction's creator. */}
       {!errored && canDecide && (
         <Card title={t("pendingCardTitle")} padding>
-          <PendingCorrections rows={items.filter((r) => r.status === "pending")} />
+          <PendingCorrections rows={rows.filter((r) => r.status === "pending")} />
         </Card>
       )}
 

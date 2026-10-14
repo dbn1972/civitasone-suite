@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -13,15 +14,17 @@ type Col = {
   render?: (row: AnalyticsDashboardRow) => ReactNode;
 };
 
-const columns: Col[] = [
+function buildColumns(unknownEmployee: string): Col[] {
+  return [
   { key: "name", label: "Name" },
   { key: "description", label: "Description", render: (r) => r.description ?? "—" },
-  // GAP-ANALYTICS-DASHBOARDS-03: show the owner (opaque id, shortened) so a
-  // viewer can tell whose dashboard this is; "—" when unknown.
+  // GAP-ANALYTICS-DASHBOARDS-03 / SF-17b: show the owner by name so a viewer can
+  // tell whose dashboard this is; "Unknown employee" when the name cannot be
+  // resolved (never the id or a fragment of it); "—" when the row has no owner.
   {
     key: "ownerId",
     label: "Owner",
-    render: (r) => (r.ownerId ? <span className="mono" title={r.ownerId}>{r.ownerId.slice(0, 8)}</span> : "—"),
+    render: (r) => (r.ownerId ? (r.ownerName ?? unknownEmployee) : "—"),
   },
   // GAP-ANALYTICS-DASHBOARDS-04: let StatusPill humanize the value itself
   // ("Shared"/"Private"/"Unknown") instead of forcing SHOUTING uppercase; the
@@ -30,7 +33,8 @@ const columns: Col[] = [
   { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} /> },
   // GAP-ANALYTICS-DASHBOARDS-04: show a version like "v3", not a bare number.
   { key: "version", label: "Version", align: "right", render: (r) => `v${r.version}` },
-];
+  ];
+}
 
 export function DashboardsTable({
   dashboards,
@@ -39,6 +43,8 @@ export function DashboardsTable({
   dashboards: AnalyticsDashboardRow[];
   source?: "api" | "error";
 }) {
+  const tFallback = useTranslations("employeeFallback");
+  const columns = buildColumns(tFallback("unknownEmployee"));
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<AnalyticsDashboardRow[]>(
     "analytics.dashboards",
     dashboards,

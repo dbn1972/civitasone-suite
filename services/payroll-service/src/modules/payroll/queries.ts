@@ -39,7 +39,7 @@ export async function getSlip(id: string, tenantId: string) {
     () => repo.findSlipById(id, tenantId)
   );
   if (!row) return null;
-  const empMap = await fetchEmployeeSummaries(tenantId);
+  const empMap = await fetchEmployeeSummaries(tenantId, [row.employeeId]);
   const emp = empMap.get(row.employeeId);
 
   // GAP-PAYROLL-SALARY-SLIPS-DETAIL-06 / GAP-PAYROLL-SLIPS-DETAIL-04: unlike
@@ -195,6 +195,10 @@ export async function getRunDetail(id: string, tenantId: string) {
   // GAP-PAYROLL-DETAIL-05: per-slip pre-disbursement issue codes (no PAN /
   // account number), from hrms-service; empty when unavailable.
   const readiness = await fetchPayrollReadiness(tenantId);
+  // SF-17b: the run's own slips are all we render, so resolve exactly those
+  // employees' names (batched, tenant-scoped) instead of showing the employee
+  // number in the name column. Falls back to the employee number on a miss.
+  const empNames = await fetchEmployeeSummaries(tenantId, runSlips.map((s) => s.employeeId));
   return {
     id: run.id,
     runDate: new Date(run.createdAt as unknown as string).toISOString().slice(0, 10),
@@ -221,7 +225,7 @@ export async function getRunDetail(id: string, tenantId: string) {
     salarySlips: runSlips.map((s) => ({
       id: s.id,
       employeeId: s.employeeId,
-      employeeName: s.employeeNo,
+      employeeName: empNames.get(s.employeeId)?.fullName ?? s.employeeNo,
       gross: Number(s.grossMinor) / 100,
       deductions: Number(s.totalDeductionsMinor) / 100,
       net: Number(s.netPayMinor) / 100,
@@ -257,10 +261,8 @@ function toSlipSummary(r: SlipListRow, empMap: Awaited<ReturnType<typeof fetchEm
 }
 
 export async function listSalarySlips(tenantId: string, limit: number) {
-  const [rows, empMap] = await Promise.all([
-    repo.listSlipsByTenant(tenantId, limit),
-    fetchEmployeeSummaries(tenantId),
-  ]);
+  const rows = await repo.listSlipsByTenant(tenantId, limit);
+  const empMap = await fetchEmployeeSummaries(tenantId, rows.map((r) => r.employeeId));
   return rows.map((r) => toSlipSummary(r, empMap));
 }
 

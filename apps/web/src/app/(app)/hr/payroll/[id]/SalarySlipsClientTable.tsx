@@ -78,6 +78,7 @@ function SalarySlipModal({
   onClose: () => void;
 }) {
   const t = useTranslations("salarySlipsClientTable");
+  const tFallback = useTranslations("employeeFallback");
   // GAP-PAYROLL-DETAIL-01: this modal used to call a client-side
   // estimateComponents(gross) that INVENTED a Basic/DA/HRA/TA/Special
   // earnings split and an EPF/ESI/PT/TDS deductions split from percentages
@@ -134,7 +135,7 @@ function SalarySlipModal({
             background: "var(--panel,#f8fafc)",
           }}
         >
-          <div style={{ fontWeight: 700, fontSize: 14 }}>{slip.employeeName}</div>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>{slip.employeeName?.trim() || tFallback("unknownEmployee")}</div>
           <div style={{ fontSize: 11, color: "var(--mut,#64748b)", marginTop: 2 }}>
             {t("employeeIdPeriodLine", { period: payPeriod })}
           </div>
@@ -201,6 +202,7 @@ export function SalarySlipsClientTable({
   payPeriod,
 }: TableProps) {
   const t = useTranslations("salarySlipsClientTable");
+  const tFallback = useTranslations("employeeFallback");
   const [preview, setPreview] = useState<SlipRow | null>(null);
   const [filter, setFilter] = useState("");
   const [page, setPage] = useState(0);
@@ -281,7 +283,7 @@ export function SalarySlipsClientTable({
             ) : (
               paged.map((slip) => (
                 <tr key={slip.id} style={{ borderBottom: "1px solid var(--line,#f1f5f9)" }}>
-                  <td style={{ padding: "10px 12px", fontWeight: 500 }}>{slip.employeeName}</td>
+                  <td style={{ padding: "10px 12px", fontWeight: 500 }}>{slip.employeeName?.trim() || tFallback("unknownEmployee")}</td>
                   <td style={{ padding: "10px 12px", textAlign: "end", fontVariantNumeric: "tabular-nums" }}>
                     {formatRupees(slip.gross)}
                   </td>

@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { IntlWrapper } from "@/lib/testUtils/intl";
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: IntlWrapper });
 
 const browserJsonMock = vi.fn();
 vi.mock("@/lib/api/browserClient", () => ({
@@ -51,6 +55,14 @@ describe("AllotmentDetailActions", () => {
     render(<AllotmentDetailActions {...BASE_PROPS} status="applied" />);
     fireEvent.click(screen.getByRole("button", { name: "Allot quarter" }));
     expect(await screen.findByText("Kiran Bose")).toBeInTheDocument();
+  });
+
+  // SF-17b: an unresolved applicant is "Unknown employee", never the employeeRef or a fragment of it
+  it("shows 'Unknown employee' (no id fragment) in the dialog when the name is unresolved", async () => {
+    render(<AllotmentDetailActions {...BASE_PROPS} employeeName={null} status="applied" />);
+    fireEvent.click(screen.getByRole("button", { name: "Allot quarter" }));
+    expect(await screen.findByText("Unknown employee")).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(BASE_PROPS.employeeRef.slice(0, 8)))).not.toBeInTheDocument();
   });
 
   it("surfaces the server's maker-checker violation code on failure", async () => {

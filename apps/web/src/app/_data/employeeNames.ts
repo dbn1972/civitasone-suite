@@ -62,12 +62,14 @@ export async function resolveEmployeeNames(ids: Iterable<string>): Promise<Map<s
 }
 
 /**
- * "Asha Rao (EMP-0042)" for a resolved id; "<unknownLabel> · 1a2b3c4d" (the
- * id's first 8 characters, enough to tell two unknowns apart) otherwise.
+ * "Asha Rao (EMP-0042)" for a resolved id; the caller's localised `unknownLabel`
+ * otherwise. SF-17b: never an id or an id fragment (an unresolved id is a deleted
+ * employee, another tenant's employee, or a failed lookup; none is the viewer's
+ * business, and a hex fragment is not a name).
  */
 export function employeeDisplayLabel(names: Map<string, EmployeeName>, id: string | null | undefined, unknownLabel: string): string {
   if (!id) return "—";
   const entry = names.get(id);
-  if (!entry) return `${unknownLabel} · ${id.slice(0, 8)}`;
+  if (!entry) return unknownLabel;
   return entry.employeeNo ? `${entry.name} (${entry.employeeNo})` : entry.name;
 }

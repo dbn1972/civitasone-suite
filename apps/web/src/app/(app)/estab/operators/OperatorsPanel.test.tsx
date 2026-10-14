@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { IntlWrapper } from "@/lib/testUtils/intl";
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: IntlWrapper });
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -61,13 +65,14 @@ describe("OperatorsPanel — officer name + role label (GAP-ESTAB-OPERATORS-01/0
     expect(screen.queryByText(/123e4567-e89b/)).toBeNull();
   });
 
-  it("falls back to an 'Unresolved' hint (never a bare UUID) when the name is missing", async () => {
+  it("falls back to 'Unknown employee' (never a UUID or an id fragment) when the name is missing", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
       if (String(url).includes("/estab/operators")) return jsonResponse({ data: [{ ...OP, employeeName: undefined, departmentName: undefined }] });
       return jsonResponse({ data: [] });
     });
     render(<OperatorsPanel canAdminister={false} />);
-    await screen.findByText(/Unresolved \(123e4567…\)/);
+    await screen.findByText("Unknown employee");
+    expect(screen.queryByText(/123e4567/)).not.toBeInTheDocument();
   });
 });
 
