@@ -6,7 +6,7 @@ import Link from "next/link";
 import type { AccountSummary } from "@civitasone/types";
 import { formatMoney, todayIST } from "@/lib/formatters";
 import { parseMinorOrZero } from "@/lib/money";
-import { Button, ConfirmDialog, EmptyState, HelpTip } from "@/app/_components/ds";
+import { Alert, Button, ConfirmDialog, EmptyState, HelpTip } from "@/app/_components/ds";
 import { explain } from "@/lib/glossary";
 import { trackActivation } from "@/lib/activation";
 import { useFormError } from "@/lib/useFormError";
@@ -73,10 +73,10 @@ function amountErrorFor(val: string): string {
 function amountPreview(val: string) {
   const minor = parseMinorOrZero(val);
   if (minor === null) {
-    return <span role="alert" style={{ fontSize: "0.7rem", color: "#b91c1c", display: "block" }}>{amountErrorFor(val)}</span>;
+    return <span role="alert" style={{ fontSize: "0.7rem", color: "var(--bad)", display: "block" }}>{amountErrorFor(val)}</span>;
   }
   if (minor === 0n) return null;
-  return <span style={{ fontSize: "0.7rem", color: "var(--ink2, #475569)", display: "block" }}>= {formatMoney(minor)}</span>;
+  return <span style={{ fontSize: "0.7rem", color: "var(--ink2)", display: "block" }}>= {formatMoney(minor)}</span>;
 }
 
 const TYPE_ORDER = ["asset", "liability", "equity", "income", "expense"] as const;
@@ -322,12 +322,12 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
   if (posted && redirectTo) {
     return (
       <div role="status" aria-live="polite" style={{ padding: "8px 0" }}>
-        <p style={{ fontSize: "0.95rem", fontWeight: 600, margin: "0 0 4px", color: "#15803d" }}>
+        <p style={{ fontSize: "0.95rem", fontWeight: 600, margin: "0 0 4px", color: "var(--good)" }}>
           {posted.queued
             ? "Journal entry accepted for processing (202)."
             : "Journal entry posted successfully."}
         </p>
-        <p style={{ margin: "0 0 12px", fontSize: "0.85rem", color: "var(--ink2, #475569)" }}>
+        <p style={{ margin: "0 0 12px", fontSize: "0.85rem", color: "var(--ink2)" }}>
           {posted.voucherNo ? <>Voucher <strong>{posted.voucherNo}</strong></> : "The voucher number is allocated when the entry is approved. The entry"}
           {posted.queued ? " is queued and may take a moment to appear in the General Ledger." : " has been posted."}
         </p>
@@ -364,11 +364,11 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
             aria-invalid={errors.voucherNo ? true : undefined}
             aria-describedby={errors.voucherNo ? "jv-voucher-err" : undefined}
           />
-          <span style={{ fontSize: "0.7rem", color: "var(--ink2, #475569)", display: "block", marginTop: 2 }}>
+          <span style={{ fontSize: "0.7rem", color: "var(--ink2)", display: "block", marginTop: 2 }}>
             Optional. If left blank, a gapless voucher number is allocated when the entry is approved.
           </span>
-          {errors.voucherNo && <span id="jv-voucher-err" style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{errors.voucherNo}</span>}
-          {formError.fieldError("voucherNo") && <span style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("voucherNo")}</span>}
+          {errors.voucherNo && <span id="jv-voucher-err" style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{errors.voucherNo}</span>}
+          {formError.fieldError("voucherNo") && <span style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("voucherNo")}</span>}
         </div>
         <div className="field">
           <label className="label" htmlFor="jv-date">Posting Date</label>
@@ -386,7 +386,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
               role="status"
               style={{
                 fontSize: "0.75rem", marginTop: 2, display: "block", fontWeight: 600,
-                color: dateCheck.kind === "open" ? "#15803d" : dateCheck.kind === "hard_close" || dateCheck.kind === "soft_close" ? "#b91c1c" : "#b45309",
+                color: dateCheck.kind === "open" ? "var(--good)" : dateCheck.kind === "hard_close" || dateCheck.kind === "soft_close" ? "var(--bad)" : "var(--warn)",
               }}
             >
               {dateCheck.kind === "open" && `Period ${dateCheck.period} is open.`}
@@ -396,8 +396,8 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
               {dateCheck.kind === "unverified" && `Closed-period status could not be loaded, so ${dateCheck.period} is unverified. The server still blocks closed periods.`}
             </span>
           )}
-          {errors.postingDate && <span id="jv-date-err" style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{errors.postingDate}</span>}
-          {formError.fieldError("postingDate") && <span style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("postingDate")}</span>}
+          {errors.postingDate && <span id="jv-date-err" style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{errors.postingDate}</span>}
+          {formError.fieldError("postingDate") && <span style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("postingDate")}</span>}
         </div>
       </div>
 
@@ -412,8 +412,8 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
           aria-invalid={errors.narration ? true : undefined}
           aria-describedby={errors.narration ? "jv-narration-err" : undefined}
         />
-        {errors.narration && <span id="jv-narration-err" style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{errors.narration}</span>}
-        {formError.fieldError("narration") && <span style={{ fontSize: "0.75rem", color: "#b91c1c", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("narration")}</span>}
+        {errors.narration && <span id="jv-narration-err" style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{errors.narration}</span>}
+        {formError.fieldError("narration") && <span style={{ fontSize: "0.75rem", color: "var(--bad)", marginTop: 2, display: "block" }} role="alert">{formError.fieldError("narration")}</span>}
       </div>
 
       {/* ── journal lines ── */}
@@ -444,7 +444,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
             gridTemplateColumns: "2fr 1fr 1fr auto",
             gap: "8px",
             fontSize: "0.75rem",
-            color: "var(--ink2, #64748b)",
+            color: "var(--ink2)",
             fontWeight: 600,
             textTransform: "uppercase",
             letterSpacing: "0.05em",
@@ -528,7 +528,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
               ×
             </Button>
             {lineErr && (
-              <span role="alert" style={{ fontSize: "0.75rem", color: "#b91c1c", display: "block", gridColumn: "1 / -1", marginBottom: 4 }}>
+              <span role="alert" style={{ fontSize: "0.75rem", color: "var(--bad)", display: "block", gridColumn: "1 / -1", marginBottom: 4 }}>
                 {lineErr}
               </span>
             )}
@@ -552,21 +552,21 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
           gap: "8px",
           marginTop: "8px",
           padding: "8px 0",
-          borderTop: "1px solid var(--line2, #e2e8f0)",
+          borderTop: "1px solid var(--line2, var(--line))",
           fontWeight: 600,
           fontSize: "0.9rem",
           alignItems: "center",
         }}
       >
-        <span style={{ color: "var(--ink2, #475569)" }}>Totals</span>
+        <span style={{ color: "var(--ink2)" }}>Totals</span>
         {/* Zero-total color: var(--mut) measured 4.2:1 against this totals
-            row's actual background (#eaecf0 / --line) -- just under 4.5:1,
+            row's actual background (var(--line) / --line) -- just under 4.5:1,
             since --mut was tuned for white/near-white. var(--ink2) reaches
             6.5:1 here. UX-005 tranche 5. */}
-        <span className="num" style={{ color: totalDebitPaise > 0n ? "var(--primary-d, #1e40af)" : "var(--ink2)" }}>
+        <span className="num" style={{ color: totalDebitPaise > 0n ? "var(--primary-d)" : "var(--ink2)" }}>
           {formatMoney(totalDebitPaise)}
         </span>
-        <span className="num" style={{ color: totalCreditPaise > 0n ? "var(--primary-d, #1e40af)" : "var(--ink2)" }}>
+        <span className="num" style={{ color: totalCreditPaise > 0n ? "var(--primary-d)" : "var(--ink2)" }}>
           {formatMoney(totalCreditPaise)}
         </span>
         <span
@@ -574,7 +574,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
           aria-live="polite"
           style={{
             fontSize: "0.78rem",
-            color: balanced ? "#15803d" : totalDebitPaise === 0n ? "#64748b" : "#b91c1c",
+            color: balanced ? "var(--good)" : totalDebitPaise === 0n ? "var(--mut)" : "var(--bad)",
             fontWeight: 700,
             whiteSpace: "nowrap",
           }}
@@ -589,7 +589,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
         </span>
       </div>
 
-      {errors.balance && <p role="alert" style={{ fontSize: "0.75rem", color: "#b91c1c", display: "block", marginTop: 4 }}>{errors.balance}</p>}
+      {errors.balance && <p role="alert" style={{ fontSize: "0.75rem", color: "var(--bad)", display: "block", marginTop: 4 }}>{errors.balance}</p>}
 
       {/* ── actions ── */}
       <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
@@ -604,22 +604,15 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
 
       {/* ── feedback ── */}
       {message && (
-        <p
+        <Alert
           id={errId}
+          variant={status === "error" ? "danger" : "success"}
           role={status === "error" ? "alert" : "status"}
           aria-live="polite"
-          style={{
-            fontSize: "0.85rem",
-            marginTop: "10px",
-            padding: "8px 12px",
-            borderRadius: "6px",
-            background: status === "error" ? "#fef2f2" : "#f0fdf4",
-            color: status === "error" ? "#b91c1c" : "#15803d",
-            border: `1px solid ${status === "error" ? "#fecaca" : "#bbf7d0"}`,
-          }}
+          style={{ marginTop: 10, marginBottom: 0 }}
         >
           {message}
-        </p>
+        </Alert>
       )}
 
       <ConfirmDialog

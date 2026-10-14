@@ -25,9 +25,9 @@ export default async function FundReleasesPage() {
 
       <StatGrid>
         <StatCard icon="📦" iconBg="var(--panel)"  label="Total Releases"  value={errored ? "—" : releases.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3"        label="Issued"          value={errored ? "—" : issued} />
-        <StatCard icon="🤝" iconBg="#eff6ff"        label="Acknowledged"    value={errored ? "—" : acknowledged} />
-        <StatCard icon="⏳" iconBg="#fffaeb"        label="Pending"         value={errored ? "—" : pending} up={false} />
+        <StatCard icon="✅" tone="good"        label="Issued"          value={errored ? "—" : issued} />
+        <StatCard icon="🤝" tone="info"        label="Acknowledged"    value={errored ? "—" : acknowledged} />
+        <StatCard icon="⏳" tone="warn"        label="Pending"         value={errored ? "—" : pending} up={false} />
       </StatGrid>
 
       {/* UX-012: the data-source badge lives inside FundReleasesTable. */}

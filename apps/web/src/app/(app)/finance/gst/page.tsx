@@ -1,4 +1,4 @@
-import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { Alert, PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
@@ -79,47 +79,47 @@ export default async function GstConsolePage({ searchParams }: { searchParams?: 
       {source === "error" && (
         <>
           <DataSourceBadge source="error" />
-          <div role="alert" className="banner" style={{ background: "#fef2f2", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
+          <Alert variant="danger">
             Data incomplete — do not file. One or more GST sources failed to load, so the figures below may be missing.
-          </div>
+          </Alert>
         </>
       )}
 
       {invalidRequested && (
-        <div role="status" className="banner" style={{ background: "#fffbe6", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
+        <Alert variant="warning">
           &quot;{invalidRequested}&quot; is not a valid period (use YYYY-MM, month 01 to 12). Showing {period} instead.
-        </div>
+        </Alert>
       )}
 
       <PeriodSelector period={period} />
 
       <StatGrid>
-        <StatCard icon="📤" iconBg="#fef3f2" label="Output Tax" value={money(outputTax)} />
-        <StatCard icon="📥" iconBg="#ecfdf3" label="Input Tax Credit Available" value={money(totals?.itcAvailable ?? null)} />
+        <StatCard icon="📤" tone="bad" label="Output Tax" value={money(outputTax)} />
+        <StatCard icon="📥" tone="good" label="Input Tax Credit Available" value={money(totals?.itcAvailable ?? null)} />
         <StatCard
           icon={totals === null || totals.payable > 0n ? "⚠️" : "✅"}
-          iconBg={totals === null || totals.payable > 0n ? "#fffbe6" : "#e6f7f0"}
+          tone={totals === null || totals.payable > 0n ? "warn" : "good"}
           label="Net balance by tax head (before credit utilisation)"
           value={payableLabel}
         />
-        <StatCard icon="↪️" iconBg="#eff6ff" label="Surplus credit by head" value={money(totals?.creditCarriedForward ?? null)} />
-        <StatCard icon="🧮" iconBg="#eff6ff" label="Estimated cash payable after set-off" value={money(estimate?.cashPayable ?? null)} />
-        <StatCard icon="🧾" iconBg="#eff6ff" label="Transactions" value={errors.summary ? null : transactionCount} />
+        <StatCard icon="↪️" tone="info" label="Surplus credit by head" value={money(totals?.creditCarriedForward ?? null)} />
+        <StatCard icon="🧮" tone="info" label="Estimated cash payable after set-off" value={money(estimate?.cashPayable ?? null)} />
+        <StatCard icon="🧾" tone="info" label="Transactions" value={errors.summary ? null : transactionCount} />
       </StatGrid>
       {itcMismatch && totals !== null && summaryInputTax !== null && (
-        <div role="alert" className="banner" style={{ background: "#fffbe6", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
+        <Alert variant="warning" role="alert">
           <strong>Mismatch:</strong> input tax on the summary ({formatMoney(summaryInputTax)}) differs from ITC available on
           the reconciliation ({formatMoney(totals.itcAvailable)}). Review the ITC Reconciliation tab before filing.
-        </div>
+        </Alert>
       )}
       <p style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 12px" }}>
         Balances are per tax head before the statutory credit set-off (IGST credit is applied against IGST, then CGST, then SGST; CGST and SGST credit against their own head, then IGST). Cash payable is finalised in GSTR-3B. Indicative only.
       </p>
 
       {ledgerSource !== "error" && ledger.length >= GST_LEDGER_LIMIT && (
-        <div role="status" className="banner" style={{ background: "#fffbe6", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
+        <Alert variant="warning">
           The ledger shows the first {GST_LEDGER_LIMIT} entries for this period; the list and its CSV export may be incomplete.
-        </div>
+        </Alert>
       )}
 
       <Card title={`GST / ITC — ${period}`}>

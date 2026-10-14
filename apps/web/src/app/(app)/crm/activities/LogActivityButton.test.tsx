@@ -63,8 +63,8 @@ describe("LogActivityButton save failures use the shared human error", () => {
     browserFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ data: [] }) }); // contacts
     renderWithIntl(<LogActivityButton />);
     fireEvent.click(screen.getByRole("button", { name: "+ Log Activity" }));
-    await waitFor(() => expect(screen.getByLabelText("Notes")).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText("Notes"), { target: { value: "Called the ward office" } });
+    await waitFor(() => expect(screen.getByLabelText(/^Notes/)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/^Notes/), { target: { value: "Called the ward office" } });
   }
 
   it("never shows a raw network exception (Failed to fetch)", async () => {
@@ -83,5 +83,34 @@ describe("LogActivityButton save failures use the shared human error", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent ?? "").not.toMatch(/403|requires one of|crm_user/);
     expect((alert.textContent ?? "").trim().length).toBeGreaterThan(0);
+  });
+});
+
+describe("LogActivityButton inline client validation (SF-14a)", () => {
+  async function open() {
+    browserFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ data: [] }) }); // contacts
+    renderWithIntl(<LogActivityButton />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Log Activity" }));
+    await waitFor(() => expect(screen.getByLabelText(/^Notes/)).toBeInTheDocument());
+  }
+
+  it("blocks an empty save with an inline aria-invalid error and no request, then fixes and resubmits", async () => {
+    await open();
+    const callsAfterOpen = browserFetch.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "Save activity" }));
+
+    expect(await screen.findByText("Enter the notes for this activity.")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Notes/)).toHaveAttribute("aria-invalid", "true");
+    expect(browserFetch).toHaveBeenCalledTimes(callsAfterOpen);
+
+    browserFetch.mockResolvedValueOnce({ ok: true });
+    fireEvent.change(screen.getByLabelText(/^Notes/), { target: { value: "Called the ward office" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save activity" }));
+
+    await waitFor(() => expect(browserFetch).toHaveBeenCalledTimes(callsAfterOpen + 1));
+    const [url, init] = browserFetch.mock.calls.at(-1)!;
+    expect(url).toBe("v1/crm/activities");
+    expect(JSON.parse((init as RequestInit).body as string).text).toBe("Called the ward office");
+    await waitFor(() => expect(screen.queryByText("Enter the notes for this activity.")).not.toBeInTheDocument());
   });
 });

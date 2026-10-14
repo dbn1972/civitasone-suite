@@ -61,11 +61,11 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
   return (
     <>
     <StatGrid>
-      <StatCard icon="🧱" iconBg="#e7edfd" label="Heads of Account" value={counts.total} />
-      <StatCard icon="🏛️" iconBg="#eff6ff" label="Asset / Liability" value={counts.assetLiability} />
-      <StatCard icon="⚖️" iconBg="#faf5ff" label="Equity" value={counts.equity} />
-      <StatCard icon="🔢" iconBg="#ecfdf3" label="Income / Expense" value={counts.incomeExpense} />
-      <StatCard icon="✅" iconBg="#fffaeb" label="Active" value={counts.active} delta="CGA" up={true} />
+      <StatCard icon="🧱" tone="info" label="Heads of Account" value={counts.total} />
+      <StatCard icon="🏛️" tone="info" label="Asset / Liability" value={counts.assetLiability} />
+      <StatCard icon="⚖️" tone="neutral" label="Equity" value={counts.equity} />
+      <StatCard icon="🔢" tone="good" label="Income / Expense" value={counts.incomeExpense} />
+      <StatCard icon="✅" tone="warn" label="Active" value={counts.active} delta="CGA" up={true} />
     </StatGrid>
     <Card
       title="Chart of Accounts · List of Major & Minor Heads (LMMHA)"

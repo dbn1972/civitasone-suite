@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { Alert } from "@/app/_components/ds";
 import { browserFetch } from "@/lib/api/browserClient";
 import { KIND_LABEL_KEY, missingForAreas, parseAssetSettings, type GlArea, type HeadKind } from "./settings/settingsModel";
 
@@ -36,10 +37,9 @@ export function AccountingBanner({ areas }: { areas: readonly GlArea[] }) {
   if (state.kind === "error") return <p style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 12px" }}>{t("accountingCheckFailed")}</p>;
   if (state.missing.length === 0) return null;
   return (
-    <div role="status" className="banner" style={{ background: "var(--panel)", border: "1px solid var(--warn)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
-      <strong>{t("accountingNotSetUp")}</strong>{" "}
+    <Alert variant="warning" title={t("accountingNotSetUp")} style={{ marginBottom: 16 }}>
       {t("accountingBannerBody", { heads: state.missing.map((k) => t(KIND_LABEL_KEY[k])).join(", ") })}{" "}
       <Link href="/assets/settings">{t("accountingBannerLink")}</Link>
-    </div>
+    </Alert>
   );
 }

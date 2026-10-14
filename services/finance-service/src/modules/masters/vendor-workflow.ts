@@ -241,7 +241,7 @@ export async function getPendingBankChange(tenantId: string, vendorId: string) {
     proposedBy: r.proposedBy,
     proposedAt: r.proposedAt,
     bankName: r.proposedBankName,
-    ifsc: r.proposedIfsc.slice(0, 4) + "XXXXXXX",
+    ifsc: r.proposedIfsc, // owner decision 3 (2026-10-14): IFSC is a public branch code, shown in full
     accountMasked: maskAccountNo(r.proposedAccountNo),
     reason: r.reason,
   };

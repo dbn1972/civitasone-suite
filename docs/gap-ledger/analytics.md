@@ -553,7 +553,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-ANOMALIES-02  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 W1 SF-18 (#2019) re-confirmed: closed by #1916; prefix removed, route-existence analyzer clean, drillRoutes.test.ts)
 - **First-pass claim:** Dead drill-through: rowLinkPrefix '/finance/anomalies/' (anomalies/page.tsx:14) — apps/web/src/app/(app)/finance has no anomalies route, so a flagged transaction cannot be opened from the one page built to review it.
 - **Verified evidence:** anomalies/page.tsx:14 rowLinkPrefix='/finance/anomalies/'; directory apps/web/src/app/(app)/finance has no 'anomalies' entry (listing checked), so every Entity link 404s (finance/not-found.tsx). Closest existing detail is finance/payments/[id] but it is unverified that transaction ids match payment ids (ms-service absent).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/anomalies/page.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`
@@ -685,7 +685,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-INVENTORY-02  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — W1 SF-18 (#2019): /inventory/[id] route verified by analyzer; entityId = stock item id still needs backend confirmation. Closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Dead drill-through: rowLinkPrefix '/inventory/items/' (inventory/page.tsx:14) — apps/web/src/app/(app)/inventory/items contains only page.tsx, so every Entity link is a 404.
 - **Verified evidence:** inventory/page.tsx:14 rowLinkPrefix='/inventory/items/'; apps/web/src/app/(app)/inventory/items contains only page.tsx (the items list, no [id]), so /inventory/items/<id> 404s (inventory/not-found.tsx). The stock item detail route is inventory/[id]/page.tsx (getStockItemById), so /inventory/<id> is the likely target, assuming entityId is a stock item id (ms-service absent).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/inventory/page.tsx`
@@ -1040,7 +1040,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-SUBSCRIPTIONS-02  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 W1 SF-18 (#2019) re-confirmed: closed by #1916; prefix removed, route-existence analyzer clean, drillRoutes.test.ts)
 - **First-pass claim:** Dead drill-through: rowLinkPrefix '/billing/subscriptions/' (subscriptions/page.tsx:14) — billing/subscriptions has page.tsx, SubscriptionsTable.tsx, loading and error only, no [id] route, so every Entity link is a 404.
 - **Verified evidence:** subscriptions/page.tsx:14 sets rowLinkPrefix='/billing/subscriptions/'; DataTable resolveHref builds `${prefix}${row.entityId}` (DataTable.tsx:212) and renders it as a link/click-through (:362-389). apps/web/src/app/(app)/billing/subscriptions contains only SubscriptionsTable.tsx, error.tsx, loading.tsx, page.tsx - no [id] dir, so every row link 404s.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/subscriptions/page.tsx`, `apps/web/src/app/(app)/billing/subscriptions/[id]/page.tsx (new, if detail wanted)`

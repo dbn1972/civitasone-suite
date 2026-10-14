@@ -3,7 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useFormError } from "@/lib/useFormError";
-import { ActionButton, Button } from "../../../../_components/ds";
+import { ActionButton, Button, Field, Input, Select, Textarea } from "../../../../_components/ds";
+import { validateActivityForm, type ActivityFormErrors } from "../../activities/activityFormSchema";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 type Props = {
@@ -21,6 +22,7 @@ export function DealDetailActions({ dealId, dealName, contactId, status, canClos
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const formError = useFormError("activity");
+  const [fieldErrors, setFieldErrors] = useState<ActivityFormErrors>({});
   const [showActivity, setShowActivity] = useState(false);
   const [activity, setActivity] = useState({ type: "call", subject: "", text: "" });
 
@@ -51,9 +53,12 @@ export function DealDetailActions({ dealId, dealName, contactId, status, canClos
 
   async function logActivity(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
     setMessage("");
     setError("");
+    const invalid = validateActivityForm({ subject: activity.subject, text: activity.text });
+    setFieldErrors(invalid);
+    if (Object.keys(invalid).length > 0) return;
+    setBusy(true);
     try {
       const res = await browserFetch("v1/crm/activities", {
         method: "POST",
@@ -121,45 +126,23 @@ export function DealDetailActions({ dealId, dealName, contactId, status, canClos
       ) : null}
       {showActivity ? (
         <div className="card" style={{ marginTop: 16 }}>
-          <form onSubmit={logActivity} className="pad">
+          <form onSubmit={logActivity} noValidate className="pad">
             <h4 style={{ marginTop: 0 }}>Log activity for {dealName}</h4>
-            <label htmlFor="deal-activity-type" style={{ display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>
-              Type
-            </label>
-            <select
-              id="deal-activity-type"
-              value={activity.type}
-              onChange={(e) => setActivity({ ...activity, type: e.target.value })}
-              style={{ width: "100%", padding: 8, marginBottom: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" }}
-            >
-              <option value="call">Call</option>
-              <option value="meeting">Meeting</option>
-              <option value="email">Email</option>
-              <option value="task">Task</option>
-              <option value="note">Note</option>
-            </select>
-            <label htmlFor="deal-activity-subject" style={{ display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>
-              Subject
-            </label>
-            <input
-              id="deal-activity-subject"
-              value={activity.subject}
-              onChange={(e) => setActivity({ ...activity, subject: e.target.value })}
-              placeholder="Short summary"
-              style={{ width: "100%", padding: 8, marginBottom: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" }}
-            />
-            <label htmlFor="deal-activity-notes" style={{ display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>
-              Notes
-            </label>
-            <textarea
-              id="deal-activity-notes"
-              required
-              value={activity.text}
-              onChange={(e) => setActivity({ ...activity, text: e.target.value })}
-              placeholder="What happened?"
-              rows={3}
-              style={{ width: "100%", padding: 8, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" }}
-            />
+            <Field label="Type" style={{ marginBottom: 8 }}>
+              <Select value={activity.type} onChange={(e) => setActivity({ ...activity, type: e.target.value })}>
+                <option value="call">Call</option>
+                <option value="meeting">Meeting</option>
+                <option value="email">Email</option>
+                <option value="task">Task</option>
+                <option value="note">Note</option>
+              </Select>
+            </Field>
+            <Field label="Subject" error={fieldErrors.subject} style={{ marginBottom: 8 }}>
+              <Input value={activity.subject} onChange={(e) => setActivity({ ...activity, subject: e.target.value })} placeholder="Short summary" />
+            </Field>
+            <Field label="Notes" required error={fieldErrors.text} style={{ marginBottom: 8 }}>
+              <Textarea value={activity.text} onChange={(e) => setActivity({ ...activity, text: e.target.value })} placeholder="What happened?" rows={3} />
+            </Field>
             <Button type="submit" disabled={busy} loading={busy}>
               {busy ? "Saving…" : "Save activity"}
             </Button>

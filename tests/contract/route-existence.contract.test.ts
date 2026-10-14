@@ -16,18 +16,17 @@
  * ever catch, because these are plain navigation, not data fetches or auth.
  *
  * This is NOT a fix-everything gate, same spirit as hr-role-matrix's own
- * allowlist: 3 currently-existing dead links this analyzer found are
- * genuinely missing destination pages (a product/feature gap, not a link
- * typo) and are named, with a reason, in KNOWN_EXCEPTIONS below -- this
- * test passes today BECAUSE of that ledger, not despite it. What it
- * protects against is a *new*, previously-unknown dead link landing
- * unnoticed.
+ * allowlist. W1 SF-18 emptied KNOWN_EXCEPTIONS (its one entry was a
+ * commented-out example the line scanner misread as a live link; comments
+ * are no longer scanned), so any dead link outside the documented designer
+ * wizard skip now fails. What it protects against is a *new*, previously-
+ * unknown dead link landing unnoticed.
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { routeSegmentType, toSegments, segsMatchRoute, isRoutePath } from "../../scripts/contract/route-existence.mjs";
+import { blankComments, resolveRowLinkPrefix, routeSegmentType, toSegments, segsMatchRoute, isRoutePath } from "../../scripts/contract/route-existence.mjs";
 
 const ROOT = join(import.meta.dirname, "../..");
 const SCRIPT = join(ROOT, "scripts/contract/route-existence.mjs");
@@ -36,7 +35,7 @@ const ARTEFACT = join(ROOT, "scripts/contract/route-existence.json");
 type LinkRow = {
   file: string;
   line: number;
-  kind: "href" | "rowLinkPrefix" | "navigate" | "helperReturn";
+  kind: "href" | "rowLinkPrefix" | "rowLinkKeyField" | "linkField" | "navigate" | "helperReturn";
   fn?: string;
   target: string;
   resolved: string;
@@ -50,9 +49,11 @@ type Report = {
     totalLinks: number;
     byKind: Record<string, number>;
     dead: number;
+    unresolvedRowLinks: number;
   };
   links: LinkRow[];
   dead: LinkRow[];
+  unresolvedRowLinks: Array<{ file: string; line: number; target: string; reason: string }>;
 };
 
 let report: Report;
@@ -76,28 +77,10 @@ describe("route-existence contract", () => {
     expect(report.counts.byKind.helperReturn ?? 0).toBeGreaterThan(0);
   });
 
-  // A narrow, ID-tagged, tracked ledger -- not a blanket carve-out, same
-  // pattern as screens.contract.test.ts's KNOWN_EXCEPTIONS and
-  // crm-link-integrity's clean-by-default bar. Each entry is a REAL,
-  // currently-existing dead link this analyzer correctly found, whose fix
-  // is a page/feature build (there is no existing correct route to point
-  // at instead), not a link correction -- out of scope for a detector PR
-  // to build. Every OTHER dead link this analyzer found while it was being
-  // written (a wrong-prefix bug in three places, and two wrong mapped
-  // paths in buildApprovalLink, including the finance_bill one that
-  // motivated this whole analyzer) was a trivial route-string correction,
-  // fixed directly in this same PR instead of listed here. Do not add an
-  // entry here to make a NEW dead link disappear without finding out why
-  // it exists first.
-  const KNOWN_EXCEPTIONS: Array<{ id: string; file: string; target: string; reason: string }> = [
-    {
-      id: "GAP-HR-SF18-001",
-      file: "apps/web/src/app/(app)/analytics/ml-insights/anomalies/page.tsx",
-      target: "/finance/anomalies/",
-      reason:
-        "ML-insights transaction-anomaly drill-through has no destination: unlike its sibling ml-insights domains (crm/leads, inventory, projects, subscriptions, tickets), no finance \"anomalies\" detail page exists anywhere under apps/web/src/app/(app)/finance. Building one is a product feature, not a link correction.",
-    },
-  ];
+  // Tracked ledger of real dead links whose fix is a feature build (no existing
+  // correct route to point at). Empty since W1 SF-18: never add an entry to make
+  // a NEW dead link disappear -- fix the link, or remove the tile.
+  const KNOWN_EXCEPTIONS: Array<{ id: string; file: string; target: string; reason: string }> = [];
 
   // designer/[id]/**'s WizardShell computes its "select block" / "next" /
   // "previous" navigation target from apps/web/src/app/(app)/designer/
@@ -181,6 +164,59 @@ describe("route-existence contract", () => {
     expect(typeof c.realRoutes).toBe("number");
   });
 
+  it("covers every buildApprovalLink route-table branch, and each resolves to a real route (W1 SF-18)", () => {
+    const rows = report.links.filter((l) => l.kind === "helperReturn" && l.fn === "buildApprovalLink");
+    // leave_app, payroll_run, procurement_indent, procurement_po, finance_bill, estab_file (the default branch is a ternary, not a literal return)
+    expect(rows.length).toBeGreaterThanOrEqual(6);
+    const bad = rows.filter((r) => !r.ok).map((r) => r.target);
+    expect(bad, `buildApprovalLink emits dead route(s): ${bad.join(", ")}`).toEqual([]);
+  });
+
+  it("resolves runtime row-link prefixes in attribute and object-literal form, and each <prefix>/[id] route exists (W1 SF-18)", () => {
+    const rows = report.links.filter((l) => l.kind === "rowLinkPrefix");
+    expect(rows.length).toBeGreaterThan(90);
+    // object-literal `{ rowLinkKey: "id", rowLinkPrefix: "/hr/icc/" }` (conditionally spread)
+    expect(rows.some((r) => r.file.endsWith("hr/icc/page.tsx") && r.target === "/hr/icc/")).toBe(true);
+    // interpolated prefix
+    expect(rows.some((r) => r.target.startsWith("/learning/courses/${"))).toBe(true);
+    expect(rows.filter((r) => !r.ok).map((r) => `${r.file}:${r.line} ${r.target}`)).toEqual([]);
+  });
+
+  it("checks the path literals a row field supplies when rowLinkPrefix is empty; the one unresolvable case is ledgered (W1 SF-18)", () => {
+    const fields = report.links.filter((l) => l.kind === "rowLinkKeyField");
+    expect(fields.length).toBeGreaterThanOrEqual(6);
+    expect(fields.filter((f) => !f.ok)).toEqual([]);
+    // TalentPoolTable receives `href` from its caller (a prop), so no literal exists in its own file.
+    expect(report.unresolvedRowLinks.map((u) => u.file)).toEqual(["apps/web/src/app/(app)/hr/recruitment/talent-pool/TalentPoolTable.tsx"]);
+  });
+
+  it("does not read links out of comments (the SF18-001 false positive)", () => {
+    expect(report.links.some((l) => l.file.endsWith("ml-insights/anomalies/page.tsx"))).toBe(false);
+  });
+
+  // Per-module drill-through check: one test per top-level module, so a failure names the module.
+  const byModule = new Map<string, LinkRow[]>();
+  beforeAllModules();
+  function beforeAllModules() {
+    // Module list must exist at collection time, so read the committed artefact (the analyzer re-run in beforeAll
+    // refreshes it before the assertions below execute).
+    const snap = JSON.parse(readFileSync(ARTEFACT, "utf8")) as Report;
+    for (const l of snap.links) {
+      if (!["rowLinkPrefix", "rowLinkKeyField", "linkField", "helperReturn"].includes(l.kind)) continue;
+      const m = /apps\/web\/src\/app\/(?:\(app\)\/)?([^/]+)/.exec(l.file)?.[1] ?? "_root";
+      byModule.set(m, []);
+    }
+  }
+  it.each([...byModule.keys()].sort())("module %s: every row/tile/helper link target resolves to a real route", (mod) => {
+    const rows = report.links.filter(
+      (l) =>
+        ["rowLinkPrefix", "rowLinkKeyField", "linkField", "helperReturn"].includes(l.kind) &&
+        (/apps\/web\/src\/app\/(?:\(app\)\/)?([^/]+)/.exec(l.file)?.[1] ?? "_root") === mod,
+    );
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.filter((r) => !r.ok).map((r) => `${r.file}:${r.line} ${r.target}`)).toEqual([]);
+  });
+
   describe("pure-function unit tests (route-existence.mjs)", () => {
     it("classifies dynamic segment shapes", () => {
       expect(routeSegmentType("employees")).toBe("static");
@@ -248,6 +284,26 @@ describe("route-existence contract", () => {
       expect(isRoutePath("#section")).toBe(false);
       expect(isRoutePath("mailto:a@b.com")).toBe(false);
       expect(isRoutePath("/api/v1/hr/employees")).toBe(false);
+    });
+
+    it("resolveRowLinkPrefix: appends [id] to a slash-terminated prefix, targets the path for a query prefix, null for empty", () => {
+      expect(resolveRowLinkPrefix("/hr/icc/")).toBe("/hr/icc/${rowId}");
+      expect(resolveRowLinkPrefix("/hr/payroll/ddos?edit=")).toBe("/hr/payroll/ddos");
+      expect(resolveRowLinkPrefix("")).toBeNull();
+    });
+
+    it("a dead rowLinkPrefix is detected: /finance/anomalies/${rowId} matches no real route shape", () => {
+      expect(segsMatchRoute(["finance", "expenditure", "bills", "[id]"], toSegments(resolveRowLinkPrefix("/finance/anomalies/")!))).toBe(false);
+      expect(segsMatchRoute(["inventory", "[id]"], toSegments(resolveRowLinkPrefix("/inventory/")!))).toBe(true);
+    });
+
+    it("blankComments removes line and block comments, keeps strings and line numbers", () => {
+      const src = ['// rowLinkPrefix="/dead/"', 'const u = "http://x/y"; // tail rowLinkPrefix="/dead2/"', "/* a", 'rowLinkPrefix="/dead3/" */ rowLinkPrefix="/live/"'].join("\n");
+      const out = blankComments(src);
+      expect(out.split("\n")).toHaveLength(4);
+      expect(out).not.toMatch(/dead/);
+      expect(out).toContain('"http://x/y"');
+      expect(out).toContain("/live/");
     });
   });
 });

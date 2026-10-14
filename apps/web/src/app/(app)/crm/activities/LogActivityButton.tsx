@@ -6,14 +6,14 @@ import { useFormError } from "@/lib/useFormError";
 import { UserFacingError } from "@/lib/userFacingError";
 import { useTranslations } from "next-intl";
 import { browserFetch } from "@/lib/api/browserClient";
-import { Button } from "@/app/_components/ds";
+import { Button, Field, Input, Select, Textarea } from "@/app/_components/ds";
+import { validateActivityForm, type ActivityFormErrors } from "./activityFormSchema";
 import { LOGGABLE_ACTIVITY_TYPES } from "./activityTypes";
 
 type ContactOption = { id: string; name: string };
 type ContactsStatus = "idle" | "loading" | "ready" | "error";
 
-const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
-const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
+const fieldGap = { marginBottom: 8 } as const;
 
 export function LogActivityButton({
   // GAP-CRM-ACTIVITIES-08: copy is passed from the server page (next-intl) so
@@ -37,6 +37,7 @@ export function LogActivityButton({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const formError = useFormError("interaction");
+  const [fieldErrors, setFieldErrors] = useState<ActivityFormErrors>({});
 
   // GAP-CRM-ACTIVITIES-06: do not swallow contact-picker failures. Track a
   // status so the user is told the list could not load (and can retry or save
@@ -75,9 +76,13 @@ export function LogActivityButton({
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
     setMessage("");
     setError("");
+    const invalid = validateActivityForm({ subject: form.subject, text: form.text });
+    setFieldErrors(invalid);
+    if (Object.keys(invalid).length > 0) return;
+    setBusy(true);
+    formError.clear();
     try {
       const res = await browserFetch("v1/crm/activities", {
         method: "POST",
@@ -90,7 +95,11 @@ export function LogActivityButton({
           ...(form.dueDate ? { dueDate: form.dueDate } : {}),
         }),
       });
-      if (!res.ok) throw UserFacingError.from(await formError.fromResponse(res, "save"));
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        setFieldErrors({ subject: resolved.fieldErrors.subject, text: resolved.fieldErrors.text });
+        throw UserFacingError.from(resolved);
+      }
       setMessage(savedMessage);
       setForm({ contactId: "", type: "call", subject: "", text: "", dueDate: "" });
       setOpen(false);
@@ -111,21 +120,20 @@ export function LogActivityButton({
       </Button>
       {open ? (
         <div className="card" style={{ marginTop: 16 }}>
-          <form onSubmit={submit} className="pad" style={{ maxWidth: 560 }}>
+          <form onSubmit={submit} noValidate className="pad" style={{ maxWidth: 560 }}>
             <h4 style={{ marginTop: 0 }}>{heading}</h4>
-            <label htmlFor="act-contact" style={labelStyle}>Contact (optional)</label>
-            <select
-              id="act-contact"
-              value={form.contactId}
-              onChange={(e) => setForm({ ...form, contactId: e.target.value })}
-              style={inputStyle}
-              disabled={contactsLoading}
-            >
-              <option value="">{contactsLoading ? "Loading contacts…" : "— No contact —"}</option>
-              {contacts.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
+            <Field label="Contact (optional)" style={fieldGap}>
+              <Select
+                value={form.contactId}
+                onChange={(e) => setForm({ ...form, contactId: e.target.value })}
+                disabled={contactsLoading}
+              >
+                <option value="">{contactsLoading ? "Loading contacts…" : "— No contact —"}</option>
+                {contacts.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </Select>
+            </Field>
             {contactsStatus === "error" ? (
               <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", margin: "-4px 0 8px" }}>
                 Contacts could not be loaded. You can still save, or{" "}
@@ -134,18 +142,22 @@ export function LogActivityButton({
                 </Button>
               </p>
             ) : null}
-            <label htmlFor="act-type" style={labelStyle}>Type</label>
-            <select id="act-type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} style={inputStyle}>
-              {LOGGABLE_ACTIVITY_TYPES.map((type) => (
-                <option key={type} value={type}>{tType(type)}</option>
-              ))}
-            </select>
-            <label htmlFor="act-subject" style={labelStyle}>Subject</label>
-            <input id="act-subject" value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="Short summary" style={inputStyle} />
-            <label htmlFor="act-due" style={labelStyle}>Due date (optional)</label>
-            <input id="act-due" type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} style={inputStyle} />
-            <label htmlFor="act-notes" style={labelStyle}>Notes</label>
-            <textarea id="act-notes" required value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} placeholder="What happened or needs doing?" rows={3} style={{ ...inputStyle, minHeight: undefined }} />
+            <Field label="Type" style={fieldGap}>
+              <Select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                {LOGGABLE_ACTIVITY_TYPES.map((type) => (
+                  <option key={type} value={type}>{tType(type)}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Subject" error={fieldErrors.subject} style={fieldGap}>
+              <Input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="Short summary" />
+            </Field>
+            <Field label="Due date (optional)" style={fieldGap}>
+              <Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
+            </Field>
+            <Field label="Notes" required error={fieldErrors.text} style={fieldGap}>
+              <Textarea value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} placeholder="What happened or needs doing?" rows={3} />
+            </Field>
             <Button type="submit" disabled={busy} loading={busy} style={{ minHeight: 44 }}>
               {busy ? "Saving…" : "Save activity"}
             </Button>

@@ -151,4 +151,30 @@ describe("FollowUpModal", () => {
     // Modal moves focus into the panel on open.
     expect(dialog.contains(document.activeElement)).toBe(true);
   });
+
+  // SF-14a: client-side validation shows inline errors, makes no request, and
+  // clears once the clerk fixes the fields and resubmits.
+  it("blocks an incomplete submit with inline aria-invalid errors and no request, then fixes and resubmits", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "sr-2" } }), { status: 201 }),
+    );
+    render(withIntl(<FollowUpModal accountId={ACCOUNT_ID} />));
+    fireEvent.click(screen.getByRole("button", { name: "Create Follow-up" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create Service Request" }));
+
+    expect(await screen.findByText("Enter the contact name.")).toBeInTheDocument();
+    expect(screen.getByText("Choose a service type.")).toBeInTheDocument();
+    expect(screen.getByLabelText(/contact name/i)).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText(/service type/i)).toHaveAttribute("aria-invalid", "true");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(pushMock).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(/contact name/i), { target: { value: "Suresh Rao" } });
+    fireEvent.change(screen.getByLabelText(/service type/i), { target: { value: "Renewal Support" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Service Request" }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/service-requests/sr-2"));
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Enter the contact name.")).not.toBeInTheDocument();
+  });
 });

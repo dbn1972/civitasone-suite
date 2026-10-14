@@ -7,12 +7,9 @@ import { useRef, useState } from "react";
 import { useFormError } from "@/lib/useFormError";
 import { browserFetch, errorMessageFromResponse, UserFacingError } from "@/lib/api/browserClient";
 import { referenceFromHeaders } from "@/lib/errorCatalogue";
-import { Button } from "@/app/_components/ds";
+import { Button, Field, Input, Select } from "@/app/_components/ds";
 import { OwnerPicker, type Owner } from "@/app/_components/crm/OwnerPicker";
 import { validateNewAccount } from "./newAccountSchema";
-
-const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
-const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
 
 type FormState = { name: string; industry: string; website: string; parentId: string };
 const EMPTY_FORM: FormState = { name: "", industry: "", website: "", parentId: "" };
@@ -155,70 +152,51 @@ export function NewAccountForm({ accounts }: { accounts: CRMAccountSummary[] }) 
       </Button>
       {open ? (
         <div className="card" style={{ marginTop: 16 }}>
-          <form onSubmit={submit} className="pad" style={{ maxWidth: 560 }}>
+          <form onSubmit={submit} noValidate className="pad" style={{ maxWidth: 560 }}>
             <h4 style={{ marginTop: 0 }}>New account</h4>
-            <label htmlFor="account-name" style={labelStyle}>Account name</label>
-            <input
-              id="account-name"
-              required
-              aria-invalid={fieldErrors.name ? true : undefined}
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="e.g. Directorate of Industries"
-              style={inputStyle}
-            />
-            {fieldErrors.name ? (
-              <p role="alert" style={{ fontSize: 12, color: "#b42318", marginTop: 4 }}>{fieldErrors.name}</p>
-            ) : null}
+            <Field label="Account name" required error={fieldErrors.name}>
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="e.g. Directorate of Industries"
+              />
+            </Field>
             {!fieldErrors.name && duplicateName ? (
               <p role="status" style={{ fontSize: 12, color: "#b45309", marginTop: 4 }}>
                 {t("duplicateName")}
               </p>
             ) : null}
-            <label htmlFor="account-industry" style={{ ...labelStyle, marginTop: 12 }}>Industry</label>
-            <input
-              id="account-industry"
-              aria-invalid={fieldErrors.industry ? true : undefined}
-              value={form.industry}
-              onChange={(e) => setForm({ ...form, industry: e.target.value })}
-              placeholder="Government, Manufacturing…"
-              style={inputStyle}
-            />
-            {fieldErrors.industry ? (
-              <p role="alert" style={{ fontSize: 12, color: "#b42318", marginTop: 4 }}>{fieldErrors.industry}</p>
-            ) : null}
-            <label htmlFor="account-website" style={{ ...labelStyle, marginTop: 12 }}>Website</label>
-            <input
-              id="account-website"
-              aria-invalid={fieldErrors.website ? true : undefined}
-              value={form.website}
-              onChange={(e) => setForm({ ...form, website: e.target.value })}
-              placeholder="https://example.gov.in"
-              style={inputStyle}
-            />
-            {fieldErrors.website ? (
-              <p role="alert" style={{ fontSize: 12, color: "#b42318", marginTop: 4 }}>{fieldErrors.website}</p>
-            ) : null}
-            <label htmlFor="account-parent" style={{ ...labelStyle, marginTop: 12 }}>Reports to</label>
-            <select
-              id="account-parent"
-              value={form.parentId}
-              onChange={(e) => setForm({ ...form, parentId: e.target.value })}
-              style={inputStyle}
-            >
-              <option value="">Top level (no parent)</option>
-              {accounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
-            <label htmlFor="account-owner" style={{ ...labelStyle, marginTop: 12 }}>{tOwner("label")}</label>
-            <OwnerPicker
-              id="account-owner"
-              value={owner}
-              onChange={setOwner}
-              aria-label={tOwner("ariaLabel")}
-              placeholder={tOwner("placeholder")}
-            />
+            <Field label="Industry" error={fieldErrors.industry} style={{ marginTop: 12 }}>
+              <Input
+                value={form.industry}
+                onChange={(e) => setForm({ ...form, industry: e.target.value })}
+                placeholder="Government, Manufacturing…"
+              />
+            </Field>
+            <Field label="Website" error={fieldErrors.website} style={{ marginTop: 12 }}>
+              <Input
+                value={form.website}
+                onChange={(e) => setForm({ ...form, website: e.target.value })}
+                placeholder="https://example.gov.in"
+              />
+            </Field>
+            <Field label="Reports to" style={{ marginTop: 12 }}>
+              <Select value={form.parentId} onChange={(e) => setForm({ ...form, parentId: e.target.value })}>
+                <option value="">Top level (no parent)</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </Select>
+            </Field>
+            <Field id="account-owner" label={tOwner("label")} style={{ marginTop: 12 }}>
+              <OwnerPicker
+                id="account-owner"
+                value={owner}
+                onChange={setOwner}
+                aria-label={tOwner("ariaLabel")}
+                placeholder={tOwner("placeholder")}
+              />
+            </Field>
             <Button type="submit" disabled={busy} loading={busy} style={{ marginTop: 16, minHeight: 44 }}>
               {busy ? "Creating…" : "Create account"}
             </Button>

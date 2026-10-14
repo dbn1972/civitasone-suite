@@ -5,7 +5,7 @@
  * - Dashboard: expiring contracts
  * - Config: get, patch
  */
-import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from "vitest";
 import { createMockSqlClient } from "./fixtures/mock-sql-client.js";
 import { signToken } from "@civitasone/auth";
 
@@ -90,6 +90,28 @@ vi.mock("../src/shared/db.js", () => {
     sqlPool: { query: async () => ({ rows: [], rowCount: 0 }) },
   };
 });
+
+// Owner decision 2 (2026-10-14): a manager's access is narrowed to self + direct
+// reports by shared/self-scope. The DB-backed behaviour (report allowed, non-report /
+// unlinked denied) is covered in src/__tests__/manager-direct-report-scope-w1d2-real-db.test.ts;
+// this mock-DB file cannot resolve an employee link, so it stubs only the manager
+// predicate (HR roles still short-circuit inside the real implementation).
+const SS = vi.hoisted(() => ({ managerCanRead: false }));
+vi.mock("../src/shared/self-scope.js", async (orig) => {
+  const actual = await orig<typeof import("../src/shared/self-scope.js")>();
+  return {
+    ...actual,
+    canReadEmployeeRecord: (ctx: { roles: string[] }, ...rest: [string, readonly string[]?]) =>
+      SS.managerCanRead && ctx.roles.includes("manager") && !ctx.roles.includes("hr_admin")
+        ? Promise.resolve(true)
+        : actual.canReadEmployeeRecord(ctx as never, ...(rest as [string])),
+  };
+});
+
+// The renew route also resolves the actor's own employee link (self-renewal block); this
+// mock-DB file has no employee rows, so the actor is simply unlinked here. The real
+// self-renewal behaviour is covered by the real-DB suite.
+vi.mock("../src/modules/employee/actor-link.js", () => ({ resolveEmployeeForActor: async () => null }));
 
 vi.mock("../src/shared/infra.js", () => ({
   cache: { invalidate: async () => {}, makeKey: (...a: string[]) => a.join(":"), getOrLoad: async (_k: string, fn: () => Promise<unknown>) => fn() },
@@ -538,6 +560,8 @@ describe("POST /v1/hrms/contracts/:id/terminate", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/hrms/contracts/:id/renew", () => {
+  afterEach(() => { SS.managerCanRead = false; });
+
   it("initiates renewal for active contract (202)", async () => {
     // Each scopedRead chain calls H.selectFrom twice (where + limit), so we need 4 values:
     // getContractById: 2 calls, getPendingRenewalForContract: 2 calls
@@ -676,6 +700,7 @@ describe("POST /v1/hrms/contracts/:id/renew", () => {
   });
 
   it("allows manager role to initiate renewal", async () => {
+    SS.managerCanRead = true; // the manager is linked to the contract holder (own / direct report)
     const contract = [{ id: CONTRACT_ID, tenantId: TENANT, status: "active", endDate: "2027-01-01" }];
     H.selectFrom
       .mockResolvedValueOnce(contract)

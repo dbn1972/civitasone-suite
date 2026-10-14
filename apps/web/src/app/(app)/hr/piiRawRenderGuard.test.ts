@@ -4,8 +4,8 @@ import { join, relative } from "node:path";
 
 /**
  * W1 SF-05a grep guard: no `.tsx` under (app)/hr (which includes hr/payroll) or
- * (app)/payroll may render a raw Aadhaar / PAN / phone / mobile / bank account /
- * IFSC value as a JSX child (or as a `value:` of a detail row) unless the same
+ * (app)/payroll may render a raw Aadhaar / PAN / phone / mobile / bank account
+ * number as a JSX child (or as a `value:` of a detail row) unless the same
  * line goes through `<Masked>`, a `mask*()` helper, or one of the audited-reveal
  * controls. Display only: form <input value={...}> and request payloads are not
  * renders and are not matched.
@@ -16,7 +16,7 @@ import { join, relative } from "node:path";
 const APP_DIR = join(__dirname, "..");
 const ROOTS = [join(APP_DIR, "hr"), join(APP_DIR, "payroll")].filter((d) => existsSync(d));
 
-const FIELD = "(?:pan|panNumber|aadhaar\\w*|aadhar\\w*|phone|mobile|contactPhone|bankAccountNo|bankAccount|accountNo|accountNumber|bankIfsc|ifsc)";
+const FIELD = "(?:pan|panNumber|aadhaar\\w*|aadhar\\w*|phone|mobile|contactPhone|bankAccountNo|bankAccount|accountNo|accountNumber)";
 // {expr.field...}  rendered as a JSX child (after a tag close or at the start of a line)
 const NOT_DATA = "(?<!errors)(?<!Errors)(?<!current)"; // validation-error maps and refs are not data
 const JSX_CHILD = new RegExp(`(?:(?<!=)>|^)\\s*\\{[^<]*${NOT_DATA}\\.${FIELD}\\b`);
@@ -26,10 +26,6 @@ const SAFE_ON_LINE = /<Masked\b|\bmask[A-Z]\w*\(|\bmaskPii\b|<ContactReveal\b|<R
 
 /** `relative/path.tsx::<trimmed line text>` -> why raw is acceptable here. */
 const ALLOW: Record<string, string> = {
-  "hr/payroll/disbursement/DisbursementTransferTable.tsx::<div style={{ fontSize: 11, color: \"var(--ink2)\" }}>{tx.ifsc}</div>":
-    "IFSC is a public RBI branch routing code, not personal data; the account NUMBER on the same row is masked with an audited RevealAccount.",
-  "hr/payroll/pensioners/[id]/page.tsx::{ label: t(\"bankIfsc\"), value: p.bankIfsc ?? none },":
-    "IFSC is a public branch code; the pensioner's PAN and account number on this page use the audited RevealValue (POST /v1/payroll/pensioners/:id/reveal).",
   "hr/recruitment/[id]/page.tsx::<span>{app.email}{app.mobile ? ` · ${app.mobile}` : \"\"}</span>":
     "Service-masked (recruitment pii-mask.ts) and shown beside ContactReveal, the audited reveal-contact control.",
 };

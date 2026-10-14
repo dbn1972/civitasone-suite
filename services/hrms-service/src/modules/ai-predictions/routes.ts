@@ -18,6 +18,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlClient } from "../../shared/db.js";
+import { resolveManagerScopeIds } from "../../shared/self-scope.js";
 import { withRawTenantGuc } from "@civitasone/db";
 
 const READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager"];
@@ -49,6 +50,16 @@ function withTenantGuc<T>(
   return withRawTenantGuc(sqlClient, tenantId, fn);
 }
 
+const ATTRITION_META = {
+  algorithm: "rule-based",
+  factors: ["tenure < 2yr (+40)", "no promotion in 3yr (+30)", "low APAR < 60 (+30)"],
+  maxScore: 100,
+};
+const SUCCESSION_META = {
+  algorithm: "rule-based",
+  factors: ["same department", "grade level proximity", "APAR score (60%)", "tenure (40%)"],
+};
+
 export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
   // Rule-based scoring — replace with ML model when training data available
   // Attrition risk: tenure < 2yr + no promotion in 3yr + low APAR score
@@ -62,6 +73,11 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.query);
 
     // Rule-based scoring — replace with ML model when training data available
+    // Owner decision 2 (2026-10-14): a manager sees self + direct reports only;
+    // HR stays tenant-wide. Empty scope (unlinked actor) => nothing (fail closed).
+    const scope = await resolveManagerScopeIds(ctx);
+    if (scope && scope.length === 0) return reply.send({ data: [], meta: ATTRITION_META });
+
     // Risk factors:
     //   +40 if tenure < 2 years
     //   +30 if no promotion (designation change) in last 3 years
@@ -104,6 +120,7 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
         JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id
         JOIN employee.hrms_designations dg ON dg.id = e.designation_id AND dg.tenant_id = e.tenant_id
         WHERE e.tenant_id = ${ctx.tenantId} AND e.status NOT IN ('separated', 'retired')
+          ${scope ? tx`AND e.id IN ${tx(scope)}` : tx``}
       )
       SELECT * FROM risk_scores
       WHERE risk_score >= ${query.minScore}
@@ -111,14 +128,7 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
       LIMIT ${query.limit}
     `);
 
-    return reply.send({
-      data: rows,
-      meta: {
-        algorithm: "rule-based",
-        factors: ["tenure < 2yr (+40)", "no promotion in 3yr (+30)", "low APAR < 60 (+30)"],
-        maxScore: 100,
-      },
-    });
+    return reply.send({ data: rows, meta: ATTRITION_META });
   });
 
   // Rule-based scoring — replace with ML model when training data available
@@ -133,6 +143,12 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
       limit: z.coerce.number().int().min(1).max(50).default(10),
     }).parse(req.query);
 
+    // Owner decision 2: manager => incumbents AND candidates limited to self +
+    // direct reports (a candidate outside the team would expose another
+    // manager's report and their APAR-derived score). HR tenant-wide.
+    const scope = await resolveManagerScopeIds(ctx);
+    if (scope && scope.length === 0) return reply.send({ data: [], meta: SUCCESSION_META });
+
     // Rule-based scoring — replace with ML model when training data available
     // Finds employees in same department at one grade level below
     // who have high APAR scores, sorted by suitability
@@ -145,6 +161,7 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
           AND e.status NOT IN ('separated', 'retired')
           ${query.departmentId ? tx`AND e.department_id = ${query.departmentId}` : tx``}
           ${query.positionId ? tx`AND e.id = ${query.positionId}` : tx``}
+          ${scope ? tx`AND e.id IN ${tx(scope)}` : tx``}
           AND dg.level >= 5
       ),
       candidates AS (
@@ -180,6 +197,7 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
           AND e.department_id = tp.department_id
           AND cdg.level BETWEEN (tp.target_level - 2) AND (tp.target_level - 1)
           AND e.id != tp.incumbent_id
+          ${scope ? tx`AND e.id IN ${tx(scope)}` : tx``}
       )
       SELECT *,
         (avg_apar_score * 0.6 + LEAST(tenure_years, 20) * 2) AS suitability_score
@@ -188,13 +206,7 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
       LIMIT ${query.limit}
     `);
 
-    return reply.send({
-      data: rows,
-      meta: {
-        algorithm: "rule-based",
-        factors: ["same department", "grade level proximity", "APAR score (60%)", "tenure (40%)"],
-      },
-    });
+    return reply.send({ data: rows, meta: SUCCESSION_META });
   });
 
   // Workforce insights — summary stats and trends

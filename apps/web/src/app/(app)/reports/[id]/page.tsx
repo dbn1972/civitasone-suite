@@ -24,7 +24,9 @@ function classifyColumn(name: string): { kind: ColKind; maskKind?: "pan" | "acco
   const n = name.toLowerCase();
   if (/\b(aadhaar|aadhar|uid)\b|aadhaar|aadhar/.test(n)) return { kind: "sensitive", maskKind: "last4" };
   if (/pan(\b|_|number|no)/.test(n) || n === "pan") return { kind: "sensitive", maskKind: "pan" };
-  if (/(account|acct|bank).*(no|num|number)?/.test(n) || /ifsc/.test(n)) return { kind: "sensitive", maskKind: "account" };
+  // Owner decision 3 (2026-10-14): an IFSC is a public branch code -- not masked.
+  if (/ifsc/.test(n)) return { kind: "text" };
+  if (/(account|acct|bank).*(no|num|number)?/.test(n)) return { kind: "sensitive", maskKind: "account" };
   if (/(mobile|phone|contact).*(no|num|number)?|^mobile$|^phone$/.test(n)) return { kind: "sensitive", maskKind: "phone" };
   if (/e-?mail/.test(n)) return { kind: "sensitive", maskKind: "email" };
   // Money columns are stored as integer paise end-to-end.

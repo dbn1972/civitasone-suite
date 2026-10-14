@@ -22,10 +22,10 @@ export default async function OutcomeBudgetPage() {
         back="/finance"
       />
       <StatGrid>
-        <StatCard icon="🎯" iconBg="#e7edfd" label="Total Indicators" value={errored ? "—" : outcomes.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Achieved" value={errored ? "—" : achieved} />
-        <StatCard icon="📈" iconBg="#fffaeb" label="In Progress" value={errored ? "—" : inProgress} />
-        <StatCard icon="⏳" iconBg="#eff6ff" label="Not Started" value={errored ? "—" : notStarted} />
+        <StatCard icon="🎯" tone="info" label="Total Indicators" value={errored ? "—" : outcomes.length} />
+        <StatCard icon="✅" tone="good" label="Achieved" value={errored ? "—" : achieved} />
+        <StatCard icon="📈" tone="warn" label="In Progress" value={errored ? "—" : inProgress} />
+        <StatCard icon="⏳" tone="info" label="Not Started" value={errored ? "—" : notStarted} />
         {!errored && notMeasured > 0 ? <StatCard icon="❔" iconBg="var(--panel)" label="Not Measured" value={notMeasured} /> : null}
       </StatGrid>
       {/* UX-012: the data-source badge lives inside OutcomeBudgetTable. */}

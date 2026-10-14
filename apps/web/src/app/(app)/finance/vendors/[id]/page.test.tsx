@@ -127,7 +127,7 @@ describe("VendorDetailPage (GAP-FINANCE-VENDORS-DETAIL-03 / -05 / -06 / -07)", (
     getFinanceVendorById.mockResolvedValue({
       data: {
         ...base, createdBy: "11111111-1111-4111-8111-111111111111", approvedBy: "22222222-2222-4222-8222-222222222222", approvedAt: "2026-07-01T10:00:00Z",
-        pendingBankChange: { id: "c1", proposedBy: "33333333-3333-4333-8333-333333333333", proposedAt: "2026-07-02T10:00:00Z", bankName: "SBI", ifsc: "SBINXXXXXXX", accountMasked: "********5544", reason: "Moved banks" },
+        pendingBankChange: { id: "c1", proposedBy: "33333333-3333-4333-8333-333333333333", proposedAt: "2026-07-02T10:00:00Z", bankName: "SBI", ifsc: "SBIN0001234", accountMasked: "********5544", reason: "Moved banks" },
         bills: [],
       },
       source: "api",

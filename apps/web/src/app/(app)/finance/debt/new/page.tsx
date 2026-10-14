@@ -8,7 +8,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, ConfirmDialog, PageHeader } from "@/app/_components/ds";
+import { Alert, Button, ConfirmDialog, PageHeader } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { errorCodeFromResponse } from "@/lib/api/browserClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
@@ -73,15 +73,15 @@ export default function NewDebtPage() {
   const err = (k: keyof DebtFormErrors, serverField: string) => {
     const local = errors[k];
     const server = formError.fieldError(serverField);
-    return local ? <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{t(`error.${local}`)}</span>
-      : server ? <span style={{ fontSize: 12, color: "#b91c1c" }}>{server}</span> : null;
+    return local ? <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{t(`error.${local}`)}</span>
+      : server ? <span style={{ fontSize: 12, color: "var(--bad)" }}>{server}</span> : null;
   };
 
   return (
     <>
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/finance/debt" backLabel={t("backLabel")} />
       {message ? (
-        <div role={isError ? "alert" : "status"} aria-live={isError ? "assertive" : "polite"} className="banner" style={{ background: isError ? "#fef2f2" : "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
+        <Alert variant={isError ? "danger" : "success"} role={isError ? "alert" : "status"} aria-live={isError ? "assertive" : "polite"}>{message}</Alert>
       ) : null}
       <div className="card">
         <form onSubmit={review} className="pad" noValidate>
