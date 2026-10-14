@@ -15088,5 +15088,42 @@
   },
   "employeeFallback": {
     "unknownEmployee": "Unknown employee"
+  },
+  "tenantAdminW2": {
+    "compliance": {
+      "provenanceMethod": "Scores are derived from your recorded compliance controls (pass or fail over testable controls).",
+      "asOf": "As of {date}.",
+      "noControls": "No controls recorded yet.",
+      "incomplete": "Some controls are not yet tested, so scores may change.",
+      "checksCaption": "Recent compliance checks",
+      "colCheck": "Check",
+      "colChecked": "Checked",
+      "colEvidence": "Evidence",
+      "colResult": "Result",
+      "evidenceNone": "None recorded",
+      "evidenceCount": "{count, plural, one {# item} other {# items}}",
+      "noValue": "—"
+    },
+    "audit": {
+      "total": "Total events",
+      "last24h": "Events (24h)",
+      "success": "Success",
+      "failures": "Failures",
+      "loaded": "Loaded events",
+      "noValue": "—",
+      "exportNotice": "Exports are recorded in the audit log."
+    },
+    "users": {
+      "exportNotice": "Exports are recorded in the audit log."
+    },
+    "subscription": {
+      "status": {
+        "active": "Active",
+        "past_due": "Past Due",
+        "cancelled": "Cancelled",
+        "trial": "Trial",
+        "suspended": "Suspended"
+      }
+    }
   }
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { render } from "@/test-utils/intl-render";
 
 const getComplianceOverviewMock = vi.fn();
 vi.mock("@/app/_data/loaders", async () => {
@@ -71,7 +72,7 @@ describe("ComplianceDashboardPage — provenance (02) + pagination (04)", () => 
     });
     render(await ComplianceDashboardPage());
     const prov = screen.getByTestId("compliance-provenance");
-    expect(prov).toHaveTextContent("Derived from persisted compliance controls.");
+    expect(prov).toHaveTextContent(/derived from your recorded compliance controls/i);
     expect(prov).toHaveTextContent(/As of/);
     expect(prov).toHaveTextContent(/not yet tested/i);
     expect(screen.getByText("2 items")).toBeInTheDocument();

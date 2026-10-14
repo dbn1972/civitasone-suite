@@ -4,10 +4,12 @@ import { getTenantAuditLog, getTenantAuditSummary } from "../../../_data/loaders
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { countLast24h } from "@/lib/formatters";
+import { getTranslations } from "next-intl/server";
 import { Breadcrumb } from "../Breadcrumb";
 import { AuditLogTable } from "./AuditLogTable";
 
 export default async function TenantAuditPage({ searchParams }: { searchParams?: { entity?: string } }) {
+  const t = await getTranslations("tenantAdminW2.audit");
   const [result, summaryResult] = await Promise.all([getTenantAuditLog(), getTenantAuditSummary()]);
   const { data: events, source } = result;
 
@@ -30,7 +32,7 @@ export default async function TenantAuditPage({ searchParams }: { searchParams?:
 
   // GAP-TENANT-ADMIN-AUDIT-04/-06: whole-history counts come from the server
   // summary (audit-service /v1/audit/events/summary), not from the size of the
-  // page the list returned. When the summary is unavailable the tiles show "—",
+  // page the list returned. When the summary is unavailable the tiles show an em dash,
   // never a number derived from the loaded page. A scoped view (?entity=) is a
   // subset the summary cannot describe, so it falls back to the loaded rows.
   const serverSummary = !actionFilter && summaryResult.source !== "error" ? summaryResult.data : null;
@@ -53,12 +55,12 @@ export default async function TenantAuditPage({ searchParams }: { searchParams?:
           is honestly just the rows in the table below. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14, marginBottom: 18 }}>
         {actionFilter ? null : (
-          <StatCard icon="🗂️" iconBg="#f1f5f9" label="Total events" value={errored || summaryUnavailable ? "—" : serverSummary!.total} />
+          <StatCard icon="🗂️" iconBg="#f1f5f9" label={t("total")} value={errored || summaryUnavailable ? t("noValue") : serverSummary!.total} />
         )}
-        <StatCard icon="📋" iconBg="#f1f5f9" label="Events (24h)" value={errored ? "—" : actionFilter ? last24h : summaryUnavailable ? "—" : serverSummary!.last24h} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Success" value={errored ? "—" : actionFilter ? successes : summaryUnavailable ? "—" : serverSummary!.success} />
-        <StatCard icon="❌" iconBg="#fef3f2" label="Failures" value={errored ? "—" : actionFilter ? failures : summaryUnavailable ? "—" : serverSummary!.failures} />
-        <StatCard icon="👥" iconBg="#eff6ff" label="Loaded events" value={errored ? "—" : loaded} />
+        <StatCard icon="📋" iconBg="#f1f5f9" label={t("last24h")} value={errored ? t("noValue") : actionFilter ? last24h : summaryUnavailable ? t("noValue") : serverSummary!.last24h} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label={t("success")} value={errored ? t("noValue") : actionFilter ? successes : summaryUnavailable ? t("noValue") : serverSummary!.success} />
+        <StatCard icon="❌" iconBg="#fef3f2" label={t("failures")} value={errored ? t("noValue") : actionFilter ? failures : summaryUnavailable ? t("noValue") : serverSummary!.failures} />
+        <StatCard icon="👥" iconBg="#eff6ff" label={t("loaded")} value={errored ? t("noValue") : loaded} />
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
       {actionFilter && !errored && (

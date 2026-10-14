@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, within, fireEvent, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { ToastProvider } from "@/app/_components/ds";
+import { NextIntlClientProvider } from "next-intl";
+import en from "@/messages/en.json";
 
 // UsersTable now emits a success toast on invite (GAP-TENANT-ADMIN-USERS-03),
 // so it must render inside a ToastProvider.
 function renderWithToast(ui: ReactElement) {
-  return render(<ToastProvider>{ui}</ToastProvider>);
+  return render(<NextIntlClientProvider locale="en" messages={en}><ToastProvider>{ui}</ToastProvider></NextIntlClientProvider>);
 }
 
 vi.mock("next/navigation", () => ({
@@ -56,6 +58,26 @@ describe("UsersTable (InviteUserDialog) — UX-016 clerk-safe errors", () => {
     await waitFor(() => expect(dialog.textContent).toMatch(/This invitation was changed by someone else\. Refresh to see the latest version, then try again\./));
     expect(dialog.textContent).not.toMatch(/duplicate email constraint/i);
     expect(dialog.textContent).not.toMatch(/\b409\b/);
+  });
+});
+
+describe("UsersTable — duplicate invite (GAP-TENANT-ADMIN-USERS-07)", () => {
+  beforeEach(() => { vi.restoreAllMocks(); mockSearch = ""; });
+
+  it("a 409 DUPLICATE_EMAIL shows the specific 'already exists' copy, not a generic conflict", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ code: "DUPLICATE_EMAIL", message: "a user with this email already exists in this tenant" }), {
+        status: 409, headers: { "content-type": "application/json" },
+      }),
+    );
+    renderWithToast(<UsersTable users={[]} />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Invite User" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/Full name/i), { target: { value: "Asha Verma" } });
+    fireEvent.change(within(dialog).getByLabelText(/^Email/i), { target: { value: "asha@gov.in" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Send invite" }));
+    await waitFor(() => expect(dialog.textContent).toMatch(/A user with this email already exists\./));
+    expect(dialog.textContent).not.toMatch(/DUPLICATE_EMAIL/);
   });
 });
 
