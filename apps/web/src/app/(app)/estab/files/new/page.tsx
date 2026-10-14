@@ -402,12 +402,30 @@ export default function NewFilePage() {
               <label htmlFor="department" className="l">
                 {t("dept")}
               </label>
+              {depts.loaded && divisions.length === 0 /* ux-001-ok: depts.failed is surfaced by the note below; both states fall back to typed entry */ ? (
+                /* No pick-list available (list not readable by this role, or no operators enrolled yet): type it. */
+                <input
+                  id="department"
+                  type="text"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  aria-required="true"
+                  maxLength={100}
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    border: "1px solid var(--line)",
+                    borderRadius: 8,
+                    fontSize: 13,
+                  }}
+                />
+              ) : (
               <select
                 id="department"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
                 aria-required="true"
-                disabled={!depts.loaded || divisions.length === 0 /* ux-001-ok: a failed load is told apart below by depts.failed */}
+                disabled={!depts.loaded}
                 style={{
                   width: "100%",
                   padding: "8px 12px",
@@ -421,6 +439,7 @@ export default function NewFilePage() {
                   <option key={d} value={d}>{d}</option>
                 ))}
               </select>
+              )}
               {depts.loaded && divisions.length === 0 /* ux-001-ok: depts.failed picks the failure message */ ? (
                 <span role="note" className="sub" style={{ fontSize: 12 }}>{depts.failed ? t("deptLoadFailed") : t("deptNone")}</span>
               ) : null}

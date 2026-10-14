@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import pino from "pino";
 import { sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
@@ -11,6 +12,7 @@ import * as recordsRepo from "../records/repo.js";
 import { emitModuleDecisionCallback } from "../linkage/consumer.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
+const log = pino({ name: "files-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
 const FILE_NOTING_WORKFLOW = "file_noting";
@@ -69,7 +71,10 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       // own transaction closes the race where two creates for one DAK are accepted together.
       if (p.inwardId) {
         const inwardNow = await repo.lockInwardByIdTx(tx, p.inwardId, p.tenantId);
-        if (!inwardNow || inwardNow.fileId) return;
+        if (!inwardNow || inwardNow.fileId) {
+          await skipped(tx, msg, "file.create", p.id, p.inwardId, inwardNow ? "dak_already_linked" : "dak_not_found");
+          return;
+        }
       }
       const dueBy = computeFileDueBy();
       // CSMOP gapless file number per section+year (legacy fileNo honoured if given).
@@ -115,14 +120,14 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       id: string; inwardId: string; tenantId: string; fileNo?: string; section?: string;
       dept: string; currentWith: string; classification: string; initialNote?: string;
     };
-    const inward = await repo.findInwardById(p.inwardId, p.tenantId);
-    if (!inward) return;
-
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // GAP-ESTAB-FILES-NEW-02: one DAK, one file. Re-check inside the transaction (the route also refuses).
-      const inwardNow = await repo.lockInwardByIdTx(tx, p.inwardId, p.tenantId);
-      if (!inwardNow || inwardNow.fileId) return;
+      const inward = await repo.lockInwardByIdTx(tx, p.inwardId, p.tenantId);
+      if (!inward || inward.fileId) {
+        await skipped(tx, msg, "inward.open_file", p.id, p.inwardId, inward ? "dak_already_linked" : "dak_not_found");
+        return;
+      }
       const dueBy = computeFileDueBy();
       const fileNo = p.fileNo ?? await repo.allocateFileNo(tx, p.tenantId, p.section ?? p.dept, new Date().getFullYear());
       await repo.insertFile(tx, {
@@ -651,6 +656,19 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "add_attachment", "file", p.fileId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "file", p.fileId));
+  });
+}
+
+/**
+ * A command the caller already got 202 for that is dropped (DAK linked or gone by the time it runs)
+ * must leave a trace: a warn log plus a "failure" audit row, never a silent no-op.
+ */
+async function skipped(tx: Parameters<typeof enqueue>[0], msg: { tenantId: string; actorId: string; correlationId: string; messageId: string }, command: string, fileId: string, inwardId: string, reason: string): Promise<void> {
+  log.warn({ messageId: msg.messageId, command, fileId, inwardId, reason }, "estab command dropped");
+  await enqueue(tx, {
+    topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: { service: "estab", action: "create_skipped", resourceType: "file", resourceId: fileId, outcome: "failure", metadata: { command, inwardId, reason } },
   });
 }
 

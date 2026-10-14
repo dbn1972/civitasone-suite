@@ -98,11 +98,13 @@ describe("QuarterCreateForm", () => {
     expect("orgUnit" in body && body.orgUnit !== undefined).toBe(false);
   });
 
-  it("GAP-ESTAB-QUARTERS-04: with no departments the org unit select is disabled and says why", () => {
+  it("GAP-ESTAB-QUARTERS-04: with no departments the org unit is an enabled typed field and says why", () => {
     depts.value = { loaded: true, failed: false, divisions: [] };
     render(<QuarterCreateForm />);
-    expect((screen.getByLabelText("Org Unit") as HTMLSelectElement).disabled).toBe(true);
-    expect(screen.getByRole("note").textContent).toMatch(/No departments are available/i);
+    const orgUnit = screen.getByLabelText("Org Unit") as HTMLInputElement;
+    expect(orgUnit.tagName).toBe("INPUT");
+    expect(orgUnit.disabled).toBe(false);
+    expect(screen.getByRole("note").textContent).toMatch(/No department list is available/i);
   });
 
   it("GAP-ESTAB-QUARTERS-05: no hard-coded hex colour fallback in the form", () => {
