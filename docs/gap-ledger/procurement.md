@@ -2829,7 +2829,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W2 PQ: closed by #PRNUM; masked-only, server-side. Audited reveal NOT built: no reveal endpoint exists for this resource -- NEEDS OWNER DECISION); IFSC shown in full per owner decision 2026-10-14
+- [x] **Status** (W2 PQ: closed by #2034; masked-only, server-side. Audited reveal NOT built: no reveal endpoint exists for this resource -- NEEDS OWNER DECISION); IFSC shown in full per owner decision 2026-10-14
 - **W0 note:** partly fixed by #1866 — vendors/[id]/page.tsx:117-165 PAN/email/phone/account via server-rendered Masked (raw not in payload); no role-gated audited reveal endpoint (fail-closed by design)
 - **First-pass claim:** DPDP / financial-data exposure: PAN, phone, email and the full bank Account No are printed in clear text (page.tsx) to any module user; nothing is masked, gated by role, or audited on view.
 - **Verified evidence:** apps/web/src/app/(app)/procurement/vendors/[id]/page.tsx renders PAN (l.70-75), Email (82-87), Phone (88-93) and bank Account No (118-123) as plain text in an RSC, so unmasked values are in the HTML for every user who passes ModuleGate (procurement/layout.tsx; tenant-level only, no role check). No shared <Masked> display component exists (only a local MaskedInput in hr/employees/new/steps/Step4.tsx:22, an input). No view audit: procurement-service is absent from the snapshot, so server-side view logging is cannot-verify. 'CSV export' in the fix text does not apply to this page (no export here).

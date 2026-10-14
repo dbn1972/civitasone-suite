@@ -282,7 +282,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-CHAT-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W2 PQ: closed by #PRNUM; masked-only, server-side. Audited reveal NOT built: no reveal endpoint exists for this resource -- NEEDS OWNER DECISION)
+- [x] **Status** (W2 PQ: closed by #2034; masked-only, server-side. Audited reveal NOT built: no reveal endpoint exists for this resource -- NEEDS OWNER DECISION)
 - **W0-10 note:** review found the W0 tick partly — Role gate (AI_CHAT_READ_ROLES, page.tsx) and maskIdentifiers at render (page.tsx:154) done, but no audit of transcript view or reveal (none in page.tsx; session-routes.ts:116-130 transcript GET has no audit) and no permitted-role reveal flow (Masked component unused); masking is unconditional
 - **First-pass claim:** DPDP: full citizen message text (names, PPO numbers, complaints) is printed unmasked to whoever passes the module gate (page.tsx:115-125); no role check or masking is visible in the page or loader.
 - **Verified evidence:** chat/[id]/page.tsx renders entry.content in <p style whiteSpace pre-wrap> (~lines 112-118) for every message, unmasked. ai/layout.tsx only wraps ModuleGate moduleKey='ai-agent' (tenant module check, no requireAnyRole); the page and getChatTranscript (loaders.ts ~2941) do no role check or redaction. No <Masked> component exists in apps/web/src (search found none). Whether the service redacts PII is cannot-verify (ai-agent-service absent).
