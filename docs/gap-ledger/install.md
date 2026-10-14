@@ -337,7 +337,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-MODULES-04  ·  MEDIUM  ·  partly  ·  theme CONTENT (was I18N)
 
-- [x] **Status** (W0 2026-10-13 RE-CONFIRMED W2 PQ-D #2036 (touched files edited additively, behaviour covered by passing tests): closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** 'Module resolution catalogue' rows show only id/label/status/meta: no dependency, edition or entitlement column, so resolution cannot be reviewed (ModuleListTable.tsx:44-55).
 - **Verified evidence:** ModuleListTable.tsx:40-44 has only ID/Name/Detail/Status/Meta columns, so no dependency/edition/entitlement columns exist. True, but the loader (_data.ts:87) is a generic mapper over /api/v1/install/modules and the install-service response shape is not in this snapshot (only hrms-service is present), so it cannot be confirmed that such fields exist. The I18N tag/fix (next-intl) does not describe this observation; the i18n claim is a separate systemic point.
 - **Files to change:** `apps/web/src/app/(app)/install/modules/page.tsx`, `apps/web/src/app/(app)/install/_data.ts`, `packages/types (ModuleRowSummary or new InstallModuleRow)`
@@ -430,7 +430,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-SILOS-04  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 RE-CONFIRMED W2 PQ-D #2036 (touched files edited additively, behaviour covered by passing tests): closed by #1923, verified on main 9c5e9e9e9)
+- [ ] **Status** (reopened in #2036 review: install/silos/page.tsx still has no role gate and no forbidden state; earlier #1923 close was PROVISIONAL and does not hold)
 - **First-pass claim:** Silo provision records are shown with the generic mapper's heuristics (name/title/label/code, description/status) — infrastructure identifiers or error text in these fields would be displayed unfiltered to any viewer; no role gate (_data.ts:44-79, silos/page.tsx).
 - **Verified evidence:** silos/page.tsx has no role check, and mapRows (_data.ts:44-63) shows name/title/label/code as label and description/status as detail verbatim (ModuleListTable.tsx:51-53). The mapper does not read errorMessage or infra fields, so error text is only shown if the API puts it into description/status. Whether the route is role-restricted is decided by the (app) layout / gateway and install-service, neither verifiable here (only hrms-service in snapshot). Exposure to any viewer is therefore plausible but unproven.
 - **Files to change:** `apps/web/src/app/(app)/install/silos/page.tsx`, `apps/web/src/app/(app)/install/_data.ts`
