@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { z } from "zod";
+import { useTranslations } from "next-intl";
 import { Button, DataTable, StatusPill, ErrorState } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { toHumanError } from "@/lib/messages";
@@ -32,6 +33,7 @@ const registerSchema = z.object({
 });
 
 export function MigrationPanel() {
+  const tMig = useTranslations("estabMigrationPanel");
   const [rows, setRows] = useState<MigrationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);

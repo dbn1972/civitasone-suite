@@ -17,7 +17,8 @@ vi.mock("./ScannedDocumentsSection", () => ({
 }));
 // OfficerName fires client fetches for name resolution; stub to the short id so
 // the test is deterministic and offline.
-vi.mock("./OfficerName", () => ({
+vi.mock("./OfficerName", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./OfficerName")>()),
   OfficerName: ({ id }: { id: string }) => <span>Officer {id.slice(0, 8)}</span>,
 }));
 
@@ -103,5 +104,43 @@ describe("EstabFileDetailPage — note sheet when/officer/signedAt (FILES-DETAIL
     // The draft note content and the green note content both render.
     expect(screen.getByText("Draft proposal.")).toBeInTheDocument();
     expect(screen.getByText("Approved at my level.")).toBeInTheDocument();
+  });
+});
+
+describe("EstabFileDetailPage - service-resolved officer names (SF-17b)", () => {
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+  });
+
+  it("renders the resolved author and holder names directly, and the localised fallback when unresolved", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        id: "f1",
+        fileNo: "ESTAB-A/00008/2026",
+        subject: "Names",
+        classification: "confidential",
+        department: "ADMIN",
+        createdBy: "Creator Name",
+        createdDate: "2026-09-01T00:00:00.000Z",
+        currentWith: "11111111-1111-4111-8111-111111111111",
+        currentHolder: "Meera Iyer",
+        status: "active",
+        noteSheets: [
+          { id: "n1", author: "Anita Desai", content: "Resolved note.", timestamp: "2026-09-18T08:00:00.000Z", type: "note", noteType: "yellow", noteStatus: "draft", eSigned: false, signedAt: null },
+          { id: "n2", author: null, content: "Unresolved note.", timestamp: "2026-09-19T08:00:00.000Z", type: "note", noteType: "yellow", noteStatus: "draft", eSigned: false, signedAt: null },
+        ],
+        dispatchHistory: [],
+        attachments: [],
+        movementHistory: [],
+      },
+    });
+
+    const ui = await EstabFileDetailPage({ params: { id: "f1" } });
+    render(ui);
+
+    expect(screen.getByText("Anita Desai")).toBeInTheDocument();
+    expect(screen.getByText("Meera Iyer")).toBeInTheDocument();
+    expect(screen.getAllByText("Unknown employee")).toHaveLength(1);
   });
 });

@@ -2,12 +2,12 @@
 
 import { DataTable } from "../../../../_components/ds";
 import { formatIndianDateTime } from "@/lib/formatters";
-import { OfficerName } from "./OfficerName";
+import { ResolvedOfficerName } from "./OfficerName";
 
 export type NoteRow = {
   idx: number;
   content: string;
-  authorId: string;
+  author: string;
   when: string;
   type: string;
   status: string;
@@ -25,7 +25,7 @@ export function NoteSheetTable({ rows }: { rows: NoteRow[] }) {
         { key: "idx", label: "#", align: "right" },
         { key: "content", label: "Note" },
         { key: "when", label: "When" },
-        { key: "authorId", label: "Officer", render: (r) => (r.authorId ? <OfficerName id={r.authorId} /> : <>—</>) },
+        { key: "author", label: "Officer", render: (r) => <ResolvedOfficerName name={r.author} /> },
         {
           key: "type",
           label: "Type",

@@ -24,11 +24,11 @@ const DEPT = "beef0000-0000-4000-8000-00000017b3da";
 const DEPT_O = "beef0000-0000-4000-8000-00000017b3db";
 const DESIG = "beef0000-0000-4000-8000-00000017b3d1";
 const DESIG_O = "beef0000-0000-4000-8000-00000017b3d2";
-const FOREIGN_EMP = "beef0000-0000-4000-9000-00000017b3e0";
-const FOREIGN_LOGIN = "beef0000-0000-4000-a000-00000017b3e0";
+const FOREIGN_EMP = "beef0000-0000-4000-9b17-00000017b3e0";
+const FOREIGN_LOGIN = "beef0000-0000-4000-ab17-00000017b3e0";
 const N = 2100;
-const empId = (i: number) => `beef0000-0000-4000-9000-${String(i).padStart(12, "0")}`;
-const loginOf = (i: number) => `beef0000-0000-4000-a000-${String(i).padStart(12, "0")}`;
+const empId = (i: number) => `beef0000-0000-4000-9b17-${String(i).padStart(12, "0")}`;
+const loginOf = (i: number) => `beef0000-0000-4000-ab17-${String(i).padStart(12, "0")}`;
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 const asT = <T,>(t: string, fn: (tx: typeof sqlClient) => Promise<T>) => withRawTenantGuc(sqlClient, t, fn);
@@ -60,9 +60,9 @@ beforeAll(async () => {
     VALUES (${FOREIGN_EMP}, ${OTHER}, 'S17B-F', 'Foreign Tenant Person', ${DEPT_O}, ${DESIG_O}, '2015-01-01', ${FOREIGN_LOGIN}, ${ACTOR}, ${ACTOR})`);
   await asT(TENANT, (tx) => tx`
     INSERT INTO employee.hrms_employees (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, user_ref, created_by, updated_by)
-    SELECT ('beef0000-0000-4000-9000-' || lpad(g::text, 12, '0'))::uuid, ${TENANT}, 'S17B-' || g,
+    SELECT ('beef0000-0000-4000-9b17-' || lpad(g::text, 12, '0'))::uuid, ${TENANT}, 'S17B-' || g,
            'Sf17b Person ' || lpad(g::text, 4, '0'), ${DEPT}, ${DESIG}, '2015-01-01',
-           ('beef0000-0000-4000-a000-' || lpad(g::text, 12, '0')), ${ACTOR}, ${ACTOR}
+           ('beef0000-0000-4000-ab17-' || lpad(g::text, 12, '0')), ${ACTOR}, ${ACTOR}
       FROM generate_series(1, ${N}) g`);
   app = await buildApp();
 }, 120_000);

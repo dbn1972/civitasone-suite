@@ -14559,6 +14559,9 @@
     "encashmentNegative": "नकदीकरण के दिन ऋणात्मक नहीं हो सकते।",
     "remarksMax1000": "टिप्पणियाँ 1000 वर्णों या उससे कम होनी चाहिए।"
   },
+  "estabMigrationPanel": {
+    "openEfile": "ई-फ़ाइल खोलें"
+  },
   "employeeFallback": {
     "unknownEmployee": "अज्ञात कर्मचारी"
   }
