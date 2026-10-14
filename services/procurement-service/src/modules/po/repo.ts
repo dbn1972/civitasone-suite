@@ -1,5 +1,6 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { likePattern } from "../../shared/search.js";
 import { procurementPos, procurementPoItems, type PoRow, type PoInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -74,9 +75,16 @@ export async function lockPoByIdTx(tx: Writer, id: string, tenantId: string): Pr
   } as unknown as PoRow;
 }
 
-export async function listPosByTenant(tenantId: string, limit = 100, offset = 0): Promise<PoRow[]> {
+export async function listPosByTenant(tenantId: string, limit = 100, offset = 0, q?: string): Promise<PoRow[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
+  // GAP-PROCUREMENT-GRN-NEW-04: optional PO-number search so a picker can reach
+  // POs beyond the first page.
+  if (q) {
+    return db.transaction((tx) => tx.select().from(procurementPos)
+      .where(and(eq(procurementPos.tenantId, tenantId), ilike(procurementPos.poNo, likePattern(q))))
+      .orderBy(asc(procurementPos.poNo)).limit(limit).offset(offset));
+  }
   return db.transaction((tx) => tx.select().from(procurementPos).where(eq(procurementPos.tenantId, tenantId)).limit(limit).offset(offset));
 }
 

@@ -1186,7 +1186,9 @@ export const ProcurementDashboardSchema = z.object({
   pendingIndents: z.number().default(0),
   activePOs: z.number().default(0),
   grnsThisMonth: z.number().default(0),
-  contractRenewalsDue: z.number().default(0),
+  // GAP-PROCUREMENT-DASHBOARD-05: null = not available from procurement-service
+  // (contract data lives in contract-service) - never a fabricated 0.
+  contractRenewalsDue: z.number().nullable().default(null),
 });
 
 export const IndentSummarySchema = z.object({

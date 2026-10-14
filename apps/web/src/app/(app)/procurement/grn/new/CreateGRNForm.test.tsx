@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@/test-utils/intl-render";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -7,89 +7,110 @@ vi.mock("next/navigation", () => ({
 
 import { CreateGRNForm } from "./CreateGRNForm";
 
-describe("CreateGRNForm — required-field ARIA (Req 3.5)", () => {
+const VENDOR = { id: "22222222-2222-4222-8222-222222222222", name: "Acme Supplies" };
+const PO = { id: "33333333-3333-4333-8333-333333333333", poNo: "PO/2026/0001", vendor: VENDOR.name, vendorId: VENDOR.id };
+const FAR_PO = { id: "44444444-4444-4444-8444-444444444444", poNo: "PO/2026/0777", vendor: "Far Away Ltd", vendorId: "55555555-5555-4555-8555-555555555555" };
+const PO_DETAIL = {
+  id: PO.id,
+  vendorId: VENDOR.id,
+  items: [{ id: "poi-1", itemCode: "PAPER-A4", quantity: 10, unit: "reams" }],
+};
+
+function mockRoutes(urls: string[] = []) {
+  vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+    const url = String(input);
+    urls.push(url);
+    if (url.includes(`/pos/${PO.id}`)) return Promise.resolve(new Response(JSON.stringify(PO_DETAIL), { status: 200 }));
+    if (url.includes(`/pos/${FAR_PO.id}`)) return Promise.resolve(new Response(JSON.stringify({ id: FAR_PO.id, vendorId: FAR_PO.vendorId, items: [] }), { status: 200 }));
+    if (url.includes("/pos") && url.includes("q=0777")) return Promise.resolve(new Response(JSON.stringify({ data: [FAR_PO] }), { status: 200 }));
+    if (url.includes("/pos")) return Promise.resolve(new Response(JSON.stringify({ data: [PO] }), { status: 200 }));
+    if (url.includes("/grns")) return Promise.resolve(new Response(JSON.stringify({ id: "new-grn" }), { status: 202 }));
+    return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+  });
+}
+
+/** Open the PO combobox and choose an option by its PO number. */
+async function pickPo(poNo: string | RegExp) {
+  const box = await screen.findByLabelText("Purchase order *");
+  fireEvent.focus(box);
+  fireEvent.mouseDown(await screen.findByRole("option", { name: poNo }));
+}
+
+describe("CreateGRNForm - required-field ARIA (Req 3.5)", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    // The component fetches vendors/POs on mount; return empty lists so the
-    // form renders in its ready-but-empty state without erroring. A fresh
-    // Response per call is required because a Response body is single-use.
-    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
-      Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200, headers: { "content-type": "application/json" } })),
-    );
+    mockRoutes();
   });
 
-  it("marks the Purchase order and Vendor selects as aria-required", async () => {
+  it("marks the Purchase order combobox as aria-required", async () => {
     render(<CreateGRNForm />);
-    const poSelect = await screen.findByLabelText("Purchase order *");
-    const vendorSelect = await screen.findByLabelText("Vendor *");
-    expect(poSelect).toHaveAttribute("aria-required", "true");
-    expect(vendorSelect).toHaveAttribute("aria-required", "true");
+    const po = await screen.findByLabelText("Purchase order *");
+    expect(po).toHaveAttribute("role", "combobox");
+    expect(po).toHaveAttribute("aria-required", "true");
   });
 
-  it("points required fields at the error message via aria-describedby once a validation error is shown", async () => {
+  it("points the PO field at the error message via aria-describedby once a validation error is shown", async () => {
     render(<CreateGRNForm />);
-    const poSelect = await screen.findByLabelText("Purchase order *");
-    expect(poSelect).not.toHaveAttribute("aria-describedby");
+    const po = await screen.findByLabelText("Purchase order *");
+    expect(po).not.toHaveAttribute("aria-describedby");
 
-    const submit = screen.getByRole("button", { name: "Record GRN" });
-    fireEvent.click(submit);
+    fireEvent.click(screen.getByRole("button", { name: "Record GRN" }));
 
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent(/required/i);
     });
     const errorMessage = screen.getByRole("alert");
     expect(errorMessage).toHaveAttribute("id", "grn-form-message");
-    expect(poSelect).toHaveAttribute("aria-describedby", "grn-form-message");
+    expect(po).toHaveAttribute("aria-describedby", "grn-form-message");
   });
 });
 
-describe("CreateGRNForm — GRN-NEW-02/03/05", () => {
-  const VENDOR = { id: "22222222-2222-4222-8222-222222222222", name: "Acme Supplies" };
-  const PO = { id: "33333333-3333-4333-8333-333333333333", poNo: "PO/2026/0001", vendorId: VENDOR.id };
-  const PO_DETAIL = {
-    id: PO.id,
-    vendorId: VENDOR.id,
-    items: [{ id: "poi-1", itemCode: "PAPER-A4", quantity: 10, unit: "reams" }],
-  };
-
-  function mockRoutes() {
-    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.includes("/vendors")) return Promise.resolve(new Response(JSON.stringify({ data: [VENDOR] }), { status: 200 }));
-      if (url.includes(`/pos/${PO.id}`)) return Promise.resolve(new Response(JSON.stringify(PO_DETAIL), { status: 200 }));
-      if (url.includes("/pos")) return Promise.resolve(new Response(JSON.stringify({ data: [PO] }), { status: 200 }));
-      if (url.includes("/grns")) return Promise.resolve(new Response(JSON.stringify({ id: "new-grn" }), { status: 202 }));
-      return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
-    });
-  }
-
+describe("CreateGRNForm - GRN-NEW-02/03/04/05", () => {
   beforeEach(() => { vi.restoreAllMocks(); });
 
   it("does not auto-select a PO on load (NEW-02)", async () => {
     mockRoutes();
     render(<CreateGRNForm />);
-    const poSelect = await screen.findByLabelText("Purchase order *") as HTMLSelectElement;
-    await waitFor(() => expect(screen.getByRole("option", { name: /PO\/2026\/0001/ })).toBeInTheDocument());
-    expect(poSelect.value).toBe("");
+    const po = await screen.findByLabelText("Purchase order *") as HTMLInputElement;
+    expect(po.value).toBe("");
   });
 
   it("lays out PO items with ordered prefilled and received blank, and uses the PO item unit (NEW-02/03)", async () => {
     mockRoutes();
     render(<CreateGRNForm />);
-    const poSelect = await screen.findByLabelText("Purchase order *");
-    await waitFor(() => expect(screen.getByRole("option", { name: /PO\/2026\/0001/ })).toBeInTheDocument());
-    fireEvent.change(poSelect, { target: { value: PO.id } });
+    await pickPo(/PO\/2026\/0001/);
     await waitFor(() => expect(screen.getByText("reams")).toBeInTheDocument());
     const received = screen.getByLabelText("Received qty row 1") as HTMLInputElement;
     expect(received.value).toBe("0");
   });
 
+  it("derives the vendor from the chosen PO and shows it read-only - there is no vendor picker to diverge (NEW-04)", async () => {
+    mockRoutes();
+    render(<CreateGRNForm />);
+    expect(screen.queryByLabelText("Vendor *")).toBeNull();
+    await pickPo(/PO\/2026\/0001/);
+    await waitFor(() => expect(screen.getByText("reams")).toBeInTheDocument());
+    // The vendor name appears as plain text (not a control).
+    expect(screen.getAllByText("Acme Supplies").length).toBeGreaterThan(0);
+    expect(screen.queryByRole("combobox", { name: /vendor/i })).toBeNull();
+  });
+
+  it("finds a PO beyond the first page by searching the SERVER with ?q= (NEW-04)", async () => {
+    const urls: string[] = [];
+    mockRoutes(urls);
+    render(<CreateGRNForm />);
+    const box = await screen.findByLabelText("Purchase order *");
+    fireEvent.focus(box);
+    fireEvent.change(box, { target: { value: "0777" } });
+    fireEvent.mouseDown(await screen.findByRole("option", { name: /PO\/2026\/0777/ }));
+    expect(urls.some((u) => u.includes("/pos?") && u.includes("q=0777") && u.includes("limit=25"))).toBe(true);
+    await waitFor(() => expect(screen.getAllByText("Far Away Ltd").length).toBeGreaterThan(0));
+  });
+
   it("blocks submit when nothing was received (NEW-02)", async () => {
     mockRoutes();
     render(<CreateGRNForm />);
-    const poSelect = await screen.findByLabelText("Purchase order *");
-    await waitFor(() => expect(screen.getByRole("option", { name: /PO\/2026\/0001/ })).toBeInTheDocument());
-    fireEvent.change(poSelect, { target: { value: PO.id } });
+    await pickPo(/PO\/2026\/0001/);
     await waitFor(() => expect(screen.getByText("reams")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Record GRN" }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/received quantity for at least one item/i));
@@ -98,24 +119,49 @@ describe("CreateGRNForm — GRN-NEW-02/03/05", () => {
   it("blocks submit when received exceeds ordered (NEW-03)", async () => {
     mockRoutes();
     render(<CreateGRNForm />);
-    const poSelect = await screen.findByLabelText("Purchase order *");
-    await waitFor(() => expect(screen.getByRole("option", { name: /PO\/2026\/0001/ })).toBeInTheDocument());
-    fireEvent.change(poSelect, { target: { value: PO.id } });
+    await pickPo(/PO\/2026\/0001/);
     await waitFor(() => expect(screen.getByText("reams")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("Received qty row 1"), { target: { value: "12" } });
     fireEvent.click(screen.getByRole("button", { name: "Record GRN" }));
     await waitFor(() => expect(screen.getByText(/cannot exceed ordered/i)).toBeInTheDocument());
   });
 
-  it("shows a Retry when the PO list fails to load (NEW-05)", async () => {
+  it("shows an error with Retry - not an empty list - when the PO search fails (NEW-05)", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes("/vendors")) return Promise.resolve(new Response(JSON.stringify({ data: [VENDOR] }), { status: 200 }));
       if (url.includes("/pos")) return Promise.resolve(new Response("err", { status: 500 }));
       return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
     });
     render(<CreateGRNForm />);
-    await waitFor(() => expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument());
-    expect(screen.getByRole("alert")).toHaveTextContent(/Couldn't load/i);
+    fireEvent.focus(await screen.findByLabelText("Purchase order *"));
+    const retry = await screen.findByRole("button", { name: "Retry" });
+    expect(retry).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/Couldn.t load/i);
+    expect(screen.queryByText(/Loading/i)).toBeNull();
+    expect(screen.queryByText(/No purchase orders found/i)).toBeNull();
+  });
+
+  it("Retry succeeds and populates the list (NEW-05)", async () => {
+    let healthy = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/pos")) {
+        return Promise.resolve(healthy ? new Response(JSON.stringify({ data: [PO] }), { status: 200 }) : new Response("err", { status: 500 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    });
+    render(<CreateGRNForm />);
+    fireEvent.focus(await screen.findByLabelText("Purchase order *"));
+    await screen.findByRole("button", { name: "Retry" });
+    healthy = true;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("option", { name: /PO\/2026\/0001/ })).toBeInTheDocument();
+  });
+
+  it("an empty list shows 'No purchase orders found' (NEW-05)", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 })));
+    render(<CreateGRNForm />);
+    fireEvent.focus(await screen.findByLabelText("Purchase order *"));
+    expect(await screen.findByText("No purchase orders found.")).toBeInTheDocument();
   });
 });

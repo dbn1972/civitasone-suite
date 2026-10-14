@@ -2,8 +2,16 @@ import { PageHeader, Card, EmptyState, RefreshErrorState } from "../../../../../
 import { getProcurementVendorScorecard, getProcurementVendorById } from "../../../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
+import { getTranslations } from "next-intl/server";
 
+// The backend (scorecard-domain.ts ratingBand) emits A (>= 85), B (>= 70),
+// C (>= 50), D (< 50) or "unrated" - GAP-...-SCORECARD-03. The older
+// word-bands are kept so a cached/legacy payload still gets a colour.
 const BAND_COLOR: Record<string, string> = {
+  A: "var(--good)",
+  B: "var(--good)",
+  C: "var(--warn)",
+  D: "var(--bad)",
   excellent: "var(--good)",
   good:      "var(--good)",
   average:   "var(--warn)",
@@ -40,51 +48,8 @@ function ScoreBar({ label, score, max = 100 }: { label: string; score: number | 
   );
 }
 
-function RadarChart({ scores }: { scores: { label: string; value: number }[] }) {
-  const N = scores.length;
-  if (N < 3) return null;
-  const cx = 120; const cy = 120; const R = 90;
-  const step = (2 * Math.PI) / N;
-
-  const toPoint = (i: number, r: number) => ({
-    x: cx + r * Math.sin(i * step),
-    y: cy - r * Math.cos(i * step),
-  });
-
-  const axisLines = scores.map((_, i) => {
-    const p = toPoint(i, R);
-    return "M " + cx + "," + cy + " L " + p.x.toFixed(1) + "," + p.y.toFixed(1);
-  }).join(" ");
-
-  const polyPath = scores.map((s, i) => {
-    const p = toPoint(i, R * Math.min(100, s.value) / 100);
-    return (i === 0 ? "M" : "L") + " " + p.x.toFixed(1) + "," + p.y.toFixed(1);
-  }).join(" ") + " Z";
-
-  return (
-    <svg viewBox="0 0 240 240" aria-label="Performance radar chart" style={{ maxWidth: 240, display: "block", margin: "0 auto" }}>
-      {/* Grid rings */}
-      {[0.25, 0.5, 0.75, 1].map((frac) => {
-        const pts = scores.map((_, i) => {
-          const p = toPoint(i, R * frac);
-          return p.x.toFixed(1) + "," + p.y.toFixed(1);
-        }).join(" ");
-        return <polygon key={frac} points={pts} fill="none" stroke="var(--line)" strokeWidth="1" />;
-      })}
-      {/* Axis lines */}
-      <path d={axisLines} stroke="var(--line)" strokeWidth="1" fill="none" />
-      {/* Data polygon */}
-      <path d={polyPath} fill="var(--good)" fillOpacity="0.25" stroke="var(--good)" strokeWidth="2" />
-      {/* Labels */}
-      {scores.map((s, i) => {
-        const p = toPoint(i, R + 16);
-        return <text key={i} x={p.x.toFixed(1)} y={p.y.toFixed(1)} textAnchor="middle" dominantBaseline="middle" fontSize="10" fill="var(--ink2)">{s.label}</text>;
-      })}
-    </svg>
-  );
-}
-
 export default async function VendorScorecardPage({ params }: { params: { id: string } }) {
+  const t = await getTranslations("procurement.scorecard");
   const [{ data: scorecard, source }, { data: vendor }] = await Promise.all([
     getProcurementVendorScorecard(params.id),
     getProcurementVendorById(params.id),
@@ -121,10 +86,17 @@ export default async function VendorScorecardPage({ params }: { params: { id: st
     { label: "Quality",  value: scorecard.qualityScore ?? null },
     { label: "SLA",      value: scorecard.slaScore ?? null },
   ];
-  // Radar only plots dimensions that are actually scored (05).
-  const radarScores = subscores
-    .filter((s): s is { label: string; value: number } => s.value !== null)
-    .map((s) => ({ label: s.label, value: s.value }));
+  // GAP-...-SCORECARD-05: the on-time / late tiles must visibly reconcile with
+  // total orders. Orders neither on time nor late are simply not delivered yet.
+  const reconcile =
+    scorecard.totalOrders != null && scorecard.onTimeDeliveries != null && scorecard.lateDeliveries != null
+      ? {
+          onTime: scorecard.onTimeDeliveries,
+          late: scorecard.lateDeliveries,
+          total: scorecard.totalOrders,
+          open: scorecard.totalOrders - scorecard.onTimeDeliveries - scorecard.lateDeliveries,
+        }
+      : null;
 
   const asOf = scorecard.lastUpdated ? formatIndianDate(scorecard.lastUpdated) : "—";
 
@@ -149,9 +121,7 @@ export default async function VendorScorecardPage({ params }: { params: { id: st
           on the list/profile — two honest, separately-sourced measures rather
           than one re-scaled into the other. */}
       <p className="muted" style={{ fontSize: 12, marginBottom: 16 }}>
-        Performance score is out of 100 (bands: Excellent ≥ 90, Good 75–89,
-        Average 50–74, Poor &lt; 50). This is separate from the buyer rating
-        (out of 5) shown on the vendor list and profile.
+        {t("legend")}
       </p>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(140px,1fr))", gap: 12, marginBottom: 24 }}>
@@ -170,32 +140,22 @@ export default async function VendorScorecardPage({ params }: { params: { id: st
         ))}
       </div>
 
-      {/* GAP-...-SCORECARD-02: responsive — stack on phones, two columns on
-          desktop (was a fixed "1fr 1fr" with no breakpoint). */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,280px),1fr))", gap: 16 }}>
-        <Card title="Score breakdown" padding>
-          {subscores.map((s) => <ScoreBar key={s.label} label={s.label} score={s.value} />)}
-        </Card>
-        <Card title="Performance radar" padding>
-          <RadarChart scores={radarScores} />
-          <table className="sr-only" aria-label="Performance radar data table">
-            <thead>
-              <tr>
-                <th>Dimension</th>
-                <th>Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              {subscores.map((s) => (
-                <tr key={s.label}>
-                  <td>{s.label}</td>
-                  <td>{s.value === null ? "—" : s.value}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      </div>
+      {reconcile ? (
+        <p className="muted" role="note" style={{ fontSize: 12, margin: "0 0 16px" }}>
+          {reconcile.open > 0
+            ? t("reconcileOpen", { onTime: reconcile.onTime, late: reconcile.late, total: reconcile.total, open: reconcile.open })
+            : reconcile.open < 0
+              ? t("reconcileMismatch", { onTime: reconcile.onTime, late: reconcile.late, total: reconcile.total })
+              : t("reconcile", { onTime: reconcile.onTime, late: reconcile.late, total: reconcile.total })}
+        </p>
+      ) : null}
+
+      {/* GAP-...-SCORECARD-04: the three-axis radar was a triangle duplicating
+          these three bars, so it is dropped and the breakdown takes the full
+          width (the bars already carry every value as text). */}
+      <Card title="Score breakdown" padding>
+        {subscores.map((s) => <ScoreBar key={s.label} label={s.label} score={s.value} />)}
+      </Card>
     </>
   );
 }

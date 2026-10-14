@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within, fireEvent } from "@/test-utils/intl-render";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock("@/lib/sync/resource", () => ({ useSeededResource: vi.fn() }));
@@ -104,5 +104,34 @@ describe("EmdBgTable", () => {
     expect(within(table).getByText("Alpha Co")).toBeInTheDocument();
     expect(within(table).getByText("Gamma Co")).toBeInTheDocument();
     expect(screen.queryByText(/showing nothing/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-PROCUREMENT-EMD-BG-05: "expiring within 30 days" filter.
+  describe("expiring-within-30-days filter", () => {
+    function isoIn(days: number): string {
+      const d = new Date(Date.now() + days * 86_400_000 + 5.5 * 3_600_000);
+      return d.toISOString().slice(0, 10);
+    }
+    const SOON: EmdBgEntry = { id: "s1", vendor: "Soon Co", type: "EMD", amount: 100, validity: isoIn(10), bank: "SBI", status: "Active" };
+
+    it("narrows the register to instruments that lapse within 30 days, and says how many are shown", () => {
+      seed({ emd: { data: [...EMD, SOON], provenance: "live" }, pbg: { data: PBG, provenance: "live" } });
+      render(<EmdBgTable emdEntries={[...EMD, SOON]} pbgEntries={PBG} emdSource="api" pbgSource="api" />);
+      expect(within(screen.getByRole("table")).getByText("Alpha Co")).toBeInTheDocument();
+      fireEvent.click(screen.getByLabelText("Expiring within 30 days"));
+      const table = screen.getByRole("table");
+      expect(within(table).getByText("Soon Co")).toBeInTheDocument();
+      expect(within(table).queryByText("Alpha Co")).not.toBeInTheDocument();
+      expect(within(table).queryByText("Beta Co")).not.toBeInTheDocument(); // already expired
+      expect(screen.getByRole("status")).toHaveTextContent("Showing 1 of 4");
+    });
+
+    it("shows an honest empty state, not a blank table, when nothing is expiring", () => {
+      seed({ emd: { data: EMD, provenance: "live" }, pbg: { data: PBG, provenance: "live" } });
+      render(<EmdBgTable emdEntries={EMD} pbgEntries={PBG} emdSource="api" pbgSource="api" />);
+      fireEvent.click(screen.getByLabelText("Expiring within 30 days"));
+      expect(screen.getByText("Nothing expires in the next 30 days")).toBeInTheDocument();
+      expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    });
   });
 });
