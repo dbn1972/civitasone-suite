@@ -521,16 +521,6 @@ function SecuritySection({ settings, onDirtyChange }: { settings: AdminSettings;
           </label>
           <input id={`${id}-mfa`} type="checkbox" role="switch" checked={values.mfaRequired} onChange={(e) => handleMfaToggle(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} />
         </div>
-        {mfaConfirm && (
-          <div role="alertdialog" aria-modal="true" style={{ background: "var(--warn-bg, #fffbeb)", border: "1px solid var(--warn-bd, #fcd34d)", borderRadius: 10, padding: "14px 16px", display: "grid", gap: 10 }}>
-            <p style={{ margin: 0, fontSize: 13.5, fontWeight: 600 }}>{t("mfaDisableTitle")}</p>
-            <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink2)" }}>{t("mfaDisableBody")}</p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <Button type="button" variant="danger" size="sm" onClick={() => { update({ mfaRequired: false }); setMfaConfirm(false); }}>{t("mfaDisableYes")}</Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setMfaConfirm(false)}>{t("cancel")}</Button>
-            </div>
-          </div>
-        )}
         <FieldRow label={t("ipLabel")} htmlFor={`${id}-ip`} error={fieldError("ipWhitelist")}>
           <textarea id={`${id}-ip`} rows={4} value={values.ipWhitelist} onChange={(e) => update({ ipWhitelist: e.target.value })} placeholder={"10.0.0.0/8\n192.168.1.0/24"} style={{ ...inp, resize: "vertical", fontFamily: "monospace", fontSize: 13 }} aria-describedby={`${id}-ip-hint`} />
           <p id={`${id}-ip-hint`} style={{ margin: "4px 0 0", fontSize: 11.5, color: "var(--mut)" }}>{t("ipHint")}</p>
@@ -554,6 +544,17 @@ function SecuritySection({ settings, onDirtyChange }: { settings: AdminSettings;
         busy={saveState === "saving"}
         onConfirm={() => { const body = pendingBody; setPendingBody(null); if (body) void save("/api/proxy/v1/admin/settings/security", body); }}
         onCancel={() => setPendingBody(null)}
+      />
+      {/* SF-19: the inline role="alertdialog" box became the shared ConfirmDialog. */}
+      <ConfirmDialog
+        open={mfaConfirm}
+        danger
+        title={t("mfaDisableTitle")}
+        description={t("mfaDisableBody")}
+        confirmLabel={t("mfaDisableYes")}
+        cancelLabel={t("cancel")}
+        onConfirm={() => { update({ mfaRequired: false }); setMfaConfirm(false); }}
+        onCancel={() => setMfaConfirm(false)}
       />
     </Card>
   );

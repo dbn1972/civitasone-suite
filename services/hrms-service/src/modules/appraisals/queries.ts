@@ -1,7 +1,7 @@
 import type { APPRAISAL_STATUS_VALUES } from "@civitasone/schemas/web";
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
-import * as employeeRepo from "../employee/repo.js";
+import { batchEmployees, batchDepartments } from "../../shared/batch-resolve.js";
 
 /**
  * `allowedEmployeeIds` is the read-scope resolved by routes.ts's
@@ -22,13 +22,16 @@ export async function listAppraisals(tenantId: string, limit: number, allowedEmp
   const key = cache.listKey(tenantId, "appraisals", `list:${limit}:${scopeKey}`);
   return (await cache.getOrLoad(key, async () => {
     const rows = await repo.listByTenant(tenantId, limit, allowedEmployeeIds);
-    const employees = await employeeRepo.listByTenant(tenantId, 500, 0);
-    const empMap = new Map(employees.map((e) => [e.id, e]));
+    // GAP-HR-SF-17a: batched, tenant-scoped name lookups for exactly this
+    // page (employee, reviewer, department). Replaces an unordered 500-row
+    // employee window plus id-fragment fallbacks for department/reviewer.
+    const empMap = await batchEmployees(tenantId, rows.flatMap((r) => [r.employeeId, r.reviewerId]));
+    const deptMap = await batchDepartments(tenantId, [...empMap.values()].map((e) => e.departmentId));
     return rows.map((r) => ({
       id: r.id,
       employeeId: r.employeeId,
-      employeeName: empMap.get(r.employeeId)?.fullName ?? r.employeeId.slice(0, 8),
-      department: empMap.get(r.employeeId)?.departmentId.slice(0, 8) ?? "",
+      employeeName: empMap.get(r.employeeId)?.fullName ?? "Unknown employee",
+      department: deptMap.get(empMap.get(r.employeeId)?.departmentId ?? "") ?? "",
       appraisalPeriod: r.appraisalPeriod,
       rating: r.rating !== null ? Number(r.rating) : undefined,
       // r.status is validated at the HTTP boundary by AppraisalSummaryListSchema
@@ -37,7 +40,7 @@ export async function listAppraisals(tenantId: string, limit: number, allowedEmp
       // claim (see APPRAISAL_STATUS_VALUES's own comment in web.ts for why
       // that mismatch was a live bug, not a cosmetic one).
       status: r.status as (typeof APPRAISAL_STATUS_VALUES)[number],
-      reviewerName: r.reviewerId ? r.reviewerId.slice(0, 8) : undefined,
+      reviewerName: (r.reviewerId && empMap.get(r.reviewerId)?.fullName) || undefined,
     }));
   })) ?? [];
 }

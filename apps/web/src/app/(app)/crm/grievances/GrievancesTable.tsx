@@ -1,5 +1,6 @@
 "use client";
 
+import { formatIndianDate } from "@/lib/formatters";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
@@ -154,7 +155,7 @@ export function GrievancesTable({
             label: t("colLogged"),
             render: (r) => (
               <span style={{ color: "var(--ink2)", fontSize: 13 }}>
-                {r.createdAt ? new Date(r.createdAt).toLocaleDateString("en-IN") : "—"}
+                {r.createdAt ? formatIndianDate(r.createdAt) : "—"}
               </span>
             ),
           },

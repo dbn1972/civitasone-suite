@@ -1,5 +1,6 @@
 "use client";
 
+import { formatIndianDate } from "@/lib/formatters";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, ErrorState, PageHeader, SkeletonCard, StatGrid, StatCard, TabPanel, Tabs } from "@/app/_components/ds";
 import {
@@ -151,7 +152,7 @@ export function IntegrationsClient() {
                           <span style={{ fontSize: 11.5, color: "var(--mut)" }}>secret {row.secretMasked}</span>
                         )}
                         {row?.lastTestedAt && (
-                          <span style={{ fontSize: 11, color: "var(--mut)" }}>· tested {new Date(row.lastTestedAt).toLocaleDateString()}</span>
+                          <span style={{ fontSize: 11, color: "var(--mut)" }}>· tested {formatIndianDate(row.lastTestedAt)}</span>
                         )}
                       </div>
                     </button>

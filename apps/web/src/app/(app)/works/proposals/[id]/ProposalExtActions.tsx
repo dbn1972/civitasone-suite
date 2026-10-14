@@ -5,7 +5,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PROPOSAL_WRITE_ROLES } from "@/lib/auth/workRoles";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatShortId } from "@/lib/formatters";
 import { ConfirmDialog, useConfirmAction, Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
@@ -162,7 +162,7 @@ function SplitProposalForm({
           <p style={{ fontSize: 13, color: "#166534", marginBottom: 10 }}>
             Child work{splitResult.workNumber ? ` ${splitResult.workNumber}` : ""} is
             now active. The new work ID is{" "}
-            <code style={{ fontSize: 12 }}>{splitResult.id.slice(0, 8)}…</code>
+            <code style={{ fontSize: 12 }}>{formatShortId(splitResult.id)}…</code>
           </p>
           <div style={{ display: "flex", gap: 10 }}>
             <Link

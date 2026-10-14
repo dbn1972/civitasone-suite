@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { z } from "zod";
 import { useFormError } from "@/lib/useFormError";
 import { useZodFieldValidation } from "@/lib/form-validation";
-import { Button, Field, Input, Select } from "../../../../_components/ds";
+import { Button, ConfirmDialog, Field, Input, Select } from "../../../../_components/ds";
 
 /**
  * GAP-HR-TRAINING-NEW-03/05: schema mirrors the server's createTrainingBody
@@ -77,9 +77,13 @@ export function NewTrainingForm() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [isDirty, status]);
 
+  // SF-19: the unsaved-changes prompt is the shared ConfirmDialog (focus trap,
+  // Escape) rather than a native window.confirm.
+  const [discardOpen, setDiscardOpen] = useState(false);
   function handleCancelClick(e: React.MouseEvent) {
-    if (isDirty && !window.confirm(t("dirtyConfirmMessage"))) {
+    if (isDirty) {
       e.preventDefault();
+      setDiscardOpen(true);
     }
   }
 
@@ -168,6 +172,7 @@ export function NewTrainingForm() {
   const doneOrBusy = busy || status === "success";
 
   return (
+    <>
     <form
       onSubmit={(e) => {
         void handleSubmit(e);
@@ -307,5 +312,19 @@ export function NewTrainingForm() {
         </p>
       )}
     </form>
+    <ConfirmDialog
+      open={discardOpen}
+      danger
+      title={t("discardTitle")}
+      description={t("dirtyConfirmMessage")}
+      confirmLabel={t("discardConfirm")}
+      cancelLabel={t("keepEditing")}
+      onConfirm={() => {
+        setDiscardOpen(false);
+        router.push("/hr/training");
+      }}
+      onCancel={() => setDiscardOpen(false)}
+    />
+    </>
   );
 }

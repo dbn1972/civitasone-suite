@@ -5,7 +5,7 @@
  *
  * The three child pages previously used the generic ModuleListPage, which
  * flattened every record to ID/Name/Detail/Status/Meta and rendered
- * row.id.slice(0,8) as a raw-UUID column — dropping the attributes that define
+ * a truncated id as a raw-UUID column — dropping the attributes that define
  * each record. These typed tables render the real defining attributes and NO
  * raw-UUID column:
  *   • InfrastructureTable: Name / Type / Condition / Status

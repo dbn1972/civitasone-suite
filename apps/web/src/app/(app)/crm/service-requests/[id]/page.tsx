@@ -1,3 +1,4 @@
+import { formatIndianDateTime } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 import { fetchJson } from "../../../../_data/apiClient";
 import { PageHeader, StatusPill, Card } from "../../../../_components/ds";
@@ -39,7 +40,7 @@ interface ServiceRequestDetail {
 
 function fmt(dt?: string) {
   if (!dt) return "—";
-  return new Date(dt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+  return formatIndianDateTime(dt);
 }
 
 /**

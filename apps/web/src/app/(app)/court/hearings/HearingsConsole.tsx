@@ -20,6 +20,7 @@ import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { Hearing } from "../_data/types";
 import { fmtDate, fmtDateTime, hearingPillStatus, hearingStatusLabel, humanize, todayIso } from "../_data/format";
 import { adjournHearing, fetchCaseHearings, recordHearingOutcome, scheduleHearing } from "../_data/client";
+import { formatShortId } from "@/lib/formatters";
 
 const fieldStyle: React.CSSProperties = {
   padding: 8,
@@ -267,7 +268,7 @@ function HearingRow({
   // same scheduled minute (or lack a scheduledDate), which would otherwise
   // collide and give every "Adjourn"/"Record outcome" button on the case the
   // same accessible name.
-  const rowLabel = `hearing on ${fmtDateTime(hearing.scheduledDate)} for ${caseLabel} (#${hearing.id.slice(0, 8)})`;
+  const rowLabel = `hearing on ${fmtDateTime(hearing.scheduledDate)} for ${caseLabel} (#${formatShortId(hearing.id)})`;
 
   return (
     <div style={{ border: "1px solid var(--line2)", borderRadius: 10, padding: 12 }}>

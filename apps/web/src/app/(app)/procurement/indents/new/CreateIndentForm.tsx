@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { LineItemsEditor, emptyLineItem, lineItemsTotalMinor, lineUnitPriceMinor, isLineUnitPriceInvalid, type LineItem } from "../../_components/LineItemsEditor";
 import { trackActivation } from "@/lib/activation";
 import { useFormError } from "@/lib/useFormError";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, todayIST } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { Button } from "@/app/_components/ds";
 
@@ -30,7 +30,7 @@ export function CreateIndentForm({
   // server allocates a gapless per-tenant number on submit; the field is a
   // read-only placeholder until then.
   const [department, setDepartment] = useState(""); // NEW-01: must be chosen, not pre-filled "Finance"
-  const [indentDate, setIndentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [indentDate, setIndentDate] = useState(todayIST());
   const [requiredBy, setRequiredBy] = useState("");
   const [purpose, setPurpose] = useState("");
   const [items, setItems] = useState<LineItem[]>([initialItem ?? emptyLineItem()]);
@@ -122,7 +122,7 @@ export function CreateIndentForm({
       // NEW-04: no client indentNo — the server allocates a gapless number.
       department: department.trim(),
       purpose: purpose.trim(),
-      indentDate: indentDate || new Date().toISOString().slice(0, 10),
+      indentDate: indentDate || todayIST(),
       requiredBy: requiredBy || undefined,
       estimatedValueMinor: estimatedValueMinor > 0 ? estimatedValueMinor : undefined,
       items: validItems.map((it) => ({

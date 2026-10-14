@@ -10,7 +10,7 @@
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { EmptyState, Button } from "../ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatIndianDateTime } from "@/lib/formatters";
 import {
   getActivities,
   createActivity,
@@ -32,7 +32,7 @@ function fmtDateTime(iso: string | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  return formatIndianDateTime(iso);
 }
 
 /** datetime-local value ("2026-08-04T09:30") → ISO, or undefined when blank. */

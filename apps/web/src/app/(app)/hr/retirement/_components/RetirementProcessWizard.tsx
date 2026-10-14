@@ -10,6 +10,7 @@
  * client-side useState with no persistence at all, and "Issue PPO" was a
  * styled <span>, not a working action.
  */
+import { formatIndianDate } from "@/lib/formatters";
 import { UserFacingError } from "@/lib/userFacingError";
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -160,7 +161,7 @@ export function RetirementProcessWizard({ employeeName, separationId }: Props) {
           }}
         >
           <span aria-hidden="true">✅</span>
-          <span>{t("ppoIssuedNotice", { date: new Date(ppoIssuedAt as string).toLocaleDateString("en-IN") })}</span>
+          <span>{t("ppoIssuedNotice", { date: formatIndianDate(ppoIssuedAt as string) })}</span>
         </div>
       )}
 

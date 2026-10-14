@@ -1,4 +1,5 @@
 "use client";
+import { formatIndianDateTime } from "@/lib/formatters";
 import { useTranslations } from "next-intl";
 import { Card, StatusPill } from "../ds";
 
@@ -20,7 +21,7 @@ export interface CaseHistoryEntry {
 function fmt(dt: string): string {
   const d = new Date(dt);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+  return formatIndianDateTime(dt);
 }
 
 export function CaseStatusTimeline({

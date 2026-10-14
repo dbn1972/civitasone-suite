@@ -37,7 +37,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
       if (!Array.isArray(arr)) return null;
       return arr.map((r) => ({
         ...r,
-        employeeName: (r as Record<string, unknown>).employeeName as string ?? r.employeeId,
+        employeeName: (r as Record<string, unknown>).employeeName as string ?? "—",
         reason: r.reason ?? "—",
       }));
     },

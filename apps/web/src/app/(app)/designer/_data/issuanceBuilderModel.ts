@@ -1,3 +1,4 @@
+import { todayIST } from "@/lib/formatters";
 import type { FormFieldDefinition } from "@/app/_components/ds/designer/formTypes";
 import type { MergeField } from "@/app/_components/ds/designer/MergeFieldPicker";
 import {
@@ -190,7 +191,7 @@ export function buildSampleMergeValues(
   serviceName: string,
   formFields: FormFieldDefinition[] = [],
 ): SampleMergeValues {
-  const issued = new Date().toISOString().slice(0, 10);
+  const issued = todayIST();
   const values: SampleMergeValues = {
     applicant_name: "Sample Applicant",
     app_no: "APP/2026/00099",

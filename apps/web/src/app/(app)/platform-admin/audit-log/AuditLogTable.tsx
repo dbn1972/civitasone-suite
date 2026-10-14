@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { Button } from "@/app/_components/ds";
-import { formatIndianDateTime, istDatePart } from "@/lib/formatters";
+import { formatIndianDateTime, istDatePart, todayIST } from "@/lib/formatters";
 import { runAuditedCsvExport } from "@/lib/export/csvExport";
 import { useTableExportGuard } from "@/lib/export/useTableExportGuard";
 
@@ -115,7 +115,7 @@ export function AuditLogTable({ events, canExport = true }: { events: PlatformAu
     const verdict = await runAuditedCsvExport({
       guard: exportGuard,
       rowCount: events.length,
-      filename: `audit-log-${new Date().toISOString().slice(0, 10)}.csv`,
+      filename: `audit-log-${todayIST()}.csv`,
       build: () => buildCsv(events),
     });
     if (!verdict.ok) setExportError(verdict.message);

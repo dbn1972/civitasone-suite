@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Button, PageHeader, DataTable, EmptyState, ErrorState, ConfirmDialog, SkeletonTable, useConfirmAction } from "../../../_components/ds";
-import { formatIndianDate, todayIST } from "@/lib/formatters";
+import { formatIndianDate, todayIST, formatShortId } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { SESSION_LIMIT, isAtSessionLimit } from "./sessions";
 import { LocationPicker, type FunctionalLocation, type LocationsLoad } from "./LocationPicker";
@@ -113,7 +113,7 @@ export default function AssetVerificationPage() {
 
   const tableRows = rows.map((r) => ({
     id: r.id,
-    session: r.id.slice(0, 8),
+    session: formatShortId(r.id),
     date: formatIndianDate(r.verificationDate),
     location: r.location ?? "—",
     status: r.status,

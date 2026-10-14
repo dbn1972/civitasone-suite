@@ -4,7 +4,7 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, todayIST } from "@/lib/formatters";
 
 type AcceptedResponse = { id?: string; status?: string; correlationId?: string };
 
@@ -12,7 +12,7 @@ const MIN_INSTALMENTS = 2;
 const MAX_INSTALMENTS = 36;
 
 function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayIST();
 }
 
 export function CreateInstalmentPlanForm({

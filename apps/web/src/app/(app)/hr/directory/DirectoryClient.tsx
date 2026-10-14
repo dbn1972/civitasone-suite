@@ -3,7 +3,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import Link from 'next/link'
-import { Avatar, Button, DataTable } from '@/app/_components/ds'
+import { Avatar, Button, DataTable, Modal } from '@/app/_components/ds'
 
 type Employee = {
   id: string
@@ -124,70 +124,21 @@ function EmployeeDetailModal({
   canViewProfiles: boolean
   t: (key: string) => string
 }) {
-  const closeRef = useRef<HTMLButtonElement>(null)
-  const dialogRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    // Move focus into modal when it opens (WCAG 2.4.3 Focus Order)
-    closeRef.current?.focus()
-  }, [])
-
-  useEffect(() => {
-    function handlePointerDown(e: MouseEvent) {
-      if (e.target === dialogRef.current) onClose()
-    }
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('mousedown', handlePointerDown)
-    document.addEventListener('keydown', handleKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown)
-      document.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [onClose])
-
   const avatarColors = [ASHOKA_BLUE, '#1a6d3c', '#7c2d12', '#4c1d95', '#064e3b', '#831843', '#92400e']
   const color = avatarColors[(emp.name.charCodeAt(0) ?? 0) % avatarColors.length]
 
+  // SF-19: ds/Modal owns the focus trap, inert background, Escape and focus
+  // restore (this used to hand-roll the overlay + document listeners).
   return (
-    <div
-      ref={dialogRef}
-      role="dialog"
-      aria-modal="true"
-      aria-label={`${t('employeeDetailsFor')} ${emp.name}`}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.4)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-        padding: 16,
-      }}
-    >
-      <div
-        style={{
-          background: 'var(--surface, #fff)',
-          borderRadius: 12,
-          padding: 24,
-          maxWidth: 400,
-          width: '100%',
-          boxShadow: '0 8px 32px rgba(0,0,0,0.18)',
-        }}
-      >
+    <Modal open onClose={onClose} title={emp.name} size="sm">
+      <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
           <Avatar name={emp.name} color={color} size="xl" />
-          <div>
-            <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: 'var(--fg, #0f172a)' }}>
-              {emp.name}
-            </h2>
-            {emp.designation && (
-              <div style={{ fontSize: 13, color: ASHOKA_BLUE, fontWeight: 600, marginTop: 2 }}>
-                {emp.designation}
-              </div>
-            )}
-          </div>
+          {emp.designation && (
+            <div style={{ fontSize: 13, color: ASHOKA_BLUE, fontWeight: 600 }}>
+              {emp.designation}
+            </div>
+          )}
         </div>
         <dl style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[
@@ -228,7 +179,6 @@ function EmployeeDetailModal({
           </Link>
         </div>
         <Button
-          ref={closeRef}
           onClick={onClose}
           aria-label={t('closeDetails')}
           style={{ marginTop: 8, width: '100%', minHeight: 44 }}
@@ -236,7 +186,7 @@ function EmployeeDetailModal({
           {t('close')}
         </Button>
       </div>
-    </div>
+    </Modal>
   )
 }
 

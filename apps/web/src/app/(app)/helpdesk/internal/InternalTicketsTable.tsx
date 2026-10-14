@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { InternalHelpdeskTicketSummary } from "@civitasone/types";
 import { DataTable, Segmented, EmptyState } from "../../../_components/ds";
 import { HELPDESK_PRIORITY_VARIANTS } from "@/lib/helpdesk/priorityVariants";
+import { formatShortId } from "@/lib/formatters";
 
 type TicketRow = {
   id: string;
@@ -31,7 +32,7 @@ export function InternalTicketsTable({
     id: t.id,
     // GAP-HELPDESK-INTERNAL-02 / DETAIL-05: show a short reference instead of
     // a truncated UUID — formatted the same way on list and detail for consistency.
-    ticketId: `INT-${t.id.slice(0, 8).toUpperCase()}`,
+    ticketId: `INT-${formatShortId(t.id, { upper: true })}`,
     subject: t.subject,
     priority: t.priority,
     status: t.status,

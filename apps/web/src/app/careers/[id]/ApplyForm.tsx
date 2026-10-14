@@ -1,5 +1,6 @@
 "use client";
 
+import { todayIST } from "@/lib/formatters";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
@@ -214,7 +215,7 @@ export function ApplyForm({ jobOpeningId, vacancyType = "regular" }: { jobOpenin
         hint={t("mobileHint")}
         value={mobile} onChange={setMobile} error={fe("mobile")} autoComplete="tel" />
       <Field label={t("dob")} id={FIELD_IDS.dateOfBirth!} type="date" placeholder=""
-        hint={t("dobHint")} max={new Date().toISOString().slice(0, 10)}
+        hint={t("dobHint")} max={todayIST()}
         value={dateOfBirth} onChange={setDateOfBirth} error={fe("dateOfBirth")} autoComplete="bday" />
       <SelectField label={t("category")} id={FIELD_IDS.category!} hint={t("categoryHint")} value={category} onChange={setCategory} error={fe("category")}
         options={[{ value: "", label: t("category_none") }, ...CATEGORY_VALUES.map((c) => ({ value: c, label: t(`category_${c}`) }))]} />

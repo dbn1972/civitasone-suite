@@ -325,7 +325,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-APPLICATIONS-DETAIL-04  ·  HIGH  ·  partly  ·  theme MONEY
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1865, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 closed by #1865; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: requested amount and scheme range shown, range-checked in bigint, optional reason; the dialog is now ds/Modal)
 - **First-pass claim:** Approve asks only for a free rupee amount with no context (ApproveApplicationDialog.tsx:47-77): requested amount and the scheme min/max are not shown or checked client-side, and there is no reason/remarks field. A sanction above the request or the scheme cap is one click.
 - **Verified evidence:** apps/web/src/app/(app)/grants/applications/[id]/ApproveApplicationDialog.tsx:34-74 asks only for a rupee amount (converted via rupeesToMinorString, then Number(minor)); it shows no requested amount, no scheme min/max and no reason field, so the amount is unchecked client-side. The dialog does use rupeesToMinorString (no float multiplication), so the 'money' theme is only about context. GrantApplicationDetail has schemeId and GrantSchemeDetail (_data.ts) has min/maxAmountMinor, so data exists via getSchemeById, but the server may still validate (not verifiable).
 - **Files to change:** `apps/web/src/app/(app)/grants/applications/[id]/page.tsx`, `apps/web/src/app/(app)/grants/applications/[id]/ApplicationActions.tsx`, `apps/web/src/app/(app)/grants/applications/[id]/ApproveApplicationDialog.tsx`

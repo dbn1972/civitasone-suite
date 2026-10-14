@@ -1,6 +1,6 @@
 /** works feature — small shared display helpers. */
 import type { BillStatus } from "./types";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatShortId } from "@/lib/formatters";
 
 /**
  * Calendar date for the works registers. Delegates to the shared
@@ -23,7 +23,8 @@ export function humanize(token: string | null | undefined): string {
 /** Shorten a UUID for compact display, e.g. "3f9a1c20…". Falls back to "—". */
 export function shortId(id: string | null | undefined): string {
   if (!id) return "—";
-  return id.length > 8 ? `${id.slice(0, 8)}…` : id;
+  const short = formatShortId(id);
+  return short !== id ? `${short}…` : id;
 }
 
 /**

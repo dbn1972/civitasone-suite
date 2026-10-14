@@ -1,5 +1,6 @@
 "use client";
 
+import { todayIST } from "@/lib/formatters";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -32,7 +33,7 @@ export function CreateSrnForm({
   items?: SrnItem[];
 }) {
   const router = useRouter();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayIST();
   const [receivedDate, setReceivedDate] = useState(today);
   const [remarks, setRemarks] = useState("");
   // GAP-PROCUREMENT-GRN-DETAIL-SRN-NEW-02 — default to Draft (not pre-armed to

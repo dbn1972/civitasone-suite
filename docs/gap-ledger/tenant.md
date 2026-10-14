@@ -187,7 +187,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CONSENT-EXCHANGE-03  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1801, verified on main 9c5e9e9e9)
+- [ ] **Status** (W1 SF-01a REOPENED from the W0 PROVISIONAL tick: slug ids no longer collide, but UUIDs that are time-ordered still share their leading 8 chars and formatShortId keeps the first 8; needs a distinguishing column or a different prefix, SF-01b)
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide (UUIDs share the leading 8 chars when time-ordered).
 - **Verified evidence:** ModuleListTable.tsx:50 truncates id to 8 chars. The 'collide' claim is plausible for time-ordered UUIDs but unproven.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -751,7 +751,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-QUOTAS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1801, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1801, verified on main 9c5e9e9e9; W1 SF-01a re-confirmed on #2016: ids shown via shared formatShortId, slug ids such as storage_gb / storage_backup_gb render whole, covered by ModuleListTable.test.tsx)
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide (storage_gb and storage_backup_gb both show "storage_").
 - **Verified evidence:** ModuleListTable.tsx:40 header 'ID' and :50 renders <span className="mono">{row.id.slice(0, 8)}</span>. Shared by every ModuleListPage screen; mapTenantRows (_data.ts:36-43) falls back to key/code/resource/`row-N` as id so truncation is lossy. The collision example is plausible: 'storage_gb'.slice(0,8) and 'storage_backup_gb'.slice(0,8) are both 'storage_'; the id falls back to row.resource (_data.ts:38).
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -844,7 +844,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-SETTINGS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W1 SF-01a: closed by #2016)
 - **W0 note:** partly fixed by #1801 — Slug ids shown in full; settings with UUID id still sliced to 8 chars, ID column kept
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide (auth.session_timeout_min and auth.session_timeout_max both show "auth.ses").
 - **Verified evidence:** ModuleListTable.tsx:50 renders <span className="mono">{row.id.slice(0, 8)}</span> (file lines 37-55 hold the table). Ids come from mapper fallback chain (id/key/code/... then `row-N`), so long keys/UUIDs sharing a prefix display identically; <tr key={row.id}> at :47 would also duplicate if real ids collide. Collision example is plausible only if the settings payload has no `id` and the mapper falls back to `key` (tenant/_data.ts:37-39); payload not visible, so the specific example is unverified.

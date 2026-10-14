@@ -3,7 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatusPill, EmptyState, UserRef } from "../../../_components/ds";
 import { getChangeRequest } from "../_data/loaders";
 import { ChangeActions } from "./ChangeActions";
-import { formatIndianDateTime } from "@/lib/formatters";
+import { formatIndianDateTime, formatShortId } from "@/lib/formatters";
 
 export default async function Page({ params }: { params: { id: string } }) {
   const { data: detail, source, status } = await getChangeRequest(params.id);
@@ -29,7 +29,7 @@ export default async function Page({ params }: { params: { id: string } }) {
 
   return (
     <>
-      <PageHeader title={c.title} subtitle={`Change ${c.id.slice(0, 8)} · ${c.type} · ${c.risk} risk`} back="/change" />
+      <PageHeader title={c.title} subtitle={`Change ${formatShortId(c.id)} · ${c.type} · ${c.risk} risk`} back="/change" />
 
       <div className="card">
         <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

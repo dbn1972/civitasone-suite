@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, DataTable, ConfirmDialog } from "@/app/_components/ds";
 import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
-import { formatMoney, todayIST } from "@/lib/formatters";
+import { formatMoney, todayIST, formatShortId } from "@/lib/formatters";
 import { aucCapitalizeErrorMessage, type CapitalizeMode } from "./capitalizeFlow";
 import { glErrorKey, journalKey, journalState } from "../glStatus";
 
@@ -77,9 +77,9 @@ export function AucTable({ rows, makerChecker = true }: { rows: AucRow[]; makerC
       setMessage(
         mode === "repost" ? t("repostDone") :
         mode === "capitalize"
-          ? `Capitalization submitted for "${row.projectCode}"${makerChecker ? " — awaiting approval by a different asset administrator" : out.id ? ` — asset ${out.id.slice(0, 8)}` : ""}.`
+          ? `Capitalization submitted for "${row.projectCode}"${makerChecker ? " — awaiting approval by a different asset administrator" : out.id ? ` — asset ${formatShortId(out.id)}` : ""}.`
           : mode === "approve"
-            ? `Capitalization approved for "${row.projectCode}"${out.id ? ` — asset ${out.id.slice(0, 8)}` : ""}.`
+            ? `Capitalization approved for "${row.projectCode}"${out.id ? ` — asset ${formatShortId(out.id)}` : ""}.`
             : `Capitalization of "${row.projectCode}" rejected; the project is back under construction.`,
       );
       setDialog(null);

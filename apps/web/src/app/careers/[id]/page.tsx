@@ -1,3 +1,4 @@
+import { formatIndianDate } from "@/lib/formatters";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -87,7 +88,7 @@ export default async function VacancyPage({ params }: { params: { id: string } }
             {v.payRange && <InfoCard icon="💰" label={t("infoPay")} value={v.payRange} />}
             {v.vacancies > 0 && <InfoCard icon="👥" label={t("infoPositions")} value={String(v.vacancies)} />}
             {v.qualification && <InfoCard icon="🎓" label={t("infoQualification")} value={v.qualification} />}
-            {v.closesAt && <InfoCard icon="📅" label={t("infoApplyBy")} value={new Date(v.closesAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} />}
+            {v.closesAt && <InfoCard icon="📅" label={t("infoApplyBy")} value={formatIndianDate(v.closesAt)} />}
           </div>
 
           {v.description && (

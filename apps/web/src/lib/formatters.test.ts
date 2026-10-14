@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { formatMoneyCompact, formatMoney, formatCrore, formatIndianDate, formatIndianDateTime, todayIST, istDatePart, addDaysIST, minorToRupeesOrNull, formatClockTime12h, percentOfMinor, humanizeStatus, formatEntityRef, utilisationPercent, isOverUtilised, formatEnumLabel, formatDays, formatPoints } from "./formatters";
+import { formatMoneyCompact, formatMoney, formatCrore, formatIndianDate, formatIndianDateTime, todayIST, istDatePart, addDaysIST, minorToRupeesOrNull, formatClockTime12h, percentOfMinor, humanizeStatus, formatEntityRef, utilisationPercent, isOverUtilised, formatEnumLabel, formatDays, formatPoints, formatShortId } from "./formatters";
 
 // ---------------------------------------------------------------------------
 // formatClockTime12h -- GAP-HR-ATTENDANCE-CONFIG-02
@@ -236,6 +236,15 @@ describe("todayIST", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2024-01-15T19:00:00.000Z"));
     expect(todayIST()).toBe("2024-01-16");
+  });
+
+  it("at 00:30 IST gives the IST date, not the (previous) UTC date that toISOString gives", () => {
+    // 2026-10-14 00:30 IST == 2026-10-13 19:00 UTC.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-13T19:00:00.000Z"));
+    expect(new Date().toISOString().slice(0, 10)).toBe("2026-10-13"); // the old, wrong "today"
+    expect(todayIST()).toBe("2026-10-14");
+    expect(addDaysIST(todayIST(), 7)).toBe("2026-10-21");
   });
 });
 
@@ -583,5 +592,24 @@ describe("formatDays", () => {
   });
   it("shows — for null", () => {
     expect(formatDays(null)).toBe("—");
+  });
+});
+
+describe("formatShortId (SF-01a)", () => {
+  const uuid = "5b1c2d3e-0000-4000-8000-000000000000";
+  it("shortens a bare UUID to 8 chars", () => {
+    expect(formatShortId(uuid)).toBe("5b1c2d3e");
+  });
+  it("upper-cases on request", () => {
+    expect(formatShortId(uuid, { upper: true })).toBe("5B1C2D3E");
+  });
+  it("keeps slug and code ids whole so distinct records stay distinct", () => {
+    expect(formatShortId("hrms-leave-requests")).toBe("hrms-leave-requests");
+    expect(formatShortId("PO-2026-014")).toBe("PO-2026-014");
+  });
+  it("renders a dash for missing ids", () => {
+    expect(formatShortId(null)).toBe("—");
+    expect(formatShortId(undefined)).toBe("—");
+    expect(formatShortId("")).toBe("—");
   });
 });

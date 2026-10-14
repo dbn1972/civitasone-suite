@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Modal } from "@/app/_components/ds/Modal";
 
 /**
  * FirstRunTour — a short, friendly walkthrough shown once on first login.
@@ -74,8 +75,6 @@ const STEPS: TourStep[] = [
 export function FirstRunTour() {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState(0);
-  const dialogRef = useRef<HTMLDivElement | null>(null);
-  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
 
   // Only show if the clerk hasn't seen (or dismissed) it before.
   useEffect(() => {
@@ -85,45 +84,6 @@ export function FirstRunTour() {
       /* localStorage unavailable (private mode) — just don't show the tour */
     }
   }, []);
-
-  // Move focus into the dialog when it opens, handle Escape, and trap focus. (R11.2)
-  useEffect(() => {
-    if (!open) return;
-    const previouslyFocused = document.activeElement as HTMLElement | null;
-    closeBtnRef.current?.focus();
-
-    const FOCUSABLE =
-      'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])';
-
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        finish();
-        return;
-      }
-      if (e.key !== "Tab") return;
-      const node = dialogRef.current;
-      if (!node) return;
-      const focusables = Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
-        (el) => el.offsetParent !== null || el === document.activeElement,
-      );
-      if (focusables.length === 0) return;
-      const first = focusables[0];
-      const last = focusables[focusables.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      previouslyFocused?.focus?.(); // restore focus on close (R11.2)
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, step]);
 
   function remember() {
     try {
@@ -143,46 +103,27 @@ export function FirstRunTour() {
   const isLast = step === STEPS.length - 1;
   const current = STEPS[step];
 
+  // SF-19: ds/Modal owns the focus trap, Escape, inert background and focus
+  // restore (R11.2). z-index 1200, not the default 1000: it must out-rank the
+  // persistent AskCivitasOne (1100) and FeedbackWidget (1000) floating siblings.
   return (
-    <div
-      role="presentation"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) finish();
-      }}
-      style={{
-        // 1200, not the old 200: this is an aria-modal dialog, so it must sit
-        // above every other persistent floating element or it isn't really
-        // modal — at 200 it rendered visibly *underneath* AskCivitasOne (1100)
-        // and FeedbackWidget (1000), both still mounted (and still clickable)
-        // behind what should have been a focus-trapped overlay. 1200 matches
-        // the tier AskCivitasOnePanel already uses for the same reason.
-        position: "fixed", inset: 0, zIndex: 1200,
-        background: "rgba(15,23,42,0.45)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: 16,
-      }}
+    <Modal
+      open
+      onClose={finish}
+      title={current.title}
+      describedById="tour-body"
+      zIndex={1200}
     >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="tour-title"
-        aria-describedby="tour-body"
-        className="card"
-        style={{ width: "100%", maxWidth: 460, padding: 0, overflow: "hidden" }}
-      >
-        <div style={{ padding: "22px 22px 8px" }}>
+      <div>
+        <div style={{ padding: "6px 0 8px" }}>
           <div aria-hidden="true" style={{ fontSize: 34, marginBottom: 6 }}>{current.icon}</div>
-          <h2 id="tour-title" style={{ margin: "0 0 8px", fontSize: 19, letterSpacing: "-0.3px" }}>
-            {current.title}
-          </h2>
           <p id="tour-body" style={{ margin: 0, color: "var(--ink2, #475569)", lineHeight: 1.55, fontSize: 14.5 }}>
             {current.body}
           </p>
         </div>
 
         {/* progress dots */}
-        <div style={{ display: "flex", gap: 6, padding: "10px 22px 0" }} aria-hidden="true">
+        <div style={{ display: "flex", gap: 6, padding: "10px 0 0" }} aria-hidden="true">
           {STEPS.map((_, i) => (
             <span
               key={i}
@@ -197,11 +138,10 @@ export function FirstRunTour() {
         <div
           style={{
             display: "flex", alignItems: "center", justifyContent: "space-between",
-            gap: 8, padding: "16px 22px 20px",
+            gap: 8, padding: "16px 0 0",
           }}
         >
           <button
-            ref={closeBtnRef}
             type="button"
             className="btn ghost"
             onClick={finish}
@@ -227,6 +167,6 @@ export function FirstRunTour() {
           </div>
         </div>
       </div>
-    </div>
+    </Modal>
   );
 }

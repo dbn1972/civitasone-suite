@@ -14,7 +14,7 @@
  * REASON_REQUIRED.
  */
 import { useEffect, useId, useState } from "react";
-import { Button } from "../ds";
+import { Button, Modal } from "../ds";
 import {
   closeOpportunity,
   CLOSE_OUTCOMES,
@@ -115,11 +115,17 @@ export function CloseOpportunityDialog({
   }
 
   return (
-    <div className="cd-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
-      <div className="cd-panel" role="alertdialog" aria-modal="true" aria-labelledby={titleId}>
-        <h2 className="cd-title" id={titleId}>
-          Close “{opportunityName}”
-        </h2>
+    // SF-19: ds/Modal (focus trap, inert background, Escape) instead of a hand-rolled overlay.
+    <Modal
+      open
+      role="alertdialog"
+      title={<>Close “{opportunityName}”</>}
+      onClose={() => { if (!busy) onClose(); }}
+      closeOnOverlayClick={!busy}
+      overlayClassName="cd-overlay"
+      panelClassName="cd-panel"
+      titleClassName="cd-title"
+    >
 
         <div className="cd-field">
           <label htmlFor={`${titleId}-outcome`}>Outcome</label>
@@ -198,7 +204,6 @@ export function CloseOpportunityDialog({
             {busy ? "Closing…" : "Close opportunity"}
           </Button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

@@ -854,6 +854,37 @@ export const AttendanceRegularisationSchema = z.object({
 });
 export const AttendanceRegularisationListSchema = z.array(AttendanceRegularisationSchema);
 
+// GAP-HR-SF-17a: typed response schemas for the request lists that now
+// resolve names in-process (one batched, tenant-scoped lookup per page).
+// employeeName is always a display name (or "Unknown employee"), never an id.
+export const ShiftRequestRowSchema = z.object({
+  id: z.string(),
+  employeeId: z.string(),
+  employeeName: z.string(),
+  approverName: z.string().nullable(),
+  currentShift: z.string(),
+  requestedShift: z.string(),
+  effectiveDate: z.string(),
+  reason: z.string().nullable(),
+  status: z.string(),
+  createdAt: z.string(),
+});
+export const ShiftRequestListResponseSchema = z.object({ data: z.array(ShiftRequestRowSchema) });
+
+export const WfhRequestRowSchema = z.object({
+  id: z.string(),
+  employeeId: z.string(),
+  employeeName: z.string(),
+  approverName: z.string().nullable(),
+  fromDate: z.string(),
+  toDate: z.string(),
+  reason: z.string().nullable(),
+  status: z.string(),
+  rejectionReason: z.string().nullable(),
+  createdAt: z.string(),
+});
+export const WfhRequestListResponseSchema = z.object({ data: z.array(WfhRequestRowSchema) });
+
 export const LeaveRequestDetailSchema = z.object({
   id: z.string(),
   employeeId: z.string(),

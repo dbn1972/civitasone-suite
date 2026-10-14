@@ -37,6 +37,15 @@ describe("WfhRequestsTable", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
+  // GAP-HR-SF-17a: the list API now resolves names in-process; the column shows
+  // the name and keeps the id available on hover, never as the visible text.
+  it("GAP-HR-SF-17a: renders the resolved employee name with the id on hover", () => {
+    renderTable([{ ...PENDING, employeeId: "00000000-aaaa-bbbb-cccc-000000000001", employeeName: "Asha Verma" }], false);
+    const cell = screen.getByText("Asha Verma");
+    expect(cell).toHaveAttribute("title", "00000000-aaaa-bbbb-cccc-000000000001");
+    expect(screen.queryByText("00000000-aaaa-bbbb-cccc-000000000001")).not.toBeInTheDocument();
+  });
+
   it("shows no decision controls when the viewer cannot approve", () => {
     renderTable([PENDING], false);
     expect(screen.queryByRole("button", { name: /approve/i })).not.toBeInTheDocument();

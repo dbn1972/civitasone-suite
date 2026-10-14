@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatShortId } from "@/lib/formatters";
 
 /**
  * Resolves an eOffice officer UUID (an HRMS employeeId, as used by the
@@ -89,7 +90,7 @@ export async function loadMaps(): Promise<OfficerMaps> {
 }
 
 export function resolveLabel(id: string, maps: OfficerMaps | null): string {
-  const shortId = `Officer ${id.slice(0, 8)}`;
+  const shortId = `Officer ${formatShortId(id)}`;
   if (!maps) return shortId;
   const name = maps.names.get(id);
   const op = maps.operators.get(id);

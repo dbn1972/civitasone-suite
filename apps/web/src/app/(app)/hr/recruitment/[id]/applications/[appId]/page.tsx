@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
-import { PageHeader, Card, Button, ErrorState } from "../../../../../../_components/ds";
+import { PageHeader, Card, Button, ErrorState, Modal } from "../../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../../_components/DataSourceBadge";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
@@ -153,44 +153,8 @@ export default function ApplicationDetailPage() {
     };
   }, [hirePhase, appId, jobOpeningId]);
 
-  // Focus-trap: lock Tab inside the hire dialog while open; Escape closes.
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const previousFocusRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!showHireDialog) return;
-    previousFocusRef.current = document.activeElement as HTMLElement;
-    const timer = setTimeout(() => {
-      const first = dialogRef.current?.querySelector<HTMLElement>("input, select, button, textarea");
-      first?.focus();
-    }, 0);
-
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setShowHireDialog(false);
-        return;
-      }
-      if (e.key !== "Tab" || !dialogRef.current) return;
-      const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
-        "input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex=\"-1\"])"
-      );
-      if (focusable.length === 0) return; // ux-001-ok: DOM focus-trap over this dialog's own focusable elements (keyboard nav), not a data loader
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (e.shiftKey) {
-        if (document.activeElement === first) { e.preventDefault(); last.focus(); }
-      } else {
-        if (document.activeElement === last) { e.preventDefault(); first.focus(); }
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener("keydown", handleKeyDown);
-      previousFocusRef.current?.focus();
-    };
-  }, [showHireDialog]);
+  // SF-19: the hire dialog is ds/Modal, which owns the focus trap, Escape,
+  // inert background and focus restore.
 
   async function handleHire(e: React.FormEvent) {
     e.preventDefault();
@@ -353,15 +317,16 @@ export default function ApplicationDetailPage() {
 
       <ApplicationExtras appId={appId} />
 
-      {showHireDialog && (
-        <div
-          style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)" }}
-          role="alertdialog" aria-modal="true" aria-labelledby="hire-dialog-title" aria-describedby={hireDialogDescId}
-        >
-          <div ref={dialogRef} style={{ background: "var(--bg)", borderRadius: 12, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", width: "100%", maxWidth: 520, padding: 28, margin: "0 16px" }}>
-            <h2 id="hire-dialog-title" style={{ fontSize: 18, fontWeight: 700, marginBottom: 20 }}>
-              {t("hireDialogTitle", { name: application.applicantName })}
-            </h2>
+      <Modal
+        open={showHireDialog}
+        onClose={() => setShowHireDialog(false)}
+        role="alertdialog"
+        title={t("hireDialogTitle", { name: application.applicantName })}
+        describedById={hireDialogDescId}
+        size="lg"
+        closeOnOverlayClick={false}
+      >
+          <div>
             <p id={hireDialogDescId} style={{ fontSize: 13, color: "var(--mut)", marginBottom: 8 }}>
               {t("hireDialogDescription", { name: application.applicantName })}
             </p>
@@ -452,8 +417,7 @@ export default function ApplicationDetailPage() {
               </div>
             </form>
           </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

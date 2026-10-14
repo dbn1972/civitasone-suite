@@ -1,3 +1,4 @@
+import { formatIndianDate } from "@/lib/formatters";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
@@ -201,7 +202,7 @@ export default async function CareersPage({ searchParams }: { searchParams: { ty
                       {v.closesAt && (
                         <span style={{ fontSize: 12, color: "#64748b" }}>
                           <strong style={{ fontWeight: 700 }}>{t("applyBy")}</strong>{" "}
-                          {new Date(v.closesAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                          {formatIndianDate(v.closesAt)}
                         </span>
                       )}
                     </div>

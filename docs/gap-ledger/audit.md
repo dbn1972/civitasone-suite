@@ -334,7 +334,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-DASHBOARD-03  ·  MEDIUM  ·  confirmed  ·  theme NAVUX
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [ ] **Status** (W1 SF-19 re-check reopened W0 tick #1872: six audit pages (exports, observations list and detail, plan, risk-register) still hard-code the breadcrumb to /audit/dashboard while the sidebar goes to /audit; AuditBreadcrumb exists but only compliance, dashboard and the Event Log use it)
 - **First-pass claim:** The sidebar “Audit” entry lands on /audit (Event Log) while every sub-page breadcrumb points to /audit/dashboard (e.g. compliance/page.tsx:39) — two competing homes.
 - **Verified evidence:** Sidebar.tsx:115 links Audit to /audit (Event Log; also GlobalSearch.tsx:75, dashboard/page.tsx of app). Breadcrumb 'Audit' links to /audit/dashboard in compliance/page.tsx:37 (not 39), audit/page.tsx:17, exports/page.tsx:17 and legal/cases/[id]/not-found.tsx:11. Two homes.
 - **Files to change:** `apps/web/src/app/_components/ds/Sidebar.tsx`, `apps/web/src/app/_components/GlobalSearch.tsx`, `apps/web/src/app/(app)/audit/page.tsx`, `apps/web/src/app/(app)/audit/compliance/page.tsx`, `apps/web/src/app/(app)/audit/exports/page.tsx`
@@ -581,7 +581,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-OBSERVATIONS-01  ·  HIGH  ·  confirmed  ·  theme LABELS (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: severityMeta maps critical/major/minor/observation and 'high' no longer collapses to Low (unit-tested); it renders raw 'high' in a neutral pill)
 - **First-pass claim:** Risk vocabularies disagree: the Log dialog offers Low/Medium/High (LogObservationButton.tsx:150-152) but the table renders critical/major as red pills showing the raw lowercase word, “minor” as “Medium” and everything else as “Low” (ObservationsTable.tsx:14-18); a “High” logged observation may display as “Low”.
 - **Verified evidence:** Vocabulary mismatch verified: LogObservationButton.tsx:13,148-153 sends riskLevel low/medium/high, while ObservationsTable.tsx:12-16 riskPill treats critical|major as red pill printing the raw lowercase word, 'minor' as 'Medium', and anything else (including 'high', 'medium', 'low') as 'Low'. If the API echoes 'high' as severity a High observation renders as 'Low'. How the service maps riskLevel->severity is cannot-verify (audit-service and @civitasone/types absent). Theme CONFIRM is wrong.
 - **Files to change:** `apps/web/src/app/(app)/audit/observations/ObservationsTable.tsx`, `apps/web/src/app/(app)/audit/observations/LogObservationButton.tsx`, `apps/web/src/lib/audit/observationLabels.ts (new)`
@@ -628,7 +628,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-OBSERVATIONS-04  ·  MEDIUM  ·  partly  ·  theme MONEY (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: rupeesToMinorString used for amountInvolvedMinor (tested at 25000010); list response parsed by AuditObservationSummaryListSchema)
 - **First-pass claim:** Response is cast without mapping (loaders.ts:3938) while create posts amountInvolvedMinor and the list reads amount — the contract for money units and field names is unverifiable here and a schema drift would not be caught.
 - **Verified evidence:** loaders.ts:3933-3939 casts `getArrayPayload(p) as AuditObservationSummary[]` in mapResponse - no field mapping, true. But it is not unvalidated: responseSchema AuditObservationSummaryListSchema (from @civitasone/schemas/web, absent) is applied by fetchJson before mapResponse (apiClient.ts:147-152), so drift is caught if the schema is strict - cannot-verify. Unit mismatch is real to inspect: create posts amountInvolvedMinor (LogObservationButton.tsx:72,85) while list/detail read `amount` and pass to formatMoney (minor units); consistency depends on the service. Also LogObservationButton.tsx:72 `String(Math.round(n*100))` is float math on money, which violates the paise rule.
 - **Files to change:** `apps/web/src/app/(app)/audit/observations/LogObservationButton.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/lib/money.ts (new, or existing helper)`
@@ -643,7 +643,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-OBSERVATIONS-05  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W1 SF-19: closed by #2014; earlier W0 tick #1872 re-confirmed against 9e34d2e4a: Log observation goes through ConfirmDialog with optional reason; the Log form dialog is now ds/Modal)
 - **First-pass claim:** Log observation is a mutation with no ConfirmDialog and no reason, unlike reply/refer on the detail page (ObservationActions.tsx:170-183); audit-on-mutation cannot be confirmed (audit-service absent).
 - **Verified evidence:** LogObservationButton.tsx:58-105 submit posts directly to /api/proxy/v1/audit/observations after only required-field validation; no ConfirmDialog/reason (ConfirmDialog with requireReason is used for reply/refer at ObservationActions.tsx:170-185). Server-side audit event cannot be verified (audit-service absent). Note: for create, a reason is arguably optional; a plain confirm summary is the minimum.
 - **Files to change:** `apps/web/src/app/(app)/audit/observations/LogObservationButton.tsx`
@@ -696,7 +696,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-OBSERVATIONS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: canReply/canRefer gate on role and status !== closed in page.tsx)
 - **First-pass claim:** Refer and Record Reply are shown regardless of observation status or role (page.tsx:41, ObservationActions.tsx:194-195); a closed observation can still be referred as an audit para, and non-audit-admin roles will only learn from a 403 after filling the form and the reason dialog.
 - **Verified evidence:** ObservationActions.tsx:190-199 always renders Refer and Record Reply, taking only obsId and department; page.tsx:43 passes no status or role. Any layout-allowed role (layout.tsx:5 includes finance_admin, dept_head) sees them; failures surface only after form + ConfirmDialog via formError.fromResponse (lines 96-99). getSessionRoles() (roleGuard.ts:26) is server-side and available to the page. Which roles/status the service allows cannot be verified (audit-service absent).
 - **Files to change:** `apps/web/src/app/(app)/audit/observations/[id]/page.tsx`, `apps/web/src/app/(app)/audit/observations/[id]/ObservationActions.tsx`, `apps/web/src/lib/auth/roleGuard.ts`
@@ -745,7 +745,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-OBSERVATIONS-DETAIL-05  ·  MEDIUM  ·  partly  ·  theme LABELS (was MONEY)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: severityMeta label plus accept/reject review actions behind canReview)
 - **First-pass claim:** Risk is printed as the raw enum (obs.severity, page.tsx:52) and money via formatMoney; the replies table has no way to accept/reject a reply though acceptedByAuditor is shown.
 - **Verified evidence:** Risk is printed raw at page.tsx:54 (`{obs.severity}`) - true. Money is NOT a defect: page.tsx:53 uses formatMoney (formatters.ts:90, minor units/paise), the correct helper. Replies: ObservationTables.tsx:27-34 shows Accepted/Rejected/'—' from acceptedByAuditor and there is no accept/reject action anywhere in the folder (ObservationActions has only reply/refer) - true; endpoint cannot be verified. Theme MONEY is wrong.
 - **Files to change:** `apps/web/src/app/(app)/audit/observations/[id]/page.tsx`, `apps/web/src/app/(app)/audit/observations/[id]/ObservationTables.tsx`, `apps/web/src/app/(app)/audit/observations/[id]/ObservationActions.tsx`, `apps/web/src/lib/audit/observationLabels.ts (new)`
@@ -826,7 +826,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-PLAN-04  ·  MEDIUM  ·  partly  ·  theme VALIDATION (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: PlanAuditButton blocks planned-to before planned-from)
 - **First-pass claim:** Period cell prints two formatted dates with no duration or overlap check; the dialog does not validate planned-to ≥ planned-from (PlanAuditButton.tsx:36-39).
 - **Verified evidence:** Dialog has partial constraints: PlanAuditButton.tsx:99,103 set max/min on the date inputs from the other date, but submit() (36-39) checks only presence, so typed/pasted or programmatic values with to<from are posted (server-side check unverifiable). PlanTable.tsx:29 prints two dates only; no duration or overlap check exists. Theme CONFIRM wrong.
 - **Files to change:** `apps/web/src/app/(app)/audit/plan/PlanAuditButton.tsx`, `apps/web/src/app/(app)/audit/plan/PlanTable.tsx`
@@ -878,7 +878,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-RISK-REGISTER-01  ·  HIGH  ·  confirmed  ·  theme LABELS (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: RiskTable shows the numeric score beside the band; the dialog previews likelihood x impact)
 - **First-pass claim:** Rating shows only a band; riskScore (likelihood × impact) is never displayed (RiskTable.tsx:48-53) and the dialog gives no preview of the score it will produce (AddRiskButton.tsx:98-110), so the page cannot justify why a risk is High.
 - **Verified evidence:** RiskTable.tsx:10-14,52 renders only the band pill from riskScore (>=15 High, >=6 Medium); the numeric score is not shown. AddRiskButton.tsx:96-110 shows likelihood/impact selects and the static note 'Risk score is computed server-side' (line 110) with no preview. page.tsx:12-14 duplicates thresholds 15/6. Theme CONFIRM wrong.
 - **Files to change:** `apps/web/src/app/(app)/audit/risk-register/RiskTable.tsx`, `apps/web/src/app/(app)/audit/risk-register/AddRiskButton.tsx`, `apps/web/src/lib/audit/riskScoring.ts (new)`
@@ -921,7 +921,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-RISK-REGISTER-04  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [ ] **Status** (W1 SF-19 re-check reopened W0 tick #1872: option labels are fixed, but there is still no close/edit risk action with a required reason and no confirm on Add; the acceptance 'Closing a risk requires reason and updates Controlled tile' is not met)
 - **First-pass claim:** Dialog options show raw enum text (“it”, “almost certain”, lowercase) (AddRiskButton.tsx:94-106); no ConfirmDialog and no way to edit or close a risk from the page.
 - **Verified evidence:** AddRiskButton.tsx:94 category options print raw enum value (`{c}`: 'it', 'financial'), 100 likelihood uses replace('_',' ') (lowercase 'almost certain'), 106 impact raw; no ConfirmDialog (submit at 38-71 posts directly); RiskTable.tsx has no rowHref or action column so risks cannot be edited or closed here (statuses closed/mitigated/escalated only arrive from elsewhere; endpoint unverified).
 - **Files to change:** `apps/web/src/app/(app)/audit/risk-register/AddRiskButton.tsx`, `apps/web/src/app/(app)/audit/risk-register/RiskTable.tsx`, `apps/web/src/app/(app)/audit/risk-register/RiskActions.tsx (new)`

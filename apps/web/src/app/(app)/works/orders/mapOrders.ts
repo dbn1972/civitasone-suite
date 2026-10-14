@@ -1,3 +1,4 @@
+import { formatShortId } from "@/lib/formatters";
 // Pure mapper for the work-orders list. Kept out of page.tsx because a Next.js
 // page module may only export the page/route-config fields.
 
@@ -57,7 +58,7 @@ export function mapOrders(payload: unknown): OrderRow[] | null {
       const estimatedCost = row.estimatedCostMinor != null ? String(row.estimatedCostMinor) : "0";
       return [{
         id: row.id,
-        workNumber: String(row.workNumber ?? row.id.slice(0, 8)),
+        workNumber: String(row.workNumber ?? formatShortId(row.id)),
         description: String(row.description ?? "—").slice(0, 80),
         status,
         category: String(row.category ?? "—"),

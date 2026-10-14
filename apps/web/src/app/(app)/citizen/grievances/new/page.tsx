@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { PageHeader, Button } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { getDpoEmail } from "@/lib/orgConfig";
+import { formatShortId } from "@/lib/formatters";
 
 const DPDP_NOTICE_VERSION = "2023.1";
 
@@ -105,7 +106,7 @@ export default function RegisterGrievancePage() {
       const id = payload?.id ?? payload?.data?.id ?? "";
       const issuedNo = payload?.grievanceNo ?? payload?.data?.grievanceNo ?? "";
       // Fallback is a tracking reference derived from the id, NOT a statutory grievance number.
-      const grievanceNo = issuedNo || (id ? `GRV-${id.slice(0, 8).toUpperCase()}` : "");
+      const grievanceNo = issuedNo || (id ? `GRV-${formatShortId(id, { upper: true })}` : "");
       setStatus("idle");
       setAck({ id, grievanceNo, issued: Boolean(issuedNo) });
     } catch (caught) {

@@ -1,3 +1,4 @@
+import { todayIST } from "@/lib/formatters";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
@@ -15,7 +16,7 @@ import { getCRMActivities } from "../../../_data/loaders";
 
 const mocked = vi.mocked(getCRMActivities);
 
-const today = new Date().toISOString().slice(0, 10);
+const today = todayIST();
 
 // 3 overdue, 2 completed, 1 open — each count is distinct for unambiguous assertions
 const mockActivities = [

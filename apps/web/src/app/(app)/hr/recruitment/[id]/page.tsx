@@ -12,7 +12,7 @@ import { VacancyNotificationPanel } from "../_components/VacancyNotificationPane
 import { ContactReveal } from "../_components/ContactReveal";
 import { OfferWorkflowDialog } from "./_components/OfferWorkflowDialog";
 import { ApplicationFeeDialog } from "./_components/ApplicationFeeDialog";
-import { ConfirmDialog, ErrorState, useConfirmAction, Button, EntityPicker, StatusPill } from "../../../../_components/ds";
+import { ConfirmDialog, ErrorState, Modal, useConfirmAction, Button, EntityPicker, StatusPill } from "../../../../_components/ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { formatIndianDate, formatIndianDateTime, todayIST } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
@@ -193,16 +193,16 @@ function ScheduleInterviewDialog({
     }
   }
 
+  // SF-19: ds/Modal (focus trap, inert background, Escape, focus restore).
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      role="dialog" aria-modal="true" aria-labelledby={`${fieldId}-title`}
+    <Modal
+      open
+      onClose={onClose}
+      title={t("scheduleInterviewDialogTitle", { name: applicantName })}
+      size="lg"
+      closeOnOverlayClick={false}
     >
-      <div className="w-full max-w-md mx-4 rounded-xl bg-white dark:bg-gray-900 p-6 shadow-2xl">
-        <h2 id={`${fieldId}-title`} className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">
-          {t("scheduleInterviewDialogTitle", { name: applicantName })}
-        </h2>
-
+      <div className="w-full">
         {status === "success" && submittedPayload.current ? (
           <div className="mt-3 flex flex-col gap-3">
             <p className="text-sm text-emerald-600 dark:text-emerald-400">{t("interviewScheduledMessage")}</p>
@@ -289,7 +289,7 @@ function ScheduleInterviewDialog({
           </form>
         )}
       </div>
-    </div>
+    </Modal>
   );
 }
 

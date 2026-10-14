@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Button, ConfirmDialog, PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
+import { Button, ConfirmDialog, Modal, PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminScheduledJob, AdminScheduledJobTargets } from "@/app/_data/loaders";
 import { useFormError } from "@/lib/useFormError";
@@ -375,10 +375,16 @@ export function ScheduledJobsManager({ initialJobs, source, targets = null }: { 
         onCancel={() => { if (!confirmBusy) { setPending(null); setConfirmError(undefined); } }}
       />
 
-      {showModal && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Create Scheduled Job">
-          <div className="modal-content" style={{ maxWidth: 560, padding: 24, borderRadius: 8, background: "#fff" }}>
-            <h3>Create Scheduled Job</h3>
+      {/* SF-19: ds/Modal (focus trap, inert background, Escape). A form dialog, so an
+          overlay click never discards typed input; Escape is blocked mid-save. */}
+      <Modal
+        open={showModal}
+        onClose={() => { if (!saving) setShowModal(false); }}
+        title="Create Scheduled Job"
+        size="lg"
+        closeOnOverlayClick={false}
+      >
+          <div>
             <form onSubmit={handleCreate}>
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="job-name">Name</label>
@@ -439,14 +445,16 @@ export function ScheduledJobsManager({ initialJobs, source, targets = null }: { 
               </div>
             </form>
           </div>
-        </div>
-      )}
+      </Modal>
 
-      {historyJobId && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Execution History">
-          <div style={{ position: "fixed", insetInlineEnd: 0, top: 0, bottom: 0, width: "min(480px, 100vw)", maxWidth: "100vw", background: "#fff", boxShadow: "-4px 0 12px rgba(0,0,0,0.1)", padding: 24, overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h3>Execution History</h3>
+      <Modal
+        open={historyJobId !== null}
+        onClose={() => setHistoryJobId(null)}
+        title="Execution History"
+        size="lg"
+      >
+          <div style={{ maxHeight: "70vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
               <Button variant="ghost" onClick={() => setHistoryJobId(null)} aria-label="Close history panel">✕</Button>
             </div>
             {historyLoading ? (
@@ -454,7 +462,7 @@ export function ScheduledJobsManager({ initialJobs, source, targets = null }: { 
             ) : historyError ? (
               <div role="alert" style={{ marginTop: 32, textAlign: "center", color: "#b42318", fontSize: 13 }}>
                 <p style={{ margin: "0 0 12px" }}>{historyError}</p>
-                <Button variant="ghost" size="sm" onClick={() => void openHistory(historyJobId)}>Retry</Button>
+                <Button variant="ghost" size="sm" onClick={() => { if (historyJobId) void openHistory(historyJobId); }}>Retry</Button>
               </div>
             ) : historyRecords.length === 0 ? (
               <p style={{ color: "var(--mut)", textAlign: "center", marginTop: 48 }}>No execution history available.</p>
@@ -478,8 +486,7 @@ export function ScheduledJobsManager({ initialJobs, source, targets = null }: { 
               </div>
             )}
           </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }
