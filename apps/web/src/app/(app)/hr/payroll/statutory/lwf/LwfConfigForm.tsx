@@ -133,6 +133,7 @@ export function LwfConfigForm({ existingConfigs = [] }: { existingConfigs?: Exis
                 onChange={(e) => setStateCode(e.target.value)}
                 maxLength={4}
                 placeholder={t("stateCodePlaceholder")}
+                aria-describedby={hintId}
               />
             </Field>
             <Field id={empId} label={t("employeeContributionLabel")}>
@@ -142,6 +143,7 @@ export function LwfConfigForm({ existingConfigs = [] }: { existingConfigs?: Exis
                 step="0.01"
                 value={empContrib}
                 onChange={(e) => setEmpContrib(e.target.value)}
+                aria-describedby={hintId}
               />
             </Field>
             <Field id={erId} label={t("employerContributionLabel")}>
@@ -151,12 +153,14 @@ export function LwfConfigForm({ existingConfigs = [] }: { existingConfigs?: Exis
                 step="0.01"
                 value={erContrib}
                 onChange={(e) => setErContrib(e.target.value)}
+                aria-describedby={hintId}
               />
             </Field>
             <Field id={freqId} label={t("frequencyLabel")}>
               <Select
                 value={frequency}
                 onChange={(e) => setFrequency(e.target.value as Frequency | "")}
+                aria-describedby={hintId}
               >
                 <option value="">{t("frequencyKeepCurrent")}</option>
                 {FREQUENCIES.map((f) => (

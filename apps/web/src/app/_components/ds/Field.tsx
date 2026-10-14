@@ -46,6 +46,11 @@ export interface FieldProps {
    * control and wires `aria-invalid` / `aria-describedby` onto it.
    */
   error?: string;
+  /**
+   * @deprecated No effect. The inline error is always announced (`role="alert"`, WCAG 4.1.3, decided in
+   * SF-14b #2024). Kept only so existing callers compile.
+   */
+  announce?: boolean;
   /** Disables the wrapped control (and dims the label). A control can still override this itself. */
   disabled?: boolean;
   /** The form control -- normally a single Input, Select, or Textarea. */

@@ -341,6 +341,7 @@ export function VacancyNotificationPanel({ jobOpeningId, published, onChanged }:
             id={`${uid}-newdeadline`}
             label={<>{t("newDeadline")} ({t("istNote")})</>}
             error={newDeadline !== "" && extensionInvalid ? t("extensionMustBeLater") : undefined}
+            announce
           >
             <Input type="datetime-local" className={inputCls} value={newDeadline} onChange={(e) => setNewDeadline(e.target.value)} />
           </Field>
