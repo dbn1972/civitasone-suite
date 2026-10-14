@@ -70,3 +70,26 @@ describe("GAP-ANALYTICS-ML-INSIGHTS-*-07/08: export gating", () => {
     expect(screen.getByText(/Export leaves the system/)).toBeInTheDocument();
   });
 });
+
+describe("GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-02: parent drill-through", () => {
+  it("links a row to its parent via the template, never via the task entity id", () => {
+    show({
+      predictions: [row({ entityLabel: "Task 1", parentId: "99990000-aaaa-bbbb-cccc-ddddeeeeffff" })],
+      source: "api",
+      domain: "tasks",
+      parentLinkTemplate: "/projects/{parentId}/tasks",
+    });
+    const link = screen.getByText("Task 1").closest("a") as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toBe("/projects/99990000-aaaa-bbbb-cccc-ddddeeeeffff/tasks");
+  });
+
+  it("a row with no parentId is plain text, not a link", () => {
+    show({
+      predictions: [row({ entityLabel: "Orphan task", parentId: null })],
+      source: "api",
+      domain: "tasks",
+      parentLinkTemplate: "/projects/{parentId}/tasks",
+    });
+    expect(screen.getByText("Orphan task").closest("a")).toBeNull();
+  });
+});
