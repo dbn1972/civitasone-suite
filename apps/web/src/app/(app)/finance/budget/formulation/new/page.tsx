@@ -18,7 +18,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, ConfirmDialog, EntityPicker, Field, PageHeader, type EntityOption } from "../../../../../_components/ds";
+import { Alert, Button, ConfirmDialog, EntityPicker, Field, PageHeader, type EntityOption } from "../../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
@@ -163,12 +163,12 @@ export default function NewBudgetEstimatePage() {
         backLabel="Budget Formulation"
       />
       {message ? (
-        <div role="status" aria-live="polite" className="banner" style={{ background: isError ? "#fef2f2" : "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}
+        <Alert variant={isError ? "danger" : "success"} aria-live="polite">{message}
           {saved && !isError ? <> <a href={listHref}>View in Budget Formulation</a></> : null}
-        </div>
+        </Alert>
       ) : null}
       {loadError ? (
-        <div role="alert" aria-live="assertive" className="banner" style={{ background: "#fef2f2", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{loadError}</div>
+        <Alert variant="danger" aria-live="assertive">{loadError}</Alert>
       ) : null}
       <div className="card">
         <form onSubmit={submit} className="pad">
@@ -195,10 +195,10 @@ export default function NewBudgetEstimatePage() {
               <label className="l" htmlFor="be-fy">Financial year</label>
               <input id="be-fy" required pattern="\d{4}-\d{2}" placeholder="YYYY-YY" value={fy} onChange={(e) => { setFy(e.target.value); setFyError(""); rotateKey(); }} aria-invalid={fyError ? true : undefined} style={inputStyle} />
               {fyError && (
-                <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{fyError}</span>
+                <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{fyError}</span>
               )}
               {formError.fieldError("fy") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("fy")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("fy")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
@@ -220,10 +220,10 @@ export default function NewBudgetEstimatePage() {
                 {previewMinor !== null ? `Will be recorded as ${formatMoney(BigInt(previewMinor))}` : "Rupees, up to 2 decimals"}
               </span>
               {amountError && (
-                <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{amountError}</span>
+                <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{amountError}</span>
               )}
               {formError.fieldError("beMinor") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("beMinor")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("beMinor")}</span>
               )}
             </div>
           </div>

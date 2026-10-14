@@ -85,12 +85,12 @@ export default async function RevisedEstimatesPage({
         actions={<FyFilter />}
       />
       <StatGrid>
-        <StatCard icon="📊" iconBg="#e7edfd" label="Total Heads" value={total ?? "—"} />
+        <StatCard icon="📊" tone="info" label="Total Heads" value={total ?? "—"} />
         {/* Neutral tones: a raised RE is not inherently good (REVISED-ESTIMATES-04). */}
         <StatCard icon="📈" iconBg="var(--panel)" label="Increased" value={increased ?? "—"} />
         <StatCard icon="📉" iconBg="var(--panel)" label="Decreased" value={decreased ?? "—"} />
-        <StatCard icon="➖" iconBg="#fffaeb" label="No Change" value={total === null || increased === null || decreased === null ? "—" : total - increased - decreased} />
-        <StatCard icon="◆" iconBg="#fef3f2" label={`Material variance (≥${Number(MATERIAL_VARIANCE_BPS) / 100}%)`} value={material ?? "—"} />
+        <StatCard icon="➖" tone="warn" label="No Change" value={total === null || increased === null || decreased === null ? "—" : total - increased - decreased} />
+        <StatCard icon="◆" tone="bad" label={`Material variance (≥${Number(MATERIAL_VARIANCE_BPS) / 100}%)`} value={material ?? "—"} />
       </StatGrid>
       <Card title="BE vs RE Variance">
         {errored ? (

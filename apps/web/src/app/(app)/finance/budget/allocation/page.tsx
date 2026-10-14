@@ -46,10 +46,10 @@ export default async function AllocationPage() {
         </div>
       ) : null}
       <StatGrid>
-        <StatCard icon="📊" iconBg="#e7edfd" label="Allocations" value={errored ? "—" : allocations.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Committed" value={errored ? "—" : committed} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Not yet committed" value={errored ? "—" : allocations.length - committed} />
-        <StatCard icon="🏛️" iconBg="#eff6ff" label="Budget Heads" value={errored ? "—" : new Set(allocations.map((a) => a.headId)).size} />
+        <StatCard icon="📊" tone="info" label="Allocations" value={errored ? "—" : allocations.length} />
+        <StatCard icon="✅" tone="good" label="Committed" value={errored ? "—" : committed} />
+        <StatCard icon="⏳" tone="warn" label="Not yet committed" value={errored ? "—" : allocations.length - committed} />
+        <StatCard icon="🏛️" tone="info" label="Budget Heads" value={errored ? "—" : new Set(allocations.map((a) => a.headId)).size} />
       </StatGrid>
       {/* UX-012: the data-source badge lives inside AllocationTable, driven by
           the same useSeededResource call that produces its rows. */}

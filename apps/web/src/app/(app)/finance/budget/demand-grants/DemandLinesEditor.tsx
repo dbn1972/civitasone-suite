@@ -72,7 +72,7 @@ export function DemandLinesEditor({
 
   return (
     <form onSubmit={save} noValidate aria-label="Edit head-wise lines">
-      {message ? <p role={isError ? "alert" : "status"} style={{ fontSize: 13, color: isError ? "#b91c1c" : "inherit" }}>{message}</p> : null}
+      {message ? <p role={isError ? "alert" : "status"} style={{ fontSize: 13, color: isError ? "var(--bad)" : "inherit" }}>{message}</p> : null}
       {rows.map((r, i) => (
         <div key={i} style={{ display: "flex", gap: 8, marginBottom: 8, flexWrap: "wrap" }}>
           <select aria-label={`Major head, row ${i + 1}`} value={r.headCode} style={{ ...inputStyle, minWidth: 220 }}

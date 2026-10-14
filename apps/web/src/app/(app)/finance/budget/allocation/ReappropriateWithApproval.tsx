@@ -114,7 +114,7 @@ export function ReappropriateWithApproval({ allocations }: { allocations: Alloca
   return (
     <>
       <Button onClick={() => { setOpen((v) => !v); setMessage(""); }} aria-expanded={open}>{open ? t("cancel") : t("open")}</Button>
-      {message ? <p role="status" style={{ color: "#047857", fontSize: "0.8125rem" }}>{message}</p> : null}
+      {message ? <p role="status" style={{ color: "var(--good)", fontSize: "0.8125rem" }}>{message}</p> : null}
       {open ? (
         <form onSubmit={review} noValidate className="card" style={{ marginTop: 14 }}>
           <div className="card-h"><h3>{t("heading")}</h3></div>
