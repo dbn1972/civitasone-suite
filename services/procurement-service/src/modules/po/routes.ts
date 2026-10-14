@@ -3,15 +3,44 @@ import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { posListResponseSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
+import { searchQuerySchema } from "../../shared/search.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createPoBody, gemOrderBody, dispatchBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
+import { assertEmpanelmentCurrent, DomainError } from "../vendor/domain.js";
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
+
+/**
+ * Synchronous vendor-eligibility gate for PO creation (422, nothing enqueued)
+ * instead of a 202 that fails later in the consumer.
+ *  - w0-report.md: reject a blacklisted vendor (tenant blacklist, central
+ *    debarment by PAN, vendor's own 'blacklisted' type). The consumer keeps
+ *    its in-transaction check as defence in depth.
+ *  - GAP-PROCUREMENT-EMPANELMENT-05 / ORDERS-NEW-06: reject a vendor whose
+ *    empanelment has lapsed. Applied to both POST aliases.
+ */
+async function assertVendorEligible(tenantId: string, vendorId: string): Promise<void> {
+  const vendor = await vendorRepo.findVendorById(vendorId, tenantId);
+  const blacklisted =
+    Boolean(await blacklistRepo.findActive(tenantId, vendorId))
+    || (vendor?.pan ? (await blacklistRepo.findActiveCentralByPan(vendor.pan)) != null : false)
+    || vendor?.vendorType === "blacklisted";
+  if (blacklisted) {
+    throw new HttpError(422, "VENDOR_BLACKLISTED", "vendor is blacklisted and cannot be used on a purchase order");
+  }
+  const today = new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10); // IST calendar day
+  try {
+    assertEmpanelmentCurrent(await vendorRepo.findEmpanelmentsByVendor(vendorId, tenantId), today);
+  } catch (err) {
+    if (err instanceof DomainError) throw new HttpError(422, err.code, err.message);
+    throw err;
+  }
+}
 
 export async function poRoutes(app: FastifyInstance): Promise<void> {
   // Alias: /v1/procurement/orders → same handler as /v1/procurement/pos
@@ -19,7 +48,8 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit, q.offset));
+    const { q: search } = searchQuerySchema.parse(req.query);
+    sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit, q.offset, search));
   });
 
   // Alias: /v1/procurement/purchase-orders → same as /pos (UAT compat)
@@ -27,33 +57,23 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit, q.offset));
+    const { q: search } = searchQuerySchema.parse(req.query);
+    sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit, q.offset, search));
   });
 
   app.get("/v1/procurement/pos", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit, q.offset));
+    const { q: search } = searchQuerySchema.parse(req.query);
+    sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit, q.offset, search));
   });
 
   app.post("/v1/procurement/pos", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const body = createPoBody.parse(req.body);
-    // w0-report.md: reject a blacklisted vendor synchronously (422, nothing
-    // enqueued) instead of returning 202 and failing later in the consumer.
-    // Same three clauses as the consumer gate (tenant blacklist, central
-    // debarment by PAN, vendor's own 'blacklisted' type). The consumer keeps
-    // its in-transaction check as defence in depth (races, replayed commands).
-    const vendor = await vendorRepo.findVendorById(body.vendorId, ctx.tenantId);
-    const blacklisted =
-      Boolean(await blacklistRepo.findActive(ctx.tenantId, body.vendorId))
-      || (vendor?.pan ? (await blacklistRepo.findActiveCentralByPan(vendor.pan)) != null : false)
-      || vendor?.vendorType === "blacklisted";
-    if (blacklisted) {
-      throw new HttpError(422, "VENDOR_BLACKLISTED", "vendor is blacklisted and cannot be used on a purchase order");
-    }
+    await assertVendorEligible(ctx.tenantId, body.vendorId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPo(ctx, body));
   });
 
@@ -97,6 +117,7 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
     const body = createPoBody.parse(req.body);
+    await assertVendorEligible(ctx.tenantId, body.vendorId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPo(ctx, body));
   });
 

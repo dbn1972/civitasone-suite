@@ -52,8 +52,8 @@ export async function getVendor(id: string, tenantId: string): Promise<VendorRow
   );
 }
 
-export async function listVendors(tenantId: string, limit: number, offset = 0): Promise<{ data: Array<{ id: string; name: string; category: string; ratingDisplay: string; blacklisted: boolean; gstin?: string; kycStatus: string; kycVerifiedAt?: string | null; email?: string; phone?: string; pan?: string; bankAccount?: string; ifsc?: string; contactPerson?: string; address?: string }> }> {
-  const rows = await repo.listVendorsByTenant(tenantId, limit, offset);
+export async function listVendors(tenantId: string, limit: number, offset = 0, q?: string): Promise<{ data: Array<{ id: string; name: string; category: string; ratingDisplay: string; blacklisted: boolean; gstin?: string; kycStatus: string; kycVerifiedAt?: string | null; email?: string; phone?: string; pan?: string; bankAccount?: string; ifsc?: string; contactPerson?: string; address?: string }> }> {
+  const rows = await repo.listVendorsByTenant(tenantId, limit, offset, q);
   return {
     data: rows.map((v) => ({
       id: v.id,

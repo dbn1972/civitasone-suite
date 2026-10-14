@@ -4,21 +4,20 @@ import { todayIST } from "@/lib/formatters";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { toHumanError } from "@/lib/messages";
+import { useTranslations } from "next-intl";
 import { Button, ConfirmDialog } from "@/app/_components/ds";
 
 type SrnItem = { itemCode: string; unit: string; receivedQty: number; acceptedQty: number };
 
-function createError(status: number): string {
-  // GAP-PROCUREMENT-GRN-DETAIL-SRN-NEW-05 — branch on status instead of using
-  // the generic save copy for everything.
-  if (status === 409) {
-    const h = toHumanError("conflict", { area: "Store Receipt Note" });
-    return `An SRN already exists for this GRN. ${h.next}`;
-  }
-  if (status === 403) return "You are not authorised to create a Store Receipt Note for this GRN.";
-  const human = toHumanError("save", { area: "Store Receipt Note" });
-  return `${human.what} ${human.next}`;
+type SrnT = (key: "exists" | "forbidden" | "invalid" | "network" | "save") => string;
+
+function createError(status: number, t: SrnT): string {
+  // GAP-PROCUREMENT-GRN-DETAIL-SRN-NEW-05 - branch on status (409 / 403 / 422)
+  // instead of using the generic save copy for everything.
+  if (status === 409) return t("exists");
+  if (status === 403) return t("forbidden");
+  if (status === 422) return t("invalid");
+  return t("save");
 }
 
 export function CreateSrnForm({
@@ -33,6 +32,7 @@ export function CreateSrnForm({
   items?: SrnItem[];
 }) {
   const router = useRouter();
+  const t = useTranslations("procurement.srnNew");
   const today = todayIST();
   const [receivedDate, setReceivedDate] = useState(today);
   const [remarks, setRemarks] = useState("");
@@ -55,7 +55,7 @@ export function CreateSrnForm({
       const createText = await createRes.text();
       if (!createRes.ok) {
         setStatus("error");
-        setMessage(createError(createRes.status));
+        setMessage(createError(createRes.status, t));
         return;
       }
       let created: { id?: string } = {};
@@ -94,7 +94,7 @@ export function CreateSrnForm({
       setStatus("error");
       // GAP-PROCUREMENT-GRN-DETAIL-SRN-NEW-05 — network-specific copy, not a raw
       // exception echo.
-      setMessage("Couldn't reach the server. Check your connection and try again.");
+      setMessage(t("network"));
     }
   }
 
@@ -162,6 +162,7 @@ export function CreateSrnForm({
                 type="date"
                 max={today}
                 value={receivedDate}
+                aria-describedby={message ? "srn-form-message" : undefined}
                 onChange={(e) => setReceivedDate(e.target.value)}
                 style={{ minHeight: 44 }}
               />
@@ -179,6 +180,7 @@ export function CreateSrnForm({
             <span className="label">Remarks</span>
             <textarea
               id="srn-remarks"
+              aria-describedby={message ? "srn-form-message" : undefined}
               value={remarks}
               onChange={(e) => setRemarks(e.target.value)}
               rows={3}
@@ -188,7 +190,7 @@ export function CreateSrnForm({
           </label>
 
           <label className="field" htmlFor="srn-sign-now" style={{ background: "#fff", padding: "13px 16px", flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <input id="srn-sign-now" type="checkbox" checked={signNow} onChange={(e) => setSignNow(e.target.checked)} style={{ width: 18, height: 18 }} />
+            <input id="srn-sign-now" type="checkbox" aria-describedby={message ? "srn-form-message" : undefined} checked={signNow} onChange={(e) => setSignNow(e.target.checked)} style={{ width: 18, height: 18 }} />
             <span className="label" style={{ margin: 0 }}>Sign now — confirms physical acceptance and clears the payment gate</span>
           </label>
         </div>

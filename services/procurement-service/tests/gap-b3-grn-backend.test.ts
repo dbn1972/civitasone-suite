@@ -13,7 +13,7 @@
  * and the real Fastify app for route-level assertions, mirroring
  * dom-002-grn-guards.test.ts / grn-amendment.test.ts.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { MemoryQueue } from "@civitasone/queue";
@@ -37,6 +37,9 @@ const OTHER_VENDOR = "9e000000-4444-4000-8000-000000000099";
 const PO_ID      = "9e000000-5555-4000-8000-000000000001";
 const PO_ITEM_ID = "9e000000-6666-4000-8000-000000000001";
 const ORDERED = 5;
+// GAP-PROCUREMENT-GRN-NEW-06: tests that raise two GRNs on this one PO line receive a PART of
+// it each (2 + 2 <= 5); a second full receipt would now be refused as an over-receipt.
+const RECEIVE_QTY = 2;
 
 function tok(roles: string[], actor = RECEIVER) {
   return signToken({ sub: actor, tid: TENANT, roles, sid: "sess-grn-b3" }, SECRET, 3600);
@@ -82,7 +85,7 @@ async function createViaFlow(q: MemoryQueue, actor = RECEIVER, clientGrnNo?: str
   await q.publish(COMMANDS.grnCreate, msg(COMMANDS.grnCreate, {
     id, tenantId: TENANT, ...(clientGrnNo ? { grnNo: clientGrnNo } : {}),
     poRef: `procurement_po:${PO_ID}`, vendorId: VENDOR,
-    items: [{ poItemRef: PO_ITEM_ID, itemCode: "LAP-001", orderedQty: ORDERED, receivedQty: ORDERED, acceptedQty: ORDERED, unit: "nos" }],
+    items: [{ poItemRef: PO_ITEM_ID, itemCode: "LAP-001", orderedQty: ORDERED, receivedQty: RECEIVE_QTY, acceptedQty: RECEIVE_QTY, unit: "nos" }],
   }, actor));
   await q.drain();
   return id;
@@ -94,6 +97,18 @@ async function getGrnRow(id: string) {
 }
 
 let app: FastifyInstance;
+
+// GAP-PROCUREMENT-GRN-NEW-06: every test in this file receives against the SAME single-line
+// PO, and a PO line can only be received up to its ordered quantity in total. Each test
+// therefore starts from an empty GRN register (the PO itself stays seeded).
+async function wipeGrns(): Promise<void> {
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(procurementInspections).where(eq(procurementInspections.tenantId, TENANT));
+    await tx.delete(procurementGrnItems).where(eq(procurementGrnItems.tenantId, TENANT));
+    await tx.delete(procurementGrns).where(eq(procurementGrns.tenantId, TENANT));
+  }));
+}
+beforeEach(async () => { await wipeGrns(); });
 
 beforeAll(async () => { await wipe(); await seedPo(); app = await buildApp(); });
 afterAll(async () => { await wipe(); await app.close(); await sqlClient.end(); });

@@ -7,6 +7,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { assertBudgetSufficient, assertCanDispatch, assertTransitionAllowed, assertDistinctMakerChecker, assertDispatcherDistinctFromCreator, DomainError } from "./domain.js";
 import * as vendorRepo from "../vendor/repo.js";
+import { isEmpanelmentLapsed } from "../vendor/domain.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
 import * as indentRepo from "../indent/repo.js";
 import { assertIndentApproved, DomainError as IndentDomainError } from "../indent/domain.js";
@@ -185,6 +186,16 @@ export function registerPoConsumers(queue: Queue): void {
           },
         });
         await audit(tx, msg, "rejected_blacklisted", "po", p.id);
+        return;
+      }
+
+      // GAP-PROCUREMENT-EMPANELMENT-05 - lapsed empanelment re-checked in-txn
+      // (the route pre-check is not atomic with this write).
+      if (isEmpanelmentLapsed(
+        await vendorRepo.findEmpanelmentsByVendorTx(tx, p.vendorId, p.tenantId),
+        new Date(Date.now() + 5.5 * 3600_000).toISOString().slice(0, 10),
+      )) {
+        await audit(tx, msg, "rejected_empanelment_expired", "po", p.id);
         return;
       }
 

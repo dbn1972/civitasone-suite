@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { createTranslator } from "next-intl";
+import en from "@/messages/en.json";
+
+// Server component: resolve namespaced keys against the real en messages.
+vi.mock("next-intl/server", () => ({
+  getTranslations: async (ns: string) => createTranslator({ locale: "en", messages: en as never, namespace: ns as never }),
+}));
 
 const scorecardMock = vi.fn();
 const vendorMock = vi.fn();
@@ -14,7 +21,7 @@ import VendorScorecardPage from "./page";
 const FULL = {
   vendorId: "v1",
   overallRating: 86,
-  ratingBand: "good",
+  ratingBand: "B",
   totalOrders: 10,
   onTimeDeliveries: 8,
   lateDeliveries: 2,
@@ -64,7 +71,33 @@ describe("VendorScorecardPage", () => {
   it("SCORECARD-03: a band legend explains the /100 thresholds and distinguishes it from the /5 buyer rating", async () => {
     scorecardMock.mockResolvedValue({ data: FULL, source: "api" });
     render(await VendorScorecardPage({ params: { id: "v1" } }));
-    expect(screen.getByText(/Excellent ≥ 90/)).toBeInTheDocument();
+    // GAP-...-SCORECARD-03: thresholds match the backend bands (A>=85, B>=70, C>=50).
+    expect(screen.getByText(/A ≥ 85, B 70–84, C 50–69, D below 50/)).toBeInTheDocument();
+    expect(screen.queryByText(/Excellent ≥ 90/)).toBeNull();
     expect(screen.getByText(/buyer rating/i)).toBeInTheDocument();
+    // the band pill shows the backend band
+    expect(screen.getByText("B")).toBeInTheDocument();
+  });
+
+  it("SCORECARD-04: no three-axis radar duplicates the bars; the breakdown carries every value as text", async () => {
+    scorecardMock.mockResolvedValue({ data: FULL, source: "api" });
+    render(await VendorScorecardPage({ params: { id: "v1" } }));
+    expect(screen.queryByLabelText(/radar/i)).toBeNull();
+    expect(screen.getByText("Score breakdown")).toBeInTheDocument();
+    expect(screen.getByText("80")).toBeInTheDocument();
+  });
+
+  it("SCORECARD-05: on-time + late visibly reconcile with total orders (and flag undelivered / mismatched counts)", async () => {
+    scorecardMock.mockResolvedValue({ data: FULL, source: "api" });
+    const first = render(await VendorScorecardPage({ params: { id: "v1" } }));
+    expect(screen.getByRole("note")).toHaveTextContent("On-time 8 + late 2 of 10 orders.");
+    first.unmount();
+    scorecardMock.mockResolvedValue({ data: { ...FULL, onTimeDeliveries: 5, lateDeliveries: 2 }, source: "api" });
+    const second = render(await VendorScorecardPage({ params: { id: "v1" } }));
+    expect(screen.getByRole("note")).toHaveTextContent(/3 not yet delivered/);
+    second.unmount();
+    scorecardMock.mockResolvedValue({ data: { ...FULL, onTimeDeliveries: 9, lateDeliveries: 4 }, source: "api" });
+    render(await VendorScorecardPage({ params: { id: "v1" } }));
+    expect(screen.getByRole("note")).toHaveTextContent(/do not add up/i);
   });
 });
