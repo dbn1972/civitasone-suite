@@ -36,10 +36,10 @@ export default async function AdvancesPage() {
       />
 
       <StatGrid>
-        <StatCard icon="💵" iconBg="#e7edfd" label={t("statOpenAdvances")} value={failed ? null : stats.open} />
-        <StatCard icon="📤" iconBg="#eff6ff" label={t("statOutstanding")} value={failed ? null : formatMoney(stats.outstanding)} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label={t("statSettledAllTime")} value={failed ? null : formatMoney(stats.settledAllTime)} />
-        <StatCard icon="⚠️" iconBg="#fef3f2" label={t("statOverdue")} value={failed ? null : stats.overdue90} />
+        <StatCard icon="💵" tone="info" label={t("statOpenAdvances")} value={failed ? null : stats.open} />
+        <StatCard icon="📤" tone="info" label={t("statOutstanding")} value={failed ? null : formatMoney(stats.outstanding)} />
+        <StatCard icon="✅" tone="good" label={t("statSettledAllTime")} value={failed ? null : formatMoney(stats.settledAllTime)} />
+        <StatCard icon="⚠️" tone="bad" label={t("statOverdue")} value={failed ? null : stats.overdue90} />
       </StatGrid>
 
       {/* UX-012: the data-source badge now lives inside AdvancesTable, driven

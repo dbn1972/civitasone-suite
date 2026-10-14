@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatusPill, Card, DataTable, RefreshErrorState } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -47,6 +48,7 @@ async function getAllotmentsForQuarter(quarterId: string): Promise<LoaderResult<
 }
 
 export default async function QuarterDetailPage({ params }: { params: { id: string } }) {
+  const tFallback = await getTranslations("employeeFallback");
   const { data: quarter, source: quarterSource } = await getQuarter(params.id);
 
   if (!quarter) {
@@ -68,11 +70,10 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
   const errored = allotmentSource === "error";
 
   const allotmentRows = quarterAllotments.map((a) => {
-    const employeeShort = `${a.employeeRef.slice(0, 8)}…`;
     return {
       id: a.id,
       employeeRef: a.employeeRef,
-      employeeDisplay: a.employeeName ?? employeeShort,
+      employeeDisplay: a.employeeName ?? tFallback("unknownEmployee"),
       designation: a.designation ?? "—",
       payLevel: a.payLevel ?? "—",
       status: a.status,

@@ -28,6 +28,26 @@ export function toView(r: TaskRow): TaskView {
   };
 }
 
+/**
+ * GAP-WORKFLOW-MY-TASKS-02 — parent-instance display fields for a page of tasks
+ * in ONE tenant-scoped (RLS) read: the instance name (subject) and its creator
+ * (requester). Instances that cannot be read simply yield no entry.
+ */
+export async function instanceSummaries(
+  tenantId: string,
+  instanceIds: string[],
+): Promise<Map<string, { name: string; requesterId: string }>> {
+  const ids = [...new Set(instanceIds)];
+  const out = new Map<string, { name: string; requesterId: string }>();
+  if (ids.length === 0) return out;
+  const rows = await scopedRead((tx) => tx
+    .select({ id: instances.id, name: instances.name, createdBy: instances.createdBy })
+    .from(instances)
+    .where(and(eq(instances.tenantId, tenantId), inArray(instances.id, ids))));
+  for (const r of rows) out.set(r.id, { name: r.name, requesterId: r.createdBy });
+  return out;
+}
+
 export async function findById(id: string, tenantId: string): Promise<TaskView | null> {
   const rows = await scopedRead((tx) => tx.select().from(tasks).where(eq(tasks.id, id)).limit(1));
   const row = rows[0];

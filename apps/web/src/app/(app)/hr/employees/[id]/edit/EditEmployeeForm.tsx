@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EmployeeDetail } from "@civitasone/types";
 import { useFormError } from "@/lib/useFormError";
-import { AcceptedNotice, Button, ConfirmDialog, EntityPicker, Field } from "@/app/_components/ds";
+import { AcceptedNotice, Button, ConfirmDialog, EntityPicker, Field, Input } from "@/app/_components/ds";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { acceptedCopy } from "@/lib/acceptedCopy";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
@@ -53,6 +53,7 @@ const labelStyle: React.CSSProperties = {
 
 export function EditEmployeeForm({ employee }: Props) {
   const t = useTranslations("employeeEdit");
+  const tv = useTranslations("hrFormErrors2");
   const formId = useId();
   const router = useRouter();
 
@@ -335,53 +336,25 @@ export function EditEmployeeForm({ employee }: Props) {
             gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
           }}
         >
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={ids.mobile} style={labelStyle}>
-              {t("mobileLabel")}
-            </label>
-            <input
-              id={ids.mobile}
+          <Field id={ids.mobile} label={t("mobileLabel")} error={formError.fieldError("mobile") ?? (invalidFields.has("mobile") ? tv("mobileInvalid") : undefined)}>
+            <Input
               type="tel"
               value={mobile}
               onChange={(e) => setMobile(e.target.value)}
               placeholder={t("mobilePlaceholder")}
               autoComplete="tel"
-              aria-invalid={invalidFields.has("mobile")}
-              style={{
-                ...inputStyle,
-                borderColor: invalidFields.has("mobile")
-                  ? "var(--bad, #ef4444)"
-                  : "var(--line, #cbd5e1)",
-              }}
             />
-            {formError.fieldError("mobile") && (
-              <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{formError.fieldError("mobile")}</span>
-            )}
-          </div>
+          </Field>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={ids.email} style={labelStyle}>
-              {t("emailLabel")}
-            </label>
-            <input
-              id={ids.email}
+          <Field id={ids.email} label={t("emailLabel")} error={formError.fieldError("email") ?? (invalidFields.has("email") ? tv("emailInvalid") : undefined)}>
+            <Input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder={t("emailPlaceholder")}
               autoComplete="email"
-              aria-invalid={invalidFields.has("email")}
-              style={{
-                ...inputStyle,
-                borderColor: invalidFields.has("email")
-                  ? "var(--bad, #ef4444)"
-                  : "var(--line, #cbd5e1)",
-              }}
             />
-            {formError.fieldError("email") && (
-              <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{formError.fieldError("email")}</span>
-            )}
-          </div>
+          </Field>
 
           <Field label={t("managerIdLabel")} error={formError.fieldError("managerId")}>
             <EntityPicker
@@ -441,75 +414,63 @@ export function EditEmployeeForm({ employee }: Props) {
             {t("statutoryHeading")}
           </h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16 }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.bankAccountNo} style={labelStyle}>{t("bankAccountLabel")}</label>
-              <input id={ids.bankAccountNo} type="text" value={bankAccountNo}
+            <Field id={ids.bankAccountNo} label={t("bankAccountLabel")} error={invalidFields.has("bankAccountNo") ? t("noAsteriskError") : undefined}>
+              <Input
+                type="text"
+                value={bankAccountNo}
                 onChange={(e) => setBankAccountNo(e.target.value)}
                 placeholder={t("bankAccountPlaceholder")}
-                aria-invalid={invalidFields.has("bankAccountNo")}
-                style={{ ...inputStyle, borderColor: invalidFields.has("bankAccountNo") ? "var(--bad, #ef4444)" : "var(--line, #cbd5e1)" }}
-                autoComplete="off" />
+                autoComplete="off"
+              />
               {/* GAP-HR-EMPLOYEES-DETAIL-EDIT-02: a leftover '*' means the
                   field still contains part of the masked placeholder it was
                   seeded with, not a real edited value -- caught client-side
                   before it's ever sent (the backend's isMaskedValue guard
                   only catches a FULLY-masked string, not a partial one). */}
-              {invalidFields.has("bankAccountNo") && (
-                <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{t("noAsteriskError")}</span>
-              )}
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.bankIfsc} style={labelStyle}>{t("bankIfscLabel")}</label>
+            </Field>
+            <Field id={ids.bankIfsc} label={t("bankIfscLabel")} error={invalidFields.has("bankIfsc") ? t("noAsteriskError") : undefined}>
               {/* GAP-HR-EMPLOYEES-DETAIL-EDIT-07: IFSC used to display
                   lowercase exactly as typed and only get uppercased in the
                   submit diff -- uppercase as-you-type instead, so what's
                   displayed always matches what gets sent. */}
-              <input id={ids.bankIfsc} type="text" value={bankIfsc}
+              <Input
+                type="text"
+                value={bankIfsc}
                 onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
-                placeholder={t("bankIfscPlaceholder")} maxLength={11}
-                aria-invalid={invalidFields.has("bankIfsc")}
-                style={{ ...inputStyle, textTransform: "uppercase", borderColor: invalidFields.has("bankIfsc") ? "var(--bad, #ef4444)" : "var(--line, #cbd5e1)" }}
-                autoComplete="off" />
-              {invalidFields.has("bankIfsc") && (
-                <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{t("noAsteriskError")}</span>
-              )}
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.uanNumber} style={labelStyle}>{t("uanLabel")}</label>
-              <input id={ids.uanNumber} type="text" value={uanNumber}
+                placeholder={t("bankIfscPlaceholder")}
+                maxLength={11}
+                autoComplete="off"
+              />
+            </Field>
+            <Field id={ids.uanNumber} label={t("uanLabel")} error={invalidFields.has("uanNumber") ? t("noAsteriskError") : undefined}>
+              <Input
+                type="text"
+                value={uanNumber}
                 onChange={(e) => setUanNumber(e.target.value)}
-                placeholder={t("uanPlaceholder")} maxLength={12}
-                aria-invalid={invalidFields.has("uanNumber")}
-                style={{ ...inputStyle, borderColor: invalidFields.has("uanNumber") ? "var(--bad, #ef4444)" : "var(--line, #cbd5e1)" }}
-                autoComplete="off" />
-              {invalidFields.has("uanNumber") && (
-                <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{t("noAsteriskError")}</span>
-              )}
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.esicIpNumber} style={labelStyle}>{t("esicLabel")}</label>
-              <input id={ids.esicIpNumber} type="text" value={esicIpNumber}
+                placeholder={t("uanPlaceholder")}
+                maxLength={12}
+                autoComplete="off"
+              />
+            </Field>
+            <Field id={ids.esicIpNumber} label={t("esicLabel")} error={invalidFields.has("esicIpNumber") ? t("noAsteriskError") : undefined}>
+              <Input
+                type="text"
+                value={esicIpNumber}
                 onChange={(e) => setEsicIpNumber(e.target.value)}
                 placeholder={t("esicPlaceholder")}
-                aria-invalid={invalidFields.has("esicIpNumber")}
-                style={{ ...inputStyle, borderColor: invalidFields.has("esicIpNumber") ? "var(--bad, #ef4444)" : "var(--line, #cbd5e1)" }}
-                autoComplete="off" />
-              {invalidFields.has("esicIpNumber") && (
-                <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{t("noAsteriskError")}</span>
-              )}
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={ids.pran} style={labelStyle}>{t("pranLabel")}</label>
-              <input id={ids.pran} type="text" value={pran}
+                autoComplete="off"
+              />
+            </Field>
+            <Field id={ids.pran} label={t("pranLabel")} error={invalidFields.has("pran") ? t("noAsteriskError") : undefined}>
+              <Input
+                type="text"
+                value={pran}
                 onChange={(e) => setPran(e.target.value)}
-                placeholder={t("pranPlaceholder")} maxLength={12}
-                aria-invalid={invalidFields.has("pran")}
-                style={{ ...inputStyle, borderColor: invalidFields.has("pran") ? "var(--bad, #ef4444)" : "var(--line, #cbd5e1)" }}
-                autoComplete="off" />
-              {invalidFields.has("pran") && (
-                <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{t("noAsteriskError")}</span>
-              )}
-            </div>
+                placeholder={t("pranPlaceholder")}
+                maxLength={12}
+                autoComplete="off"
+              />
+            </Field>
           </div>
           <p style={{ fontSize: 12, color: "var(--mut)", marginTop: 12 }}>
             {t("statutoryNote")}

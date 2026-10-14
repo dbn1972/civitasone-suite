@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { DataTable } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 
@@ -18,19 +19,19 @@ export type AllotmentRow = {
 } & Record<string, unknown>;
 
 export function AllotmentsTable({ allotments }: { allotments: AllotmentRow[] }) {
+  const tFallback = useTranslations("employeeFallback");
   const rows = allotments.map((a) => {
-    const employeeShort = `${a.employeeRef.slice(0, 8)}…`;
+    const unknownEmployee = tFallback("unknownEmployee");
     return {
       ...a,
       // GAP-ESTAB-QUARTERS-ALLOTMENTS-03: single Employee column with a
       // "Name unavailable" fallback when hrms enrichment fails, replacing
       // the duplicate Employee-ref column that showed the same truncated
       // UUID twice when name was null.
-      employeeDisplay: a.employeeName ?? employeeShort,
-      employeeFallback: a.employeeName ? undefined : employeeShort,
+      employeeDisplay: a.employeeName ?? unknownEmployee,
       // GAP-ESTAB-QUARTERS-ALLOTMENTS-01: show the quarter number instead of
       // a truncated UUID prefix. The service now enriches `quarterNo`.
-      quarterDisplay: a.quarterNo ?? `${a.quarterId.slice(0, 8)}…`,
+      quarterDisplay: a.quarterNo ?? "—",
       appliedDisplay: formatIndianDate(a.appliedAt),
     };
   });

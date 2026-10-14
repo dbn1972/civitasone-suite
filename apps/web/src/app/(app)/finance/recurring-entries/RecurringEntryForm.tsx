@@ -172,7 +172,7 @@ export function RecurringEntryForm({ accounts, accountsError = false }: Props) {
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={nameId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Name <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Name <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={nameId}
@@ -185,12 +185,12 @@ export function RecurringEntryForm({ accounts, accountsError = false }: Props) {
                 aria-describedby={errors.name ? nameErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.name && <p id={nameErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.name}</p>}
+              {errors.name && <p id={nameErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.name}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={debitId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Debit Account <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Debit Account <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <select
                 id={debitId}
@@ -207,12 +207,12 @@ export function RecurringEntryForm({ accounts, accountsError = false }: Props) {
                   <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
                 ))}
               </select>
-              {errors.debitAccountId && <p id={debitErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.debitAccountId}</p>}
+              {errors.debitAccountId && <p id={debitErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.debitAccountId}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={creditId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Credit Account <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Credit Account <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <select
                 id={creditId}
@@ -229,12 +229,12 @@ export function RecurringEntryForm({ accounts, accountsError = false }: Props) {
                   <option key={a.id} value={a.id}>{a.code} — {a.name}</option>
                 ))}
               </select>
-              {errors.creditAccountId && <p id={creditErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.creditAccountId}</p>}
+              {errors.creditAccountId && <p id={creditErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.creditAccountId}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={amountId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Amount (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Amount (₹) <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={amountId}
@@ -251,12 +251,12 @@ export function RecurringEntryForm({ accounts, accountsError = false }: Props) {
               <span id={amountPreviewId} style={{ fontSize: 12, color: "var(--ink2)" }}>
                 {paise !== null ? formatMoney(paise) : "Enter rupees, e.g. 1,20,000.50"}
               </span>
-              {errors.amount && <p id={amountErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.amount}</p>}
+              {errors.amount && <p id={amountErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.amount}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={nextRunId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Next Run Date <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Next Run Date <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={nextRunId}
@@ -270,7 +270,7 @@ export function RecurringEntryForm({ accounts, accountsError = false }: Props) {
                 aria-describedby={errors.nextRunDate ? nextRunErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.nextRunDate && <p id={nextRunErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.nextRunDate}</p>}
+              {errors.nextRunDate && <p id={nextRunErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.nextRunDate}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -286,7 +286,7 @@ export function RecurringEntryForm({ accounts, accountsError = false }: Props) {
                 aria-describedby={errors.endDate ? endDateErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.endDate && <p id={endDateErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.endDate}</p>}
+              {errors.endDate && <p id={endDateErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.endDate}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -316,7 +316,7 @@ export function RecurringEntryForm({ accounts, accountsError = false }: Props) {
                   <option key={v.value} value={v.value}>{v.label}</option>
                 ))}
               </select>
-              {errors.voucherType && <p role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.voucherType}</p>}
+              {errors.voucherType && <p role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.voucherType}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>

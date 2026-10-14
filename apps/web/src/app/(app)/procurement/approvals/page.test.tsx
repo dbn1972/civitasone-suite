@@ -7,6 +7,8 @@ vi.mock("@/app/_data/apiClient", async () => {
   return { ...actual, fetchJson: (...args: unknown[]) => fetchJsonMock(...args) };
 });
 
+vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => ["procurement_admin"] }));
+
 // The actionable queue is a client component with browser-only hooks; stub it
 // so this test exercises only the server page's stats/table.
 vi.mock("./ProcurementApprovalsPanel", () => ({

@@ -17,5 +17,8 @@ export const swmService: MunicipalServiceConfig = {
   // heuristic also catches it; listed for explicitness).
   moneyFields: ["feeMinor"],
   // citizenServiceKey intentionally omitted — no citizen-service manifest exists yet.
+  // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
+  // swm-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
+  displayFields: ["generatorName", "generatorType", "address", "estimatedWasteKgPerDay"],
   sec5: true,
 };

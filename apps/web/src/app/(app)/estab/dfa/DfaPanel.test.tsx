@@ -34,7 +34,7 @@ describe("DfaPanel — step-change announcement (Req 2.6)", () => {
       .mockResolvedValueOnce(jsonResponse({})) // submit action
       .mockResolvedValueOnce(jsonResponse({ data: [{ ...dfa, status: "pending_approval" }] })); // reload after submit
 
-    render(<DfaPanel />);
+    render(<DfaPanel canApprove canDraft viewerId="viewer-1" />);
 
     const submitBtn = await screen.findByRole("button", { name: "Submit" });
     fireEvent.click(submitBtn);
@@ -67,7 +67,7 @@ describe("DfaPanel — UX-016 clerk-safe errors", () => {
         }),
       ); // create failure
 
-    render(<DfaPanel />);
+    render(<DfaPanel canApprove canDraft viewerId="viewer-1" />);
 
     fireEvent.click(await screen.findByRole("button", { name: "+ New draft" }));
     fireEvent.change(screen.getByLabelText(/Subject/i), { target: { value: "Test outgoing letter" } });
@@ -91,7 +91,7 @@ describe("DfaPanel — UX-016 clerk-safe errors", () => {
       .mockResolvedValueOnce(jsonResponse({ data: [dfa] })) // initial load
       .mockResolvedValueOnce(new Response("", { status: 503 })); // submit action fails
 
-    render(<DfaPanel />);
+    render(<DfaPanel canApprove canDraft viewerId="viewer-1" />);
 
     const submitBtn = await screen.findByRole("button", { name: "Submit" });
     fireEvent.click(submitBtn);
@@ -110,7 +110,7 @@ describe("DfaPanel — GAP-ESTAB-DFA-01 (load error state)", () => {
 
   it("shows a retryable ErrorState (not 'No drafts' text) when load fails", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 500 }));
-    render(<DfaPanel />);
+    render(<DfaPanel canApprove canDraft viewerId="viewer-1" />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument());
     expect(screen.queryByText(/No drafts in this view/i)).not.toBeInTheDocument();
   });
@@ -121,7 +121,7 @@ describe("DfaPanel — GAP-ESTAB-DFA-03 (returned filter tab)", () => {
 
   it("includes a 'Returned' tab in the segment control", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [] }));
-    render(<DfaPanel />);
+    render(<DfaPanel canApprove canDraft viewerId="viewer-1" />);
     await waitFor(() => expect(screen.getByRole("tab", { name: "Returned" })).toBeInTheDocument());
   });
 });
@@ -131,7 +131,7 @@ describe("DfaPanel — GAP-ESTAB-DFA-05 (human labels)", () => {
 
   it("tab labels are human-readable (not snake_case)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [] }));
-    render(<DfaPanel />);
+    render(<DfaPanel canApprove canDraft viewerId="viewer-1" />);
     await waitFor(() => expect(screen.getByRole("tab", { name: "Pending Approval" })).toBeInTheDocument());
     expect(screen.queryByRole("tab", { name: "pending_approval" })).not.toBeInTheDocument();
   });
@@ -147,7 +147,7 @@ describe("DfaPanel — GAP-ESTAB-DFA-02 (approve needs remarks)", () => {
       fileId: null,
     };
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [dfa] }));
-    render(<DfaPanel />);
+    render(<DfaPanel canApprove canDraft viewerId="viewer-1" />);
     const approveBtn = await screen.findByRole("button", { name: "Approve" });
     fireEvent.click(approveBtn);
     const dialog = await screen.findByRole("alertdialog");
@@ -174,7 +174,7 @@ describe("DfaPanel — GAP2-ESTAB-NOTIFICATIONS-DFALINK-01 (?focus= deep-link)",
     mockSearch = new URLSearchParams({ focus: "dfa-focus-1" });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [dfa] }));
 
-    render(<DfaPanel />);
+    render(<DfaPanel canApprove canDraft viewerId="viewer-1" />);
 
     const banner = await screen.findByTestId("dfa-focus-banner");
     expect(banner.textContent).toMatch(/DFA-F01/);
@@ -193,7 +193,7 @@ describe("DfaPanel — GAP2-ESTAB-NOTIFICATIONS-DFALINK-01 (?focus= deep-link)",
     mockSearch = new URLSearchParams({ focus: "dfa-missing-id" });
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [dfa] }));
 
-    render(<DfaPanel />);
+    render(<DfaPanel canApprove canDraft viewerId="viewer-1" />);
 
     const banner = await screen.findByTestId("dfa-focus-banner");
     expect(banner.textContent).toMatch(/isn't in this view/i);
@@ -202,7 +202,7 @@ describe("DfaPanel — GAP2-ESTAB-NOTIFICATIONS-DFALINK-01 (?focus= deep-link)",
 
   it("renders no focus banner when no ?focus= is present", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [] }));
-    render(<DfaPanel />);
+    render(<DfaPanel canApprove canDraft viewerId="viewer-1" />);
     await waitFor(() => expect(screen.getByRole("tab", { name: "All" })).toBeInTheDocument());
     expect(screen.queryByTestId("dfa-focus-banner")).toBeNull();
   });
@@ -216,11 +216,65 @@ describe("DfaPanel — focus banner is localised (not hardcoded English)", () =>
     vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [] }));
     rtlRender(
       <NextIntlClientProvider locale="hi" messages={hiMessages}>
-        <DfaPanel />
+        <DfaPanel canApprove canDraft viewerId="viewer-1" />
       </NextIntlClientProvider>,
     );
     const banner = await screen.findByTestId("dfa-focus-banner");
     expect(banner.textContent).toBe(hiMessages.estabDfaFocus.missing);
     expect(banner.textContent).not.toMatch(/in this view/i);
+  });
+});
+
+describe("DfaPanel — GAP-ESTAB-DFA-02 (role + actor gating)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    mockSearch = new URLSearchParams();
+  });
+
+  const base = {
+    id: "dfa-g", dfaNo: "DFA-G01", communicationType: "letter", subject: "Gate me",
+    editable: false, recipientName: null, updatedAt: "2026-10-01T00:00:00Z", fileId: null,
+    createdBy: "drafter-1",
+  };
+
+  it("hides Approve and Return from a viewer who is not an approver", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [{ ...base, status: "pending_approval" }] }));
+    render(<DfaPanel canApprove={false} canDraft viewerId="clerk-9" />);
+    expect(await screen.findByText("Awaiting approver")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Return" })).toBeNull();
+  });
+
+  it("hides Approve and Return from the drafter even when they hold an approver role", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [{ ...base, status: "pending_approval" }] }));
+    render(<DfaPanel canApprove canDraft viewerId="drafter-1" />);
+    expect(await screen.findByText(/You drafted this; another approver must act/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
+  });
+
+  it("offers Approve and Return to a different approver", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [{ ...base, status: "pending_approval" }] }));
+    render(<DfaPanel canApprove canDraft viewerId="approver-2" />);
+    expect(await screen.findByRole("button", { name: "Approve" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Return" })).toBeTruthy();
+  });
+
+  it("hides Sign from the drafter and from a non-approver, offers it to another approver", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => jsonResponse({ data: [{ ...base, status: "approved" }] }));
+    const { unmount } = render(<DfaPanel canApprove canDraft viewerId="drafter-1" />);
+    expect(await screen.findByText(/another officer must sign/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Sign" })).toBeNull();
+    unmount();
+
+    render(<DfaPanel canApprove={false} canDraft viewerId="clerk-9" />);
+    expect(await screen.findByText("Awaiting signature")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Sign" })).toBeNull();
+  });
+
+  it("hides Submit from a viewer without a drafter role", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [{ ...base, status: "draft" }] }));
+    render(<DfaPanel canApprove canDraft={false} viewerId="x" />);
+    await screen.findByText("DFA-G01");
+    expect(screen.queryByRole("button", { name: "Submit" })).toBeNull();
   });
 });

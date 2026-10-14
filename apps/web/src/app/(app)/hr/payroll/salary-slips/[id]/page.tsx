@@ -16,6 +16,7 @@ import { LetterheadForm } from "./LetterheadForm";
 
 export default async function SalarySlipPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("salarySlipDetail");
+  const tFallback = await getTranslations("employeeFallback");
   const roles = getSessionRoles();
   // payroll-critical fix: this used to be SALARY_ADMIN_ROLES-only, so an
   // employee got "Access restricted" on their OWN payslip -- see the
@@ -112,7 +113,7 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
         <table style={{ width: "100%", fontSize: 13, marginBottom: 20 }}>
           <tbody>
             <tr>
-              <td style={{ padding: "4px 0" }}><strong>{t("employee")}</strong> {slip.employeeName ?? slip.employeeId}</td>
+              <td style={{ padding: "4px 0" }}><strong>{t("employee")}</strong> {slip.employeeName?.trim() || tFallback("unknownEmployee")}</td>
               <td style={{ padding: "4px 0" }}><strong>{t("empNo")}</strong> {slip.employeeNo}</td>
             </tr>
             <tr>

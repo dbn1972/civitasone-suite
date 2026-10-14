@@ -85,7 +85,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-APPROVALS-01  ·  HIGH  ·  confirmed  ·  theme CAP
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Approvals can be missed: the queue fetches /v1/workflow/tasks?status=pending&limit=50 across all modules, then filters client-side to four procurement refTypes (Panel:60, toTasks:36-41). With >50 pending tasks tenant-wide, procurement tasks past the cut-off never render and "No pending tasks" reads as all clear.
 - **Verified evidence:** ProcurementApprovalsPanel.tsx:58-61 fetches /v1/workflow/tasks?status=pending&limit=50 with no refType filter; toTasks (l.36-41) filters client-side to four refTypes. Any procurement tasks beyond the first 50 tenant-wide pending tasks are never shown, and the empty state (l.197-198) says 'No pending procurement workflow tasks'. Server-side refType filter/cursor support is unverifiable (workflow-service absent).
 - **Files to change:** `apps/web/src/app/(app)/procurement/approvals/ProcurementApprovalsPanel.tsx`
@@ -102,6 +102,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-APPROVALS-02  ·  HIGH  ·  confirmed  ·  theme DATA-CONSISTENCY (was OTHER)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 PQ-A note (#2037):** workflow queue now shows Approve/Reject only for tasks the viewer role may complete (workflow-service roleRef check) and the register vs queue sources are labelled. Needs owner decision: single source of truth for stats and queue.
 - **W0 note:** partly fixed by #1866 — mapApprovals returns [] when empty (loaders.ts); Action Required card replaced by distinct metrics; two sources (approvals table vs workflow panel) still unreconciled
 - **First-pass claim:** Two unreconciled approval sources on one page: the stat cards and top table count /procurement/approvals (page.tsx:41-44) while the actionable queue reads workflow tasks; an approver can see "Pending Approvals 0" above a non-empty queue, or vice-versa. "Action Required" repeats the same number as "Pending Approvals" (page.tsx:41,44).
 - **Verified evidence:** page.tsx:16,41,44 stats and the top DataTable come from getProcurementApprovals (/api/v1/procurement/approvals); the actionable queue in ProcurementApprovalsPanel comes from /v1/workflow/tasks - separate sources, no reconciliation. 'Pending Approvals' (l.41) and 'Action Required' (l.44) both = approvals.length. Extra finding: loaders.ts:625 mapApprovals returns null for an empty list, which apiClient.ts:155-158 treats as invalid_payload, so a genuinely empty approvals list renders the load ErrorState instead of 'No pending approvals'.
@@ -119,7 +120,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-APPROVALS-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Failed fetch reads as good news in the stats: on source "error" the table shows ErrorState but the four StatCards are real zeros (page.tsx:41-48) — compare dashboard/page.tsx which renders "—".
 - **Verified evidence:** page.tsx:41-44: on source==='error' approvals is [] so all four StatCards render 0/0/0/0; only the table (l.48-53) shows ErrorState plus header badge (l.35). The role-features and abac pages in the policy module already use `errored ? "—"`.
 - **Files to change:** `apps/web/src/app/(app)/procurement/approvals/page.tsx`
@@ -167,7 +168,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-APPROVALS-06  ·  MEDIUM  ·  confirmed  ·  theme ERRORCOPY (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Approval failures show the raw response body in the dialog (msg = text || …, Panel:83-85) — a JSON/SoD error string can reach the clerk unformatted; no SoD-specific copy unlike InspectGrnForm.tsx:53-55.
 - **Verified evidence:** Panel:81-86 sets msg = response text (raw body) or `${decision} failed (${status})` and passes it to ConfirmDialog errorMessage (l.222); catch (l.91-94) also uses err.message. This contradicts useFormError's rule of never showing raw server text/status. InspectGrnForm.tsx:47-54 maps code SOD_VIOLATION to human copy.
 - **Files to change:** `apps/web/src/app/(app)/procurement/approvals/ProcurementApprovalsPanel.tsx`, `apps/web/src/lib/messages.ts`
@@ -1528,6 +1529,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-ORDERS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme APPROVAL_PATH (was OTHER)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 PQ-A note (#2037):** CreatePOForm no longer says the PO was submitted for workflow approval (i18n en+hi). The procurement_po_approval workflow instance still enqueued on create is untouched. Needs owner decision: single release path (workflow inbox vs eOffice).
 - **W0-10 note:** review found the W0 tick partly — Page side done (APPROVAL_RAISABLE_STATUSES draft/pending page.tsx:23,164; Approval card; status-aware dispatch hint; tests). But second path still live: PO create still enqueues a workflow-inbox instance (services/procurement-service/src/modules/po/consumer.ts:229-243 procurement_po_approval) while page says release path is eOffice, and CreatePOForm.tsx:140 still says 'PO submitted for workflow approval.' Pending PO still has two approval mechanisms; no evidence of product-owner decision/dedupe
 - **First-pass claim:** Two competing approval paths on one screen: the PO enters the workflow inbox on create (CreatePOForm "submitted for workflow approval"), yet RaiseEOfficeNote (page.tsx) offers a second, eOffice approval for any status including approved and dispatched, and DispatchPOActions tells the user to "Approve via workflow inbox" (DispatchPOActions.tsx). An officer cannot tell which decision actually releases the PO.
 - **Verified evidence:** orders/[id]/page.tsx:126-134 renders RaiseEOfficeNote for every status (no gating), which posts to /estab/files/from-module then notifyPath submit-approval; CreatePOForm.tsx:244 says 'PO submitted for workflow approval'; DispatchPOActions.tsx:15-16 says 'Approve via workflow inbox' for any non-approved status. Two approval mechanisms are offered; whether the backend deduplicates is cannot-verify.
@@ -1680,7 +1682,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-ORDERS-NEW-01  ·  HIGH  ·  confirmed  ·  theme DEFAULT (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Vendor and Source indent default silently to the first item of each list (setVendorId(clean[0].id), setIndentId(clean[0].id), CreatePOForm.tsx), and neither list is filtered: a clerk who fills only the lines issues a PO to whichever vendor sorts first, including blacklisted or provisional vendors, against any indent regardless of status.
 - **Verified evidence:** CreatePOForm.tsx:181 setVendorId(clean[0].id) and l.195 setIndentId(clean[0].id); vendors/indents fetched with limit=100 and no status filter (l.175,189); submit check only needs non-empty ids (l.207). Blacklist/provisional/indent-status filtering not present; server-side validation is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/procurement/orders/new/CreatePOForm.tsx`
@@ -1698,7 +1700,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-ORDERS-NEW-02  ·  HIGH  ·  confirmed  ·  theme CLIENT_GENERATED_ID (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** PO number is generated in the browser (PO/{year}/{random 100–999}, CreatePOForm.tsx) — only 900 values per year, so collisions are near-certain at volume and the number is not sequential; a statutory PO series must be issued by the server.
 - **Verified evidence:** CreatePOForm.tsx:214 poNo=`PO/${year}/${floor(random*900)+100}` posted at l.216. 900 values/year, random, not sequential. Server behaviour on duplicate/missing poNo is cannot-verify (service absent).
 - **Files to change:** `apps/web/src/app/(app)/procurement/orders/new/CreatePOForm.tsx`, `services/procurement-service (not in snapshot)`
@@ -1753,7 +1755,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-ORDERS-NEW-05  ·  LOW  ·  confirmed  ·  theme DARKMODE (was DATEFMT)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Fields use inline hex backgrounds (background:#fff) that break dark mode (Form); delivery date is not checked to be after today.
 - **Verified evidence:** CreatePOForm.tsx:256,265,274 use style background:'#fff' on fields (dark-mode break); message colours hard-coded #b91c1c/#047857 (l.284); delivery date input has no min and no check (l.276).
 - **Files to change:** `apps/web/src/app/(app)/procurement/orders/new/CreatePOForm.tsx`
@@ -2829,7 +2831,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2034; masked-only, server-side. Audited reveal NOT built: no reveal endpoint exists for this resource -- NEEDS OWNER DECISION); IFSC shown in full per owner decision 2026-10-14
 - **W0 note:** partly fixed by #1866 — vendors/[id]/page.tsx:117-165 PAN/email/phone/account via server-rendered Masked (raw not in payload); no role-gated audited reveal endpoint (fail-closed by design)
 - **First-pass claim:** DPDP / financial-data exposure: PAN, phone, email and the full bank Account No are printed in clear text (page.tsx) to any module user; nothing is masked, gated by role, or audited on view.
 - **Verified evidence:** apps/web/src/app/(app)/procurement/vendors/[id]/page.tsx renders PAN (l.70-75), Email (82-87), Phone (88-93) and bank Account No (118-123) as plain text in an RSC, so unmasked values are in the HTML for every user who passes ModuleGate (procurement/layout.tsx; tenant-level only, no role check). No shared <Masked> display component exists (only a local MaskedInput in hr/employees/new/steps/Step4.tsx:22, an input). No view audit: procurement-service is absent from the snapshot, so server-side view logging is cannot-verify. 'CSV export' in the fix text does not apply to this page (no export here).

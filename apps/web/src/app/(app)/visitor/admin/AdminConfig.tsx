@@ -8,11 +8,13 @@ import {
   APPROVAL_NS,
   POLICY_NS,
   POLICY_GROUPS,
+  diffPreset,
   encodeBooleanValue,
   readBooleanValue,
+  type PresetDiffRow,
   type PolicyField,
 } from "../_data/policy";
-import { ConflictError, applyPreset, fetchConfigNamespace, setConfig } from "../_data/client";
+import { ConflictError, applyPreset, fetchConfigNamespace, fetchPreset, setConfig } from "../_data/client";
 
 const monoStyle: React.CSSProperties = {
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
@@ -55,6 +57,9 @@ export function AdminConfig({
   const [confirmBool, setConfirmBool] = useState<null | { field: PolicyField; next: boolean }>(null);
   const [confirmPreset, setConfirmPreset] = useState<null | PresetName>(null);
   const [dialogErr, setDialogErr] = useState<string | undefined>(undefined);
+  // GAP-VISITOR-ADMIN-01: the from -> to diff for the preset being confirmed.
+  const [presetDiff, setPresetDiff] = useState<PresetDiffRow[] | null>(null);
+  const [presetDiffFailed, setPresetDiffFailed] = useState(false);
 
   const byKey = useMemo(() => {
     const m = new Map<string, ConfigEntry>();
@@ -122,13 +127,27 @@ export function AdminConfig({
     }
   }
 
-  async function onApplyPreset(preset: PresetName, reason?: string) {
+  /** Open the confirm dialog and load the preset's values to build the diff. */
+  function openPreset(p: PresetName) {
+    setDialogErr(undefined);
+    setPresetDiff(null);
+    setPresetDiffFailed(false);
+    setConfirmPreset(p);
+    void fetchPreset(p)
+      .then((values) => setPresetDiff(diffPreset(entries, values)))
+      .catch(() => setPresetDiffFailed(true));
+  }
+
+  async function onApplyPreset(preset: PresetName, reason: string, diff: PresetDiffRow[] | null) {
     setPresetBusy(preset);
     setError(null);
     setToast(null);
     try {
       await applyPreset(preset, reason);
-      setToast(`Applied the ${PRESET_LABELS[preset]} preset.`);
+      // GAP-VISITOR-ADMIN-01: leave the previous values on screen so an unwanted
+      // change can be reverted by hand (no server-side undo exists).
+      const prev = diff && diff.length > 0 ? ` Previous values: ${diff.map((r) => `${r.label} ${r.from}`).join("; ")}.` : "";
+      setToast(`Applied the ${PRESET_LABELS[preset]} preset.${prev}`);
       await reload();
     } catch (err) {
       if (err instanceof ConflictError) {
@@ -172,7 +191,7 @@ export function AdminConfig({
               type="button"
               className="btn ghost"
               disabled={presetBusy !== null || bothFailed}
-              onClick={() => { setDialogErr(undefined); setConfirmPreset(p); }}
+              onClick={() => openPreset(p)}
             >
               {presetBusy === p ? "Applying…" : PRESET_LABELS[p]}
             </button>
@@ -340,17 +359,43 @@ export function AdminConfig({
         open={confirmPreset !== null}
         title={confirmPreset ? `Apply the ${PRESET_LABELS[confirmPreset]} preset?` : ""}
         description={
-          "This upserts the whole policy below — including DPDP data-retention, erasure SLA, auto-approval and anti-passback — for the entire tenant. Record a reason; the change is audited."
+          <div style={{ display: "grid", gap: 8 }}>
+            <p style={{ margin: 0 }}>
+              This overwrites the policy below for the entire tenant — including DPDP data-retention, erasure SLA,
+              auto-approval and anti-passback. Record a reason; the change is audited.
+            </p>
+            {presetDiffFailed ? (
+              <p role="alert" style={{ margin: 0, color: "var(--bad)" }}>
+                Couldn’t load the list of changes, so this preset can’t be applied right now. Close this dialog and try again.
+              </p>
+            ) : presetDiff === null ? (
+              <p style={{ margin: 0, color: "var(--ink2)" }}>Loading the changes this preset will make…</p>
+            ) : presetDiff.length === 0 ? (
+              <p style={{ margin: 0, color: "var(--ink2)" }}>No current value differs from this preset.</p>
+            ) : (
+              <ul aria-label="Changes this preset will make" style={{ margin: 0, paddingInlineStart: 18, display: "grid", gap: 4 }}>
+                {presetDiff.map((r) => (
+                  <li key={r.key} style={r.sensitive ? { fontWeight: 650 } : undefined}>
+                    {r.label}: {r.from} → {r.to}
+                    {r.sensitive ? " (data protection)" : ""}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         }
         confirmLabel="Apply preset"
         danger
         requireReason
         reasonLabel="Reason for applying this preset"
+        minReasonLength={10}
+        maxReasonLength={2000}
+        blockConfirm={presetDiff === null || presetDiffFailed}
         busy={presetBusy !== null}
         errorMessage={dialogErr}
         onConfirm={(reason) => {
           if (!confirmPreset) return;
-          void onApplyPreset(confirmPreset, reason)
+          void onApplyPreset(confirmPreset, reason ?? "", presetDiff)
             .then(() => setConfirmPreset(null))
             .catch((e) => setDialogErr(e instanceof Error ? e.message : "Could not apply the preset."));
         }}

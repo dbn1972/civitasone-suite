@@ -157,10 +157,10 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
         }
       />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e7edfd" label="Total Bills" value={rawBills.length} />
-        <StatCard icon="🧾" iconBg="#eff6ff" label="Total Billed" value={money(totals.billedMinor)} />
-        <StatCard icon="₹" iconBg="#ecfdf3" label="Total Paid (initiated)" value={money(totals.paidMinor)} />
-        <StatCard icon="🧮" iconBg="#fffaeb" label="TDS Deducted (initiated payments)" value={money(totals.tdsOnPaidMinor)} />
+        <StatCard icon="📋" tone="info" label="Total Bills" value={rawBills.length} />
+        <StatCard icon="🧾" tone="info" label="Total Billed" value={money(totals.billedMinor)} />
+        <StatCard icon="₹" tone="good" label="Total Paid (initiated)" value={money(totals.paidMinor)} />
+        <StatCard icon="🧮" tone="warn" label="TDS Deducted (initiated payments)" value={money(totals.tdsOnPaidMinor)} />
       </StatGrid>
 
       <Card title="Vendor Details" padding>

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Button, ConfirmDialog } from "../../../_components/ds";
+import { Button, ConfirmDialog, Field, Input, Select } from "../../../_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { trackActivation } from "@/lib/activation";
 import { useFormError } from "@/lib/useFormError";
@@ -189,10 +189,6 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [], payGrou
 
   if (structures.length === 0) return null;
 
-  const selStyle: React.CSSProperties = {
-    padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)",
-    minHeight: 44, background: "var(--panel)", color: "var(--ink)", fontSize: 13.5, width: "100%",
-  };
   const labelStyle: React.CSSProperties = { fontSize: 13, fontWeight: 600, color: "var(--ink2)" };
 
   return (
@@ -203,77 +199,55 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [], payGrou
       <div className="pad" style={{ display: "grid", gap: 14 }}>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
           {/* Month select */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={monthSelId} style={labelStyle}>{t("monthLabel")}</label>
-            <select
-              id={monthSelId}
+          <Field id={monthSelId} label={t("monthLabel")} error={fieldErrors.month}>
+            <Select
               value={selectedMonthIdx}
-              onChange={(e) => handleMonthYearChange(selectedYear, Number(e.target.value))}
+              aria-invalid={periodDuplicate || undefined}
               aria-describedby={periodDuplicate ? errId : undefined}
-              aria-invalid={periodDuplicate}
-              style={selStyle}
+              onChange={(e) => handleMonthYearChange(selectedYear, Number(e.target.value))}
             >
               {MONTHS.map((name, i) => (
                 <option key={i + 1} value={i + 1}>{name}</option>
               ))}
-            </select>
-            {fieldErrors.month && <span style={{ fontSize: 12, color: "var(--bad)" }}>{fieldErrors.month}</span>}
-          </div>
+            </Select>
+          </Field>
           {/* Year select */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={yearSelId} style={labelStyle}>{t("yearLabel")}</label>
-            <select
-              id={yearSelId}
+          <Field id={yearSelId} label={t("yearLabel")}>
+            <Select
               value={selectedYear}
               onChange={(e) => handleMonthYearChange(Number(e.target.value), selectedMonthIdx)}
-              style={selStyle}
             >
               {years.map((y) => (
                 <option key={y} value={y}>{y}</option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </Field>
           {/* Run No */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={runNoId} style={labelStyle}>{t("runNoLabel")}</label>
-            <input
-              id={runNoId}
-              value={runNo}
-              onChange={(e) => setRunNo(e.target.value)}
-              style={{ ...selStyle }}
-            />
-            {fieldErrors.runNo && <span style={{ fontSize: 12, color: "var(--bad)" }}>{fieldErrors.runNo}</span>}
-          </div>
+          <Field id={runNoId} label={t("runNoLabel")} error={fieldErrors.runNo}>
+            <Input value={runNo} onChange={(e) => setRunNo(e.target.value)} />
+          </Field>
           {/* Pay structure */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={structId} style={labelStyle}>{t("structureLabel")}</label>
-            <select
-              id={structId}
-              value={structureId}
-              onChange={(e) => setStructureId(e.target.value)}
-              style={selStyle}
-            >
+          <Field id={structId} label={t("structureLabel")} error={fieldErrors.structureId}>
+            <Select value={structureId} onChange={(e) => setStructureId(e.target.value)}>
               {structures.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
-            </select>
-            {fieldErrors.structureId && <span style={{ fontSize: 12, color: "var(--bad)" }}>{fieldErrors.structureId}</span>}
-          </div>
+            </Select>
+          </Field>
         </div>
 
         <fieldset style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 8 }}>
           <legend style={labelStyle}>{t("runForLabel")}</legend>
-          <select
+          <Select
             id={scopeId}
             aria-label={t("runForLabel")}
             value={scopeKind}
             onChange={(e) => setScopeKind(e.target.value as ScopeKind)}
-            style={selStyle}
           >
             <option value="tenant">{t("runForTenant")}</option>
             <option value="groups">{t("runForGroups")}</option>
             <option value="ddo">{t("runForDdo")}</option>
-          </select>
+          </Select>
           {scopeKind === "groups" &&
             (payGroups.length > 0 ? (
               <div role="group" aria-label={t("groupsLabel")} style={{ display: "grid", gap: 4 }}>
@@ -294,18 +268,17 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [], payGrou
               <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>{t("noPayGroups")}</p>
             ))}
           {scopeKind === "ddo" && (
-            <select
+            <Select
               id={ddoSelId}
               aria-label={t("ddoLabel")}
               value={ddoCode}
               onChange={(e) => setDdoCode(e.target.value)}
-              style={selStyle}
             >
               <option value="">{t("ddoPlaceholder")}</option>
               {ddos.map((d) => (
                 <option key={d.ddoCode} value={d.ddoCode}>{`${d.name} (${d.ddoCode})`}</option>
               ))}
-            </select>
+            </Select>
           )}
           {scopeKind !== "tenant" && <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>{t("scopeHint")}</p>}
           {fieldErrors.scope && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{fieldErrors.scope}</span>}

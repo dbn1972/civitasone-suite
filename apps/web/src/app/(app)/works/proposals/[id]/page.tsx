@@ -8,6 +8,7 @@ import { fetchJson } from "@/app/_data/apiClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getWorkTypeNameMap } from "../../_data/loaders";
 import { ProposalActions } from "./ProposalActions";
 import { ProposalExtActions } from "./ProposalExtActions";
 import { ProposalEditToggle } from "./ProposalEditToggle";
@@ -200,6 +201,14 @@ export default async function WorkProposalDetailPage({
 
   const roles = getSessionRoles();
 
+  // GAP-WORKS-PROPOSALS-DETAIL-06: resolve workTypeId to its master name; on a
+  // failed/missing lookup the row shows "—" (never a raw UUID).
+  let workTypeName = "—";
+  if (proposal.workTypeId) {
+    const typeMap = await getWorkTypeNameMap();
+    workTypeName = typeMap.source === "error" ? "—" : (typeMap.data[proposal.workTypeId] ?? "—");
+  }
+
   const detailRows: Array<[string, string]> = [
     ["Work Number", proposal.workNumber],
     ["Plan/Non-Plan", humanize(proposal.planOrNonPlan)],
@@ -207,6 +216,7 @@ export default async function WorkProposalDetailPage({
     ["Charged / Voted", humanize(proposal.chargedOrVoted)],
     ["Habitation", proposal.habitation || "—"],
     ["Sector", humanize(proposal.sector)],
+    ["Work Type", workTypeName],
     ["DAO Finalized At", formatIndianDate(proposal.daoFinalizedAt)],
     ["Created", formatIndianDate(proposal.createdAt)],
     ["Updated", formatIndianDate(proposal.updatedAt)],

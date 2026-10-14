@@ -35,10 +35,10 @@ export default async function PaymentsPage() {
       />
 
       <StatGrid>
-        <StatCard icon="💳" iconBg="#e7edfd" label="Total Payments" value={summary.total} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Released" value={summary.released} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending Approval" value={summary.pendingApproval} />
-        <StatCard icon="❌" iconBg="#fef3f2" label="Failed" value={summary.failed} />
+        <StatCard icon="💳" tone="info" label="Total Payments" value={summary.total} />
+        <StatCard icon="✅" tone="good" label="Released" value={summary.released} />
+        <StatCard icon="⏳" tone="warn" label="Pending Approval" value={summary.pendingApproval} />
+        <StatCard icon="❌" tone="bad" label="Failed" value={summary.failed} />
       </StatGrid>
 
       {/* UX-012: the data-source badge now lives inside PaymentsTable, driven

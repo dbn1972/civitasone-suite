@@ -18,6 +18,8 @@ export function MembersTable({
   defaultDate: string;
 }) {
   const t = useTranslations("payGroupMembers");
+  const tFallback = useTranslations("employeeFallback");
+  const nameOf = (r: MemberRow) => r.fullName?.trim() || tFallback("unknownEmployee");
   return (
     <DataTable<MemberRow>
       caption={t("membersTitle")}
@@ -25,7 +27,7 @@ export function MembersTable({
       sortable={false}
       columns={[
         { key: "employeeNo", label: t("colEmployeeNo") },
-        { key: "fullName", label: t("colName") },
+        { key: "fullName", label: t("colName"), render: (r) => nameOf(r) },
         { key: "departmentName", label: t("colDepartment"), render: (r) => r.departmentName ?? "—" },
         { key: "effectiveFrom", label: t("colFrom"), render: (r) => formatIndianDate(r.effectiveFrom) },
         {
@@ -51,14 +53,14 @@ export function MembersTable({
                         mode="move"
                         currentGroupId={payGroupId}
                         employeeId={r.employeeId}
-                        employeeName={r.fullName}
+                        employeeName={nameOf(r)}
                         groups={groups}
                         defaultDate={defaultDate}
                       />
                       <EndMembershipButton
                         payGroupId={payGroupId}
                         employeeId={r.employeeId}
-                        employeeName={r.fullName}
+                        employeeName={nameOf(r)}
                         defaultDate={defaultDate}
                       />
                     </span>

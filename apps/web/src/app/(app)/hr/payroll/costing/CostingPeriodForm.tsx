@@ -3,11 +3,12 @@
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button } from "../../../../_components/ds";
+import { Button, Field, Input } from "../../../../_components/ds";
 import { PERIOD_PATTERN, isValidPeriod } from "@/lib/payroll/period";
 
 export function CostingPeriodForm({ initialPeriod }: { initialPeriod: string }) {
   const t = useTranslations("costingPeriodForm");
+  const tv = useTranslations("hrFormErrors2");
   const router = useRouter();
   const [period, setPeriod] = useState(initialPeriod);
   const [error, setError] = useState<string | null>(null);
@@ -26,23 +27,15 @@ export function CostingPeriodForm({ initialPeriod }: { initialPeriod: string }) 
 
   return (
     <form onSubmit={handleSubmit} noValidate style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 14 }}>
-      <div style={{ display: "grid", gap: 6 }}>
-        <label htmlFor={fieldId} style={{ fontSize: 13, fontWeight: 600 }}>
-          {t("periodLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-        </label>
-        <input
-          id={fieldId}
+      <Field id={fieldId} label={t("periodLabel")} required error={error ? tv("invalidValue") : undefined}>
+        <Input
           type="month"
           pattern={PERIOD_PATTERN}
           value={period}
           onChange={(e) => setPeriod(e.target.value)}
           placeholder="2026-08"
-          aria-required="true"
-          aria-invalid={!!error || undefined}
-          aria-describedby={error ? `${fieldId}-err` : undefined}
-          style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
         />
-      </div>
+      </Field>
       <Button type="submit" style={{ minHeight: 44 }}>
         {t("viewReportBtn")}
       </Button>

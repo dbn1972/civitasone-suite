@@ -197,7 +197,7 @@ Counts: ACTION 20
 
 ### GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-02  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT (was WIRING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by ##1924, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W2 PQ-C re-confirmed: ISO dates still formatted by detailEntries, records.test.ts passes; closed by ##1924)
 - **First-pass claim:** Updated column prints the raw API string (records.ts pickField returns the ISO timestamp verbatim) instead of a formatted date; reference/title fall back to "—" when the configured fields are absent (records.ts), giving a row with three dashes and only a raw-id link target.
 - **Verified evidence:** apps/web/src/app/(app)/municipal/_data/records.ts:117 updatedAt via pickField returns ISO string verbatim; RecordsTable.tsx:261 shows it with no formatter. records.ts:101 pickField returns '—' for missing reference/title/status, so a row can show dashes; row link still uses id (RecordsTable.tsx:264-265).
 - **Files to change:** `apps/web/src/app/(app)/municipal/_components/RecordsTable.tsx`, `apps/web/src/app/(app)/municipal/_data/records.ts`
@@ -268,7 +268,7 @@ Counts: ACTION 20
 
 ### GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2034; detailEntries is now an allow-list, PII masked incl. nested/free text. Audited reveal NOT built -- NEEDS OWNER DECISION)
 - **W0-10 note:** review found the W0 tick partly — default masking via Masked + piiFields/hiddenFields in records.ts:174-260, but: only trade.ts defines piiFields; heuristic piiKindForKey (records.ts:183) omits names/address; no permission-gated reveal with audit (RecordDetailPanel.tsx:53 uses Masked only) as acceptance requires
 - **First-pass claim:** Generic dump of the whole record: detailEntries() skips only tenantId/createdBy/updatedBy/version (records.ts) and prints every other field, including applicant/owner name, mobile, address and any identity or document numbers the service returns, with no masking or role gate — DPDP exposure the code cannot rule out (backend absent).
 - **Verified evidence:** apps/web/src/app/(app)/municipal/_data/records.ts:152-161 detailEntries skips only tenantId/createdBy/updatedBy/version and renders every other key; RecordDetailPanel.tsx:206-231 prints all values verbatim. No masking component exists in ds (no Masked in app/_components/ds), and no role gate beyond ModuleGate. Which PII fields the backend returns cannot be verified (services absent), but trade config titleFields include ownerName.
@@ -289,6 +289,7 @@ Counts: ACTION 20
 ### GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme WORKFLOW (was FABRICATED)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 PQ-A note (#2037):** re-verified, no change: RecordActions is officer-role gated and wired for trade only; other services have no workflow endpoints. Needs owner decision plus per-service backend contracts.
 - **W0 note:** partly fixed by ##1934 — Done: roadmap copy removed; RecordActions (officer-role gated) + RecordHistory added. Remains: only trade has a workflow config; other services stay read-only with no actions
 - **First-pass claim:** An officer console with no officer actions: the card literally tells staff "Actions (approve, inspect, issue) will wire to workflow tasks in a follow-up pass" (RecordDetailPanel.tsx). Nothing on this route approves, rejects, inspects or issues, so scrutiny must happen outside the app; no audit trail or history is shown either.
 - **Verified evidence:** apps/web/src/app/(app)/municipal/_components/RecordDetailPanel.tsx:198-201 says 'Actions (approve, inspect, issue) will wire to workflow tasks in a follow-up pass.' The page ([id]/page.tsx:130-161) has no action buttons and no history/audit section. Theme FABRICATED is wrong: this is missing functionality, not fake data.

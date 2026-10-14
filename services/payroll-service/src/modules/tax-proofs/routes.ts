@@ -304,7 +304,7 @@ export async function taxProofRoutes(app: FastifyInstance): Promise<void> {
     }));
     const byStatus = { pending: 0, accepted: 0, rejected: 0 } as Record<string, number>;
     for (const c of counts) byStatus[String(c.status)] = Number(c.n);
-    const names = items.length > 0 ? await fetchEmployeeSummaries(ctx.tenantId) : new Map();
+    const names = items.length > 0 ? await fetchEmployeeSummaries(ctx.tenantId, items.map((r) => String(r.employee_id))) : new Map();
     const data = items.map((r) => {
       const who = names.get(String(r.employee_id));
       return { ...publicProof(r, { staff: true }), employeeName: who?.fullName ?? null, employeeNo: who?.employeeNo ?? null };

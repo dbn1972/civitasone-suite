@@ -34,10 +34,10 @@ export default async function DepositDetailPage({ params }: { params: { id: stri
     <div className="page-main wrap">
       <PageHeader title={`Deposit ${deposit.pdNo}`} subtitle={deposit.administrator || undefined} back="/finance/treasury/deposits" />
       <StatGrid>
-        <StatCard icon="₹" iconBg="#ecfdf3" label="Balance" value={formatMoney(deposit.balanceMinor)} />
-        <StatCard icon="↩️" iconBg="#eff6ff" label="Refunded" value={formatMoney(deposit.refundedMinor)} />
-        <StatCard icon="⚖️" iconBg="#fce7ee" label="Forfeited" value={formatMoney(deposit.forfeitedMinor)} />
-        <StatCard icon="🧾" iconBg="#fffaeb" label="Adjusted against bills" value={formatMoney(deposit.adjustedMinor)} />
+        <StatCard icon="₹" tone="good" label="Balance" value={formatMoney(deposit.balanceMinor)} />
+        <StatCard icon="↩️" tone="info" label="Refunded" value={formatMoney(deposit.refundedMinor)} />
+        <StatCard icon="⚖️" tone="bad" label="Forfeited" value={formatMoney(deposit.forfeitedMinor)} />
+        <StatCard icon="🧾" tone="warn" label="Adjusted against bills" value={formatMoney(deposit.adjustedMinor)} />
       </StatGrid>
 
       <Card title="Deposit Details" padding>

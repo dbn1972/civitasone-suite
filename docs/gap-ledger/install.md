@@ -14,7 +14,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-HOME-01  ·  HIGH  ·  defect  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2036)
 - **First-pass claim:** Data-shape mismatch: page.tsx reads step.stepNo/title/isRequired/completedAt/errorMessage/description, but getInstallSteps runs every row through mapRows(), which only ever emits {id,label,sublabel,status,meta} (_data.ts:44-79,98). As coded, title and stepNo render as undefined, isRequired is always falsy so every step is Optional, Required complete reads 0/0 and Status never reaches Complete. ModuleRowSummary itself (@civitasone/types) is not in the snapshot, so whether tsc tolerates the extra fields is undeterminable.
 - **Service:** `apps/web (install-service shape unverified)`  ·  **Endpoint(s):** `['GET /api/v1/install/steps']`
 - **Question:** See evidence.
@@ -430,7 +430,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-SILOS-04  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [ ] **Status** (reopened in #2036 review: install/silos/page.tsx still has no role gate and no forbidden state; earlier #1923 close was PROVISIONAL and does not hold)
 - **First-pass claim:** Silo provision records are shown with the generic mapper's heuristics (name/title/label/code, description/status) — infrastructure identifiers or error text in these fields would be displayed unfiltered to any viewer; no role gate (_data.ts:44-79, silos/page.tsx).
 - **Verified evidence:** silos/page.tsx has no role check, and mapRows (_data.ts:44-63) shows name/title/label/code as label and description/status as detail verbatim (ModuleListTable.tsx:51-53). The mapper does not read errorMessage or infra fields, so error text is only shown if the API puts it into description/status. Whether the route is role-restricted is decided by the (app) layout / gateway and install-service, neither verifiable here (only hrms-service in snapshot). Exposure to any viewer is therefore plausible but unproven.
 - **Files to change:** `apps/web/src/app/(app)/install/silos/page.tsx`, `apps/web/src/app/(app)/install/_data.ts`

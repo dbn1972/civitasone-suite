@@ -12,7 +12,7 @@ export default async function StockListPage() {
   const errored = source === "error";
   const lowStockCount = errored ? null : items.filter((i) => i.isLowStock === true).length;
   const totalValue = errored ? null : items.reduce((sum, i) => sum + (i.totalValue ?? 0), 0);
-  const categories = errored ? null : new Set(items.map((i) => i.category)).size;
+  const categories = errored ? null : new Set(items.map((i) => i.category).filter((c) => c !== "—")).size;
 
   return (
     <>

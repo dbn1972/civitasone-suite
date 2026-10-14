@@ -4,13 +4,13 @@
  * Approves a grant application with a sanctioned amount: `PATCH
  * /v1/grants/applications/:id/approve`, validated server-side by
  * approveApplicationBody (grant-service validators.ts) as
- * { amountApprovedMinor: positive integer, reason?: string }.
+ * { amountApprovedMinor: positive integer, reason: string (>= 10 chars) }.
  *
  * The clerk enters rupees; converted with rupeesToMinorString (no float
  * multiplication). DETAIL-04: the dialog now SHOWS the requested amount and the
  * scheme's min/max, prefills with the requested value, blocks submit when the
  * amount is outside the scheme range (bigint/minor-string comparison), and
- * carries an optional sanction reason. The grant-service still validates
+ * carries a REQUIRED sanction reason (GAP-GRANTS-APPLICATIONS-DETAIL-02). The grant-service still validates
  * server-side; this is a guard + context, not the authority.
  */
 import { useEffect, useId, useState } from "react";
@@ -31,6 +31,9 @@ interface ApproveApplicationDialogProps {
   onCancel: () => void;
   onSubmit: (req: ApproveApplicationRequest) => void;
 }
+
+/** Mirrors grant-service approveApplicationBody.reason min length. */
+const MIN_REASON = 10;
 
 function minorToRupeeInput(minor: number | null | undefined): string {
   if (minor == null || !Number.isFinite(minor) || minor <= 0) return "";
@@ -74,8 +77,12 @@ export function ApproveApplicationDialog({
       setValidationError(`Sanctioned amount exceeds the scheme maximum (${formatMoney(maxMinor)}).`);
       return;
     }
+    if (reason.trim().length < MIN_REASON) {
+      setValidationError(`Enter the sanction reason (at least ${MIN_REASON} characters) for the audit trail.`);
+      return;
+    }
     setValidationError("");
-    onSubmit({ amountApprovedMinor: Number(minor), ...(reason.trim() ? { reason: reason.trim() } : {}) });
+    onSubmit({ amountApprovedMinor: Number(minor), reason: reason.trim() });
   }
 
   const rangeLabel =
@@ -114,11 +121,13 @@ export function ApproveApplicationDialog({
         </div>
 
         <div className="cd-field">
-          <label htmlFor={`${titleId}-reason`}>Reason / remarks (optional)</label>
+          <label htmlFor={`${titleId}-reason`}>Reason / remarks</label>
           <textarea
             id={`${titleId}-reason`}
             rows={2}
             value={reason}
+            aria-required="true"
+            minLength={MIN_REASON}
             onChange={(e) => setReason(e.target.value)}
             placeholder="Sanction reference / remarks for the audit trail"
           />

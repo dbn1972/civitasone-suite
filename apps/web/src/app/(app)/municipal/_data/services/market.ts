@@ -14,5 +14,8 @@ export const marketService: MunicipalServiceConfig = {
   // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: market/allotments/domain.ts AllotmentStatus.
   statusVocabulary: ["applied", "selected", "agreement_signed", "active", "transferred", "cancelled", "evicted"],
   citizenServiceKey: "market-stall",
+  // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
+  // market-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
+  displayFields: ["allotmentNumber", "propertyId", "allotteeName", "allotmentType", "allotmentDate", "agreementStartDate", "agreementEndDate"],
   sec5: true,
 };

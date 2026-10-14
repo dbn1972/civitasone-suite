@@ -14,5 +14,8 @@ export const vendorService: MunicipalServiceConfig = {
   // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: vendor/registrations/domain.ts REGISTRATION_STATUSES.
   statusVocabulary: ["draft", "submitted", "under_review", "zone_allocated", "approved", "rejected", "withdrawn"],
   citizenServiceKey: "street-vendor",
+  // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
+  // vendor-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
+  displayFields: ["vendorName", "preferredZone", "allocatedZone", "allocatedSpot", "feePaid"],
   sec5: true,
 };

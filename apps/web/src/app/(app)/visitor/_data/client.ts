@@ -151,6 +151,23 @@ export async function fetchConfigNamespace(namespace: string): Promise<ConfigEnt
   return out.items ?? [];
 }
 
-export async function applyPreset(preset: PresetName, reason?: string): Promise<void> {
-  await post(`v1/visitor/config/presets/${preset}`, reason ? { reason } : undefined);
+/** One value a vertical preset would write (GET /v1/visitor/config/presets/:preset). */
+export interface PresetEntry {
+  namespace: string;
+  configKey: string;
+  value: unknown;
+  label: string;
+}
+
+/** Preview a preset's values so the admin can see the from -> to diff before confirming. */
+export async function fetchPreset(preset: PresetName): Promise<PresetEntry[]> {
+  const res = await browserFetch(`v1/visitor/config/presets/${encodeURIComponent(preset)}`);
+  if (!res.ok) throw new Error(readError("load"));
+  const out = (await res.json()) as { entries?: PresetEntry[] };
+  return out.entries ?? [];
+}
+
+/** A preset overwrites tenant-wide policy, so the reason is mandatory (audited server-side). */
+export async function applyPreset(preset: PresetName, reason: string): Promise<void> {
+  await post(`v1/visitor/config/presets/${preset}`, { reason });
 }

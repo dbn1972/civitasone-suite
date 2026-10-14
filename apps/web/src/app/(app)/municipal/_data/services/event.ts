@@ -14,5 +14,8 @@ export const eventService: MunicipalServiceConfig = {
   // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: event/applications/domain.ts.
   statusVocabulary: ["draft", "submitted", "noc_pending", "nocs_received", "approved", "rejected", "permitted", "completed", "withdrawn"],
   citizenServiceKey: "event-permission",
+  // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
+  // event-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
+  displayFields: ["organiserName", "organiserOrg", "eventType", "venueName", "venueAddress", "expectedAttendance", "temporaryStructures", "soundPermission"],
   sec5: true,
 };

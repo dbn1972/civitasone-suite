@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog, EntityPicker, type EntityOption } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog, EntityPicker, type EntityOption, Field, Input, Select, Textarea } from "../../../../_components/ds";
 import { browserFetch, browserJson, errorCodeFromResponse } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
 import { minorToDecimalString, nonNegativeRupeesToMinorString } from "@/lib/money";
@@ -112,6 +112,7 @@ const rupeesOfMinor = (minor: string): string => minorToDecimalString(minor) ?? 
 
 export function ComputeFnfForm() {
   const t = useTranslations("computeFnfForm");
+  const tv = useTranslations("hrFormErrors2");
   const MONEY_LABELS: Record<MoneyField, string> = Object.fromEntries(
     (Object.keys(MONEY_FIELD_KEYS) as MoneyField[]).map((f) => [f, t(MONEY_FIELD_KEYS[f])]),
   ) as Record<MoneyField, string>;
@@ -472,19 +473,14 @@ export function ComputeFnfForm() {
     }
   }
 
-  const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
-  const lockedStyle = { ...inputStyle, background: "var(--panel)" } as const;
+  const lockedStyle = { background: "var(--panel)" } as const;
   const overridden = overriddenFields();
 
   function overridableInput(field: HrField, id: string, labelKey: string, value: string, setValue: (v: string) => void) {
     const locked = snapshot !== null && !override[field];
     return (
-      <div style={{ display: "grid", gap: 6 }}>
-        <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
-          {t(labelKey)} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-        </label>
-        <input
-          id={id}
+      <Field id={id} label={t(labelKey)} required error={invalidFields.has(field) ? tv("invalidValue") : undefined}>
+        <Input
           ref={(el) => { topFieldRefs.current[field] = el; }}
           type="number"
           min={0}
@@ -492,10 +488,7 @@ export function ComputeFnfForm() {
           value={value}
           readOnly={locked}
           onChange={(e) => { setValue(e.target.value); clearInvalid(field); }}
-          aria-required="true"
-          aria-invalid={invalidFields.has(field) || undefined}
-          aria-describedby={invalidFields.has(field) ? errId : undefined}
-          style={locked ? lockedStyle : inputStyle}
+          style={locked ? lockedStyle : undefined}
         />
         {snapshot && (
           <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "var(--ink2)" }}>
@@ -511,19 +504,16 @@ export function ComputeFnfForm() {
             {t("overrideToggle", { value: snapshot[field] })}
           </label>
         )}
-      </div>
+      </Field>
     );
   }
 
   return (
-    <form onSubmit={openConfirm} style={{ marginBottom: 16 }}>
+    <form noValidate onSubmit={openConfirm} style={{ marginBottom: 16 }}>
       <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={empIdField} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("employeeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
+            <Field id={empIdField} label={t("employeeLabel")} required error={invalidFields.has("employeeId") ? tv("fieldRequired") : undefined}>
               {/* GAP-PAYROLL-FNF-05: was a raw "Employee ID (UUID)" text box. */}
               <EntityPicker
                 id={empIdField}
@@ -537,64 +527,58 @@ export function ComputeFnfForm() {
                   {t("directoryForbidden")}
                 </p>
               )}
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={dateField} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("separationDateLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={dateField}
+            </Field>
+            <Field id={dateField} label={t("separationDateLabel")} required error={invalidFields.has("separationDate") ? tv("invalidValue") : undefined}>
+              <Input
                 ref={(el) => { topFieldRefs.current.separationDate = el; }}
                 type="date"
                 value={separationDate}
                 onChange={(e) => { setSeparationDate(e.target.value); clearInvalid("separationDate"); }}
-                aria-required="true"
-                aria-invalid={invalidFields.has("separationDate") || undefined}
-                aria-describedby={invalidFields.has("separationDate") ? errId : undefined}
-                style={inputStyle}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={sepTypeField} style={{ fontSize: 13, fontWeight: 600 }}>{t("separationTypeLabel")}</label>
-              <select id={sepTypeField} value={separationType} onChange={(e) => setSeparationType(e.target.value as (typeof SEPARATION_TYPES)[number])} style={inputStyle}>
+            </Field>
+            <Field id={sepTypeField} label={t("separationTypeLabel")}>
+              <Select
+                value={separationType}
+                onChange={(e) => setSeparationType(e.target.value as (typeof SEPARATION_TYPES)[number])}
+              >
                 {SEPARATION_TYPES.map((v) => <option key={v} value={v}>{SEPARATION_TYPE_LABELS[v]}</option>)}
-              </select>
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={catField} style={{ fontSize: 13, fontWeight: 600 }}>{t("employeeCategoryLabel")}</label>
-              <select id={catField} value={employeeCategory} onChange={(e) => setEmployeeCategory(e.target.value as (typeof EMPLOYEE_CATEGORIES)[number])} style={inputStyle}>
+              </Select>
+            </Field>
+            <Field id={catField} label={t("employeeCategoryLabel")}>
+              <Select
+                value={employeeCategory}
+                onChange={(e) => setEmployeeCategory(e.target.value as (typeof EMPLOYEE_CATEGORIES)[number])}
+              >
                 {EMPLOYEE_CATEGORIES.map((c) => <option key={c} value={c}>{EMPLOYEE_CATEGORY_LABELS[c]}</option>)}
-              </select>
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={regimeField} style={{ fontSize: 13, fontWeight: 600 }}>{t("taxRegimeLabel")}</label>
-              <select id={regimeField} value={taxRegime} onChange={(e) => setTaxRegime(e.target.value as "old" | "new")} style={inputStyle}>
+              </Select>
+            </Field>
+            <Field id={regimeField} label={t("taxRegimeLabel")}>
+              <Select
+                value={taxRegime}
+                onChange={(e) => setTaxRegime(e.target.value as "old" | "new")}
+              >
                 <option value="old">{t("taxRegimeOld")}</option>
                 <option value="new">{t("taxRegimeNew")}</option>
-              </select>
-            </div>
+              </Select>
+            </Field>
             {overridableInput("completedYears", yearsField, "completedYearsLabel", completedYears, setCompletedYears)}
             {overridableInput("leaveBalanceDays", leaveField, "leaveBalanceLabel", leaveBalanceDays, setLeaveBalanceDays)}
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={remainingField} style={{ fontSize: 13, fontWeight: 600 }}>{t("remainingMonthsLabel")}</label>
-              <input id={remainingField} type="number" min={0} value={remainingMonthsToRetirement} onChange={(e) => setRemainingMonthsToRetirement(e.target.value)} style={inputStyle} />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={fyField} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("fyStartYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={fyField}
+            <Field id={remainingField} label={t("remainingMonthsLabel")}>
+              <Input
+                type="number"
+                min={0}
+                value={remainingMonthsToRetirement}
+                onChange={(e) => setRemainingMonthsToRetirement(e.target.value)}
+              />
+            </Field>
+            <Field id={fyField} label={t("fyStartYearLabel")} required error={invalidFields.has("fyStartYear") ? tv("invalidValue") : undefined}>
+              <Input
                 ref={(el) => { topFieldRefs.current.fyStartYear = el; }}
                 type="number"
                 value={fyStartYear}
                 onChange={(e) => { setFyStartYear(e.target.value); clearInvalid("fyStartYear"); }}
-                aria-required="true"
-                aria-invalid={invalidFields.has("fyStartYear") || undefined}
-                aria-describedby={invalidFields.has("fyStartYear") ? errId : undefined}
-                style={inputStyle}
               />
-            </div>
+            </Field>
           </div>
 
           {snapshotState === "loading" && <p role="status" style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>{t("hrRecordsLoading")}</p>}
@@ -605,23 +589,15 @@ export function ComputeFnfForm() {
           {paySnapState === "unavailable" && <p role="status" className="pill warn" style={{ width: "fit-content", margin: 0 }}>{t("payRecordsUnavailable")}</p>}
 
           {overridden.length > 0 && (
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={reasonField} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("overrideReasonLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <textarea
-                id={reasonField}
+            <Field id={reasonField} label={t("overrideReasonLabel")} required error={invalidFields.has("overrideReason") ? tv("fieldRequired") : undefined}>
+              <Textarea
                 ref={reasonRef}
                 value={overrideReason}
                 onChange={(e) => { setOverrideReason(e.target.value); clearInvalid("overrideReason"); }}
                 rows={2}
                 maxLength={500}
-                aria-required="true"
-                aria-invalid={invalidFields.has("overrideReason") || undefined}
-                aria-describedby={invalidFields.has("overrideReason") ? errId : undefined}
-                style={{ ...inputStyle, minHeight: 64 }}
               />
-            </div>
+            </Field>
           )}
 
           <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 14 }}>
@@ -641,22 +617,15 @@ export function ComputeFnfForm() {
                   : null
                   : null;
                 return (
-                  <div key={f} style={{ display: "grid", gap: 6 }}>
-                    <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
-                      {MONEY_LABELS[f]} {required && <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>}
-                    </label>
-                    <input
-                      id={id}
+                  <Field key={f} id={id} label={MONEY_LABELS[f]} required={required} error={invalid ? tv(required ? "fieldRequired" : "invalidValue") : undefined}>
+                    <Input
                       ref={(el) => { moneyFieldRefs.current[f] = el; }}
                       type="text"
                       inputMode="decimal"
                       value={money[f]}
                       readOnly={lockedPay}
                       onChange={(e) => setMoneyField(f, e.target.value)}
-                      aria-required={required}
-                      aria-invalid={invalid || undefined}
-                      aria-describedby={invalid ? errId : undefined}
-                      style={lockedPay ? lockedStyle : inputStyle}
+                      style={lockedPay ? lockedStyle : undefined}
                     />
                     {payField && (
                       <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "var(--ink2)" }}>
@@ -675,7 +644,7 @@ export function ComputeFnfForm() {
                     {hint !== null && (
                       <span style={{ fontSize: 12, color: "var(--ink2)" }}>{t("systemEstimateHint", { amount: formatMoney(hint) })}</span>
                     )}
-                  </div>
+                  </Field>
                 );
               })}
             </div>
@@ -695,26 +664,16 @@ export function ComputeFnfForm() {
                 ] as const).map(([field, labelKey, kind]) => {
                   const id = `${baseId}-nominee-${field}`;
                   const invalid = invalidFields.has(`nominee.${field}`);
-                  const common = {
-                    id,
-                    "aria-required": true as const,
-                    "aria-invalid": invalid || undefined,
-                    "aria-describedby": invalid ? errId : undefined,
-                    style: inputStyle,
-                  };
+                  const err = invalid ? tv("fieldRequired") : undefined;
                   return (
-                    <div key={field} style={{ display: "grid", gap: 6 }}>
-                      <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
-                        {t(labelKey)} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-                      </label>
+                    <Field key={field} id={id} label={t(labelKey)} required error={err}>
                       {kind === "select" ? (
-                        <select {...common} value={nominee.relationship} onChange={(e) => { setNominee((p) => ({ ...p, relationship: e.target.value })); clearInvalid("nominee.relationship"); }}>
+                        <Select value={nominee.relationship} onChange={(e) => { setNominee((p) => ({ ...p, relationship: e.target.value })); clearInvalid("nominee.relationship"); }}>
                           <option value="">{t("nomineeRelationshipPlaceholder")}</option>
                           {NOMINEE_RELATIONSHIPS.map((r) => <option key={r} value={r}>{t(`nomineeRelationship_${r}`)}</option>)}
-                        </select>
+                        </Select>
                       ) : (
-                        <input
-                          {...common}
+                        <Input
                           type="text"
                           inputMode={kind === "account" ? "numeric" : undefined}
                           autoComplete="off"
@@ -723,7 +682,7 @@ export function ComputeFnfForm() {
                           onChange={(e) => { setNominee((p) => ({ ...p, [field]: e.target.value })); clearInvalid(`nominee.${field}`); }}
                         />
                       )}
-                    </div>
+                    </Field>
                   );
                 })}
               </div>

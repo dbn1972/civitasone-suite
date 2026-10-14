@@ -831,7 +831,9 @@ export function mapEstabFileSummaries(payload: unknown): EstabFileSummary[] | nu
       subject,
       classification,
       department: toText(row.dept) ?? toText(row.department) ?? undefined,
-      createdBy: toText(row.createdBy) ?? "—",
+      // SF-17b: the service sends the creator's resolved name as createdByName; the raw
+      // createdBy id is never shown. "" = unresolved (the list renders "Unknown employee").
+      createdBy: toText(row.createdByName) ?? "",
       createdDate: toText(row.createdDate) ?? toText(row.createdAt)?.slice(0, 10) ?? "—",
       currentHolder: toText(row.currentWith) ?? toText(row.currentHolder) ?? undefined,
       status,
@@ -860,7 +862,8 @@ export function mapEstabFileDetail(payload: unknown): import("@civitasone/types"
     if (!nid) return [];
     return [{
       id: nid,
-      author: toText(row.author) ?? "—",
+      // SF-17b: the service sends the resolved name; "" = unresolved (web shows the localised fallback).
+      author: toText(row.author) ?? "",
       content: toText(row.content) ?? toText(row.body) ?? "",
       timestamp: toText(row.timestamp) ?? toText(row.createdAt) ?? "",
       type: (toText(row.type) ?? "note") as "note" | "order" | "remark",
@@ -918,6 +921,9 @@ export function mapEstabFileDetail(payload: unknown): import("@civitasone/types"
 
   return {
     ...base,
+    // SF-17b: the detail view shows the service-resolved holder name (the summary
+    // mapper above keeps the id for list rows that resolve it client-side).
+    currentHolder: toText(payload.currentHolder) ?? "",
     dakNo: toText(payload.dakNo) ?? undefined,
     dueBy: toText(payload.dueBy) ?? undefined,
     noteSheets,
@@ -1156,8 +1162,10 @@ export function mapStockItemSummaries(payload: unknown): StockItemSummary[] | nu
     if (!isRecord(row)) continue;
     const id = toText(row.id);
     const name = toText(row.name);
-    const itemCode = toText(row.itemCode) ?? toText(row.code) ?? id;
-    if (!id || !name || !itemCode) continue;
+    if (!id || !name) continue;
+    // GAP-STOCK-LIST-02: never surface the record id, an id fragment or an
+    // invented unit/category as if it were real data. Missing names read "—".
+    const itemCode = toText(row.itemCode) ?? toText(row.code) ?? "—";
     // A level the service did not report stays null: defaulting it to 0 made every
     // item read "Low Stock" with a Rs 0 value (stock-service returns no levels).
     const currentStock = parseMinor(row.currentStock);
@@ -1166,8 +1174,8 @@ export function mapStockItemSummaries(payload: unknown): StockItemSummary[] | nu
       id,
       itemCode,
       name,
-      category: toText(row.category) ?? toText(row.categoryId)?.slice(0, 8) ?? "General",
-      unit: toText(row.unit) ?? toText(row.uomId)?.slice(0, 4) ?? "EA",
+      category: toText(row.category) ?? toText(row.categoryName) ?? "—",
+      unit: toText(row.unit) ?? toText(row.uomCode) ?? "—",
       currentStock,
       minStockLevel,
       unitCost: parseMinor(row.unitCost),

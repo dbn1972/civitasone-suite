@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatShortId } from "@/lib/formatters";
+import { useTranslations } from "next-intl";
 
 /**
  * Resolves an eOffice officer UUID (an HRMS employeeId, as used by the
@@ -89,8 +89,12 @@ export async function loadMaps(): Promise<OfficerMaps> {
   return inflight;
 }
 
-export function resolveLabel(id: string, maps: OfficerMaps | null): string {
-  const shortId = `Officer ${formatShortId(id)}`;
+/**
+ * `unknownLabel` is the localised "Unknown employee" (SF-17b): an officer the
+ * roster cannot name is never shown as an id or an id fragment.
+ */
+export function resolveLabel(id: string, maps: OfficerMaps | null, unknownLabel: string): string {
+  const shortId = unknownLabel;
   if (!maps) return shortId;
   const name = maps.names.get(id);
   const op = maps.operators.get(id);
@@ -102,6 +106,7 @@ export function resolveLabel(id: string, maps: OfficerMaps | null): string {
 }
 
 export function OfficerName({ id, prefix }: { id: string; prefix?: string }) {
+  const tFallback = useTranslations("employeeFallback");
   const [maps, setMaps] = useState<OfficerMaps | null>(cache);
 
   useEffect(() => {
@@ -118,6 +123,16 @@ export function OfficerName({ id, prefix }: { id: string; prefix?: string }) {
     };
   }, []);
 
-  const label = resolveLabel(id, maps);
+  const label = resolveLabel(id, maps, tFallback("unknownEmployee"));
   return <>{prefix ?? ""}{label}</>;
+}
+
+/**
+ * Renders an officer name the service has ALREADY resolved (note author, current
+ * holder). An empty/absent name is "unresolved" and shows the localised fallback;
+ * never looked up by id.
+ */
+export function ResolvedOfficerName({ name }: { name?: string | null }) {
+  const tFallback = useTranslations("employeeFallback");
+  return <>{name ? name : tFallback("unknownEmployee")}</>;
 }

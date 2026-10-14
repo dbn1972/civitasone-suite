@@ -51,15 +51,16 @@ describe("disburseBody (GAP-GRANTS-DETAIL-03)", () => {
 });
 
 describe("approveApplicationBody (GAP-GRANTS-APPLICATIONS-DETAIL-04/02)", () => {
-  it("accepts an optional sanction reason alongside the amount", () => {
+  it("accepts a sanction reason alongside the amount", () => {
     const parsed = approveApplicationBody.parse({ amountApprovedMinor: 5000000, reason: "Within scheme ceiling" });
     expect(parsed.amountApprovedMinor).toBe(5000000);
     expect(parsed.reason).toBe("Within scheme ceiling");
   });
 
-  it("still accepts an amount with no reason (reason is optional)", () => {
-    const parsed = approveApplicationBody.parse({ amountApprovedMinor: 5000000 });
-    expect(parsed.reason).toBeUndefined();
+  it("requires a sanction reason of at least 10 characters (GAP-GRANTS-APPLICATIONS-DETAIL-02)", () => {
+    expect(() => approveApplicationBody.parse({ amountApprovedMinor: 5000000 })).toThrow();
+    expect(() => approveApplicationBody.parse({ amountApprovedMinor: 5000000, reason: "short" })).toThrow();
+    expect(() => approveApplicationBody.parse({ amountApprovedMinor: 5000000, reason: "          " })).toThrow();
   });
 
   it("rejects a non-positive amount", () => {

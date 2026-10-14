@@ -482,7 +482,7 @@ export const FINALIZED_STATUSES = new Set<string>(["finalized", "approved", "pub
  * for a bill/MB finalize (POST .../finalize). Mirrors billing/routes.ts
  *   WRITE_ROLES = ["works_admin","works_operator","super_admin","dao","do",
  *                  "sdo","section_officer","estimator"]
- * exactly, so the UI only offers the irreversible Advance control to a caller
+ * plus "auditor" (finalize + read only; the officer for auditor_finalized), so the UI only offers the irreversible Advance control to a caller
  * the server will actually accept. The server remains the authority (every
  * finalize route calls requireRole and the consumer re-checks the transition);
  * this gate is defence-in-depth + UX, hiding a control that would otherwise
@@ -506,6 +506,7 @@ export const BILLING_FINALIZE_ROLES = [
   "sdo",
   "section_officer",
   "estimator",
+  "auditor",
 ];
 
 /** Roles that may read the billing registers (billing/routes.ts READ_ROLES). */
@@ -532,6 +533,28 @@ export const MB_STEP_AUTHORITY: Record<string, string> = {
   estimator_finalized: "Estimator",
   do_finalized: "Divisional Officer (DO)",
 };
+
+/**
+ * GAP-WORKS-BILLING-WORKID-03: per-step finalize authority, keyed by the TARGET
+ * status. Mirrors works-service billing/domain.ts finalizeStepRoles() (the
+ * route requires it and answers 403 otherwise): the officer for the step plus
+ * the tenant admin overrides. The server stays the authority.
+ */
+const STEP_ADMIN_ROLES = ["works_admin", "super_admin"];
+export const FINALIZE_STEP_OFFICER_ROLE: Record<string, string> = {
+  so_finalized: "section_officer",
+  sdo_finalized: "sdo",
+  estimator_finalized: "estimator",
+  auditor_finalized: "auditor",
+  dao_finalized: "dao",
+  do_finalized: "do",
+};
+
+export function canAdvanceFinalizeStep(sessionRoles: string[], nextStatus: string): boolean {
+  const officer = FINALIZE_STEP_OFFICER_ROLE[nextStatus];
+  const allowed = officer ? [officer, ...STEP_ADMIN_ROLES] : STEP_ADMIN_ROLES;
+  return allowed.some((r) => sessionRoles.includes(r));
+}
 
 /**
  * GAP-WORKS-BILLING-ACCOUNT-COMPILE-02: roles the works-service accepts for

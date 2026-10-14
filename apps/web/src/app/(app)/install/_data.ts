@@ -146,6 +146,5 @@ function installModulesLoader() {
 }
 
 export const getInstallStages = moduleLoader("/api/v1/install/stages", "install.stages");
-export const getInstallSteps = moduleLoader("/api/v1/install/steps", "install.steps");
 export const getInstallModules = installModulesLoader;
 export const getInstallSilos = moduleLoader("/api/v1/install/silo-provisions", "install.silos");

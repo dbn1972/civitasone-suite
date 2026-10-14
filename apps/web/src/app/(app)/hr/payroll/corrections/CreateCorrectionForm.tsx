@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog, Field, Input } from "../../../../_components/ds";
 import { EmployeePicker } from "../../../../_components/EmployeePicker";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
@@ -45,10 +45,11 @@ function toPaise(input: string): number | null {
   return Number(minor);
 }
 
-const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
 
 export function CreateCorrectionForm() {
   const t = useTranslations("createCorrectionForm");
+  const tFallback = useTranslations("employeeFallback");
+  const tv = useTranslations("hrFormErrors2");
   const router = useRouter();
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [employeeName, setEmployeeName] = useState<string | null>(null);
@@ -138,83 +139,48 @@ export function CreateCorrectionForm() {
       <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("employeeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
+            <Field id={empId} label={t("employeeLabel")} required>
               <EmployeePicker
                 id={empId}
                 value={employeeId}
                 onChange={(id, option) => { setEmployeeId(id); setEmployeeName(option?.label ?? null); }}
                 clearable
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={compId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("componentLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={compId}
+            </Field>
+            <Field id={compId} label={t("componentLabel")} required error={isInvalid("comp") ? tv("fieldRequired") : undefined}>
+              <Input
                 ref={compRef}
                 value={component}
                 onChange={(e) => setComponent(e.target.value)}
                 maxLength={32}
                 placeholder={t("componentPlaceholder")}
-                aria-required="true"
-                aria-invalid={isInvalid("comp") || undefined}
-                aria-describedby={isInvalid("comp") ? errId : undefined}
-                style={inputStyle}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={dateId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("effectiveFromLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
+            </Field>
+            <Field id={dateId} label={t("effectiveFromLabel")} required error={isInvalid("date") ? tv("invalidValue") : undefined}>
               {/* GAP-PAYROLL-CORRECTIONS-04: native date picker (value stays YYYY-MM-DD). */}
-              <input
-                id={dateId}
+              <Input
                 ref={dateRef}
                 type="date"
                 value={effectiveFrom}
                 onChange={(e) => setEffectiveFrom(e.target.value)}
-                aria-required="true"
-                aria-invalid={isInvalid("date") || undefined}
-                aria-describedby={isInvalid("date") ? errId : undefined}
-                style={inputStyle}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={oldId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("oldValueLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={oldId}
+            </Field>
+            <Field id={oldId} label={t("oldValueLabel")} required error={isInvalid("old") ? tv("invalidValue") : undefined}>
+              <Input
                 ref={oldRef}
                 inputMode="decimal"
                 value={oldValue}
                 onChange={(e) => setOldValue(e.target.value)}
-                aria-required="true"
-                aria-invalid={isInvalid("old") || undefined}
-                aria-describedby={isInvalid("old") ? errId : undefined}
-                style={inputStyle}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={newId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("newValueLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={newId}
+            </Field>
+            <Field id={newId} label={t("newValueLabel")} required error={isInvalid("new") ? tv("invalidValue") : undefined}>
+              <Input
                 ref={newRef}
                 inputMode="decimal"
                 value={newValue}
                 onChange={(e) => setNewValue(e.target.value)}
-                aria-required="true"
-                aria-invalid={isInvalid("new") || undefined}
-                aria-describedby={isInvalid("new") ? errId : undefined}
-                style={inputStyle}
               />
-            </div>
+            </Field>
           </div>
 
           <div>
@@ -254,7 +220,7 @@ export function CreateCorrectionForm() {
           pending
             ? t.rich("confirmDescription", {
                 component: pending.component,
-                employee: employeeName ?? pending.employeeId,
+                employee: employeeName ?? tFallback("unknownEmployee"),
                 oldAmount: formatMoney(pending.oldValueMinor),
                 newAmount: formatMoney(pending.newValueMinor),
                 effectiveFrom: formatIndianDate(pending.effectiveFrom),

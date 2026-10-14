@@ -6,6 +6,7 @@ import { PageHeader, Button, SkeletonCard } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
 import { useFormError } from "@/lib/useFormError";
+import { WorkField, safeWorkId } from "../../WorkField";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -20,7 +21,7 @@ function NewBillForm() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
-  const workId = (searchParams.get("workId") ?? "").trim();
+  const workId = safeWorkId(searchParams.get("workId")) ?? "";
 
   const [form, setForm] = useState({
     workId,
@@ -43,36 +44,41 @@ function NewBillForm() {
   const [awards, setAwards] = useState<Option[] | null>(null);
   const [mbs, setMbs] = useState<Option[] | null>(null);
 
+  const chosenWorkId = safeWorkId(form.workId) ?? "";
   useEffect(() => {
-    if (!workId) return;
+    setAwards(null);
+    setMbs(null);
+    if (!chosenWorkId) return;
     let cancelled = false;
     (async () => {
       try {
         const [aRes, mRes] = await Promise.all([
-          fetch(`/api/proxy/v1/works/billing/${workId}/awards`),
-          fetch(`/api/proxy/v1/works/billing/${workId}/mbs`),
+          fetch(`/api/proxy/v1/works/billing/${chosenWorkId}/awards`),
+          fetch(`/api/proxy/v1/works/billing/${chosenWorkId}/mbs`),
         ]);
         if (!cancelled && aRes.ok) {
           const body = (await aRes.json()) as { data?: unknown };
           const rows = Array.isArray(body.data) ? body.data : [];
-          setAwards(
-            rows.map((r) => {
-              const row = r as Record<string, unknown>;
-              const agreement = row.agreementNumber ? String(row.agreementNumber) : null;
-              const id = String(row.id ?? "");
-              return { id, label: agreement ? `${agreement} — ${String(row.contractorName ?? "")}` : id };
-            }),
-          );
+          const awardOpts = rows.map((r) => {
+            const row = r as Record<string, unknown>;
+            const agreement = row.agreementNumber ? String(row.agreementNumber) : null;
+            const id = String(row.id ?? "");
+            return { id, label: agreement ? `${agreement} — ${String(row.contractorName ?? "")}` : id };
+          });
+          setAwards(awardOpts);
+          // Exactly one award: nothing to choose, preselect it.
+          if (awardOpts.length === 1) setForm((prev) => (prev.awardId ? prev : { ...prev, awardId: awardOpts[0].id }));
         }
         if (!cancelled && mRes.ok) {
           const body = (await mRes.json()) as { data?: unknown };
           const rows = Array.isArray(body.data) ? body.data : [];
-          setMbs(
-            rows
-              .map((r) => r as Record<string, unknown>)
-              .filter((row) => String(row.status ?? "") === "do_finalized")
-              .map((row) => ({ id: String(row.id ?? ""), label: String(row.mbNumber ?? row.id ?? "") })),
-          );
+          const mbOpts = rows
+            .map((r) => r as Record<string, unknown>)
+            .filter((row) => String(row.status ?? "") === "do_finalized")
+            .map((row) => ({ id: String(row.id ?? ""), label: String(row.mbNumber ?? row.id ?? "") }));
+          setMbs(mbOpts);
+          // Exactly one DO-finalized MB: nothing to choose, preselect it.
+          if (mbOpts.length === 1) setForm((prev) => (prev.mbId ? prev : { ...prev, mbId: mbOpts[0].id }));
         }
       } catch {
         /* leave selects null → fall back to guarded text inputs */
@@ -81,7 +87,7 @@ function NewBillForm() {
     return () => {
       cancelled = true;
     };
-  }, [workId]);
+  }, [chosenWorkId]);
 
   function set(field: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -103,6 +109,10 @@ function NewBillForm() {
     setError("");
     setMessage("");
 
+    if (!safeWorkId(form.workId)) {
+      setError("Select the work this bill is for.");
+      return;
+    }
     if (grossMinor === null || BigInt(grossMinor) <= 0n) {
       setError("Enter a valid gross amount in rupees (greater than zero, up to two decimals).");
       return;
@@ -144,10 +154,7 @@ function NewBillForm() {
       }
       setMessage("Bill created.");
       toast.success("Bill created.");
-      setTimeout(
-        () => router.push(form.workId.trim() ? `/works/billing/${form.workId.trim()}` : "/works/billing"),
-        600,
-      );
+      setTimeout(() => router.push(`/works/billing/${safeWorkId(form.workId)}`), 600);
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
     } finally {
@@ -155,7 +162,7 @@ function NewBillForm() {
     }
   }
 
-  const backHref = form.workId.trim() ? `/works/billing/${form.workId.trim()}` : "/works/billing";
+  const backHref = workId ? `/works/billing/${workId}` : "/works/billing";
 
   return (
     <>
@@ -183,8 +190,8 @@ function NewBillForm() {
         >
           <p style={{ fontSize: 12, color: "var(--muted)" }}>
             Fields marked * are required. The measurement book must be fully finalized
-            (DO&nbsp;finalized) before a bill can be raised against it. Open a work from the
-            Billing register to have the Work, Award and MB chosen for you.
+            (DO&nbsp;finalized) before a bill can be raised against it. Choose the work, then its
+            award and finalized MB.
           </p>
 
           <div
@@ -195,8 +202,13 @@ function NewBillForm() {
             }}
           >
             <div>
-              <label style={labelStyle} htmlFor="workId">Work ID (UUID) *</label>
-              <input id="workId" style={inputStyle} type="text" required value={form.workId} onChange={set("workId")} placeholder="UUID of the work" readOnly={!!workId} />
+              <label style={labelStyle} htmlFor="workId">Work *</label>
+              <WorkField
+                id="workId"
+                value={form.workId}
+                locked={!!workId}
+                onChange={(w) => setForm((prev) => ({ ...prev, workId: w, awardId: "", mbId: "" }))}
+              />
             </div>
             <div>
               <label style={labelStyle} htmlFor="awardId">Award *</label>
@@ -210,7 +222,7 @@ function NewBillForm() {
               ) : (
                 <>
                   <input id="awardId" style={inputStyle} type="text" required value={form.awardId} onChange={set("awardId")} placeholder="UUID of the award" />
-                  <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>Open this work from the Billing register to pick the award.</p>
+                  <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>{chosenWorkId ? "No awards were found for this work." : "Choose a work first; its awards will be listed here."}</p>
                 </>
               )}
             </div>

@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { getEstabFiles } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState, Term } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
@@ -23,6 +24,7 @@ const CLASSIFICATION_LABEL: Record<string, string> = {
 const MASKED_CLASSIFICATIONS = new Set(["secret", "top_secret"]);
 
 export default async function EstabFilesListPage() {
+  const tFallback = await getTranslations("employeeFallback");
   const { data: files, source } = await getEstabFiles();
   const errored = source === "error";
   const active = files.filter((f) => f.status === "active").length;
@@ -50,7 +52,7 @@ export default async function EstabFilesListPage() {
     classification: CLASSIFICATION_LABEL[f.classification] ?? f.classification.replace(/_/g, " "),
     classificationRaw: f.classification,
     department: f.department ?? "—",
-    createdBy: f.createdBy,
+    createdBy: f.createdBy.trim() || tFallback("unknownEmployee"),
     status: f.status.replace(/_/g, " "),
     statusRaw: f.status,
     // GAP-ESTAB-LIST-03: surface dueDate for overdue detection.

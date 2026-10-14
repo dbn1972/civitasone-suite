@@ -944,3 +944,28 @@ export const REPORTS_READER_ROLES = [
   "tenant_admin",
   "super_admin",
 ];
+
+/**
+ * GAP-ESTAB-DFA-02: roles permitted to approve, return and sign a Draft For
+ * Approval. Mirrors estab-service modules/dfa/routes.ts APPROVER_ROLES. The
+ * server additionally rejects the drafter approving/signing their own DFA
+ * (403 MAKER_CHECKER_VIOLATION); the UI uses `createdBy` + the session user id
+ * to hide the same buttons. Defence in depth: the server is the authority.
+ */
+export const ESTAB_DFA_APPROVER_ROLES = ["estab_admin", "super_admin", "estab_deputy_secretary"];
+
+/**
+ * GAP-ESTAB-DFA-02 / GAP-ESTAB-GUESTHOUSE-01: roles permitted to submit and
+ * dispatch a DFA and to check guests in/out. Mirrors estab-service DRAFTER_ROLES
+ * (dfa/routes.ts) and ESTAB_ROLES (facilities/routes.ts).
+ */
+export const ESTAB_DFA_DRAFTER_ROLES = ["estab_officer", "estab_admin", "super_admin"];
+
+/**
+ * GAP-KNOWLEDGE-POLICIES-DETAIL-02: roles permitted to approve, return, publish
+ * and withdraw a governed document. Mirrors knowledge-service
+ * modules/policies/routes.ts APPROVER_ROLES (the server 403s anyone else, and
+ * additionally enforces approver != author via assertApproverDistinct). hr_admin
+ * can READ acknowledgements but is NOT an approver there.
+ */
+export const KNOWLEDGE_POLICY_APPROVER_ROLES = ["knowledge_admin", "super_admin"];

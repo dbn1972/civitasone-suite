@@ -39,11 +39,11 @@ export default async function TDSReturnsPage({ searchParams }: { searchParams?: 
         actions={<FyFilter />}
       />
       <StatGrid>
-        <StatCard icon="📑" iconBg="#e7edfd" label="Total Deductions" value={counts.total} />
-        <StatCard icon="✂️" iconBg="#fffaeb" label="Deducted (not yet deposited)" value={counts.deducted} />
-        <StatCard icon="🏦" iconBg="#eff6ff" label="Deposited" value={counts.deposited} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Filed" value={counts.filed} />
-        <StatCard icon="📊" iconBg="#eff6ff" label="FY-Quarters" value={fyQuarterCount(deductions)} />
+        <StatCard icon="📑" tone="info" label="Total Deductions" value={counts.total} />
+        <StatCard icon="✂️" tone="warn" label="Deducted (not yet deposited)" value={counts.deducted} />
+        <StatCard icon="🏦" tone="info" label="Deposited" value={counts.deposited} />
+        <StatCard icon="✅" tone="good" label="Filed" value={counts.filed} />
+        <StatCard icon="📊" tone="info" label="FY-Quarters" value={fyQuarterCount(deductions)} />
       </StatGrid>
       {/* UX-012: the data-source badge now lives inside TDSReturnsTable,
           driven by the same useSeededResource call that produces its rows —

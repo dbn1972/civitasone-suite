@@ -1,4 +1,4 @@
-import { Button } from "../../../../_components/ds";
+import { Button, Field, Input } from "../../../../_components/ds";
 
 /**
  * Server-safe (no JS required) financial-year lookup — a plain GET form that
@@ -30,20 +30,15 @@ export function FyLookupForm({
 }) {
   return (
     <form method="GET" style={{ display: "flex", alignItems: "flex-end", gap: 10, marginBottom: 16 }}>
-      <div style={{ display: "grid", gap: 6 }}>
-        <label htmlFor="fy-lookup" style={{ fontSize: 13, fontWeight: 600 }}>
-          {financialYearLabel}
-        </label>
-        <input
-          id="fy-lookup"
+      <Field id="fy-lookup" label={financialYearLabel}>
+        <Input
           name="fy"
+          aria-describedby="fy-lookup-hint"
           defaultValue={defaultFy}
           pattern="\d{4}-\d{2}"
           placeholder="2025-26"
-          aria-describedby="fy-lookup-hint"
-          style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, width: 140 }}
         />
-      </div>
+      </Field>
       <Button type="submit" variant="ghost" style={{ minHeight: 44 }}>
         {checkRunLabel}
       </Button>

@@ -68,7 +68,21 @@ function toTasks(payload: unknown): TasksResult {
 
 type Pending = { task: WorkflowTask; decision: "approve" | "reject" };
 
-export function ProcurementApprovalsPanel() {
+/**
+ * GAP-PROCUREMENT-APPROVALS-02 / GAP-PROCUREMENT-ORDERS-DETAIL-01 (role gate):
+ * mirrors workflow-service tasks/commands.ts -- completing a task needs the
+ * task's `roleRef` (a task with no roleRef is unrestricted; super_admin may act
+ * on any). Anyone else gets 403 ROLE_NOT_AUTHORIZED, so the queue shows who the
+ * task is assigned to instead of an Approve/Reject pair that cannot work.
+ * (An active delegation also lets the server accept the action; delegated
+ * approvers act from the workflow inbox.)
+ */
+export function canActOnTask(task: { roleRef?: string | null }, viewerRoles: readonly string[]): boolean {
+  if (viewerRoles.includes("super_admin")) return true;
+  return !task.roleRef || viewerRoles.includes(task.roleRef);
+}
+
+export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: readonly string[] }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
@@ -201,7 +215,9 @@ export function ProcurementApprovalsPanel() {
     {
       key: "id",
       label: "Actions",
-      render: (row) => (
+      render: (row) => !canActOnTask(row._task, viewerRoles) ? (
+        <span style={{ color: "var(--mut)", fontSize: "0.8125rem" }}>Assigned to {row._task.roleRef}</span>
+      ) : (
         <>
           <Button
             type="button"

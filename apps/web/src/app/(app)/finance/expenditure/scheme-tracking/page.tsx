@@ -19,10 +19,10 @@ export default async function SchemeTrackingPage() {
         back="/finance"
       />
       <StatGrid>
-        <StatCard icon="🎯" iconBg="#e7edfd" label={t("statTotal")} value={failed ? null : stats.total} />
-        <StatCard icon="📈" iconBg="#ecfdf3" label={t("statActive")} value={failed ? null : stats.active} />
-        <StatCard icon="✅" iconBg="#fffaeb" label={t("statCompleted")} value={failed ? null : stats.completed} />
-        <StatCard icon="⏳" iconBg="#eff6ff" label={t("statOtherStatus")} value={failed ? null : stats.otherStatus} />
+        <StatCard icon="🎯" tone="info" label={t("statTotal")} value={failed ? null : stats.total} />
+        <StatCard icon="📈" tone="good" label={t("statActive")} value={failed ? null : stats.active} />
+        <StatCard icon="✅" tone="warn" label={t("statCompleted")} value={failed ? null : stats.completed} />
+        <StatCard icon="⏳" tone="info" label={t("statOtherStatus")} value={failed ? null : stats.otherStatus} />
       </StatGrid>
       {/* UX-012: the data-source badge now lives inside SchemeTable, driven
           by the same useSeededResource call that produces its rows — not a

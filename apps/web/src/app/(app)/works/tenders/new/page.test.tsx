@@ -2,8 +2,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
 const pushMock = vi.fn();
+let searchParamsMock = new URLSearchParams();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
+  useSearchParams: () => searchParamsMock,
 }));
 
 vi.mock("@/app/_components/ds/Toast", () => ({
@@ -123,5 +125,57 @@ describe("NewTenderPage — NEW-04 accessible error + UX-016 clerk-safe errors",
     expect(alert.textContent).toMatch(/This pre-tender was changed by someone else\. Refresh to see the latest version, then try again\./);
     expect(document.body.textContent).not.toMatch(/duplicate reference number/i);
     expect(document.body.textContent).not.toMatch(/\b409\b/);
+  });
+});
+
+describe("NewTenderPage — NEW-01 ?workId= prefill", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    pushMock.mockReset();
+    searchParamsMock = new URLSearchParams();
+  });
+
+  it("preselects the work from ?workId= so it can be submitted without picking", async () => {
+    const spy = mockFetch();
+    searchParamsMock = new URLSearchParams(`workId=${WORK_ID}`);
+    render(<NewTenderPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Create Pre-Tender" }));
+    await waitFor(() => expect(spy.mock.calls.some((c) => String(c[0]).endsWith("/tenders/pre-tender"))).toBe(true));
+    const call = spy.mock.calls.find((c) => String(c[0]).endsWith("/tenders/pre-tender"))!;
+    expect(JSON.parse((call[1] as RequestInit).body as string).workId).toBe(WORK_ID);
+  });
+
+  it("ignores a malformed ?workId= and still requires a pick", async () => {
+    const spy = mockFetch();
+    searchParamsMock = new URLSearchParams("workId=not-a-uuid");
+    render(<NewTenderPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Create Pre-Tender" }));
+    await waitFor(() => expect(screen.getByText("Select the work this tender belongs to.")).toBeInTheDocument());
+    expect(spy.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === "POST")).toBe(false);
+  });
+});
+
+describe("NewTenderPage — back link and bid validity bound (NEW-04 / NEW-05)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    pushMock.mockReset();
+    searchParamsMock = new URLSearchParams();
+  });
+
+  it("shows a visible back link to the tenders register", async () => {
+    mockFetch();
+    render(<NewTenderPage />);
+    const back = await screen.findByRole("link", { name: /Tenders/ });
+    expect(back).toHaveAttribute("href", "/works/tenders");
+  });
+
+  it("blocks a bid validity above the maximum and does not POST", async () => {
+    const spy = mockFetch();
+    render(<NewTenderPage />);
+    await pickWork();
+    fireEvent.change(screen.getByLabelText(/Bid validity/i), { target: { value: "999" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Create Pre-Tender" }).closest("form")!);
+    await waitFor(() => expect(screen.getByText(/between 1 and 365 days/i)).toBeInTheDocument());
+    expect(spy.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === "POST")).toBe(false);
   });
 });

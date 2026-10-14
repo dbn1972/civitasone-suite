@@ -47,6 +47,7 @@ async function getForm12BA(employeeId: string, fy: string): Promise<LoaderResult
 
 export default async function PerquisitePage({ searchParams }: { searchParams?: { employeeId?: string; fy?: string; edit?: string } }) {
   const t = await getTranslations("perquisite");
+  const tFallback = await getTranslations("employeeFallback");
 
   // GAP-PAYROLL-STATUTORY-PERQUISITE-02/04: GET form12ba is self-service-
   // scoped server-side (enforceEmployeeOwnership -- an "employee" caller can
@@ -153,7 +154,7 @@ export default async function PerquisitePage({ searchParams }: { searchParams?: 
             <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
               <div>
                 <div style={{ fontSize: 12, color: "var(--ink2)" }}>{t("employeeLabel")}</div>
-                <div style={{ fontSize: 15, fontWeight: 600 }}>{form12ba.employee.name || form12ba.employee.employeeId}</div>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>{form12ba.employee.name?.trim() || tFallback("unknownEmployee")}</div>
               </div>
               <div>
                 <div style={{ fontSize: 12, color: "var(--ink2)" }}>{t("panLabel")}</div>

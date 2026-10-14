@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, ErrorState } from "../../../_components/ds";
 import { getProcurementApprovals } from "../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { ProcurementApprovalsPanel } from "./ProcurementApprovalsPanel";
 
 type ApprovalRow = {
@@ -60,6 +61,15 @@ export default async function ApprovalsPage() {
         }
       />
 
+      {/* GAP-PROCUREMENT-APPROVALS-02: two sources feed this page and they are not
+          reconciled (no single source of truth has been chosen -- product
+          decision). Say so, so an approver never reads the register total as
+          the size of the actionable queue below. */}
+      <p style={{ fontSize: "0.8125rem", color: "var(--mut)", margin: "0 0 12px" }}>
+        The figures and table below come from the procurement approvals register. The workflow queue underneath lists
+        the tasks you can act on; the two are separate sources and their counts can differ.
+      </p>
+
       <StatGrid>
         {/* GAP-PROCUREMENT-APPROVALS-02: the "Action Required" card used to
             duplicate "Pending Approvals" verbatim. It is replaced below with
@@ -71,7 +81,7 @@ export default async function ApprovalsPage() {
         <StatCard icon="📋" iconBg="#ecfdf3" label="With a due date" value={errored ? "—" : approvals.filter((a) => a.dueAt).length} />
       </StatGrid>
 
-      <Card title="Pending approvals">
+      <Card title="Pending approvals (register)">
         {source === "error" ? (
           // L4 fix: see tenders/page.tsx for the same fix and rationale. Note
           // this page ALSO renders <ProcurementApprovalsPanel/> below, which
@@ -96,7 +106,7 @@ export default async function ApprovalsPage() {
         )}
       </Card>
 
-      <ProcurementApprovalsPanel />
+      <ProcurementApprovalsPanel viewerRoles={getSessionRoles()} />
     </>
   );
 }

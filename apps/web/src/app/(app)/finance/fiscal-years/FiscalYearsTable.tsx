@@ -178,14 +178,14 @@ export function FiscalYearsTable({
               </span>
             ) : null}
             {outgoing && unclosed.length > 0 ? (
-              <span role="note" style={{ display: "block", marginTop: 8, color: "var(--warn, #b45309)" }}>
+              <span role="note" style={{ display: "block", marginTop: 8, color: "var(--warn)" }}>
                 ⚠ Activation is blocked: {unclosed.length} period{unclosed.length === 1 ? "" : "s"} of {outgoing.code} not hard-closed:{" "}
                 {unclosed.map((p) => `${p.period} (${p.status === "soft_close" ? "soft-closed" : "open"})`).join(", ")}.{" "}
                 <a href="/finance/period-close">Review period close</a>
               </span>
             ) : null}
             {periodsUnavailable ? (
-              <span role="note" style={{ display: "block", marginTop: 8, color: "var(--warn, #b45309)" }}>
+              <span role="note" style={{ display: "block", marginTop: 8, color: "var(--warn)" }}>
                 ⚠ Period status couldn&apos;t be checked. <a href="/finance/period-close">Review period close</a> before switching.
               </span>
             ) : null}

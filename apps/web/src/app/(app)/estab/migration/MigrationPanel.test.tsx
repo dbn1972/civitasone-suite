@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@/test-utils/intl-render";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -103,5 +103,33 @@ describe("MigrationPanel", () => {
     const source = fs.readFileSync(path.join(dir, "MigrationPanel.tsx"), "utf8");
     expect(source).not.toContain("#4f46e5");
     expect(source).not.toMatch(/fetch\(['"]\/api\/proxy/);
+  });
+});
+
+describe("MigrationPanel - Open eFile link (SF-17b)", () => {
+  it("renders the localised Open eFile link for a migrated row", async () => {
+    vi.restoreAllMocks();
+    const row = { id: "m1", legacyFileNo: "L-1", subject: "Old file", dept: "ADMIN", pageCount: 3, scanRef: null, efileId: "f1", status: "migrated", createdAt: "2026-09-01T00:00:00.000Z" };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: [row] }), { status: 200 }));
+    render(<MigrationPanel />);
+    const link = await screen.findByRole("link", { name: "Open eFile" });
+    expect(link).toHaveAttribute("href", "/estab/files/f1");
+  });
+
+  it("renders the Hindi label under the hi locale (not a hardcoded literal)", async () => {
+    vi.restoreAllMocks();
+    const row = { id: "m2", legacyFileNo: "L-2", subject: "Old file", dept: "ADMIN", pageCount: 3, scanRef: null, efileId: "f2", status: "migrated", createdAt: "2026-09-01T00:00:00.000Z" };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: [row] }), { status: 200 }));
+    const { render: rtlRender } = await import("@testing-library/react");
+    const { NextIntlClientProvider } = await import("next-intl");
+    const hiMessages = (await import("@/messages/hi.json")).default;
+    rtlRender(
+      <NextIntlClientProvider locale="hi" messages={hiMessages}>
+        <MigrationPanel />
+      </NextIntlClientProvider>,
+    );
+    const link = await screen.findByRole("link", { name: hiMessages.estabMigrationPanel.openEfile });
+    expect(link).toHaveAttribute("href", "/estab/files/f2");
+    expect(screen.queryByRole("link", { name: "Open eFile" })).toBeNull();
   });
 });

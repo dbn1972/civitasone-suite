@@ -2,8 +2,8 @@
 
 import { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Button, Card } from "../../../../_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
+import { Button, Card, Field, Input } from "../../../../_components/ds";
+import { browserJson, UserFacingError } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
 
@@ -12,9 +12,12 @@ type CalcResult = { ctcMinor: number; grossMinor: number; employerCostMinor: num
 
 export function CtcCalculatorForm() {
   const t = useTranslations("ctcCalculatorForm");
+  const tv = useTranslations("hrFormErrors2");
   const [ctc, setCtc] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Validation state is tracked apart from request failure: only a rejected input marks the field invalid.
+  const [fieldInvalid, setFieldInvalid] = useState(false);
   const [result, setResult] = useState<CalcResult | null>(null);
 
   const ctcId = useId();
@@ -24,6 +27,7 @@ export function CtcCalculatorForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setFieldInvalid(false);
     setResult(null);
 
     // GAP-PAYROLL-CTC-05: strict string -> paise conversion (no float
@@ -32,6 +36,7 @@ export function CtcCalculatorForm() {
     const ctcMinor = minor === null ? NaN : Number(minor);
     if (minor === null || !Number.isSafeInteger(ctcMinor)) {
       setError(t("ctcRequiredError"));
+      setFieldInvalid(true);
       ctcRef.current?.focus();
       return;
     }
@@ -44,7 +49,7 @@ export function CtcCalculatorForm() {
       });
       setResult(res);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("calcFailedError"));
+      setError(err instanceof UserFacingError ? err.message : t("calcFailedError"));
     } finally {
       setBusy(false);
     }
@@ -52,13 +57,9 @@ export function CtcCalculatorForm() {
 
   return (
     <Card title={t("formTitle")}>
-      <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14 }}>
-        <div style={{ display: "grid", gap: 6, maxWidth: 320 }}>
-          <label htmlFor={ctcId} style={{ fontSize: 13, fontWeight: 600 }}>
-            {t("annualCtcLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-          </label>
-          <input
-            id={ctcId}
+      <form noValidate onSubmit={handleSubmit} style={{ display: "grid", gap: 14 }}>
+        <Field id={ctcId} label={t("annualCtcLabel")} required error={fieldInvalid ? tv("invalidValue") : undefined} style={{ display: "grid", gap: 6, maxWidth: 320 }}>
+          <Input
             ref={ctcRef}
             type="number"
             min="0"
@@ -66,12 +67,8 @@ export function CtcCalculatorForm() {
             value={ctc}
             onChange={(e) => setCtc(e.target.value)}
             placeholder={t("ctcPlaceholder")}
-            aria-required="true"
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? errId : undefined}
-            style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
           />
-        </div>
+        </Field>
 
         <div>
           <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>

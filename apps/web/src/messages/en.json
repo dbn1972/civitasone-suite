@@ -1,4 +1,27 @@
 {
+  "hrFormErrors2": {
+    "fieldRequired": "This field is required.",
+    "invalidValue": "Enter a valid value.",
+    "mobileInvalid": "Enter a valid mobile number.",
+    "emailInvalid": "Enter a valid email address.",
+    "empTypeCodeRequired": "Code is required.",
+    "empTypeCodeMax": "Code must be 24 characters or fewer.",
+    "empTypeNameMin": "Name must be at least 2 characters.",
+    "empTypeNameMax": "Name must be 120 characters or fewer.",
+    "empTypeDescriptionMax": "Description must be 500 characters or fewer.",
+    "empTypeProbationWhole": "Probation months must be a whole number.",
+    "empTypeProbationNegative": "Probation months cannot be negative.",
+    "empTypeContractWhole": "Maximum contract months must be a whole number.",
+    "empTypeContractPositive": "Maximum contract months must be at least 1.",
+    "structureNameRequired": "Enter a structure name.",
+    "structureNameMax": "Structure name must be 128 characters or fewer.",
+    "structureDescriptionMax": "Description must be 500 characters or fewer.",
+    "ddoCodeRequired": "Enter the DDO code.",
+    "ddoCodeMax": "DDO code must be 32 characters or fewer.",
+    "ddoCodeFormat": "Use letters, digits and / _ . - only, starting with a letter or digit.",
+    "ddoNameRequired": "Enter the DDO name.",
+    "ddoNameMax": "DDO name must be 200 characters or fewer."
+  },
   "themes": {
     "title": "Themes",
     "description": "Design tokens, templates and branding for tenant editions. Publishing tokens changes what every tenant screen shows; the branding lists are read-only.",
@@ -5589,7 +5612,8 @@
   "procurement": {
     "title": "Procurement",
     "poForm": {
-      "vendorBlacklisted": "This vendor is blacklisted and cannot be used on a purchase order. Choose a different vendor."
+      "vendorBlacklisted": "This vendor is blacklisted and cannot be used on a purchase order. Choose a different vendor.",
+      "created": "PO created as a draft. Raise it for approval from the PO page; the eOffice decision releases it for dispatch."
     },
     "gfr": {
       "band": {
@@ -9475,7 +9499,7 @@
     "noneMessage": "No corrections are waiting for a decision.",
     "checkerNote": "A correction must be approved or rejected by a payroll user other than the one who created it.",
     "summary": "from {from}: {oldValue} → {newValue}, arrears {arrears}",
-    "employeeLabel": "Employee {id}",
+    "employeeLabel": "Employee {name}",
     "approveBtn": "Approve",
     "rejectBtn": "Reject",
     "approveAriaLabel": "Approve {component} correction",
@@ -15058,5 +15082,11 @@
     "encashmentWhole": "Enter a whole number of days.",
     "encashmentNegative": "Encashment days cannot be negative.",
     "remarksMax1000": "Remarks must be 1000 characters or fewer."
+  },
+  "estabMigrationPanel": {
+    "openEfile": "Open eFile"
+  },
+  "employeeFallback": {
+    "unknownEmployee": "Unknown employee"
   }
 }

@@ -106,6 +106,27 @@ describe("POST /v1/admin/data-export", () => {
     expect(res.json().error?.code ?? res.json().code).toBe("PURPOSE_REQUIRED");
   });
 
+  it("returns 400 PURPOSE_REQUIRED for a payroll or hrms module export without a purpose (GAP-TENANT-ADMIN-DATA-EXPORT-02)", async () => {
+    for (const moduleFilter of ["payroll", "hrms"]) {
+      const res = await app.inject({
+        method: "POST", url: "/v1/admin/data-export",
+        headers: authHeader(["tenant_admin"]),
+        payload: { type: "module", moduleFilter, format: "csv" },
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error?.code ?? res.json().code).toBe("PURPOSE_REQUIRED");
+    }
+  });
+
+  it("accepts a payroll module export that states a purpose", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/admin/data-export",
+      headers: authHeader(["tenant_admin"]),
+      payload: { type: "module", moduleFilter: "payroll", format: "csv", purpose: "Statutory audit of FY25 salaries" },
+    });
+    expect(res.statusCode).toBe(202);
+  });
+
   it("returns 400 with missing format", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/admin/data-export",

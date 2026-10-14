@@ -1,29 +1,19 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
-import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { browserFetch } from "@/lib/api/browserClient";
 import { rupeesToMinorString, nonNegativeRupeesToMinorString } from "@/lib/money";
 import { formatMoney, formatIndianDate, todayIST } from "@/lib/formatters";
-import { Button, ConfirmDialog, maskLast4 } from "../../../../../_components/ds";
+import { Button, ConfirmDialog, maskLast4, Field, Input } from "../../../../../_components/ds";
 
 // Same rules payroll-service's createPensionerBody enforces server-side
 // (payroll/validators.ts) -- GAP-PAYROLL-PENSIONERS-NEW-02.
 const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 const BANK_ACCOUNT_REGEX = /^\d{9,18}$/;
-
-// Matches the shared design-system look used by sibling HR/payroll forms
-// (RequestAdvanceForm, TravelRequestForm, CreateFlexPlanForm, …) instead of
-// hardcoded Tailwind slate/indigo classes.
-const inputStyle: CSSProperties = {
-  width: "100%", padding: "10px 12px", borderRadius: 10,
-  border: "1px solid var(--line)", minHeight: 44, fontSize: 14,
-};
-const labelStyle: CSSProperties = { fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 };
 
 type FieldKey =
   | "ppoNo" | "fullName" | "dateOfBirth" | "basicPension" | "commutedPension" | "commutationDate"
@@ -43,10 +33,6 @@ type Payload = {
   pan?: string;
   taxRegime: "old" | "new";
 };
-
-function RequiredMark() {
-  return <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>;
-}
 
 export function CreatePensionerForm() {
   const t = useTranslations("createPensionerForm");
@@ -196,136 +182,96 @@ export function CreatePensionerForm() {
   return (
     <div className="card" style={{ maxWidth: 640 }}>
       <form onSubmit={handleSubmit} className="pad" style={{ display: "grid", gap: 16 }} noValidate>
-        <div>
-          <label htmlFor={ids.ppoNo} style={labelStyle}>
-            {t("ppoNoLabel")} <RequiredMark />
-          </label>
-          <input
-            id={ids.ppoNo}
+        <Field id={ids.ppoNo} label={t("ppoNoLabel")} required>
+          <Input
             ref={(el) => { fieldRefs.current.ppoNo = el; }}
             type="text"
             value={ppoNo}
             onChange={(e) => setPpoNo(e.target.value)}
             placeholder={t("ppoNoPlaceholder")}
-            style={inputStyle}
-            required
-            aria-required="true"
             {...fieldA11y("ppoNo")}
           />
-        </div>
+        </Field>
 
-        <div>
-          <label htmlFor={ids.fullName} style={labelStyle}>
-            {t("fullNameLabel")} <RequiredMark />
-          </label>
-          <input
-            id={ids.fullName}
+        <Field id={ids.fullName} label={t("fullNameLabel")} required>
+          <Input
             ref={(el) => { fieldRefs.current.fullName = el; }}
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             placeholder={t("fullNamePlaceholder")}
-            style={inputStyle}
-            required
-            aria-required="true"
             {...fieldA11y("fullName")}
           />
-        </div>
+        </Field>
 
-        <div>
-          <label htmlFor={ids.dateOfBirth} style={labelStyle}>
-            {t("dobLabel")} <RequiredMark />
-          </label>
-          <input
-            id={ids.dateOfBirth}
+        <Field id={ids.dateOfBirth} label={t("dobLabel")} required>
+          <Input
             ref={(el) => { fieldRefs.current.dateOfBirth = el; }}
             type="date"
             value={dateOfBirth}
             max={todayIST()}
             onChange={(e) => setDateOfBirth(e.target.value)}
-            style={inputStyle}
-            required
-            aria-required="true"
             {...fieldA11y("dateOfBirth")}
           />
-        </div>
+        </Field>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
-          <div>
-            <label htmlFor={ids.basicPension} style={labelStyle}>
-              {t("basicPensionLabel")} <RequiredMark />
-            </label>
-            <input
-              id={ids.basicPension}
+          <Field id={ids.basicPension} label={t("basicPensionLabel")} required>
+            <Input
               ref={(el) => { fieldRefs.current.basicPension = el; }}
               type="text"
               inputMode="decimal"
               value={basicPension}
               onChange={(e) => setBasicPension(e.target.value)}
               placeholder={t("basicPensionPlaceholder")}
-              style={inputStyle}
-              required
-              aria-required="true"
               {...fieldA11y("basicPension")}
             />
-          </div>
+          </Field>
 
-          <div>
-            <label htmlFor={ids.commutedPension} style={labelStyle}>{t("commutedPensionLabel")}</label>
-            <input
-              id={ids.commutedPension}
+          <Field id={ids.commutedPension} label={t("commutedPensionLabel")}>
+            <Input
               ref={(el) => { fieldRefs.current.commutedPension = el; }}
               type="text"
               inputMode="decimal"
               value={commutedPension}
               onChange={(e) => setCommutedPension(e.target.value)}
               placeholder={t("commutedPensionPlaceholder")}
-              style={inputStyle}
               {...fieldA11y("commutedPension")}
             />
-          </div>
+          </Field>
 
-          <div>
-            <label htmlFor={ids.commutationDate} style={labelStyle}>{t("commutationDateLabel")}</label>
-            <input
-              id={ids.commutationDate}
+          <Field id={ids.commutationDate} label={t("commutationDateLabel")}>
+            <Input
               ref={(el) => { fieldRefs.current.commutationDate = el; }}
               type="date"
               value={commutationDate}
               min={dateOfBirth || undefined}
               max={todayIST()}
               onChange={(e) => setCommutationDate(e.target.value)}
-              style={inputStyle}
               {...fieldA11y("commutationDate")}
             />
-          </div>
+          </Field>
 
-          <div>
-            <label htmlFor={ids.medicalAllowance} style={labelStyle}>{t("medicalAllowanceLabel")}</label>
-            <input
-              id={ids.medicalAllowance}
+          <Field id={ids.medicalAllowance} label={t("medicalAllowanceLabel")}>
+            <Input
               ref={(el) => { fieldRefs.current.medicalAllowance = el; }}
               type="text"
               inputMode="decimal"
               value={medicalAllowance}
               onChange={(e) => setMedicalAllowance(e.target.value)}
               placeholder={t("medicalAllowancePlaceholder")}
-              style={inputStyle}
               {...fieldA11y("medicalAllowance")}
             />
-          </div>
+          </Field>
 
-          <div>
-            <label htmlFor={ids.ddoCode} style={labelStyle}>{t("ddoCodeLabel")}</label>
-            <input
-              id={ids.ddoCode}
+          <Field id={ids.ddoCode} label={t("ddoCodeLabel")}>
+            <Input
               type="text"
               value={ddoCode}
               onChange={(e) => setDdoCode(e.target.value)}
               placeholder={t("ddoCodePlaceholder")}
-              style={inputStyle}
             />
-          </div>
+          </Field>
         </div>
 
         {/* GAP-PAYROLL-PENSIONERS-NEW-02: sensitive bank/PAN group, with a
@@ -334,10 +280,8 @@ export function CreatePensionerForm() {
           <legend style={{ fontSize: 13, fontWeight: 600, padding: "0 4px" }}>{t("bankPanLegend")}</legend>
           <p id={ids.dpdpNotice} style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>{t("dpdpNotice")}</p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
-            <div>
-              <label htmlFor={ids.bankAccountNo} style={labelStyle}>{t("bankAccountLabel")}</label>
-              <input
-                id={ids.bankAccountNo}
+            <Field id={ids.bankAccountNo} label={t("bankAccountLabel")}>
+              <Input
                 ref={(el) => { fieldRefs.current.bankAccountNo = el; }}
                 type="text"
                 inputMode="numeric"
@@ -346,15 +290,12 @@ export function CreatePensionerForm() {
                 value={bankAccountNo}
                 onChange={(e) => setBankAccountNo(e.target.value)}
                 placeholder={t("bankAccountPlaceholder")}
-                style={inputStyle}
                 {...fieldA11y("bankAccountNo")}
               />
-            </div>
+            </Field>
 
-            <div>
-              <label htmlFor={ids.bankIfsc} style={labelStyle}>{t("ifscLabel")}</label>
-              <input
-                id={ids.bankIfsc}
+            <Field id={ids.bankIfsc} label={t("ifscLabel")}>
+              <Input
                 ref={(el) => { fieldRefs.current.bankIfsc = el; }}
                 type="text"
                 autoComplete="off"
@@ -362,15 +303,12 @@ export function CreatePensionerForm() {
                 value={bankIfsc}
                 onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
                 placeholder={t("ifscPlaceholder")}
-                style={{ ...inputStyle, textTransform: "uppercase" }}
                 {...fieldA11y("bankIfsc")}
               />
-            </div>
+            </Field>
 
-            <div>
-              <label htmlFor={ids.pan} style={labelStyle}>{t("panLabel")}</label>
-              <input
-                id={ids.pan}
+            <Field id={ids.pan} label={t("panLabel")}>
+              <Input
                 ref={(el) => { fieldRefs.current.pan = el; }}
                 type="text"
                 autoComplete="off"
@@ -378,10 +316,9 @@ export function CreatePensionerForm() {
                 onChange={(e) => setPan(e.target.value.toUpperCase())}
                 placeholder={t("panPlaceholder")}
                 maxLength={10}
-                style={{ ...inputStyle, textTransform: "uppercase" }}
                 {...fieldA11y("pan")}
               />
-            </div>
+            </Field>
           </div>
         </fieldset>
 

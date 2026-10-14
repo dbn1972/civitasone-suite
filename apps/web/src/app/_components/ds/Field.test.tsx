@@ -81,4 +81,37 @@ describe("Field", () => {
     expect(input).toHaveAttribute("id", "explicit-id");
     expect(screen.getByText("Code")).toHaveAttribute("for", "explicit-id");
   });
+
+  it("always announces the inline error (role=alert, WCAG 4.1.3), with or without the deprecated announce prop", () => {
+    render(
+      <Field label="Code" error="Required.">
+        <Input />
+      </Field>,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Required.");
+  });
+
+  it("announces the inline error to assistive tech when announce is set (role=alert)", () => {
+    render(
+      <Field label="Code" error="Required." announce>
+        <Input />
+      </Field>,
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent("Required.");
+  });
+
+  it("keeps a caller-supplied hint association alongside the error (merged aria-describedby)", () => {
+    const { rerender } = render(
+      <Field label="Code">
+        <Input aria-describedby="code-hint" />
+      </Field>,
+    );
+    expect(screen.getByLabelText("Code")).toHaveAttribute("aria-describedby", "code-hint");
+    rerender(
+      <Field id="code" label="Code" error="Required.">
+        <Input aria-describedby="code-hint" />
+      </Field>,
+    );
+    expect(screen.getByLabelText("Code")).toHaveAttribute("aria-describedby", "code-hint code-error");
+  });
 });

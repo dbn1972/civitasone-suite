@@ -8,7 +8,7 @@ import { measurementBooks, measurements, bills, billItems, accountCompilations }
 import {
   calculateNetPayable, billedQuantityExceedsBoq, canCreateBill, billAmountExceedsAward,
   isTerminalBillStatus, awardBelongsToWork, mbBelongsToBill, billAmountExceedsMeasuredValue,
-  computeMeasuredValueMinor, boqItemBelongsToMbWork,
+  computeMeasuredValueMinor, boqItemBelongsToMbWork, isSelfFinalization,
 } from "./domain.js";
 import { boqItems } from "../boq/schema.js";
 import { calculateBoqAmount } from "../boq/domain.js";
@@ -40,6 +40,17 @@ export function registerBillingConsumers(q: Queue): void {
         throw new NonRetryableError("AWARD_WORK_MISMATCH: cited award does not belong to this work");
       }
 
+      // GAP-WORKS-BILLING-NEW-MB-03: MB number unique per work, re-checked in
+      // the same transaction as the insert (the route pre-check can race).
+      const dup = await tx.select({ id: measurementBooks.id }).from(measurementBooks)
+        .where(and(
+          eq(measurementBooks.tenantId, msg.tenantId),
+          eq(measurementBooks.workId, workId),
+          eq(measurementBooks.mbNumber, (p.mbNumber as string).trim()),
+        ))
+        .limit(1);
+      if (dup.length > 0) throw new NonRetryableError("DUPLICATE_MB_NUMBER: MB number already used for this work");
+
       await tx.insert(measurementBooks).values({
         id: p.id as string,
         tenantId: msg.tenantId,
@@ -70,6 +81,16 @@ export function registerBillingConsumers(q: Queue): void {
       if (!ok) return;
 
       const { id, nextStatus } = msg.payload as { id: string; nextStatus: string };
+      // GAP-WORKS-BILLING-WORKID-03: maker-checker re-enforced in the consumer
+      // (the route pre-check can race / be bypassed by a replayed command).
+      const mbRows = await tx.select().from(measurementBooks)
+        .where(and(eq(measurementBooks.tenantId, msg.tenantId), eq(measurementBooks.id, id)))
+        .limit(1);
+      const mbRow = mbRows[0];
+      if (!mbRow) throw new NonRetryableError("MB_NOT_FOUND: measurement book not found for finalization");
+      if (isSelfFinalization(msg.actorId, { createdBy: mbRow.createdBy, issuedBy: mbRow.issuedBy })) {
+        throw new NonRetryableError("SELF_APPROVAL_FORBIDDEN: The issuer of a measurement book cannot finalize it (maker-checker rule)");
+      }
       await tx.update(measurementBooks)
         .set({ status: nextStatus })
         .where(eq(measurementBooks.id, id));
@@ -241,6 +262,9 @@ export function registerBillingConsumers(q: Queue): void {
         .limit(1);
       const bill = billRows[0];
       if (!bill) throw new NonRetryableError("BILL_NOT_FOUND: bill record not found for finalization");
+      if (isSelfFinalization(msg.actorId, { createdBy: bill.createdBy })) {
+        throw new NonRetryableError("SELF_APPROVAL_FORBIDDEN: The creator of a bill cannot finalize it (maker-checker rule)");
+      }
 
       await tx.update(bills)
         .set({ status: nextStatus })

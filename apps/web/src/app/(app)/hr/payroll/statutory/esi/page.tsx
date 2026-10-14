@@ -25,6 +25,7 @@ type EsiRow = {
 
 export default async function EsiStatutoryPage({ searchParams }: { searchParams?: { period?: string } }) {
   const t = await getTranslations("esi");
+  const tFallback = await getTranslations("employeeFallback");
   // GAP-PAYROLL-STATUTORY-ESI-01: hr/layout.tsx admits employee/manager to every /hr/payroll/*
   // URL, but this page's API (ESI ledger) is READER_ROLES-only in
   // payroll-service (no employee/manager). Gate before fetching so those
@@ -44,7 +45,7 @@ export default async function EsiStatutoryPage({ searchParams }: { searchParams?
   const errored = source === "error";
   const periods = ledger.summary?.periods ?? [];
   const selectedPeriod = ledger.summary?.period ?? undefined;
-  const periodRows = ledger.rows.map((r) => ({ ...r, employee: employeeLabel(r.employeeId, r.employeeName) }));
+  const periodRows = ledger.rows.map((r) => ({ ...r, employee: employeeLabel(r.employeeName, null, tFallback("unknownEmployee")) }));
   const recordCount = ledger.summary?.recordCount ?? 0;
   const totalEmpContribMinor = ledger.summary?.empContribMinor ?? "0";
   const totalErContribMinor = ledger.summary?.erContribMinor ?? "0";

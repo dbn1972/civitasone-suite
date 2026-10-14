@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 import { Button, PageHeader } from "@/app/_components/ds";
 import { EmployeePicker } from "@/app/_components/EmployeePicker";
@@ -20,6 +21,7 @@ const inputStyle = {
 type FieldKey = "roomId" | "guestName" | "guestRef" | "checkIn" | "checkOut";
 
 export default function NewGuesthouseBookingPage() {
+  const tFallback = useTranslations("employeeFallback");
   const router = useRouter();
   const [roomId, setRoomId] = useState("");
   // GAP-ESTAB-GUESTHOUSE-NEW-01: rooms directory for picker (no more raw UUID).
@@ -301,7 +303,7 @@ export default function NewGuesthouseBookingPage() {
                   <option value="">External guest (no employee link)</option>
                   {staff.map((s) => (
                     <option key={s.employeeId} value={s.employeeId}>
-                      {s.employeeName ?? s.employeeId.slice(0, 8)} · {s.division}
+                      {s.employeeName ?? tFallback("unknownEmployee")} · {s.division}
                     </option>
                   ))}
                 </select>

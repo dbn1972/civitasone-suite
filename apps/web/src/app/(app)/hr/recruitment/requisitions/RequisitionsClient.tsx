@@ -4,7 +4,7 @@ import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Card, Button, ConfirmDialog, useConfirmAction, ErrorState } from "../../../../_components/ds";
+import { Card, Button, ConfirmDialog, useConfirmAction, ErrorState, Field, Input, Select, Textarea } from "../../../../_components/ds";
 import { StatusPill } from "../../../../_components/ds/StatusPill";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
@@ -21,8 +21,6 @@ type Named = { id: string; name: string };
 type LoadState = "loading" | "ready" | "error";
 
 const RELOAD_AFTER_WRITE_MS = 1200;
-const fieldStyle: React.CSSProperties = { width: "100%", boxSizing: "border-box", padding: "10px 12px", fontSize: 14, border: "1.5px solid var(--line)", borderRadius: "var(--r-sm)", background: "var(--panel)", color: "var(--ink)", minHeight: 44 };
-const labelStyle: React.CSSProperties = { display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink2)", marginBottom: 4 };
 
 async function fetchNamed(url: string): Promise<Named[] | null> {
   try {
@@ -160,36 +158,47 @@ export function RequisitionsClient() {
     <div style={{ display: "grid", gap: 16 }}>
       <Card title={t("newTitle")}>
         <form onSubmit={create} noValidate style={{ display: "grid", gap: 12, maxWidth: 640, padding: "16px 20px" }} aria-label={t("newTitle")}>
-          <div>
-            <label htmlFor={`${uid}-title`} style={labelStyle}>{t("fieldTitle")}</label>
-            <input id={`${uid}-title`} style={fieldStyle} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor={`${uid}-dept`} style={labelStyle}>{t("fieldDepartment")}</label>
-            <select id={`${uid}-dept`} style={fieldStyle} value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+          <Field id={`${uid}-title`} label={t("fieldTitle")}>
+            <Input value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} />
+          </Field>
+          <Field id={`${uid}-dept`} label={t("fieldDepartment")}>
+            <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
               <option value="">{t("selectDepartment")}</option>
               {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label htmlFor={`${uid}-desig`} style={labelStyle}>{t("fieldDesignation")}</label>
-            <select id={`${uid}-desig`} style={fieldStyle} value={designationId} onChange={(e) => setDesignationId(e.target.value)}>
+            </Select>
+          </Field>
+          <Field id={`${uid}-desig`} label={t("fieldDesignation")}>
+            <Select
+              value={designationId}
+              onChange={(e) => setDesignationId(e.target.value)}
+            >
               <option value="">{t("selectDesignation")}</option>
               {designations.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          </div>
-          <div>
-            <label htmlFor={`${uid}-vac`} style={labelStyle}>{t("fieldVacancies")}</label>
-            <input id={`${uid}-vac`} type="number" min={1} step={1} style={fieldStyle} value={vacancies} onChange={(e) => setVacancies(e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor={`${uid}-qual`} style={labelStyle}>{t("fieldQualification")}</label>
-            <input id={`${uid}-qual`} style={fieldStyle} value={qualification} maxLength={1000} onChange={(e) => setQualification(e.target.value)} />
-          </div>
-          <div>
-            <label htmlFor={`${uid}-reason`} style={labelStyle}>{t("fieldReason")}</label>
-            <textarea id={`${uid}-reason`} style={{ ...fieldStyle, minHeight: 80 }} value={reason} maxLength={4000} onChange={(e) => setReason(e.target.value)} />
-          </div>
+            </Select>
+          </Field>
+          <Field id={`${uid}-vac`} label={t("fieldVacancies")}>
+            <Input
+              type="number"
+              min={1}
+              step={1}
+              value={vacancies}
+              onChange={(e) => setVacancies(e.target.value)}
+            />
+          </Field>
+          <Field id={`${uid}-qual`} label={t("fieldQualification")}>
+            <Input
+              value={qualification}
+              maxLength={1000}
+              onChange={(e) => setQualification(e.target.value)}
+            />
+          </Field>
+          <Field id={`${uid}-reason`} label={t("fieldReason")}>
+            <Textarea
+              value={reason}
+              maxLength={4000}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </Field>
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
             <Button type="submit" variant="primary" className="btn-tall" disabled={createState === "saving"}>{createState === "saving" ? t("creating") : t("create")}</Button>
             {createMessage && <span role={createState === "error" ? "alert" : "status"} style={{ fontSize: 13, color: createState === "error" ? "var(--bad)" : "var(--mut)" }}>{createMessage}</span>}

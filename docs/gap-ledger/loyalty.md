@@ -70,7 +70,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-ACCRUALS-01  ·  HIGH  ·  confirmed  ·  theme WIRING (was MONEY)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 PQ-D #2036: still open - loyalty-service exposes accruals only per enrolment (GET /enrolments/:id/accruals); page honestly shows per-member points position; NEEDS OWNER DECISION: tenant-wide accruals endpoint or per-member drill-down route)
 - **W0 note:** partly fixed by #1924 — points/lifetime now always visible via a zod-typed loader and the drill-down promise is removed; page still lists per-member enrolment positions, not points transactions (no tenant-wide accruals endpoint).
 - **First-pass claim:** Accruals page shows no accruals: it lists enrolments (loyalty/_data.ts:90) and points/balance is the LAST option of the meta chain, after code/currency/updatedAt/createdAt (loyalty/_data.ts:61-67), so any row with a timestamp never shows points or balance. The "accrual/balance drill-down" (accruals/page.tsx:16) has no drill-down route.
 - **Verified evidence:** apps/web/src/app/(app)/loyalty/_data.ts:91 getLoyaltyAccruals = moduleLoader('/api/v1/loyalty/enrolments') (same as members, line 90 in the read; file lines 88-92). mapRows meta chain (61-67) is code ?? currency ?? updatedAt ?? createdAt ?? points ?? balance, so any row with a string timestamp never surfaces points/balance. accruals/page.tsx:16 describes 'accrual/balance drill-down' but ls shows only loyalty/accruals/page.tsx; no drill-down route. Points are not money, so the paise/formatINR theme does not apply; loyalty-service is absent so real field names cannot be verified.

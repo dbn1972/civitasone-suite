@@ -227,3 +227,58 @@ export function readBooleanValue(raw: unknown, field: PolicyField): boolean {
 export function encodeBooleanValue(namespace: string, next: boolean): unknown {
   return namespace === APPROVAL_NS ? { autoApprove: next } : next;
 }
+
+export interface PresetDiffRow {
+  key: string;
+  label: string;
+  from: string;
+  to: string;
+  /** DPDP-sensitive: retention or erasure SLA (shown first and flagged). */
+  sensitive: boolean;
+}
+
+function displayValue(field: PolicyField | undefined, raw: unknown): string {
+  if (field?.kind === "boolean" || (raw && typeof raw === "object" && "autoApprove" in (raw as object))) {
+    const on = field ? readBooleanValue(raw, field) : Boolean((raw as { autoApprove?: unknown }).autoApprove);
+    return on ? "On" : "Off";
+  }
+  if (typeof raw === "boolean") return raw ? "On" : "Off";
+  if (typeof raw === "number") return field?.unit ? `${raw} ${field.unit}` : String(raw);
+  return raw === undefined || raw === null ? "not set" : String(raw);
+}
+
+/**
+ * GAP-VISITOR-ADMIN-01: the rows a preset would CHANGE, comparing the preset's
+ * values with the tenant's current config (falling back to the field default
+ * when no row exists, since that is what the policy engine is using today).
+ * Rows whose value is unchanged are omitted; retention / erasure changes sort
+ * first so the DPDP-relevant ones cannot be missed.
+ */
+export function diffPreset(
+  current: ReadonlyArray<{ namespace: string; configKey: string; value: unknown; active?: boolean }>,
+  preset: ReadonlyArray<{ namespace: string; configKey: string; value: unknown; label: string }>,
+): PresetDiffRow[] {
+  const fields = new Map<string, PolicyField>();
+  for (const g of POLICY_GROUPS) for (const f of g.fields) fields.set(`${f.namespace}::${f.configKey}`, f);
+  const cur = new Map<string, unknown>();
+  for (const e of current) if (e.active !== false) cur.set(`${e.namespace}::${e.configKey}`, e.value);
+
+  const rows: PresetDiffRow[] = [];
+  for (const e of preset) {
+    const key = `${e.namespace}::${e.configKey}`;
+    const field = fields.get(key);
+    const hasCurrent = cur.has(key);
+    const currentRaw = hasCurrent ? cur.get(key) : field ? (field.namespace === APPROVAL_NS ? { autoApprove: field.default } : field.default) : undefined;
+    const from = displayValue(field, currentRaw);
+    const to = displayValue(field, e.value);
+    if (from === to) continue;
+    rows.push({
+      key,
+      label: field?.label ?? e.label,
+      from,
+      to,
+      sensitive: e.configKey === "retention.pii_days" || e.configKey === "retention.erasure_sla_hours",
+    });
+  }
+  return rows.sort((a, b) => Number(b.sensitive) - Number(a.sensitive));
+}

@@ -36,7 +36,7 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog, EntityPicker } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog, EntityPicker, Field, Input, Select } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
@@ -53,6 +53,7 @@ type InvalidField = "employeeId" | "orderNo" | "effectiveDate" | "oldBasic" | "n
  */
 export function CreateSalaryRevisionForm({ secondApprover = true }: { secondApprover?: boolean } = {}) {
   const t = useTranslations("createSalaryRevisionForm");
+  const tv = useTranslations("hrFormErrors2");
   const router = useRouter();
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [effectiveDate, setEffectiveDate] = useState("");
@@ -232,14 +233,11 @@ export function CreateSalaryRevisionForm({ secondApprover = true }: { secondAppr
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
+    <form noValidate onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
       <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={empPickerId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("employeeIdLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
+            <Field id={empPickerId} label={t("employeeIdLabel")} required>
               {/* GAP-PAYROLL-SALARY-REVISIONS-03: employee_id used to be a
                   bare free-text input -- no validation beyond non-empty, and
                   the backend requires a real UUID anyway. EntityPicker (and
@@ -260,122 +258,73 @@ export function CreateSalaryRevisionForm({ secondApprover = true }: { secondAppr
                   announces the error; only the per-field red-border/
                   aria-invalid treatment the other fields get is unavailable
                   here until EntityPicker grows that. */}
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={dateId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("effectiveDateLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={dateId}
+            </Field>
+            <Field id={dateId} label={t("effectiveDateLabel")} required error={dateInvalid ? tv("invalidValue") : undefined}>
+              <Input
                 ref={dateRef}
                 type="date"
                 value={effectiveDate}
                 onChange={(e) => setEffectiveDate(e.target.value)}
-                aria-required="true"
-                aria-invalid={dateInvalid || undefined}
-                aria-describedby={dateInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={typeId} style={{ fontSize: 13, fontWeight: 600 }}>{t("revisionTypeLabel")}</label>
-              <select
-                id={typeId}
+            </Field>
+            <Field id={typeId} label={t("revisionTypeLabel")}>
+              <Select
                 value={revisionType}
                 onChange={(e) => setRevisionType(e.target.value as RevisionType)}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "#fff" }}
               >
                 {REVISION_TYPES.map((v) => (
                   <option key={v} value={v}>{REVISION_TYPE_LABELS[v]}</option>
                 ))}
-              </select>
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={oldBasicId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("oldBasicLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={oldBasicId}
+              </Select>
+            </Field>
+            <Field id={oldBasicId} label={t("oldBasicLabel")} required error={oldBasicInvalid ? tv("invalidValue") : undefined}>
+              <Input
                 ref={oldBasicRef}
                 type="number"
                 min="0"
                 step="0.01"
                 value={oldBasic}
                 onChange={(e) => setOldBasic(e.target.value)}
-                aria-required="true"
-                aria-invalid={oldBasicInvalid || undefined}
-                aria-describedby={oldBasicInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={newBasicId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("newBasicLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={newBasicId}
+            </Field>
+            <Field id={newBasicId} label={t("newBasicLabel")} required error={newBasicInvalid ? tv("invalidValue") : undefined}>
+              <Input
                 ref={newBasicRef}
                 type="number"
                 min="0"
                 step="0.01"
                 value={newBasic}
                 onChange={(e) => setNewBasic(e.target.value)}
-                aria-required="true"
-                aria-invalid={newBasicInvalid || undefined}
-                aria-describedby={newBasicInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={oldGrossId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("oldGrossLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={oldGrossId}
+            </Field>
+            <Field id={oldGrossId} label={t("oldGrossLabel")} required error={oldGrossInvalid ? tv("invalidValue") : undefined}>
+              <Input
                 ref={oldGrossRef}
                 type="number"
                 min="0"
                 step="0.01"
                 value={oldGross}
                 onChange={(e) => setOldGross(e.target.value)}
-                aria-required="true"
-                aria-invalid={oldGrossInvalid || undefined}
-                aria-describedby={oldGrossInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={newGrossId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("newGrossLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={newGrossId}
+            </Field>
+            <Field id={newGrossId} label={t("newGrossLabel")} required error={newGrossInvalid ? tv("invalidValue") : undefined}>
+              <Input
                 ref={newGrossRef}
                 type="number"
                 min="0"
                 step="0.01"
                 value={newGross}
                 onChange={(e) => setNewGross(e.target.value)}
-                aria-required="true"
-                aria-invalid={newGrossInvalid || undefined}
-                aria-describedby={newGrossInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={orderId} style={{ fontSize: 13, fontWeight: 600 }}>{t("orderNoLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span></label>
-              <input
-                id={orderId}
+            </Field>
+            <Field id={orderId} label={t("orderNoLabel")} required error={orderInvalid ? tv("fieldRequired") : undefined}>
+              <Input
                 ref={orderRef}
-                aria-required="true"
-                aria-invalid={orderInvalid || undefined}
-                aria-describedby={orderInvalid ? errId : undefined}
                 value={orderNo}
                 onChange={(e) => setOrderNo(e.target.value)}
                 maxLength={64}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-            </div>
+            </Field>
           </div>
 
           <div>

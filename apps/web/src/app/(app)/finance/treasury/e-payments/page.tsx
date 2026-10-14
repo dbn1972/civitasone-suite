@@ -20,11 +20,11 @@ export default async function EPaymentsPage() {
         actions={<Link href="/finance/payments" className="btn ghost">Open Payments register</Link>}
       />
       <StatGrid>
-        <StatCard icon="💳" iconBg="#e7edfd" label="Total Orders" value={orders.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Released" value={released} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={pending} />
+        <StatCard icon="💳" tone="info" label="Total Orders" value={orders.length} />
+        <StatCard icon="✅" tone="good" label="Released" value={released} />
+        <StatCard icon="⏳" tone="warn" label="Pending" value={pending} />
         {/* PaymentSummary has no "bank" field (referenceId/beneficiary/amountDisplay/status only) — beneficiary is the closest real field. */}
-        <StatCard icon="🏦" iconBg="#eff6ff" label="Beneficiaries" value={new Set(orders.map((o) => o.beneficiary)).size} />
+        <StatCard icon="🏦" tone="info" label="Beneficiaries" value={new Set(orders.map((o) => o.beneficiary)).size} />
       </StatGrid>
       {/* UX-012: the data-source badge now lives inside EPaymentsTable,
           driven by the same useSeededResource call that produces its rows —

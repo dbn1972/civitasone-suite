@@ -64,4 +64,21 @@ describe("CtcCalculatorForm", () => {
     });
     expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
+
+  it("a request failure does not mark the CTC field invalid", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
+    renderForm();
+    const input = screen.getByLabelText(/Annual CTC/);
+    fireEvent.change(input, { target: { value: "1200000" } });
+    fireEvent.click(screen.getByText("Calculate Breakup"));
+    await screen.findAllByRole("alert");
+    expect(input).not.toHaveAttribute("aria-invalid");
+    expect(screen.queryByText("Enter a valid value.")).not.toBeInTheDocument();
+  });
+
+  it("a rejected amount marks the CTC field invalid", () => {
+    renderForm();
+    fireEvent.click(screen.getByText("Calculate Breakup"));
+    expect(screen.getByLabelText(/Annual CTC/)).toHaveAttribute("aria-invalid", "true");
+  });
 });

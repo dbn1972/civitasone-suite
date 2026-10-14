@@ -1,12 +1,13 @@
 "use client";
 
 import { UserFacingError } from "@/lib/userFacingError";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PROPOSAL_WRITE_ROLES } from "@/lib/auth/workRoles";
 import { formatMoney, formatShortId } from "@/lib/formatters";
-import { ConfirmDialog, useConfirmAction, Button } from "@/app/_components/ds";
+import { ConfirmDialog, useConfirmAction, Button, EntityPicker } from "@/app/_components/ds";
+import { searchDivisions, resolveDivisions } from "@/lib/entityAdapters/division";
 import { useFormError } from "@/lib/useFormError";
 
 
@@ -226,7 +227,10 @@ function SplitProposalForm({
       <ConfirmDialog
         open={open}
         title="Split this proposal?"
-        description="This requests a new permanent child work record with the description you entered. No amount is apportioned here — it cannot be undone."
+        description={
+          `Parent work: ${parentLabel}\nNew child description: ${description}\n\n` +
+          "This requests a new permanent child work record with the description above. No amount is apportioned here — it cannot be undone."
+        }
         confirmLabel="Confirm Split"
         danger
         busy={busy}
@@ -403,6 +407,24 @@ function MapOfficeForm({
 }) {
   const { toast } = useToast();
   const [divisionId, setDivisionId]     = useState("");
+  // GAP-WORKS-PROPOSALS-DETAIL-04: the chosen division's NAME, shown in the
+  // permanent-record confirmation (the id alone is not reviewable).
+  const [divisionLabel, setDivisionLabel] = useState("");
+  useEffect(() => {
+    setDivisionLabel("");
+    if (!divisionId) return;
+    let cancelled = false;
+    resolveDivisions([divisionId])
+      .then((o) => {
+        if (!cancelled && o[0]) setDivisionLabel(o[0].label);
+      })
+      .catch(() => {
+        /* the dialog falls back to the id */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [divisionId]);
   const [subDivisionId, setSubDivisionId] = useState("");
   const [sectionId, setSectionId]       = useState("");
   const [isNodal, setIsNodal]           = useState(false);
@@ -434,16 +456,14 @@ function MapOfficeForm({
 
   // GAP-WORKS-PROPOSALS-DETAIL-04: the works-service office-mapping route
   // requires divisionId/subDivisionId/sectionId to be UUIDs (mapOfficeSchema).
-  // There is no office/division NAME master in works-service to drive an
-  // EntityPicker (the org structure lives outside this service), so until one
-  // exists we at least block a malformed, permanent mapping client-side with a
-  // precise inline error instead of letting a typo'd id reach an append-only
-  // record. See the per-GAP report's HUMAN REVIEW note.
+  // Division is now chosen from the division master (EntityPicker). Sub-Division
+  // and Section have no master in works-service yet, so they stay UUID inputs
+  // with the same client-side guard (NEEDS OWNER DECISION: add masters).
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLocalError(null);
     if (!UUID_RE.test(divisionId.trim())) {
-      setLocalError("Division ID must be a valid UUID.");
+      setLocalError("Select a division from the list.");
       return;
     }
     if (subDivisionId.trim() && !UUID_RE.test(subDivisionId.trim())) {
@@ -462,16 +482,18 @@ function MapOfficeForm({
       <form onSubmit={handleSubmit}>
         <div style={fieldGroup}>
           <label htmlFor="office-map-division-id" style={labelStyle}>
-            Division ID <span style={{ color: "#b42318" }}>*</span>
+            Division <span style={{ color: "#b42318" }}>*</span>
           </label>
-          <input
+          {/* GAP-WORKS-PROPOSALS-DETAIL-04: pick the division by name from the
+              division master instead of pasting a UUID into an append-only record. */}
+          <EntityPicker
             id="office-map-division-id"
-            type="text"
-            required
-            placeholder="Division UUID"
-            value={divisionId}
-            onChange={(e) => setDivisionId(e.target.value)}
-            style={{ ...inputStyle, minHeight: "auto" }}
+            aria-label="Division"
+            value={divisionId || null}
+            onChange={(v) => setDivisionId((Array.isArray(v) ? v[0] : v) ?? "")}
+            search={searchDivisions}
+            resolve={resolveDivisions}
+            placeholder="Search divisions by name or code…"
           />
           {formError.fieldError("divisionId") && (
             <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("divisionId")}</span>
@@ -529,7 +551,7 @@ function MapOfficeForm({
         title="Map this office / division?"
         description={
           `This records a PERMANENT office mapping for this work — it cannot be edited or removed once submitted.\n\n` +
-          `Division: ${divisionId}` +
+          `Division: ${divisionLabel || divisionId}` +
           (subDivisionId ? `\nSub-Division: ${subDivisionId}` : "") +
           (sectionId ? `\nSection: ${sectionId}` : "") +
           `\nNodal: ${isNodal ? "Yes" : "No"}`

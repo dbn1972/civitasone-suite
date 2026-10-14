@@ -1,5 +1,5 @@
 import { Card, StatusPill, Masked } from "@/app/_components/ds";
-import { detailEntries } from "../_data/records";
+import { detailEntries, omittedFieldCount } from "../_data/records";
 import type { MunicipalServiceConfig } from "../_data/services";
 
 type Props = {
@@ -12,6 +12,7 @@ type Props = {
 
 export function RecordDetailPanel({ record, config, title, reference, status }: Props) {
   const entries = detailEntries(record, config);
+  const omitted = omittedFieldCount(record, config);
 
   return (
     <div style={{ display: "grid", gap: 16 }}>
@@ -71,6 +72,11 @@ export function RecordDetailPanel({ record, config, title, reference, status }: 
               )}
             </div>
           ))}
+          {omitted > 0 && (
+            <p role="note" style={{ margin: 0, fontSize: 12, color: "var(--muted)" }}>
+              {omitted} {omitted === 1 ? "field" : "fields"} not shown
+            </p>
+          )}
         </div>
       </Card>
     </div>

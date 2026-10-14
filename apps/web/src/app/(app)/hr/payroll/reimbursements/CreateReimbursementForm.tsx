@@ -3,7 +3,7 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog, Field, Input, Select } from "../../../../_components/ds";
 import { EmployeePicker } from "../../../../_components/EmployeePicker";
 import { postWithErrorCode } from "../_lib/postWithErrorCode";
 import { formatMoney, formatPeriod } from "@/lib/formatters";
@@ -24,10 +24,11 @@ export type ClaimSubject = { mode: "admin" } | { mode: "self"; employeeId: strin
 
 type InvalidField = "employeeId" | "amount" | "period" | "receipts" | null;
 
-const fieldStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
 
 export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) {
   const t = useTranslations("createReimbursementForm");
+  const tFallback = useTranslations("employeeFallback");
+  const tv = useTranslations("hrFormErrors2");
   const router = useRouter();
   const [pickedEmployeeId, setPickedEmployeeId] = useState<string | null>(null);
   const [pickedName, setPickedName] = useState<string | null>(null);
@@ -57,7 +58,7 @@ export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) 
   const periodRef = useRef<HTMLInputElement>(null);
 
   const employeeId = subject.mode === "self" ? subject.employeeId : pickedEmployeeId;
-  const employeeLabel = subject.mode === "self" ? subject.label : pickedName ?? pickedEmployeeId ?? "";
+  const employeeLabel = subject.mode === "self" ? subject.label : pickedName ?? tFallback("unknownEmployee");
   const amountMinor = rupeesToMinorString(amount);
   const isInvalid = (f: Exclude<InvalidField, null>) => tone === "bad" && invalidField === f;
   const categoryLabel = (c: string) => {
@@ -131,12 +132,9 @@ export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) 
       <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("employeeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
+            <Field id={empId} label={t("employeeLabel")} required>
               {subject.mode === "self" ? (
-                <input id={empId} value={subject.label} readOnly aria-readonly="true" style={{ ...fieldStyle, background: "var(--panel)" }} />
+                <Input value={subject.label} readOnly aria-readonly="true" style={{ background: "var(--panel)" }} />
               ) : (
                 <EmployeePicker
                   id={empId}
@@ -145,60 +143,47 @@ export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) 
                   clearable
                 />
               )}
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={catId} style={{ fontSize: 13, fontWeight: 600 }}>{t("categoryLabel")}</label>
-              <select
-                id={catId}
+            </Field>
+            <Field id={catId} label={t("categoryLabel")}>
+              <Select
                 value={category}
                 onChange={(e) => setCategory(e.target.value as ReimbursementCategory)}
-                style={{ ...fieldStyle, background: "var(--bg, #fff)" }}
               >
                 {REIMBURSEMENT_CATEGORIES.map((c) => (
                   <option key={c} value={c}>{categoryLabel(c)}</option>
                 ))}
-              </select>
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={amtId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("amountLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={amtId}
+              </Select>
+            </Field>
+            <Field id={amtId} label={t("amountLabel")} required error={isInvalid("amount") ? tv("invalidValue") : undefined}>
+              <Input
                 ref={amtRef}
                 inputMode="decimal"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                aria-required="true"
-                aria-invalid={isInvalid("amount") || undefined}
-                aria-describedby={isInvalid("amount") ? errId : undefined}
-                style={fieldStyle}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={periodId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("periodLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={periodId}
+            </Field>
+            <Field id={periodId} label={t("periodLabel")} required error={isInvalid("period") ? tv("invalidValue") : undefined}>
+              <Input
                 ref={periodRef}
                 type="month"
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
-                aria-required="true"
-                aria-invalid={isInvalid("period") || undefined}
-                aria-describedby={isInvalid("period") ? errId : undefined}
-                style={fieldStyle}
               />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={dateId} style={{ fontSize: 13, fontWeight: 600 }}>{t("billDateLabel")}</label>
-              <input id={dateId} type="date" value={billDate} onChange={(e) => setBillDate(e.target.value)} style={fieldStyle} />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={refId} style={{ fontSize: 13, fontWeight: 600 }}>{t("billRefLabel")}</label>
-              <input id={refId} value={billRef} onChange={(e) => setBillRef(e.target.value)} maxLength={128} style={fieldStyle} />
-            </div>
+            </Field>
+            <Field id={dateId} label={t("billDateLabel")}>
+              <Input
+                type="date"
+                value={billDate}
+                onChange={(e) => setBillDate(e.target.value)}
+              />
+            </Field>
+            <Field id={refId} label={t("billRefLabel")}>
+              <Input
+                value={billRef}
+                onChange={(e) => setBillRef(e.target.value)}
+                maxLength={128}
+              />
+            </Field>
           </div>
 
           <div>

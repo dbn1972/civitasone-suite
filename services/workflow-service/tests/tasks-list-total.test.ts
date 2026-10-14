@@ -91,3 +91,14 @@ describe("listTasks pagination.total (GAP-APPROVALS-HOME-01)", () => {
     expect(page2.pagination.hasMore).toBe(false);
   });
 });
+
+describe("listTasks subject enrichment (GAP-WORKFLOW-MY-TASKS-02)", () => {
+  it("attaches the parent instance name and requester to each task", async () => {
+    const tenant = newTenant();
+    const instanceId = await seedInstance(tenant);
+    await seedTask(tenant, instanceId, { roleRef: null });
+    const res = await asTenant(tenant, () => queries.listTasks(tenant, 10, 0, { status: "pending", roles: ["manager"] }));
+    expect(res.data[0]).toMatchObject({ instanceName: "Inbox fixture" });
+    expect(res.data[0]!.requesterId).toMatch(/^[0-9a-f-]{36}$/);
+  });
+});

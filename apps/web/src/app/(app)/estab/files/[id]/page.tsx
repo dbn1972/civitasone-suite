@@ -5,14 +5,14 @@ import { toHumanError } from "@/lib/messages";
 import { FileDetailActions } from "./FileDetailActions";
 import { FileAttachments } from "./FileAttachments";
 import { ScannedDocumentsSection } from "./ScannedDocumentsSection";
-import { OfficerName } from "./OfficerName";
+import { ResolvedOfficerName } from "./OfficerName";
 import { NoteSheetTable } from "./NoteSheetTable";
 import { MovementTimeline } from "./MovementTimeline";
 
 type NoteRow = {
   idx: number;
   content: string;
-  authorId: string;
+  author: string;
   when: string;
   type: string;
   status: string;
@@ -66,7 +66,7 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
       return {
         idx: idx + 1,
         content: ns.content,
-        authorId: ns.author,
+        author: ns.author,
         when: ns.timestamp ? formatIndianDate(ns.timestamp) : "—",
         type: `${typeLabel}${ns.eSigned ? " · e-Signed" : ""}`,
         status: (ns.noteStatus ?? "—").replace(/_/g, " "),
@@ -110,7 +110,7 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
               <div className="fld"><div className="l">Subject</div><div className="v">{file.subject}</div></div>
               <div className="fld"><div className="l">Department</div><div className="v">{file.department ?? "—"}</div></div>
               <div className="fld"><div className="l">Classification</div><div className="v">{file.classification.replace(/_/g, " ")}</div></div>
-              <div className="fld"><div className="l">Currently with</div><div className="v">{file.currentHolder ? <OfficerName id={file.currentHolder} /> : "—"}</div></div>
+              <div className="fld"><div className="l">Currently with</div><div className="v"><ResolvedOfficerName name={file.currentHolder} /></div></div>
               {ext.dueBy ? (
                 <div className="fld"><div className="l">SLA due by</div><div className="v">{formatIndianDate(ext.dueBy)}</div></div>
               ) : null}

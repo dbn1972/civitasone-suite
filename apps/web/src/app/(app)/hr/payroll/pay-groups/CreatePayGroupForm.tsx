@@ -4,7 +4,7 @@ import { useId, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog, Field, Input, Select } from "../../../../_components/ds";
 import { postWithErrorCode, patchWithErrorCode } from "../_lib/postWithErrorCode";
 import { BILL_TYPES, isBillType, type BillType, type DdoOption } from "./payGroupMembership";
 import { payScheduleFields, payScheduleProblem, weekdayName, type PayFrequency } from "./payGroupSchedule";
@@ -72,6 +72,7 @@ export function CreatePayGroupForm({
   ddosUnavailable?: boolean;
 }) {
   const t = useTranslations("createPayGroupForm");
+  const tv = useTranslations("hrFormErrors2");
   const tm = useTranslations("payGroupMembers");
   const locale = useLocale();
   const FREQUENCIES = FREQUENCY_VALUES.map((value) => ({
@@ -217,51 +218,34 @@ export function CreatePayGroupForm({
     }
   }
 
-  const fieldStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
-  const selectStyle = { ...fieldStyle, background: "var(--panel, #fff)" } as const;
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }} noValidate>
       <Card title={editing ? t("editFormTitle", { name: editing.name }) : t("formTitle")} padding>
       <div style={{ display: "grid", gap: 14 }}>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={nameId} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("nameLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-            </label>
-            <input
-              id={nameId}
+          <Field id={nameId} label={t("nameLabel")} required error={nameInvalid ? tv("fieldRequired") : undefined}>
+            <Input
               ref={nameRef}
               value={name}
               onChange={(e) => setName(e.target.value)}
               maxLength={128}
-              aria-required="true"
-              aria-invalid={nameInvalid || undefined}
-              aria-describedby={nameInvalid ? errId : undefined}
-              style={fieldStyle}
             />
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={freqId} style={{ fontSize: 13, fontWeight: 600 }}>{t("frequencyLabel")}</label>
-            <select
-              id={freqId}
+          </Field>
+          <Field id={freqId} label={t("frequencyLabel")}>
+            <Select
               value={frequency}
               onChange={(e) => setFrequency(e.target.value as PayFrequency)}
-              style={selectStyle}
             >
               {FREQUENCIES.map((f) => (
                 <option key={f.value} value={f.value}>{f.label}</option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </Field>
 
           {frequency === "monthly" ? (
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={dayId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("payDayLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={dayId}
+            <Field id={dayId} label={t("payDayLabel")} required error={dayInvalid ? tv("invalidValue") : undefined}>
+              <Input
                 ref={dayRef}
                 type="number"
                 min={1}
@@ -269,110 +253,78 @@ export function CreatePayGroupForm({
                 value={payDayOfMonth}
                 disabled={lastDay}
                 onChange={(e) => setPayDayOfMonth(e.target.value)}
-                aria-required="true"
-                aria-invalid={dayInvalid || undefined}
-                aria-describedby={[dayInvalid ? errId : "", dayHintId].filter(Boolean).join(" ")}
-                style={fieldStyle}
+                aria-describedby={[dayInvalid ? `${dayId}-error` : "", dayHintId].filter(Boolean).join(" ")}
               />
-              <label htmlFor={lastDayId} style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
+              <label style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
                 <input id={lastDayId} type="checkbox" checked={lastDay} onChange={(e) => setLastDay(e.target.checked)} />
                 {t("lastDayLabel")}
               </label>
               <p id={dayHintId} style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>{t("payDayHintMonthly")}</p>
-            </div>
+            </Field>
           ) : (
             <>
-              <div style={{ display: "grid", gap: 6 }}>
-                <label htmlFor={weekdayId} style={{ fontSize: 13, fontWeight: 600 }}>
-                  {t("payWeekdayLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-                </label>
-                <select
-                  id={weekdayId}
+              <Field id={weekdayId} label={t("payWeekdayLabel")} required error={weekdayInvalid ? tv("fieldRequired") : undefined}>
+                <Select
                   ref={weekdayRef}
                   value={weekday}
                   onChange={(e) => setWeekday(e.target.value)}
-                  aria-required="true"
-                  aria-invalid={weekdayInvalid || undefined}
-                  aria-describedby={weekdayInvalid ? errId : dayHintId}
-                  style={selectStyle}
+                  aria-describedby={weekdayInvalid ? `${weekdayId}-error` : dayHintId}
                 >
                   <option value="">{t("payWeekdayPlaceholder")}</option>
                   {[1, 2, 3, 4, 5, 6, 7].map((n) => (
                     <option key={n} value={String(n)}>{weekdayName(n, locale)}</option>
                   ))}
-                </select>
+                </Select>
                 <p id={dayHintId} style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>
                   {frequency === "weekly" ? t("payDayHintWeekly") : t("payDayHintBiWeekly")}
                 </p>
-              </div>
+              </Field>
               {frequency === "bi_weekly" && (
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label htmlFor={parityId} style={{ fontSize: 13, fontWeight: 600 }}>
-                    {t("payParityLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-                  </label>
-                  <select
-                    id={parityId}
+                <Field id={parityId} label={t("payParityLabel")} required error={parityInvalid ? tv("fieldRequired") : undefined}>
+                  <Select
                     ref={parityRef}
                     value={parity}
                     onChange={(e) => setParity(e.target.value)}
-                    aria-required="true"
-                    aria-invalid={parityInvalid || undefined}
-                    aria-describedby={parityInvalid ? errId : undefined}
-                    style={selectStyle}
                   >
                     <option value="">{t("payParityPlaceholder")}</option>
                     <option value="1">{t("parityOdd")}</option>
                     <option value="0">{t("parityEven")}</option>
-                  </select>
-                </div>
+                  </Select>
+                </Field>
               )}
             </>
           )}
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={tzId} style={{ fontSize: 13, fontWeight: 600 }}>{t("timezoneLabel")}</label>
-            <select
-              id={tzId}
-              value={timezone}
-              onChange={(e) => setTimezone(e.target.value)}
-              aria-invalid={tzInvalid || undefined}
-              aria-describedby={tzInvalid ? errId : undefined}
-              style={selectStyle}
-            >
+          <Field id={tzId} label={t("timezoneLabel")} error={tzInvalid ? tv("invalidValue") : undefined}>
+            <Select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
               {zones.map((z) => (
                 <option key={z} value={z}>{z}</option>
               ))}
-            </select>
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={ddoId} style={{ fontSize: 13, fontWeight: 600 }}>{t("ddoLabel")}</label>
-            <select
-              id={ddoId}
+            </Select>
+          </Field>
+          <Field id={ddoId} label={t("ddoLabel")}>
+            <Select
               value={ddoCode}
               disabled={ddosUnavailable}
               onChange={(e) => setDdoCode(e.target.value)}
-              style={selectStyle}
             >
               <option value="">{t("ddoNone")}</option>
               {ddoOptions.map((d) => (
                 <option key={d.ddoCode} value={d.ddoCode}>{`${d.name} (${d.ddoCode})`}</option>
               ))}
-            </select>
+            </Select>
             <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>{ddosUnavailable ? t("ddoUnavailableHint") : t("ddoHint")}</p>
-          </div>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={billTypeId} style={{ fontSize: 13, fontWeight: 600 }}>{t("billTypeLabel")}</label>
-            <select
-              id={billTypeId}
+          </Field>
+          <Field id={billTypeId} label={t("billTypeLabel")}>
+            <Select
               value={billType}
               onChange={(e) => setBillType(e.target.value as BillType)}
-              style={selectStyle}
             >
               {BILL_TYPES.map((b) => (
                 <option key={b} value={b}>{tm(`billType.${b}`)}</option>
               ))}
-            </select>
-          </div>
+            </Select>
+          </Field>
         </div>
 
         <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>

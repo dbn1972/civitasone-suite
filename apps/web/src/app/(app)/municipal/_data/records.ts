@@ -1,4 +1,5 @@
 import type { MunicipalServiceConfig } from "./services";
+import { maskIdentifiers } from "@/lib/pii";
 import { formatIndianDate, formatIndianDateTime, formatMoney, humanizeStatus } from "@/lib/formatters";
 
 export type MunicipalRecordRow = {
@@ -190,6 +191,56 @@ function piiKindForKey(key: string): MunicipalPiiKind | null {
   return null;
 }
 
+// W2 PQ-C (GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-01): the detail panel is
+// an ALLOW-LIST, not a skip-list. A key the backend adds later (applicant
+// address, document numbers, free-form blobs) stays out of the page until a
+// service owner adds it to the config `displayFields`. PII-looking keys
+// (phone/email/PAN/Aadhaar/account) are allowed but ALWAYS rendered masked.
+const BASE_DISPLAY_FIELDS = new Set([
+  "status", "reference", "title", "name", "businessName", "ownerName", "applicantName",
+  "applicationNumber", "complaintNumber", "registrationNumber", "referenceNumber",
+  "licenceNumber", "licenseNumber", "permitNumber", "certificateNumber",
+  "type", "category", "serviceType", "applicationType", "licenceType", "licenseType",
+  "complaintType", "animalType", "businessType", "purpose", "priority", "channel",
+  "description", "remarks", "reason", "notes", "outcome", "decision",
+  "ward", "wardId", "zone", "zoneId", "area", "locality", "location", "siteAddress", "premises",
+  "createdAt", "updatedAt", "submittedAt", "approvedAt", "rejectedAt", "issuedAt", "decidedAt",
+  "closedAt", "assignedAt", "validFrom", "validTo", "validUntil", "expiryDate", "issueDate", "dueDate",
+  "startDate", "endDate", "currency",
+]);
+// Free-text fields can carry identity numbers typed by a citizen/officer.
+const FREE_TEXT_KEYS = new Set(["description", "remarks", "reason", "notes", "outcome", "decision"]);
+
+function isDisplayable(key: string, config?: MunicipalServiceConfig): boolean {
+  if (BASE_DISPLAY_FIELDS.has(key)) return true;
+  if (piiKindForKey(key)) return true; // allowed, masked
+  if (MONEY_KEY_RE.test(key)) return true;
+  const extra = [
+    ...(config?.displayFields ?? []), ...(config?.titleFields ?? []), ...(config?.numberFields ?? []),
+    ...(config?.fieldOrder ?? []), ...(config?.moneyFields ?? []), ...(config?.piiFields ?? []),
+  ];
+  return extra.includes(key);
+}
+
+// Address/location strings can also carry typed identity numbers.
+const ADDRESS_KEY_RE = /(address|location)$/i;
+
+/**
+ * Number of populated record fields the detail panel does NOT render because
+ * they are outside the allow-list (so the panel can say so instead of silently
+ * dropping them). Hidden/system columns and raw actor UUIDs are intentional
+ * omissions and are not counted.
+ */
+export function omittedFieldCount(
+  record: Record<string, unknown>,
+  config?: MunicipalServiceConfig,
+): number {
+  const hidden = new Set([...ALWAYS_SKIP, ...((config?.hiddenFields ?? []) as string[])]);
+  return Object.entries(record).filter(
+    ([k, v]) => !hidden.has(k) && v != null && !isRawActorOrFkUuid(k, v) && !isDisplayable(k, config),
+  ).length;
+}
+
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T.*)?$/;
 
 // GAP2-MUNICIPAL-DETAIL-MONEY-01: money columns are bigint minor units
@@ -238,6 +289,7 @@ export function detailEntries(
 
   const entries: MunicipalDetailEntry[] = Object.entries(record)
     .filter(([k]) => !hidden.has(k))
+    .filter(([k]) => isDisplayable(k, config))
     // GAP2-MUNICIPAL-DETAIL-UUID-01: drop raw actor/FK UUID columns
     // (reportedBy/assignedTo/*By/*Id whose value is a bare UUID) — opaque to
     // officers and a minor identity leak. Resolving to names needs an identity
@@ -259,7 +311,9 @@ export function detailEntries(
       if (isRecord(value) || Array.isArray(value)) {
         return { key, label, value: formatNested(value), kind: "nested" as const };
       }
-      return { key, label, value: formatDetailValue(value), kind: "text" as const };
+      const text = formatDetailValue(value);
+      const maskText = FREE_TEXT_KEYS.has(key) || ADDRESS_KEY_RE.test(key);
+      return { key, label, value: maskText ? maskIdentifiers(text) : text, kind: "text" as const };
     });
 
   const orderIndex = (key: string) => {
@@ -277,13 +331,15 @@ export function detailEntries(
 /** Nested object/array → readable "key: value" lines (not raw JSON braces). */
 function formatNested(value: unknown): string {
   if (Array.isArray(value)) {
-    return value.map((v) => formatDetailValue(v)).join(", ");
+    return value.map((v) => maskIdentifiers(formatDetailValue(v))).join(", ");
   }
   if (isRecord(value)) {
     return Object.entries(value)
       .map(([k, v]) => {
         const label = k.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
-        return `${label}: ${formatDetailValue(v)}`;
+        // PQ-C: a nested PII-looking key never prints in the clear.
+        const shown = piiKindForKey(k) ? "••••" : maskIdentifiers(formatDetailValue(v));
+        return `${label}: ${shown}`;
       })
       .join("\n");
   }

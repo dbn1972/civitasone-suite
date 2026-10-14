@@ -8,9 +8,10 @@ import {
   isValidNextStep, eMbFinalizationSequence, billFinalizationSequence, canCreateBill,
   billAmountExceedsAward, billAmountExceedsMeasuredValue, mbBelongsToBill, awardBelongsToWork,
   billedQuantityExceedsBoq, computeMeasuredValueMinor, boqItemBelongsToMbWork,
+  finalizeStepRoles, isSelfFinalization,
 } from "./domain.js";
 import {
-  getMb, getBill, listBillsForWork, listBills, countBills, listMeasurementsByMb, listMeasurementsByBoqItem,
+  getMb, getMbByNumber, getBill, listBillsForWork, listBills, countBills, listMeasurementsByMb, listMeasurementsByBoqItem,
   listBillsByMb, listMbsForWork, listAwardsForWork, listAccountCompilations,
 } from "./repo.js";
 import { getAwardById } from "../tender/repo.js";
@@ -19,7 +20,11 @@ import { parseMinor } from "@civitasone/schemas";
 import { paginationSchema } from "../masters/validators.js";
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
-const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
+// GAP-WORKS-BILLING-WORKID-03: finalize additionally admits "auditor", the
+// officer for auditor_finalized; the per-step check (finalizeStepRoles) then
+// narrows each step. "auditor" gets no other write route.
+const FINALIZE_ROLES = [...WRITE_ROLES, "auditor"];
+const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator", "auditor"];
 
 export async function billingRoutes(app: FastifyInstance): Promise<void> {
   // List bills for a work
@@ -86,13 +91,19 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(422, "AWARD_WORK_MISMATCH", "The cited award does not belong to this work");
     }
 
+    // GAP-WORKS-BILLING-NEW-MB-03: duplicate MB number for this work → 409 so
+    // the form can show a field-level message (the consumer re-checks).
+    if (await getMbByNumber(ctx.tenantId, body.workId, body.mbNumber.trim())) {
+      throw new HttpError(409, "DUPLICATE_MB_NUMBER", "MB number already used for this work");
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.issueMbCommand(ctx, body));
   });
 
   // Finalize MB
   app.post("/v1/works/billing/mb/:id/finalize", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, WRITE_ROLES);
+    requireRole(ctx, FINALIZE_ROLES);
     const body = v.finalizeMbSchema.parse({ ...(req.body as object), id: (req.params as { id: string }).id });
     const mb = await getMb(ctx.tenantId, body.id);
     if (!mb) throw new HttpError(404, "NOT_FOUND", "measurement book not found");
@@ -100,6 +111,12 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const seq = eMbFinalizationSequence();
     if (!isValidNextStep(mb.status, body.nextStatus, seq)) {
       throw new HttpError(422, "INVALID_STEP", `Cannot transition from '${mb.status}' to '${body.nextStatus}'`);
+    }
+
+    // GAP-WORKS-BILLING-WORKID-03: per-step authority + maker-checker.
+    requireRole(ctx, finalizeStepRoles(body.nextStatus));
+    if (isSelfFinalization(ctx.actorId, { createdBy: mb.createdBy, issuedBy: mb.issuedBy })) {
+      throw new HttpError(422, "SELF_APPROVAL_FORBIDDEN", "The issuer of a measurement book cannot finalize it (maker-checker rule)");
     }
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.finalizeMbCommand(ctx, body.id, body.nextStatus));
@@ -189,7 +206,7 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
   // Finalize bill
   app.post("/v1/works/billing/bills/:id/finalize", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, WRITE_ROLES);
+    requireRole(ctx, FINALIZE_ROLES);
     const body = v.finalizeBillSchema.parse({ ...(req.body as object), id: (req.params as { id: string }).id });
     const bill = await getBill(ctx.tenantId, body.id);
     if (!bill) throw new HttpError(404, "NOT_FOUND", "bill not found");
@@ -197,6 +214,12 @@ export async function billingRoutes(app: FastifyInstance): Promise<void> {
     const seq = billFinalizationSequence();
     if (!isValidNextStep(bill.status, body.nextStatus, seq)) {
       throw new HttpError(422, "INVALID_STEP", `Cannot transition from '${bill.status}' to '${body.nextStatus}'`);
+    }
+
+    // GAP-WORKS-BILLING-WORKID-03: per-step authority + maker-checker.
+    requireRole(ctx, finalizeStepRoles(body.nextStatus));
+    if (isSelfFinalization(ctx.actorId, { createdBy: bill.createdBy })) {
+      throw new HttpError(422, "SELF_APPROVAL_FORBIDDEN", "The creator of a bill cannot finalize it (maker-checker rule)");
     }
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.finalizeBillCommand(ctx, body.id, body.nextStatus));

@@ -47,7 +47,7 @@ export async function listOperators(
   limit: number,
 ): Promise<OperatorDto[]> {
   const rows = await repo.listOperators(tenantId, limit);
-  const displayMap = await getEmployeeDisplayMap(tenantId);
+  const displayMap = await getEmployeeDisplayMap(tenantId, rows.map((r) => r.employeeId));
   return rows
     .filter((r) => (filter.division ? r.division === filter.division : true))
     .filter((r) => (filter.deskRole ? r.deskRole === filter.deskRole : true))
@@ -58,6 +58,6 @@ export async function listOperators(
 export async function getOperator(tenantId: string, id: string): Promise<OperatorDto | null> {
   const row = await repo.findOperatorById(id, tenantId);
   if (!row) return null;
-  const displayMap = await getEmployeeDisplayMap(tenantId);
+  const displayMap = await getEmployeeDisplayMap(tenantId, [row.employeeId]);
   return toOperatorDto(row, displayMap);
 }

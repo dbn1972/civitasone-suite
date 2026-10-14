@@ -3,7 +3,7 @@
 import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ConfirmDialog, ErrorState, useConfirmAction, Button } from "../../../../_components/ds";
+import { ConfirmDialog, ErrorState, useConfirmAction, Button, Field, Input, Select, Textarea } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
 import { minorToRupeesInput, rupeesToMinorString } from "@/lib/money";
@@ -224,43 +224,64 @@ export function VacancyNotificationPanel({ jobOpeningId, published, onChanged }:
       <form onSubmit={save} className="grid gap-3" aria-label={t("advertisementHeading")}>
         <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t("advertisementHeading")}</h3>
         <div className="grid sm:grid-cols-2 gap-3">
-          <div>
-            <label htmlFor={`${uid}-advt`} className={labelCls}>{t("advertisementNoLabel")}</label>
-            <input id={`${uid}-advt`} type="text" className={inputCls} value={advtNo} maxLength={64} disabled={readOnly} onChange={(e) => setAdvtNo(e.target.value)} placeholder={t("advertisementNoPlaceholder")} aria-describedby={`${uid}-advt-help`} />
+          <Field id={`${uid}-advt`} label={t("advertisementNoLabel")}>
+            <Input type="text" className={inputCls} value={advtNo} maxLength={64} disabled={readOnly} onChange={(e) => setAdvtNo(e.target.value)} placeholder={t("advertisementNoPlaceholder")} aria-describedby={`${uid}-advt-help`} />
             <p id={`${uid}-advt-help`} className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("advertisementNoHelp")}</p>
-          </div>
-          <div>
-            <label htmlFor={`${uid}-fee`} className={labelCls}>{t("feeLabel")}</label>
-            <input id={`${uid}-fee`} type="text" inputMode="decimal" className={inputCls} value={fee} disabled={readOnly} onChange={(e) => setFee(e.target.value)} placeholder={t("feePlaceholder")} />
-          </div>
-          <div>
-            <label htmlFor={`${uid}-scope`} className={labelCls}>{t("scopeLabel")}</label>
-            <select id={`${uid}-scope`} className={inputCls} value={scope} disabled={readOnly} onChange={(e) => setScope(e.target.value as Advertisement["portalScope"])}>
+          </Field>
+          <Field id={`${uid}-fee`} label={t("feeLabel")}>
+            <Input
+              type="text"
+              inputMode="decimal"
+              className={inputCls}
+              value={fee}
+              disabled={readOnly}
+              onChange={(e) => setFee(e.target.value)}
+              placeholder={t("feePlaceholder")}
+            />
+          </Field>
+          <Field id={`${uid}-scope`} label={t("scopeLabel")}>
+            <Select
+              className={inputCls}
+              value={scope}
+              disabled={readOnly}
+              onChange={(e) => setScope(e.target.value as Advertisement["portalScope"])}
+            >
               <option value="public">{t("scope_public")}</option>
               <option value="internal">{t("scope_internal")}</option>
               <option value="both">{t("scope_both")}</option>
-            </select>
-          </div>
+            </Select>
+          </Field>
         </div>
-        <div>
-          <label htmlFor={`${uid}-exempt`} className={labelCls}>{t("feeExemptionLabel")}</label>
-          <textarea id={`${uid}-exempt`} rows={2} maxLength={2000} className={inputCls} value={feeExemption} disabled={readOnly} onChange={(e) => setFeeExemption(e.target.value)} />
-        </div>
-        <div>
-          <label htmlFor={`${uid}-docs`} className={labelCls}>{t("docsLabel")}</label>
-          <textarea id={`${uid}-docs`} rows={3} className={inputCls} value={docs} disabled={readOnly} onChange={(e) => setDocs(e.target.value)} aria-describedby={`${uid}-docs-help`} />
+        <Field id={`${uid}-exempt`} label={t("feeExemptionLabel")}>
+          <Textarea
+            rows={2}
+            maxLength={2000}
+            className={inputCls}
+            value={feeExemption}
+            disabled={readOnly}
+            onChange={(e) => setFeeExemption(e.target.value)}
+          />
+        </Field>
+        <Field id={`${uid}-docs`} label={t("docsLabel")}>
+          <Textarea rows={3} className={inputCls} value={docs} disabled={readOnly} onChange={(e) => setDocs(e.target.value)} aria-describedby={`${uid}-docs-help`} />
           <p id={`${uid}-docs-help`} className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{t("docsHelp")}</p>
-        </div>
-        <div>
-          <label htmlFor={`${uid}-selection`} className={labelCls}>{t("selectionLabel")}</label>
-          <textarea id={`${uid}-selection`} rows={2} maxLength={4000} className={inputCls} value={selection} disabled={readOnly} onChange={(e) => setSelection(e.target.value)} />
-        </div>
+        </Field>
+        <Field id={`${uid}-selection`} label={t("selectionLabel")}>
+          <Textarea
+            rows={2}
+            maxLength={4000}
+            className={inputCls}
+            value={selection}
+            disabled={readOnly}
+            onChange={(e) => setSelection(e.target.value)}
+          />
+        </Field>
         <fieldset className="grid gap-2" disabled={readOnly}>
           <legend className={labelCls}>{t("datesLabel")}</legend>
           {dates.map((r, i) => (
             <div key={r.key} className="grid grid-cols-[1fr_1fr_auto] gap-2">
-              <input aria-label={t("dateName", { n: i + 1 })} className={inputCls} maxLength={64} value={r.label} onChange={(e) => setDates((d) => d.map((x) => x.key === r.key ? { ...x, label: e.target.value } : x))} placeholder={t("dateNamePlaceholder")} />
-              <input aria-label={t("dateValue", { n: i + 1 })} className={inputCls} maxLength={64} value={r.value} onChange={(e) => setDates((d) => d.map((x) => x.key === r.key ? { ...x, value: e.target.value } : x))} placeholder={t("dateValuePlaceholder")} />
+              <Input aria-label={t("dateName", { n: i + 1 })} className={inputCls} maxLength={64} value={r.label} onChange={(e) => setDates((d) => d.map((x) => x.key === r.key ? { ...x, label: e.target.value } : x))} placeholder={t("dateNamePlaceholder")} />
+              <Input aria-label={t("dateValue", { n: i + 1 })} className={inputCls} maxLength={64} value={r.value} onChange={(e) => setDates((d) => d.map((x) => x.key === r.key ? { ...x, value: e.target.value } : x))} placeholder={t("dateValuePlaceholder")} />
               <button type="button" onClick={() => setDates((d) => d.filter((x) => x.key !== r.key))} className="text-xs text-red-600 dark:text-red-400 underline" aria-label={t("removeDate", { n: i + 1 })}>{t("remove")}</button>
             </div>
           ))}
@@ -316,11 +337,14 @@ export function VacancyNotificationPanel({ jobOpeningId, published, onChanged }:
         onCancel={notice.cancel}
       >
         {corrigendumKind === "extension" && (
-          <div className="cd-field">
-            <label htmlFor={`${uid}-newdeadline`}>{t("newDeadline")} ({t("istNote")})</label>
-            <input id={`${uid}-newdeadline`} type="datetime-local" className={inputCls} value={newDeadline} onChange={(e) => setNewDeadline(e.target.value)} aria-invalid={newDeadline !== "" && extensionInvalid ? true : undefined} />
-            {newDeadline !== "" && extensionInvalid && <p role="alert" className="text-xs text-red-600 dark:text-red-400 mt-1">{t("extensionMustBeLater")}</p>}
-          </div>
+          <Field
+            id={`${uid}-newdeadline`}
+            label={<>{t("newDeadline")} ({t("istNote")})</>}
+            error={newDeadline !== "" && extensionInvalid ? t("extensionMustBeLater") : undefined}
+            announce
+          >
+            <Input type="datetime-local" className={inputCls} value={newDeadline} onChange={(e) => setNewDeadline(e.target.value)} />
+          </Field>
         )}
       </ConfirmDialog>
     </div>

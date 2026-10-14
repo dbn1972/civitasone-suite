@@ -14,5 +14,8 @@ export const advertisementService: MunicipalServiceConfig = {
   // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: advertisement/applications/domain.ts.
   statusVocabulary: ["draft", "submitted", "under_review", "approved", "rejected", "withdrawn"],
   citizenServiceKey: "advertisement-hoarding",
+  // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
+  // advertisement-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
+  displayFields: ["advertiserName", "advertiserOrg", "advertisementType", "dimensions", "structuralDetails", "feePaid"],
   sec5: true,
 };

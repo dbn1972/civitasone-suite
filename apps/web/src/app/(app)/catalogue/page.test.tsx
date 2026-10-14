@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import Page from "./page";
 
+import { getHelpModule } from "@/lib/helpContent";
+
 describe("Catalogue hub page", () => {
   // GAP-CATALOGUE-HOME-01 / RATES-02 (COPY): tiles must describe what the
   // destination pages actually show (read-only lists), not promise variants,
@@ -17,17 +19,15 @@ describe("Catalogue hub page", () => {
     expect(screen.getByText("Browse product bundles and combo offerings.")).toBeInTheDocument();
   });
 
-  // GAP-CATALOGUE-HOME-05 (BACKEND): no help article with slug "catalogue"
-  // exists (helpContent.ts HELP_MODULES), so /help/catalogue would 404. The
-  // help prop is removed rather than linking to a dead page.
-  it("renders no help link (would be a dead /help/catalogue 404)", () => {
+  // GAP-CATALOGUE-HOME-05: the "catalogue" guide now exists in HELP_MODULES, so
+  // the hub links to /help/catalogue and that slug resolves (no 404).
+  it("links to /help/catalogue and the slug resolves to a guide", () => {
     render(<Page />);
-    const helpLink = screen.queryByRole("link", { name: /how this works/i });
-    expect(helpLink).toBeNull();
-    const anyCatalogueHelp = Array.from(document.querySelectorAll("a")).find(
+    const link = Array.from(document.querySelectorAll("a")).find(
       (a) => a.getAttribute("href") === "/help/catalogue",
     );
-    expect(anyCatalogueHelp).toBeUndefined();
+    expect(link).toBeDefined();
+    expect(getHelpModule("catalogue")).toBeDefined();
   });
 
   // GAP-CATALOGUE-HOME-04 (ICONS): each of the four tiles resolves to a

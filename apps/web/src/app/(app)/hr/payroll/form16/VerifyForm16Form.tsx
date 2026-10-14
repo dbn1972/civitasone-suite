@@ -2,8 +2,8 @@
 
 import { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Button, Card } from "../../../../_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
+import { Button, Card, Field, Input } from "../../../../_components/ds";
+import { browserJson, UserFacingError } from "@/lib/api/browserClient";
 
 type VerifyResponse = {
   data: {
@@ -33,35 +33,43 @@ function fileToBase64(file: File): Promise<string> {
 
 export function VerifyForm16Form() {
   const t = useTranslations("verifyForm16Form");
+  const tv = useTranslations("hrFormErrors2");
   const fileRef = useRef<HTMLInputElement>(null);
   const inputId = useId();
   const errId = useId();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Validation state is tracked apart from request failure: only a rejected file marks the field invalid.
+  const [fieldInvalid, setFieldInvalid] = useState(false);
   const [result, setResult] = useState<VerifyResponse["data"] | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setFieldInvalid(false);
     setResult(null);
     const file = fileRef.current?.files?.[0];
     if (!file) {
       setError(t("chooseFileError"));
+      setFieldInvalid(true);
       fileRef.current?.focus();
       return;
     }
     if (file.type && file.type !== "application/pdf") {
       setError(t("onlyPdfError"));
+      setFieldInvalid(true);
       fileRef.current?.focus();
       return;
     }
     if (file.size === 0) {
       setError(t("emptyFileError"));
+      setFieldInvalid(true);
       fileRef.current?.focus();
       return;
     }
     if (file.size > MAX_BYTES) {
       setError(t("fileTooLargeError"));
+      setFieldInvalid(true);
       fileRef.current?.focus();
       return;
     }
@@ -75,31 +83,19 @@ export function VerifyForm16Form() {
       });
       setResult(res.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("networkError"));
+      setError(err instanceof UserFacingError ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <form onSubmit={(e) => void handleSubmit(e)} style={{ marginTop: 16 }}>
+    <form noValidate onSubmit={(e) => void handleSubmit(e)} style={{ marginTop: 16 }}>
       <Card title={t("cardTitle")} padding>
         <div style={{ display: "grid", gap: 12 }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={inputId} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("fileLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-            </label>
-            <input
-              id={inputId}
-              ref={fileRef}
-              type="file"
-              accept="application/pdf"
-              aria-required="true"
-              aria-invalid={!!error || undefined}
-              aria-describedby={error ? errId : undefined}
-              style={{ fontSize: 13 }}
-            />
-          </div>
+          <Field id={inputId} label={t("fileLabel")} required error={fieldInvalid ? tv("fieldRequired") : undefined}>
+            <Input ref={fileRef} type="file" accept="application/pdf" />
+          </Field>
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>

@@ -14,5 +14,8 @@ export const drainageService: MunicipalServiceConfig = {
   // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: drainage/complaints/domain.ts ComplaintStatus.
   statusVocabulary: ["reported", "assigned", "in_progress", "resolved", "closed"],
   // citizenServiceKey intentionally omitted — no citizen-service manifest exists yet.
+  // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
+  // drainage-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
+  displayFields: ["severity", "resolution", "resolvedAt"],
   sec5: true,
 };

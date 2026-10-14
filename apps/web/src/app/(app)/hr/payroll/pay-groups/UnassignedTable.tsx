@@ -17,6 +17,7 @@ export function UnassignedTable({
   defaultDate: string;
 }) {
   const t = useTranslations("payGroupUnassigned");
+  const tFallback = useTranslations("employeeFallback");
   return (
     <div style={{ display: "grid", gap: 12 }}>
       {canAdminister && (
@@ -28,7 +29,7 @@ export function UnassignedTable({
         sortable={false}
         columns={[
           { key: "employeeNo", label: t("colEmployeeNo") },
-          { key: "fullName", label: t("colName") },
+          { key: "fullName", label: t("colName"), render: (r) => r.fullName?.trim() || tFallback("unknownEmployee") },
           { key: "departmentName", label: t("colDepartment"), render: (r) => r.departmentName ?? "—" },
           ...(canAdminister
             ? [
@@ -39,7 +40,7 @@ export function UnassignedTable({
                     <ChangeGroupButton
                       mode="assign"
                       employeeId={r.employeeId}
-                      employeeName={r.fullName}
+                      employeeName={r.fullName?.trim() || tFallback("unknownEmployee")}
                       groups={groups}
                       defaultDate={defaultDate}
                     />

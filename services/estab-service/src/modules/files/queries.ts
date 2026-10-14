@@ -12,7 +12,7 @@ export type FileDetailDto = {
   department: string;
   classification: string;
   currentWith: string;
-  currentHolder: string;
+  currentHolder: string | null;
   status: string;
   fileType: string;
   volumeNo: number;
@@ -25,7 +25,7 @@ export type FileDetailDto = {
   createdAt: string;
   noteSheets: Array<{
     id: string;
-    author: string;
+    author: string | null;
     content: string;
     timestamp: string;
     type: "note" | "order" | "remark";
@@ -44,7 +44,7 @@ export type FileDetailDto = {
   dispatchHistory: Array<{
     id: string;
     dispatchedTo: string;
-    dispatchedBy: string;
+    dispatchedBy: string | null;
     timestamp: string;
     remarks?: string;
   }>;
@@ -57,19 +57,17 @@ export type FileDetailDto = {
   }>;
 };
 
-// SECURITY/DATA-INTEGRITY: this used to unconditionally truncate the id
-// (`id.slice(0, 8)`) and never even attempted a real lookup. officerId here
-// may be a real hrms employeeId (explicit routing/movement/dispatch to a
-// named colleague, sourced from the operators directory) — in that case we
-// now resolve and show their actual name via hrms-service, the authoritative
-// source for employee identity, instead of always fabricating a fake label.
-// A self-authored id (ctx.actorId, a Keycloak subject) will still not be
-// found in `employees` and falls back to truncation: there is currently no
-// employee↔identity bridge anywhere in this platform to resolve that case
-// (see hrms-client.ts's doc comment and the PR description) — that is a
-// separate, larger platform gap, not something this fix can close.
-function officerLabel(id: string, employees: Map<string, EmployeeDisplay>): string {
-  return employees.get(id)?.fullName ?? id.slice(0, 8);
+// officerId here is either a real hrms employeeId (explicit routing/movement/
+// dispatch to a named colleague, from the operators directory) or the
+// authenticated actor's identity-provider subject (ctx.actorId: notings and
+// dispatches author themselves). getEmployeeDisplayMap resolves both through
+// hrms-service (employee id, or hrms_employees.user_ref for a linked login),
+// batched and tenant-scoped. An actor with no linked employee record cannot be
+// named; that is returned as null (web shows the localised "Unknown employee"), never as an id fragment.
+// SF-17b: an unresolvable officer is null, never an id fragment or an English
+// literal; the web renders the localised employeeFallback.unknownEmployee.
+function officerLabel(id: string, employees: Map<string, EmployeeDisplay>): string | null {
+  return employees.get(id)?.fullName ?? null;
 }
 
 function mapNoting(n: NotingRow, employees: Map<string, EmployeeDisplay>) {
@@ -124,15 +122,16 @@ export async function getFileDetail(tenantId: string, id: string): Promise<FileD
   );
   if (!file) return null;
 
-  const [notings, movements, dispatches, attachments, employees] = await Promise.all([
+  const [notings, movements, dispatches, attachments] = await Promise.all([
     repo.findNotingsByFile(id),
     repo.listFileMovements(id, tenantId),
     repo.listDispatchByFile(id, tenantId),
     repo.listAttachmentsByFile(id, tenantId),
-    // Best-effort, cached, tenant-scoped hrms lookup for officer display
-    // names — see hrms-client.ts. Never throws/blocks: an hrms-service
-    // outage degrades every label to id truncation, it never breaks the read.
-    getEmployeeDisplayMap(tenantId),
+  ]);
+  const employees = await getEmployeeDisplayMap(tenantId, [
+    file.currentWith,
+    ...notings.map((n) => n.officerId),
+    ...dispatches.map((d) => d.createdBy),
   ]);
 
   return {
@@ -163,13 +162,18 @@ export async function getFileDetail(tenantId: string, id: string): Promise<FileD
   };
 }
 
-export async function listFiles(tenantId: string, limit: number): Promise<FileRow[]> {
+export async function listFiles(tenantId: string, limit: number): Promise<Array<FileRow & { createdByName: string | null }>> {
   const rows = await cache.getOrLoad(
     cache.makeKey(tenantId, "file", `list:${limit}`),
     () => repo.listFilesByTenant(tenantId, limit),
     60,
   );
-  return rows ?? [];
+  const list = rows ?? [];
+  // SF-17b: "Created By" shows a name, not the creator's id. Resolved per page
+  // (batched, tenant-scoped), outside the cache so a rename is never stale
+  // beyond hrms's own data. null = unresolvable; the web shows "Unknown employee".
+  const names = await getEmployeeDisplayMap(tenantId, list.map((f) => f.createdBy));
+  return list.map((f) => ({ ...f, createdByName: names.get(f.createdBy)?.fullName ?? null }));
 }
 
 export async function listInward(tenantId: string, limit: number) {

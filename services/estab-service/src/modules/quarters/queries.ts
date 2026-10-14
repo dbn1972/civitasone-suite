@@ -90,7 +90,7 @@ export async function listAllotments(
   const conds: SQL[] = [eq(estabQuarterAllotments.tenantId, tenantId)];
   if (opts.status) conds.push(eq(estabQuarterAllotments.status, opts.status));
   if (opts.quarterId) conds.push(eq(estabQuarterAllotments.quarterId, opts.quarterId));
-  const [rows, totalRows, employees] = await Promise.all([
+  const [rows, totalRows] = await Promise.all([
     db.transaction((tx) => tx.select().from(estabQuarterAllotments)
       .where(and(...conds)).limit(opts.limit).offset(opts.offset)),
     db.transaction((tx) => tx.select({ n: count() }).from(estabQuarterAllotments).where(and(...conds))),
@@ -99,8 +99,8 @@ export async function listAllotments(
     // of-record display problem -- see hrms-client.ts. Never
     // throws/blocks: an hrms-service outage degrades every row to
     // employeeRef truncation at the frontend, it never breaks the read.
-    getEmployeeDisplayMap(tenantId),
   ]);
+  const employees = await getEmployeeDisplayMap(tenantId, rows.map((r) => r.employeeRef));
   const quarterNos = await resolveQuarterNos(tenantId, rows.map((r) => r.quarterId));
   return {
     rows: rows.map((r) => ({
@@ -124,7 +124,7 @@ export async function getAllotment(tenantId: string, id: string): Promise<Allotm
   const row = rows[0];
   if (!row) return null;
   const [employees, quarterNos] = await Promise.all([
-    getEmployeeDisplayMap(tenantId),
+    getEmployeeDisplayMap(tenantId, [row.employeeRef]),
     resolveQuarterNos(tenantId, [row.quarterId]),
   ]);
   return {

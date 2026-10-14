@@ -4,7 +4,8 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
-import { getAwardById, getTenderById, countTenders, listTenders, listQuotations, tenderOrPreTenderExists } from "./repo.js";
+import { getAwardById, getTenderById, countTenders, listTenders, listQuotations, tenderOrPreTenderExists, preTenderReferenceExists } from "./repo.js";
+import { hasFinalizedTsForWork } from "../approval/repo.js";
 import { canDaoFinalizeAward, canDoFinalizeAward, canViewBidDetails, redactQuotation, isSelfApprovalAward } from "./domain.js";
 import { findContractorById, findContractorByName } from "../contractor/repo.js";
 import { paginationSchema } from "../masters/validators.js";
@@ -93,6 +94,16 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.createPreTenderSchema.parse(req.body);
+
+    // GAP-WORKS-TENDERS-NEW-06: a tender needs a sanctioned work — the work
+    // must carry a finalized technical sanction (which also proves it exists)
+    // — and a reference number may not be reused.
+    if (!(await hasFinalizedTsForWork(ctx.tenantId, body.workId))) {
+      throw new HttpError(422, "TS_REQUIRED", "A pre-tender requires a finalized technical sanction (TS) for this work");
+    }
+    if (body.referenceNumber && (await preTenderReferenceExists(ctx.tenantId, body.referenceNumber.trim()))) {
+      throw new HttpError(409, "DUPLICATE_REFERENCE", "A pre-tender with this reference number already exists");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPreTenderCommand(ctx, body));
   });
 
@@ -107,6 +118,16 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const tenderExists = await tenderOrPreTenderExists(ctx.tenantId, body.tenderId);
     if (!tenderExists) {
       throw new HttpError(404, "NOT_FOUND", "tenderId does not reference an existing tender or pre-tender");
+    }
+
+    // GAP-WORKS-TENDERS-DETAIL-01: a supplied contractorId must be a real
+    // registered contractor matching contractorName (same rule as awards).
+    if (body.contractorId) {
+      const contractor = await findContractorById(ctx.tenantId, body.contractorId);
+      if (!contractor) throw new HttpError(404, "NOT_FOUND", "contractor not found for contractorId");
+      if (contractor.name.trim().toLowerCase() !== body.contractorName.trim().toLowerCase()) {
+        throw new HttpError(422, "CONTRACTOR_NAME_MISMATCH", "contractorName does not match the registered contractor record for contractorId");
+      }
     }
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.addQuotationCommand(ctx, body));

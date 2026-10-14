@@ -13,6 +13,19 @@ const DRAFTER_ROLES = ["estab_officer", "estab_admin", "super_admin"];
 const APPROVER_ROLES = ["estab_admin", "super_admin", "estab_deputy_secretary"];
 const READER_ROLES = [...DRAFTER_ROLES, "audit_officer"];
 
+/**
+ * GAP-ESTAB-DFA-02: segregation of duties enforced at the route, synchronously,
+ * so a drafter gets a 403 (and no command is enqueued) instead of a message that
+ * dead-letters in the consumer. The consumer keeps its own K3 check as defence
+ * in depth. A missing DFA falls through to the consumer's no-op as before.
+ */
+async function assertNotDrafter(ctx: { tenantId: string; actorId: string }, id: string, verb: string): Promise<void> {
+  const dfa = await queries.getDfa(ctx.tenantId, id);
+  if (dfa && dfa.createdBy === ctx.actorId) {
+    throw new HttpError(403, "MAKER_CHECKER_VIOLATION", `A DFA cannot be ${verb} by its drafter`);
+  }
+}
+
 export async function dfaRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/estab/dfa", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -74,6 +87,7 @@ export async function dfaRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, APPROVER_ROLES);
     const { id } = req.params as { id: string };
     const body = approveDfaBody.parse(req.body ?? {});
+    await assertNotDrafter(ctx, id, "approved");
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveDfa(ctx, id, { modality: body.modality, conditions: body.conditions }));
   });
 
@@ -89,6 +103,7 @@ export async function dfaRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, APPROVER_ROLES);
     const { id } = req.params as { id: string };
+    await assertNotDrafter(ctx, id, "signed");
     return sendAccepted(reply, acceptedResponseSchema, await commands.signDfa(ctx, id));
   });
 

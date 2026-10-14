@@ -44,10 +44,10 @@ describe("grant application actions (COMP-012)", () => {
 
   it("approveApplication PATCHes the real approve route with the sanctioned amount", async () => {
     mockFetchOnce(202);
-    await approveApplication("app-1", { amountApprovedMinor: 500000 });
+    await approveApplication("app-1", { amountApprovedMinor: 500000, reason: "Within scheme ceiling" });
     expect(global.fetch).toHaveBeenCalledWith(
       "/api/proxy/v1/grants/applications/app-1/approve",
-      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ amountApprovedMinor: 500000 }) }),
+      expect.objectContaining({ method: "PATCH", body: JSON.stringify({ amountApprovedMinor: 500000, reason: "Within scheme ceiling" }) }),
     );
   });
 
