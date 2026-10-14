@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "@/app/_components/ds";
 import { formatIndianDateTime } from "@/lib/formatters";
 import type { ComplianceCheck } from "@/app/_data/loaders";
@@ -14,24 +15,25 @@ type Row = ComplianceCheck & Record<string, unknown>;
  * implied by an empty cell.
  */
 export function ComplianceChecksTable({ checks }: { checks: ComplianceCheck[] }) {
+  const t = useTranslations("tenantAdminW2.compliance");
   return (
     <DataTable<Row>
-      caption="Recent compliance checks"
+      caption={t("checksCaption")}
       columns={[
-        { key: "title", label: "Check" },
-        { key: "timestamp", label: "Checked", render: (c) => formatIndianDateTime(c.timestamp) },
+        { key: "title", label: t("colCheck") },
+        { key: "timestamp", label: t("colChecked"), render: (c) => formatIndianDateTime(c.timestamp) },
         {
           key: "evidenceCount",
-          label: "Evidence",
+          label: t("colEvidence"),
           render: (c) =>
             typeof c.evidenceCount === "number"
               ? c.evidenceCount === 0
-                ? "None recorded"
-                : `${c.evidenceCount} item${c.evidenceCount === 1 ? "" : "s"}`
-              : "—",
+                ? t("evidenceNone")
+                : t("evidenceCount", { count: c.evidenceCount })
+              : t("noValue"),
         },
         // GAP-TENANT-ADMIN-COMPLIANCE-01: token-based, contrast-checked pill.
-        { key: "result", label: "Result", render: (c) => <StatusPill status={c.result} /> },
+        { key: "result", label: t("colResult"), render: (c) => <StatusPill status={c.result} /> },
       ]}
       rows={checks as Row[]}
       sortable

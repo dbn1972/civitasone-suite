@@ -4,9 +4,11 @@ import { getComplianceOverview } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { formatPercent, formatIndianDateTime } from "@/lib/formatters";
+import { getTranslations } from "next-intl/server";
 import { ComplianceChecksTable } from "./ComplianceChecksTable";
 
 export default async function ComplianceDashboardPage() {
+  const t = await getTranslations("tenantAdminW2.compliance");
   const result = await getComplianceOverview();
   const { data: overview } = result;
   const resource = toResourceState(result, (data) => data.checks.length === 0);
@@ -38,9 +40,9 @@ export default async function ComplianceDashboardPage() {
           defensible. Shown only when the service supplied it. */}
       {!errored && overview.provenance ? (
         <p style={{ fontSize: 12.5, color: "var(--ink2)", margin: "0 0 14px" }} data-testid="compliance-provenance">
-          {overview.provenance.method}{" "}
-          {overview.provenance.asOf ? <>As of {formatIndianDateTime(overview.provenance.asOf)}. </> : "No controls recorded yet. "}
-          {overview.provenance.complete ? null : "Some controls are not yet tested, so scores may change."}
+          {t("provenanceMethod")}{" "}
+          {overview.provenance.asOf ? t("asOf", { date: formatIndianDateTime(overview.provenance.asOf) }) : t("noControls")}{" "}
+          {overview.provenance.complete ? null : t("incomplete")}
         </p>
       ) : null}
 

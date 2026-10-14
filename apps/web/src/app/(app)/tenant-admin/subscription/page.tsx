@@ -1,9 +1,12 @@
 import { PageHeader, StatCard, StatusPill, EmptyState, Card, RefreshErrorState } from "../../../_components/ds";
 import { formatIndianDate, formatMoney, humanizeStatus } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 import { Breadcrumb } from "../Breadcrumb";
 import { getSubscription } from "../../../_data/loaders";
 import { PLANS_HREF } from "../navConstants";
+
+const STATUS_KEYS = new Set(["active", "past_due", "cancelled", "trial", "suspended"]);
 
 /** Human display name for a raw module key (fallback: humanized key). */
 function moduleDisplayName(key: string): string {
@@ -11,6 +14,7 @@ function moduleDisplayName(key: string): string {
 }
 
 export default async function SubscriptionPage() {
+  const tStatus = await getTranslations("tenantAdminW2.subscription.status");
   const result = await getSubscription();
   const { data: subscription } = result;
   // null-on-api (genuinely no subscription) is distinct from source:"error".
@@ -65,7 +69,7 @@ export default async function SubscriptionPage() {
                 <h3>Usage & quota</h3>
                 {/* GAP-TENANT-ADMIN-SUBSCRIPTION-05: let StatusPill humanize
                     ('Past Due') instead of a raw lowercased string. */}
-                <StatusPill status={subscription.status} />
+                <StatusPill status={subscription.status} label={STATUS_KEYS.has(subscription.status) ? tStatus(subscription.status) : undefined} />
               </div>
               <div className="pad">
                 <div style={{ marginBottom: 20 }}>

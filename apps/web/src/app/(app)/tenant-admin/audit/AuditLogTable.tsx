@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Segmented, DataTable, StatusPill } from "../../../_components/ds";
 import { maskEmail } from "../../../_components/ds/Masked";
 import { formatIndianDateTime } from "@/lib/formatters";
@@ -47,6 +48,7 @@ function maskIp(ip: string): string {
 }
 
 export function AuditLogTable({ events }: { events: AuditEvent[] }) {
+  const tw2 = useTranslations("tenantAdminW2.audit");
   const [filter, setFilter] = useState<string>("All");
 
   const rows = useMemo(() => {
@@ -113,7 +115,7 @@ export function AuditLogTable({ events }: { events: AuditEvent[] }) {
         exportable
         exportAudit="tenant-admin/audit"
         exportFilename="audit-log"
-        exportNotice="Exports are recorded in the audit log."
+        exportNotice={tw2("exportNotice")}
         emptyIcon="📋"
         emptyTitle={filter === "Failures" ? "No failures recorded" : "No audit events yet"}
         emptyMessage={filter === "Failures" ? "No failed actions in the loaded events." : "Audit events will appear here as actions are taken."}

@@ -14558,5 +14558,42 @@
     "encashmentWhole": "कृपया दिनों की पूर्ण संख्या दर्ज करें।",
     "encashmentNegative": "नकदीकरण के दिन ऋणात्मक नहीं हो सकते।",
     "remarksMax1000": "टिप्पणियाँ 1000 वर्णों या उससे कम होनी चाहिए।"
+  },
+  "tenantAdminW2": {
+    "compliance": {
+      "provenanceMethod": "स्कोर आपके दर्ज किए गए अनुपालन नियंत्रणों से निकाले जाते हैं (परीक्षण योग्य नियंत्रणों पर पास या फ़ेल)।",
+      "asOf": "{date} तक की स्थिति।",
+      "noControls": "अभी कोई नियंत्रण दर्ज नहीं है।",
+      "incomplete": "कुछ नियंत्रणों का परीक्षण अभी नहीं हुआ है, इसलिए स्कोर बदल सकते हैं।",
+      "checksCaption": "हाल की अनुपालन जाँचें",
+      "colCheck": "जाँच",
+      "colChecked": "जाँच की तिथि",
+      "colEvidence": "साक्ष्य",
+      "colResult": "परिणाम",
+      "evidenceNone": "कोई दर्ज नहीं",
+      "evidenceCount": "{count, plural, one {# आइटम} other {# आइटम}}",
+      "noValue": "—"
+    },
+    "audit": {
+      "total": "कुल घटनाएँ",
+      "last24h": "घटनाएँ (24 घंटे)",
+      "success": "सफल",
+      "failures": "विफल",
+      "loaded": "लोड की गई घटनाएँ",
+      "noValue": "—",
+      "exportNotice": "निर्यात ऑडिट लॉग में दर्ज किए जाते हैं।"
+    },
+    "users": {
+      "exportNotice": "निर्यात ऑडिट लॉग में दर्ज किए जाते हैं।"
+    },
+    "subscription": {
+      "status": {
+        "active": "सक्रिय",
+        "past_due": "बकाया",
+        "cancelled": "रद्द",
+        "trial": "परीक्षण अवधि",
+        "suspended": "निलंबित"
+      }
+    }
   }
 }
