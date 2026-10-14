@@ -14,7 +14,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, ConfirmDialog, PageHeader } from "../../../../../_components/ds";
+import { Alert, Button, ConfirmDialog, PageHeader } from "../../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
@@ -115,7 +115,7 @@ export function NewUCForm({ schemes }: { schemes: SchemeOption[] | null }) {
         backLabel={t("backLabel")}
       />
       {message ? (
-        <div role={isError ? "alert" : "status"} aria-live={isError ? "assertive" : "polite"} className="banner" style={{ background: isError ? "#fef2f2" : "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
+        <Alert variant={isError ? "danger" : "success"} role={isError ? "alert" : "status"} aria-live={isError ? "assertive" : "polite"} style={{ marginBottom: 16 }}>{message}</Alert>
       ) : null}
       <div className="card">
         <form onSubmit={review} className="pad" noValidate>
@@ -124,7 +124,7 @@ export function NewUCForm({ schemes }: { schemes: SchemeOption[] | null }) {
               <label className="l" htmlFor="uc-no">{t("labelUcNumber")}</label>
               <input id="uc-no" required value={form.ucNo} onChange={(e) => setForm({ ...form, ucNo: e.target.value })} style={inputStyle} />
               {formError.fieldError("ucNo") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("ucNo")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("ucNo")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
@@ -146,17 +146,17 @@ export function NewUCForm({ schemes }: { schemes: SchemeOption[] | null }) {
               {schemes !== null && schemes.length === 0 && (
                 <span style={{ fontSize: 12, color: "var(--mut)" }}>{t("noSchemes")}</span>
               )}
-              {errors.scheme && <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{errors.scheme}</span>}
+              {errors.scheme && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{errors.scheme}</span>}
               {formError.fieldError("scheme") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("scheme")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("scheme")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="uc-grantee">{t("labelGrantee")}</label>
               <input id="uc-grantee" required aria-required="true" maxLength={200} value={form.grantee} onChange={(e) => setForm({ ...form, grantee: e.target.value })} aria-invalid={errors.grantee ? true : undefined} style={inputStyle} />
-              {errors.grantee && <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{errors.grantee}</span>}
+              {errors.grantee && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{errors.grantee}</span>}
               {formError.fieldError("grantee") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("grantee")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("grantee")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
@@ -164,7 +164,7 @@ export function NewUCForm({ schemes }: { schemes: SchemeOption[] | null }) {
               <input id="uc-grant" value={form.grantRef} aria-describedby="uc-grant-help" onChange={(e) => setForm({ ...form, grantRef: e.target.value })} style={inputStyle} />
               <span id="uc-grant-help" style={{ fontSize: 12, color: "var(--ink2)" }}>{t("helpGrantRef")}</span>
               {formError.fieldError("grantRef") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("grantRef")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("grantRef")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
@@ -174,21 +174,21 @@ export function NewUCForm({ schemes }: { schemes: SchemeOption[] | null }) {
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="uc-to">{t("labelPeriodTo")}</label>
               <input id="uc-to" type="date" value={form.periodTo} onChange={(e) => setForm({ ...form, periodTo: e.target.value })} style={inputStyle} aria-invalid={errors.period ? true : undefined} />
-              {errors.period && <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{errors.period}</span>}
+              {errors.period && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{errors.period}</span>}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="uc-amt">{t("labelAmountUtilised")}</label>
               <input id="uc-amt" required type="number" min="0" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={inputStyle} />
-              {errors.amount && <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{errors.amount}</span>}
+              {errors.amount && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{errors.amount}</span>}
               {formError.fieldError("amountMinor") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("amountMinor")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("amountMinor")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="uc-purpose">{t("labelPurpose")}</label>
               <input id="uc-purpose" required value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} style={inputStyle} />
               {formError.fieldError("purpose") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("purpose")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("purpose")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
@@ -196,7 +196,7 @@ export function NewUCForm({ schemes }: { schemes: SchemeOption[] | null }) {
                 <input id="uc-declaration" type="checkbox" checked={declared} onChange={(e) => setDeclared(e.target.checked)} aria-invalid={errors.declaration ? true : undefined} />
                 <span>{t("declaration")}</span>
               </label>
-              {errors.declaration && <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{errors.declaration}</span>}
+              {errors.declaration && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{errors.declaration}</span>}
             </div>
           </div>
           <Button type="submit" disabled={busy || done || schemes === null} aria-busy={busy} style={{ marginTop: 12 }}>

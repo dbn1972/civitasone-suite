@@ -27,6 +27,15 @@ const CLEANED: readonly string[] = [
   "(app)/finance/statutory",
   "(app)/finance/treasury",
   "(app)/finance/vendors",
+  "(app)/finance/accounting",
+  "(app)/finance/audit-paras",
+  "(app)/finance/dashboard",
+  "(app)/finance/expenditure",
+  "(app)/finance/fiscal-years",
+  "(app)/finance/opening-balances",
+  "(app)/finance/period-close",
+  "(app)/finance/reconciliation",
+  "(app)/finance/recurring-entries",
 ];
 
 function walk(p: string): string[] {

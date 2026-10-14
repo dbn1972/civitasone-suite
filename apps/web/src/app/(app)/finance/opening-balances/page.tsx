@@ -193,9 +193,9 @@ export default async function OpeningBalancesPage({
       ) : balancesErr ? (
         <>
           <StatGrid>
-            <StatCard icon="🧾" iconBg="#e6f0ff" label="Entries" value="—" />
-            <StatCard icon="⬇️" iconBg="#e6f7f0" label="Total Debit" value="—" />
-            <StatCard icon="⬆️" iconBg="#fff2e6" label="Total Credit" value="—" />
+            <StatCard icon="🧾" tone="info" label="Entries" value="—" />
+            <StatCard icon="⬇️" tone="good" label="Total Debit" value="—" />
+            <StatCard icon="⬆️" tone="warn" label="Total Credit" value="—" />
           </StatGrid>
           <Card title={`Opening Balances — ${selectedFy}`}>
             <div className="pad">
@@ -206,9 +206,9 @@ export default async function OpeningBalancesPage({
       ) : (
         <>
           <StatGrid>
-            <StatCard icon="🧾" iconBg="#e6f0ff" label="Entries" value={balances.length} />
-            <StatCard icon="⬇️" iconBg="#e6f7f0" label="Total Debit" value={formatMoney(totalDebit)} />
-            <StatCard icon="⬆️" iconBg="#fff2e6" label="Total Credit" value={formatMoney(totalCredit)} />
+            <StatCard icon="🧾" tone="info" label="Entries" value={balances.length} />
+            <StatCard icon="⬇️" tone="good" label="Total Debit" value={formatMoney(totalDebit)} />
+            <StatCard icon="⬆️" tone="warn" label="Total Credit" value={formatMoney(totalCredit)} />
           </StatGrid>
 
           {!fyOpen ? (

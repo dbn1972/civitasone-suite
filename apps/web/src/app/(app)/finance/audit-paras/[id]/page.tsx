@@ -52,10 +52,10 @@ export default async function AuditParaDetailPage({ params }: { params: { id: st
         actions={actions.length > 0 ? <AuditParaActions id={para.id} paraNo={para.paraNo} actions={actions} /> : null}
       />
       <StatGrid>
-        <StatCard icon="₹" iconBg="#fce7ee" label="Amount" value={formatMoney(para.moneyValueMinor)} />
-        <StatCard icon="🏛️" iconBg="#e7edfd" label="Source" value={para.source} />
-        <StatCard icon="🏢" iconBg="#fffaeb" label="Department" value={para.dept} />
-        <StatCard icon="⏳" iconBg="#fce7ee" label="Status" value={humanizeStatus(para.status)} />
+        <StatCard icon="₹" tone="bad" label="Amount" value={formatMoney(para.moneyValueMinor)} />
+        <StatCard icon="🏛️" tone="info" label="Source" value={para.source} />
+        <StatCard icon="🏢" tone="warn" label="Department" value={para.dept} />
+        <StatCard icon="⏳" tone="bad" label="Status" value={humanizeStatus(para.status)} />
       </StatGrid>
 
       <Card title="Register record" padding>

@@ -71,10 +71,10 @@ export default async function ReconciliationWorkbenchPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🔁" iconBg="#e7edfd" label="Recon Runs" value={runsResult.source === "error" ? "—" : runs.length} />
-        <StatCard icon="⚠️" iconBg="#fef3f2" label="Unbalanced Runs" value={runsResult.source === "error" ? "—" : unbalancedRuns} />
-        <StatCard icon="🧩" iconBg="#fffaeb" label="Open Exceptions" value={exceptionsResult.source === "error" ? "—" : openExceptions} />
-        <StatCard icon="🔌" iconBg="#eff6ff" label="Providers" value={providersResult.source === "error" ? "—" : providers.length} />
+        <StatCard icon="🔁" tone="info" label="Recon Runs" value={runsResult.source === "error" ? "—" : runs.length} />
+        <StatCard icon="⚠️" tone="bad" label="Unbalanced Runs" value={runsResult.source === "error" ? "—" : unbalancedRuns} />
+        <StatCard icon="🧩" tone="warn" label="Open Exceptions" value={exceptionsResult.source === "error" ? "—" : openExceptions} />
+        <StatCard icon="🔌" tone="info" label="Providers" value={providersResult.source === "error" ? "—" : providers.length} />
       </StatGrid>
 
       <Card title="Reconciliation Runs">

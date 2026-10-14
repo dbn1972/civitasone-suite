@@ -53,9 +53,9 @@ export default async function BillDetailPage({ params }: { params: { id: string 
       />
 
       <StatGrid>
-        <StatCard icon="₹" iconBg="#ecfdf5" label={t("amount")} value={formatMoney(bill.amount)} />
-        <StatCard icon="📅" iconBg="#fff7ed" label={t("fieldSubmitted")} value={formatIndianDate(bill.submittedDate)} />
-        <StatCard icon="⏰" iconBg="#fef3f2" label={t("fieldDueDate")} value={bill.dueDate ? formatIndianDate(bill.dueDate) : "—"} />
+        <StatCard icon="₹" tone="good" label={t("amount")} value={formatMoney(bill.amount)} />
+        <StatCard icon="📅" tone="warn" label={t("fieldSubmitted")} value={formatIndianDate(bill.submittedDate)} />
+        <StatCard icon="⏰" tone="bad" label={t("fieldDueDate")} value={bill.dueDate ? formatIndianDate(bill.dueDate) : "—"} />
       </StatGrid>
 
       <Card title={t("cardTitleDetails")} padding>

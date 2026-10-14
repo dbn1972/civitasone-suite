@@ -34,10 +34,10 @@ export default async function BillsPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🧮" iconBg="#e7edfd" label={t("statInProcess")} value={failed ? null : stats.inProcess} />
-        <StatCard icon="⏱" iconBg="#fffaeb" label={t("statTotal")} value={failed ? null : bills.length} />
-        <StatCard icon="💸" iconBg="#eff6ff" label={t("statValueInPipeline")} value={failed ? null : formatMoney(stats.pipelineValue)} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label={t("statPaidAllTime")} value={failed ? null : formatMoney(stats.paidAllTime)} />
+        <StatCard icon="🧮" tone="info" label={t("statInProcess")} value={failed ? null : stats.inProcess} />
+        <StatCard icon="⏱" tone="warn" label={t("statTotal")} value={failed ? null : bills.length} />
+        <StatCard icon="💸" tone="info" label={t("statValueInPipeline")} value={failed ? null : formatMoney(stats.pipelineValue)} />
+        <StatCard icon="✅" tone="good" label={t("statPaidAllTime")} value={failed ? null : formatMoney(stats.paidAllTime)} />
       </StatGrid>
 
       {/* UX-012: the data-source badge now lives inside BillsTable, driven by

@@ -13,7 +13,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, ConfirmDialog, PageHeader } from "../../../../../_components/ds";
+import { Alert, Button, ConfirmDialog, PageHeader } from "../../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
@@ -120,7 +120,7 @@ export default function NewAdvancePage() {
         backLabel={t("backLabel")}
       />
       {message ? (
-        <div role={isError ? "alert" : "status"} aria-live={isError ? "assertive" : "polite"} className="banner" style={{ background: isError ? "#fef2f2" : "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
+        <Alert variant={isError ? "danger" : "success"} role={isError ? "alert" : "status"} aria-live={isError ? "assertive" : "polite"} style={{ marginBottom: 16 }}>{message}</Alert>
       ) : null}
       <div className="card">
         <form onSubmit={review} className="pad" noValidate>
@@ -130,25 +130,25 @@ export default function NewAdvancePage() {
               <input id="adv-no" required aria-required="true" maxLength={64} aria-describedby="adv-no-hint" value={form.advanceNo} onChange={(e) => setForm({ ...form, advanceNo: e.target.value })} style={inputStyle} />
               <span id="adv-no-hint" style={{ fontSize: 12, color: "var(--ink2)" }}>{t("hintAdvanceNumber")}</span>
               {formError.fieldError("advanceNo") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("advanceNo")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("advanceNo")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="adv-payee">{t("labelPayee")}</label>
               <input id="adv-payee" required aria-required="true" maxLength={200} aria-invalid={payeeError ? true : undefined} aria-describedby="adv-payee-help" value={form.payee} onChange={(e) => setForm({ ...form, payee: e.target.value })} style={inputStyle} />
               <span id="adv-payee-help" style={{ fontSize: 12, color: "var(--ink2)" }}>{t("helpPayee")}</span>
-              {payeeError && <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{payeeError}</span>}
+              {payeeError && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{payeeError}</span>}
               {formError.fieldError("payee") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("payee")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("payee")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="adv-authority">{t("labelAuthority")}</label>
               <input id="adv-authority" required aria-required="true" maxLength={200} aria-invalid={authorityError ? true : undefined} aria-describedby="adv-authority-help" value={form.sanctionAuthority} onChange={(e) => setForm({ ...form, sanctionAuthority: e.target.value })} style={inputStyle} />
               <span id="adv-authority-help" style={{ fontSize: 12, color: "var(--ink2)" }}>{t("helpAuthority")}</span>
-              {authorityError && <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{authorityError}</span>}
+              {authorityError && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{authorityError}</span>}
               {formError.fieldError("sanctionAuthority") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("sanctionAuthority")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("sanctionAuthority")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
@@ -159,29 +159,29 @@ export default function NewAdvancePage() {
                 <option value="other">{t("typeOther")}</option>
               </select>
               {formError.fieldError("type") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("type")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("type")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="adv-amt">{t("labelAmount")}</label>
               <input id="adv-amt" required type="text" inputMode="decimal" autoComplete="off" pattern="\d{1,13}(\.\d{1,2})?" aria-invalid={amountError ? true : undefined} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} style={inputStyle} />
-              {amountError && <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{amountError}</span>}
+              {amountError && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{amountError}</span>}
               {formError.fieldError("amountMinor") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("amountMinor")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("amountMinor")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="adv-due">{t("labelDueDate")}</label>
               <input id="adv-due" type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} style={inputStyle} />
               {formError.fieldError("dueDate") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("dueDate")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("dueDate")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="adv-purpose">{t("labelPurpose")}</label>
               <input id="adv-purpose" required value={form.purpose} onChange={(e) => setForm({ ...form, purpose: e.target.value })} style={inputStyle} />
               {formError.fieldError("purpose") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("purpose")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("purpose")}</span>
               )}
             </div>
           </div>
