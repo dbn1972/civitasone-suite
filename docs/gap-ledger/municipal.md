@@ -268,7 +268,7 @@ Counts: ACTION 20
 
 ### GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W2 PQ: closed by #PRNUM; detailEntries is now an allow-list, PII masked incl. nested/free text. Audited reveal NOT built -- NEEDS OWNER DECISION)
+- [x] **Status** (W2 PQ: closed by #2034; detailEntries is now an allow-list, PII masked incl. nested/free text. Audited reveal NOT built -- NEEDS OWNER DECISION)
 - **W0-10 note:** review found the W0 tick partly — default masking via Masked + piiFields/hiddenFields in records.ts:174-260, but: only trade.ts defines piiFields; heuristic piiKindForKey (records.ts:183) omits names/address; no permission-gated reveal with audit (RecordDetailPanel.tsx:53 uses Masked only) as acceptance requires
 - **First-pass claim:** Generic dump of the whole record: detailEntries() skips only tenantId/createdBy/updatedBy/version (records.ts) and prints every other field, including applicant/owner name, mobile, address and any identity or document numbers the service returns, with no masking or role gate — DPDP exposure the code cannot rule out (backend absent).
 - **Verified evidence:** apps/web/src/app/(app)/municipal/_data/records.ts:152-161 detailEntries skips only tenantId/createdBy/updatedBy/version and renders every other key; RecordDetailPanel.tsx:206-231 prints all values verbatim. No masking component exists in ds (no Masked in app/_components/ds), and no role gate beyond ModuleGate. Which PII fields the backend returns cannot be verified (services absent), but trade config titleFields include ownerName.
