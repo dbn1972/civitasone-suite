@@ -969,7 +969,7 @@ export function mapAssetSummaries(payload: unknown): AssetSummary[] | null {
       id,
       assetCode,
       name,
-      category: toText(row.category) ?? toText(row.categoryName) ?? "—",
+      category: toText(row.category) ?? toText(row.categoryId)?.slice(0, 8) ?? "General",
       type,
       purchaseDate: toText(row.acquisitionDate) ?? toText(row.purchaseDate) ?? toText(row.createdAt)?.slice(0, 10) ?? "—",
       purchaseCost,
