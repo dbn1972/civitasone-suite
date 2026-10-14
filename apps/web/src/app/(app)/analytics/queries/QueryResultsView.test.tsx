@@ -112,3 +112,34 @@ describe("QueryResultsView", () => {
     expect(refreshMock).not.toHaveBeenCalled();
   });
 });
+
+// GAP-ANALYTICS-QUERIES-04 (W2): headers + unit come from the backend catalog.
+describe("QueryResultsView catalog labels", () => {
+  const catalog = {
+    metrics: { amount_sum: { label: "Total amount", unit: "paise" as const }, event_count: { label: "Event count", unit: "count" as const } },
+    dimensions: { department_id: "Department" },
+  };
+
+  beforeEach(() => resourceMock.mockReset());
+
+  it("shows the catalog label for dimension and value headers, not the raw keys", () => {
+    seed([run({ id: "c1", metric: "amount_sum", metricUnit: "paise", dimensions: ["department_id"], rows: [{ department_id: "Finance", value: 12345 }] })]);
+    render(<QueryResultsView runs={[]} source="api" catalog={catalog} />);
+    expect(screen.getByRole("columnheader", { name: /^Department/ })).toBeInTheDocument();
+    expect(screen.queryByText("department_id")).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Total amount/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("₹123.45").length).toBeGreaterThan(0);
+  });
+
+  it("the backend-declared unit wins over the key-derived one (paise from catalog even if the run said count)", () => {
+    seed([run({ id: "c2", metric: "amount_sum", metricUnit: "count", rows: [{ value: 12345 }] })]);
+    render(<QueryResultsView runs={[]} source="api" catalog={catalog} />);
+    expect(screen.getAllByText("₹123.45").length).toBeGreaterThan(0);
+  });
+
+  it("without a catalog, an unlabelled dimension key is humanised rather than shown as snake_case", () => {
+    seed([run({ id: "c3", dimensions: ["department_id"], rows: [{ department_id: "Finance", value: 3 }] })]);
+    render(<QueryResultsView runs={[]} source="api" />);
+    expect(screen.getByRole("columnheader", { name: /^Department/ })).toBeInTheDocument();
+  });
+});

@@ -80,4 +80,14 @@ describe("DashboardsTable", () => {
     expect(screen.queryByText("SHARED")).not.toBeInTheDocument();
     expect(screen.getByText("v3")).toBeInTheDocument();
   });
+
+  it("GAP-ANALYTICS-DASHBOARDS-03 (W2): a missing visibility shows an em dash, not an Unknown access pill", () => {
+    const r = { ...row, visibility: "unknown" };
+    seed([r]);
+    render(<DashboardsTable dashboards={[r]} source="api" />);
+    expect(screen.queryByText("Unknown")).not.toBeInTheDocument();
+    expect(screen.queryByText("Private")).not.toBeInTheDocument();
+    expect(screen.queryByText("Shared")).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
 });

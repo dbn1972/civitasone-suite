@@ -41,6 +41,55 @@ export function unitForMetric(metricKey: string): MetricUnit {
   return metricKey.startsWith("amount_") ? "paise" : "count";
 }
 
+/**
+ * GAP-ANALYTICS-QUERIES-04 (W2): labels + units come from the backend catalog
+ * (GET /v1/analytics/catalog declares a `unit` and a human `label` for every
+ * metric and dimension). A run only stores the whitelisted KEYS, so the page
+ * loads the catalog once and passes this serialisable lookup to the results
+ * view. If the catalog is unavailable the view falls back to a humanised key
+ * and the key-derived unit above - it never shows a snake_case key as a header
+ * when a label is known.
+ */
+export type AnalyticsCatalogLabels = {
+  metrics: Record<string, { label: string; unit: MetricUnit }>;
+  dimensions: Record<string, string>;
+};
+
+const EMPTY_CATALOG_LABELS: AnalyticsCatalogLabels = { metrics: {}, dimensions: {} };
+
+/** "department_id" -> "Department"; "event_type" -> "Event type". Fallback only. */
+export function humanizeKey(key: string): string {
+  const words = key.replace(/_id$/i, "").split(/[_\s]+/).filter(Boolean);
+  if (words.length === 0) return key;
+  const joined = words.join(" ").toLowerCase();
+  return joined.charAt(0).toUpperCase() + joined.slice(1);
+}
+
+export async function getAnalyticsCatalogLabels(): Promise<LoaderResult<AnalyticsCatalogLabels>> {
+  return fetchJson<Record<string, unknown>, AnalyticsCatalogLabels>(
+    "/api/v1/analytics/catalog",
+    EMPTY_CATALOG_LABELS,
+    {
+      revalidateSeconds: 300,
+      telemetryKey: "analytics.catalog.labels",
+      mapResponse: (payload) => {
+        if (!isRecord(payload)) return EMPTY_CATALOG_LABELS;
+        const metrics: AnalyticsCatalogLabels["metrics"] = {};
+        for (const m of Array.isArray(payload.metrics) ? payload.metrics : []) {
+          if (isRecord(m) && typeof m.key === "string" && typeof m.label === "string") {
+            metrics[m.key] = { label: m.label, unit: m.unit === "paise" ? "paise" : "count" };
+          }
+        }
+        const dimensions: AnalyticsCatalogLabels["dimensions"] = {};
+        for (const d of Array.isArray(payload.dimensions) ? payload.dimensions : []) {
+          if (isRecord(d) && typeof d.key === "string" && typeof d.label === "string") dimensions[d.key] = d.label;
+        }
+        return { metrics, dimensions };
+      },
+    },
+  );
+}
+
 export type AnalyticsQueryRunRow = {
   id: string;
   queryName: string;

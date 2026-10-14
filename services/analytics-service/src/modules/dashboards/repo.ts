@@ -3,7 +3,7 @@
  * Every read/write is tenant-scoped. Updates use optimistic locking on the
  * `version` column (compare-and-set); a stale version affects 0 rows.
  */
-import { and, eq, asc, desc } from "drizzle-orm";
+import { and, eq, asc, desc, or, exists } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import {
   dashboards,
@@ -63,6 +63,52 @@ export async function findById(id: string, tenantId: string): Promise<DashboardV
   );
   const row = rows[0];
   return row ? toView(row) : null;
+}
+
+/**
+ * Dashboards a NON-admin viewer may see: ones they own, plus shared ones with
+ * a share row naming them. Mirrors access.ts canView (owner | admin | shared +
+ * share) so the list never advertises a dashboard whose detail would 404.
+ * GAP-ANALYTICS-DASHBOARDS-03 (private dashboards were listed tenant-wide).
+ */
+export async function listVisibleToActor(
+  tenantId: string,
+  actorId: string,
+  limit: number,
+  offset: number,
+): Promise<DashboardView[]> {
+  const rows = await scopedRead(async (tx) =>
+    tx
+      .select()
+      .from(dashboards)
+      .where(
+        and(
+          eq(dashboards.tenantId, tenantId),
+          or(
+            eq(dashboards.ownerId, actorId),
+            and(
+              eq(dashboards.visibility, "shared"),
+              exists(
+                tx
+                  .select({ one: dashboardShares.id })
+                  .from(dashboardShares)
+                  .where(
+                    and(
+                      eq(dashboardShares.dashboardId, dashboards.id),
+                      eq(dashboardShares.tenantId, tenantId),
+                      eq(dashboardShares.principalId, actorId),
+                    ),
+                  ),
+              ),
+            ),
+          ),
+        ),
+      )
+      .orderBy(desc(dashboards.updatedAt))
+      .limit(limit)
+      .offset(offset),
+  );
+  return rows.map(toView);
 }
 
 export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<DashboardView[]> {

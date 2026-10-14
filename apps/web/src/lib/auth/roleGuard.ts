@@ -266,6 +266,16 @@ export const INVENTORY_ITEM_LINK_ROLES = ["inventory_manager", "inventory_admin"
 export const CRM_ADMIN_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
 
 /**
+ * Roles crm-service admits on GET /v1/crm/contacts/:id (its CRM_ROLES in
+ * modules/contacts/routes.ts). Used to decide whether a drill-through link to a
+ * contact record is offered at all: an analytics/ML admin without a CRM role
+ * would only reach a 403, and the scored person should not be one click from
+ * personal data without a CRM entitlement (DPDP purpose limitation,
+ * GAP-ANALYTICS-ML-INSIGHTS-LEADS-05). The server remains the authority.
+ */
+export const CRM_CONTACT_READ_ROLES = ["crm_user", "crm_admin", "super_admin"];
+
+/**
  * Roles permitted to approve/reject a quotation discount or deviation
  * exception. Mirrors crm-service's ADMIN_ROLES in
  * modules/deals/quotation-approval-routes.ts (the POST

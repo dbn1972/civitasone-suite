@@ -16,6 +16,8 @@ interface DomainInsightPageProps {
   source: "api" | "error";
   /** URL prefix for drill-through links from the predictions table */
   rowLinkPrefix?: string;
+  /** Parent drill-through path template with `{parentId}` (see RecentPredictionsTable). */
+  parentLinkTemplate?: string;
   /** Custom labels for the 4 stat cards */
   statLabels?: {
     predictions?: string;
@@ -54,6 +56,7 @@ export function DomainInsightPage({
   evaluation,
   source,
   rowLinkPrefix,
+  parentLinkTemplate,
   statLabels,
   metric,
   predictionKind,
@@ -154,6 +157,7 @@ export function DomainInsightPage({
           predictions={evaluation.recentPredictions}
           source={source}
           rowLinkPrefix={rowLinkPrefix}
+          parentLinkTemplate={parentLinkTemplate}
           domain={domain}
           predictionKind={resolvedKind}
           canExport={canExport}

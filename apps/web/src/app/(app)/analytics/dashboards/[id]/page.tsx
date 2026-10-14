@@ -53,7 +53,7 @@ export default async function AnalyticsDashboardDetailPage({ params }: { params:
           <dt>Status</dt>
           <dd><StatusPill status={dashboard.status} /></dd>
           <dt>Visibility</dt>
-          <dd><StatusPill status={dashboard.visibility} /></dd>
+          <dd>{dashboard.visibility === "unknown" ? "—" : <StatusPill status={dashboard.visibility} />}</dd>
           <dt>Owner</dt>
           <dd>{dashboard.ownerId ? (dashboard.ownerName ?? tFallback("unknownEmployee")) : "—"}</dd>
         </dl>
