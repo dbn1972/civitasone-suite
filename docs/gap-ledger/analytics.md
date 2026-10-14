@@ -166,7 +166,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-DASHBOARDS-01  ·  HIGH  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Dashboards can be listed but not opened: no row link or action (DashboardsTable.tsx:16-22) and no /analytics/dashboards/[id] route exists under the segment; the subtitle's 'widgets, layout and owner/shared access control' (page.tsx:24) is not reachable.
 - **Verified evidence:** DashboardsTable.tsx:16-22 columns have no link/action and the DataTable call (46-53) passes no rowHref although DataTable supports rowHref (DataTable.tsx:56). No dashboards/[id] route exists (dir has only page.tsx and DashboardsTable.tsx). Subtitle at page.tsx:24 promises widgets/layout/access control. No getAnalyticsDashboardById loader; whether a detail endpoint exists cannot be verified (analytics service absent).
 - **Files to change:** `apps/web/src/app/(app)/analytics/dashboards/page.tsx`, `apps/web/src/app/(app)/analytics/dashboards/DashboardsTable.tsx`, `apps/web/src/app/(app)/analytics/_data.ts`, `apps/web/src/app/(app)/analytics/dashboards/[id]/page.tsx`
@@ -198,6 +198,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 ### GAP-ANALYTICS-DASHBOARDS-03  ·  MEDIUM  ·  partly  ·  theme WIRING
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W1 SF-17b note (#2033):** owner now shown by name (analytics-service resolves ownerName through hrms actorIds; unresolved shows "Unknown employee"). Left open: a missing visibility still renders as an "unknown" pill rather than "—", and server-side filtering of private dashboards is still unconfirmed.
 - **W0-10 note:** review found the W0 tick partly — Owner column shows truncated opaque ownerId (DashboardsTable.tsx:24, _data.ts ownerId) not a name; missing visibility shows "unknown" pill not "—"; no evidence backend filters private dashboards server-side (fix step 4)
 - **First-pass claim:** Visibility 'private' rows appear in a tenant-wide list; the page does not show owner, so a viewer cannot tell why they see or do not see a dashboard (owner column missing from AnalyticsDashboardRow, _data.ts:9-16).
 - **Verified evidence:** _data.ts:9-16 AnalyticsDashboardRow has id,name,description,status,visibility,version only; mapper (47-54) reads no owner field, so owner cannot be shown. visibility defaults to 'private' when missing (line 52). Whether the API returns owner fields or filters private dashboards by caller cannot be verified (analytics service absent). Rows are tenant-list as returned by the API; the page does not itself filter.
@@ -214,7 +215,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-DASHBOARDS-04  ·  LOW  ·  partly  ·  theme NAVUX (was VALIDATION)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Version is printed as a bare number and status/visibility upper-cased in pills (DashboardsTable.tsx:19-21); duplicate route /analytics/list lists the same endpoint.
 - **Verified evidence:** DashboardsTable.tsx:19-21 pass label={value.toUpperCase()} to StatusPill; 'shared'/'private' are not in STATUS_MAP (StatusPill.tsx) so they render neutral 'info'. version is a right-aligned number without 'v' prefix (line 21). Duplicate /analytics/list on the same endpoint is true (list/page.tsx:5). Cosmetic; theme VALIDATION is wrong.
 - **Files to change:** `apps/web/src/app/(app)/analytics/dashboards/DashboardsTable.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`

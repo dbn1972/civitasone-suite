@@ -709,7 +709,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Attachments are rendered as plain text (fileName + date) with no link or download (FileAttachments.tsx:80-86); officers can upload but never open an attachment from the file.
 - **Verified evidence:** FileAttachments.tsx:80-85 (file lines) renders <li>{a.fileName} + date as text; no anchor. The mapper (_data/apiMappers.ts:~795-803) drops any storageRef/url from attachments, so the page has no handle to download. No download route is visible in the web app; existing note-sheet PDF uses /api/proxy/v1/estab/files/:id/note-sheet/pdf (page.tsx:97). Backend download endpoint is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/estab/files/[id]/FileAttachments.tsx`, `apps/web/src/app/_data/apiMappers.ts`, `estab-service attachments GET (not in snapshot)`
@@ -743,6 +743,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 ### GAP-ESTAB-FILES-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme PII
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W1 SF-17b note (#2033):** OfficerName already reads only the operator roster (no /hrms/employees pull; failures not cached), and its labels now say "Unknown employee" instead of "Officer <id8>". Left open: names still come from the roster rather than a batched resolve for the ids on screen.
 - **W0 note:** partly fixed by #1916 — Uses operator roster names only, cache only on success; no resolve endpoint or TTL.
 - **First-pass claim:** OfficerName pulls GET /hrms/employees?limit=200 into every viewer's browser to resolve names (OfficerName.tsx:61-67) — over-fetching PII for a label, silently falling back to "Officer 3f9a1c2e" beyond 200 employees or without HR permission; the module-level cache is never refreshed.
 - **Verified evidence:** OfficerName.tsx:59-70 fetches /api/proxy/v1/hrms/employees?limit=200 (and operators limit=500 at :46) in every viewer's browser, keeps only id+name but the full employee payload crosses the wire; failures are swallowed and `cache = {operators,names}` is set even if both fetches failed (:72), so the degraded map is permanent until page reload; no invalidation. Used by page.tsx:118, MovementTimeline and InboxPanel. Beyond 200 employees names fall back to 'Officer 3f9a1c2e' (:81). Whether the proxy strips HR fields is cannot-verify.
@@ -760,7 +761,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Note sheet rows show content and officer only — no timestamp, no e-sign hash/time (page.tsx:69-80,143-150); Officer is the raw ns.author.
 - **Verified evidence:** page.tsx:70-80 builds NoteRow with idx, content, author, type, status only; mapper already supplies timestamp (apiMappers.ts:769) but it is unused; e-sign is only a ' · e-Signed' suffix (:77) with no signer time/hash (mapper does not carry them). author is ns.author raw (:76) and is not passed through <OfficerName>; whether it is a UUID or name is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/estab/files/[id]/page.tsx`, `apps/web/src/app/_data/apiMappers.ts`
@@ -777,7 +778,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-DETAIL-06  ·  MEDIUM  ·  confirmed  ·  theme TYPES (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Page reads noteType, noteStatus, eSigned, movementHistory, dakNo, dueBy through casts (page.tsx:51-67) because EstabFileDetail lacks them — type drift that hides API-shape changes.
 - **Verified evidence:** page.tsx:51-53, 56-68, 71 cast noteSheets and the file to ad-hoc shapes for noteType, noteStatus, eSigned, dakNo, dueBy, movementHistory; the mapper also builds them and returns via an `as` cast (_data/apiMappers.ts:~809-815). EstabFileDetail is imported from @civitasone/types but that package is not in this snapshot (only packages/ui-kit), so the canonical type cannot be inspected.
 - **Files to change:** `packages/types (EstabFileDetail, not in snapshot)`, `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/estab/files/[id]/page.tsx`
@@ -792,7 +793,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-DETAIL-07  ·  LOW  ·  confirmed  ·  theme ERRORS (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Action errors print raw response text (FileDetailActions.tsx:89,111,131,155); the refer picker lists "3f9a1c2e ·· Division ·· Role" rather than names (FileDetailActions.tsx:64-65); disabled-state on Sign/Submit gives no reason.
 - **Verified evidence:** FileDetailActions.tsx throws new Error(await res.text()) at :89,111,131,155 and prints e.message in the alert (:250) and dialogs, so raw JSON/server text is shown. operatorLabel (:64-65) is employeeId.slice(0,8) + division + role, no name. Submit/Sign are disabled by !draftNotingId (:206,209) without explanation (only Sign has a title tooltip). Note the confirm dialogs themselves are in place, so the CONFIRM tag is wrong.
 - **Files to change:** `apps/web/src/app/(app)/estab/files/[id]/FileDetailActions.tsx`, `apps/web/src/app/(app)/estab/files/[id]/OfficerName.tsx`, `apps/web/src/lib/useFormError.ts`
@@ -1093,7 +1094,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-HANDOVER-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Officers are identified by employeeId.slice(0,8)+"…" plus division in both pickers, the confirm text and the history (HandoverPanel.tsx:61-64,121,128,163-164). Two officers in one division are indistinguishable, and a mis-pick moves an entire desk.
 - **Verified evidence:** HandoverPanel.tsx:61-64 label() = employeeId.slice(0,8)+'… · division'; selects at :121 and :128 show slice(0,8)… · division · deskRole; history :162-163 and the confirm text :176 use label(). No names. files/[id]/OfficerName.tsx already resolves names via /api/proxy/v1/hrms/employees?limit=200 plus operator roster but is not used here. The confirm dialog is present (ConfirmDialog, danger) but has no requireReason; reason is a form select already.
 - **Files to change:** `apps/web/src/app/(app)/estab/handover/HandoverPanel.tsx`, `apps/web/src/app/(app)/estab/files/[id]/OfficerName.tsx`
@@ -1110,7 +1111,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-HANDOVER-03  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** The confirm dialog never says how many files will move (HandoverPanel.tsx:173-183); fileCount is only known after the fact in history.
 - **Verified evidence:** ConfirmDialog description (HandoverPanel.tsx:173-183) says 'every file' but shows no count; fileCount exists only on history rows (type at :14, column at :165). No count preview endpoint is visible.
 - **Files to change:** `apps/web/src/app/(app)/estab/handover/HandoverPanel.tsx`
@@ -1139,7 +1140,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-HANDOVER-05  ·  LOW  ·  partly  ·  theme LOADERROR (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Load-error copy: the specific messages built at :44-45 are discarded and a generic ErrorState is shown (HandoverPanel.tsx:155); the form stays usable with empty pickers.
 - **Verified evidence:** load() builds specific messages (:42-43) and stores err.message in loadError (:49), but the render uses toHumanError('load',{area:'handover history'}) (:155), discarding them. However the 'form usable' claim is overstated: pickers are empty so the Hand over button (:143) stays disabled until officers are selected. The error covers both operators and history yet is placed only in the history card; the shared RefreshErrorState is not used.
 - **Files to change:** `apps/web/src/app/(app)/estab/handover/HandoverPanel.tsx`
@@ -1220,7 +1221,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-INBOX-04  ·  MEDIUM  ·  confirmed  ·  theme NAV (was WIRING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Header action and page links use plain <a href> (inbox/page.tsx:48), forcing full page reloads instead of client navigation.
 - **Verified evidence:** inbox/page.tsx:48 uses <a className='btn ghost' href='/estab/list'> (also list/page.tsx:63-74 sub-nav and :46). Plain anchors cause full reload in Next App Router; guesthouse/page.tsx:35 already uses next/link.
 - **Files to change:** `apps/web/src/app/(app)/estab/inbox/page.tsx`, `apps/web/src/app/(app)/estab/list/page.tsx`
@@ -1516,7 +1517,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-LIST-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Closed (MTD)" counts all archived and disposed files ever returned (list/page.tsx:11,99) — the label promises month-to-date.
 - **Verified evidence:** list/page.tsx:11 counts every archived or disposed file returned; :99 labels it 'Closed (MTD)'. EstabFileSummary mapper (apiMappers.ts:733-745) has no closed date, only createdDate/dueDate, so MTD cannot be computed client-side.
 - **Files to change:** `apps/web/src/app/(app)/estab/list/page.tsx`
@@ -1530,7 +1531,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-LIST-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Banner promises "SLA on pendency" (page.tsx:87) while a code comment states there is no due-date/SLA field on this page (page.tsx:89-93) and the dashboard shows an API SLA figure.
 - **Verified evidence:** Banner list/page.tsx:87 promises 'SLA on pendency'; comment :89-91 says no due-date/SLA field exists. In fact the mapper does carry dueDate (apiMappers.ts:743, from dueBy) but the page and table never use it. Avg Pendency (:13-25) is days since creation, not SLA. Dashboard SLA figure not verified.
 - **Files to change:** `apps/web/src/app/(app)/estab/list/page.tsx`, `apps/web/src/app/(app)/estab/list/FilesTable.tsx`
@@ -1544,7 +1545,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-LIST-04  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Two primary buttons ("Guided File" and "+ Create File") sit side by side with the same weight (page.tsx:44-49), and eight related registers are hidden in a ten-link text sub-nav made of plain anchors (page.tsx:63-74).
 - **Verified evidence:** Two `btn primary` anchors side by side at list/page.tsx:46-47 confirmed. The sub-nav is 10 plain <a> (not eight) at :64-73 inside a deliberate <nav class=subnav> (comment :51-62), so hidden-register claim is overstated; plain anchors cause full page loads instead of next/link.
 - **Files to change:** `apps/web/src/app/(app)/estab/list/page.tsx`
@@ -1558,7 +1559,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-LIST-05  ·  LOW  ·  partly  ·  theme FORMAT (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W1 SF-17b: closed by #2033)
 - **W0 note:** partly fixed by #1916 — Classification label map/pill done; createdBy still printed raw
 - **First-pass claim:** "Created By" prints the raw createdBy value and Classification the raw lowercase code (page.tsx:31-33); classification is not null-guarded (.replace on a possibly undefined value would throw into error.tsx).
 - **Verified evidence:** Refuted part: classification cannot be undefined; mapEstabFileSummaries (apiMappers.ts:718-728) always defaults to a valid enum, so .replace (list/page.tsx:31) will not throw. True part: createdBy is printed raw (:33; mapper falls back to '—', apiMappers.ts:738) and is likely an id, and classification is lowercase text ('top secret').
@@ -1766,7 +1767,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-MIGRATION-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** A failed load leaves rows = [] and loading = false, so the register card prints "No legacy files registered yet." beneath a raw red error line — an outage looks like an empty register, and there is no retry (MigrationPanel.tsx:33-36,119-122).
 - **Verified evidence:** apps/web/src/app/(app)/estab/migration/MigrationPanel.tsx:28-44 load() catch sets error and leaves rows=[]; loading=false in finally. Render at :79-84 prints error as raw red <p>, and :121-122 then shows 'No legacy files registered yet.' because rows.length===0. No retry control anywhere in the panel.
 - **Files to change:** `apps/web/src/app/(app)/estab/migration/MigrationPanel.tsx`
@@ -1815,6 +1816,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 ### GAP-ESTAB-MIGRATION-04  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W1 SF-17b note (#2033):** the eFile column no longer shows an 8-character id prefix (link text is "Open eFile"). Left open: the register mutates with no confirmation and validation failures still use one combined message.
 - **W0 note:** partly fixed by #1916 — Per-field errors+aria done; no ConfirmDialog; eFile link still shows id prefix not efileNo
 - **First-pass claim:** Register mutates with no confirmation and validation failures use one combined message; the eFile column shows an 8-character id prefix rather than a file number (MigrationPanel.tsx:55-57,131).
 - **Verified evidence:** apps/web/src/app/(app)/estab/migration/MigrationPanel.tsx:55-57 one combined validation message for three fields (true). Register (:52-77) fires immediately from a plain Button (:111) with no ConfirmDialog (true) - but it is a create of a register row, not an approval or destructive action, so a mandatory-reason/maker-checker requirement from the suggested fix is overstated. eFile column (:130-131) shows efileId.slice(0,8) as link text, not a file number (true; row type has no fileNo field, so a number needs the API to return it). Audit event emission is server-side, cannot-verify.
@@ -1831,7 +1833,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-MIGRATION-05  ·  LOW  ·  confirmed  ·  theme FORMA11Y (was FAILMASK)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Inputs are unstyled native controls inside plain labels with no error association, no required markers, and Pages accepts negative values on the client (min={0} only).
 - **Verified evidence:** apps/web/src/app/(app)/estab/migration/MigrationPanel.tsx:89-108 bare <label><span/><input/></label> with no required marker, aria-required, aria-invalid or per-field error; error only in top status <p> (:83). Pages input (:99) has min={0} only and register sends Number(form.pageCount||'0') (:64), so '-5', '2.5' or 'abc' are not blocked client-side (NaN if non-numeric). No global input style found in globals.css. Finding's fix text (RefreshErrorState) is unrelated to this observation.
 - **Files to change:** `apps/web/src/app/(app)/estab/migration/MigrationPanel.tsx`
@@ -1868,7 +1870,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-NOTIFICATIONS-01  ·  HIGH  ·  confirmed  ·  theme STALE (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Fetch is done once on mount with no refresh, polling or count in the shell; an officer sees overdue files only when they open this page, and stale data is not marked (NotificationsPanel.tsx:47-51).
 - **Verified evidence:** apps/web/src/app/(app)/estab/notifications/NotificationsPanel.tsx:47-51 loads once in useEffect; no interval, focus refetch, SSE or lastUpdated stamp. The only shell bell (apps/web/src/app/_components/NotificationBell.tsx:156) reads /api/notification/stream/unread, not estab notifications; the only in-app entry to this page is a link at estab/list/page.tsx:73. So no count/badge surfaces overdue files (bell content of the notification service cannot be verified).
 - **Files to change:** `apps/web/src/app/(app)/estab/notifications/NotificationsPanel.tsx`, `apps/web/src/app/(app)/estab/list/page.tsx`
@@ -1950,7 +1952,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-OPERATORS-01  ·  HIGH  ·  partly  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Officer names come from GET /hrms/employees?limit=200 fetched into every viewer's browser (OperatorsPanel.tsx:72); beyond 200 employees or without HR read permission the table shows "3f9a1c2e…" instead of a name, and the enrol picker silently degrades to a raw UUID box.
 - **Verified evidence:** apps/web/src/app/(app)/estab/operators/OperatorsPanel.tsx:72 fetches /v1/hrms/employees?limit=200 in each viewer's browser (true). empLabel (:89-92) falls back to id.slice(0,8)+'…' when the employee is not in the 200 (true). The enrol picker (:160-169) shows a <select> when employees.length>0 (so with >200 employees it is silently truncated, not a UUID box) and only falls back to a UUID text input when the HRMS call fails/returns empty (:73 returns silently). HR read permission is enforced by hrms-service (not verified here). Operators list itself uses limit=500 (:52).
 - **Files to change:** `apps/web/src/app/(app)/estab/operators/OperatorsPanel.tsx`
@@ -1998,7 +2000,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-OPERATORS-04  ·  MEDIUM  ·  partly  ·  theme FORMA11Y (was VALIDATION)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Validation errors ("Pick an employee or enter a valid employee ID") appear in a red paragraph at the top of the page, away from the field, with no aria-invalid or focus move (OperatorsPanel.tsx:108-109,150-153).
 - **Verified evidence:** apps/web/src/app/(app)/estab/operators/OperatorsPanel.tsx:108-109 client validation throws, caught at :130 and rendered in the top role=status region (:150-153), not by the field; no aria-invalid/focus move on the inputs (:158-188) (true). However the Enrol button is disabled unless employeeId and division are non-empty (:191), so 'Division is required' is effectively unreachable and only the UUID-regex message can show. Server fieldErrors from useFormError are populated by fromResponse but never rendered.
 - **Files to change:** `apps/web/src/app/(app)/estab/operators/OperatorsPanel.tsx`
@@ -2014,7 +2016,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-OPERATORS-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Success/toggle messages persist until the next action and the roster reloads after a fixed 800 ms timeout rather than on the mutation result (OperatorsPanel.tsx:126,145).
 - **Verified evidence:** apps/web/src/app/(app)/estab/operators/OperatorsPanel.tsx:126 and :145 use setTimeout(() => void load(), 800) after the mutation resolves rather than awaiting/optimistically updating; timer is not cleared on unmount. message is cleared only at enrol start (:105), so the toggle success text (:144) persists (and can sit beside an older error). The mutation itself is awaited, so 800ms is a guard for async command processing, whose behaviour is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/estab/operators/OperatorsPanel.tsx`
@@ -2121,7 +2123,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-DETAIL-01  ·  HIGH  ·  partly  ·  theme PERF (was CAP)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** The history is built by fetching every allotment in the estate (GET /estab/quarter-allotments, no quarterId filter) and filtering client-side (page.tsx:30,56); every quarter page ships all employees' names, designations and pay levels to render one quarter, and a large table truncates silently.
 - **Verified evidence:** apps/web/src/app/(app)/estab/quarters/[id]/page.tsx:29-37 getAllotments() calls fetchJson('/api/v1/estab/quarter-allotments') with no quarterId/limit/page param; :56 filters client-side by a.quarterId === quarter.id. TRUE: unfiltered over-fetch and silent-truncation risk if the service caps the list (estab-service is not in the snapshot, so the default cap cannot be verified). OVERSTATED: the page is an async Server Component, so the full list stays on the server; only allotmentRows (filtered, :68-82) are serialised to the browser. Other employees' names are not shipped to the client.
 - **Files to change:** `apps/web/src/app/(app)/estab/quarters/[id]/page.tsx`, `apps/web/src/app/(app)/estab/quarters/allotments/page.tsx`, `estab-service quarter-allotments list route (not in snapshot)`
@@ -2158,7 +2160,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Quarter or allotment-list failures show only a DataSourceBadge with no retry (page.tsx:47-49,114-116); not-found is a bare paragraph.
 - **Verified evidence:** quarters/[id]/page.tsx:43-53: when !quarter and quarterSource==='error' only <DataSourceBadge source='error' /> is shown (no retry: DataSourceBadge has no retry/help action); allotment failure shows the same badge twice (:112 Card link and :114-116). Because fetchJson (apps/web/src/app/_data/apiClient.ts) returns source:'error' for ANY non-ok response or a null mapResponse, a real 404 also lands in the error branch; the 'could not be found' paragraph at :50 is effectively unreachable. The loader result carries status (404 vs 5xx) but the page ignores it. RefreshErrorState exists (ds/RefreshErrorState.tsx) and is used on vehicles/page.tsx:63.
 - **Files to change:** `apps/web/src/app/(app)/estab/quarters/[id]/page.tsx`
@@ -2175,7 +2177,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme RAWVALUE (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Version (optimistic-lock counter) is displayed to users as a detail field (page.tsx:104) and Condition prints the raw stored string.
 - **Verified evidence:** quarters/[id]/page.tsx:104 renders <dt>Version</dt><dd>{quarter.version}</dd> (optimistic-lock counter, meaningless to users; QuarterRow.version at QuartersTable.tsx:16); :102 prints quarter.condition raw (stored snake_case/free string, e.g. 'needs_repair'), while type is humanised at :88.
 - **Files to change:** `apps/web/src/app/(app)/estab/quarters/[id]/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -2190,7 +2192,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-DETAIL-05  ·  LOW  ·  partly  ·  theme NUMFMT (was DATEFMT)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** The apply form disappears for non-vacant quarters with no explanation of why; Applied dates use formatIndianDate but Carpet area/other numbers are unformatted.
 - **Verified evidence:** page.tsx:108 renders ApplyAllotmentForm only when quarter.status==='vacant' with no else message (TRUE, no explanation for allotted/occupied/other). :101 prints the area as `${quarter.carpetAreaSqft} sq. ft.` with no Indian grouping (TRUE, minor). The date part is wrong: appliedAt already goes through formatIndianDate (:80); theme DATEFMT does not fit.
 - **Files to change:** `apps/web/src/app/(app)/estab/quarters/[id]/page.tsx`
@@ -2243,7 +2245,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-ALLOTMENTS-03  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W1 SF-17b: closed by #2033)
 - **First-pass claim:** Employee ref column duplicates the Employee column as a truncated UUID (:37); when employeeName is null the name column shows the same prefix twice.
 - **Verified evidence:** apps/web/src/app/(app)/estab/quarters/allotments/AllotmentsTable.tsx:21 employeeShort = employeeRef.slice(0,8)+'…'; :29 employeeDisplay = employeeName ?? employeeShort; columns :36-37 show Employee (employeeDisplay) and Employee ref (employeeShort). When employeeName is null both columns show identical prefix; when set, the second column is an unhelpful truncated id (comment at :25-28 says name is best-effort).
 - **Files to change:** `apps/web/src/app/(app)/estab/quarters/allotments/AllotmentsTable.tsx`
@@ -2314,7 +2316,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** The page fetches the entire allotments list and does allotments.find(id) (page.tsx:51); a valid allotment outside the returned list shows "could not be found", and all employees' allotments are pulled to render one.
 - **Verified evidence:** apps/web/src/app/(app)/estab/quarters/allotments/[id]/page.tsx:19-27 getAllotments() hits /api/v1/estab/quarter-allotments with no id/limit param and :50-51 does allotments.find(a=>a.id===params.id). Not found (:53-63) prints 'could not be found' whenever the id is absent from the returned page (server default page size unknown, cannot-verify), and the whole list is transferred per view. The web code only calls /quarter-allotments/:id/<action> (AllotmentDetailActions.tsx:37); a GET-by-id endpoint is not evidenced in the snapshot (estab-service absent).
 - **Files to change:** `apps/web/src/app/(app)/estab/quarters/allotments/[id]/page.tsx`
@@ -2329,7 +2331,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-03  ·  HIGH  ·  partly  ·  theme UUID (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** The full employee UUID is printed in Application details (page.tsx:91) although employeeName exists on the row; the header and dialogs use the 8-character prefix. Names, not identifiers, should identify the applicant (DPDP data-minimisation).
 - **Verified evidence:** apps/web/src/app/(app)/estab/quarters/allotments/[id]/page.tsx:91 prints the full employeeRef with class mono in 'Application details'; header subtitle (:79) and action dialogs (AllotmentDetailActions.tsx:43,152,174) use the 8-char prefix. AllotmentRow has employeeName (AllotmentsTable.tsx:10) but the detail page never uses it. A UUID reference is an internal id, not direct PII, so the DPDP framing and 'high' severity are overstated; the real defect is that the applicant is identified by id instead of name (name is nullable, hrms enrichment fails open).
 - **Files to change:** `apps/web/src/app/(app)/estab/quarters/allotments/[id]/page.tsx`, `apps/web/src/app/(app)/estab/quarters/allotments/[id]/AllotmentDetailActions.tsx`, `apps/web/src/app/(app)/estab/quarters/allotments/[id]/AllotmentDetailActions.tsx`
@@ -2345,7 +2347,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Lifecycle buttons render for every viewer and irreversible ones (Vacate now, Record vacation) sit beside routine actions; "Vacate now (skip notice)" bypasses the notice period with one confirm.
 - **Verified evidence:** apps/web/src/app/(app)/estab/quarters/allotments/[id]/AllotmentDetailActions.tsx:145-238 Allot/Occupy/Issue notice/Vacate buttons render for every viewer (no role prop; page.tsx passes none). 'Vacate now (skip notice)' (:212-219) sits directly under the routine vacation-notice form; its ConfirmDialog (:261-276) is danger-styled but has no requireReason and the same dialog is used for 'Record vacation' after notice. Whether the backend permits skipping notice is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/estab/quarters/allotments/[id]/AllotmentDetailActions.tsx`, `apps/web/src/app/(app)/estab/quarters/allotments/[id]/page.tsx`
@@ -2361,7 +2363,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** No way to reject or cancel an application although "cancelled" is treated as a final state (AllotmentDetailActions.tsx); nothing in this route can set it.
 - **Verified evidence:** apps/web/src/app/(app)/estab/quarters/allotments/[id]/AllotmentDetailActions.tsx:125 treats 'cancelled' as final, but the only actions in the file are allot (:158), occupy (:180), vacation-notice (:92), vacate (:114); there is no reject/cancel/withdraw control anywhere on this route. Whether a cancel/reject endpoint exists is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/estab/quarters/allotments/[id]/AllotmentDetailActions.tsx`
@@ -2377,7 +2379,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-06  ·  LOW  ·  confirmed  ·  theme VALIDATION (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Vacation due date is a native date input with no min (past dates accepted) and the dialog prints it as ISO yyyy-mm-dd (AllotmentDetailActions.tsx); Eligibility score and Version are shown without explanation.
 - **Verified evidence:** apps/web/src/app/(app)/estab/quarters/allotments/[id]/AllotmentDetailActions.tsx:195-205 date input has no min attribute and continueVacationNotice (:77-86) only regex-checks YYYY-MM-DD, so past dates pass; ConfirmDialog description prints the raw string (:254). apps/web/src/app/(app)/estab/quarters/allotments/[id]/page.tsx:95-96 show 'Eligibility score' and 'Version' without help text. Server-side date validation is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/estab/quarters/allotments/[id]/AllotmentDetailActions.tsx`, `apps/web/src/app/(app)/estab/quarters/allotments/[id]/page.tsx`
@@ -2630,7 +2632,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-WORKSPACE-04  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Mark to officer lists "3f9a1c2e… · Administration · section_officer" — a raw id prefix and a raw role value — instead of names (:225); the Operators page resolves names from HRMS but this wizard does not.
 - **Verified evidence:** GuidedFileWizard.tsx:225 renders `{o.employeeId.slice(0, 8)}… · {o.division} · {o.deskRole}` for each option; the Operator type (:15) has only id, employeeId, division, deskRole, active (no name), so the wizard shows an id prefix and the raw role value (e.g. section_officer). By contrast estab/operators/OperatorsPanel.tsx:72 fetches /api/proxy/v1/hrms/employees?limit=200 and formats 'name · designation' (:91,:164). When the operators list is empty the fallback is a raw 'officer UUID' text input (:228).
 - **Files to change:** `apps/web/src/app/(app)/estab/workspace/GuidedFileWizard.tsx`, `apps/web/src/app/(app)/estab/operators/OperatorsPanel.tsx (extract shared helper)`
