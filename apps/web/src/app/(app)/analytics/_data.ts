@@ -4,6 +4,7 @@
  * envelopes to the row shapes the screens render. API-only: on failure the
  * screens fall back to the encrypted offline cache via useSeededResource.
  */
+import type { AnalyticsCatalogLabels } from "./catalog-labels";
 import { fetchJson, type LoaderResult } from "../../_data/apiClient";
 
 export type AnalyticsDashboardRow = {
@@ -50,20 +51,7 @@ export function unitForMetric(metricKey: string): MetricUnit {
  * and the key-derived unit above - it never shows a snake_case key as a header
  * when a label is known.
  */
-export type AnalyticsCatalogLabels = {
-  metrics: Record<string, { label: string; unit: MetricUnit }>;
-  dimensions: Record<string, string>;
-};
-
 const EMPTY_CATALOG_LABELS: AnalyticsCatalogLabels = { metrics: {}, dimensions: {} };
-
-/** "department_id" -> "Department"; "event_type" -> "Event type". Fallback only. */
-export function humanizeKey(key: string): string {
-  const words = key.replace(/_id$/i, "").split(/[_\s]+/).filter(Boolean);
-  if (words.length === 0) return key;
-  const joined = words.join(" ").toLowerCase();
-  return joined.charAt(0).toUpperCase() + joined.slice(1);
-}
 
 export async function getAnalyticsCatalogLabels(): Promise<LoaderResult<AnalyticsCatalogLabels>> {
   return fetchJson<Record<string, unknown>, AnalyticsCatalogLabels>(

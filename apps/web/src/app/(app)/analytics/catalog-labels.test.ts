@@ -8,7 +8,8 @@ vi.mock("../../_data/apiClient", () => ({
   },
 }));
 
-const { getAnalyticsCatalogLabels, humanizeKey } = await import("./_data");
+const { getAnalyticsCatalogLabels } = await import("./_data");
+const { humanizeKey } = await import("./catalog-labels");
 
 // GAP-ANALYTICS-QUERIES-04 (W2)
 describe("analytics catalog labels", () => {
