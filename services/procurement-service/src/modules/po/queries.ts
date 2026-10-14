@@ -41,8 +41,8 @@ export async function getPo(id: string, tenantId: string): Promise<Record<string
   };
 }
 
-export async function listPos(tenantId: string, limit: number, offset = 0): Promise<{ data: Array<{ id: string; poNo: string; vendor: string; amountDisplay: string; totalMinor: string; orderDate: string; deliveryDate?: string | null; status: string }> }> {
-  const rows = await repo.listPosByTenant(tenantId, limit, offset);
+export async function listPos(tenantId: string, limit: number, offset = 0, q?: string): Promise<{ data: Array<{ id: string; poNo: string; vendor: string; amountDisplay: string; totalMinor: string; orderDate: string; deliveryDate?: string | null; status: string }> }> {
+  const rows = await repo.listPosByTenant(tenantId, limit, offset, q);
   const { listVendorsByTenant } = await import("../vendor/repo.js");
   const vendors = await listVendorsByTenant(tenantId, 500);
   const vendorNameById = new Map(vendors.map((v) => [v.id, v.name]));

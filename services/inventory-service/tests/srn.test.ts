@@ -23,7 +23,9 @@ import type { FastifyInstance } from "fastify";
 import { MemoryQueue } from "@civitasone/queue";
 import type { Queue, Handler } from "@civitasone/queue";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
+import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
+import { COMMANDS } from "../src/topics.js";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
@@ -216,16 +218,31 @@ describe("SRN — one per GRN", () => {
     await app.inject({ method: "POST", url: "/v1/inventory/srn", headers: hdr(TENANT_A, ACTOR_A), payload: { grnId, remarks: "first" } });
     await drain();
 
-    const mq = queue as unknown as MemoryQueue;
-    const before = mq.dlq.length;
-    await app.inject({ method: "POST", url: "/v1/inventory/srn", headers: hdr(TENANT_A, ACTOR_A), payload: { grnId, remarks: "second" } });
+    // GAP-PROCUREMENT-GRN-DETAIL-SRN-NEW-06: the second create is refused SYNCHRONOUSLY.
+    const second = await app.inject({ method: "POST", url: "/v1/inventory/srn", headers: hdr(TENANT_A, ACTOR_A), payload: { grnId, remarks: "second" } });
+    expect(second.statusCode).toBe(409);
+    expect(second.json().code).toBe("SRN_ALREADY_EXISTS");
     await drain();
 
     const rows = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
       tx.select().from(storeReceiptNotes).where(eq(storeReceiptNotes.grnId, grnId))));
     expect(rows).toHaveLength(1);
     expect(rows[0]!.remarks).toBe("first");
+
+    // Defence in depth: a create command that bypassed the route (a race, a replay) is
+    // still rejected by the consumer inside its transaction.
+    const mq = queue as unknown as MemoryQueue;
+    const before = mq.dlq.length;
+    await queue.publish(COMMANDS.srnCreate, {
+      messageId: randomUUID(), type: COMMANDS.srnCreate,
+      tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "corr-srn-dup", schemaVersion: "1.0",
+      payload: { id: randomUUID(), tenantId: TENANT_A, grnId, storeOfficerId: ACTOR_A, remarks: "raced" },
+    });
+    await drain();
     expect(mq.dlq.slice(before).some((d) => d.error.includes("SRN_ALREADY_EXISTS"))).toBe(true);
+    const after = await runWithTenant(TENANT_A, () => db.transaction(async (tx) =>
+      tx.select().from(storeReceiptNotes).where(eq(storeReceiptNotes.grnId, grnId))));
+    expect(after).toHaveLength(1);
   });
 });
 

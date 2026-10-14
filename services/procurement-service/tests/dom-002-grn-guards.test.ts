@@ -27,7 +27,7 @@
  * asserted both by DB state (nothing persisted / nothing changed) and by
  * the DLQ error message carrying the expected domain-error code.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { MemoryQueue } from "@civitasone/queue";
@@ -128,6 +128,18 @@ async function wipe(): Promise<void> {
     await tx.delete(procurementPos).where(eq(procurementPos.tenantId, TENANT));
   }));
 }
+
+// GAP-PROCUREMENT-GRN-NEW-06: every test in this file receives against the SAME single-line
+// PO, and a PO line can only be received up to its ordered quantity in total. Each test
+// therefore starts from an empty GRN register (the PO itself stays seeded).
+async function wipeGrns(): Promise<void> {
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(procurementInspections).where(eq(procurementInspections.tenantId, TENANT));
+    await tx.delete(procurementGrnItems).where(eq(procurementGrnItems.tenantId, TENANT));
+    await tx.delete(procurementGrns).where(eq(procurementGrns.tenantId, TENANT));
+  }));
+}
+beforeEach(async () => { await wipeGrns(); });
 
 beforeAll(async () => { await wipe(); await seedPo(); });
 afterAll(async () => { await wipe(); await sqlClient.end(); });

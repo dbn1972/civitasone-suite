@@ -45,6 +45,33 @@ export function assertQtyValid(items: GrnItem[]): void {
 }
 
 /**
+ * GAP-PROCUREMENT-GRN-NEW-06 - cumulative over-receipt guard. A line may not
+ * receive more than the PO line still has open: ordered minus the quantity
+ * already committed by this PO line's other non-rejected GRNs (accepted qty
+ * for accepted GRNs, received qty for GRNs still awaiting inspection). Lines
+ * whose ordered qty is not positive are unpriced/unbounded and skipped, the
+ * same convention as assertQtyValid.
+ */
+export function assertWithinOpenQty(
+  lines: Array<{ poItemRef: string; orderedQty: number; receivedQty: number }>,
+  committedByPoItem: ReadonlyMap<string, number>,
+): void {
+  const incoming = new Map<string, { ordered: number; received: number }>();
+  for (const l of lines) {
+    const cur = incoming.get(l.poItemRef) ?? { ordered: l.orderedQty, received: 0 };
+    cur.received += l.receivedQty;
+    incoming.set(l.poItemRef, cur);
+  }
+  for (const [ref, { ordered, received }] of incoming) {
+    if (ordered <= 0) continue;
+    const open = ordered - (committedByPoItem.get(ref) ?? 0);
+    if (received > open) {
+      throw new DomainError("OVER_RECEIPT", `received quantity ${received} exceeds the open quantity ${Math.max(open, 0)} on the purchase order line`);
+    }
+  }
+}
+
+/**
  * SVC/GRN-amend (Req 1.2): a GRN may only be amended (partial-delivery qty
  * correction) while it is still in `draft` or `under_inspection`. Once a
  * three-way-match decision has been recorded (`accepted` / `rejected` /

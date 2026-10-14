@@ -4,6 +4,7 @@ import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { LinkTiles } from "../../../_components/LinkTiles";
 import { getProcurementDashboard } from "../../../_data/loaders";
 import { formatIndianDateTime } from "@/lib/formatters";
+import { getTranslations } from "next-intl/server";
 // GAP-PROCUREMENT-DASHBOARD-04: the dashboard links the SAME shared module
 // list as the /procurement hub (procurement/tiles.ts) so the two can never
 // drift — previously the dashboard hard-coded its own 8-entry QUICK_LINKS,
@@ -16,6 +17,7 @@ import { procurementTiles } from "../tiles";
 const QUICK_LINKS = procurementTiles.filter((tile) => tile.href !== "/procurement/dashboard");
 
 export default async function ProcurementDashboardPage() {
+  const t = await getTranslations("procurement.dashboard");
   const { data: dashboard, source } = await getProcurementDashboard();
   // UX-013: `source` was already fetched but only wired to the badge below
   // (whose own message claims "showing nothing" on error) -- never to the
@@ -57,9 +59,26 @@ export default async function ProcurementDashboardPage() {
       <StatGrid>
         <StatCard icon="📋" iconBg="#e7edfd" label="Pending Indents" value={errored ? "—" : dashboard.pendingIndents} href={errored ? undefined : "/procurement/indents?status=pending"} />
         <StatCard icon="📦" iconBg="#eff6ff" label="Active POs" value={errored ? "—" : dashboard.activePOs} href={errored ? undefined : "/procurement/orders?status=active"} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="GRNs (MTD)" value={errored ? "—" : dashboard.grnsThisMonth} href={errored ? undefined : "/procurement/grn"} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label="Contract Renewals Due" value={errored ? "—" : dashboard.contractRenewalsDue} href={errored ? undefined : "/procurement/contracts?status=renewal_due"} />
+        {/* GAP-PROCUREMENT-DASHBOARD-05: label the window so the KPI is not
+            ambiguous - accepted GRNs received in the current IST calendar month. */}
+        <StatCard icon="✅" iconBg="#ecfdf3" label="GRNs (MTD)" hint={t("grnsMtdHint")} value={errored ? "—" : dashboard.grnsThisMonth} href={errored ? undefined : "/procurement/grn"} />
+        {/* GAP-PROCUREMENT-DASHBOARD-05: renewals live in contract-service and the
+            API reports null when it cannot count them - show a dash and say why,
+            never a false "0 due". The card drills into the expiring contracts. */}
+        <StatCard
+          icon="⚠️"
+          iconBg="#fffaeb"
+          label="Contract Renewals Due"
+          hint={!errored && dashboard.contractRenewalsDue == null ? t("renewalsUnavailableHint") : undefined}
+          value={errored || dashboard.contractRenewalsDue == null ? "—" : dashboard.contractRenewalsDue}
+          href={errored ? undefined : "/procurement/contracts?status=renewal_due"}
+        />
       </StatGrid>
+      {!errored && dashboard.contractRenewalsDue == null ? (
+        <p className="muted" role="note" style={{ margin: "0 0 12px", fontSize: "0.8125rem" }}>
+          {t("renewalsUnavailableNote")}
+        </p>
+      ) : null}
 
       <Card title="Procurement modules">
         {/* GAP-PROCUREMENT-DASHBOARD-01 + 04: render the shared module list

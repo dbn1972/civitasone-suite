@@ -3,9 +3,17 @@ import { PageHeader, Card, StatusPill, EmptyState, RefreshErrorState } from "../
 import { getSrnByGrn, getProcurementGRNById } from "../../../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 import { SignSrnAction } from "./SignSrnAction";
 
-export default async function SrnDetailPage({ params }: { params: { id: string } }) {
+export default async function SrnDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams?: { signFailed?: string };
+}) {
+  const t = await getTranslations("procurement.srn");
   const [{ data: srn, source: srnSource, status: srnStatus }, { data: grn }] = await Promise.all([
     getSrnByGrn(params.id),
     getProcurementGRNById(params.id),
@@ -75,6 +83,16 @@ export default async function SrnDetailPage({ params }: { params: { id: string }
         }
       />
 
+      {/* GAP-PROCUREMENT-GRN-DETAIL-SRN-NEW-01 - the create form lands here with
+          ?signFailed=1 when "Sign now" was ticked but signing did not complete.
+          Say so (only while the SRN is genuinely still a draft) so the clerk
+          does not believe the payment gate cleared. */}
+      {searchParams?.signFailed === "1" && srn.status === "draft" ? (
+        <p role="alert" style={{ margin: "0 0 12px", fontSize: "0.875rem", color: "var(--warn)" }}>
+          {t("signFailedBanner")}
+        </p>
+      ) : null}
+
       <Card title="SRN details" padding>
         <div className="fields">
           <div className="field">
@@ -95,7 +113,7 @@ export default async function SrnDetailPage({ params }: { params: { id: string }
           <div className="field">
             <span className="label">Status</span>
             {/* GAP-PROCUREMENT-GRN-DETAIL-SRN-04 — tone tokens, not hard-coded hex. */}
-            <span style={{ color: srn.status === "signed" ? "var(--good, #16a34a)" : "var(--warn, #b45309)", fontWeight: 600 }}>
+            <span style={{ color: srn.status === "signed" ? "var(--good)" : "var(--warn)", fontWeight: 600 }}>
               {srn.status === "signed" ? "Signed — payment gate cleared" : "Draft — not yet signed"}
             </span>
           </div>

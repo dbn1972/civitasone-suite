@@ -1,5 +1,6 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, inArray, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
+import { likePattern } from "../../shared/search.js";
 import { procurementVendors, procurementEmpanelment, type VendorRow, type VendorInsert } from "./schema.js";
 import { procurementVendorScorecards } from "./scorecard-schema.js";
 
@@ -34,9 +35,17 @@ export async function findVendorsByIds(ids: string[], tenantId: string): Promise
   return byId;
 }
 
-export async function listVendorsByTenant(tenantId: string, limit = 100, offset = 0): Promise<VendorRow[]> {
+export async function listVendorsByTenant(tenantId: string, limit = 100, offset = 0, q?: string): Promise<VendorRow[]> {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
+  // GAP-PROCUREMENT-GRN-NEW-04 / CONTRACTS-NEW-05: optional name search so a
+  // picker can reach vendors beyond the first page. Ordered by name when
+  // searching so the best-known prefix matches are stable.
+  if (q) {
+    return db.transaction((tx) => tx.select().from(procurementVendors)
+      .where(and(eq(procurementVendors.tenantId, tenantId), ilike(procurementVendors.name, likePattern(q))))
+      .orderBy(asc(procurementVendors.name)).limit(limit).offset(offset));
+  }
   return db.transaction((tx) => tx.select().from(procurementVendors).where(eq(procurementVendors.tenantId, tenantId)).limit(limit).offset(offset));
 }
 
@@ -120,4 +129,26 @@ export async function listEmpanelmentsByTenant(tenantId: string, limit: number, 
     .orderBy(desc(procurementEmpanelment.createdAt))
     .limit(limit)
     .offset(offset));
+}
+
+/** Empanelment rows for one vendor (tenant-scoped); for the PO eligibility gate. */
+export async function findEmpanelmentsByVendor(
+  vendorId: string,
+  tenantId: string,
+): Promise<Array<{ status: string; validUntil: string | null }>> {
+  return db.transaction((tx) => tx
+    .select({ status: procurementEmpanelment.status, validUntil: procurementEmpanelment.validUntil })
+    .from(procurementEmpanelment)
+    .where(and(eq(procurementEmpanelment.vendorId, vendorId), eq(procurementEmpanelment.tenantId, tenantId))));
+}
+
+export async function findEmpanelmentsByVendorTx(
+  tx: Writer,
+  vendorId: string,
+  tenantId: string,
+): Promise<Array<{ status: string; validUntil: string | null }>> {
+  return (tx as typeof db)
+    .select({ status: procurementEmpanelment.status, validUntil: procurementEmpanelment.validUntil })
+    .from(procurementEmpanelment)
+    .where(and(eq(procurementEmpanelment.vendorId, vendorId), eq(procurementEmpanelment.tenantId, tenantId)));
 }

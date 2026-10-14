@@ -2203,6 +2203,8 @@ export async function getBillingPlanById(id: string): Promise<LoaderResult<Recor
 export type ContractListRow = ModuleRowSummary & {
   expiry?: string;
   valueMinor?: string;
+  /** Linked purchase-order reference (GAP-PROCUREMENT-CONTRACTS-05). */
+  poRef?: string;
 };
 
 export function mapContractsListRows(payload: unknown): ModuleRowSummary[] | null {
@@ -2225,6 +2227,7 @@ export function mapContractsListRows(payload: unknown): ModuleRowSummary[] | nul
     // field is absent the column simply renders a dash — never a fabricated 0.
     const expiry = toText(row.expiry) ?? toText(row.validTo) ?? toText(row.expiryDate);
     const valueMinor = toText(row.valueMinor) ?? toText(row.value);
+    const poRef = toText(row.poRef);
     mapped.push({
       id,
       label,
@@ -2233,6 +2236,7 @@ export function mapContractsListRows(payload: unknown): ModuleRowSummary[] | nul
       ...(meta ? { meta } : {}),
       ...(expiry ? { expiry } : {}),
       ...(valueMinor ? { valueMinor } : {}),
+      ...(poRef ? { poRef } : {}),
     });
   }
   return mapped;
@@ -3270,7 +3274,7 @@ const PROCUREMENT_DASHBOARD_EMPTY: ProcurementDashboard = {
   pendingIndents: 0,
   activePOs: 0,
   grnsThisMonth: 0,
-  contractRenewalsDue: 0,
+  contractRenewalsDue: null,
 };
 
 export async function getProcurementDashboard(): Promise<LoaderResult<ProcurementDashboard>> {
@@ -7625,9 +7629,40 @@ export async function getProcurementVendorScorecard(vendorId: string): Promise<L
     {
       revalidateSeconds: 120,
       telemetryKey: "procurement.vendor.scorecard",
-      mapResponse: (p) => ((p as { data?: VendorScorecard } | null)?.data ?? null),
+      mapResponse: mapVendorScorecard,
     }
   );
+}
+
+/**
+ * GAP-PROCUREMENT-VENDORS-DETAIL-SCORECARD-04: the API stamps the scorecard with
+ * `computedAt` (not `lastUpdated`), so the page's "As of" always read "-". Map
+ * it. GAP-...-SCORECARD-05: an UNRATED vendor (no orders yet) comes back with a
+ * placeholder overallRating of 0 - that is "not rated", not a score of 0, so it
+ * is mapped to null here and the page shows a dash.
+ */
+export function mapVendorScorecard(payload: unknown): VendorScorecard | null {
+  const raw = (payload as { data?: Record<string, unknown> } | null)?.data;
+  if (!raw || typeof raw !== "object") return null;
+  const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const band = typeof raw.ratingBand === "string" && raw.ratingBand ? raw.ratingBand : "unrated";
+  const totalOrders = num(raw.totalOrders);
+  const unrated = band === "unrated" || totalOrders === 0 || totalOrders === null;
+  const stamp = typeof raw.lastUpdated === "string" ? raw.lastUpdated : typeof raw.computedAt === "string" ? raw.computedAt : null;
+  return {
+    vendorId: typeof raw.vendorId === "string" ? raw.vendorId : "",
+    overallRating: unrated ? null : num(raw.overallRating),
+    ratingBand: band,
+    totalOrders,
+    onTimeDeliveries: num(raw.onTimeDeliveries),
+    lateDeliveries: num(raw.lateDeliveries),
+    qualityRejections: num(raw.qualityRejections),
+    slaBreaches: num(raw.slaBreaches),
+    deliveryScore: unrated ? null : num(raw.deliveryScore),
+    qualityScore: unrated ? null : num(raw.qualityScore),
+    slaScore: unrated ? null : num(raw.slaScore),
+    lastUpdated: stamp,
+  };
 }
 
 // ---- Procurement: Annual Plans --------------------------------------------

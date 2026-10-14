@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { createTranslator } from "next-intl";
+import en from "@/messages/en.json";
 import { procurementTiles } from "../tiles";
+
+// Server component: resolve namespaced keys against the real en messages.
+vi.mock("next-intl/server", () => ({
+  getTranslations: async (ns: string) => createTranslator({ locale: "en", messages: en as never, namespace: ns as never }),
+}));
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", async () => {
@@ -105,5 +112,25 @@ describe("ProcurementDashboardPage", () => {
     expect(hrefs).toContain("/procurement/empanelment");
     // And a direct link to the full hub.
     expect(hrefs).toContain("/procurement");
+  });
+
+  it("GAP-PROCUREMENT-DASHBOARD-05: a null contractRenewalsDue renders a dash and an honest note, never a false zero", async () => {
+    mockProcurementLoader({
+      data: { pendingIndents: 5, activePOs: 18, grnsThisMonth: 9, contractRenewalsDue: null },
+      source: "api",
+    });
+    render(await ProcurementDashboardPage());
+    const card = screen.getByText("Contract Renewals Due").closest(".stat");
+    expect(card).toHaveTextContent("—");
+    expect(card).not.toHaveTextContent("0");
+    expect(screen.getByRole("note")).toHaveTextContent(/contract service/i);
+  });
+
+  it("GAP-PROCUREMENT-DASHBOARD-05: a real renewals count is shown and the GRN card labels its window", async () => {
+    mockProcurementLoader({ data: MOCK_DASHBOARD, source: "api" });
+    render(await ProcurementDashboardPage());
+    expect(screen.getByText("Contract Renewals Due").closest(".stat")).toHaveTextContent("2");
+    expect(screen.queryByRole("note")).toBeNull();
+    expect(screen.getByText("GRNs (MTD)").closest(".stat")).toHaveAttribute("title", expect.stringMatching(/accepted/i));
   });
 });

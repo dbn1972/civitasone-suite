@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -8,7 +9,7 @@ import * as repo from "./repo.js";
 import {
   computeThreeWayMatch, assertQtyValid, assertGrnAmendable,
   assertPoItemsResolved, assertGrnLinesResolved, assertDistinctReceiverInspector,
-  assertGrnInspectable,
+  assertGrnInspectable, assertWithinOpenQty,
 } from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import { allocateDocNo } from "../../shared/numbering.js";
@@ -55,6 +56,14 @@ export function registerGrnConsumers(queue: Queue): void {
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // GAP-PROCUREMENT-GRN-NEW-06 - cumulative over-receipt guard, serialised
+      // per PO so two concurrent receipts cannot both fit the same open qty.
+      const poLockKey = `grn-po:${poId}`;
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${poLockKey}))`);
+      assertWithinOpenQty(
+        p.items.map((i, idx) => ({ poItemRef: i.poItemRef, orderedQty: guardItems[idx]!.orderedQty, receivedQty: i.receivedQty })),
+        await repo.committedQtyByPoItemTx(tx, p.tenantId, poId),
+      );
       const grnNo = await allocateDocNo(tx, p.tenantId, "grn");
       // DOM-002 — grnCreate is now a receive-only step: it persists the GRN
       // in `under_inspection`, awaiting a SEPARATE, independently
@@ -136,6 +145,19 @@ export function registerGrnConsumers(queue: Queue): void {
         orderedQty: existingByLine.get(l.lineId)!.orderedQty,
         receivedQty: l.receivedQty, acceptedQty: l.acceptedQty,
       })));
+      // GAP-PROCUREMENT-GRN-NEW-06 - an amendment may not push the PO line past
+      // its open qty either (other GRNs' commitments; this GRN excluded).
+      const amendPoId = grn.poRef.replace(/^procurement_po:/, "");
+      const amendLockKey = `grn-po:${amendPoId}`;
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${amendLockKey}))`);
+      assertWithinOpenQty(
+        p.lines.map((l) => ({
+          poItemRef: existingByLine.get(l.lineId)!.poItemRef,
+          orderedQty: existingByLine.get(l.lineId)!.orderedQty,
+          receivedQty: l.receivedQty,
+        })),
+        await repo.committedQtyByPoItemTx(tx, p.tenantId, amendPoId, p.id),
+      );
 
       for (const line of p.lines) {
         await repo.updateGrnItemQty(tx, line.lineId, p.id, {

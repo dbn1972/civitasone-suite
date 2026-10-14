@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
+import { db } from "../../shared/db.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as poRepo from "../po/repo.js";
-import { canAmendGrn, canInspectGrn, assertDistinctReceiverInspector, DomainError } from "./domain.js";
+import { canAmendGrn, canInspectGrn, assertDistinctReceiverInspector, assertWithinOpenQty, DomainError } from "./domain.js";
 import type { CreateGrnBody, AmendGrnBody, AcceptGrnBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -33,6 +34,22 @@ export async function createGrn(ctx: RequestContext, body: CreateGrnBody): Promi
   }
   if (po.vendorId && body.vendorId && po.vendorId !== body.vendorId) {
     throw new HttpError(422, "VENDOR_PO_MISMATCH", "GRN vendor does not match the purchase order's vendor");
+  }
+  // GAP-PROCUREMENT-GRN-NEW-06 - synchronous over-receipt check so the caller
+  // gets an immediate 422 (the consumer re-checks under a per-PO lock).
+  const poItems = await poRepo.findPoItemsByPoId(poId, ctx.tenantId);
+  const orderedByRef = new Map(poItems.map((pi) => [pi.id, pi.quantity]));
+  const committed = await db.transaction((tx) => repo.committedQtyByPoItemTx(tx, ctx.tenantId, poId));
+  try {
+    assertWithinOpenQty(
+      body.items.flatMap((i) => (orderedByRef.has(i.poItemRef)
+        ? [{ poItemRef: i.poItemRef, orderedQty: orderedByRef.get(i.poItemRef)!, receivedQty: i.receivedQty }]
+        : [])),
+      committed,
+    );
+  } catch (err) {
+    if (err instanceof DomainError) throw new HttpError(422, err.code, err.message);
+    throw err;
   }
   const id = randomUUID();
   await queue.publish(COMMANDS.grnCreate, {

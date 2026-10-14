@@ -5611,6 +5611,56 @@
   },
   "procurement": {
     "title": "Procurement",
+    "srnNew": {
+      "exists": "An SRN already exists for this GRN.",
+      "forbidden": "You are not authorised to create a Store Receipt Note for this GRN.",
+      "invalid": "Check the details entered and try again.",
+      "network": "Couldn’t reach the server. Check your connection and try again.",
+      "save": "The Store Receipt Note could not be saved. Please try again."
+    },
+    "srn": {
+      "signFailedBanner": "SRN saved as Draft. Signing did not complete, so the payment gate is not cleared. Please sign it again."
+    },
+    "vendorPicker": {
+      "placeholder": "Search vendors by name…",
+      "loading": "Searching…",
+      "empty": "No vendors match your search.",
+      "error": "Couldn’t load vendors.",
+      "retry": "Try again",
+      "clear": "Clear vendor"
+    },
+    "poPicker": {
+      "placeholder": "Search purchase orders by number…",
+      "loading": "Searching…",
+      "empty": "No purchase orders found.",
+      "error": "Couldn’t load purchase orders.",
+      "retry": "Retry",
+      "clear": "Clear purchase order",
+      "vendorFromPo": "Set from the purchase order",
+      "vendorPending": "Choose a purchase order. The vendor is set from it."
+    },
+    "dashboard": {
+      "grnsMtdHint": "Accepted GRNs received in the current calendar month (IST).",
+      "renewalsUnavailableHint": "Not available here: contract data is held in the contract service.",
+      "renewalsUnavailableNote": "Contract renewals are tracked in the contract service and are not counted on this dashboard yet. Open the contracts register to see what is expiring."
+    },
+    "contractsPage": {
+      "viewPo": "View PO",
+      "filteredBy": "Showing {status} contracts only.",
+      "clearFilter": "Show all contracts"
+    },
+    "emdBg": {
+      "filterExpiring": "Expiring within 30 days",
+      "filterShowing": "Showing {count} of {total}",
+      "noneExpiringTitle": "Nothing expires in the next 30 days",
+      "noneExpiringMessage": "Every active instrument has more than 30 days of validity left."
+    },
+    "scorecard": {
+      "legend": "Performance score is out of 100. Bands: A ≥ 85, B 70–84, C 50–69, D below 50. This is separate from the buyer rating (out of 5) shown on the vendor list and profile.",
+      "reconcile": "On-time {onTime} + late {late} of {total} orders.",
+      "reconcileOpen": "On-time {onTime} + late {late} of {total} orders; {open} not yet delivered.",
+      "reconcileMismatch": "On-time {onTime} + late {late} do not add up to the {total} orders recorded."
+    },
     "poForm": {
       "vendorBlacklisted": "This vendor is blacklisted and cannot be used on a purchase order. Choose a different vendor.",
       "created": "PO created as a draft. Raise it for approval from the PO page; the eOffice decision releases it for dispatch."

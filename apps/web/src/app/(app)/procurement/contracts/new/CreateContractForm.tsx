@@ -2,26 +2,33 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useTranslations } from "next-intl";
 import { formatMoney, todayIST } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
 import { toHumanError } from "@/lib/messages";
 import { Button } from "@/app/_components/ds";
+import { RemoteSearchSelect, type RemoteOption, type RemoteSearchState } from "../../_components/RemoteSearchSelect";
 
-type VendorOption = { id: string; name: string };
-type VendorsState = "loading" | "ready" | "error";
+const VENDOR_SEARCH_LIMIT = 25;
 
 export function CreateContractForm() {
   const router = useRouter();
-  const [vendors, setVendors] = useState<VendorOption[]>([]);
-  const [vendorsState, setVendorsState] = useState<VendorsState>("loading");
-  const [reloadKey, setReloadKey] = useState(0);
-  const [vendorId, setVendorId] = useState("");
+  const t = useTranslations("procurement.vendorPicker");
+  // GAP-PROCUREMENT-CONTRACTS-NEW-05: the vendor is chosen through a SERVER-SIDE
+  // search combobox (?q=), not a `<select>` filled from one capped page, so a
+  // vendor master of any size is reachable. No vendor is pre-selected
+  // (CONTRACTS-NEW-01) and a failed search shows an error + Retry (NEW-02).
+  const [vendor, setVendor] = useState<RemoteOption | null>(null);
+  const vendorId = vendor?.id ?? "";
+  // CONTRACTS-NEW-02: while the vendor list cannot be loaded (and none is chosen)
+  // the form cannot be submitted - the officer sees the error + Retry instead.
+  const [vendorSearch, setVendorSearch] = useState<RemoteSearchState>("idle");
   const [contractNo, setContractNo] = useState("");
   const [title, setTitle] = useState("");
   // GAP-PROCUREMENT-CONTRACTS-NEW-05: value is a STRING parsed with
   // rupeesToMinorString (exact paise, no float math). "" default means "no
-  // value entered yet" so the ₹ hint is hidden until the clerk types.
+  // value entered yet" so the hint is hidden until the clerk types.
   const [value, setValue] = useState("");
   const [startDate, setStartDate] = useState(todayIST());
   const [expiry, setExpiry] = useState("");
@@ -30,38 +37,15 @@ export function CreateContractForm() {
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState<{ vendor?: string; expiry?: string; value?: string; contractNo?: string }>({});
 
-  useEffect(() => {
-    const controller = new AbortController();
-    setVendorsState("loading");
-    void (async () => {
-      try {
-        // GAP-PROCUREMENT-CONTRACTS-NEW-05: raise the cap from 100 to 500 so
-        // vendors beyond the first 100 are reachable (the create form needs the
-        // full empanelled list, not a truncated page).
-        const res = await fetch("/api/proxy/v1/procurement/vendors?limit=500", { signal: controller.signal });
-        if (!res.ok) {
-          setVendorsState("error");
-          return;
-        }
-        const body = await res.json() as { data?: VendorOption[] } | VendorOption[];
-        const rows = Array.isArray(body) ? body : (body.data ?? []);
-        const clean = rows.filter((v) => v.id && v.name);
-        setVendors(clean);
-        setVendorsState("ready");
-        // GAP-PROCUREMENT-CONTRACTS-NEW-01: do NOT auto-select the first vendor
-        // — the field stays blank so a hurried clerk cannot register a contract
-        // against an unintended vendor. The placeholder below forces a choice.
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        // GAP-PROCUREMENT-CONTRACTS-NEW-02: surface the failure instead of
-        // swallowing it and showing "Loading vendors…" forever.
-        setVendorsState("error");
-      }
-    })();
-    return () => controller.abort();
-  }, [reloadKey]);
-
-  const retryVendors = useCallback(() => setReloadKey((k) => k + 1), []);
+  const searchVendors = useCallback(async (q: string, signal: AbortSignal): Promise<RemoteOption[]> => {
+    const qs = new URLSearchParams({ limit: String(VENDOR_SEARCH_LIMIT) });
+    if (q) qs.set("q", q);
+    const res = await fetch(`/api/proxy/v1/procurement/vendors?${qs.toString()}`, { signal });
+    if (!res.ok) throw new Error("vendor search failed");
+    const body = await res.json() as { data?: Array<{ id: string; name: string }> } | Array<{ id: string; name: string }>;
+    const rows = Array.isArray(body) ? body : (body.data ?? []);
+    return rows.filter((v) => v.id && v.name).map((v) => ({ id: v.id, label: v.name }));
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -136,36 +120,24 @@ export function CreateContractForm() {
   return (
     <form className="card pad" onSubmit={(e) => void handleSubmit(e)} style={{ maxWidth: 720 }} noValidate>
       <div className="fields">
-        <label className="field" style={{ background: "#fff", padding: "13px 16px" }}>
-          <span className="label">Vendor / counter-party *</span>
-          <select
-            value={vendorId}
-            onChange={(e) => setVendorId(e.target.value)}
+        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+          <label className="label" htmlFor="c-vendor">Vendor / counter-party *</label>
+          <RemoteSearchSelect
+            inputId="c-vendor"
+            value={vendor}
+            onChange={setVendor}
+            search={searchVendors}
+            onStateChange={setVendorSearch}
             required
-            aria-invalid={fieldErrors.vendor ? true : undefined}
-            aria-describedby={fieldErrors.vendor ? "c-vendor-err" : undefined}
-            disabled={vendorsState !== "ready"}
-            style={{ minHeight: 44 }}
-          >
-            <option value="" disabled>
-              {vendorsState === "loading"
-                ? "Loading vendors…"
-                : vendorsState === "error"
-                  ? "Couldn't load vendors"
-                  : vendors.length === 0
-                    ? "No vendors found"
-                    : "Select a vendor…"}
-            </option>
-            {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-          </select>
+            invalid={Boolean(fieldErrors.vendor)}
+            describedBy={fieldErrors.vendor ? "c-vendor-err" : undefined}
+            labels={{
+              placeholder: t("placeholder"), loading: t("loading"), empty: t("empty"),
+              error: t("error"), retry: t("retry"), clear: t("clear"),
+            }}
+          />
           {fieldErrors.vendor ? <span id="c-vendor-err" style={{ color: "#b91c1c", fontSize: 12 }}>{fieldErrors.vendor}</span> : null}
-          {vendorsState === "error" ? (
-            <span role="alert" style={{ color: "#b91c1c", fontSize: 12, marginTop: 4 }}>
-              Couldn’t load vendors.{" "}
-              <button type="button" className="link" onClick={retryVendors} style={{ textDecoration: "underline" }}>Try again</button>
-            </span>
-          ) : null}
-        </label>
+        </div>
         <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
           <label className="label" htmlFor="c-no">Contract no *</label>
           <input
@@ -237,7 +209,7 @@ export function CreateContractForm() {
         ) : null}
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-        <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={status === "submitting" || vendorsState !== "ready"}>
+        <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={status === "submitting" || (vendorSearch === "error" && !vendor)}>
           {status === "submitting" ? "Creating…" : "Create contract"}
         </Button>
         <Link href="/procurement/contracts" className="btn ghost" style={{ minHeight: 44 }}>Cancel</Link>
