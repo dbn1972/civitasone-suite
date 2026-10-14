@@ -1,15 +1,19 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getStockLedger } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
 import { PrintExportButton } from "../_components/PrintExportButton";
 import { formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { StockLedgerClient } from "./StockLedgerClient";
 
 export default async function StockLedgerPage() {
   const { data: entries, source } = await getStockLedger();
-  const totalReceipts = entries.filter((e) => e.type === "receipt").reduce((sum, e) => sum + e.totalValue, 0);
-  const totalIssues = entries.filter((e) => e.type === "issue").reduce((sum, e) => sum + e.totalValue, 0);
-  const netBalance = totalReceipts - totalIssues;
+  // GAP-STOCK-LEDGER-01: a failed load must not render as an empty ledger with
+  // zero totals. Totals are unknown (null -> "—") when the load errored.
+  const errored = source === "error";
+  const totalReceipts = errored ? null : entries.filter((e) => e.type === "receipt").reduce((sum, e) => sum + e.totalValue, 0);
+  const totalIssues = errored ? null : entries.filter((e) => e.type === "issue").reduce((sum, e) => sum + e.totalValue, 0);
+  const netBalance = totalReceipts === null || totalIssues === null ? null : totalReceipts - totalIssues;
 
   return (
     <>
@@ -25,12 +29,18 @@ export default async function StockLedgerPage() {
         }
       />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f7f5" label="Total Entries" value={entries.length.toLocaleString("en-IN")} />
-        <StatCard icon="📥" iconBg="#ecfdf3" label="Total Receipts" value={formatMoney(totalReceipts)} />
-        <StatCard icon="📤" iconBg="#fef3f2" label="Total Issues" value={formatMoney(totalIssues)} />
-        <StatCard icon="⚖️" iconBg="#eff6ff" label="Net Balance" value={formatMoney(netBalance)} />
+        <StatCard icon="📋" iconBg="#e6f7f5" label="Total Entries" value={errored ? "—" : entries.length.toLocaleString("en-IN")} />
+        <StatCard icon="📥" iconBg="#ecfdf3" label="Total Receipts" value={totalReceipts === null ? "—" : formatMoney(totalReceipts)} />
+        <StatCard icon="📤" iconBg="#fef3f2" label="Total Issues" value={totalIssues === null ? "—" : formatMoney(totalIssues)} />
+        <StatCard icon="⚖️" iconBg="#eff6ff" label="Net Balance" value={netBalance === null ? "—" : formatMoney(netBalance)} />
       </StatGrid>
-      <StockLedgerClient entries={entries} />
+      {errored ? (
+        <div className="card" style={{ marginTop: 18 }}>
+          <RefreshErrorState error={toHumanError("load", { area: "stock ledger" })} />
+        </div>
+      ) : (
+        <StockLedgerClient entries={entries} />
+      )}
     </>
   );
 }

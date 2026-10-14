@@ -309,6 +309,8 @@ function mapTask(v: unknown): WorkflowTask | null {
     // GAP-WORKFLOW-MY-TASKS-05 — age + SLA from the task view.
     createdAt: optStr(v.createdAt),
     dueAt: optStr(v.dueAt),
+    instanceName: optStr(v.instanceName),
+    requesterId: optStr(v.requesterId),
     version: num(v.version, 1),
   };
 }

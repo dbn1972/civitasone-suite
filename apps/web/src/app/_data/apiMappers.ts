@@ -969,7 +969,7 @@ export function mapAssetSummaries(payload: unknown): AssetSummary[] | null {
       id,
       assetCode,
       name,
-      category: toText(row.category) ?? toText(row.categoryId)?.slice(0, 8) ?? "General",
+      category: toText(row.category) ?? toText(row.categoryName) ?? "—",
       type,
       purchaseDate: toText(row.acquisitionDate) ?? toText(row.purchaseDate) ?? toText(row.createdAt)?.slice(0, 10) ?? "—",
       purchaseCost,
@@ -1162,8 +1162,10 @@ export function mapStockItemSummaries(payload: unknown): StockItemSummary[] | nu
     if (!isRecord(row)) continue;
     const id = toText(row.id);
     const name = toText(row.name);
-    const itemCode = toText(row.itemCode) ?? toText(row.code) ?? id;
-    if (!id || !name || !itemCode) continue;
+    if (!id || !name) continue;
+    // GAP-STOCK-LIST-02: never surface the record id, an id fragment or an
+    // invented unit/category as if it were real data. Missing names read "—".
+    const itemCode = toText(row.itemCode) ?? toText(row.code) ?? "—";
     // A level the service did not report stays null: defaulting it to 0 made every
     // item read "Low Stock" with a Rs 0 value (stock-service returns no levels).
     const currentStock = parseMinor(row.currentStock);
@@ -1172,8 +1174,8 @@ export function mapStockItemSummaries(payload: unknown): StockItemSummary[] | nu
       id,
       itemCode,
       name,
-      category: toText(row.category) ?? toText(row.categoryId)?.slice(0, 8) ?? "General",
-      unit: toText(row.unit) ?? toText(row.uomId)?.slice(0, 4) ?? "EA",
+      category: toText(row.category) ?? toText(row.categoryName) ?? "—",
+      unit: toText(row.unit) ?? toText(row.uomCode) ?? "—",
       currentStock,
       minStockLevel,
       unitCost: parseMinor(row.unitCost),

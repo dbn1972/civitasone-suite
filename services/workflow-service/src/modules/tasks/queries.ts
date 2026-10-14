@@ -31,8 +31,13 @@ export async function listTasks(
       : opts?.status === "pending" && opts.roles?.length
         ? await repo.countPendingForRoles(tenantId, opts.roles)
         : await repo.countByTenant(tenantId);
+    const subjects = await repo.instanceSummaries(tenantId, rows.map((r) => r.instanceId));
+    const enriched = rows.map((r) => {
+      const s = subjects.get(r.instanceId);
+      return s ? { ...r, instanceName: s.name, requesterId: s.requesterId } : r;
+    });
     return {
-      data: rows,
+      data: enriched,
       pagination: {
         hasMore: offset + rows.length < total,
         pageSize: limit,

@@ -32,10 +32,14 @@ export default async function MyTasksPage() {
   // GAP-WORKFLOW-INSTANCES-DETAIL-01 — resolve assignee ids to display names via
   // the shared tenant-scoped directory so the inbox names the assignee instead
   // of a raw UUID fragment. Fail-soft: unresolved ids fall back to a short id.
-  const names = ok ? await resolveUsers(tasks.map((t) => t.assigneeId ?? "")) : new Map<string, string>();
+  // GAP-WORKFLOW-MY-TASKS-02 - same for the requester (instance creator).
+  const names = ok
+    ? await resolveUsers(tasks.flatMap((t) => [t.assigneeId ?? "", t.requesterId ?? ""]))
+    : new Map<string, string>();
   const tasksNamed = tasks.map((t) => ({
     ...t,
     assigneeName: t.assigneeId ? (names.get(t.assigneeId) ?? null) : null,
+    requesterName: t.requesterId ? (names.get(t.requesterId) ?? null) : null,
   }));
 
   // GAP-WORKFLOW-MY-TASKS-04 — the inbox is capped at TASK_LIMIT with no total;

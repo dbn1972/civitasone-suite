@@ -57,3 +57,17 @@ describe("mapInstallModules (MODULES-04)", () => {
     expect(row.status).toBe("ready");
   });
 });
+
+// GAP-INSTALL-HOME-01: the wizard reads typed steps (loaders.getInstallSteps,
+// InstallStepSummarySchema), not the generic mapRows. Pin that a real
+// /v1/install/steps payload (stageToStep output) parses with title, stepNo and
+// isRequired populated.
+import { InstallStepSummaryListSchema } from "@civitasone/schemas/web";
+describe("install steps payload shape", () => {
+  it("populates title, stepNo and isRequired", () => {
+    const [step] = InstallStepSummaryListSchema.parse([
+      { id: "s1", stepNo: 1, title: "Create tenant", status: "pending" },
+    ]);
+    expect(step).toMatchObject({ title: "Create tenant", stepNo: 1, isRequired: true });
+  });
+});

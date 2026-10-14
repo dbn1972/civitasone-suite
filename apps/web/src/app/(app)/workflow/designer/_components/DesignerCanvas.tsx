@@ -129,8 +129,42 @@ export function DesignerCanvas({ definitions, seedGraph, embedded = false, initi
   const [definitionName, setDefinitionName] = useState(seedGraph?.name ?? "Untitled Process");
   const [saveState, setSaveState] = useState<{ kind: "idle" | "saving" | "ok" | "err"; text?: string }>({ kind: "idle" });
 
+  // GAP-WORKFLOW-DESIGNER-01 - dirty tracking. A signature of the editable model
+  // is compared with the last loaded/saved baseline; unsaved work triggers a
+  // beforeunload guard so a refresh cannot silently discard the graph.
+  const signature = useMemo(
+    () =>
+      JSON.stringify({
+        n: definitionName,
+        nodes: nodes.map((n) => [n.id, n.type, Math.round(n.position.x), Math.round(n.position.y), n.data]),
+        edges: edges.map((e) => [e.id, e.source, e.target]),
+      }),
+    [definitionName, nodes, edges],
+  );
+  const [baseline, setBaseline] = useState<string | null>(null);
+  // Bumped when a definition is opened so the baseline is re-taken from the
+  // freshly loaded model (same commit as the new nodes/edges).
+  const [loadSeq, setLoadSeq] = useState(0);
+  useEffect(() => {
+    setBaseline(signature);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-baseline only on mount/open, not on every edit
+  }, [loadSeq]);
+  const dirty = baseline !== null && signature !== baseline;
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const guard = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", guard);
+    return () => window.removeEventListener("beforeunload", guard);
+  }, [dirty]);
+  // Save is blocked while the last validation run found problems; any edit
+  // resets hasValidated, so a stale result never blocks or allows a save.
+  const hasBlockingViolations = hasValidated && violations.length > 0;
+
   /**
-   * GAP-WORKFLOW-DESIGNER-01 — map reactflow nodes/edges to the designer API
+   * GAP-WORKFLOW-DESIGNER-01 - map reactflow nodes/edges to the designer API
    * shape and Save as a NEW draft (POST; never overwrites a live definition —
    * see Risk note). The service create endpoint is ADMIN_ROLES + audited.
    */
@@ -164,11 +198,12 @@ export function DesignerCanvas({ definitions, seedGraph, embedded = false, initi
         setSaveState({ kind: "err", text: "Could not save. Please try again." });
         return;
       }
+      setBaseline(signature);
       setSaveState({ kind: "ok", text: "Saved as a new draft." });
     } catch {
       setSaveState({ kind: "err", text: "Could not save. Please try again." });
     }
-  }, [definitionName, nodes, edges]);
+  }, [definitionName, nodes, edges, signature]);
 
   /** GAP-WORKFLOW-DESIGNER-01 — load a draft's full graph into the canvas. */
   const onOpen = useCallback(
@@ -189,6 +224,7 @@ export function DesignerCanvas({ definitions, seedGraph, embedded = false, initi
         setDefinitionId(id);
         setDefinitionName(d.name ?? "Untitled Process");
         setHasValidated(false);
+        setLoadSeq((n) => n + 1);
         setSaveState({ kind: "idle" });
       } catch {
         setSaveState({ kind: "err", text: "Could not open that workflow." });
@@ -541,7 +577,8 @@ export function DesignerCanvas({ definitions, seedGraph, embedded = false, initi
                 className="rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                 style={{ background: "var(--primary, #00439C)", color: "#fff", border: "1px solid var(--line)" }}
                 onClick={() => void onSave()}
-                disabled={saveState.kind === "saving"}
+                disabled={saveState.kind === "saving" || hasBlockingViolations}
+                title={hasBlockingViolations ? "Fix the validation problems before saving." : undefined}
               >
                 {saveState.kind === "saving" ? "Saving…" : "Save as draft"}
               </button>
