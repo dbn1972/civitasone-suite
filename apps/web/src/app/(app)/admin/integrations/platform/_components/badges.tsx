@@ -1,5 +1,6 @@
 "use client";
 
+import { formatInIST } from "@/lib/formatters";
 import { useTranslations, useLocale } from "next-intl";
 import { StatusPill } from "@/app/_components/ds";
 import {
@@ -25,7 +26,7 @@ export function EnvBadge({ env }: { env: IntegrationEnv }) {
 export function formatWhen(iso: string | null, locale: string): string {
   if (!iso) return "";
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "" : d.toLocaleString(locale, { dateStyle: "medium", timeStyle: "short" });
+  return Number.isNaN(d.getTime()) ? "" : formatInIST(d, { dateStyle: "medium", timeStyle: "short" }, locale);
 }
 
 /** Last test result + time. A sandbox result is labelled as a mock so it is never mistaken for a live handshake. */

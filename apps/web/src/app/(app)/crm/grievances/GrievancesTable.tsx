@@ -39,7 +39,7 @@ function DueCell({ dueAt, status }: { dueAt: string | null; status: string }) {
   const diffDays = Math.ceil((due.getTime() - now) / dayMs);
   const disposed = status === "DISPOSED";
   const overdue = !disposed && due.getTime() < now;
-  const dateText = due.toLocaleDateString("en-IN");
+  const dateText = formatIndianDate(dueAt);
   if (overdue) {
     return (
       <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>

@@ -1,3 +1,4 @@
+import { formatIndianDateTime } from "@/lib/formatters";
 import { notFound } from "next/navigation";
 import { Card, EmptyState, PageHeader, RefreshErrorState, StatCard, StatGrid } from "../../../../_components/ds";
 import { getCopilotTurn } from "../../../../_data/loaders";
@@ -12,15 +13,8 @@ interface PageProps {
 }
 
 function formatDateTime(iso: string): string {
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return "—";
-  return parsed.toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  if (Number.isNaN(new Date(iso).getTime())) return "—";
+  return formatIndianDateTime(iso);
 }
 
 export default async function CopilotTurnPage({ params }: PageProps) {

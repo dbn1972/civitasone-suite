@@ -8,11 +8,11 @@
  * window boundary should align with the calendar date in India.
  */
 
-const IST_TZ = "Asia/Kolkata";
-
 /** Return today's date string in IST as YYYY-MM-DD. */
+import { istDateKey } from "@/lib/formatters";
+
 export function todayInIST(now: Date = new Date()): string {
-  return now.toLocaleDateString("en-CA", { timeZone: IST_TZ }); // en-CA → YYYY-MM-DD
+  return istDateKey(now); // YYYY-MM-DD
 }
 
 /** Return the date 30 days from today in IST as YYYY-MM-DD. */

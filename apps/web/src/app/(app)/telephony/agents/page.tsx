@@ -6,6 +6,7 @@
  * presence (available / busy / wrap-up / offline) and their queue assignment.
  * WCAG 2.2 AA: semantic structure, aria-live status, DS DataTable + StatusPill.
  */
+import { formatInIST } from "@/lib/formatters";
 import { useState } from "react";
 import { PageHeader, StatCard, StatGrid, StatusPill, DataTable, ErrorState, Button } from "../../../_components/ds";
 import type { PillVariant } from "../../../_components/ds/StatusPill";
@@ -69,7 +70,7 @@ export default function TelephonyAgentsPage() {
     "/v1/telephony/agents",
     { map: toAgents, initialData: [] },
   );
-  const [refreshedAt, setRefreshedAt] = useState<string>(() => new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
+  const [refreshedAt, setRefreshedAt] = useState<string>(() => formatInIST(new Date(), { hour: "2-digit", minute: "2-digit" }));
 
   const available = agents.filter((a) => a.status === "available").length;
   const busy = agents.filter((a) => a.status === "busy" || a.status === "wrap_up").length;
@@ -81,7 +82,7 @@ export default function TelephonyAgentsPage() {
   const showingCache = (offline || source === "cache") && cachedAt !== null;
 
   function handleRefresh() {
-    setRefreshedAt(new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }));
+    setRefreshedAt(formatInIST(new Date(), { hour: "2-digit", minute: "2-digit" }));
     refresh();
   }
 

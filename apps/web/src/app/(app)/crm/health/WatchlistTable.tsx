@@ -1,4 +1,5 @@
 "use client";
+import { formatIndianDate } from "@/lib/formatters";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -60,7 +61,7 @@ const FALLBACK: Record<string, string> = {
 function formatDate(iso: string): string {
   const parsed = new Date(iso);
   if (Number.isNaN(parsed.getTime())) return "—";
-  return parsed.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return formatIndianDate(iso);
 }
 
 export function WatchlistTable({ entries }: { entries: NamedAccountHealthEntry[] }) {

@@ -9,7 +9,7 @@ import {
 } from "../../../_data/loaders";
 import { getSessionName, getSessionRoles } from "../../../../lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
-import { formatIndianDate, humanizeStatus, greetingForHour, currentIstHour } from "@/lib/formatters";
+import { formatIndianDate, humanizeStatus, greetingForHour, currentIstHour, formatInIST } from "@/lib/formatters";
 import { GreetingHeader } from "./_components/GreetingHeader";
 import { HRKPIStrip } from "./_components/HRKPIStrip";
 import { MyKPIStrip } from "./_components/MyKPIStrip";
@@ -90,9 +90,9 @@ function payrollDaysLeft(): number {
 function formatToday(): { today: string; dayName: string; monthName: string } {
   const d = new Date();
   return {
-    today: d.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }),
-    dayName: d.toLocaleDateString("en-IN", { weekday: "long" }),
-    monthName: d.toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
+    today: formatInIST(d, { day: "numeric", month: "long", year: "numeric" }),
+    dayName: formatInIST(d, { weekday: "long" }),
+    monthName: formatInIST(d, { month: "long", year: "numeric" }),
   };
 }
 

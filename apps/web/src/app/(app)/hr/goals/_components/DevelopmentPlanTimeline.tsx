@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useTranslations } from "next-intl";
-import { humanizeStatus } from "@/lib/formatters";
+import { humanizeStatus, formatIndianDate } from "@/lib/formatters";
 
 export interface DevActivity {
   id: string;
@@ -48,8 +48,7 @@ function getQuarter(date: Date): number {
 }
 
 function formatDate(s: string): string {
-  const d = new Date(s);
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  return formatIndianDate(s);
 }
 
 export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineProps) {

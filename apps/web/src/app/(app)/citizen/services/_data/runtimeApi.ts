@@ -377,7 +377,7 @@ export function formatExpectedByDate(slaDays: number | null | undefined, from: D
     const day = d.getDay();
     if (day !== 0 && day !== 6) remaining -= 1;
   }
-  return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  return formatIndianDate(d.toISOString());
 }
 
 export type RuntimeJourneyStep = "form" | "review" | "fee" | "submitted";

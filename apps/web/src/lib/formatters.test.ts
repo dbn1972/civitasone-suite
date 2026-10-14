@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { formatMoneyCompact, formatMoney, formatCrore, formatIndianDate, formatIndianDateTime, todayIST, istDatePart, addDaysIST, minorToRupeesOrNull, formatClockTime12h, percentOfMinor, humanizeStatus, formatEntityRef, utilisationPercent, isOverUtilised, formatEnumLabel, formatDays, formatPoints, formatShortId } from "./formatters";
+import { formatMoneyCompact, formatMoney, formatCrore, formatIndianDate, formatIndianDateTime, todayIST, istDatePart, addDaysIST, minorToRupeesOrNull, formatClockTime12h, percentOfMinor, humanizeStatus, formatEntityRef, utilisationPercent, isOverUtilised, formatEnumLabel, formatDays, formatPoints, formatShortId, formatInIST, istDateKey, formatMonthYear } from "./formatters";
 
 // ---------------------------------------------------------------------------
 // formatClockTime12h -- GAP-HR-ATTENDANCE-CONFIG-02
@@ -611,5 +611,59 @@ describe("formatShortId (SF-01a)", () => {
     expect(formatShortId(null)).toBe("—");
     expect(formatShortId(undefined)).toBe("—");
     expect(formatShortId("")).toBe("—");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SF-07b: formatInIST / istDateKey / formatMonthYear
+// ---------------------------------------------------------------------------
+describe("formatInIST (SF-07b)", () => {
+  // 2026-03-10T19:00:00Z is 00:30 on 11 March in IST (a Wednesday).
+  const instant = "2026-03-10T19:00:00Z";
+
+  it("resolves the weekday on the IST calendar day, not the UTC one", () => {
+    expect(formatInIST(instant, { weekday: "long" })).toBe("Wednesday");
+  });
+
+  it("formats time-only in IST regardless of host zone", () => {
+    expect(formatInIST(instant, { hour: "2-digit", minute: "2-digit", hour12: false })).toBe("00:30");
+  });
+
+  it("formats a date-only shape in IST", () => {
+    expect(formatInIST(instant, { day: "2-digit", month: "short", year: "numeric" })).toBe("11 Mar 2026");
+  });
+
+  it("honours an explicit locale (en-CA gives an ISO-ordered day key)", () => {
+    expect(formatInIST(instant, { year: "numeric", month: "2-digit", day: "2-digit" }, "en-CA")).toBe("2026-03-11");
+  });
+
+  it("returns the em-dash placeholder for missing or invalid input", () => {
+    expect(formatInIST(null)).toBe("—");
+    expect(formatInIST(undefined)).toBe("—");
+    expect(formatInIST("")).toBe("—");
+    expect(formatInIST("not-a-date", { weekday: "long" })).toBe("—");
+  });
+});
+
+describe("istDateKey (SF-07b)", () => {
+  it("returns the IST calendar day as YYYY-MM-DD", () => {
+    expect(istDateKey(new Date("2026-03-10T19:00:00Z"))).toBe("2026-03-11");
+    expect(istDateKey(new Date("2026-03-10T18:29:59Z"))).toBe("2026-03-10");
+  });
+  it("accepts epoch milliseconds", () => {
+    expect(istDateKey(Date.UTC(2026, 2, 10, 19, 0, 0))).toBe("2026-03-11");
+  });
+});
+
+describe("formatMonthYear (SF-07b)", () => {
+  it("labels a 0-based month index", () => {
+    expect(formatMonthYear(2026, 9)).toBe("October 2026");
+  });
+  it("rolls under/overflow into the neighbouring year", () => {
+    expect(formatMonthYear(2026, -1)).toBe("December 2025");
+    expect(formatMonthYear(2026, 12)).toBe("January 2027");
+  });
+  it("supports the short month style", () => {
+    expect(formatMonthYear(2026, 0, "short")).toBe("Jan 2026");
   });
 });

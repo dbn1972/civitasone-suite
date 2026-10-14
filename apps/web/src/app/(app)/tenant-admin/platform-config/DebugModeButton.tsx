@@ -1,5 +1,6 @@
 "use client";
 
+import { formatInIST } from "@/lib/formatters";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, ConfirmDialog } from "../../../_components/ds";
@@ -48,7 +49,7 @@ export function DebugModeButton({ debugModeUntil }: { debugModeUntil: string | n
     <div style={{ marginTop: 10 }}>
       {active && (
         <span style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, background: "#fef3c7", color: "#92400e", fontWeight: 600, marginInlineEnd: 8 }}>
-          Debug until {new Date(debugModeUntil!).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Kolkata" })} IST
+          Debug until {formatInIST(debugModeUntil!, { hour: "2-digit", minute: "2-digit" })} IST
         </span>
       )}
       <Button size="sm" variant="ghost" onClick={() => { setError(undefined); setOpen(true); }}>

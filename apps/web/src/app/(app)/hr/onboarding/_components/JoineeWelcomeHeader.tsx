@@ -3,6 +3,8 @@
  * Shows name, start date, department, reporting manager, and office address
  * in standard Indian address format.
  */
+import { formatInIST } from "@/lib/formatters";
+
 
 interface JoineeWelcomeHeaderProps {
   name: string;
@@ -16,9 +18,7 @@ interface JoineeWelcomeHeaderProps {
 
 function formatDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString("en-IN", {
-      day: "numeric", month: "long", year: "numeric",
-    });
+    return formatInIST(iso, { day: "numeric", month: "long", year: "numeric" });
   } catch {
     return iso;
   }

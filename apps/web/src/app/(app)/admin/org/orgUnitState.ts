@@ -1,8 +1,9 @@
+import { istDateKey } from "@/lib/formatters";
 import type { AdminOrgUnit } from "@/app/_data/loaders";
 
 /** YYYY-MM-DD of an instant on the IST calendar. */
 function istDate(ms: number): string {
-  return new Date(ms).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  return istDateKey(ms);
 }
 
 /**

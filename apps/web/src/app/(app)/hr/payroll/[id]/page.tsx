@@ -3,7 +3,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatGrid, StatCard, StatusPill } from "../../../../_components/ds";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getPayrollRunById, getPayrollRunDetails } from "../../../../_data/loaders";
-import { formatRupees, formatIndianDate } from "@/lib/formatters";
+import { formatRupees, formatIndianDate, formatMonthYear } from "@/lib/formatters";
 import { payrollRunStatusLabel, payrollRunStatusVariant } from "@/lib/payroll/statusLabels";
 import { PayrollRunActions } from "./PayrollRunActions";
 import { PayrollRunStepper } from "./PayrollRunStepper";
@@ -37,8 +37,7 @@ function parsePeriod(pp: string): { year: number; month: number } | null {
 function prevPeriodLabel(pp: string): string {
   const parsed = parsePeriod(pp);
   if (!parsed) return "Previous month";
-  const d = new Date(parsed.year, parsed.month - 2, 1);
-  return d.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  return formatMonthYear(parsed.year, parsed.month - 2);
 }
 
 /** ISO ("YYYY-MM") of the month immediately before `pp`, or null if unparseable. */

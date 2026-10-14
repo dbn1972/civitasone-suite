@@ -15,6 +15,7 @@
  * endpoints concurrently — the normalisers tolerate wrapper/field drift and the
  * assumed contract is documented per function.
  */
+import { formatIndianDateTime } from "@/lib/formatters";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 
 export type IngestionSource = "api" | "error";
@@ -279,15 +280,8 @@ export function normaliseRuns(raw: unknown): IngestionRun[] {
 /** Human date+time; empty for a missing timestamp (never fabricate "now"). */
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-IN", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  if (Number.isNaN(new Date(iso).getTime())) return "—";
+  return formatIndianDateTime(iso);
 }
 
 /* ================================================================ loaders === */

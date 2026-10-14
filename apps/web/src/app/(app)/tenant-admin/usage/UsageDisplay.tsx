@@ -1,5 +1,6 @@
 "use client";
 
+import { formatIndianDate } from "@/lib/formatters";
 import { EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -142,7 +143,7 @@ export function UsageDisplay({
               )}
               {r.projectedOverageDate && (
                 <p style={{ fontSize: 12, color: r.percent !== null ? getColor(r.percent) : "#6b7280", marginTop: 4 }}>
-                  ⏱️ At current rate, you&apos;ll hit the limit on {new Date(r.projectedOverageDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}
+                  ⏱️ At current rate, you&apos;ll hit the limit on {formatIndianDate(r.projectedOverageDate)}
                 </p>
               )}
             </div>

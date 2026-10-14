@@ -1,3 +1,4 @@
+import { formatDateTimeIST } from "@/lib/formatters";
 import { PageHeader, StatCard, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getAdminOperationsDashboard } from "../../../_data/loaders";
 import { Breadcrumb } from "../Breadcrumb";
@@ -12,7 +13,7 @@ function formatDate(value?: string): string {
   // operator reads one timezone regardless of their browser locale.
   return Number.isNaN(date.getTime())
     ? "Not recorded"
-    : `${date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" })} IST`;
+    : formatDateTimeIST(date);
 }
 
 // GAP-TENANT-ADMIN-OPERATIONS-02: the health score is 8 equally-weighted

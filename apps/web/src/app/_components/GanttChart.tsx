@@ -1,5 +1,6 @@
 "use client";
 
+import { formatInIST } from "@/lib/formatters";
 import React from "react";
 
 export interface GanttTask {
@@ -24,7 +25,7 @@ function parseDate(d: string): number {
 }
 
 function formatMonth(d: Date): string {
-  return d.toLocaleString("en", { month: "short", year: "2-digit" });
+  return formatInIST(d, { month: "short", year: "2-digit" }, "en");
 }
 
 export function GanttChart({ tasks, startDate, endDate }: GanttChartProps) {
