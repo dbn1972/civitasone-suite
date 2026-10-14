@@ -289,6 +289,7 @@ Counts: ACTION 20
 ### GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme WORKFLOW (was FABRICATED)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 PQ-A note (#2037):** re-verified, no change: RecordActions is officer-role gated and wired for trade only; other services have no workflow endpoints. Needs owner decision plus per-service backend contracts.
 - **W0 note:** partly fixed by ##1934 — Done: roadmap copy removed; RecordActions (officer-role gated) + RecordHistory added. Remains: only trade has a workflow config; other services stay read-only with no actions
 - **First-pass claim:** An officer console with no officer actions: the card literally tells staff "Actions (approve, inspect, issue) will wire to workflow tasks in a follow-up pass" (RecordDetailPanel.tsx). Nothing on this route approves, rejects, inspects or issues, so scrutiny must happen outside the app; no audit trail or history is shown either.
 - **Verified evidence:** apps/web/src/app/(app)/municipal/_components/RecordDetailPanel.tsx:198-201 says 'Actions (approve, inspect, issue) will wire to workflow tasks in a follow-up pass.' The page ([id]/page.tsx:130-161) has no action buttons and no history/audit section. Theme FABRICATED is wrong: this is missing functionality, not fake data.
