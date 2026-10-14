@@ -45,6 +45,12 @@ export type MunicipalServiceConfig = {
    */
   hiddenFields?: readonly string[];
   /**
+   * W2 PQ-C: extra record keys the detail panel may show, beyond the shared
+   * allow-list in records.ts. The panel is an allow-list: a key not named
+   * there or here is not rendered.
+   */
+  displayFields?: readonly string[];
+  /**
    * GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-03: preferred leading order of
    * detail fields (status, reference, owner, …); any key not listed falls
    * after these, alphabetically by label.

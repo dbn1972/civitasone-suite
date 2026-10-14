@@ -200,4 +200,34 @@ describe("municipal record parsing", () => {
       expect(e.rawValue ?? "").not.toMatch(uuidRe);
     }
   });
+
+  // W2 PQ-C (DETAIL-01): the panel is an allow-list. Unknown keys (applicant
+  // address, document numbers, free blobs) are not rendered; PII keys are
+  // flagged for masking; PII inside nested objects and free text is masked.
+  it("detailEntries: allow-list drops unknown keys and masks nested/free-text PII (PQ-C)", () => {
+    const entries = detailEntries(
+      {
+        id: "x",
+        status: "submitted",
+        applicationNumber: "TL-1",
+        ownerMobile: "9876543210",
+        applicantAddress: "12 Secret Lane",
+        aadhaarNumber: "123456789012",
+        documentNumber: "DOC-99",
+        internalNotesBlob: { a: 1 },
+        remarks: "call me on 9876543210 or a.b@example.com",
+        siteAddress: { line1: "12 MG Road", ownerPhone: "9876543210" },
+      },
+      trade,
+    );
+    const byKey = Object.fromEntries(entries.map((e) => [e.key, e]));
+    expect(byKey.applicantAddress).toBeUndefined();
+    expect(byKey.documentNumber).toBeUndefined();
+    expect(byKey.internalNotesBlob).toBeUndefined();
+    expect(byKey.aadhaarNumber.kind).toBe("pii");
+    expect(byKey.remarks.value).not.toContain("9876543210");
+    expect(byKey.remarks.value).not.toContain("a.b@example.com");
+    expect(byKey.siteAddress.value).toContain("MG Road");
+    expect(byKey.siteAddress.value).not.toContain("9876543210");
+  });
 });
