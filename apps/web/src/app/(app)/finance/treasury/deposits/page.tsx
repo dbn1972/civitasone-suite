@@ -23,11 +23,11 @@ export default async function DepositsPage() {
         back="/finance"
       />
       <StatGrid>
-        <StatCard icon="🏧" iconBg="#e7edfd" label="Total Deposits" value={failed ? null : stats.total} />
-        <StatCard icon="📈" iconBg="#ecfdf3" label="Active" value={failed ? null : stats.active} />
-        <StatCard icon="✅" iconBg="#fffaeb" label="Refunded" value={failed ? null : stats.refunded} />
-        <StatCard icon="⚠️" iconBg="#fef3f2" label="Forfeited" value={failed ? null : stats.forfeited} />
-        <StatCard icon="💰" iconBg="#eff6ff" label="Active Balance" value={failed ? null : formatMoney(stats.activeBalanceMinor)} />
+        <StatCard icon="🏧" tone="info" label="Total Deposits" value={failed ? null : stats.total} />
+        <StatCard icon="📈" tone="good" label="Active" value={failed ? null : stats.active} />
+        <StatCard icon="✅" tone="warn" label="Refunded" value={failed ? null : stats.refunded} />
+        <StatCard icon="⚠️" tone="bad" label="Forfeited" value={failed ? null : stats.forfeited} />
+        <StatCard icon="💰" tone="info" label="Active Balance" value={failed ? null : formatMoney(stats.activeBalanceMinor)} />
       </StatGrid>
       {/* UX-012: the data-source badge now lives inside DepositsTable, driven
           by the same useSeededResource call that produces its rows — not a

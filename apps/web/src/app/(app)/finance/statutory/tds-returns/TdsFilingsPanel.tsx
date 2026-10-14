@@ -113,7 +113,7 @@ export function TdsFilingsPanel({ fy, filings, canFile }: { fy: string; filings:
             <Button type="submit" disabled={busy} aria-busy={busy}>{busy ? "Saving…" : "Record as filed"}</Button>
             <Button type="button" variant="ghost" disabled={busy} onClick={() => setOpen(null)}>Cancel</Button>
           </div>
-          {error ? <p role="alert" style={{ color: "#b91c1c", fontSize: 13 }}>{error}</p> : null}
+          {error ? <p role="alert" style={{ color: "var(--bad)", fontSize: 13 }}>{error}</p> : null}
         </form>
       ) : null}
     </>

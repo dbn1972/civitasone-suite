@@ -10,7 +10,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ActionButton, Button, ConfirmDialog } from "@/app/_components/ds";
+import { Alert, ActionButton, Button, ConfirmDialog } from "@/app/_components/ds";
 import { browserFetch } from "@/lib/api/browserClient";
 import { workflowErrorMessage } from "@/lib/finance/workflowErrors";
 import { validateBankChange, type BankChangeForm } from "@/lib/finance/vendorBankChange";
@@ -90,7 +90,7 @@ export function VendorBankChange({
   return (
     <section aria-label={t("heading")} style={{ marginTop: 16 }}>
       {pending ? (
-        <div role="status" className="banner" style={{ background: "#fffaeb", padding: 12, borderRadius: 12, fontSize: 13 }}>
+        <Alert variant="warning" style={{ marginBottom: 0 }}>
           <strong>{t("pendingTitle")}</strong>
           <p style={{ margin: "6px 0" }}>
             {t("pendingBody", { bank: pending.bankName, ifsc: pending.ifsc, account: pending.accountMasked, by: pending.proposedByName, on: pending.proposedAtLabel })}
@@ -127,7 +127,7 @@ export function VendorBankChange({
               </span>
             )
           ) : null}
-        </div>
+        </Alert>
       ) : canPropose ? (
         <>
           <Button variant="ghost" onClick={() => setOpen((v) => !v)} aria-expanded={open}>{open ? t("cancel") : t("proposeLabel")}</Button>
@@ -146,7 +146,7 @@ export function VendorBankChange({
                       aria-invalid={errors[k] ? true : undefined}
                       style={inputStyle}
                     />
-                    {errors[k] ? <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{errors[k]}</span> : null}
+                    {errors[k] ? <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{errors[k]}</span> : null}
                   </div>
                 ))}
               </div>

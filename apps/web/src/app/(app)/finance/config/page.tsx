@@ -44,8 +44,8 @@ export default async function FinanceConfigPage() {
       />
 
       <StatGrid>
-        <StatCard icon="📅" iconBg="#e7edfd" label="Active FY" value={fyErr ? "—" : activeFY?.code ?? "Not set"} />
-        <StatCard icon="🏦" iconBg="#ecfdf3" label="Bank Accounts" value={bankErr ? "—" : banks.length} />
+        <StatCard icon="📅" tone="info" label="Active FY" value={fyErr ? "—" : activeFY?.code ?? "Not set"} />
+        <StatCard icon="🏦" tone="good" label="Bank Accounts" value={bankErr ? "—" : banks.length} />
       </StatGrid>
 
       {/* Financial Years -- created/activated on the Fiscal Years screen. */}

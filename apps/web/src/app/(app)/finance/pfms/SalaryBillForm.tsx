@@ -221,7 +221,7 @@ export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillF
                 aria-describedby={errors.totalAmountMinor ? `${amountId}-error` : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {previewAmount && <span style={{ fontSize: 12, color: "var(--muted, #666)" }}>{previewAmount}</span>}
+              {previewAmount && <span style={{ fontSize: 12, color: "var(--muted)" }}>{previewAmount}</span>}
               {errors.totalAmountMinor && (
                 <p id={`${amountId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
                   {errors.totalAmountMinor}

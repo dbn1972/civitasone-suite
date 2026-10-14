@@ -12,7 +12,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, ConfirmDialog } from "@/app/_components/ds";
+import { Alert, Button, ConfirmDialog } from "@/app/_components/ds";
 import { maskAccount, maskPan } from "@/app/_components/ds/Masked";
 import { useFormError } from "@/lib/useFormError";
 import { buildCreateVendorRequest, type VendorFormInput } from "@/lib/finance/vendorForm";
@@ -89,7 +89,7 @@ export function VendorForm() {
   const built = buildCreateVendorRequest(form);
   return (
     <>
-      {done ? <div role="status" className="banner" style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{done === "pending" ? t("createdPending") : t("created")}</div> : null}
+      {done ? <Alert variant="success">{done === "pending" ? t("createdPending") : t("created")}</Alert> : null}
       <div className="card">
         <form onSubmit={onSubmit} className="pad" noValidate>
           <div className="fields">
@@ -107,7 +107,7 @@ export function VendorForm() {
                     style={inputStyle}
                     aria-invalid={err ? true : undefined}
                   />
-                  {err ? <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{err}</span> : null}
+                  {err ? <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{err}</span> : null}
                 </div>
               );
             })}
