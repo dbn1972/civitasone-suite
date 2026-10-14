@@ -77,4 +77,28 @@ describe("DealDetailActions", () => {
     expect(screen.getByRole("button", { name: "Mark Won" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Mark Lost" })).toBeDisabled();
   });
+
+  // SF-14a: inline client validation replaces a silent/raw server round trip.
+  it("blocks an empty activity save with an inline aria-invalid error and no request, then fixes and resubmits", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: "a-1" } }), { status: 201 }),
+    );
+    render(<DealDetailActions dealId={DEAL_ID} dealName="Municipal Waste Contract" status="open" />);
+    fireEvent.click(screen.getByRole("button", { name: "Log Activity" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Save activity" }));
+
+    expect(await screen.findByText("Enter the notes for this activity.")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Notes/)).toHaveAttribute("aria-invalid", "true");
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(/^Notes/), { target: { value: "Sent the revised quote" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save activity" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(url).toBe("/api/proxy/v1/crm/activities");
+    expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({ dealId: DEAL_ID, text: "Sent the revised quote" });
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    expect(screen.queryByText("Enter the notes for this activity.")).not.toBeInTheDocument();
+  });
 });
