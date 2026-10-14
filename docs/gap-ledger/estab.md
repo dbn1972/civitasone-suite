@@ -1913,7 +1913,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-NOTIFICATIONS-04  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Date shows only "dd Mon" with no year or time, so an overdue item from last year is indistinguishable (NotificationsPanel.tsx:83).
 - **Verified evidence:** apps/web/src/app/(app)/estab/notifications/NotificationsPanel.tsx:83 toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) - no year, no time, no explicit IST timezone. lib/formatters.ts formatIndianDate (:2) yields dd/mm/yyyy without time; no shared DateTime formatter exists in lib/formatters (only apps/web/src/lib/admin/sftpIngestion.ts:280 formatDateTime, admin-specific). Also <time> lacks a dateTime attribute.
 - **Files to change:** `apps/web/src/app/(app)/estab/notifications/NotificationsPanel.tsx`, `apps/web/src/lib/formatters.ts`

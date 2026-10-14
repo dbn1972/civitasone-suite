@@ -67,7 +67,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DEFINITIONS-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Dead-end authoring: the page tells users to "Clone a template … then customise the approval steps" (definitions/page.tsx:99-116) and the empty state says "Start from a template below", but there is no Clone, New or Open-in-designer control anywhere on the page; template rows are not links (no rowLinkKey) — the promised workflow cannot be started here.
 - **Verified evidence:** definitions/page.tsx:98-115: Templates card text says 'Clone a template ...' (:101-103) and empty state (:77) says 'Start from a template below', but the templates DataTable (:104-112) has no rowLinkKey/rowHref/actions; nothing on the page links to /workflow/designer or any clone action. The definitions table does link rows (:88-89).
 - **Files to change:** `apps/web/src/app/(app)/workflow/definitions/page.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`

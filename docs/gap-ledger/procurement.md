@@ -2117,7 +2117,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-REVERSE-AUCTION-03  ·  MEDIUM  ·  partly  ·  theme MONEY
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Money formatting is hand-rolled: `₹${(paise/100).toLocaleString("en-IN")}` (Table) — no paise digits (₹1,84,500.5 possible), and toLocaleString runs on the server and again in the browser, so a locale difference can cause a hydration mismatch; other screens use formatMoney.
 - **Verified evidence:** ReverseAuctionTable.tsx:163-165 uses `₹${(paise/100).toLocaleString('en-IN')}` - no fixed 2 digits (18450050 -> ₹1,84,500.5), float division on paise. Hydration mismatch claim is weak: Node 20 has full ICU so en-IN output matches; low real risk. Shared formatMoney (lib/formatters.ts:90) exists and is bigint-safe. Columns are labelled '(₹)' as well, so symbol is duplicated.
 - **Files to change:** `apps/web/src/app/(app)/procurement/reverse-auction/ReverseAuctionTable.tsx`
