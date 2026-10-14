@@ -29,9 +29,21 @@ function task(id: string, over: Partial<WorkflowTask> = {}): WorkflowTask {
 }
 
 describe("TasksTable — GAP-WORKFLOW-MY-TASKS-02/05", () => {
-  it("renders an enriched Subject (refType + short refId)", () => {
+  it("renders Subject as refType + the instance name and shows the requester, never an id fragment", () => {
+    render(
+      <TasksTable
+        tasks={[task("1", { instanceName: "Casual leave - 3 days", requesterId: "u-1", requesterName: "Asha Verma" })]}
+        showStatusFilter={false}
+      />,
+    );
+    expect(screen.getByText("Leave App · Casual leave - 3 days")).toBeInTheDocument();
+    expect(screen.getByText("Asha Verma")).toBeInTheDocument();
+    expect(screen.queryByText(/aaaaaaaa/)).toBeNull();
+  });
+
+  it("without an instance name the subject is just the record type", () => {
     render(<TasksTable tasks={[task("1")]} showStatusFilter={false} />);
-    expect(screen.getByText(/Leave App ·/)).toBeInTheDocument();
+    expect(screen.getByText("Leave App")).toBeInTheDocument();
   });
 
   it("renders an Overdue pill for a task whose dueAt is in the past", () => {

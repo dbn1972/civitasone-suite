@@ -115,6 +115,11 @@ export interface WorkflowTask {
   // show Age/Due columns and sort oldest/most-overdue first. Optional/null.
   createdAt?: string | null;
   dueAt?: string | null;
+  // GAP-WORKFLOW-MY-TASKS-02 - subject enrichment from the parent instance:
+  // its name (what is being approved) and its creator (who raised it).
+  instanceName?: string | null;
+  requesterId?: string | null;
+  requesterName?: string | null;
   version: number;
 }
 
