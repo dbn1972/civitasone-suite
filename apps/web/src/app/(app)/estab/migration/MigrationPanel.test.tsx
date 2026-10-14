@@ -115,4 +115,21 @@ describe("MigrationPanel - Open eFile link (SF-17b)", () => {
     const link = await screen.findByRole("link", { name: "Open eFile" });
     expect(link).toHaveAttribute("href", "/estab/files/f1");
   });
+
+  it("renders the Hindi label under the hi locale (not a hardcoded literal)", async () => {
+    vi.restoreAllMocks();
+    const row = { id: "m2", legacyFileNo: "L-2", subject: "Old file", dept: "ADMIN", pageCount: 3, scanRef: null, efileId: "f2", status: "migrated", createdAt: "2026-09-01T00:00:00.000Z" };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: [row] }), { status: 200 }));
+    const { render: rtlRender } = await import("@testing-library/react");
+    const { NextIntlClientProvider } = await import("next-intl");
+    const hiMessages = (await import("@/messages/hi.json")).default;
+    rtlRender(
+      <NextIntlClientProvider locale="hi" messages={hiMessages}>
+        <MigrationPanel />
+      </NextIntlClientProvider>,
+    );
+    const link = await screen.findByRole("link", { name: hiMessages.estabMigrationPanel.openEfile });
+    expect(link).toHaveAttribute("href", "/estab/files/f2");
+    expect(screen.queryByRole("link", { name: "Open eFile" })).toBeNull();
+  });
 });
