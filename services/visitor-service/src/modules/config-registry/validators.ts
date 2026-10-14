@@ -32,3 +32,14 @@ export const deactivateConfigBody = z.object({
   expectedVersion: z.coerce.number().int().min(1),
 });
 export type DeactivateConfigBody = z.infer<typeof deactivateConfigBody>;
+
+/**
+ * Apply a vertical preset. A preset overwrites tenant-wide policy (DPDP
+ * retention, erasure SLA, auto-approval, anti-passback) in one call, so the
+ * caller must state why; it is carried into every config.set audit event
+ * (GAP-VISITOR-ADMIN-01).
+ */
+export const applyPresetBody = z.object({
+  reason: z.string().trim().min(10, "state the reason for applying this preset (min 10 characters)").max(2000),
+});
+export type ApplyPresetBody = z.infer<typeof applyPresetBody>;

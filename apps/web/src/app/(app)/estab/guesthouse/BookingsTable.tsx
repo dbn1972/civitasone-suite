@@ -19,7 +19,7 @@ export type BookingRow = {
 
 const SEGMENTS = ["All", "Pending", "In-house"];
 
-export function BookingsTable({ rows }: { rows: BookingRow[] }) {
+export function BookingsTable({ rows, canOperate = false }: { rows: BookingRow[]; canOperate?: boolean }) {
   const router = useRouter();
   const [seg, setSeg] = useState("All");
   const [message, setMessage] = useState("");
@@ -86,6 +86,9 @@ export function BookingsTable({ rows }: { rows: BookingRow[] }) {
             key: "id",
             label: "Actions",
             render: (r) => {
+              // GAP-ESTAB-GUESTHOUSE-01: only establishment officers see check-in/out
+              // (estab-service 403s every other role on these endpoints).
+              if (!canOperate) return <>—</>;
               if (r.statusRaw === "confirmed" || r.statusRaw === "pending") {
                 return (
                   <Button type="button" variant="ghost" onClick={() => triggerAction(r, "checkin")}>

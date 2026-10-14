@@ -8,7 +8,9 @@ import { ActionButton } from "@/app/_components/ds";
 /**
  * Client-side lifecycle actions for a governed document.
  *
- * - Maker-checker: Approve/Publish are disabled when the current user is the author.
+ * - Role gate: Approve/Return/Publish render only for a knowledge approver role;
+ *   everyone else sees an "awaiting approver" note instead of a control that 403s.
+ * - Maker-checker: Approve/Publish are disabled (with a visible reason) when the current user is the author.
  * - Reject (withdraw back to draft) requires a reason.
  * - Publish lets the user choose review cycle months.
  * - Acknowledge shows "already acknowledged" when applicable.
@@ -21,14 +23,15 @@ export function PolicyActions({
   authorId,
   currentUserId,
   alreadyAcknowledged,
-  isAdmin,
+  canApprove: hasApproverRole,
 }: {
   policyId: string;
   status: string;
   authorId: string;
   currentUserId: string | null;
   alreadyAcknowledged: boolean;
-  isAdmin: boolean;
+  /** Viewer holds a knowledge approver role (approve / return / publish). Server-enforced too. */
+  canApprove: boolean;
 }) {
   const router = useRouter();
   const [msg, setMsg] = useState("");
@@ -47,6 +50,8 @@ export function PolicyActions({
   const canSubmit = status === "draft";
   const canApprove = status === "under_review";
   const canPublish = status === "approved";
+  const AUTHOR_HINT = "You authored this document, so a different approver must approve and publish it (maker-checker).";
+  const NEEDS_APPROVER = "Awaiting an authorised approver (knowledge administrator).";
   const canAcknowledge = status === "published";
 
   // GAP-KNOWLEDGE-POLICIES-DETAIL-02: maker-checker UI hint
@@ -64,7 +69,10 @@ export function PolicyActions({
             onConfirm={async () => { await post("submit"); setMsg("Submitted for review."); }}
           />
         )}
-        {canApprove && (
+        {canApprove && !hasApproverRole && (
+          <span style={{ color: "var(--mut)", fontSize: 14 }}>{NEEDS_APPROVER}</span>
+        )}
+        {canApprove && hasApproverRole && (
           <>
             <ActionButton
               label="Approve"
@@ -77,8 +85,9 @@ export function PolicyActions({
               disabled={isAuthor}
               onConfirm={async () => { await post("approve"); setMsg("Approved."); }}
             />
+            {isAuthor && <span role="note" style={{ color: "var(--mut)", fontSize: 13 }}>{AUTHOR_HINT}</span>}
             {/* GAP-KNOWLEDGE-POLICIES-DETAIL-04: Reject / return to draft */}
-            {isAdmin && (
+            {(
               <ActionButton
                 label="Return for changes"
                 confirmTitle="Return this document for changes?"
@@ -92,7 +101,10 @@ export function PolicyActions({
             )}
           </>
         )}
-        {canPublish && (
+        {canPublish && !hasApproverRole && (
+          <span style={{ color: "var(--mut)", fontSize: 14 }}>{NEEDS_APPROVER}</span>
+        )}
+        {canPublish && hasApproverRole && (
           <>
             {/* GAP-KNOWLEDGE-POLICIES-DETAIL-03: configurable review cycle */}
             <label htmlFor="reviewMonths" style={{ fontSize: 13, color: "var(--ink2)" }}>
@@ -124,6 +136,7 @@ export function PolicyActions({
                 setMsg("Published.");
               }}
             />
+            {isAuthor && <span role="note" style={{ color: "var(--mut)", fontSize: 13 }}>{AUTHOR_HINT}</span>}
           </>
         )}
         {/* GAP-KNOWLEDGE-POLICIES-DETAIL-05: already-acked state */}

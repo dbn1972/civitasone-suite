@@ -4,6 +4,7 @@ import { render, screen, fireEvent, within, waitFor } from "@testing-library/rea
 const fetchConfigNamespaceMock = vi.fn();
 const setConfigMock = vi.fn();
 const applyPresetMock = vi.fn();
+const fetchPresetMock = vi.fn();
 vi.mock("../_data/client", async () => {
   const actual = await vi.importActual<typeof import("../_data/client")>("../_data/client");
   return {
@@ -11,6 +12,7 @@ vi.mock("../_data/client", async () => {
     fetchConfigNamespace: (...args: unknown[]) => fetchConfigNamespaceMock(...args),
     setConfig: (...args: unknown[]) => setConfigMock(...args),
     applyPreset: (...args: unknown[]) => applyPresetMock(...args),
+    fetchPreset: (...args: unknown[]) => fetchPresetMock(...args),
   };
 });
 
@@ -21,6 +23,7 @@ describe("AdminConfig — numeric policy bounds", () => {
     fetchConfigNamespaceMock.mockReset().mockResolvedValue([]);
     setConfigMock.mockReset().mockResolvedValue(undefined);
     applyPresetMock.mockReset().mockResolvedValue(undefined);
+    fetchPresetMock.mockReset().mockResolvedValue([]);
   });
 
   it("renders native min/max on the overstay-escalation-hours input", () => {
@@ -81,6 +84,7 @@ describe("AdminConfig — confirmations, drafts and degraded state", () => {
     fetchConfigNamespaceMock.mockReset().mockResolvedValue([]);
     setConfigMock.mockReset().mockResolvedValue(undefined);
     applyPresetMock.mockReset().mockResolvedValue(undefined);
+    fetchPresetMock.mockReset().mockResolvedValue([]);
   });
 
   // GAP-VISITOR-ADMIN-01: a preset opens a confirm dialog and only POSTs after
@@ -95,8 +99,9 @@ describe("AdminConfig — confirmations, drafts and degraded state", () => {
     expect(confirm).toBeDisabled();
     expect(applyPresetMock).not.toHaveBeenCalled();
 
+    // The dialog is gated until the preset preview has loaded; the reason needs 10+ chars.
     fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: "Onboarding this office." } });
-    expect(confirm).toBeEnabled();
+    await waitFor(() => expect(confirm).toBeEnabled());
     fireEvent.click(confirm);
 
     await waitFor(() => expect(applyPresetMock).toHaveBeenCalledWith("secretariat", "Onboarding this office."));
@@ -156,5 +161,48 @@ describe("AdminConfig — confirmations, drafts and degraded state", () => {
   it("shows the both-failed empty state only when both namespaces fail", () => {
     render(<AdminConfig initialEntries={[]} policySource="error" approvalSource="error" />);
     expect(screen.getByText("Showing default policy")).toBeInTheDocument();
+  });
+});
+
+describe("AdminConfig -- preset diff (GAP-VISITOR-ADMIN-01)", () => {
+  beforeEach(() => {
+    fetchConfigNamespaceMock.mockReset().mockResolvedValue([]);
+    applyPresetMock.mockReset().mockResolvedValue(undefined);
+    fetchPresetMock.mockReset();
+  });
+
+  const retention365 = {
+    id: "c1", namespace: "visitor_policy", configKey: "retention.pii_days", value: 365,
+    label: null, description: null, active: true, sortOrder: 0, version: 1,
+  };
+
+  it("shows the retention change (365 -> 1825) before anything is applied, and flags it as data protection", async () => {
+    fetchPresetMock.mockResolvedValue([
+      { namespace: "visitor_policy", configKey: "retention.pii_days", value: 1825, label: "Retain visitor PII 5 years" },
+    ]);
+    render(<AdminConfig initialEntries={[retention365]} policySource="api" approvalSource="api" />);
+    fireEvent.click(screen.getByRole("button", { name: "Hospital" }));
+    const dialog = screen.getByRole("alertdialog");
+    const list = await within(dialog).findByRole("list", { name: /Changes this preset will make/ });
+    expect(list).toHaveTextContent(/365/);
+    expect(list).toHaveTextContent(/1825/);
+    expect(list).toHaveTextContent(/data protection/);
+    expect(applyPresetMock).not.toHaveBeenCalled();
+
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: "Hospital onboarding, 5-year retention" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Apply preset" }));
+    await waitFor(() => expect(applyPresetMock).toHaveBeenCalledWith("hospital", "Hospital onboarding, 5-year retention"));
+    expect(await screen.findByRole("status")).toHaveTextContent(/Previous values: .*365/);
+  });
+
+  it("cannot apply while the preview is unavailable", async () => {
+    fetchPresetMock.mockRejectedValue(new Error("boom"));
+    render(<AdminConfig initialEntries={[]} policySource="api" approvalSource="api" />);
+    fireEvent.click(screen.getByRole("button", { name: "Hospital" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(await within(dialog).findByText(/Couldn.t load the list of changes/)).toBeInTheDocument();
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: "Switching to hospital policy" } });
+    expect(within(dialog).getByRole("button", { name: "Apply preset" })).toBeDisabled();
+    expect(applyPresetMock).not.toHaveBeenCalled();
   });
 });

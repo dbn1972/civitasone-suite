@@ -88,10 +88,31 @@ describe("ApplicationActions (COMP-012)", () => {
     render(<ApplicationActions applicationId="app-1" actions={ALL_ACTIONS} />);
     fireEvent.click(screen.getByRole("button", { name: "Approve Application" }));
     fireEvent.change(screen.getByLabelText(/Sanctioned amount/i), { target: { value: "50000.50" } });
+    fireEvent.change(screen.getByLabelText(/Reason \/ remarks/i), { target: { value: "Within scheme ceiling, docs verified." } });
     fireEvent.click(screen.getByRole("button", { name: "Approve application" }));
     await waitFor(() =>
-      expect(api.approveApplication).toHaveBeenCalledWith("app-1", { amountApprovedMinor: 5000050 }),
+      expect(api.approveApplication).toHaveBeenCalledWith("app-1", {
+        amountApprovedMinor: 5000050,
+        reason: "Within scheme ceiling, docs verified.",
+      }),
     );
+  });
+
+  // GAP-GRANTS-APPLICATIONS-DETAIL-02: approving without a reason is blocked.
+  it("blocks approve until a sanction reason of at least 10 characters is entered", async () => {
+    render(<ApplicationActions applicationId="app-1" actions={ALL_ACTIONS} />);
+    fireEvent.click(screen.getByRole("button", { name: "Approve Application" }));
+    fireEvent.change(screen.getByLabelText(/Sanctioned amount/i), { target: { value: "500" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Approve application" }));
+    });
+    expect(await screen.findByText(/Enter the sanction reason/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Reason \/ remarks/i), { target: { value: "short" } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Approve application" }));
+    });
+    expect(screen.getByText(/Enter the sanction reason/i)).toBeInTheDocument();
+    expect(api.approveApplication).not.toHaveBeenCalled();
   });
 
   it("rejects with a reason of at least 10 characters", async () => {
@@ -121,6 +142,7 @@ describe("ApplicationActions (COMP-012)", () => {
     render(<ApplicationActions applicationId="app-1" actions={ALL_ACTIONS} />);
     fireEvent.click(screen.getByRole("button", { name: "Approve Application" }));
     fireEvent.change(screen.getByLabelText(/Sanctioned amount/i), { target: { value: "500" } });
+    fireEvent.change(screen.getByLabelText(/Reason \/ remarks/i), { target: { value: "Verified against scheme rules." } });
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Approve application" }));
     });

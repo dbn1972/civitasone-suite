@@ -10,7 +10,7 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
-  configIdParam, namespaceParam, setConfigBody, deactivateConfigBody,
+  configIdParam, namespaceParam, setConfigBody, deactivateConfigBody, applyPresetBody,
 } from "./validators.js";
 import { assertValidNamespace, assertValidKey } from "./domain.js";
 import * as commands from "./commands.js";
@@ -63,8 +63,22 @@ export async function configRegistryRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, CONFIG_WRITE_ROLES);
     const preset = (req.params as { preset: string }).preset;
-    const result = await presets.applyPreset(ctx, preset);
+    const { reason } = applyPresetBody.parse(req.body ?? {});
+    const result = await presets.applyPreset(ctx, preset, reason);
     return reply.code(202).send(result);
+  });
+
+  // Preview a preset's values so the admin UI can show a from -> to diff
+  // against the current tenant policy BEFORE confirming (GAP-VISITOR-ADMIN-01).
+  app.get("/v1/visitor/config/presets/:preset", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CONFIG_WRITE_ROLES);
+    const preset = (req.params as { preset: string }).preset;
+    const entries = presets.getPreset(preset);
+    if (!entries) {
+      throw new HttpError(400, "UNKNOWN_PRESET", `no vertical preset '${preset}' (known: ${presets.PRESET_NAMES.join(", ")})`);
+    }
+    return reply.send({ preset, entries });
   });
 
   // Deactivate (soft-retire) a config entry by id.

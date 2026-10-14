@@ -69,7 +69,7 @@ describe("ProcurementApprovalsPanel — REF_TYPES coverage (regression)", () => 
       status: "pending", roleRef: "procurement_admin", refType: "procurement_plan", refId: "plan-123",
     }];
 
-    render(<ProcurementApprovalsPanel />);
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
 
     expect(screen.queryByText("No pending tasks")).not.toBeInTheDocument();
     expect(screen.getByText("Approve annual plan FY25-26")).toBeInTheDocument();
@@ -85,7 +85,7 @@ describe("ProcurementApprovalsPanel — REF_TYPES coverage (regression)", () => 
       status: "pending", roleRef: "procurement_admin", refType: "procurement_po_amendment", refId: "amend-456",
     }];
 
-    render(<ProcurementApprovalsPanel />);
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
 
     expect(screen.queryByText("No pending tasks")).not.toBeInTheDocument();
     expect(screen.getByText("Approve PO amendment")).toBeInTheDocument();
@@ -101,7 +101,7 @@ describe("ProcurementApprovalsPanel — REF_TYPES coverage (regression)", () => 
       { id: "t4", instanceId: "i4", name: "Already-completed indent approval", status: "completed", refType: "procurement_indent", refId: "y" },
     ];
 
-    render(<ProcurementApprovalsPanel />);
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
 
     expect(screen.getByText("No pending tasks")).toBeInTheDocument();
     expect(screen.queryByText("Unrelated HR task")).not.toBeInTheDocument();
@@ -114,7 +114,7 @@ describe("ProcurementApprovalsPanel — REF_TYPES coverage (regression)", () => 
       { id: "t6", instanceId: "i6", name: "Approve PO", status: "pending", refType: "procurement_po", refId: "po-1" },
     ];
 
-    render(<ProcurementApprovalsPanel />);
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
 
     expect(screen.getByRole("link", { name: "ind-1" })).toHaveAttribute("href", "/procurement/indents/ind-1");
     expect(screen.getByRole("link", { name: "po-1" })).toHaveAttribute("href", "/procurement/orders/po-1");
@@ -130,7 +130,7 @@ describe("ProcurementApprovalsPanel — REF_TYPES coverage (regression)", () => 
     rawPayload = [];
     mockError = "HTTP_500";
 
-    render(<ProcurementApprovalsPanel />);
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
 
     expect(screen.queryByText("No pending tasks")).not.toBeInTheDocument();
     const alert = screen.getByRole("alert");
@@ -157,7 +157,7 @@ describe("ProcurementApprovalsPanel — truncation notice (GAP-PROCUREMENT-APPRO
       status: "pending", refType: "procurement_indent", refId: `ind-${i}`,
     }));
 
-    render(<ProcurementApprovalsPanel />);
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
 
     expect(
       screen.getByText(/Showing the first 200 pending tasks — more may exist/i),
@@ -169,14 +169,14 @@ describe("ProcurementApprovalsPanel — truncation notice (GAP-PROCUREMENT-APPRO
       { id: "t1", instanceId: "i1", name: "Only task", status: "pending", refType: "procurement_po", refId: "po-1" },
     ];
 
-    render(<ProcurementApprovalsPanel />);
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
 
     expect(screen.queryByText(/more may exist/i)).not.toBeInTheDocument();
   });
 
   it("requests the four procurement refTypes server-side (additive filter)", () => {
     rawPayload = [];
-    render(<ProcurementApprovalsPanel />);
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
     const path = mockUseOfflineResource.mock.calls[0]![1];
     expect(path).toContain("refType=procurement_indent");
     expect(path).toContain("refType=procurement_po");
@@ -207,7 +207,7 @@ describe("ProcurementApprovalsPanel — approval error copy (GAP-PROCUREMENT-APP
       },
     });
 
-    render(<ProcurementApprovalsPanel />);
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     // Dialog opens with its own confirm "Approve"; click the last match.
     const confirmButtons = screen.getAllByRole("button", { name: "Approve" });
@@ -230,7 +230,7 @@ describe("ProcurementApprovalsPanel — approval error copy (GAP-PROCUREMENT-APP
       },
     });
 
-    render(<ProcurementApprovalsPanel />);
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     const confirmButtons = screen.getAllByRole("button", { name: "Approve" });
     fireEvent.click(confirmButtons[confirmButtons.length - 1]);
@@ -238,5 +238,31 @@ describe("ProcurementApprovalsPanel — approval error copy (GAP-PROCUREMENT-APP
     expect(await screen.findByText(/We couldn't save your approval\./)).toBeInTheDocument();
     expect(screen.queryByText(/Internal Server Error/)).not.toBeInTheDocument();
     expect(screen.queryByText(/500/)).not.toBeInTheDocument();
+  });
+});
+
+describe("ProcurementApprovalsPanel -- role gate (GAP-PROCUREMENT-APPROVALS-02)", () => {
+  beforeEach(() => {
+    mockUseOfflineResource.mockClear();
+    rawPayload = [
+      { id: "t9", instanceId: "i9", name: "Approve PO 9", status: "pending", roleRef: "procurement_admin", refType: "procurement_po", refId: "po-9" },
+      { id: "t10", instanceId: "i10", name: "Open task", status: "pending", roleRef: null, refType: "procurement_po", refId: "po-10" },
+    ];
+    mockError = null;
+  });
+
+  it("shows Approve/Reject only for tasks the viewer's role may complete", () => {
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_clerk"]} />);
+    // roleRef-less task is unrestricted server-side; the role-bound one is not.
+    expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(1);
+    expect(screen.getByText("Assigned to procurement_admin")).toBeInTheDocument();
+  });
+
+  it("offers every task to super_admin and to the matching role", () => {
+    const { unmount } = render(<ProcurementApprovalsPanel viewerRoles={["super_admin"]} />);
+    expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(2);
+    unmount();
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
+    expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(2);
   });
 });

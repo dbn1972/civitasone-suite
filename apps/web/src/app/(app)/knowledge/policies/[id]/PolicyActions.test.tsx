@@ -16,7 +16,7 @@ describe("PolicyActions (maker-checker UI)", () => {
         authorId="me"
         currentUserId="me"
         alreadyAcknowledged={false}
-        isAdmin={false}
+        canApprove
       />,
     );
     const approve = screen.getByRole("button", { name: "Approve" });
@@ -31,7 +31,7 @@ describe("PolicyActions (maker-checker UI)", () => {
         authorId="author"
         currentUserId="approver"
         alreadyAcknowledged={false}
-        isAdmin={false}
+        canApprove
       />,
     );
     const approve = screen.getByRole("button", { name: "Approve" });
@@ -46,7 +46,7 @@ describe("PolicyActions (maker-checker UI)", () => {
         authorId="author"
         currentUserId="approver"
         alreadyAcknowledged={false}
-        isAdmin={true}
+        canApprove
       />,
     );
     expect(screen.getByRole("button", { name: "Return for changes" })).toBeInTheDocument();
@@ -60,7 +60,7 @@ describe("PolicyActions (maker-checker UI)", () => {
         authorId="author"
         currentUserId="approver"
         alreadyAcknowledged={false}
-        isAdmin={true}
+        canApprove
       />,
     );
     const select = screen.getByLabelText(/Review cycle/i);
@@ -77,7 +77,7 @@ describe("PolicyActions (maker-checker UI)", () => {
         authorId="me"
         currentUserId="me"
         alreadyAcknowledged={false}
-        isAdmin={true}
+        canApprove
       />,
     );
     expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
@@ -91,10 +91,36 @@ describe("PolicyActions (maker-checker UI)", () => {
         authorId="author"
         currentUserId="emp"
         alreadyAcknowledged={true}
-        isAdmin={false}
+        canApprove
       />,
     );
     expect(screen.getByText(/You have acknowledged this document/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /I have read/ })).not.toBeInTheDocument();
+  });
+
+  it("GAP-KNOWLEDGE-POLICIES-DETAIL-02: a non-approver role sees no Approve/Return/Publish, only a note", () => {
+    const { unmount } = render(
+      <PolicyActions policyId="p1" status="under_review" authorId="author" currentUserId="viewer"
+        alreadyAcknowledged={false} canApprove={false} />,
+    );
+    expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Return for changes" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Awaiting an authorised approver/)).toBeInTheDocument();
+    unmount();
+    render(
+      <PolicyActions policyId="p1" status="approved" authorId="author" currentUserId="viewer"
+        alreadyAcknowledged={false} canApprove={false} />,
+    );
+    expect(screen.queryByRole("button", { name: "Publish" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Awaiting an authorised approver/)).toBeInTheDocument();
+  });
+
+  it("GAP-KNOWLEDGE-POLICIES-DETAIL-02: the author sees a visible reason next to the disabled Approve", () => {
+    render(
+      <PolicyActions policyId="p1" status="under_review" authorId="me" currentUserId="me"
+        alreadyAcknowledged={false} canApprove />,
+    );
+    expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled();
+    expect(screen.getByRole("note")).toHaveTextContent(/a different approver must approve and publish/);
   });
 });

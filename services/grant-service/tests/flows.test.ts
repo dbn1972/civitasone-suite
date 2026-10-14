@@ -129,7 +129,7 @@ describe("SoD — separation of duties on approval", () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/grants/applications/${APP}/approve`,
       headers: { authorization: `Bearer ${token}` },
-      payload: { amountApprovedMinor: 100 },
+      payload: { amountApprovedMinor: 100, reason: "Self-approval attempt" },
     });
     await app.close();
     expect(res.statusCode).toBe(403);

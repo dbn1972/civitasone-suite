@@ -6,7 +6,7 @@ import { getKnowledgePolicy, getPolicyAcknowledgements } from "../../_data/loade
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { policyStatusLabel } from "../../_data/statusLabels";
-import { getSessionUserId, getSessionRoles } from "@/lib/auth/roleGuard";
+import { getSessionUserId, getSessionRoles, KNOWLEDGE_POLICY_APPROVER_ROLES } from "@/lib/auth/roleGuard";
 import { PolicyActions } from "./PolicyActions";
 
 const POLICY_ADMIN_ROLES = ["knowledge_admin", "super_admin", "hr_admin"];
@@ -32,6 +32,8 @@ export default async function Page({ params }: { params: { id: string } }) {
   const currentUserId = getSessionUserId();
   const sessionRoles = getSessionRoles();
   const isAdmin = POLICY_ADMIN_ROLES.some((r) => sessionRoles.includes(r));
+  // GAP-KNOWLEDGE-POLICIES-DETAIL-02: approve/return/publish need an approver role (server-enforced).
+  const canApprove = KNOWLEDGE_POLICY_APPROVER_ROLES.some((r) => sessionRoles.includes(r));
   const alreadyAcknowledged = currentUserId
     ? acks.employeeIds.includes(currentUserId)
     : false;
@@ -80,7 +82,7 @@ export default async function Page({ params }: { params: { id: string } }) {
         authorId={policy.authorId}
         currentUserId={currentUserId}
         alreadyAcknowledged={alreadyAcknowledged}
-        isAdmin={isAdmin}
+        canApprove={canApprove}
       />
 
       <div className="card">

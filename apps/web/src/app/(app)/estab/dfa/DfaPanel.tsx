@@ -23,6 +23,8 @@ type Dfa = {
   createdAt?: string;
   updatedAt: string;
   returnedReason?: string | null;
+  /** Drafter id (GAP-ESTAB-DFA-02): the maker cannot approve or sign. */
+  createdBy?: string;
 };
 
 const COMM_TYPES = ["letter", "order", "memo", "notification", "circular", "do_letter"] as const;
@@ -65,7 +67,18 @@ function stepTitleFor(status: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
-export function DfaPanel() {
+export function DfaPanel({
+  viewerId = null,
+  canApprove = false,
+  canDraft = false,
+}: {
+  /** Session user id (JWT sub); null when unknown. */
+  viewerId?: string | null;
+  /** Viewer holds an approver role (approve / return / sign). */
+  canApprove?: boolean;
+  /** Viewer holds a drafter role (submit / dispatch). */
+  canDraft?: boolean;
+}) {
   const [rows, setRows] = useState<Dfa[]>([]);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("all");
   const [loading, setLoading] = useState(true);
@@ -211,9 +224,15 @@ export function DfaPanel() {
   // GAP-ESTAB-DFA-02: Approve now has requireReason. Actions still server-enforced
   // (APPROVER_ROLES, maker≠checker in consumer). Sign description is Phase 2 honest.
   const actionsFor = (d: Dfa) => {
+    // GAP-ESTAB-DFA-02: segregation of duties. The drafter may not approve or
+    // sign their own DFA (server: 403 MAKER_CHECKER_VIOLATION); a viewer
+    // without the role sees no control at all, never a button that will 403.
+    const isDrafter = viewerId !== null && d.createdBy !== undefined && d.createdBy === viewerId;
+    const note = (text: string) => <span style={{ color: "var(--mut)", fontSize: "0.8125rem" }}>{text}</span>;
     switch (d.status) {
       case "draft":
       case "returned":
+        if (!canDraft) return <span style={{ color: "var(--mut)" }}>—</span>;
         return (
           <ActionButton label="Submit" className="btn primary"
             confirmTitle="Submit this draft for approval?"
@@ -221,6 +240,8 @@ export function DfaPanel() {
             confirmLabel="Submit" onConfirm={() => act(d.id, "submit")} />
         );
       case "pending_approval":
+        if (!canApprove) return note("Awaiting approver");
+        if (isDrafter) return note("You drafted this; another approver must act.");
         return (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
             {/* GAP-ESTAB-DFA-02: requireReason on Approve so approvals are auditable.
@@ -238,6 +259,8 @@ export function DfaPanel() {
           </div>
         );
       case "approved":
+        if (!canApprove) return note("Awaiting signature");
+        if (isDrafter) return note("You drafted this; another officer must sign.");
         return (
           <ActionButton label="Sign" className="btn primary"
             confirmTitle="Record signing of this DFA?"
@@ -245,6 +268,7 @@ export function DfaPanel() {
             confirmLabel="Sign" onConfirm={() => act(d.id, "sign")} />
         );
       case "signed":
+        if (!canDraft) return <span style={{ color: "var(--mut)" }}>—</span>;
         return (
           <ActionButton label="Dispatch" className="btn primary"
             confirmTitle="Dispatch this communication?"
