@@ -7,6 +7,7 @@ import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import type { GrantInstallmentSummary } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
+import { useTranslations } from "next-intl";
 import { postDisburse } from "@/app/(app)/grants/postDisburse";
 
 type Col = {
@@ -33,6 +34,7 @@ export function InstallmentsTable({
   canRelease?: boolean;
 }) {
   const router = useRouter();
+  const tm = useTranslations("pqbMoney");
   const [statusFilter, setStatusFilter] = useState("");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<GrantInstallmentSummary[]>(
     "grants.installments",
@@ -113,7 +115,7 @@ export function InstallmentsTable({
               // `reason` (audited), NOT as beneficiaryBankRef. The payee bank
               // reference is resolved server-side from the grantee master; it
               // must never carry a free-text clerk reason.
-              await postDisburse(row.id, reason);
+              await postDisburse(row.id, reason, tm);
               router.refresh();
             }}
           />

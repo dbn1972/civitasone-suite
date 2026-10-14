@@ -18,6 +18,7 @@
  */
 import { useCallback, useId, useRef, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog, EmptyState, Modal, StatusPill } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { CourtOrder, Hearing } from "../_data/types";
@@ -652,6 +653,7 @@ function ApproveIssueDialog({
   onClose: () => void;
   onDone: (msg: string) => Promise<void> | void;
 }) {
+  const tm = useTranslations("pqbMoney");
   const [dsc, setDsc] = useState("");
   const [issuedDate, setIssuedDate] = useState(todayIso());
   const [dscError, setDscError] = useState<string | undefined>();
@@ -822,11 +824,7 @@ function ApproveIssueDialog({
       {/* GAP-COURT-ORDERS-02 interim: be honest that a pasted blob is only as strong as the trust store. */}
       {verification?.ok && !verification.chainTrusted && (
         <p role="alert" data-testid="dsc-untrusted-warning" style={errStyle}>
-          The signature is mathematically valid, but the signer&apos;s certificate is not checked
-          against a trusted certifying authority
-          {verification.trustStoreConfigured ? " (it does not chain to the configured trust store)" : " (no trust store is configured on the server)"}.
-          This is not proof of a legally valid DSC. Direct token or eSign signing is not yet
-          available in this console.
+          {tm("dscUntrusted", { storeState: verification.trustStoreConfigured ? "configured" : "none" })}
         </p>
       )}
       {verifyError && (

@@ -71,8 +71,18 @@ describe("from-module initiator identity", () => {
     resolveActorEmployeeId.mockRejectedValue(new HrmsUnavailableError("down"));
     expect((await post(payload())).statusCode).toBe(503);
   });
+  it("rejects forwarding an eFile to the officer who is raising it (segregation of duties)", async () => {
+    const r = await post(payload({ currentWith: SELF_EMP }));
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe("INITIATOR_EQUALS_APPROVER");
+  });
+  it("rejects initiator == forward-to for a service-account raise too", async () => {
+    const r = await post(payload({ initiatedBy: OTHER_EMP, currentWith: OTHER_EMP }), ["service_account"]);
+    expect(r.statusCode).toBe(422);
+    expect(r.json().code).toBe("INITIATOR_EQUALS_APPROVER");
+  });
   it("lets a service account supply the initiator it acts for", async () => {
-    const r = await post(payload({ initiatedBy: OTHER_EMP }), ["service_account"]);
+    const r = await post(payload({ initiatedBy: OTHER_EMP, currentWith: SELF_EMP }), ["service_account"]);
     expect(r.statusCode).toBe(202);
     expect(resolveActorEmployeeId).not.toHaveBeenCalled();
   });

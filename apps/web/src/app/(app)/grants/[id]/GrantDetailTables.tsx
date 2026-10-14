@@ -6,6 +6,7 @@ import { DataTable, StatusPill, ActionButton } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { isUcVerified } from "@/lib/grants/ucStatus";
+import { useTranslations } from "next-intl";
 import { postDisburse } from "@/app/(app)/grants/postDisburse";
 import type { GrantDetail } from "@civitasone/types";
 
@@ -77,6 +78,7 @@ export function GrantInstallmentsTable({
   canRelease?: boolean;
 }) {
   const router = useRouter();
+  const tm = useTranslations("pqbMoney");
 
   // GAP-GRANTS-DETAIL-04: Release is only valid on an active grant, and only
   // for the lowest-numbered pending installment (tranches release in order).
@@ -135,7 +137,7 @@ export function GrantInstallmentsTable({
               // GAP-GRANTS-DETAIL-03: the reason is the audit/approval reference,
               // NOT the payee bank ref. Send it as `reason`; the grantee's bank
               // account is resolved server-side from the grantee master.
-              await postDisburse(row.id, reason);
+              await postDisburse(row.id, reason, tm);
               router.refresh();
             }}
           />

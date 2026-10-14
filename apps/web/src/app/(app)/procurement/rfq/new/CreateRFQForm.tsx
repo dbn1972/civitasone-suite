@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations } from "next-intl";
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -16,6 +17,7 @@ type VendorOption = { id: string; name: string; blacklisted?: boolean };
 const MIN_VENDORS = 3;
 
 export function CreateRFQForm() {
+  const tm = useTranslations("pqbMoney");
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -161,7 +163,7 @@ export function CreateRFQForm() {
           <select className="inp" value={indentId} onChange={(e) => setIndentId(e.target.value)} required style={{ minHeight: 44 }}>
             {/* GAP-PROCUREMENT-RFQ-NEW-01: placeholder, no auto-selected indent. */}
             <option value="">{indents.length === 0 ? "No approved indents available" : "Select an approved indent"}</option>
-            {indents.map((i) => <option key={i.id} value={i.id}>{i.indentNo ?? i.id}{i.department ? ` — ${i.department}` : ""} ({i.status ?? "approved"})</option>)}
+            {indents.map((i) => <option key={i.id} value={i.id}>{i.indentNo ?? i.id}{i.department ? ` — ${i.department}` : ""} {" "}{tm("rfqIndentStatus", { status: i.status ?? "approved" })}</option>)}
           </select>
         </label>
         <label className="field">

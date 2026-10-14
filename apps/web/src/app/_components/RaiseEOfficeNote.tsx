@@ -21,6 +21,7 @@
 
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, Field, Input, Select, StatusPill, type EntityOption } from "./ds";
 import { EmployeePicker } from "./EmployeePicker";
 import { useSelfEmployee } from "./useSelfEmployee";
@@ -96,6 +97,7 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
     notifyPath, notifyWithFileNo = false, onLinkedFileChange, allowRaiseAfterTerminal = false,
   } = props;
 
+  const tm = useTranslations("pqbMoney");
   const [file, setFile] = useState<LinkedFile | null>(null);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -252,12 +254,11 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
       {raisable && open ? (
         <div className="pad" style={{ display: "grid", gap: 12 }}>
           <p style={{ fontSize: "0.8125rem", color: "#64748b", margin: 0 }}>
-            Raising sends this {refType.replace(/_/g, " ")} to eOffice for a formal, tamper-proof decision.
-            The approval chain is selected automatically by amount. The file is always raised in your own name.
+            {tm("eofficeRaiseIntro", { refType: refType.replace(/_/g, " ") })}
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
             <Field label="Initiating officer">
-              <Input readOnly value={self?.label ?? "You (the signed-in officer)"} />
+              <Input readOnly value={self?.label ?? tm("eofficeSelfFallback")} />
             </Field>
             <Field label="Forward to officer">
               <EmployeePicker
