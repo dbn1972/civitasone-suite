@@ -140,6 +140,7 @@ Hard-coded #fff/#b91c1c banners break .dark; add Alert/Banner component and use 
 - Items touched: **38** across **22** modules (top: tenant-admin 5, procurement 4, admin 3, ai 3, crm 3, estab 2, knowledge 2, notifications 2)
 - Example ids: GAP-PROCUREMENT-VENDORS-DETAIL-SCORECARD-02, GAP-ADMIN-CONFIG-05, GAP-DOMAINS-NEW-04, GAP-GRANTS-APPLICATIONS-04, GAP-HELPDESK-INTERNAL-NEW-03, GAP-NOTIFICATIONS-HOME-02, GAP-OFFLINE-HOME-03, GAP-PROCUREMENT-VENDORS-NEW-04
 - Full id list: `gaps/gaps.json` filter by evidence match, or grep this pattern in the module files.
+- W1 SF-13c (#2031): remaining finance dirs (expenditure, accounting, audit-paras, dashboard, fiscal-years, period-close, opening-balances, reconciliation, recurring-entries; 42 files) moved onto Alert/tone/tokens; guard widened; --chart-* got .dark values. Finance now has no quoted hex. No finance ledger item newly closed; none carried a PROVISIONAL tick.
 
 
 ## SF-14 Field/Input/Form primitives + useFormError + zod client validation
