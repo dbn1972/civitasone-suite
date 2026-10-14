@@ -78,18 +78,18 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
           badge from the raw `source` prop — removed). */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {badCells > 0 ? (
-        <p role="alert" style={{ margin: "0 0 12px", color: "#b91c1c", fontSize: "0.85rem" }}>
+        <p role="alert" style={{ margin: "0 0 12px", color: "var(--bad)", fontSize: "0.85rem" }}>
           Data error: {badCells} figure{badCells === 1 ? "" : "s"} could not be read and {badCells === 1 ? "is" : "are"} shown as
           &quot;—&quot;. Totals and the balance check are withheld until the source data is corrected.
         </p>
       ) : null}
       {activeType === "I&E" && rows.length > 0 ? (
         <StatGrid>
-          <StatCard icon="📥" iconBg="#ecfdf3" label="Total Income" value={ie.invalidRows ? "—" : formatMoney(ie.totalIncome)} />
-          <StatCard icon="📤" iconBg="#fef3f2" label="Total Expenditure" value={ie.invalidRows ? "—" : formatMoney(ie.totalExpenditure)} />
+          <StatCard icon="📥" tone="good" label="Total Income" value={ie.invalidRows ? "—" : formatMoney(ie.totalIncome)} />
+          <StatCard icon="📤" tone="bad" label="Total Expenditure" value={ie.invalidRows ? "—" : formatMoney(ie.totalExpenditure)} />
           <StatCard
             icon="💰"
-            iconBg="#eff6ff"
+            tone="info"
             label={ie.surplus < 0n ? "Deficit" : "Surplus"}
             value={ie.invalidRows ? "—" : formatMoney(ie.surplus < 0n ? -ie.surplus : ie.surplus)}
             {...(ie.invalidRows ? {} : { delta: ie.surplus < 0n ? "Deficit" : "Surplus", up: ie.surplus >= 0n })}
@@ -98,17 +98,17 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
       ) : null}
       {activeType === "Balance Sheet" && rows.length > 0 ? (
         <StatGrid>
-          <StatCard icon="🏛️" iconBg="#e7edfd" label="Total Assets" value={bs.invalidRows ? "—" : formatMoney(bs.totalAssets)} />
-          <StatCard icon="📑" iconBg="#fef3f2" label="Total Liabilities" value={bs.invalidRows ? "—" : formatMoney(bs.totalLiabilities)} />
+          <StatCard icon="🏛️" tone="info" label="Total Assets" value={bs.invalidRows ? "—" : formatMoney(bs.totalAssets)} />
+          <StatCard icon="📑" tone="bad" label="Total Liabilities" value={bs.invalidRows ? "—" : formatMoney(bs.totalLiabilities)} />
           <StatCard
             icon="💰"
-            iconBg="#eff6ff"
+            tone="info"
             label={bs.surplus < 0n ? "Current-period deficit" : "Current-period surplus"}
             value={bs.invalidRows ? "—" : formatMoney(bs.surplus < 0n ? -bs.surplus : bs.surplus)}
           />
           <StatCard
             icon="⚖️"
-            iconBg="#ecfdf3"
+            tone="good"
             label="Balance check"
             value={bs.invalidRows ? "Cannot verify" : bs.balanced ? "Balanced" : "Unbalanced"}
             {...(bs.invalidRows

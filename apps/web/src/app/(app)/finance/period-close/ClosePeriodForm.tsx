@@ -94,7 +94,7 @@ export function ClosePeriodForm({
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 6, maxWidth: 240 }}>
             <label htmlFor={periodId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Period <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              Period <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={periodId}
@@ -111,7 +111,7 @@ export function ClosePeriodForm({
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
             {error && (
-              <p id={periodErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>
+              <p id={periodErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>
                 {error}
               </p>
             )}

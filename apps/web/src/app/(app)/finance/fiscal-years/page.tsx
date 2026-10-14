@@ -38,8 +38,8 @@ export default async function FiscalYearsPage() {
       ) : (
         <>
           <StatGrid>
-            <StatCard icon="📅" iconBg="#e6f0ff" label="Total Fiscal Years" value={fiscalYears.length} />
-            <StatCard icon="🟢" iconBg="#e6f7f0" label="Active Fiscal Year" value={activeYear?.code ?? "—"} />
+            <StatCard icon="📅" tone="info" label="Total Fiscal Years" value={fiscalYears.length} />
+            <StatCard icon="🟢" tone="good" label="Active Fiscal Year" value={activeYear?.code ?? "—"} />
           </StatGrid>
 
           <FiscalYearForm rows={fiscalYears} createsAsDraft={createsAsDraft} />

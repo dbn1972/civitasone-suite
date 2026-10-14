@@ -76,26 +76,26 @@ export default async function FinanceDashboardPage({ searchParams }: { searchPar
       <StatGrid>
         <StatCard
           icon="💰"
-          iconBg="#e7edfd"
+          tone="info"
           label={t("budgetUtilisation")}
           value={errored ? "—" : formatPercent(data.budgetUtilisationPct)}
         />
         <StatCard
           icon="📤"
-          iconBg="#eff6ff"
+          tone="info"
           label={t("expenditureYtd")}
           value={errored ? "—" : formatMoney(data.totalExpenditure)}
         />
         <StatCard
           icon="📥"
-          iconBg="#ecfdf3"
+          tone="good"
           label={t("paymentsMtd")}
           value={errored ? "—" : `${data.paymentsThisMonth} ${t("paymentsThisMonth")}`}
           up={true}
         />
         <StatCard
           icon="⏳"
-          iconBg="#fffaeb"
+          tone="warn"
           label={t("pendingApprovals")}
           value={errored ? "—" : data.pendingSanctions}
           up={false}
@@ -129,7 +129,7 @@ export default async function FinanceDashboardPage({ searchParams }: { searchPar
               style={{ textDecoration: "none", cursor: "pointer" }}
             >
               <div className="top">
-                <div className="ic" style={{ background: "#eef2ff" }}>
+                <div className="ic" style={{ background: "var(--primary-soft)" }}>
                   <StatIcon icon={link.icon} />
                 </div>
               </div>

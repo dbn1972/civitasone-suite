@@ -50,10 +50,10 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
         back="/finance/expenditure/scheme-tracking"
       />
       <StatGrid>
-        <StatCard icon="₹" iconBg="#ecfdf3" label={t("outlay")} value={formatMoney(scheme.outlayMinor)} />
-        <StatCard icon="📤" iconBg="#e7edfd" label={t("utilised")} value={formatMoney(scheme.utilisedMinor)} />
-        <StatCard icon="📊" iconBg="#fffaeb" label={t("statUtilisation")} value={utilisationPct === null ? "—" : overUtilised ? `${utilisationPct}% · ${t("overUtilised")}` : `${utilisationPct}%`} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label={t("status")} value={humanizeStatus(scheme.status)} />
+        <StatCard icon="₹" tone="good" label={t("outlay")} value={formatMoney(scheme.outlayMinor)} />
+        <StatCard icon="📤" tone="info" label={t("utilised")} value={formatMoney(scheme.utilisedMinor)} />
+        <StatCard icon="📊" tone="warn" label={t("statUtilisation")} value={utilisationPct === null ? "—" : overUtilised ? `${utilisationPct}% · ${t("overUtilised")}` : `${utilisationPct}%`} />
+        <StatCard icon="✅" tone="good" label={t("status")} value={humanizeStatus(scheme.status)} />
       </StatGrid>
 
       <Card title={t("cardTitle")} padding>

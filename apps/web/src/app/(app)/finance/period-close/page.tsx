@@ -46,10 +46,10 @@ export default async function PeriodCloseCockpitPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🟢" iconBg="#e6f7f0" label="Open" value={openCount} />
-        <StatCard icon="🟡" iconBg="#fffaeb" label="Soft-Closed" value={softClosedCount} />
-        <StatCard icon="🔒" iconBg="#fef3f2" label="Hard-Closed" value={hardClosedCount} />
-        <StatCard icon="📊" iconBg="#eff6ff" label="Tracked Periods" value={periods.length} />
+        <StatCard icon="🟢" tone="good" label="Open" value={openCount} />
+        <StatCard icon="🟡" tone="warn" label="Soft-Closed" value={softClosedCount} />
+        <StatCard icon="🔒" tone="bad" label="Hard-Closed" value={hardClosedCount} />
+        <StatCard icon="📊" tone="info" label="Tracked Periods" value={periods.length} />
       </StatGrid>
 
       <p style={{ color: "var(--ink2)", fontSize: 13, marginTop: -8, marginBottom: 16 }}>

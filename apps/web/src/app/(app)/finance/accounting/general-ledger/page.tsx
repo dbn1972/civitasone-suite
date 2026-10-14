@@ -1,4 +1,4 @@
-import { PageHeader, LoadErrorState } from "../../../../_components/ds";
+import { Alert, PageHeader, LoadErrorState } from "../../../../_components/ds";
 import { getFinanceGLPage } from "../../../../_data/loaders";
 import { GLTable } from "./GLTable";
 import { PrintExportButton } from "../../_components/PrintExportButton";
@@ -39,22 +39,11 @@ export default async function GeneralLedgerPage({
       <PrintHeader title="General Ledger" scope={`FY ${view.fy}, current page`} />
 
       {posted ? (
-        <p
-          role="status"
-          style={{
-            margin: "0 0 12px",
-            padding: "8px 12px",
-            borderRadius: 6,
-            background: "#f0fdf4",
-            color: "#15803d",
-            border: "1px solid #bbf7d0",
-            fontSize: "0.85rem",
-          }}
-        >
+        <Alert variant="success" role="status">
           {queued
             ? `Voucher ${posted} accepted for processing - it may take a moment to appear. Refresh this page to check.`
             : `Voucher ${posted} posted.`}
-        </p>
+        </Alert>
       ) : null}
 
       {/* A failed load is its own state (retry / permission), never an empty or "Balanced" ledger. */}

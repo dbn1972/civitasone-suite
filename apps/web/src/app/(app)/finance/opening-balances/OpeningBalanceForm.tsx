@@ -192,7 +192,7 @@ export function OpeningBalanceForm({ fyCode, accounts, accountsUnavailable = fal
       <Card title={`Set Opening Balances — ${fyCode}`} padding>
         <div style={{ display: "grid", gap: 12 }}>
           {accountsUnavailable ? (
-            <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--warn, #b54708)" }}>
+            <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--warn)" }}>
               The chart of accounts could not be loaded, so account codes are not checked here. Type each code
               exactly; the server validates it when you save.
             </p>
@@ -291,7 +291,7 @@ export function OpeningBalanceForm({ fyCode, accounts, accountsUnavailable = fal
           </div>
 
           {rowError && (
-            <p id={errId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{rowError}</p>
+            <p id={errId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{rowError}</p>
           )}
 
           {message && (

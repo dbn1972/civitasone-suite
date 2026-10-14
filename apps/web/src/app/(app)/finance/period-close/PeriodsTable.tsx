@@ -213,7 +213,7 @@ export function PeriodsTable({
           <span style={{ display: "block", marginTop: 10 }} aria-live="polite">
             {readinessState === "loading" && "Checking outstanding items for this period…"}
             {readinessState === "error" && (
-              <span role="alert" style={{ color: "var(--bad, #c0392b)" }}>
+              <span role="alert" style={{ color: "var(--bad)" }}>
                 Couldn&apos;t check outstanding items for this period, so hard-close is blocked. Close this dialog and try again.
               </span>
             )}
