@@ -541,7 +541,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DFA-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2037)
 - **W0 note:** partly fixed by #1949 — Approve requireReason added; no createdBy/canApprove from server; maker-checker backend unverified.
 - **First-pass claim:** Approve and Sign are offered to whoever opens the page; nothing in the UI separates drafter from approver or signer (DfaPanel.tsx:128-171). Approve has no remarks field, only a confirm. Server enforcement cannot be verified (estab-service absent).
 - **Verified evidence:** DfaPanel.tsx actionsFor (:143-181) renders Approve/Return for every viewer when status is pending_approval, Sign for approved, with no role/actor check; Dfa type (:22-31) carries no drafter/approver id so UI cannot compare. Approve uses ActionButton with confirm only (:156-158), no requireReason (Return has it :159). Sign confirm exists (:166-169) already. Server-side maker!=checker cannot be verified (estab-service absent).
@@ -558,7 +558,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DFA-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was NAVUX)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1949, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1949, verified on main 9c5e9e9e9)
 - **First-pass claim:** The "returned" status produced by Return (ACTION_STEP_STATUS) has no filter tab (DfaPanel.tsx:19,26-32); returned drafts are visible only under "all" though they need the drafter's action.
 - **Verified evidence:** FILTERS (DfaPanel.tsx:34) = all, draft, pending_approval, approved, signed, dispatched; 'returned' (produced by Return, ACTION_STEP_STATUS :44, handled in actionsFor :146) has no tab. Returned drafts appear only under 'all'. Segmented (_components/ds/Segmented.tsx) renders opt strings raw as labels.
 - **Files to change:** `apps/web/src/app/(app)/estab/dfa/DfaPanel.tsx`, `apps/web/src/app/_components/ds/Segmented.tsx`
@@ -592,7 +592,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DFA-05  ·  LOW  ·  confirmed  ·  theme COPY (was NAVUX)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1949, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1949, verified on main 9c5e9e9e9)
 - **First-pass claim:** Success copy is "DFA approve done." built from the action verb (DfaPanel.tsx:122); filter tabs show raw snake_case ("pending_approval").
 - **Verified evidence:** DfaPanel.tsx:137 setMessage(`DFA ${action} done.`) yields 'DFA approve done.'; thrown errors are prefixed with the raw action (:135). Segmented gets raw FILTERS strings (:187) so tabs read 'pending_approval'.
 - **Files to change:** `apps/web/src/app/(app)/estab/dfa/DfaPanel.tsx`, `apps/web/src/app/_components/ds/Segmented.tsx`
@@ -608,7 +608,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DFA-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1949, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1949, verified on main 9c5e9e9e9)
 - **First-pass claim:** Create then reload uses a fixed 800 ms timeout for an eventually-consistent write (DfaPanel.tsx:103,125); the new draft may not appear.
 - **Verified evidence:** DfaPanel.tsx:118 (create) and :140 (act) use setTimeout(() => void load(), 800) after the POST returns; not cleared on unmount, and if the read model lags more than 800 ms the draft/status change is not shown. Whether writes are eventually consistent (CQRS) cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/estab/dfa/DfaPanel.tsx`
@@ -934,6 +934,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 ### GAP-ESTAB-GUESTHOUSE-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 PQ-A note (#2037):** no approval step or endpoint exists for room bookings (estab-service facilities has only book/checkin/checkout); check-in/out are now shown only to estab officer roles and the subtitle no longer claims approvals. Needs owner decision: is a booking approval step wanted (new endpoint plus maker-checker)?
 - **W0-10 note:** review found the W0 tick partly — Check-in/check-out with ConfirmDialog added (BookingsTable.tsx:44-113) but no approve/reject, no role/approver gating, subtitle still says 'Room booking and approvals.' (guesthouse/page.tsx:32; fix step 5 unmet), checkout hard-codes chargesMinor:0 (BookingsTable.tsx:~50)
 - **First-pass claim:** Page advertises "approvals" and counts "Pending Approval" (page.tsx:33,43) but offers no way to approve, reject, check in or check out — nothing in guesthouse/ mutates a booking; a pending request is a dead end.
 - **Verified evidence:** guesthouse/page.tsx:33 subtitle says 'approvals' and :43 shows a 'Pending Approval' stat; BookingsTable.tsx renders plain DataTable rows with no rowLink or actions (only a Pending/In-house filter). Nothing under estab/guesthouse/ issues a PATCH/POST besides new/page.tsx. Whether a backend approve/check-in API exists cannot be verified (no estab service in snapshot); the /estab/approvals tile is for file notes.
@@ -952,7 +953,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-GUESTHOUSE-03  ·  MEDIUM  ·  partly  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** Table omits sponsoring department and timing; Dates show dd/mm/yyyy only although check-in/out are datetime values (page.tsx:19-22, new/page.tsx:205-235).
 - **Verified evidence:** page.tsx:23 renders dates via formatIndianDate (lib/formatters.ts:2-8), which is dd/mm/yyyy date-only in the server's locale timezone, so time-of-day is dropped although the form collects datetime (new/page.tsx:206-236). BookingRow (BookingsTable.tsx:6-14) has no sponsor-department column; whether the summary type carries sponsorDept is unverifiable.
 - **Files to change:** `apps/web/src/app/(app)/estab/guesthouse/page.tsx`, `apps/web/src/app/(app)/estab/guesthouse/BookingsTable.tsx`, `apps/web/src/lib/formatters.ts`
@@ -968,7 +969,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-GUESTHOUSE-04  ·  LOW  ·  confirmed  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Upcoming" uses string comparison checkInDate > today on an ISO string (page.tsx:9-13); a datetime value for today compares greater than the date-only "today" and would be miscounted.
 - **Verified evidence:** page.tsx:12 builds today as UTC date (toISOString().split('T')[0]) and :16 compares b.checkInDate > today as strings. If checkInDate is a datetime (the form sends full ISO), '2026-09-29T08:30:00Z' > '2026-09-29' is true so a same-day check-in counts as Upcoming; UTC date also lags IST by 5.5 h. If the API returns date-only values it works. Field format not verifiable.
 - **Files to change:** `apps/web/src/app/(app)/estab/guesthouse/page.tsx`
@@ -981,7 +982,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-GUESTHOUSE-05  ·  LOW  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** No back link and no occupancy view (rooms × dates) although the subtitle promises "occupancy management"; EmptyState has no action (page.tsx:31-38,53).
 - **Verified evidence:** page.tsx:31-37 PageHeader has no `back` prop (the new-booking page does, new/page.tsx:102); subtitle promises 'occupancy management' but only a booking table exists; EmptyState at :53 has no action although a New Booking link exists at :35.
 - **Files to change:** `apps/web/src/app/(app)/estab/guesthouse/page.tsx`

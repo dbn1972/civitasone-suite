@@ -290,7 +290,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-APPLICATIONS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2037)
 - **W0 note:** partly fixed by #1865 — own-application maker block + explanatory text done, but Approve reason is still optional (ApproveApplicationDialog) so 'approve without a reason is blocked' is unmet
 - **First-pass claim:** No maker-checker: the Approve/Reject buttons depend on status only (page.tsx:28-29,130-134). Nothing compares the viewer with submittedBy or reviewerRef, so a user can submit, score (as any reviewer string) and approve the same application.
 - **Verified evidence:** apps/web/src/app/(app)/grants/applications/[id]/page.tsx:8-15,28 STATUS_ACTIONS depends only on status; :132 renders ApplicationActions unconditionally. No viewer identity is available (lib/auth/roleGuard.ts exposes roles/tenant/name, no user id) and reviewerRef is free text (ScoreApplicationDialog.tsx), so nothing compares viewer with submittedBy/reviewer. Approve (ApproveApplicationDialog.tsx) has no reason field, unlike Reject (ApplicationActions.tsx, minReasonLength 10). Server enforcement not verifiable.
@@ -375,7 +375,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-APPLICATIONS-DETAIL-07  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1865, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1865, verified on main 9c5e9e9e9)
 - **First-pass claim:** STATUS_ACTIONS covers six statuses (page.tsx:8-15); any other status (e.g. withdrawn, routing_failed) silently yields no actions and no explanation, and a draft can only be withdrawn, never submitted. "View / Schedule Installments" links ?appId= which /grants/installments ignores (page.tsx:141-146).
 - **Verified evidence:** apps/web/src/app/(app)/grants/applications/[id]/page.tsx:8-15 STATUS_ACTIONS has six keys; `STATUS_ACTIONS[status] ?? []` (:28) gives no actions and no message for any other status (mapApplicationDetail maps unknown to raw text). Draft only has 'withdraw' - no submit action exists in lib/grants/application.ts. :142 links /grants/installments?appId=... and installments/page.tsx does not read searchParams (grep: no appId). Whether withdrawn/routing_failed exist as statuses is not verifiable.
 - **Files to change:** `apps/web/src/app/(app)/grants/applications/[id]/page.tsx`, `apps/web/src/app/(app)/grants/installments/page.tsx`, `apps/web/src/lib/grants/application.ts`

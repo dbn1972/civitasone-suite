@@ -81,7 +81,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-ADMIN-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2037)
 - **W0-10 note:** review found the W0 tick partly — Preset now behind ConfirmDialog with requireReason (AdminConfig.tsx:338-358) but no from->to diff (retention 365->1825) or undo summary, and the reason is dropped: visitor-service POST /config/presets/:preset (config-registry/routes.ts:62-66, presets.ts applyPreset) ignores body so reason is never audited though the dialog says it is
 - **First-pass claim:** A preset is one click with no confirmation (AdminConfig.tsx:120-126) yet "upserts the policies below" — retention, erasure SLA, auto-approval and anti-passback for the whole tenant are overwritten at once; DPDP retention (retention.pii_days, up to 1825 in the hospital preset) can change without a review step.
 - **Verified evidence:** admin/AdminConfig.tsx:120-126 renders one plain `btn ghost` per preset whose onClick calls onApplyPreset -> applyPreset (client.ts:117-119, POST v1/visitor/config/presets/{preset}) immediately; text at lines 117-119 says presets 'upsert the policies below'. policy.ts:55-58 notes the hospital preset sets retention.pii_days to 1825. No confirm, diff or reason. Server-side audit/versioning cannot be verified (visitor-service absent).
@@ -98,7 +98,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-ADMIN-03  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Boolean toggles save immediately on click (AdminConfig.tsx:159-166) and the button label shows the current state ("On"/"Off") rather than the action, so Auto-approve VIP flips with no confirmation and an ambiguous label.
 - **Verified evidence:** AdminConfig.tsx:159-166: the toggle is a `btn primary/ghost` whose onClick calls save(field, encodeBooleanValue(!current)) directly; its text shows current state ('On'/'Off'), and busy shows '…'. Applies to Auto-approve VIP/contractors/delegations (policy.ts:185-212) and Anti-passback (policy.ts:163-170), so security-relevant flags flip with one tap. setConfig (client.ts:94-108) sends no reason.
 - **Files to change:** `apps/web/src/app/(app)/visitor/admin/AdminConfig.tsx`, `apps/web/src/app/(app)/visitor/_data/client.ts`
@@ -115,7 +115,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-ADMIN-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Number drafts are keyed and never cleared after a preset/reload (AdminConfig.tsx:53,172), so after "Apply preset" an edited field keeps showing the pre-preset typed value while the pill says the new version.
 - **Verified evidence:** AdminConfig.tsx:53 keeps drafts keyed by namespace::configKey; line 172 reads `drafts[k] ?? String(currentNum)` and 195-198 writes drafts on change. onApplyPreset (96-109) and reload (61-71) never clear drafts, so a field the user edited before applying a preset keeps the typed value while the pill (186) shows the new version; Save stays enabled if draftNum differs from the new value.
 - **Files to change:** `apps/web/src/app/(app)/visitor/admin/AdminConfig.tsx`
@@ -130,7 +130,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-ADMIN-05  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Degraded state hides partial failure: the "Showing default policy" EmptyState needs initialSource==="error" AND zero entries (AdminConfig.tsx:129); if only one namespace fails, defaults render with "Default" pills as if they were live values (admin/page.tsx:14-17).
 - **Verified evidence:** Real: AdminConfig.tsx:129 shows the 'Showing default policy' EmptyState only when initialSource==='error' AND entries.length===0; admin/page.tsx:15-16 merges both namespaces and sets one combined `source`. With one namespace failing, entries are non-empty, fields fall back to defaults (`Default` pill, lines 156/186). Overstated: page.tsx:26 does render DataSourceBadge ('Couldn't load — showing nothing') on any failure, so it is not fully hidden, but the wording is wrong (defaults are shown) and it does not say which group. Worse: Save on a defaulted field sends no expectedVersion (line 85), so it may overwrite a live value that failed to load (server behaviour unverified).
 - **Files to change:** `apps/web/src/app/(app)/visitor/admin/page.tsx`, `apps/web/src/app/(app)/visitor/admin/AdminConfig.tsx`
@@ -146,7 +146,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-ADMIN-06  ·  LOW  ·  partly  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Min/max bounds are client-only — policy.ts:23-31 states the service accepts arbitrary JSON per key; reload() hard-codes "visitor_policy" instead of POLICY_NS (AdminConfig.tsx:63); optimistic-lock conflicts (expectedVersion) surface only as a generic save error.
 - **Verified evidence:** policy.ts:24-35 documents that bounds are UX-only and that the service accepts arbitrary JSON per key (server validation cannot be verified; visitor-service absent). AdminConfig.tsx:64 hard-codes 'visitor_policy', but POLICY_NS === 'visitor_policy' (policy.ts:11), so it is currently correct, only drift-prone (POLICY_NS not imported at line 8-13). save() passes expectedVersion (line 85) but client.ts:31-32 throws the same generic readError('save') for any non-2xx, so a version conflict is shown as a generic save error and the page is not reloaded.
 - **Files to change:** `apps/web/src/app/(app)/visitor/admin/AdminConfig.tsx`, `apps/web/src/app/(app)/visitor/_data/client.ts`, `apps/web/src/app/(app)/visitor/_data/policy.ts`

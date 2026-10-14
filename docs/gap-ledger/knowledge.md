@@ -588,7 +588,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2037)
 - **W0-10 note:** review found the W0 tick partly — authorId/currentUserId wired (page.tsx:76-80, getSessionUserId roleGuard.ts:56) and Approve/Publish disabled for author, BUT disabled button shows no reason: explanation lives only in confirmDescription (PolicyActions.tsx:72-77,116-121) which never opens when disabled (ActionButton.tsx:108-115 has no title/tooltip); no role-eligibility check for approver rights (step 3); server maker-checker exists (policies/commands.ts:123,173)
 - **First-pass claim:** Lifecycle buttons render by status only (PolicyActions.tsx:29-32): Approve is offered to the author and to every role; the maker-checker rule fails only after Confirm, and the raw server text is shown in the dialog (PolicyActions.tsx:25).
 - **Verified evidence:** PolicyActions.tsx:29-32 derive canSubmit/canApprove/canPublish/canAcknowledge from status only; the component receives only policyId and status (:15), and page.tsx:47 does not pass authorId or the session user. The dialog itself says 'you must not be the author' (:50). On failure post() throws new Error(await res.text()) (:25) and ActionButton shows e.message in the dialog (ActionButton.tsx:48-49), i.e. raw server body (likely JSON). Server-side maker-checker enforcement is claimed in the comment (:10) but the service is absent - cannot verify. Session helpers: roleGuard.ts has roles/tid/name but no getSessionUserId (sub is in the JWT payload type, roleGuard.ts:6); whether sub equals authorId is unknown.
@@ -607,7 +607,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Publish hard-codes reviewMonths:12 and the dialog promises "sets the effective date" (PolicyActions.tsx:58-59) — reviewer cannot choose effective date or review cycle.
 - **Verified evidence:** PolicyActions.tsx:59 sends { reviewMonths: 12 } fixed; ActionButton offers only an optional reason input (requireReason, ActionButton.tsx:74), not effective-date or review-cycle fields. Dialog text at :58 says 'sets the effective date' without stating the value. Whether the publish endpoint accepts effectiveDate is not visible (service absent).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/[id]/PolicyActions.tsx`

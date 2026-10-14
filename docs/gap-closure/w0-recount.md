@@ -1,20 +1,20 @@
 # W0-08: recount after Wave 0 reconciliation
 
-Total: **689 open**, 3958 closed, 4 blocked or obsolete.
+Total: **687 open**, 3960 closed, 4 blocked or obsolete.
 
-Priority queue: 26 open, 193 closed (3 entries ticked by W0-07 to match closed module items).
+Priority queue: 22 open, 197 closed (4 entries ticked by W0-07 to match closed module items).
 
 | Module | Open | Closed | Blocked/obsolete |
 |---|---|---|---|
 | tenant-admin | 55 | 140 | 0 |
 | works | 47 | 153 | 0 |
 | procurement | 44 | 172 | 0 |
-| estab | 32 | 131 | 0 |
+| estab | 31 | 132 | 0 |
 | analytics | 30 | 49 | 0 |
 | locations | 30 | 6 | 0 |
 | tenant | 29 | 44 | 0 |
-| knowledge | 28 | 41 | 0 |
-| audit | 26 | 49 | 0 |
+| audit | 28 | 47 | 0 |
+| knowledge | 27 | 42 | 0 |
 | citizen | 26 | 108 | 0 |
 | stock | 26 | 20 | 0 |
 | revenue | 23 | 56 | 0 |
@@ -24,9 +24,9 @@ Priority queue: 26 open, 193 closed (3 entries ticked by W0-07 to match closed m
 | helpdesk | 15 | 52 | 0 |
 | projects | 13 | 72 | 0 |
 | billing | 12 | 42 | 4 |
-| grants | 12 | 74 | 0 |
 | cdp | 11 | 24 | 0 |
 | court | 11 | 25 | 0 |
+| grants | 11 | 75 | 0 |
 | themes | 10 | 21 | 0 |
 | workflow | 10 | 34 | 0 |
 | field | 9 | 17 | 0 |
@@ -34,10 +34,10 @@ Priority queue: 26 open, 193 closed (3 entries ticked by W0-07 to match closed m
 | recommendations | 9 | 11 | 0 |
 | catalogue | 8 | 23 | 0 |
 | meeting | 8 | 25 | 0 |
-| visitor | 8 | 16 | 0 |
 | install | 7 | 30 | 0 |
 | notifications | 7 | 43 | 0 |
 | telephony | 7 | 26 | 0 |
+| visitor | 7 | 17 | 0 |
 | ai | 6 | 39 | 0 |
 | auth | 6 | 12 | 0 |
 | platform-admin | 6 | 39 | 0 |
