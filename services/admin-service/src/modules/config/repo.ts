@@ -28,6 +28,24 @@ export async function listModuleKeys(tenantId: string): Promise<string[]> {
   return rows.filter((r) => r.enabled).map((r) => r.moduleKey);
 }
 
+/**
+ * GAP-TENANT-ADMIN-SETTINGS-01/-07: every module row the tenant holds (enabled
+ * AND disabled), for the tenant-admin Settings page. listModuleKeys() above
+ * stays enabled-only because the gateway module projection depends on it.
+ */
+export async function listModuleConfigs(tenantId: string): Promise<Array<{ moduleKey: string; enabled: boolean; updatedAt: Date | null }>> {
+  const rows = await runWithTenant(tenantId, () => scopedRead((tx) => tx.select({ moduleKey: adminModuleConfigs.moduleKey, enabled: adminModuleConfigs.enabled, updatedAt: adminModuleConfigs.updatedAt })
+    .from(adminModuleConfigs).where(eq(adminModuleConfigs.tenantId, tenantId)).orderBy(adminModuleConfigs.moduleKey)));
+  return rows;
+}
+
+/** True when the tenant already holds a config row for this module key. */
+export async function moduleConfigured(tenantId: string, moduleKey: string): Promise<boolean> {
+  const rows = await runWithTenant(tenantId, () => scopedRead((tx) => tx.select({ id: adminModuleConfigs.id })
+    .from(adminModuleConfigs).where(and(eq(adminModuleConfigs.tenantId, tenantId), eq(adminModuleConfigs.moduleKey, moduleKey))).limit(1)));
+  return rows.length > 0;
+}
+
 export async function getTenantConfig(tenantId: string): Promise<TenantConfigView | null> {
   const editionRows = await runWithTenant(tenantId, () => scopedRead((tx) => tx.select().from(adminEditions).where(eq(adminEditions.tenantId, tenantId)).limit(1)));
   const moduleRows = await runWithTenant(tenantId, () => scopedRead((tx) => tx.select().from(adminModuleConfigs).where(eq(adminModuleConfigs.tenantId, tenantId))));

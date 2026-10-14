@@ -141,6 +141,7 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const controls = await complianceRepo.listControls(ctx.tenantId);
+    const evidenceCounts = await complianceRepo.countEvidenceByControl(ctx.tenantId);
     const posture = computePosture(controls as { framework: string; status: string }[]);
     const dpdpPosture = computePosture(
       (controls as { framework: string; status: string }[]).filter((c) => c.framework === "DPDP"),
@@ -164,6 +165,8 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
         timestamp: toIso(c.updatedAt),
         title: c.title,
         result: c.status === "pass" ? "pass" : c.status === "fail" ? "fail" : "warn",
+        // GAP-TENANT-ADMIN-COMPLIANCE-02: how many evidence items back this check (0 = none recorded).
+        evidenceCount: evidenceCounts[c.id] ?? 0,
       }));
     // Flat shape (NOT wrapped in `{data: ...}`) — matches
     // apps/web/src/app/_data/loaders.ts's ComplianceOverview mapResponse,
@@ -172,8 +175,11 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     // shape the frontend loader never actually read (a second, independent
     // bug on top of the fabrication itself — fixed here too).
     return reply.send({
-      dpdpScore: dpdpPosture.overallScore ?? 0,
-      certInReadiness: posture.overallScore ?? 0,
+      // GAP-TENANT-ADMIN-COMPLIANCE-02: null = no testable control yet (the web
+      // renders "—"). It used to be coerced to 0, showing a tenant with NO
+      // checks a fabricated "0.0%" board-level score.
+      dpdpScore: dpdpPosture.overallScore,
+      certInReadiness: posture.overallScore,
       retentionStatus,
       checks,
       // GAP-TENANT-ADMIN-COMPLIANCE-02: provenance so a board-level DPDP score

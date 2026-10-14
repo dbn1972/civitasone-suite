@@ -128,6 +128,15 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
     })));
   });
 
+  // GAP-TENANT-ADMIN-AUDIT-04/-06: whole-history counts for the CALLER's tenant
+  // (never a query-supplied tenant), same roles as the list. Static path, so it
+  // is not shadowed by /v1/audit/events/:id.
+  app.get("/v1/audit/events/summary", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["audit_officer", "audit_admin", "super_admin", "platform_admin"]);
+    return reply.send(await queries.summarizeEvents(ctx.tenantId));
+  });
+
   app.get("/audit/events/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["audit_officer", "audit_admin", "super_admin", "platform_admin"]);

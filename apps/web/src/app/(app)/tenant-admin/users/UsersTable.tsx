@@ -133,6 +133,10 @@ export function UsersTable({ users, source = "api" }: { users: AdminUser[]; sour
         filterable
         filterPlaceholder="Search users…"
         pageSize={10}
+        exportable
+        exportAudit="tenant-admin/users"
+        exportFilename="users"
+        exportNotice="Exports are recorded in the audit log."
         {...(directoryEmpty
           ? {
               emptyIcon: "👥",

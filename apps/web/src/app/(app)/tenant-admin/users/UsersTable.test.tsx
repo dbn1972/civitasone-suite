@@ -192,3 +192,22 @@ describe("UsersTable — GAP-TENANT-ADMIN-USERS-03 (invite success toast)", () =
     );
   });
 });
+
+describe("UsersTable — audited export (GAP-TENANT-ADMIN-USERS-05)", () => {
+  beforeEach(() => { mockSearch = ""; });
+
+  it("offers the audited table export (which records itself) when there are users to export", () => {
+    renderWithToast(
+      <UsersTable
+        users={[{ id: "u1", name: "Asha", email: "asha@dept.gov.in", roles: ["clerk"], mfaEnabled: true, status: "active" }]}
+      />,
+    );
+    // DataTable's export button carries the "recorded in the audit log" notice as its title.
+    expect(screen.getByTitle(/recorded in the audit log/i)).toBeInTheDocument();
+  });
+
+  it("offers no export button for an empty directory", () => {
+    renderWithToast(<UsersTable users={[]} />);
+    expect(screen.queryByTitle(/recorded in the audit log/i)).not.toBeInTheDocument();
+  });
+});
