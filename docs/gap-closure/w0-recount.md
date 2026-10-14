@@ -2,23 +2,23 @@
 
 Total: **689 open**, 3958 closed, 4 blocked or obsolete.
 
-Priority queue: 29 open, 190 closed (1 entries ticked by W0-07 to match closed module items).
+Priority queue: 26 open, 193 closed (3 entries ticked by W0-07 to match closed module items).
 
 | Module | Open | Closed | Blocked/obsolete |
 |---|---|---|---|
-| tenant-admin | 56 | 139 | 0 |
-| works | 45 | 155 | 0 |
+| tenant-admin | 55 | 140 | 0 |
+| works | 47 | 153 | 0 |
 | procurement | 44 | 172 | 0 |
 | estab | 32 | 131 | 0 |
 | analytics | 30 | 49 | 0 |
 | locations | 30 | 6 | 0 |
 | tenant | 29 | 44 | 0 |
+| knowledge | 28 | 41 | 0 |
 | audit | 26 | 49 | 0 |
 | citizen | 26 | 108 | 0 |
-| knowledge | 26 | 43 | 0 |
 | stock | 26 | 20 | 0 |
 | revenue | 23 | 56 | 0 |
-| designer | 18 | 52 | 0 |
+| designer | 20 | 50 | 0 |
 | legal | 18 | 34 | 0 |
 | crm | 16 | 343 | 0 |
 | helpdesk | 15 | 52 | 0 |
@@ -36,7 +36,6 @@ Priority queue: 29 open, 190 closed (1 entries ticked by W0-07 to match closed m
 | meeting | 8 | 25 | 0 |
 | visitor | 8 | 16 | 0 |
 | install | 7 | 30 | 0 |
-| learning | 7 | 39 | 0 |
 | notifications | 7 | 43 | 0 |
 | telephony | 7 | 26 | 0 |
 | ai | 6 | 39 | 0 |
@@ -44,19 +43,20 @@ Priority queue: 29 open, 190 closed (1 entries ticked by W0-07 to match closed m
 | platform-admin | 6 | 39 | 0 |
 | journeys | 5 | 11 | 0 |
 | municipal | 5 | 15 | 0 |
-| change | 4 | 19 | 0 |
 | contact | 4 | 2 | 0 |
 | inspection | 4 | 19 | 0 |
+| learning | 4 | 42 | 0 |
+| change | 3 | 20 | 0 |
 | contracts | 3 | 20 | 0 |
 | documents | 3 | 18 | 0 |
 | policy | 3 | 21 | 0 |
 | pricing | 3 | 4 | 0 |
-| settings | 3 | 4 | 0 |
 | domains | 2 | 4 | 0 |
 | help | 2 | 7 | 0 |
 | identity | 2 | 32 | 0 |
 | metadata | 2 | 21 | 0 |
 | reports | 2 | 36 | 0 |
+| settings | 2 | 5 | 0 |
 | dashboard | 1 | 10 | 0 |
 | developer-portal | 1 | 5 | 0 |
 | fleet | 1 | 8 | 0 |
