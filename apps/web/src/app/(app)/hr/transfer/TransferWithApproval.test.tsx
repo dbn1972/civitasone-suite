@@ -78,8 +78,8 @@ async function openAndFillWizard() {
   fireEvent.click(screen.getByRole("button", { name: "Next: Approval routing →" }));
 
   // The initiator is the signed-in employee, shown read-only (the estab route rejects any other initiator).
-  await waitFor(() => expect(screen.getByLabelText("Initiating officer")).toHaveValue("Meera Self (E-009)"));
-  fireEvent.change(screen.getByLabelText("Forward to (approving officer)"), { target: { value: "Iyer" } });
+  await waitFor(() => expect(screen.getByLabelText(/^Initiating officer/)).toHaveValue("Meera Self (E-009)"));
+  fireEvent.change(screen.getByLabelText(/^Forward to \(approving officer\)/), { target: { value: "Iyer" } });
   fireEvent.mouseDown(await screen.findByText("P. Iyer (E-020)"));
   fireEvent.change(screen.getByPlaceholderText(/Why is this transfer being initiated/), {
     target: { value: "Administrative requirement" },
@@ -133,7 +133,7 @@ describe("TransferWithApproval", () => {
     });
     render(<TransferWithApproval />);
     await openAndFillWizard();
-    expect(screen.getByLabelText("Initiating officer")).toHaveAttribute("readonly");
+    expect(screen.getByLabelText(/^Initiating officer/)).toHaveAttribute("readonly");
     fireEvent.click(screen.getByRole("button", { name: "Submit transfer to eOffice" }));
     await waitFor(() => expect(fromModuleCalls).toHaveLength(1));
     expect(fromModuleCalls[0]!.body).toMatchObject({ initiatedBy: ME.id, currentWith: "emp-off-2" });
