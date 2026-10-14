@@ -243,7 +243,6 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [], payGrou
             aria-label={t("runForLabel")}
             value={scopeKind}
             onChange={(e) => setScopeKind(e.target.value as ScopeKind)}
-          
           >
             <option value="tenant">{t("runForTenant")}</option>
             <option value="groups">{t("runForGroups")}</option>
@@ -274,7 +273,6 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [], payGrou
               aria-label={t("ddoLabel")}
               value={ddoCode}
               onChange={(e) => setDdoCode(e.target.value)}
-              
             >
               <option value="">{t("ddoPlaceholder")}</option>
               {ddos.map((d) => (

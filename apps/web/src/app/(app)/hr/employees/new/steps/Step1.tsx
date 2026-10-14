@@ -24,7 +24,7 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
       </h2>
       <div style={grid2}>
         {/* Full Name */}
-        <Field id="w-fullName" label={<>{t("fullNameLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.fullName} style={{ ...fieldWrap, gridColumn: "span 2" }}>
+        <Field id="w-fullName" label={<>{t("fullNameLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.fullName} announce style={{ ...fieldWrap, gridColumn: "span 2" }}>
           <Input
             type="text"
             autoComplete="name"
@@ -36,7 +36,7 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
         </Field>
 
         {/* Date of Birth */}
-        <Field id="w-dob" label={t("dobLabel")} error={errors.dateOfBirth} style={fieldWrap}>
+        <Field id="w-dob" label={t("dobLabel")} error={errors.dateOfBirth} announce style={fieldWrap}>
           {/* GAP-HR-EMPLOYEES-NEW-08: `max` is an HTML-only guard -- it
               constrains the native date picker but a typed/pasted date
               bypassed it entirely, since nothing here re-checked it in JS.
@@ -93,7 +93,7 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
         </Field>
 
         {/* Official Email */}
-        <Field id="w-email" label={t("officialEmailLabel")} error={errors.email} style={fieldWrap}>
+        <Field id="w-email" label={t("officialEmailLabel")} error={errors.email} announce style={fieldWrap}>
           <Input
             type="email"
             autoComplete="email"
@@ -105,7 +105,7 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
         </Field>
 
         {/* Mobile */}
-        <Field id="w-mobile" label={t("mobileLabel")} error={errors.mobile} style={fieldWrap}>
+        <Field id="w-mobile" label={t("mobileLabel")} error={errors.mobile} announce style={fieldWrap}>
           <Input
             type="tel"
             autoComplete="tel"

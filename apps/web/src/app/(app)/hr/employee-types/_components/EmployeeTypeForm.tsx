@@ -141,7 +141,7 @@ export function EmployeeTypeForm({ mode, id, initial }: Props) {
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 14 }}>
-        <Field id={ids.code} label={t("fieldCode")} required error={errors.code}>
+        <Field id={ids.code} label={t("fieldCode")} required error={errors.code} announce>
           <Input
             value={fields.code}
             onChange={(e) => set("code", e.target.value)}
@@ -149,7 +149,7 @@ export function EmployeeTypeForm({ mode, id, initial }: Props) {
             disabled={mode === "edit"}
           />
         </Field>
-        <Field id={ids.name} label={t("fieldName")} required error={errors.name}>
+        <Field id={ids.name} label={t("fieldName")} required error={errors.name} announce>
           <Input
             value={fields.name}
             onChange={(e) => set("name", e.target.value)}
@@ -158,7 +158,7 @@ export function EmployeeTypeForm({ mode, id, initial }: Props) {
         </Field>
       </div>
 
-      <Field id={ids.description} label={t("fieldDescription")} error={errors.description}>
+      <Field id={ids.description} label={t("fieldDescription")} error={errors.description} announce>
         <Textarea
           value={fields.description}
           onChange={(e) => set("description", e.target.value)}
@@ -197,13 +197,13 @@ export function EmployeeTypeForm({ mode, id, initial }: Props) {
             ))}
           </Select>
         </Field>
-        <Field id={ids.probation} label={t("fieldProbationMonths")} error={errors.defaultProbationMonths}>
+        <Field id={ids.probation} label={t("fieldProbationMonths")} error={errors.defaultProbationMonths} announce>
           <Input
             type="number" min={0} value={fields.defaultProbationMonths}
             onChange={(e) => set("defaultProbationMonths", Math.max(0, Number(e.target.value) || 0))}
           />
         </Field>
-        <Field id={ids.maxContract} label={t("fieldMaxContractMonths")} error={errors.maxContractMonths}>
+        <Field id={ids.maxContract} label={t("fieldMaxContractMonths")} error={errors.maxContractMonths} announce>
           <Input
             type="number" min={1} value={fields.maxContractMonths ?? ""}
             placeholder={t("contractUnlimited")}

@@ -93,7 +93,7 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
         <Field id="w-pan" label={<>{t("panLabel")}
             <span style={{ fontWeight: 400, color: "var(--mut, #64748b)", marginInlineStart: 6, fontSize: 11 }}>
               {t("storedEncrypted")}
-            </span></>} error={errors.pan} style={fieldWrap}>
+            </span></>} error={errors.pan} announce style={fieldWrap}>
           <MaskedInput
             id="w-pan"
             value={data.pan}
@@ -143,7 +143,7 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
         </Field>
 
         {/* IFSC */}
-        <Field id="w-ifsc" label={t("ifscCodeLabel")} error={errors.bankIfsc} style={fieldWrap}>
+        <Field id="w-ifsc" label={t("ifscCodeLabel")} error={errors.bankIfsc} announce style={fieldWrap}>
           <Input
             type="text"
             value={data.bankIfsc}
