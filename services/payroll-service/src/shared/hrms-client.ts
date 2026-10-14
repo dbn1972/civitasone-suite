@@ -281,7 +281,15 @@ export async function fetchPendingPayrollRuns(tenantId: string): Promise<number>
   return rows.filter((r) => r.status === "processing" || r.status === "draft").length;
 }
 
-export async function fetchEmployeeSummaries(tenantId: string): Promise<Map<string, { fullName: string; departmentName: string; employeeNo: string | null }>> {
+export async function fetchEmployeeSummaries(
+  tenantId: string,
+  ids?: readonly string[],
+): Promise<Map<string, { fullName: string; departmentName: string; employeeNo: string | null }>> {
+  // SF-17b: when the caller knows which employees it is about to render, ask
+  // for exactly those (batched, tenant-scoped on the hrms side). The unfiltered
+  // feed is capped at 2000 rows with a name ordering, so on a larger tenant any
+  // employee outside the cap lost their name. Fails open like the full feed.
+  if (ids) return fetchEmployeeSummariesByIds(tenantId, ids);
   const url = `${HRMS_URL}/v1/hrms/internal/employee-summaries`;
   try {
     const res = await fetch(url, {
@@ -294,6 +302,26 @@ export async function fetchEmployeeSummaries(tenantId: string): Promise<Map<stri
   } catch {
     return new Map();
   }
+}
+
+const SUMMARY_IDS_PER_REQUEST = 40;
+
+/** Exactly the requested ids, in bounded parallel chunks. Fails open (a missing id has no entry). */
+export async function fetchEmployeeSummariesByIds(
+  tenantId: string,
+  ids: readonly string[],
+): Promise<Map<string, { fullName: string; departmentName: string; employeeNo: string | null }>> {
+  const unique = [...new Set(ids.filter((i) => typeof i === "string" && i.length > 0))];
+  const out = new Map<string, { fullName: string; departmentName: string; employeeNo: string | null }>();
+  for (let i = 0; i < unique.length; i += SUMMARY_IDS_PER_REQUEST * 8) {
+    const wave: string[][] = [];
+    for (let j = i; j < Math.min(unique.length, i + SUMMARY_IDS_PER_REQUEST * 8); j += SUMMARY_IDS_PER_REQUEST) {
+      wave.push(unique.slice(j, j + SUMMARY_IDS_PER_REQUEST));
+    }
+    const parts = await Promise.all(wave.map((chunk) => searchEmployeeSummaries(tenantId, { ids: chunk })));
+    for (const p of parts) for (const [k, v] of p) out.set(k, v);
+  }
+  return out;
 }
 
 /**

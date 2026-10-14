@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { IntlWrapper } from "@/lib/testUtils/intl";
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: IntlWrapper });
 
 import { HandoverPanel } from "./HandoverPanel";
 import { __resetOfficerMapsCacheForTest } from "../files/[id]/OfficerName";

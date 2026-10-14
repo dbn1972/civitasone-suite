@@ -91,10 +91,11 @@ describe("SalaryRevisionsPage", () => {
     expect(paths.some((p) => /limit=500/.test(p))).toBe(false);
   });
 
-  it("falls back to 'Unknown employee · <id prefix>' when the directory has no match", async () => {
+  it("falls back to 'Unknown employee' (no id fragment) when the directory has no match", async () => {
     mockRevisionsAndNames([rev({ employee_id: E_UNKNOWN })]);
     await renderPage();
-    expect(screen.getByText("Unknown employee · 99999999")).toBeInTheDocument();
+    expect(screen.getByText("Unknown employee")).toBeInTheDocument();
+    expect(screen.queryByText(/99999999/)).not.toBeInTheDocument();
   });
 
   // GAP-PAYROLL-SALARY-REVISIONS-01: "correction" and "fitment" used to fall

@@ -49,6 +49,7 @@ const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid 
 
 export function CreateCorrectionForm() {
   const t = useTranslations("createCorrectionForm");
+  const tFallback = useTranslations("employeeFallback");
   const router = useRouter();
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [employeeName, setEmployeeName] = useState<string | null>(null);
@@ -254,7 +255,7 @@ export function CreateCorrectionForm() {
           pending
             ? t.rich("confirmDescription", {
                 component: pending.component,
-                employee: employeeName ?? pending.employeeId,
+                employee: employeeName ?? tFallback("unknownEmployee"),
                 oldAmount: formatMoney(pending.oldValueMinor),
                 newAmount: formatMoney(pending.newValueMinor),
                 effectiveFrom: formatIndianDate(pending.effectiveFrom),

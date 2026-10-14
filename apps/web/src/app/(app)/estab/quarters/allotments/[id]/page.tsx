@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatusPill, Card, RefreshErrorState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { toHumanError } from "@/lib/messages";
@@ -53,6 +54,7 @@ async function getLicenceFeeRates(): Promise<LoaderResult<LicenceFeeRate[]>> {
 }
 
 export default async function AllotmentDetailPage({ params }: { params: { id: string } }) {
+  const tFallback = await getTranslations("employeeFallback");
   const { data: allotment, source: allotmentSource } = await getAllotment(params.id);
 
   if (!allotment) {
@@ -79,9 +81,8 @@ export default async function AllotmentDetailPage({ params }: { params: { id: st
 
   // GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-03: identify the applicant by name,
   // falling back to a short ref when hrms enrichment failed.
-  const employeeShort = `${allotment.employeeRef.slice(0, 8)}…`;
-  const employeeDisplay = allotment.employeeName ?? employeeShort;
-  const quarterLabel = allotment.quarterNo ?? (quarter ? quarter.quarterNo : `${allotment.quarterId.slice(0, 8)}…`);
+  const employeeDisplay = allotment.employeeName ?? tFallback("unknownEmployee");
+  const quarterLabel = allotment.quarterNo ?? (quarter ? quarter.quarterNo : "—");
 
   // GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-04 (+OPERATORS-02): lifecycle actions
   // gated to estab admins; the server stays authoritative.
@@ -111,9 +112,6 @@ export default async function AllotmentDetailPage({ params }: { params: { id: st
             <dt style={{ fontSize: 12, color: "var(--ink2)" }}>Employee</dt>
             <dd style={{ margin: 0 }}>
               {employeeDisplay}
-              {!allotment.employeeName && (
-                <span style={{ display: "block", fontSize: 11, color: "var(--ink2)" }}>Name unavailable</span>
-              )}
             </dd>
           </div>
           <div><dt style={{ fontSize: 12, color: "var(--ink2)" }}>Quarter</dt><dd style={{ margin: 0 }}>{quarterLabel}</dd></div>

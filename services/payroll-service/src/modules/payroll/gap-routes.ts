@@ -373,7 +373,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
         FROM payroll.flex_benefit_elections e
        WHERE e.tenant_id = ${ctx.tenantId}::uuid ${statusFilter}
     `))) as unknown as Array<{ total: number; pending: number }>;
-    const names = await fetchEmployeeSummaries(ctx.tenantId);
+    const names = await fetchEmployeeSummaries(ctx.tenantId, rows.map((r) => r.employee_id));
     return reply.send({
       data: rows.map((r) => ({ ...r, employee_name: names.get(r.employee_id)?.fullName ?? null })),
       total: totals[0]?.total ?? 0,

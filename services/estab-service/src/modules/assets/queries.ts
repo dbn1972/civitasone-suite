@@ -64,6 +64,6 @@ export async function listVehicleSummaries(tenantId: string, limit: number) {
   // name (best-effort; never throws, empty map on hrms failure), mirroring
   // quarter-allotments' employeeName enrichment. The UI shows the name, or
   // "Pool"/"—" — never the raw UUID.
-  const displayMap = await getEmployeeDisplayMap(tenantId);
+  const displayMap = await getEmployeeDisplayMap(tenantId, (rows ?? []).flatMap((r) => (r.allocatedTo ? [r.allocatedTo] : [])));
   return (rows ?? []).map((row) => toVehicleSummary(row, displayMap));
 }

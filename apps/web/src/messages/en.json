@@ -9474,7 +9474,7 @@
     "noneMessage": "No corrections are waiting for a decision.",
     "checkerNote": "A correction must be approved or rejected by a payroll user other than the one who created it.",
     "summary": "from {from}: {oldValue} → {newValue}, arrears {arrears}",
-    "employeeLabel": "Employee {id}",
+    "employeeLabel": "Employee {name}",
     "approveBtn": "Approve",
     "rejectBtn": "Reject",
     "approveAriaLabel": "Approve {component} correction",
@@ -15009,5 +15009,8 @@
     "failed": "Could not submit. Nothing was changed.",
     "dismiss": "Dismiss",
     "continue": "Continue"
+  },
+  "employeeFallback": {
+    "unknownEmployee": "Unknown employee"
   }
 }

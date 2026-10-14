@@ -183,7 +183,7 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
 
     // fetchEmployeeSummaries provides departmentName; it never throws (returns
     // empty Map on any failure) so no try/catch needed here.
-    const summaries = await fetchEmployeeSummaries(ctx.tenantId);
+    const summaries = await fetchEmployeeSummaries(ctx.tenantId, [slip.employeeId]);
     const summary = summaries.get(slip.employeeId);
     if (summary) {
       department = summary.departmentName;

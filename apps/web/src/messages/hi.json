@@ -8968,7 +8968,7 @@
     "noneMessage": "कोई सुधार निर्णय की प्रतीक्षा में नहीं है।",
     "checkerNote": "किसी सुधार को उसे बनाने वाले के अलावा किसी अन्य पेरोल उपयोगकर्ता द्वारा अनुमोदित या अस्वीकृत किया जाना चाहिए।",
     "summary": "{from} से: {oldValue} → {newValue}, बकाया {arrears}",
-    "employeeLabel": "कर्मचारी {id}",
+    "employeeLabel": "कर्मचारी {name}",
     "approveBtn": "अनुमोदित करें",
     "rejectBtn": "अस्वीकार करें",
     "approveAriaLabel": "{component} सुधार अनुमोदित करें",
@@ -14509,5 +14509,8 @@
     "failed": "जमा नहीं हो सका। कुछ भी नहीं बदला।",
     "dismiss": "हटाएं",
     "continue": "आगे बढ़ें"
+  },
+  "employeeFallback": {
+    "unknownEmployee": "अज्ञात कर्मचारी"
   }
 }

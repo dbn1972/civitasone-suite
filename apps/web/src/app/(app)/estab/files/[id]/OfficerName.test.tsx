@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { IntlWrapper } from "@/lib/testUtils/intl";
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: IntlWrapper });
 
 import { OfficerName, __resetOfficerMapsCacheForTest } from "./OfficerName";
 
@@ -36,7 +40,7 @@ describe("OfficerName — DPDP data minimisation (DETAIL-04)", () => {
   });
 
   it("does not permanently cache a failed first load — a later mount recovers the name", async () => {
-    // First mount: operators 500 → empty maps, short id.
+    // First mount: operators 500 → empty maps, "Unknown employee" (never an id fragment).
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
       const url = typeof input === "string" ? input : input.toString();
       if (url.includes("/estab/operators")) return Promise.resolve(jsonResponse({ message: "boom" }, 500));
@@ -44,7 +48,8 @@ describe("OfficerName — DPDP data minimisation (DETAIL-04)", () => {
     });
 
     const first = render(<OfficerName id={OP_ID} />);
-    await waitFor(() => expect(screen.getByText(/Officer 11111111/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Unknown employee")).toBeInTheDocument());
+    expect(screen.queryByText(/11111111/)).not.toBeInTheDocument();
     first.unmount();
 
     // Second mount: operators OK now → name resolves (failure was NOT cached).

@@ -87,7 +87,7 @@ export default async function SalaryRevisionsPage() {
   // UUID. One batched hrms directory lookup (ids=, 50 per request) for just
   // the employees on this page -- the shared resolver the arrears/bonus/
   // corrections/reimbursements registers use -- instead of pulling the whole
-  // directory. Unresolved ids fall back to "Unknown employee · <id prefix>".
+  // directory. Unresolved ids fall back to "Unknown employee" (never an id fragment).
   const names = await resolveEmployeeNames(rawItems.map((r) => r.employee_id));
 
   // Every field DataTable sees is a plain serialisable value: DataTable is a

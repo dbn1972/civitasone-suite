@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { IntlWrapper } from "@/lib/testUtils/intl";
+
+const render = (ui: ReactElement) => rtlRender(ui, { wrapper: IntlWrapper });
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -87,5 +91,19 @@ describe("QuarterAllotmentsPage", () => {
 
     expect(screen.queryByText(/current financial year/)).not.toBeInTheDocument();
     expect(screen.getByText("Quarter allotments")).toBeInTheDocument();
+  });
+});
+
+// SF-17b: an allotment whose employee the service could not name (deleted, another
+// tenant's, hrms down) renders "Unknown employee", never the employeeRef or a fragment.
+describe("QuarterAllotmentsPage — unresolved employee (SF-17b)", () => {
+  it("renders 'Unknown employee' and no id fragment when employeeName is null", async () => {
+    fetchJsonMock.mockReset();
+    fetchJsonMock.mockResolvedValue({ data: { rows: [{ ...ALLOTMENT, employeeName: null, quarterNo: null }], total: 1 }, source: "api" });
+    const ui = await QuarterAllotmentsPage();
+    render(ui);
+    expect(screen.getByText("Unknown employee")).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(String(ALLOTMENT.employeeRef).slice(0, 8)))).not.toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(String(ALLOTMENT.quarterId).slice(0, 8)))).not.toBeInTheDocument();
   });
 });

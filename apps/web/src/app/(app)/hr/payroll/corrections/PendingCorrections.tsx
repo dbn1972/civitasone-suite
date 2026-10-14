@@ -10,6 +10,8 @@ import { postWithErrorCode } from "../_lib/postWithErrorCode";
 export type PendingCorrection = {
   id: string;
   employee_id: string;
+  /** Resolved display name (SF-17b); absent = not resolvable, shown as "Unknown employee". */
+  employee_label?: string;
   component: string;
   effective_from: string;
   old_value_minor: number | string;
@@ -29,6 +31,7 @@ type Decision = "approve" | "reject";
  */
 export function PendingCorrections({ rows }: { rows: PendingCorrection[] }) {
   const t = useTranslations("pendingCorrections");
+  const tFallback = useTranslations("employeeFallback");
   const router = useRouter();
   const [target, setTarget] = useState<{ row: PendingCorrection; decision: Decision } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -81,7 +84,7 @@ export function PendingCorrections({ rows }: { rows: PendingCorrection[] }) {
                 newValue: formatMoney(row.new_value_minor),
                 arrears: formatMoney(row.arrears_minor),
               })}
-              <div style={{ fontSize: 12, color: "var(--ink2)" }}>{t("employeeLabel", { id: row.employee_id })}</div>
+              <div style={{ fontSize: 12, color: "var(--ink2)" }}>{t("employeeLabel", { name: row.employee_label || tFallback("unknownEmployee") })}</div>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <Button

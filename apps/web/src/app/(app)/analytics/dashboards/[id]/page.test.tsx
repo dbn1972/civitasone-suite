@@ -26,6 +26,7 @@ const DETAIL = {
   status: "active",
   visibility: "shared",
   ownerId: "22222222-2222-2222-2222-222222222222",
+  ownerName: "Asha Rao",
   version: 3,
   widgets: [
     { id: "w1", title: "Spend by dept", vizType: "bar", position: 1 },
@@ -48,8 +49,19 @@ describe("AnalyticsDashboardDetailPage (GAP-ANALYTICS-DASHBOARDS-01)", () => {
     expect(screen.getByText("Budget Overview")).toBeInTheDocument();
     expect(screen.getByText("Spend by dept", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("v3")).toBeInTheDocument();
-    // owner id is shown shortened
-    expect(screen.getByText("22222222")).toBeInTheDocument();
+    // SF-17b: the owner is shown by name, never as an id
+    expect(screen.getByText("Asha Rao")).toBeInTheDocument();
+    expect(screen.queryByText("22222222")).not.toBeInTheDocument();
+  });
+
+  it("SF-17b: an owner the service could not resolve renders 'Unknown employee', not an id fragment", async () => {
+    const unresolved = { ...DETAIL, ownerName: null };
+    fetchJsonMock.mockImplementation((_path, _empty, opts: { mapResponse: (p: unknown) => unknown }) => {
+      return Promise.resolve({ data: opts.mapResponse(unresolved), source: "api" });
+    });
+    render(await AnalyticsDashboardDetailPage({ params: { id: DETAIL.id } }));
+    expect(screen.getByText("Unknown employee")).toBeInTheDocument();
+    expect(screen.queryByText(/22222222/)).not.toBeInTheDocument();
   });
 
   it("calls notFound() on a 404", async () => {
