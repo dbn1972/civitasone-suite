@@ -32,13 +32,13 @@ Large SFs (01, 11, 13, 14) are split into several PRs by module group, so no PR 
 
 ## Owner decisions (2026-10-14)
 
-The orchestrator put three questions to the owner. The owner answered in chat on 2026-10-14, verbatim: "continue  approved 1 2 3". All three recommendations were approved. Implemented in one PR: #PRNUM.
+The orchestrator put three questions to the owner. The owner answered in chat on 2026-10-14, verbatim: "continue  approved 1 2 3". All three recommendations were approved. Implemented in one PR: #2021.
 
 | # | Question | Decision | Verbatim reply | PR |
 |---|---|---|---|---|
-| 1 | Should commissioners keep access to workflow-task Approvals? | Yes, leave as is. No code change. | "approved 1 2 3" | #PRNUM (record only) |
-| 2 | Should managers be limited to their direct reports for contracts, AI predictions and training-progress updates? | Yes. A manager sees self plus direct reports only. HR and admin roles stay tenant-wide. An actor with no linked employee record fails closed. | "approved 1 2 3" | #PRNUM |
-| 3 | Should IFSC codes be shown unmasked everywhere? | Yes. An IFSC is a public bank-branch code, not personal data. Bank account number, PAN, Aadhaar and phone stay masked. | "approved 1 2 3" | #PRNUM |
+| 1 | Should commissioners keep access to workflow-task Approvals? | Yes, leave as is. No code change. | "approved 1 2 3" | #2021 (record only) |
+| 2 | Should managers be limited to their direct reports for contracts, AI predictions and training-progress updates? | Yes. A manager sees self plus direct reports only. HR and admin roles stay tenant-wide. An actor with no linked employee record fails closed. | "approved 1 2 3" | #2021 |
+| 3 | Should IFSC codes be shown unmasked everywhere? | Yes. An IFSC is a public bank-branch code, not personal data. Bank account number, PAN, Aadhaar and phone stay masked. | "approved 1 2 3" | #2021 |
 
 Decision 2 covers: GET /v1/hrms/contracts (list, detail, employee history, renewals list and detail), POST /v1/hrms/contracts/:id/renew, GET /v1/hrms/ai/attrition-risk, GET /v1/hrms/ai/succession and PATCH /v1/hrms/learning/enrollments/:id/progress. List routes filter, detail routes return 404, the employee-keyed history route and writes return 403. The aggregate-only AI routes (workforce-insights, leave-prediction) carry no per-employee rows and are unchanged.
 
