@@ -14558,6 +14558,27 @@
     "statusOffline": "आप अभी ऑफ़लाइन हैं।"
   },
   "works": {
+    "billingActions": {
+      "createdBillNote": "यह बिल आपने बनाया है, इसलिए इसे अंतिम रूप कोई अन्य अधिकारी देगा।",
+      "issuedMbNote": "यह माप पुस्तिका आपने जारी की है, इसलिए इसे अंतिम रूप कोई अन्य अधिकारी देगा।",
+      "recordMeasurement": "माप दर्ज करें",
+      "recordMeasurementAria": "{mbNumber} में माप दर्ज करें"
+    },
+    "boqTable": {
+      "recordMeasurement": "माप दर्ज करें",
+      "recordMeasurementAria": "{item} के लिए माप दर्ज करें"
+    },
+    "billingDetail": {
+      "openedFromRegister": "रजिस्टर से खोला गया: बिल {billNo} नीचे सबसे पहले सूचीबद्ध है।"
+    },
+    "accountCompile": {
+      "recordedStatus": "दर्ज स्थिति:",
+      "recordedFallback": "दर्ज",
+      "submittedTo": "({to} को प्रस्तुत)"
+    },
+    "tsNew": {
+      "daoBanner": "तकनीकी स्वीकृति के लिए कार्य प्रस्ताव का डीएओ द्वारा अंतिम रूप से स्वीकृत होना आवश्यक है। कार्य चयनकर्ता में केवल डीएओ-अंतिम कार्य ही सूचीबद्ध हैं।"
+    },
     "billsNew": {
       "position": "इस एमबी के विरुद्ध मापा गया: {measured}। पहले से बिल किया गया: {billed}। अभी बिल योग्य: {available}।",
       "useAvailable": "पूरी राशि भरें",

@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { PageHeader, Card, Button, ConfirmDialog, AcceptedNotice } from "@/app/_components/ds";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
+import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
+import { billStatusLabel } from "../../_data/format";
 import { useFormError } from "@/lib/useFormError";
 
 const inputStyle: React.CSSProperties = {
@@ -62,6 +64,7 @@ type PriorCompile = { id: string; status: string; submittedTo: string | null; su
 
 export default function AccountCompilePage() {
   const { toast } = useToast();
+  const t = useTranslations("works.accountCompile");
 
   const [month, setMonth] = useState(String(new Date().getMonth() + 1));
   const [year, setYear] = useState(String(currentYear));
@@ -215,8 +218,8 @@ export default function AccountCompilePage() {
             <AcceptedNotice {...accepted.noticeProps} />
             {recorded ? (
               <span style={{ fontWeight: 400 }}>
-                Recorded status: <strong>{recorded.status || "recorded"}</strong>
-                {recorded.submittedTo ? ` (submitted to ${recorded.submittedTo})` : ""}.
+                {t("recordedStatus")} <strong>{recorded.status ? billStatusLabel(recorded.status) : t("recordedFallback")}</strong>
+                {recorded.submittedTo ? ` ${t("submittedTo", { to: recorded.submittedTo })}` : ""}.
               </span>
             ) : null}
             <Link href="/works/billing" className="btn ghost" style={{ alignSelf: "flex-start", minHeight: 36 }}>

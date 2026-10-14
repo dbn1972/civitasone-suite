@@ -15058,6 +15058,27 @@
     "statusOffline": "You are currently offline."
   },
   "works": {
+    "billingActions": {
+      "createdBillNote": "You created this bill, so another officer must finalize it.",
+      "issuedMbNote": "You issued this measurement book, so another officer must finalize it.",
+      "recordMeasurement": "Record measurement",
+      "recordMeasurementAria": "Record measurement in {mbNumber}"
+    },
+    "boqTable": {
+      "recordMeasurement": "Record measurement",
+      "recordMeasurementAria": "Record measurement for {item}"
+    },
+    "billingDetail": {
+      "openedFromRegister": "Opened from the register: bill {billNo} is listed first below."
+    },
+    "accountCompile": {
+      "recordedStatus": "Recorded status:",
+      "recordedFallback": "recorded",
+      "submittedTo": "(submitted to {to})"
+    },
+    "tsNew": {
+      "daoBanner": "Technical sanction requires the work proposal to be DAO-finalized. Only DAO-finalized works are listed in the Work picker."
+    },
     "billsNew": {
       "position": "Measured against this MB: {measured}. Already billed: {billed}. Still billable: {available}.",
       "useAvailable": "Use the full amount",

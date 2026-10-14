@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { ConfirmDialog, useToast, Card, Button, AcceptedNotice } from "@/app/_components/ds";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { useFormError } from "@/lib/useFormError";
@@ -60,6 +61,7 @@ export function BillingActions({ workId, canFinalize, roles, actorId, bills }: B
   const mayAdvance = (next: string) => roles === undefined || canAdvanceFinalizeStep(roles, next);
   const accepted = useAcceptedWrite();
   const { toast } = useToast();
+  const t = useTranslations("works.billingActions");
 
   // ── Bill finalize ──────────────────────────────────────────────────────────
   const [billDialog, setBillDialog] = useState<{
@@ -227,7 +229,7 @@ export function BillingActions({ workId, canFinalize, roles, actorId, bills }: B
                     </span>
                   ) : actorId && bill.createdBy === actorId ? (
                     <span style={{ fontSize: 12, color: "var(--ink3)" }}>
-                      You created this bill, so another officer must finalize it.
+                      {t("createdBillNote")}
                     </span>
                   ) : (
                   <Button
@@ -281,9 +283,9 @@ export function BillingActions({ workId, canFinalize, roles, actorId, bills }: B
                         href={`/works/billing/measurements/new?workId=${encodeURIComponent(workId)}&mbId=${encodeURIComponent(mb.id)}`}
                         className="btn ghost sm"
                         style={{ marginInlineStart: 12 }}
-                        aria-label={`Record measurement in ${mb.mbNumber}`}
+                        aria-label={t("recordMeasurementAria", { mbNumber: mb.mbNumber })}
                       >
-                        Record measurement
+                        {t("recordMeasurement")}
                       </Link>
                     ) : null}
                   </div>
@@ -293,7 +295,7 @@ export function BillingActions({ workId, canFinalize, roles, actorId, bills }: B
                     </span>
                   ) : actorId && mb.makerIds.includes(actorId) ? (
                     <span style={{ fontSize: 12, color: "var(--ink3)" }}>
-                      You issued this measurement book, so another officer must finalize it.
+                      {t("issuedMbNote")}
                     </span>
                   ) : (
                   <Button

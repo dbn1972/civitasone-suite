@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { DataTable } from "@/app/_components/ds";
 
 type BoqRow = Record<string, unknown> & { id: string };
@@ -12,6 +13,7 @@ type BoqRow = Record<string, unknown> & { id: string };
  * cannot cross from the server page.)
  */
 export function BoqItemsTable({ rows, workId, canRecordMeasurement }: { rows: BoqRow[]; workId: string; canRecordMeasurement: boolean }) {
+  const t = useTranslations("works.boqTable");
   const columns = [
     { key: "itemCode", label: "Item Code" },
     { key: "itemDescription", label: "Description" },
@@ -29,9 +31,9 @@ export function BoqItemsTable({ rows, workId, canRecordMeasurement }: { rows: Bo
               <Link
                 href={`/works/billing/measurements/new?workId=${encodeURIComponent(workId)}&boqItemId=${encodeURIComponent(row.id)}`}
                 className="btn ghost sm"
-                aria-label={`Record measurement for ${String(row.itemCode ?? row.id)}`}
+                aria-label={t("recordMeasurementAria", { item: String(row.itemCode ?? row.id) })}
               >
-                Record measurement
+                {t("recordMeasurement")}
               </Link>
             ),
           },
