@@ -15301,5 +15301,13 @@
         "suspended": "Suspended"
       }
     }
+  },
+  "pqbMoney": {
+    "releaseReasonTooShort": "Enter the sanction or approval reference (at least {min} characters).",
+    "releaseReasonTooLong": "Keep the reference under {max} characters.",
+    "dscUntrusted": "The signature is mathematically valid, but the signer's certificate is not checked against a trusted certifying authority {storeState, select, configured {(it does not chain to the configured trust store)} other {(no trust store is configured on the server)}}. This is not proof of a legally valid DSC. Direct token or eSign signing is not yet available in this console.",
+    "eofficeRaiseIntro": "Raising sends this {refType} to eOffice for a formal, tamper-proof decision. The approval chain is selected automatically by amount. The file is always raised in your own name.",
+    "eofficeSelfFallback": "You (the signed-in officer)",
+    "rfqIndentStatus": "({status})"
   }
 }

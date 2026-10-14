@@ -10,15 +10,18 @@ export const RELEASE_REASON_MAX = 500;
  * `reason` and never as `beneficiaryBankRef` (the payee bank-account pointer, which the
  * server resolves from the grantee master). Returns a message when the reason is invalid.
  */
-export function validateReleaseReason(reason: string | undefined): string | null {
+/** Translator for the release-reason messages (next-intl `t` from namespace "pqbMoney"). */
+export type ReleaseT = (key: "releaseReasonTooShort" | "releaseReasonTooLong", values: { min?: number; max?: number }) => string;
+
+export function validateReleaseReason(reason: string | undefined, t: ReleaseT): string | null {
   const r = (reason ?? "").trim();
-  if (r.length < RELEASE_REASON_MIN) return `Enter the sanction or approval reference (at least ${RELEASE_REASON_MIN} characters).`;
-  if (r.length > RELEASE_REASON_MAX) return `Keep the reference under ${RELEASE_REASON_MAX} characters.`;
+  if (r.length < RELEASE_REASON_MIN) return t("releaseReasonTooShort", { min: RELEASE_REASON_MIN });
+  if (r.length > RELEASE_REASON_MAX) return t("releaseReasonTooLong", { max: RELEASE_REASON_MAX });
   return null;
 }
 
-export async function postDisburse(installmentId: string, reason: string | undefined): Promise<void> {
-  const invalid = validateReleaseReason(reason);
+export async function postDisburse(installmentId: string, reason: string | undefined, t: ReleaseT): Promise<void> {
+  const invalid = validateReleaseReason(reason, t);
   if (invalid) throw new Error(invalid);
   const res = await fetch(`/api/proxy/v1/grants/installments/${installmentId}/disburse`, {
     method: "POST",

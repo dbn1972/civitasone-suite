@@ -69,6 +69,11 @@ export async function linkageRoutes(app: FastifyInstance): Promise<void> {
     if (!initiatedBy) {
       throw new HttpError(422, "INITIATOR_REQUIRED", "initiatedBy is required for a service-account raise");
     }
+    // Segregation of duties: the officer who raises the file may not also be the one it is forwarded to
+    // (the browser forms check this too, but the server is the real control; applies to service accounts as well).
+    if (initiatedBy === parsed.currentWith) {
+      throw new HttpError(422, "INITIATOR_EQUALS_APPROVER", "the initiating officer and the officer the file is forwarded to must be different people");
+    }
     const body = { ...parsed, initiatedBy };
 
     // Files may only be held/operated by enrolled eOffice operators — enforced

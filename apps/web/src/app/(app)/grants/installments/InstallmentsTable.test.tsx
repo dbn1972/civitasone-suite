@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider, createTranslator } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+// The money-identity strings are translated client-side (pqbMoney), so every render needs an intl provider.
+const render = (ui: ReactElement) =>
+  rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -96,7 +103,8 @@ describe("postDisburse validation (GAP-GRANTS-DETAIL-03)", () => {
     const { postDisburse } = await import("../postDisburse");
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     fetchSpy.mockClear();
-    await expect(postDisburse("inst-1", "ab")).rejects.toThrow(/at least 3/);
+    const t = createTranslator({ locale: "en", messages: enMessages, namespace: "pqbMoney" }) as unknown as Parameters<typeof postDisburse>[2];
+    await expect(postDisburse("inst-1", "ab", t)).rejects.toThrow(/at least 3/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

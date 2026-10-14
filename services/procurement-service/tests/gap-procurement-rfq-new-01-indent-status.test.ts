@@ -26,7 +26,7 @@ async function seed(id: string, tenantId: string, status: string) {
     });
   }));
 }
-async function post(indentRef: string) {
+async function post(indentRef: string | undefined) {
   return app.inject({
     method: "POST", url: "/v1/procurement/rfqs",
     headers: { authorization: `Bearer ${tok()}`, "content-type": "application/json" },
@@ -57,6 +57,16 @@ describe("POST /v1/procurement/rfqs — indent must be approved", () => {
   it("rejects an unknown indent and another tenant's indent with 422 INDENT_NOT_FOUND", async () => {
     expect((await post(`procurement_indent:${randomUUID()}`)).json().code).toBe("INDENT_NOT_FOUND");
     expect((await post(`procurement_indent:${ids.foreign}`)).json().code).toBe("INDENT_NOT_FOUND");
+  });
+  it("rejects a malformed non-empty indentRef with 422 INDENT_REF_INVALID (no bypass of the approved-indent check)", async () => {
+    for (const bad of ["procurement_indent:abc", "free text ref", `indent:${ids.approved}`, ids.approved, `procurement_indent:${ids.approved} `.replace(/ $/, "x")]) {
+      const r = await post(bad);
+      expect(r.statusCode, bad).toBe(422);
+      expect(r.json().code, bad).toBe("INDENT_REF_INVALID");
+    }
+  });
+  it("still accepts an RFQ with no indentRef (legacy no-indent RFQ)", async () => {
+    expect((await post(undefined)).statusCode).toBe(202);
   });
   it("accepts an approved indent", async () => {
     expect((await post(`procurement_indent:${ids.approved}`)).statusCode).toBe(202);

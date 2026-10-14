@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import {render as rtlRender, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+// The money-identity strings are translated client-side (pqbMoney), so every render needs an intl provider.
+const render = (ui: ReactElement) =>
+  rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),

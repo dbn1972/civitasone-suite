@@ -38,10 +38,15 @@ export async function rfqRoutes(app: FastifyInstance): Promise<void> {
       }
     }
     // GAP-PROCUREMENT-RFQ-NEW-01: an RFQ may only be raised against an APPROVED indent of this tenant.
-    // The web picker is filtered, but the server is the real control. Only the structured
-    // "procurement_indent:<uuid>" reference is checked (free-text legacy refs are left as before).
-    const indentMatch = /^procurement_indent:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(body.indentRef ?? "");
-    if (indentMatch) {
+    // The web picker is filtered, but the server is the real control. A supplied indentRef MUST be the
+    // structured "procurement_indent:<uuid>" reference: a malformed non-empty ref is rejected (422) so it
+    // cannot be used to skip the approved-indent check. An omitted/blank ref is a legacy no-indent RFQ.
+    const indentRefRaw = (body.indentRef ?? "").trim();
+    if (indentRefRaw !== "") {
+      const indentMatch = /^procurement_indent:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(indentRefRaw);
+      if (!indentMatch) {
+        throw new HttpError(422, "INDENT_REF_INVALID", "indentRef must be of the form procurement_indent:<indent id>");
+      }
       const indent = await indentRepo.findIndentById(indentMatch[1]!);
       if (!indent || indent.tenantId !== ctx.tenantId) {
         throw new HttpError(422, "INDENT_NOT_FOUND", "the source indent was not found");
