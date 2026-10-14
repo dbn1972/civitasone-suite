@@ -19,10 +19,11 @@ import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
 import { Button, Field, Input, Select, Textarea } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { EmployeePicker } from "@/app/_components/EmployeePicker";
+import { useSelfEmployee } from "@/app/_components/useSelfEmployee";
 
 type Employee = { id: string; name?: string; designation?: string; departmentId?: string; department?: string };
 type Department = { id: string; name: string };
-type Officer = { id: string; name: string; designation?: string };
 type PayStructureOption = { id: string; name?: string; code?: string };
 type LookupStatus = "loading" | "ok" | "error";
 
@@ -49,10 +50,8 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
   const [step, setStep] = useState<1 | 2>(1);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [officers, setOfficers] = useState<Officer[]>([]);
   const [payStructures, setPayStructures] = useState<PayStructureOption[]>([]);
   const [deptStatus, setDeptStatus] = useState<LookupStatus>("loading");
-  const [officerStatus, setOfficerStatus] = useState<LookupStatus>("loading");
   const [payStructureStatus, setPayStructureStatus] = useState<LookupStatus>("loading");
   const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -73,7 +72,9 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
   // one remaining gap, the actual UI never sending it.
   const [payStructureId, setPayStructureId] = useState("");
   const [effectiveDate, setEffectiveDate] = useState("");
-  const [initiatedBy, setInitiatedBy] = useState("");
+  // The initiating officer is always the signed-in employee (the estab route rejects any other initiator).
+  const self = useSelfEmployee(open);
+  const initiatedBy = self?.id ?? "";
   const [currentWith, setCurrentWith] = useState("");
   const [note, setNote] = useState("");
   // Set once step 1 (create the pending_approval transfer request) succeeds.
@@ -87,13 +88,12 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
-    setDeptStatus("loading"); setOfficerStatus("loading"); setPayStructureStatus("loading");
+    setDeptStatus("loading"); setPayStructureStatus("loading");
     void (async () => {
       try {
-        const [empRes, deptRes, offRes, psRes] = await Promise.all([
+        const [empRes, deptRes, psRes] = await Promise.all([
           fetch("/api/proxy/v1/hrms/employees?limit=200", { signal: controller.signal }),
           fetch("/api/proxy/v1/hrms/departments?limit=200", { signal: controller.signal }),
-          fetch("/api/proxy/v1/identity/users?limit=200", { signal: controller.signal }),
           // Same endpoint/pattern as EditEmployeeForm.tsx's pay-structure picker.
           fetch("/api/proxy/v1/payroll/structures?limit=200", { signal: controller.signal }),
         ]);
@@ -108,13 +108,6 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
         } else {
           setDeptStatus("error");
         }
-        if (offRes.ok) {
-          const body = (await offRes.json()) as { data?: Officer[] } | Officer[];
-          setOfficers(Array.isArray(body) ? body : (body.data ?? []));
-          setOfficerStatus("ok");
-        } else {
-          setOfficerStatus("error");
-        }
         if (psRes.ok) {
           const body = (await psRes.json()) as { data?: PayStructureOption[] } | PayStructureOption[];
           setPayStructures(Array.isArray(body) ? body : (body.data ?? []));
@@ -127,7 +120,6 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
         setDeptStatus((s) => (s === "loading" ? "error" : s));
-        setOfficerStatus((s) => (s === "loading" ? "error" : s));
         // Pay structure is optional; never leave its select stuck disabled.
         setPayStructureStatus((s) => (s === "loading" ? "ok" : s));
       }
@@ -154,7 +146,7 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
     setFromDeptName("");
     setToDeptId("");
     setPayStructureId("");
-    setEffectiveDate(""); setInitiatedBy(""); setCurrentWith(""); setNote("");
+    setEffectiveDate(""); setCurrentWith(""); setNote("");
     setSubmittedTransferId(null);
     setStep(1);
   };
@@ -173,8 +165,9 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
 
   const validateStep2 = (): boolean => {
     const errs: typeof fieldErrors = {};
-    if (!initiatedBy) errs.initiatedBy = tr("errSelectInitiator");
+    if (!initiatedBy) errs.initiatedBy = tr("errInitiatorUnknown");
     if (!currentWith) errs.currentWith = tr("errSelectApprover");
+    else if (currentWith === initiatedBy) errs.currentWith = tr("errInitiatorEqualsApprover");
     if (note.trim().length < 3) errs.note = tr("errNote");
     setFieldErrors(errs);
     setError("");
@@ -394,40 +387,14 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
                 <Field label={tr("initiator")} required error={fieldErrors.initiatedBy}>
-                  {officerStatus === "error" ? (
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ color: "var(--bad, #b91c1c)", fontSize: "0.75rem" }}>{tr("officersLoadFailed")}</span>
-                      <Button type="button" variant="ghost" style={{ fontSize: 12 }} onClick={() => setReloadKey((k) => k + 1)}>{tr("retry")}</Button>
-                    </div>
-                  ) : (
-                    <Select
-                      value={initiatedBy}
-                      onChange={(e) => setInitiatedBy(e.target.value)}
-                      disabled={officerStatus === "loading"}
-                    >
-                      <option value="">{officerStatus === "loading" ? tr("loadingOfficers") : tr("selectInitiator")}</option>
-                      {officers.map((o) => (
-                        <option key={o.id} value={o.id}>{o.name}{o.designation ? ` · ${o.designation}` : ""}</option>
-                      ))}
-                    </Select>
-                  )}
-                </Field>
+                  <Input readOnly value={self?.label ?? ""} placeholder={tr("loadingOfficers")} />
 
                 <Field label={tr("approver")} required error={fieldErrors.currentWith}>
-                  {officerStatus === "error" ? (
-                    <span style={{ color: "var(--bad, #b91c1c)", fontSize: "0.75rem" }}>{tr("officersLoadFailed")}</span>
-                  ) : (
-                    <Select
-                      value={currentWith}
-                      onChange={(e) => setCurrentWith(e.target.value)}
-                      disabled={officerStatus === "loading"}
-                    >
-                      <option value="">{officerStatus === "loading" ? tr("loadingOfficers") : tr("selectApprover")}</option>
-                      {officers.filter((o) => o.id !== initiatedBy).map((o) => (
-                        <option key={o.id} value={o.id}>{o.name}{o.designation ? ` · ${o.designation}` : ""}</option>
-                      ))}
-                    </Select>
-                  )}
+                  <EmployeePicker
+                    value={currentWith || null}
+                    onChange={(id) => setCurrentWith(id ?? "")}
+                    placeholder={tr("selectApprover")}
+                  />
                 </Field>
               </div>
 

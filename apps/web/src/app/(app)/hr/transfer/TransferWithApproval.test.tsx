@@ -17,15 +17,13 @@ import { TransferWithApproval } from "./TransferWithApproval";
 
 const EMPLOYEES = [
   { id: "emp-1", name: "Asha Verma", designation: "Clerk", departmentId: "dept-1", department: "Finance" },
+  { id: "off-2", employeeNo: "E-002", name: "P. Iyer", designation: "Under Secretary", departmentId: "dept-1", department: "Finance" },
 ];
 const DEPARTMENTS = [
   { id: "dept-1", name: "Finance" },
   { id: "dept-2", name: "Works" },
 ];
-const OFFICERS = [
-  { id: "off-1", name: "S. Rao", designation: "Section Officer" },
-  { id: "off-2", name: "P. Iyer", designation: "Under Secretary" },
-];
+const ME = { id: "me-1", fullName: "Meera Self", employeeNo: "E-009" };
 const PAY_STRUCTURES = [
   { id: "ps-1", name: "Pay Level 6 (GP 4200)" },
   { id: "ps-2", name: "Pay Level 7 (GP 4600)" },
@@ -47,9 +45,9 @@ function mockFetchRouting(opts: { submitApproval: () => Response; fromModule: ()
   const fromModuleCalls: Array<{ url: string; body: unknown }> = [];
   vi.spyOn(globalThis, "fetch").mockImplementation(((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    if (url.includes("/hrms/me/profile")) return Promise.resolve(jsonResponse(ME));
     if (url.includes("/hrms/employees?")) return Promise.resolve(jsonResponse({ data: EMPLOYEES }));
     if (url.includes("/hrms/departments?")) return Promise.resolve(jsonResponse({ data: DEPARTMENTS }));
-    if (url.includes("/identity/users?")) return Promise.resolve(jsonResponse({ data: OFFICERS }));
     if (url.includes("/payroll/structures?")) return Promise.resolve(jsonResponse({ data: PAY_STRUCTURES }));
     if (url.includes("/transfer/submit-approval")) {
       submitApprovalCalls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : null });
@@ -73,11 +71,13 @@ async function openAndFillWizard() {
   fireEvent.change(screen.getByLabelText(/^Effective date/), { target: { value: "2026-09-01" } });
   fireEvent.click(screen.getByRole("button", { name: "Next: Approval routing →" }));
 
+  // The initiator is the signed-in employee, shown read-only (the estab route rejects any other initiator).
+  await waitFor(() => expect(screen.getByLabelText("Initiating officer")).toHaveValue("Meera Self (E-009)"));
   await waitFor(() =>
-    expect(within(screen.getByLabelText(/^Initiating officer/)).getByRole("option", { name: /S\. Rao/ })).toBeInTheDocument(),
+    expect(screen.getByLabelText(/^Forward to \(approving officer\)/)).toBeInTheDocument(),
   );
-  fireEvent.change(screen.getByLabelText(/^Initiating officer/), { target: { value: "off-1" } });
-  fireEvent.change(screen.getByLabelText(/^Forward to \(approving officer\)/), { target: { value: "off-2" } });
+  fireEvent.change(screen.getByLabelText(/^Forward to \(approving officer\)/), { target: { value: "Iyer" } });
+  fireEvent.mouseDown(await screen.findByText("P. Iyer (E-002)"));
   fireEvent.change(screen.getByPlaceholderText(/Why is this transfer being initiated/), {
     target: { value: "Administrative requirement" },
   });
@@ -121,6 +121,19 @@ describe("TransferWithApproval", () => {
     // Both eFile attempts must reference the SAME transfer id from step 1.
     expect(fromModuleCalls[0]!.body).toMatchObject({ refId: "transfer-abc" });
     expect(fromModuleCalls[1]!.body).toMatchObject({ refId: "transfer-abc" });
+  });
+
+  it("always raises the eFile with the signed-in employee as initiator, and the field is read-only", async () => {
+    const { fromModuleCalls } = mockFetchRouting({
+      submitApproval: () => jsonResponse({ id: "transfer-self", status: "accepted" }),
+      fromModule: () => jsonResponse({ fileNo: "HR/2026/003" }),
+    });
+    render(<TransferWithApproval />);
+    await openAndFillWizard();
+    expect(screen.getByLabelText("Initiating officer")).toHaveAttribute("readonly");
+    fireEvent.click(screen.getByRole("button", { name: "Submit transfer to eOffice" }));
+    await waitFor(() => expect(fromModuleCalls).toHaveLength(1));
+    expect(fromModuleCalls[0]!.body).toMatchObject({ initiatedBy: ME.id, currentWith: "off-2" });
   });
 
   it("raises the eFile and shows a success toast on the happy path", async () => {
@@ -209,7 +222,6 @@ describe("TransferWithApproval", () => {
         const url = String(input);
         if (url.includes("/hrms/employees?")) return Promise.resolve(jsonResponse({ data: EMPLOYEES }));
         if (url.includes("/hrms/departments?")) return Promise.resolve(new Response("", { status: 500 }));
-        if (url.includes("/identity/users?")) return Promise.resolve(jsonResponse({ data: OFFICERS }));
         if (url.includes("/payroll/structures?")) return Promise.resolve(jsonResponse({ data: PAY_STRUCTURES }));
         return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
       }) as typeof fetch);
