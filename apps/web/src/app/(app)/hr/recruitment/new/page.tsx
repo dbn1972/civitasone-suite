@@ -4,6 +4,7 @@ import { PageHeader, Card } from "../../../../_components/ds";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { NewJobOpeningForm } from "./NewJobOpeningForm";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * Mirrors services/hrms-service/src/modules/recruitment/routes.ts's
@@ -11,7 +12,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
  * ALL_ROLES, which additionally includes "manager", gates the read-only
  * GET /v1/hrms/job-openings list -- not creating one.)
  */
-const RECRUITMENT_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const RECRUITMENT_ADMIN_ROLES = HR_STAFF_ROLES;
 
 export default async function NewJobOpeningPage() {
   const roles = getSessionRoles();

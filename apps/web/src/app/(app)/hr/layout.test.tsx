@@ -122,8 +122,20 @@ describe("HrLayout", () => {
           "officer",
           "finance_officer",
           "finance_admin",
+          "hiring_manager",
+          "dept_head",
         ]),
       );
+    });
+
+    it("admits the two W1 SF-09b roles (hiring_manager, dept_head) that backend routes and a web page already depend on", () => {
+      for (const role of ["hiring_manager", "dept_head"]) {
+        mockRedirect.mockReset();
+        sessionWithRoles([role]);
+        const { unmount } = render(<HrLayout>{`hr content ${role}`}</HrLayout>);
+        expect(mockRedirect).not.toHaveBeenCalled();
+        unmount();
+      }
     });
 
     it("admits the four GAP-HR-SF-09b roles explicitly (belt-and-suspenders alongside the it.each above)", () => {
@@ -152,8 +164,9 @@ describe("HrLayout", () => {
       // current main: GAP-HR-ICC-06 (an independent, already-merged PR)
       // added it to HR_ROLES for real, so it now belongs in the admission
       // tests above (it.each(HR_ROLES) already covers it), not here.
+      // "dept_head" moved OUT of this list under W1 SF-09b (performance-dev-routes.ts
+      // admits it and hr/goals consumes those routes); see the admission test above.
       const mustStillReject = [
-        "dept_head",
         "audit_officer",
         "budget_officer",
         "security_admin",

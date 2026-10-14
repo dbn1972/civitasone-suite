@@ -15,6 +15,7 @@ import {
   type Successor,
 } from "./_components/SuccessionPlanCard";
 import { CreatePlanForm } from "./_components/CreatePlanForm";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 // GAP-HR-SUCCESSION-05: server enforces HR_ROLES on every succession route
 // already (gap-features/routes.ts) -- this mirrors that same list so a
@@ -23,7 +24,7 @@ import { CreatePlanForm } from "./_components/CreatePlanForm";
 // error. NOT a widening or narrowing of who has access: hr_officer already
 // has server-side access today (HR_ROLES = hr_admin, super_admin,
 // hr_officer), verified directly against gap-features/routes.ts.
-const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const HR_ROLES = HR_STAFF_ROLES;
 
 /* ── API types ── */
 type PipelineRow = {

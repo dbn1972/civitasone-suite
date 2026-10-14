@@ -1,31 +1,7 @@
 {
-  "$comment": "GAP-HR-SF-09a role-matrix allowlist. Each entry is a KNOWN, currently-accepted drift between hr/layout.tsx's shared HR_ROLES (or a specific /hr, /hr/payroll or /hr/recruitment page's own tighter gate) and the backend route(s) it is responsible for -- discovered by scripts/contract/hr-role-matrix.mjs, a static analyzer that reads both sides live from source on every run. This file does NOT fix any of them (that is GAP-HR-SF-09b's job, gated on SF-20 and the relevant policy decisions per the campaign plan); it only lets the contract test pass today by naming each one, so the test can fail on a genuinely NEW, previously-unknown drift instead of on all 186 already-known ones every time. Never add an entry here to make a NEW drift disappear without asking why it exists first -- that defeats the point of the gate. `match` keys are matched against the analyzer's per-route report exactly: a route's (extraInBackend, extraInWeb, comparator) triple, both arrays compared as sets. GAP-HR-SF-09b (in progress) resolves these entry by entry -- see each removed entry's replacement commit for the resolution, and workRoles.ts's HR_ROLES doc comment for the biggest single cluster (GAP-HR-SF09A-001/002/003/011/012/014, resolved together by one widen).",
-  "generatedAt": "2026-10-01",
+  "$comment": "GAP-HR-SF09A role-matrix allowlist, shrunk by W1 SF-09b from 9 entries (39 routes) to 3 (10 routes). Each remaining entry is a backend route whose role has NO web page consuming it at all, so there is no web gate to reconcile -- see each reason. Resolved by SF-09b: GAP-HR-SF09A-004, GAP-HR-SF09A-005, GAP-HR-SF09A-007, GAP-HR-SF09A-008, GAP-HR-ICC-02, GAP-HR-SF09A-015 (hiring_manager and dept_head added to the shared HR_ROLES; device-trust compared against its real consumer /admin/devices DEVICE_ADMIN_ROLES; advances approve/reject, ICC identity detail and disciplinary irreversible actions compared against the action-level gate the web already applies -- see PAGE_GATES in scripts/contract/hr-role-matrix.mjs). Never add an entry here to make a NEW drift disappear; find out why it exists first. `match` keys are matched against the analyzer per-route report exactly: a route's (extraInBackend, extraInWeb, comparator) triple, both arrays compared as sets.",
+  "generatedAt": "2026-10-14",
   "driftEntries": [
-    {
-      "id": "GAP-HR-SF09A-004",
-      "match": {
-        "comparator": "page:disciplinary (DISCIPLINARY_ROLES)",
-        "extraInBackend": [],
-        "extraInWeb": [
-          "hr_officer"
-        ]
-      },
-      "routeCount": 8,
-      "reason": "CONFIRMED INTENTIONAL by GAP-HR-SF-09b (no code change needed): hr_officer can open the disciplinary list/detail pages (DISCIPLINARY_ROLES admits it) but the 7 highest-stakes actions -- impose penalty, submit-approval, appeal-decision, close, drop, create suspension, revoke suspension -- narrow to hr_admin/super_admin only on the backend (hr_officer runs routine casework, hr_admin/super_admin signs off on the irreversible/severe steps). redesign/gaps/hr.md has no ROLEGATE (or any other) gap filed against this behavior, and services/hrms-service/tests/disciplinary-routes.test.ts ALREADY has an explicit, passing `it(\"returns 403 for hr_officer (needs hr_admin)\", ...)` test for all 7 of these exact routes (penalty ~L513, submit-approval ~L575, appeal-decision ~L671, close ~L721, drop ~L780, suspension-create ~L835, suspension-revoke ~L940) -- the regression coverage this entry asked for already existed; GAP-HR-SF-09b just found and cited it. Left allowlisted because the drift is real and by design, not because it is unverified. 2026-10-07 (CI arch-contract lane, rebase onto current main): routeCount 7->8: one more disciplinary/routes.ts POST action landed on main with the same DISCIPLINARY_ROLES shape (hr_officer extra in web); same drift class, not a new mismatch."
-    },
-    {
-      "id": "GAP-HR-SF09A-005",
-      "match": {
-        "comparator": "layout:HR_ROLES",
-        "extraInBackend": [
-          "hiring_manager"
-        ],
-        "extraInWeb": []
-      },
-      "routeCount": 7,
-      "reason": "recruitment/requisition-routes.ts admits a dedicated \"hiring_manager\" panel role that does not exist anywhere on the web side (not in HR_ROLES, not in any recruitment page gate). Plausibly by design -- ad hoc panel members likely reach requisition approval via a direct/emailed link rather than the general /hr nav -- but if that path doesn't exist yet, a hiring_manager-only account currently has zero way to use these 7 routes through the app."
-    },
     {
       "id": "GAP-HR-SF09A-006",
       "match": {
@@ -36,31 +12,7 @@
         "extraInWeb": []
       },
       "routeCount": 6,
-      "reason": "ai-fraud/routes.ts (AI-assisted fraud detection alerts/scans/risk-scores/recommendations) admits audit_admin, which HR_ROLES doesn't have. Most likely intentional -- this is arguably an audit-service-adjacent surface hosted inside hrms-service -- but audit_admin has no way to reach it via /hr today."
-    },
-    {
-      "id": "GAP-HR-SF09A-007",
-      "match": {
-        "comparator": "layout:HR_ROLES",
-        "extraInBackend": [
-          "dept_head"
-        ],
-        "extraInWeb": []
-      },
-      "routeCount": 5,
-      "reason": "gap-features/performance-dev-routes.ts (goals, development plans) admits a \"dept_head\" role absent from HR_ROLES and from every page gate. Same shape as GAP-HR-SF09A-005/009 (a participant role with no web-reachable path) -- listed separately since it's a different role name on a different file."
-    },
-    {
-      "id": "GAP-HR-SF09A-008",
-      "match": {
-        "comparator": "layout:HR_ROLES",
-        "extraInBackend": [
-          "it_admin"
-        ],
-        "extraInWeb": []
-      },
-      "routeCount": 6,
-      "reason": "AMBIGUOUS, flagged for a product decision -- GAP-HR-SF-09b deliberately did not add this role. device-trust/routes.ts's block/unblock/policy-update endpoints admit it_admin, absent from HR_ROLES and every page gate, with no reference anywhere in apps/web. This module's device-trust dashboard route itself (GET /v1/hrms/devices/admin) has NO role check at all -- see GAP-HR-SF09A-019, deliberately out of GAP-HR-SF-09b's scope (a missing-guard security question, not a role-list drift) -- so this whole module's access story needs a combined security + product look, not a role-matrix side-fix. routeCount corrected 3->5 on 2026-10-01's rebase onto current main: device-trust/routes.ts grew two more it_admin-gated endpoints (now 5 call sites of the identical requireRole([\"hr_admin\",\"it_admin\",\"super_admin\"]) pattern at lines 203/255/286/303/329) since GAP-HR-SF-09b (this PR's first commit) wrote the reason above; same AMBIGUOUS/product-decision framing applies to all five. 2026-10-07 (CI arch-contract lane, rebase onto current main): routeCount 5->6: one more device-trust/routes.ts route now carries the same it_admin-only backend role as the other five."
+      "reason": "W1 SF-09b: NO WEB SURFACE EXISTS. ai-fraud/routes.ts (alerts/scan/risk-scores/recommendations/attrition-risk) admits audit_admin on all 6 routes and NO page under apps/web consumes any of them (the only web caller of /hrms/ai/ is tenant-admin/ai-plugins, a different set of routes). Widening the /hr layout for audit_admin would admit it to every ungated /hr page without giving it anything to use, so it was deliberately not done: building the fraud-alert screen (and choosing its gate from this backend list) is a feature, tracked here. Backend guard NOT changed."
     },
     {
       "id": "GAP-HR-SF09A-009",
@@ -72,7 +24,7 @@
         "extraInWeb": []
       },
       "routeCount": 3,
-      "reason": "AMBIGUOUS, flagged for a product decision -- GAP-HR-SF-09b deliberately did not add this role. recruitment/interview-scoring-routes.ts admits a dedicated \"interviewer\" panel role, same ad hoc-panel shape as GAP-HR-SF09A-005 (hiring_manager) and GAP-HR-SF09A-007 (dept_head). Note: apps/web/src/app/(app)/hr/recruitment/[id]/page.tsx and InterviewCard.tsx DO reference \"interviewer\" -- but only as a display label/free-text id field (who a slot's interviewer is), never as an auth-role check; that page has no role-matrix-tracked gate of its own (not in scripts/contract/hr-role-matrix.mjs's PAGE_GATES) and relies on the layout default. Genuinely unclear whether an interviewer-role *account* is meant to use recruitment/[id] directly (vs. HR staff recording interviewer names on their behalf) -- needs a product decision, not a guess."
+      "reason": "W1 SF-09b: NO WEB SURFACE EXISTS for an interviewer-only account. interview-scoring-routes.ts admits a dedicated panel role \"interviewer\" (scores POST/GET, panel-result). hr/recruitment/[id] and InterviewCard only show interviewer as a display label / free-text id, never as an auth role, and no page calls these three routes under an interviewer gate. Adding interviewer to HR_ROLES would let a panel account into every ungated /hr page for no usable screen, so it stays open until a panel-scoring page exists (a product decision). Backend guard NOT changed."
     },
     {
       "id": "GAP-HR-SF09A-013",
@@ -84,34 +36,7 @@
         "extraInWeb": []
       },
       "routeCount": 1,
-      "reason": "POST /v1/hrms/declarations/:declId/revoke (disciplinary/coi-routes.ts, Conflict-of-Interest declarations) admits a \"vigilance_officer\" role. This is UNRELATED to the /hr/vigilance page (that page covers a different backend concept, gap-features.ts's \"vigilance cases\", and its own VIGILANCE_ROLES cleanly matches gap-features.ts already -- see hr-role-matrix.json). \"vigilance_officer\" itself appears nowhere else in either service and has no web-side representation anywhere (not HR_ROLES, not any page gate, not even the /hr/vigilance page's own list) -- if this role is meant to have any web-facing capability, it currently has none at all."
-    },
-    {
-      "id": "GAP-HR-ICC-02",
-      "match": {
-        "comparator": "page:icc (ICC_ROLES)",
-        "extraInBackend": [],
-        "extraInWeb": [
-          "hr_admin",
-          "super_admin"
-        ]
-      },
-      "routeCount": 1,
-      "reason": "Deliberate, intentional narrowing, not a bug: the published decision packet's own recommendation for GAP-HR-ICC-02 is \"identity only through a dedicated icc_member-only detail route, audited -- the statutory default, not really optional.\" GET /v1/hrms/icc/complaints/:id is the ONLY route that ever returns complainantId/respondentId (POSH Act 2013 s.16) -- unlike the list route (GET /v1/hrms/icc/complaints, which correctly matches page:icc's ICC_ROLES: hr_admin/super_admin/icc_member), this detail route is icc_member-ONLY by design, excluding hr_admin/super_admin. A chairing hr_admin needs the icc_member role granted to them (a role-assignment decision, out of this fix's scope), not a code-level bypass on the one route that exposes identity. The analyzer maps this route to the page's shared ICC_ROLES comparator by file, not by exact path, so this drift is expected to persist until the analyzer grows a per-route-path comparator for icc-routes.ts's two GET routes."
-    },
-    {
-      "id": "GAP-HR-SF09A-015",
-      "match": {
-        "comparator": "page:advances (ADVANCE_ROLES)",
-        "extraInBackend": [],
-        "extraInWeb": [
-          "employee",
-          "manager",
-          "officer"
-        ]
-      },
-      "routeCount": 2,
-      "reason": "CONFIRMED INTENTIONAL by GAP-HR-SF-09b (no source change needed): ADVANCE_ROLES admits manager/officer (and now also employee) to view and request salary advances, but PATCH .../approve and PATCH .../reject narrow to finance_admin/hr_admin/hr_officer/super_admin on the backend (loans-routes.ts HR_ROLES) -- an approval/rejection step correctly excluding the requester's own tier. Two regression tests in services/hrms-service/src/__tests__/loans-advances-manager-scope-real-db.test.ts (\"GAP-HR-SF09A-015: manager ... cannot approve\" / \"... finance_admin ... can approve\") lock the approve half of this in. Corrected on 2026-10-01's rebase onto current main: extraInWeb was [manager,officer] (routeCount 1, approve only) when GAP-HR-SF-09b first wrote this entry; employee was added to ADVANCE_ROLES by an unrelated already-merged change since then, and reject carries the identical backend role list to approve -- both now extraInWeb=[employee,manager,officer], routeCount 2. Caught only because this rebase re-ran the analyzer against current main, same as GAP-HR-SF-16/GAP-HR-SF09A-019's precedent. Left allowlisted because the drift is real and by design, not unverified."
+      "reason": "W1 SF-09b: NO WEB SURFACE EXISTS. POST /v1/hrms/declarations/:declId/revoke (disciplinary/coi-routes.ts, Conflict-of-Interest declarations) admits vigilance_officer; no page under apps/web calls any /declarations route, and the role appears in the web only on audit/vigilance (audit-service, a different concept). Nothing to gate until a COI-declarations screen exists. Backend guard NOT changed."
     }
   ],
   "noRoleCheckEntries": [

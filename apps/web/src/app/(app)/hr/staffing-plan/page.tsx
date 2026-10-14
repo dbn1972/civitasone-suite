@@ -6,6 +6,7 @@ import { formatPercent } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { getData, type Row } from "./_data";
 import { VACANCY_ALERT_THRESHOLD_PCT, countOverVacancyThreshold, isOverVacancyThreshold } from "./vacancyAlert";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * GAP-HR-STAFFING-PLAN-04: mirrors gap-features/routes.ts's own HR_ROLES
@@ -21,7 +22,7 @@ import { VACANCY_ALERT_THRESHOLD_PCT, countOverVacancyThreshold, isOverVacancyTh
  * attempting the fetch; LoadErrorState below still handles a live 403
  * reactively too, in case this list and the backend's ever drift apart.
  */
-const STAFFING_PLAN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const STAFFING_PLAN_ROLES = HR_STAFF_ROLES;
 
 const YEAR_RE = /^\d{4}$/;
 

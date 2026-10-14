@@ -1,4 +1,5 @@
 import { rupeesToMinorString } from "@/lib/money";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * Pure helpers for the offer approval workflow dialog (GAP-RECRUITMENT-DETAIL-05). The service owns
@@ -46,7 +47,7 @@ export type OfferActionState = {
   approveBlockedReason: "creator" | "role" | null;
 };
 
-const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const HR_ROLES = HR_STAFF_ROLES;
 
 export function offerActions(offer: OfferView, who: { userId: string | null; roles: readonly string[] }): OfferActionState {
   const isHr = who.roles.some((r) => HR_ROLES.includes(r));

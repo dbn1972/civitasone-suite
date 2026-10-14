@@ -430,6 +430,25 @@ function layoutHrRoles() {
 // backend route(s) that page is responsible for, and the exact page file +
 // const name to pull the live role list from (never hand-copied).
 const PAGE_GATES = [
+  // W1 SF-09b: ACTION-LEVEL gates. Each of these routes is narrower than its
+  // page's list/detail gate on purpose, and the web already narrows the
+  // matching controls (or the whole consumer page) to the same tier, so the
+  // route is compared against THAT declared tier instead of the page-wide
+  // one. These entries MUST stay ahead of the broader page gates below
+  // (first match wins).
+  { area: "advances approve/reject (decider tier)", page: "advances/page.tsx", constName: "ADVANCE_DECIDE_ROLES",
+    match: (r) => /employee\/loans-routes\.ts$/.test(r.file) && /salary-advances\/:id\/(approve|reject)$/.test(r.routePath) },
+  { area: "icc detail (identity, icc_member only)", page: "icc/[id]/page.tsx", constName: "IDENTITY_ROLES",
+    match: (r) => /disciplinary\/icc-routes\.ts$/.test(r.file) && r.method === "GET" && r.routePath === "/v1/hrms/icc/complaints/:id" },
+  { area: "disciplinary actions (hr_admin/super_admin tier)", page: "disciplinary/[id]/_components/caseActions.ts", constName: "HR_ONLY_ROLES",
+    match: (r) => /\/modules\/disciplinary\/routes\.ts$/.test(r.file) && r.method === "POST" &&
+      /(penalty|submit-approval|appeal-decision|\/close|\/drop|\/suspensions|\/suspensions\/:suspId\/revoke|subsistence-review)$/.test(r.routePath) },
+  // device-trust admin routes are consumed by /admin/devices (not by any /hr
+  // page), so the web claim for them is that page's DEVICE_ADMIN_ROLES.
+  { area: "device-trust admin (/admin/devices)", page: "../../../lib/auth/adminRoles.ts", constName: "DEVICE_ADMIN_ROLES",
+    match: (r) => /device-trust\/routes\.ts$/.test(r.file) &&
+      (/\/devices\/(admin|export-audit|:id\/block|:id\/unblock|:deviceId\/activity)$/.test(r.routePath) ||
+        (r.method === "PATCH" && r.routePath === "/v1/hrms/devices/policy")) },
   { area: "advances", page: "advances/page.tsx", constName: "ADVANCE_ROLES",
     match: (r) => /employee\/loans-routes\.ts$/.test(r.file) && r.routePath.includes("salary-advances") },
   // GAP-HR-SF09A-010 / GAP-HR-APAR-04 / GAP-HR-APAR-NEW-01: apar/routes.ts's

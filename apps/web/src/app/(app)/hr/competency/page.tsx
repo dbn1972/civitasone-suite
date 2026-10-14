@@ -8,6 +8,7 @@ import { AddFrameworkAction } from "./_components/AddFrameworkAction";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
 import { toHumanError } from "@/lib/messages";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 type Framework  = { id: string; name: string; description?: string; status: string } & Record<string, unknown>;
 type Competency = { id: string; name: string; category: string; maxLevel?: number; certifiedLevel?: number } & Record<string, unknown>;
@@ -26,7 +27,7 @@ type CompetencyDisplay = Omit<Competency, "category" | "maxLevel"> & { category:
  * Mirrors services/hrms-service/src/modules/competency/routes.ts's own
  * HR_ROLES exactly -- POST .../frameworks is HR-only there.
  */
-const COMPETENCY_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const COMPETENCY_ADMIN_ROLES = HR_STAFF_ROLES;
 
 async function getFrameworks(): Promise<LoaderResult<Framework[]>> {
   return fetchJson<unknown, Framework[]>("/api/v1/hrms/competency/frameworks", [], {

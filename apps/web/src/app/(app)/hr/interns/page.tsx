@@ -6,6 +6,7 @@ import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
 import { mapInterns, isRegisterCapped, INTERN_TYPES_QUERY, INTERNS_PAGE_LIMIT, type ApiApprenticeship, type ApiEmployee, type InternRow as Row } from "./internsModel";
 import { getTranslations } from "next-intl/server";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 const EMPTY_APPRENTICESHIPS: ApiApprenticeship[] = [];
 
@@ -45,7 +46,7 @@ async function getInterns(): Promise<LoaderResult<Row[]> & { enrichmentFailed: b
   } as LoaderResult<Row[]> & { enrichmentFailed: boolean; capped: boolean };
 }
 
-const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const EMPLOYEE_ADMIN_ROLES = HR_STAFF_ROLES;
 
 /**
  * GAP-HR-INTERNS-04 (DPDP): interns are frequently students and sometimes
