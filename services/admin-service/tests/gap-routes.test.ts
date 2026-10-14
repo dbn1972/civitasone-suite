@@ -111,6 +111,33 @@ describe("GET /v1/admin/compliance", () => {
     expect(body.dpdpScore).toBe(100);
     expect(Array.isArray(body.checks)).toBe(true);
     expect(body.checks.some((c: { id: string }) => c.id === controlId)).toBe(true);
+    // GAP-TENANT-ADMIN-COMPLIANCE-02: provenance (method/scope/asOf) + per-check evidence count.
+    expect(body.provenance.method).toEqual(expect.any(String));
+    expect(body.provenance.scope).toMatch(/^tenant:/);
+    expect(Number.isNaN(Date.parse(body.provenance.asOf))).toBe(false);
+    const check = body.checks.find((c: { id: string }) => c.id === controlId);
+    expect(check.evidenceCount).toBe(0);
+
+    const ev = await app.inject({
+      method: "POST", url: `/v1/admin/security/compliance/controls/${controlId}/evidence`,
+      headers: authHeader(["super_admin"]),
+      payload: { kind: "note", note: "Quarterly consent-capture review" },
+    });
+    expect(ev.statusCode).toBe(202);
+    await queue.drain();
+    const after = await app.inject({ method: "GET", url: "/v1/admin/compliance", headers: authHeader(["tenant_admin"]) });
+    expect(after.json().checks.find((c: { id: string }) => c.id === controlId).evidenceCount).toBe(1);
+  });
+
+  it("returns null scores (not a fabricated 0) for a tenant with no testable control (GAP-TENANT-ADMIN-COMPLIANCE-02)", async () => {
+    const EMPTY_TENANT = "bbbbbbbb-2222-4000-8000-0000000000e1";
+    const res = await app.inject({ method: "GET", url: "/v1/admin/compliance", headers: authHeader(["tenant_admin"], EMPTY_TENANT) });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.dpdpScore).toBeNull();
+    expect(body.certInReadiness).toBeNull();
+    expect(body.checks).toEqual([]);
+    expect(body.provenance.asOf).toBeNull();
   });
 
   it("returns 401 without auth, 403 for an unrelated role", async () => {

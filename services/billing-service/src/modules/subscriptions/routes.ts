@@ -3,10 +3,13 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { SubscriptionSummarySchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { resolveContext, requireSuperAdmin, HttpError } from "../../shared/context.js";
+import { resolveContext, requireSuperAdmin, requireRole, HttpError } from "../../shared/context.js";
 import { createSubBody, idParam, tenantParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+
+const SUBSCRIPTION_READERS = ["billing_admin", "tenant_admin", "super_admin", "platform_admin"];
+const SUMMARY_STATUSES = new Set(["active", "cancelled", "past_due", "suspended", "trial"]);
 
 export async function subscriptionsRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/billing/subscriptions", async (req, reply) => {
@@ -39,15 +42,22 @@ export async function subscriptionsRoutes(app: FastifyInstance): Promise<void> {
     return reply.send(sub);
   });
 
+  // GAP-TENANT-ADMIN-SUBSCRIPTION-06: this is the CALLER's OWN tenant summary
+  // (ctx.tenantId, never a body/query id) and it is what the tenant-admin
+  // Subscription page reads. It used to be super-admin-only, so a tenant_admin
+  // always got 403 on their own subscription page. Read-only; every write route
+  // stays super-admin only.
   app.get("/v1/billing/subscriptions", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireSuperAdmin(ctx);
+    requireRole(ctx, SUBSCRIPTION_READERS);
     const sub = await queries.getSubscription(ctx.tenantId);
     if (!sub) return reply.send(null);
     sendValidated(reply, SubscriptionSummarySchema, {
       id: sub.id,
       plan: sub.planId,
-      status: (sub.status === "active" ? "active" : sub.status === "cancelled" ? "cancelled" : sub.status === "past_due" ? "past_due" : "trial") as "active" | "past_due" | "cancelled" | "trial",
+      // The consumer also writes "suspended" (dunning); it used to fall through to
+      // "trial", showing a suspended tenant a friendly "Trial" pill.
+      status: (SUMMARY_STATUSES.has(sub.status) ? sub.status : "trial") as "active" | "past_due" | "cancelled" | "trial" | "suspended",
       // No real billing-period / usage / currency data exists yet: return null
       // (unknown) rather than inventing values. The trial expiry is the only
       // real date we hold.

@@ -321,6 +321,15 @@ describe("GET /v1/admin/tenant/modules", () => {
 
 describe("POST /v1/admin/tenant/modules/:key/toggle", () => {
   it("returns 202 with valid body for tenant_admin", async () => {
+    // GAP-TENANT-ADMIN-SETTINGS-07: the module must be provisioned for the tenant.
+    const { runWithTenant } = await import("@civitasone/db");
+    const { db } = await import("../src/shared/db.js");
+    const { adminModuleConfigs } = await import("../src/modules/config/schema.js");
+    const { and, eq } = await import("drizzle-orm");
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(adminModuleConfigs).where(and(eq(adminModuleConfigs.tenantId, TENANT), eq(adminModuleConfigs.moduleKey, "hrms")));
+      await tx.insert(adminModuleConfigs).values({ tenantId: TENANT, moduleKey: "hrms", enabled: false, createdBy: ACTOR, updatedBy: ACTOR });
+    }));
     const res = await app.inject({
       method: "POST", url: "/v1/admin/tenant/modules/hrms/toggle",
       headers: authHeader(["tenant_admin"]),

@@ -107,6 +107,13 @@ export function AuditLogTable({ events }: { events: AuditEvent[] }) {
         filterable
         filterPlaceholder="Search audit events…"
         pageSize={15}
+        // GAP-TENANT-ADMIN-AUDIT-03: the page's old "Export" was window.print() of
+        // the unmasked table with no record. Export is now the audited CSV export:
+        // the audit write is awaited first and a failed audit blocks the file.
+        exportable
+        exportAudit="tenant-admin/audit"
+        exportFilename="audit-log"
+        exportNotice="Exports are recorded in the audit log."
         emptyIcon="📋"
         emptyTitle={filter === "Failures" ? "No failures recorded" : "No audit events yet"}
         emptyMessage={filter === "Failures" ? "No failed actions in the loaded events." : "Audit events will appear here as actions are taken."}

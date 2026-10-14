@@ -9,10 +9,18 @@ import type { UserView } from "./domain.js";
 import type * as rbacRepo from "../rbac/repo.js";
 import { strandsTenantAdmins } from "./last-admin.js";
 import { scopedRead } from "../../shared/db.js";
+import * as userRepo from "./repo.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function createUser(ctx: RequestContext, body: CreateUserBody): Promise<Accepted> {
+  // GAP-TENANT-ADMIN-USERS-07: refuse a duplicate email up front. Without this the
+  // POST answered 202 and the consumer then failed on the unique index, so the
+  // admin saw "invitation sent" for an invite that never created anything (and a
+  // projected cache entry for a user that does not exist).
+  if (await userRepo.emailExists(ctx.tenantId, body.email)) {
+    throw new HttpError(409, "DUPLICATE_EMAIL", "a user with this email already exists in this tenant");
+  }
   const id = randomUUID();
   const projected: UserView = {
     id, tenantId: ctx.tenantId, email: body.email, name: body.name,

@@ -1,4 +1,3 @@
-import { PrintExportButton } from "../../../_components/PrintExportButton";
 import { PageHeader, StatCard, Term, RefreshErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { getAdminUsers } from "../../../_data/loaders";
@@ -33,8 +32,10 @@ export default async function AdminUsersPage() {
         title="Manage Users"
         subtitle={<>Your {LABELS.tenant}&apos;s user directory with roles and <Term name="MFA" /> status.</>}
         help="tenant-admin"
-        actions={<PrintExportButton label="Export" style={{ minHeight: 44 }} documentTitle="Users" />}
       />
+      {/* GAP-TENANT-ADMIN-USERS-05: the old header "Export" was window.print() of the
+          unmasked directory with no record of who took it. Export now lives on the
+          table as the audited CSV export (audit write is awaited and fail-closed). */}
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="👥" iconBg="#f1f5f9" label="Total Users" value={tile(total)} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={tile(active)} />

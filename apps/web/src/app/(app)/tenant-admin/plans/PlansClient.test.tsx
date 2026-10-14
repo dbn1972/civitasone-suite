@@ -44,6 +44,16 @@ describe("PlansClient — GAP-TENANT-ADMIN-PLANS-01/-02/-03/-04/-05", () => {
     expect(screen.queryByText(/Upgrade Successful/i)).toBeNull();
   });
 
+  it("Escape closes the change dialog and Tab stays inside it (-05)", () => {
+    render(<PlansClient plansData={DATA} source="api" />);
+    const trigger = screen.getByRole("button", { name: "Request upgrade" });
+    fireEvent.click(trigger);
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+  });
+
   it("has no dead PDF button in the invoice table (-04)", () => {
     render(<PlansClient plansData={DATA} source="api" />);
     fireEvent.click(screen.getByRole("button", { name: "Show" }));

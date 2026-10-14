@@ -22,6 +22,15 @@ describe("SiemTable (GAP-TENANT-ADMIN-SIEM-02/04/05)", () => {
     expect(screen.getByText("High")).toBeInTheDocument();
   });
 
+  it("critical and high pills render different classes (SIEM-02)", () => {
+    render(<SiemTable alerts={alerts} source="api" />);
+    const critical = screen.getByText(/Critical/);
+    const high = screen.getByText("High");
+    expect(critical.className).not.toBe(high.className);
+    expect(critical.className).toContain("pill-critical");
+    expect(high.className).not.toContain("pill-critical");
+  });
+
   it("humanizes status labels (SIEM-05)", () => {
     render(<SiemTable alerts={alerts} source="api" />);
     expect(screen.getByText("Detected")).toBeInTheDocument();
