@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, Card, DataTable, StatGrid, StatCard } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
@@ -62,6 +63,7 @@ export default async function BillingDetailPage({
 
   // GAP-WORKS-BILLING-02: the register links here with ?bill=<id>; call that bill out and list it first.
   const focusId = typeof searchParams?.bill === "string" ? searchParams.bill : "";
+  const t = await getTranslations("works.billingDetail");
   const focusBill = focusId ? bills.find((b) => b.id === focusId) : undefined;
   const orderedBills = focusBill ? [focusBill, ...bills.filter((b) => b.id !== focusBill.id)] : bills;
 
@@ -116,7 +118,7 @@ export default async function BillingDetailPage({
 
       {focusBill ? (
         <div role="note" style={{ background: "var(--info-bg, #eff6ff)", color: "var(--info, #1e40af)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
-          Opened from the register: bill {focusBill.billNo || "—"} is listed first below.
+          {t("openedFromRegister", { billNo: focusBill.billNo || "—" })}
         </div>
       ) : null}
 

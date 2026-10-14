@@ -1,6 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader, Button, Field, Input, Select, Textarea, EntityPicker } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
@@ -20,6 +21,7 @@ const MAX_AMOUNT_MINOR = 99999999999n;
 export function NewTsForm({ initialWorkId = "" }: { initialWorkId?: string }) {
   const router = useRouter();
   const { toast } = useToast();
+  const t = useTranslations("works.tsNew");
   const srYears = recentFinancialYears(6);
   const [form, setForm] = useState({
     workId: initialWorkId,
@@ -110,7 +112,7 @@ export function NewTsForm({ initialWorkId = "" }: { initialWorkId?: string }) {
         backLabel="Approvals"
       />
       <div role="note" style={infoBanner}>
-        Technical sanction requires the work proposal to be DAO-finalized. Only DAO-finalized works are listed in the Work picker.
+        {t("daoBanner")}
       </div>
       {message ? (
         <div role="status" aria-live="polite" style={okBanner}>
