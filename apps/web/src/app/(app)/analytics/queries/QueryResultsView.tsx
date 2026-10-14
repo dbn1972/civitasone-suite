@@ -7,7 +7,8 @@ import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
-import { humanizeKey, type AnalyticsCatalogLabels, type AnalyticsQueryRunRow, type AnalyticsResultRow, type MetricUnit } from "../_data";
+import { humanizeKey, type AnalyticsCatalogLabels } from "../catalog-labels";
+import type { AnalyticsQueryRunRow, AnalyticsResultRow, MetricUnit } from "../_data";
 import { AccessibleBarChart, type BarDatum } from "./AccessibleBarChart";
 
 /**
