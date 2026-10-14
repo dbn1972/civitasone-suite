@@ -2,6 +2,8 @@
  * TaskCalendar — column-per-due-day view of a joinee's onboarding tasks.
  * Tasks in past due columns that are not completed are highlighted amber.
  */
+import { formatInIST, addDaysIST } from "@/lib/formatters";
+
 
 export type CalendarTask = {
   id: string;
@@ -20,9 +22,8 @@ interface TaskCalendarProps {
 
 function addDays(iso: string, days: number): string {
   try {
-    const d = new Date(iso);
-    d.setDate(d.getDate() + days - 1);
-    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+    const shifted = addDaysIST(iso, days - 1);
+    return shifted === "—" ? "" : formatInIST(shifted, { day: "numeric", month: "short" });
   } catch {
     return "";
   }

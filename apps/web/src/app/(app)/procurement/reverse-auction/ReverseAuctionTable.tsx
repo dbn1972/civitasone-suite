@@ -5,7 +5,7 @@ import { Card, DataTable, StatGrid, StatCard, RefreshErrorState } from "../../..
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { toHumanError } from "@/lib/messages";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatInIST } from "@/lib/formatters";
 import type { ReverseAuction } from "../../../_data/loaders";
 
 type AuctionRow = {
@@ -149,7 +149,7 @@ export function ReverseAuctionTable({ auctions, source = "api" }: { auctions: Re
           />
           {updatedAt ? (
             <span aria-live="polite" style={{ fontSize: 12, color: "var(--muted)" }}>
-              Updated {new Date(updatedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
+              Updated {formatInIST(updatedAt, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true })}
             </span>
           ) : null}
         </div>

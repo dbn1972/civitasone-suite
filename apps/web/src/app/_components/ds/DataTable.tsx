@@ -7,7 +7,7 @@ import { csvFormulaSafe } from "@/lib/csv";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 import { StatusPill } from "./StatusPill";
-import { formatMoney, formatRupees, formatIndianDate, formatPercent, formatPeriod, formatMoneyIn } from "@/lib/formatters";
+import { formatMoney, formatRupees, formatIndianDate, formatIndianDateTime, formatPercent, formatPeriod, formatMoneyIn } from "@/lib/formatters";
 import { minorToDecimalString } from "@/lib/money";
 import { downloadCsvFile, tableExportGuard, TABLE_EXPORT_NOT_RECORDED, type ExportGuard } from "@/lib/export/csvExport";
 import { useSessionIdentity } from "@/lib/auth/useSessionIdentity";
@@ -36,27 +36,6 @@ function useSafeTranslations(namespace: string, fallback: Record<string, string>
   } catch {
     return (key: string) => fallback[key] ?? key;
   }
-}
-
-/**
- * GAP-HR-APAR-DETAIL-04: date-only `formatIndianDate` (dd/MM/yyyy) has no
- * time component, so a stage-history "At" column showing a real timestamp
- * (e.g. two transitions on the same day) needs its own formatter. Kept
- * local rather than added to `@/lib/formatters` deliberately: an unrelated,
- * already-open PR (GAP-HR-SF-07, "formatIndianDateTime + todayIST/
- * addDaysIST") adds a shared export of that exact name to that exact file;
- * adding a second one here now would guarantee a same-name-same-file merge
- * conflict between the two PRs. This is a narrow, private helper for the
- * one cellType below; once SF-07 lands, a follow-up can delete this and
- * switch to the shared helper.
- */
-function formatDateTimeIST(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const datePart = d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Kolkata" });
-  const timePart = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" });
-  return `${datePart} ${timePart}`;
 }
 
 interface Column<T> {
@@ -351,7 +330,7 @@ function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): R
     return formatIndianDate(row[col.key] as string | null | undefined);
   }
   if (col.cellType === "datetime") {
-    return formatDateTimeIST(row[col.key] as string | null | undefined);
+    return formatIndianDateTime(row[col.key] as string | null | undefined);
   }
   if (col.cellType === "percent") {
     return formatPercent(toPercentNumber(row[col.key]));
@@ -551,7 +530,7 @@ export function DataTable<T extends Record<string, unknown>>({
     if (col.cellType === "amount") return String(formatMoney(row[col.key] as number | null) ?? "");
     if (col.cellType === "rupees") return String(formatRupees(row[col.key] as number | string | null) ?? "");
     if (col.cellType === "date") return formatIndianDate(row[col.key] as string | null | undefined);
-    if (col.cellType === "datetime") return formatDateTimeIST(row[col.key] as string | null | undefined);
+    if (col.cellType === "datetime") return formatIndianDateTime(row[col.key] as string | null | undefined);
     if (col.cellType === "percent") return String(formatPercent(toPercentNumber(row[col.key])) ?? "");
     if (col.cellType === "period") return formatPeriod(row[col.key] as string | null | undefined);
     if (col.cellType === "money") {

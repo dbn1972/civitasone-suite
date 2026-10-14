@@ -316,6 +316,50 @@ export function addDaysIST(date: string | Date | null | undefined, days: number)
   return `${yyyy}-${mm}-${dd}`;
 }
 
+/**
+ * Format an instant in Asia/Kolkata with caller-chosen Intl options (SF-07b).
+ * The escape hatch for shapes the fixed formatters above do not cover
+ * (weekday names, month-year labels, time-only, chart axis ticks). `timeZone`
+ * is always forced to IST so server render and browser agree. Default locale
+ * is en-IN; pass "en-CA" for ISO-ordered YYYY-MM-DD keys. Returns "—" for a
+ * missing/invalid value rather than "Invalid Date".
+ *
+ *   formatInIST("2026-03-10T19:00:00Z", { weekday: "long" }) -> "Wednesday"
+ */
+export function formatInIST(
+  value: string | number | Date | null | undefined,
+  options: Intl.DateTimeFormatOptions = {},
+  locale = "en-IN",
+): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  const hasTime =
+    options.hour !== undefined || options.minute !== undefined || options.second !== undefined || options.timeStyle !== undefined;
+  const hasDate =
+    options.day !== undefined || options.month !== undefined || options.year !== undefined ||
+    options.weekday !== undefined || options.dateStyle !== undefined;
+  const opts = { ...options, timeZone: IST_TIME_ZONE };
+  if (hasTime && !hasDate) return d.toLocaleTimeString(locale, opts);
+  if (hasDate && !hasTime) return d.toLocaleDateString(locale, opts);
+  return d.toLocaleString(locale, opts);
+}
+
+/** The IST calendar day (YYYY-MM-DD) of an instant; "—" for an invalid one. */
+export function istDateKey(value: Date | number): string {
+  return formatInIST(value, { year: "numeric", month: "2-digit", day: "2-digit" }, "en-CA");
+}
+
+/**
+ * Month-year label for a calendar grid cell ("October 2026"), from a year and a
+ * 0-based month index (overflow rolls over, so -1 is December of the previous
+ * year). A calendar month is not an instant, so it is anchored in UTC and never
+ * shifts with the viewer's zone.
+ */
+export function formatMonthYear(year: number, monthIndex: number, month: "long" | "short" = "long"): string {
+  return new Date(Date.UTC(year, monthIndex, 1)).toLocaleDateString("en-IN", { month, year: "numeric", timeZone: "UTC" });
+}
+
 export const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
 /**

@@ -1,3 +1,4 @@
+import { formatIndianDateTime } from "@/lib/formatters";
 import { Card, EmptyState, PageHeader, StatCard, StatGrid, StatusPill, RefreshErrorState } from "../../../../_components/ds";
 import { getChatConversation, getChatTranscript } from "../../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
@@ -21,15 +22,8 @@ interface PageProps {
 
 function formatDateTime(iso: string | null): string {
   if (iso === null) return "—";
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return "—";
-  return parsed.toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  if (Number.isNaN(new Date(iso).getTime())) return "—";
+  return formatIndianDateTime(iso);
 }
 
 export default async function ChatConversationPage({ params }: PageProps) {

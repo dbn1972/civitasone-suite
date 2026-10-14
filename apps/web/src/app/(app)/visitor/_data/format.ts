@@ -8,6 +8,8 @@
  * renders could disagree. Passing an explicit `timeZone` to every formatter
  * makes the output deterministic regardless of where the process runs.
  */
+import { formatInIST } from "@/lib/formatters";
+
 const IST = "Asia/Kolkata";
 
 /** The civil calendar day ("YYYY-MM-DD") of an instant, as seen in `timeZone`. */
@@ -26,21 +28,14 @@ export function fmtTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: IST });
+  return formatInIST(d, { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 export function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: IST,
-  });
+  return formatInIST(d, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 /**

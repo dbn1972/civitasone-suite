@@ -1,5 +1,6 @@
 "use client";
 
+import { formatIndianDateTime } from "@/lib/formatters";
 import { useEffect, useRef, useState } from "react";
 import { Button, ConfirmDialog, Modal, PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
@@ -325,7 +326,7 @@ export function ScheduledJobsManager({ initialJobs, source, targets = null }: { 
                 <tr key={job.id}>
                   <td><strong>{job.name}</strong><br /><small style={{ color: "#666" }}>{job.targetService} → {job.targetCommand}</small></td>
                   <td><code>{job.cronExpression}</code><br /><small style={{ color: "#666" }}>{cronToHuman(job.cronExpression)}</small></td>
-                  <td>{job.nextRunAt ? new Date(job.nextRunAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : "—"}</td>
+                  <td>{job.nextRunAt ? formatIndianDateTime(job.nextRunAt) : "—"}</td>
                   <td>{getStatusBadge(job.lastRunStatus)}</td>
                   <td>
                     <label className="toggle" aria-label={`Toggle ${job.name}`}>
@@ -475,7 +476,7 @@ export function ScheduledJobsManager({ initialJobs, source, targets = null }: { 
                 <tbody>
                   {historyRecords.map((rec) => (
                     <tr key={rec.id}>
-                      <td>{new Date(rec.startedAt).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</td>
+                      <td>{formatIndianDateTime(rec.startedAt)}</td>
                       <td>{rec.durationMs ? `${(rec.durationMs / 1000).toFixed(1)}s` : "—"}</td>
                       <td>{getStatusBadge(rec.status)}</td>
                       <td style={{ color: "#dc2626", fontSize: 12 }}>{rec.errorMessage ?? "—"}</td>

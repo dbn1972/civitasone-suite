@@ -1,5 +1,6 @@
 "use client";
 
+import { formatMonthYear } from "@/lib/formatters";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Button } from "@/app/_components/ds";
@@ -70,7 +71,7 @@ export function MeetingsCalendar({ meetings }: { meetings: CalendarMeeting[] }) 
   const firstOfMonth = new Date(cursor.year, cursor.month, 1);
   const daysInMonth = new Date(cursor.year, cursor.month + 1, 0).getDate();
   const startWeekday = firstOfMonth.getDay();
-  const monthLabel = firstOfMonth.toLocaleDateString("en-IN", { month: "long", year: "numeric" });
+  const monthLabel = formatMonthYear(cursor.year, cursor.month);
   const todayKey = dateKeyOf(todayCursor.year, todayCursor.month, new Date().getDate());
 
   const cells: (number | null)[] = [

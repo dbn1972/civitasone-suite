@@ -1,3 +1,4 @@
+import { formatIndianDateTime } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 import { fetchJson } from "../../../../_data/apiClient";
 import { PageHeader, StatusPill, Card, LoadErrorState, EmptyState } from "../../../../_components/ds";
@@ -34,9 +35,7 @@ interface GrievanceDetail {
 
 function fmt(dt?: string) {
   if (!dt) return "—";
-  return new Date(dt).toLocaleString("en-IN", {
-    dateStyle: "medium", timeStyle: "short",
-  });
+  return formatIndianDateTime(dt);
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

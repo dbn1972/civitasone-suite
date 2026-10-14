@@ -1,23 +1,15 @@
 /** court feature — small shared display helpers. */
 
-import { istDatePart, todayIST } from "@/lib/formatters";
+import { istDatePart, todayIST, formatInIST, formatIndianDate } from "@/lib/formatters";
 
 /** IST-friendly date-time, e.g. "12 Jul 2026, 14:32". Falls back to "—". */
 export function fmtDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    // GAP-COURT-HEARINGS-04: pin to IST so a hearing instant renders the same
-    // calendar day/time for a UTC-clock server and an IST browser alike.
-    timeZone: "Asia/Kolkata",
-  });
+  // GAP-COURT-HEARINGS-04: formatInIST pins to IST so a hearing instant renders
+  // the same calendar day/time for a UTC-clock server and an IST browser alike.
+  return formatInIST(d, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 /** Calendar date only, e.g. "12 Jul 2026". Falls back to "—". */
@@ -25,16 +17,9 @@ export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  // Bare "YYYY-MM-DD" calendar dates name a day and must NOT be shifted by a
-  // timezone (that could roll them to the previous day); only resolve a full
-  // instant to its IST day. Mirrors lib/formatters' isBareCalendarDate rule.
-  const isBareDate = /^\d{4}-\d{2}-\d{2}$/.test(iso);
-  return d.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    ...(isBareDate ? { timeZone: "UTC" } : { timeZone: "Asia/Kolkata" }),
-  });
+  // formatIndianDate leaves a bare "YYYY-MM-DD" calendar date unshifted and
+  // resolves a full instant to its IST day.
+  return formatIndianDate(iso);
 }
 
 /** Title-case a snake/kebab enum token, e.g. "part_heard" → "Part heard". */

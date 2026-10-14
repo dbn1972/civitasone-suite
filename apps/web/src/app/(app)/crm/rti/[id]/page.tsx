@@ -3,7 +3,7 @@ import { fetchJson } from "../../../../_data/apiClient";
 import { PageHeader, StatusPill, Card, LoadErrorState, EmptyState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { RtiActions } from "./RtiActions";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatIndianDateTime } from "@/lib/formatters";
 import { rupeesNumberToMinorString } from "@/lib/money";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { sectionLabel } from "@/lib/crm/rti";
@@ -74,9 +74,7 @@ interface RtiDetail {
 
 function fmt(dt?: string) {
   if (!dt) return "—";
-  return new Date(dt).toLocaleString("en-IN", {
-    dateStyle: "medium", timeStyle: "short",
-  });
+  return formatIndianDateTime(dt);
 }
 
 const SECTION_KEY: Record<string, string> = {

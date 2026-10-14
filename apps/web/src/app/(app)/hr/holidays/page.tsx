@@ -1,3 +1,4 @@
+import { formatInIST } from "@/lib/formatters";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
@@ -30,7 +31,7 @@ function getDayName(dateStr: string): string {
   try {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return "—";
-    return d.toLocaleDateString("en-IN", { weekday: "long" });
+    return formatInIST(d, { weekday: "long" });
   } catch {
     return "—";
   }
