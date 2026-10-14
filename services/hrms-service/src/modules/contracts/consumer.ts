@@ -22,6 +22,7 @@ import {
   getContractHistoryTx,
 } from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { eq, and } from "drizzle-orm";
 import type { ContractStatus } from "./types.js";
 import { uuidV5 } from "../../shared/ids.js";
@@ -31,6 +32,30 @@ const AUDIT = "audit.event.record";
 const NOTIFICATION_SEND = "notification.send";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/**
+ * Segregation of duties for contract renewal (owner decision 2026-10-14): an
+ * actor never renews their own contract, whatever their role. Enforced HERE in
+ * the consumer (not only the route) so every producer path -- single renew and
+ * bulk-renew -- is covered. The actor's own hrms_employees.id is resolved ONCE
+ * before the transaction opens (resolveEmployeeForActor opens its own
+ * transaction; nesting it would be the pool-exhaustion deadlock class that
+ * contracts-nested-tx-deadlock.test.ts guards), and the comparison runs inside
+ * the transaction that holds the markProcessed insert, so a violation rolls
+ * the dedup row back together with everything else. An actor with no linked
+ * employee record (system / service actor) cannot own a contract, so null.
+ */
+async function resolveActingEmployeeId(tenantId: string, actorId: string): Promise<string | null> {
+  return (await resolveEmployeeForActor(tenantId, actorId))?.id ?? null;
+}
+
+function assertNotSelfRenewal(actingEmployeeId: string | null, contractEmployeeId: string, contractId: string): void {
+  if (actingEmployeeId !== null && actingEmployeeId === contractEmployeeId) {
+    throw new NonRetryableError(
+      `SELF_RENEWAL_FORBIDDEN: actor cannot renew their own contract ${contractId}; another approver must initiate it`,
+    );
+  }
+}
 
 async function audit(
   tx: any,
@@ -234,6 +259,8 @@ export function registerContractConsumers(queue: Queue): void {
       initiatedBy: string;
     };
 
+    const actingEmployeeId = await resolveActingEmployeeId(p.tenantId, msg.actorId);
+
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
@@ -241,6 +268,7 @@ export function registerContractConsumers(queue: Queue): void {
       if (!contract) {
         throw new NonRetryableError(`Contract not found: ${p.contractId}`);
       }
+      assertNotSelfRenewal(actingEmployeeId, contract.employeeId, p.contractId);
 
       const status = contract.status as ContractStatus;
 
@@ -604,6 +632,8 @@ export function registerContractConsumers(queue: Queue): void {
       alreadyProcessed?: boolean;
     }> = [];
 
+    const actingEmployeeId = await resolveActingEmployeeId(p.tenantId, msg.actorId);
+
     for (const contractId of p.contractIds) {
       try {
         const renewalId = crypto.randomUUID();
@@ -619,6 +649,7 @@ export function registerContractConsumers(queue: Queue): void {
           if (!contract) {
             throw new NonRetryableError(`Contract not found: ${contractId}`);
           }
+          assertNotSelfRenewal(actingEmployeeId, contract.employeeId, contractId);
 
           const status = contract.status as ContractStatus;
           if (status !== "active" && status !== "expiring") {

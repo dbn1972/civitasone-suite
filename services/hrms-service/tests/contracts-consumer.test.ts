@@ -37,6 +37,7 @@ const H = vi.hoisted(() => {
     getContractConfig: vi.fn(async () => null),
     getContractHistory: vi.fn(async () => []),
     employeeFindById: vi.fn(async () => null),
+    resolveActor: vi.fn(async (): Promise<{ id: string } | undefined> => undefined),
     cacheInvalidate: vi.fn(async () => undefined),
     cacheMakeKey: vi.fn((...args: string[]) => args.join(":")),
   };
@@ -88,6 +89,10 @@ vi.mock("../src/modules/contracts/repo.js", () => ({
 vi.mock("../src/modules/employee/repo.js", () => ({
   findById: (...a: unknown[]) => H.employeeFindById(...a),
   findByIdTx: (...a: unknown[]) => H.employeeFindById(...a),
+}));
+
+vi.mock("../src/modules/employee/actor-link.js", () => ({
+  resolveEmployeeForActor: (...a: unknown[]) => H.resolveActor(...a),
 }));
 
 import { registerContractConsumers } from "../src/modules/contracts/consumer.js";
@@ -163,6 +168,7 @@ beforeEach(async () => {
   H.getContractConfig.mockResolvedValue(null);
   H.getContractHistory.mockResolvedValue([]);
   H.employeeFindById.mockResolvedValue(null);
+  H.resolveActor.mockResolvedValue(undefined);
   q = new MemoryQueue();
   registerContractConsumers(q);
   await q.start();
@@ -938,5 +944,42 @@ describe("cache invalidation", () => {
 
     // Multiple cache invalidations after transaction
     expect(H.cacheInvalidate.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// ─── Segregation of duties (consumer-level, owner decision 2026-10-14) ──────
+
+describe("renewal segregation of duties -- enforced in the consumer", () => {
+  it("contractRenewalInitiate: refuses when the acting employee owns the contract (no renewal row, no outbox)", async () => {
+    const contractId = randomUUID();
+    H.resolveActor.mockResolvedValue({ id: EMPLOYEE });
+    H.getContractById.mockResolvedValue(makeContract({ id: contractId, status: "active", employeeId: EMPLOYEE }));
+    await q.publish(COMMANDS.contractRenewalInitiate, makeMsg(COMMANDS.contractRenewalInitiate, {
+      id: randomUUID(), tenantId: TENANT, contractId, newEndDate: "2026-06-30", newTerms: {}, initiatedBy: ACTOR,
+    }));
+    await settle();
+    expect(H.mockTx.insert).not.toHaveBeenCalled();
+    expect(H.enqueue).not.toHaveBeenCalled();
+  });
+
+  it("contractRenewalBulk: own contract fails, a colleague's in the same batch still renews", async () => {
+    const own = randomUUID();
+    const other = randomUUID();
+    const OTHER_EMP = "40000000-dddd-4000-8000-000000000004";
+    H.resolveActor.mockResolvedValue({ id: EMPLOYEE });
+    H.getContractById.mockImplementation((async (_tx: unknown, _t: string, id: string) =>
+      id === own ? makeContract({ id, status: "active", employeeId: EMPLOYEE })
+                 : makeContract({ id, status: "active", employeeId: OTHER_EMP })) as any);
+    H.getContractConfig.mockResolvedValue({ approvalChain: [], maxContractMonths: null });
+    await q.publish(COMMANDS.contractRenewalBulk, makeMsg(COMMANDS.contractRenewalBulk, {
+      tenantId: TENANT, contractIds: [own, other], newEndDate: "2026-06-30", newTerms: {}, initiatedBy: ACTOR,
+    }));
+    await settle();
+    const summary = H.enqueue.mock.calls.find((c: any) => c[1]?.payload?.action === "bulk_renewal_complete") as any;
+    const results = summary[1].payload.metadata?.results ?? summary[1].payload.results;
+    const byId = Object.fromEntries(results.map((r: any) => [r.contractId, r]));
+    expect(byId[own].success).toBe(false);
+    expect(byId[own].error).toContain("SELF_RENEWAL_FORBIDDEN");
+    expect(byId[other].success).toBe(true);
   });
 });
