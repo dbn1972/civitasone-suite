@@ -222,6 +222,25 @@ function isDisplayable(key: string, config?: MunicipalServiceConfig): boolean {
   return extra.includes(key);
 }
 
+// Address/location strings can also carry typed identity numbers.
+const ADDRESS_KEY_RE = /(address|location)$/i;
+
+/**
+ * Number of populated record fields the detail panel does NOT render because
+ * they are outside the allow-list (so the panel can say so instead of silently
+ * dropping them). Hidden/system columns and raw actor UUIDs are intentional
+ * omissions and are not counted.
+ */
+export function omittedFieldCount(
+  record: Record<string, unknown>,
+  config?: MunicipalServiceConfig,
+): number {
+  const hidden = new Set([...ALWAYS_SKIP, ...((config?.hiddenFields ?? []) as string[])]);
+  return Object.entries(record).filter(
+    ([k, v]) => !hidden.has(k) && v != null && !isRawActorOrFkUuid(k, v) && !isDisplayable(k, config),
+  ).length;
+}
+
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T.*)?$/;
 
 // GAP2-MUNICIPAL-DETAIL-MONEY-01: money columns are bigint minor units
@@ -293,7 +312,8 @@ export function detailEntries(
         return { key, label, value: formatNested(value), kind: "nested" as const };
       }
       const text = formatDetailValue(value);
-      return { key, label, value: FREE_TEXT_KEYS.has(key) ? maskIdentifiers(text) : text, kind: "text" as const };
+      const maskText = FREE_TEXT_KEYS.has(key) || ADDRESS_KEY_RE.test(key);
+      return { key, label, value: maskText ? maskIdentifiers(text) : text, kind: "text" as const };
     });
 
   const orderIndex = (key: string) => {

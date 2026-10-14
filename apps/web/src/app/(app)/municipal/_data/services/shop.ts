@@ -14,5 +14,8 @@ export const shopService: MunicipalServiceConfig = {
   // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: shop/registrations/domain.ts APPLICATION_STATUSES.
   statusVocabulary: ["draft", "submitted", "under_scrutiny", "inspecting", "approved", "rejected", "withdrawn"],
   citizenServiceKey: "shops-establishments",
+  // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
+  // shop-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
+  displayFields: ["establishmentName", "establishmentType", "ownerType", "premisesAddress", "premisesPropertyId", "activityDescription", "activityCategory", "employeeCount", "capacityDetails", "feePaid", "feeTransactionId"],
   sec5: false,
 };

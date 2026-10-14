@@ -17,5 +17,8 @@ export const animalService: MunicipalServiceConfig = {
   // rejected/issued values can ever match, so drive the filter tabs from this.
   statusVocabulary: ["reported", "assigned", "dispatched", "action_taken", "closed"],
   // citizenServiceKey intentionally omitted — no citizen-service manifest exists yet.
+  // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
+  // animal-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
+  displayFields: ["severity", "assignedTeam", "resolution", "resolvedAt"],
   sec5: true,
 };

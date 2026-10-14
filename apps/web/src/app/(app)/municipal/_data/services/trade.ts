@@ -21,6 +21,9 @@ export const tradeService: MunicipalServiceConfig = {
   piiFields: ["ownerMobile", "ownerEmail", "ownerPan"],
   hiddenFields: [],
   fieldOrder: ["status", "applicationNumber", "businessName", "ownerName"],
+  // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
+  // trade-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
+  displayFields: ["tradeCategory", "subCategory", "premisesAddress", "areaInSqft", "employeeCount", "feePaid", "feeTransactionId"],
   sec5: true,
   // GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-02: trade-service exposes the
   // per-service officer workflow + timeline endpoints, so wire the actions and

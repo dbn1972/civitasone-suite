@@ -17,5 +17,8 @@ export const refundService: MunicipalServiceConfig = {
   // (the *_minor heuristic also catches them; listed for explicitness).
   moneyFields: ["originalAmountMinor", "refundAmountMinor"],
   // citizenServiceKey intentionally omitted — no citizen-service manifest exists yet.
+  // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
+  // refund-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
+  displayFields: ["requestNumber", "applicantName", "originalServiceType", "originalTransactionRef", "refundReason"],
   sec5: true,
 };

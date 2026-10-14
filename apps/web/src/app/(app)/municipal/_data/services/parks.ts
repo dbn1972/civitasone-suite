@@ -14,5 +14,8 @@ export const parksService: MunicipalServiceConfig = {
   // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: parks/tree_requests/domain.ts TreeRequestStatus.
   statusVocabulary: ["submitted", "inspected", "approved", "rejected", "work_ordered", "completed"],
   // citizenServiceKey intentionally omitted — no citizen-service manifest exists yet.
+  // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
+  // parks-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
+  displayFields: ["requestNumber", "requestType", "treeSpecies", "inspectionReport"],
   sec5: true,
 };

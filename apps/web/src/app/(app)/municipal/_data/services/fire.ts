@@ -14,5 +14,8 @@ export const fireService: MunicipalServiceConfig = {
   // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: fire/applications/domain.ts.
   statusVocabulary: ["draft", "submitted", "under_review", "inspection_scheduled", "approved", "rejected", "withdrawn"],
   citizenServiceKey: "fire-noc",
+  // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
+  // fire-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
+  displayFields: ["buildingName", "buildingAddress", "occupancyType", "buildingHeight", "numberOfFloors", "builtUpArea", "fireSafetyMeasures", "feePaid"],
   sec5: true,
 };
