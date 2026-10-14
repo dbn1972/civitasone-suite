@@ -5,10 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 import { useFormError } from "@/lib/useFormError";
-import { Button, ConfirmDialog } from "@/app/_components/ds";
-
-const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
-const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
+import { Button, ConfirmDialog, Field, Select } from "@/app/_components/ds";
 
 type Props = {
   accountId: string;
@@ -99,13 +96,14 @@ export function AccountParentForm({ accountId, accountName, currentParentId, opt
         <div className="card" style={{ marginTop: 16 }}>
           <form onSubmit={requestConfirm} className="pad" style={{ maxWidth: 520 }}>
             <h4 style={{ marginTop: 0 }}>Move {accountName}</h4>
-            <label htmlFor="parent-select" style={labelStyle}>Reports to</label>
-            <select id="parent-select" value={parentId} onChange={(e) => setParentId(e.target.value)} style={inputStyle}>
-              <option value="">Top level (no parent)</option>
-              {options.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+            <Field label="Reports to">
+              <Select value={parentId} onChange={(e) => setParentId(e.target.value)}>
+                <option value="">Top level (no parent)</option>
+                {options.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </Select>
+            </Field>
             <Button type="submit" disabled={busy} loading={busy} style={{ marginTop: 16, minHeight: 44 }}>
               {busy ? "Saving…" : "Save hierarchy"}
             </Button>

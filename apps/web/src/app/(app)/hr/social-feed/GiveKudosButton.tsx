@@ -13,6 +13,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useFormError } from "@/lib/useFormError";
 import { Modal, EntityPicker } from "../../../_components/ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 
@@ -26,21 +27,6 @@ const BADGES = [
   { value: "thumbsup", label: "👍 Thumbs up" },
 ] as const;
 
-type FieldError = { field: string; message: string };
-type ErrorEnvelope = { code?: string; message?: string; fieldErrors?: FieldError[] };
-
-/** Mirrors LocationActions.tsx's parseError -- same standard backend error envelope. */
-async function parseError(res: Response): Promise<ErrorEnvelope> {
-  const text = await res.text();
-  try {
-    const body = JSON.parse(text) as ErrorEnvelope;
-    if (body && (body.message || body.code || body.fieldErrors)) return body;
-  } catch {
-    // not JSON
-  }
-  return { message: text || "Failed to give kudos. Please try again." };
-}
-
 export function GiveKudosButton({ label }: { label: string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -49,6 +35,7 @@ export function GiveKudosButton({ label }: { label: string }) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const formError = useFormError("kudos");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   function reset() {
@@ -75,18 +62,16 @@ export function GiveKudosButton({ label }: { label: string }) {
         body: JSON.stringify({ receiverId, badge, message }),
       });
       if (!res.ok) {
-        const env = await parseError(res);
-        if (env.fieldErrors?.length) {
-          setFieldErrors(Object.fromEntries(env.fieldErrors.map((f) => [f.field, f.message])));
-        }
-        setError(env.message ?? "Failed to give kudos. Please try again.");
+        const resolved = await formError.fromResponse(res, "save");
+        setFieldErrors(resolved.fieldErrors);
+        setError(resolved.message);
         return;
       }
       setOpen(false);
       reset();
       router.refresh();
-    } catch {
-      setError("Network error — could not reach the server. Please try again.");
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

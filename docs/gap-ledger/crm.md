@@ -132,7 +132,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W1 SF-14a re-confirmed against main d0b65c3b5 (feature still present after the Field/Input conversion): closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** New account is two writes (POST then PATCH parent). If the PATCH fails the form closes with a success-styled "Account created…" message and only a hint that the parent was not set; nothing offers a retry (app/(app)/crm/accounts/NewAccountForm.tsx:48).
 - **Verified evidence:** NewAccountForm.tsx:38-47 POSTs v1/crm/accounts, then (only if form.parentId && body.id) PATCHes v1/crm/accounts/{id}/parent. On PATCH failure (:49-56) it sets message 'Account created. The parent could not be set — you can set it from the account page.', closes the form and refreshes; the message is rendered in the green role=status paragraph (:120-122, colour #047857), with no retry action. Two extra defects found: (a) the form state is NOT reset on this path (setForm reset is only on the success path, :60), so re-opening shows the old values and a resubmit creates a duplicate; (b) if the 202 body has no `id`, the parent step is skipped silently and the user sees the plain success message with no hint the parent was dropped.
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/NewAccountForm.tsx`
@@ -150,7 +150,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-04  ·  MEDIUM  ·  partly  ·  theme VALIDATION
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W1 SF-14a re-confirmed against main d0b65c3b5 (feature still present after the Field/Input conversion): closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Create is queue-backed (202): the new row does not appear until the consumer runs, but router.refresh() is called immediately, so a user can submit twice and create a duplicate; neither the form nor browserFetch sets an idempotency key (browserClient.ts sends only device headers) (app/(app)/crm/accounts/NewAccountForm.tsx:50).
 - **Verified evidence:** NewAccountForm.tsx:50-55 POSTs with headers only from browserFetch (browserClient.ts:22-34 adds content-type + x-device-id/trust); no idempotency header is set, although the BFF proxy already forwards x-idempotency-key (app/api/proxy/[...path]/route.ts:7) and finance JournalEntryForm.tsx:74,159 shows the pattern. router.refresh() is called right after the 202 (:62) so the new row is not yet listed. Overstated: the submit Button is disabled/loading while busy (:110-112) and the form closes and resets after success, so an accidental double-click is already blocked; duplicates need the user to reopen the form and re-enter. There is no zod validation at the form boundary (only `required` on name; website free text). Backend queue/idempotency behaviour cannot be verified (CRM service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/NewAccountForm.tsx`, `apps/web/src/app/(app)/crm/accounts/newAccountSchema.ts`
@@ -254,7 +254,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-DETAIL-03  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W1 SF-14a re-confirmed against main d0b65c3b5 (feature still present after the Field/Input conversion): closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** Re-parenting has no ConfirmDialog although it moves the whole subtree in the hierarchy, and the parent select lists every account except itself — including its own descendants — so the only guard against a cycle is the server 422 (app/(app)/crm/accounts/[id]/page.tsx:61, app/(app)/crm/accounts/[id]/AccountParentForm.tsx:20).
 - **Verified evidence:** AccountParentForm.tsx:79-95 submits PATCH /crm/accounts/:id/parent with no ConfirmDialog and no reason; options (page.tsx:61) exclude only the account itself, so descendants are selectable; CYCLE_DETECTED 422 handled at :55-57. Audit emission is a backend concern (cannot-verify). Suggestion of maker-checker is not appropriate for a hierarchy edit; a simple confirm is.
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/[id]/AccountParentForm.tsx`, `apps/web/src/app/(app)/crm/accounts/[id]/page.tsx`
@@ -430,7 +430,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACTIVITIES-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W1 SF-14a re-confirmed against main d0b65c3b5 (feature still present after the Field/Input conversion): closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Contact picker failures are swallowed ("contact picker is optional"), so the select silently shows only "— No contact —" and a user cannot tell the list did not load (app/(app)/crm/activities/LogActivityButton.tsx:37).
 - **Verified evidence:** LogActivityButton.tsx:32-46: on open it fetches v1/crm/contacts; `if (!res.ok) return;` (:37) and `catch { /* contact picker is optional */ }` swallow failures, so the <select> (:83-88) only ever shows '— No contact —' with no message, and the user may log an interaction unlinked to the contact they meant. Also loads the contacts list unpaginated on every open and shows no loading state.
 - **Files to change:** `apps/web/src/app/(app)/crm/activities/LogActivityButton.tsx`
@@ -463,7 +463,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACTIVITIES-08  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W1 SF-14a re-confirmed against main d0b65c3b5 (feature still present after the Field/Input conversion): closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Page and stats are titled "Stakeholder Interactions" while the hub and nav call the route "Activities" and the dashboard quick link says "Activities" (app/(app)/crm/activities/page.tsx:21).
 - **Verified evidence:** activities/page.tsx:21 PageHeader title='Stakeholder Interactions', stat 'Total Interactions' (:30), button '+ Log Interaction' (LogActivityButton.tsx:79) and empty state 'No interactions yet', whereas the CRM hub tile is 'Activities' (crm/page.tsx:14) and dashboard quick link is 'Activities' (crm/dashboard/page.tsx:36). The API route and variable names also say activities. Terminology is inconsistent for one screen.
 - **Files to change:** `apps/web/src/app/(app)/crm/activities/page.tsx`, `apps/web/src/app/(app)/crm/activities/LogActivityButton.tsx`, `apps/web/src/app/(app)/crm/activities/ActivitiesTable.tsx`, `apps/web/src/app/(app)/crm/page.tsx`, `apps/web/src/app/(app)/crm/dashboard/page.tsx`
@@ -965,7 +965,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CAMPAIGNS-DETAIL-04  ·  LOW  ·  confirmed  ·  theme DEADEND (was DEADROUTE)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W1 SF-14a re-confirmed against main d0b65c3b5 (feature still present after the Field/Input conversion): closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** Detail is read-only: there is no way to post a period's cost or revenue from here although the empty period state tells the user to "Post a reporting period's cost and revenue" (app/(app)/crm/campaigns/[id]/page.tsx:97).
 - **Verified evidence:** Detail page is read-only (no forms/actions); the DataTable emptyMessage (:97) says 'Post a reporting period's cost and revenue to see the breakdown.' and no page, component or lib helper in apps/web posts campaign periods (grep of web for campaign period/roi writes found only the two loaders). Whether a POST endpoint exists in crm-service cannot be verified. Note the empty state is also unreachable in practice: a campaign with zero periods returns 404 and shows the page-level EmptyState instead.
 - **Files to change:** `apps/web/src/app/(app)/crm/campaigns/[id]/page.tsx`, `apps/web/src/lib/crm/campaignPeriods.ts`, `apps/web/src/app/(app)/crm/campaigns/[id]/PostPeriodForm.tsx`
@@ -1150,7 +1150,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W1 SF-14a re-confirmed against main d0b65c3b5 (feature still present after the Field/Input conversion): closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** Log Activity, Edit and Delete render for every CRM role with no canDelete/role check; a normal crm_user gets a Delete control whose success or 403 is only learned after the reason dialog (app/(app)/crm/contacts/[id]/ContactDetailActions.tsx:74).
 - **Verified evidence:** ContactDetailActions.tsx renders Log Activity, Edit and Delete (:211-231) unconditionally; the CRM layout (crm/layout.tsx) admits crm_user etc. and page.tsx passes no role info. Delete uses ActionButton requireReason so a denied user learns about a 403 only after typing a reason. lib/auth/roleGuard.ts getSessionRoles() (server-only) is available. Which roles the backend allows to edit/delete cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/ContactDetailActions.tsx`, `apps/web/src/app/(app)/crm/contacts/[id]/page.tsx`
@@ -3366,7 +3366,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-ACCOUNTID-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W1 SF-14a re-confirmed against main d0b65c3b5 (feature still present after the Field/Input conversion): closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** The detail page never shows which account it describes: the title is a fixed 'Account Health', the subtitle is the scored time, and the follow-up dialog labels the account with its raw id (a UUID), so a clerk cannot confirm the target before creating a service request (health/[accountId]/page.tsx:49-52; FollowUpModal.tsx:144-154).
 - **Verified evidence:** health/[accountId]/page.tsx:30 and 50 set title 'Account Health' (fixed); subtitle (51) is 'Scored <date>'. FollowUpModal.tsx:144-154 (file lines ~271-282) prints `Account: <code>{accountId}</code>`. Nothing on the page shows the account name; the breakdown fields used (accountId, score, band, version, computedAt, storedScore, contributingFactors) do not include a name, and the AccountHealthBreakdown type is in @civitasone/types which is absent from the snapshot. The View Account link (line 56) exists but only after the fact. Existing getCrmAccounts() (loaders.ts:1421, used by crm/accounts/[id]/page.tsx) can resolve the name.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/[accountId]/page.tsx`, `apps/web/src/app/(app)/crm/health/[accountId]/FollowUpModal.tsx`
@@ -3397,7 +3397,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-ACCOUNTID-03  ·  MEDIUM  ·  partly  ·  theme WIRING (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W1 SF-14a re-confirmed against main d0b65c3b5 (feature still present after the Field/Input conversion): closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The follow-up reuses the citizen service-request API: it posts citizenName / citizenPhone for what is an account representative, and offers service types 'New Water Connection' and 'New Electricity Connection' for an account-health action, so the resulting record is mis-typed (FollowUpModal.tsx:77-85, 234-247).
 - **Verified evidence:** True: FollowUpModal.tsx:77-85 (file lines ~204-212) POSTs {citizenName, citizenPhone, serviceType, subject, description, priority, relatedAccountId} to /api/proxy/v1/crm/service-requests, the citizen service-request API; select options (file ~363-374) include 'New Water Connection' and 'New Electricity Connection' next to health-specific ones. Softening: the name field label is 'Contact Name' with placeholder 'Citizen or account representative name', so it is partly acknowledged. Phone is optional. Whether the endpoint accepts these free-text service types, or a dedicated account follow-up endpoint exists, is cannot-verify (crm-service absent). Theme PII is mis-tagged; the issue is domain mis-typing.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/[accountId]/FollowUpModal.tsx`
