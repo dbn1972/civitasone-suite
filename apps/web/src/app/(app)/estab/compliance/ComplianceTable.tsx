@@ -25,7 +25,7 @@ const SEGMENT_MAP: Record<string, string | null> = {
 };
 const SEGMENTS = Object.keys(SEGMENT_MAP);
 
-export function ComplianceTable({ rows }: { rows: ComplianceRow[] }) {
+export function ComplianceTable({ rows, canComply = false }: { rows: ComplianceRow[]; canComply?: boolean }) {
   const router = useRouter();
   const [seg, setSeg] = useState("All");
   const [error, setError] = useState("");
@@ -77,12 +77,13 @@ export function ComplianceTable({ rows }: { rows: ComplianceRow[] }) {
             label: "Status",
             render: (r) => <StatusPill status={r.statusRaw} />,
           },
-          {
-            key: "id",
+          // GAP-ESTAB-COMPLIANCE-03: only viewers the service lets comply (estab officers)
+          // get the action column; an audit officer reads the register without a dead button.
+          ...(canComply ? [{
+            key: "id" as const,
             label: "Action",
             sortable: false,
-            // GAP-ESTAB-COMPLIANCE-03: mark complied button for non-complied rows.
-            render: (r) =>
+            render: (r: ComplianceRow) =>
               r.statusRaw !== "complied" ? (
                 <ActionButton
                   label="Mark complied"
@@ -97,7 +98,7 @@ export function ComplianceTable({ rows }: { rows: ComplianceRow[] }) {
               ) : (
                 <span style={{ color: "var(--mut)" }}>✔</span>
               ),
-          },
+          }] : []),
         ]}
         rows={filtered}
         sortable

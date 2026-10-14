@@ -65,6 +65,12 @@ export function registerFilesConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // GAP-ESTAB-FILES-NEW-02: the route already refuses a linked DAK; this re-check inside the write's
+      // own transaction closes the race where two creates for one DAK are accepted together.
+      if (p.inwardId) {
+        const inwardNow = await repo.lockInwardByIdTx(tx, p.inwardId, p.tenantId);
+        if (!inwardNow || inwardNow.fileId) return;
+      }
       const dueBy = computeFileDueBy();
       // CSMOP gapless file number per section+year (legacy fileNo honoured if given).
       const fileNo = p.fileNo ?? await repo.allocateFileNo(tx, p.tenantId, p.section ?? p.dept, new Date().getFullYear());
@@ -114,6 +120,9 @@ export function registerFilesConsumers(rawQueue: Queue): void {
 
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // GAP-ESTAB-FILES-NEW-02: one DAK, one file. Re-check inside the transaction (the route also refuses).
+      const inwardNow = await repo.lockInwardByIdTx(tx, p.inwardId, p.tenantId);
+      if (!inwardNow || inwardNow.fileId) return;
       const dueBy = computeFileDueBy();
       const fileNo = p.fileNo ?? await repo.allocateFileNo(tx, p.tenantId, p.section ?? p.dept, new Date().getFullYear());
       await repo.insertFile(tx, {

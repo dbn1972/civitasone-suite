@@ -2,12 +2,17 @@ import { getEstabCompliance } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate, todayIST } from "@/lib/formatters";
+import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
+import { ESTAB_COMMITTEE_WRITE_ROLES } from "@/lib/estab/roles";
 import { ComplianceTable, type ComplianceRow } from "./ComplianceTable";
 import { complianceRate as rateOf, countEscalated, ESCALATION_DAYS } from "./complianceStats";
 
 export default async function CompliancePage() {
   const { data: items, source } = await getEstabCompliance();
   const errored = source === "error";
+  // GAP-ESTAB-COMPLIANCE-03: the comply route is estab-officer only (audit_officer reads),
+  // so only those viewers are offered "Mark complied". The service stays the authority.
+  const canComply = hasAnyRole(getSessionRoles(), ESTAB_COMMITTEE_WRITE_ROLES);
   const today = todayIST(); // GAP-ESTAB-COMPLIANCE-01: IST calendar day, not UTC.
   // GAP-ESTAB-COMPLIANCE-02: null (→ "—") on an empty register, not a misleading 0%.
   const rate = rateOf(items);
@@ -55,7 +60,7 @@ export default async function CompliancePage() {
             <EmptyState icon="✅" title="No compliance items" message="Action items from meetings will appear here." />
           </>
         ) : (
-          <ComplianceTable rows={rows} />
+          <ComplianceTable rows={rows} canComply={canComply} />
         )}
       </div>
     </>

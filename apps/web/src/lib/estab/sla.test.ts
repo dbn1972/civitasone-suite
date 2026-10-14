@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { daysLeft, computeSla, isOverdue, pendencyDays } from "./sla";
+import { daysLeft, computeSla, isOverdue, pendencyDays, isClosedStatus } from "./sla";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -72,5 +72,23 @@ describe("pendencyDays", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-01T19:00:00.000Z"));
     expect(pendencyDays({ createdDate: "2026-02-01", status: "disposed" })).toBeNull();
+  });
+});
+
+describe("closed files (GAP-ESTAB-DASHBOARD-01: one definition shared with the dashboard service)", () => {
+  it("a closed file is never overdue and has no pendency, like archived and disposed", () => {
+    expect(isOverdue({ dueDate: "2026-01-01", status: "closed" })).toBe(false);
+    expect(pendencyDays({ createdDate: "2026-02-01", status: "closed" })).toBeNull();
+  });
+
+  it("draft, active and pending files stay open", () => {
+    for (const status of ["draft", "active", "pending"]) {
+      expect(isOverdue({ dueDate: "2020-01-01", status })).toBe(true);
+    }
+  });
+
+  it("isClosedStatus covers exactly closed, archived and disposed", () => {
+    expect(["closed", "archived", "disposed", "active", "draft", "", undefined].map((s) => isClosedStatus(s)))
+      .toEqual([true, true, true, false, false, false, false]);
   });
 });

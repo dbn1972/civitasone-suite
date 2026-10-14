@@ -1,33 +1,33 @@
 "use client";
 
 import { Button } from "@/app/_components/ds";
+import { useEstabT } from "@/lib/estab/useEstabT";
 
 interface MeetingActionsProps {
   meetingId: string;
 }
 
 export function MeetingActions({ meetingId: _meetingId }: MeetingActionsProps) {
+  const t = useEstabT();
   return (
     <>
       {/*
-        GAP-ESTAB-MEETINGS-DETAIL-05: removed the header "Agenda" link — it
-        duplicated the Agenda tab below. Only one route to the agenda now.
+        GAP-ESTAB-MEETINGS-DETAIL-05: the header "Agenda" link was removed; it duplicated the
+        Agenda tab, which is the single route to the agenda.
 
-        There is no /generate-mom route (and no backend endpoint this page
-        knows of) — the button used to silently no-op via a client-side
-        redirect to a 404. Disabled honestly until MOM generation is built,
-        rather than left as a dead link. MOM is still capturable today via
-        the "MOM" field/Action items shown below once a meeting completes.
+        GAP-ESTAB-MEETINGS-DETAIL-04 (NEEDS OWNER DECISION): this screen cannot capture or generate
+        minutes. There is no generate-MOM endpoint, and no MOM field on this page; minutes are only
+        shown when the meeting service already holds them. The control stays disabled and says so,
+        instead of promising a feature or pointing at a field that does not exist.
       */}
       <Button
         type="button"
         style={{ minHeight: 44 }}
         disabled
         aria-disabled="true"
-        title="Generating MOM automatically is coming soon."
+        title={t("momUnavailableTitle")}
       >
-        Generate MOM{" "}
-        <span style={{ fontSize: 11, fontWeight: 500, opacity: 0.85 }}>(coming soon)</span>
+        {t("momGenerate")}
       </Button>
     </>
   );
