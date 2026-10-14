@@ -5,7 +5,7 @@
  * box that lets the layout jump when real content arrives.
  */
 const shimmer: React.CSSProperties = {
-  background: "linear-gradient(90deg,#eef1f4 25%,#e2e6ea 37%,#eef1f4 63%)",
+  background: "linear-gradient(90deg,var(--line2) 25%,var(--line) 37%,var(--line2) 63%)",
   backgroundSize: "400% 100%",
   animation: "auditShimmer 1.4s ease infinite",
   borderRadius: 8,

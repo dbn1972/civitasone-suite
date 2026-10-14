@@ -15,7 +15,7 @@ import { SkeletonBar, SkeletonCard, SkeletonRow } from "../../../_components/ds"
  */
 export default function HRDashboardLoading() {
   return (
-    <div style={{ background: "var(--page-bg,#eef2f7)", minHeight: "100vh" }}>
+    <div style={{ background: "var(--bg)", minHeight: "100vh" }}>
       {/* Greeting-header-shaped placeholder -- no visible text. */}
       <div aria-hidden="true" style={{ padding: "20px 24px 34px", display: "flex", flexDirection: "column", gap: 10 }}>
         <SkeletonBar w="220px" h={12} />
@@ -35,7 +35,7 @@ export default function HRDashboardLoading() {
       </div>
 
       {/* Employee table skeleton. */}
-      <div style={{ margin: "0 24px 32px", background: "var(--panel,#fff)", borderRadius: 8, padding: "4px 16px" }}>
+      <div style={{ margin: "0 24px 32px", background: "var(--panel)", borderRadius: 8, padding: "4px 16px" }}>
         {Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)}
       </div>
     </div>

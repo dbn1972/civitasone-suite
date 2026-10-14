@@ -14,8 +14,11 @@
  */
 
 import { useState, type FormEvent } from "react";
+import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
-import { AcceptedNotice } from "@/app/_components/ds";
+import { AcceptedNotice, Field, Input } from "@/app/_components/ds";
+import { validateAddTask } from "./addTaskSchema";
+import { translateFormErrors } from "../../_components/translateFormErrors";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 
 interface AddTaskFormProps {
@@ -24,18 +27,28 @@ interface AddTaskFormProps {
 
 export function AddTaskForm({ employeeId }: AddTaskFormProps) {
   const accepted = useAcceptedWrite();
+  const tv = useTranslations("hrFormErrors");
   const [title, setTitle] = useState("");
   const [dueByDay, setDueByDay] = useState("7");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [touched, setTouched] = useState<{ title?: boolean; dueByDay?: boolean }>({});
   const formError = useFormError("onboarding task");
+  const clientErrors = translateFormErrors(validateAddTask({ title, dueByDay }), tv);
+  /** Client message once the field has been edited, then a backend rejection for the same field. */
+  const errFor = (f: "title" | "dueByDay") => (touched[f] ? clientErrors[f] : undefined) ?? formError.fieldError(f);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (Object.keys(clientErrors).length > 0) {
+      setTouched({ title: true, dueByDay: true });
+      return;
+    }
     setSubmitting(true);
     setSuccess(false);
     setLocalError(null);
+    formError.clear();
     try {
       const res = await fetch(`/api/proxy/v1/hrms/employees/${employeeId}/onboarding-tasks`, {
         method: "POST",
@@ -59,40 +72,30 @@ export function AddTaskForm({ employeeId }: AddTaskFormProps) {
     }
   }
 
-  const dueByDayNum = Number(dueByDay);
-  const canSubmit = title.trim().length > 0 && Number.isInteger(dueByDayNum) && dueByDayNum >= 1 && dueByDayNum <= 365;
+  const canSubmit = Object.keys(clientErrors).length === 0;
 
   return (
     <form onSubmit={(e) => void handleSubmit(e)} style={{ marginTop: 16, textAlign: "left", maxWidth: 360, marginInline: "auto" }}>
       <AcceptedNotice {...accepted.noticeProps} />
-      <div style={{ marginBottom: 10 }}>
-        <label htmlFor="add-task-title" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--body, #334155)", marginBottom: 4 }}>
-          Task title
-        </label>
-        <input
-          id="add-task-title"
+      <Field label="Task title" required error={errFor("title")} style={{ marginBottom: 10 }}>
+        <Input
           type="text"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => { setTitle(e.target.value); setTouched((p) => ({ ...p, title: true })); }}
           maxLength={200}
           placeholder="e.g. Collect department ID badge"
-          style={{ width: "100%", padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border, #cbd5e1)", fontSize: 13 }}
         />
-      </div>
-      <div style={{ marginBottom: 10 }}>
-        <label htmlFor="add-task-due" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--body, #334155)", marginBottom: 4 }}>
-          Due (days from joining)
-        </label>
-        <input
-          id="add-task-due"
+      </Field>
+      <Field label="Due (days from joining)" required error={errFor("dueByDay")} style={{ marginBottom: 10 }}>
+        <Input
           type="number"
           min={1}
           max={365}
           value={dueByDay}
-          onChange={(e) => setDueByDay(e.target.value)}
-          style={{ width: 100, padding: "7px 10px", borderRadius: 6, border: "1px solid var(--border, #cbd5e1)", fontSize: 13 }}
+          onChange={(e) => { setDueByDay(e.target.value); setTouched((p) => ({ ...p, dueByDay: true })); }}
+          style={{ width: 100 }}
         />
-      </div>
+      </Field>
       <button type="submit" className="btn primary" disabled={!canSubmit || submitting} style={{ fontSize: 13 }}>
         {submitting ? "Adding…" : "Add task"}
       </button>

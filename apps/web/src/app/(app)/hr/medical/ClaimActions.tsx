@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, ConfirmDialog } from "../../../_components/ds";
 import { useTranslations } from "next-intl";
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { UserFacingError } from "@/lib/userFacingError";
 
 type Decision = "approved" | "rejected";
 
@@ -53,13 +55,12 @@ export function ClaimActions({
         }),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => null) as { message?: string } | null;
-        throw new Error(body?.message ?? t("actionFailedMessage"));
+        throw await userFacingErrorFromResponse(res, "save", "medical claim");
       }
       setDecision(null);
       router.refresh();
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("actionFailedMessage"));
+      setError(e instanceof UserFacingError ? e.message : t("actionFailedMessage"));
     } finally {
       setBusy(false);
     }

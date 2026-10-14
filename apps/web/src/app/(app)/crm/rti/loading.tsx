@@ -1,5 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader } from "../../../_components/ds";
+import { PageHeader, SkeletonBar } from "../../../_components/ds";
 
 export default async function RtiLoading() {
   const t = await getTranslations("crmRtiList");
@@ -19,33 +19,10 @@ export default async function RtiLoading() {
         }}
       >
         {[1, 2, 3, 4].map((i) => (
-          <div
-            key={i}
-            style={{
-              height: 72,
-              borderRadius: "var(--r)",
-              background: "var(--panel)",
-              border: "1px solid var(--line)",
-              animation: "pulse 1.4s ease-in-out infinite",
-            }}
-          />
+          <SkeletonBar key={i} h={72} style={{ borderRadius: "var(--r)", border: "1px solid var(--line)" }} />
         ))}
       </div>
-      <div
-        style={{
-          height: 320,
-          borderRadius: "var(--r)",
-          background: "var(--panel)",
-          border: "1px solid var(--line)",
-          animation: "pulse 1.4s ease-in-out infinite",
-        }}
-      />
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50%       { opacity: 0.5; }
-        }
-      `}</style>
+      <SkeletonBar h={320} style={{ borderRadius: "var(--r)", border: "1px solid var(--line)" }} />
     </>
   );
 }

@@ -1194,7 +1194,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-06  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** Ten client panels each fetch separately after the server render, so the page paints its top card and then fills in over many spinners; loading.tsx shows two blocks and no columns (app/(app)/crm/contacts/[id]/loading.tsx:7).
 - **Verified evidence:** Eleven client components fetch in useEffect after the server render (QualifyPanel, Customer360Panel, ActivityFeed, CommunicationLog, AddressesEditor, ContactRolesEditor, DocumentAlertsView, DocumentsPanel, LeadTransitionControl, AssignmentLogView, ScoreHistoryView), each with its own loading state. contacts/[id]/loading.tsx has header bars and two card blocks (h-48, h-40) in a single column and uses Tailwind min-h-screen bg-slate-50 unlike the two-column g-main layout.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/loading.tsx`, `apps/web/src/app/(app)/crm/contacts/[id]/page.tsx`
@@ -1655,7 +1655,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTROL-TOWER-07  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** loading.tsx is one line of text ("Loading control tower…") while every sibling uses skeleton blocks (app/(app)/crm/control-tower/loading.tsx:2).
 - **Verified evidence:** control-tower/loading.tsx:1-3 is `<div className="page-main"><p>Loading control tower…</p></div>`; crm/accounts/loading.tsx and contacts/new/loading.tsx use animate-pulse skeleton blocks.
 - **Files to change:** `apps/web/src/app/(app)/crm/control-tower/loading.tsx`
@@ -1821,7 +1821,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DASHBOARD-03  ·  LOW  ·  confirmed  ·  theme COPY (was LOADING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** The loading skeleton prints the heading "Dashboard" while the loaded page title is "CRM", so the h1 changes as the page paints; the hub tile is "Dashboard" too (app/(app)/crm/dashboard/loading.tsx:6, app/(app)/crm/dashboard/page.tsx:13).
 - **Verified evidence:** dashboard/loading.tsx:6 h1 'Dashboard' (id page-heading, own page-main wrapper); page.tsx:13 title 'CRM'; hub tile is 'Dashboard' (crm/page.tsx:10). Heading flips on paint. Loading.tsx also has no subtitle/actions.
 - **Files to change:** `apps/web/src/app/(app)/crm/dashboard/loading.tsx`, `apps/web/src/app/(app)/crm/dashboard/page.tsx`
@@ -2568,7 +2568,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENT-TYPES-05  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** loading.tsx renders a heading plus four 80px tiles and a 280px block, but the loaded page has no tiles and a different card list, so the layout jumps on load (document-types/loading.tsx:1-19).
 - **Verified evidence:** document-types/loading.tsx:9-16 renders 4 tiles (80px) and a 280px block; the real page (page.tsx + apps/web/src/app/_components/crm/DocumentTypesEditor.tsx) is a header plus a card of stacked li rows with no tiles. Also loading.tsx duplicates the heading via its own .ph h1 while the loaded page uses PageHeader (harmless as they replace each other but structures differ). The same copy-pasted skeleton is used in documents/ and escalation-rules/.
 - **Files to change:** `apps/web/src/app/(app)/crm/document-types/loading.tsx`
@@ -2663,7 +2663,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENTS-04  ·  LOW  ·  partly  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** loading.tsx draws four stat tiles and a 280px block for a page that has neither, and titles itself 'Documents' with its own h1 (documents/loading.tsx).
 - **Verified evidence:** documents/loading.tsx:9-16 has 4 tiles + 280px block while the page is a single text card (page.tsx:18-37). The 'own h1 titled Documents' is not a real conflict: loading replaces the page during Suspense and its title matches; it just omits the subtitle/back link.
 - **Files to change:** `apps/web/src/app/(app)/crm/documents/loading.tsx`
@@ -2929,7 +2929,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-04  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** dueAt is mapped by the loader but no column, overdue marker or sort exposes it, so a clerk cannot see which grievances are near or past their disposal deadline (app/_data/loaders.ts:1539; GrievancesTable.tsx:50-98).
 - **Verified evidence:** loaders.ts:1539 maps dueAt into CrmGrievanceRow, but GrievancesTable.tsx columns (lines 50-98 of the file) are Ref, Citizen, Category, Subject, Priority, Status, Logged, View; dueAt and assignedTo (also mapped) are not shown, no overdue marker and no sort on due date. The detail page shows 'Due By' only after opening each record (page.tsx:~171).
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/GrievancesTable.tsx`, `apps/web/src/app/(app)/crm/grievances/page.tsx`
@@ -3261,7 +3261,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1858, verified on main 9c5e9e9e9)
 - **First-pass claim:** On a failed load the page prints the badge but Critical and At risk show 0 and the table says 'Every scored account is currently healthy or thriving', a false all-clear on the one screen meant to surface risk; the tiles have no '—' guard like Grievances / Lead Forms (health/page.tsx:13-14, 29-41; WatchlistTable.tsx:47-49).
 - **Verified evidence:** health/page.tsx:8-14 derives source='error' when either loader fails (loaders return [] on failure, loaders.ts:1422,2990), but only renders <DataSourceBadge> (:28). Critical/At risk tiles (:30-41) show summary counts of 0 and WatchlistTable (WatchlistTable.tsx:47-49) shows 'Every scored account is currently healthy or thriving'. Correction: Average Score (:46) already shows '—' when total==0 and Call First falls back to '—', so only the two count tiles and the empty table lack a guard.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/page.tsx`, `apps/web/src/app/(app)/crm/health/WatchlistTable.tsx`
@@ -3313,7 +3313,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-04  ·  MEDIUM  ·  confirmed  ·  theme I18N
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1859, verified on main 9c5e9e9e9)
 - **First-pass claim:** The empty-state copy hard-codes 'falls to 50 or below' as the at-risk rule although banding is owned by the recommendation-service; if thresholds change the message goes stale (WatchlistTable.tsx:49).
 - **Verified evidence:** WatchlistTable.tsx:49 hard-codes 'falls to 50 or below'; health.ts:4 states banding is owned by recommendation-service and the client has no threshold constant. Also all page strings (title, subtitle, labels, filterPlaceholder) are literals, no next-intl.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/WatchlistTable.tsx`, `apps/web/src/app/(app)/crm/health/page.tsx`, `apps/web/messages/en.json`, `apps/web/messages/hi.json`
@@ -3455,7 +3455,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-ACCOUNTID-07  ·  LOW  ·  partly  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1860, verified on main 9c5e9e9e9)
 - **First-pass claim:** The 'Score Recomputed From Signals' card exposes a stored-vs-computed discrepancy as an explanation paragraph with no action or timestamp of the last recompute (page.tsx:116-124).
 - **Verified evidence:** page.tsx:116-124 shows the 'Score Recomputed From Signals' card when storedScore !== score, as text only: 'A recompute will bring the stored value back in line.' There is no recompute button or link (whether a recompute endpoint exists is cannot-verify). Overstated: a scored timestamp is present in the header subtitle (line 51, breakdown.computedAt), though it is not in the card and it is not labelled as the last recompute. Also the paragraph uses hard-coded color #475569 (line 118) instead of a token, poor in dark mode (same for iconBg hex on lines 61-69).
 - **Files to change:** `apps/web/src/app/(app)/crm/health/[accountId]/page.tsx`
@@ -3853,7 +3853,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LINKED-ACCOUNTS-06  ·  LOW  ·  confirmed  ·  theme LOADING (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** The screen is 'Connected Accounts' (page), 'Connect email & calendar' (card) and 'Linked Accounts' (loading.tsx, route, error area); loading.tsx also draws four stat tiles the page never shows (linked-accounts/loading.tsx).
 - **Verified evidence:** Title inconsistency verified: page.tsx PageHeader title 'Connected Accounts'; card h3 'Connect email & calendar' (apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx:101); loading.tsx h1 'Linked Accounts' and 4 stat-tile skeletons + 280px block that the page never renders (page is one card with form+table); error.tsx area='CRM Linked Accounts'. Not a PII issue.
 - **Files to change:** `apps/web/src/app/(app)/crm/linked-accounts/loading.tsx`, `apps/web/src/app/(app)/crm/linked-accounts/error.tsx`, `apps/web/src/app/(app)/crm/linked-accounts/page.tsx`
@@ -4235,7 +4235,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** loading.tsx heading is "New" and the error boundary area is "CRM New", while the page title is "New Opportunity"; the error page reads "We couldn't open CRM New" (apps/web/src/app/(app)/crm/opportunities/new/loading.tsx:6, error.tsx:11).
 - **Verified evidence:** loading.tsx h1 'New' with 4-tile skeleton (page is a single form card); error.tsx area 'CRM New' so RouteError prints "We couldn't open CRM New" (RouteError.tsx:63); page title 'New Opportunity'.
 - **Files to change:** `apps/web/src/app/(app)/crm/opportunities/new/loading.tsx`, `apps/web/src/app/(app)/crm/opportunities/new/error.tsx`
@@ -4364,7 +4364,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITY-AGEING-06  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** loading.tsx heading is "Opportunity Ageing" but the page title is "Stage Ageing" (opportunity-ageing/loading.tsx:6).
 - **Verified evidence:** opportunity-ageing/loading.tsx:6 has <h1>Opportunity Ageing</h1>; page.tsx:8 PageHeader title is 'Stage Ageing'. Loading skeleton also shows 4 stat tiles and one block whereas the page renders two cards (no stat tiles).
 - **Files to change:** `apps/web/src/app/(app)/crm/opportunity-ageing/loading.tsx`
@@ -5758,7 +5758,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-06  ·  LOW  ·  confirmed  ·  theme COPY (was LOADING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** Titles diverge: "Citizen Feedback" / back label "Voice of Citizen", while the route and sibling loading.tsx say "Voice Of Customer" (feedback/page.tsx:85, voice-of-customer/loading.tsx:6).
 - **Verified evidence:** feedback/page.tsx:108 title 'Citizen Feedback' and back label 'Voice of Citizen' (111); voice-of-customer/page.tsx title is 'Voice of Citizen'; voice-of-customer/loading.tsx:6 says 'Voice Of Customer' and the URL segment is voice-of-customer. Copy inconsistency only; also the loading heading is hard-coded with odd capitalisation.
 - **Files to change:** `apps/web/src/app/(app)/crm/voice-of-customer/loading.tsx`, `apps/web/src/app/(app)/crm/voice-of-customer/error.tsx`, `apps/web/src/app/(app)/crm/voice-of-customer/feedback/page.tsx`

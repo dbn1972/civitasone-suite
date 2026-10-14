@@ -28,7 +28,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Expected Today" uses isToday() with the server-process clock (format.ts:24-34, page.tsx:36) — a UTC Node host shifts the day boundary by 5h30m versus IST, mis-counting evening/early-morning visits.
 - **Verified evidence:** format.ts:24-34 isToday compares getFullYear/Month/Date of `new Date(iso)` and `new Date()` in the server process timezone; visitor/page.tsx:36 and guard/page.tsx:15 use it. On a UTC host the day rolls at 05:30 IST. fmtTime/fmtDateTime (format.ts:3-21) also omit `timeZone`, so SSR vs browser render can differ. lib/formatters.ts formatIndianDate also has no explicit timeZone. Deployment TZ setting not verified.
 - **Files to change:** `apps/web/src/app/(app)/visitor/_data/format.ts`, `apps/web/src/lib/formatters.ts`
@@ -220,7 +220,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-GUARD-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1923, verified on main 9c5e9e9e9)
 - **First-pass claim:** Expected today is not scoped to the selected Location (page.tsx:15; GuardConsole.tsx:255) — a guard at one site sees every site's approved visitors; day boundary uses the server clock (format.ts:24-34).
 - **Verified evidence:** guard/page.tsx:9-15 calls getVisitRequests('approved') with no location filter and filters only by isToday (line 15); GuardConsole.tsx:190,258 shows expectedToday.length and the table for all sites even though locationId state (55) selects a site and VisitRequest.locationId exists (types.ts). isToday (format.ts:24-34) uses `new Date()` in the server process timezone. Whether the API supports a locationId query parameter is not verifiable.
 - **Files to change:** `apps/web/src/app/(app)/visitor/guard/GuardConsole.tsx`, `apps/web/src/app/(app)/visitor/guard/page.tsx`, `apps/web/src/app/(app)/visitor/_data/format.ts`

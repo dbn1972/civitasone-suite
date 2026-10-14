@@ -95,10 +95,11 @@ describe("GoalTrackerCard", () => {
     });
 
     it("keeps the form open and shows an error when the request fails", async () => {
-      const fetchMock = vi.fn().mockResolvedValue({
-        ok: false,
-        json: () => Promise.resolve({ message: "Goal not found" }),
-      });
+      // A real Response: the error now goes through useFormError, which reads
+      // the body/status itself instead of echoing the server's raw `message`.
+      const fetchMock = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ message: "Goal not found" }), { status: 404 }),
+      );
       vi.stubGlobal("fetch", fetchMock);
 
       render(<GoalTrackerCard {...PROPS} />);
@@ -106,11 +107,27 @@ describe("GoalTrackerCard", () => {
       fireEvent.change(screen.getByLabelText(/New progress/), { target: { value: "65" } });
       fireEvent.click(screen.getByRole("button", { name: "Save" }));
 
-      expect(await screen.findByRole("alert")).toHaveTextContent("Goal not found");
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(/couldn.t find/i);
+      expect(alert).not.toHaveTextContent("Goal not found");
       expect(screen.getByText("New progress (%)")).toBeInTheDocument();
       // Still shows the original, unsaved progress -- the optimistic update
       // only happens after a confirmed 2xx.
       expect(screen.getByText("40%")).toBeInTheDocument();
+    });
+
+    it("blocks an out-of-range progress value with an inline error and makes no request (mirrors goalCheckinSchema)", async () => {
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
+
+      render(<GoalTrackerCard {...PROPS} />);
+      fireEvent.click(screen.getByRole("button", { name: "Check-in" }));
+      fireEvent.change(screen.getByLabelText(/New progress/), { target: { value: "150" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+      expect(await screen.findByText("Progress cannot be above 100.")).toBeInTheDocument();
+      expect(screen.getByLabelText(/New progress/)).toHaveAttribute("aria-invalid", "true");
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,7 +1,7 @@
 "use client";
 import { DataTable, StatusPill } from "../../../_components/ds";
 import type { ChatConversation } from "@civitasone/types";
-import { formatDuration } from "@/lib/formatters";
+import { formatDuration, formatInIST } from "@/lib/formatters";
 import { conversationDurationMinutes, handoffReasonLabel, statusLabel } from "./chat";
 
 type ConversationRow = {
@@ -19,14 +19,7 @@ type ConversationRow = {
 
 function formatDateTime(iso: string | null): string {
   if (iso === null) return "—";
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return "—";
-  return parsed.toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatInIST(iso, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 // GAP-AI-CHAT-02: a short, recognisable reference for a conversation UUID. The

@@ -16,7 +16,10 @@
 import { UserFacingError } from "@/lib/userFacingError";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { StatusPill, ConfirmDialog, useConfirmAction, Button } from "@/app/_components/ds";
+import { useTranslations } from "next-intl";
+import { StatusPill, ConfirmDialog, useConfirmAction, Button, Field, Input, Select } from "@/app/_components/ds";
+import { validateConfirm, validateExtend } from "./probationSchema";
+import { translateFormErrors } from "../../_components/translateFormErrors";
 import { formatIndianDate, daysUntilIST } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
 
@@ -58,6 +61,7 @@ function todayIsoIST(): string {
 function ProbationCard({ row }: { row: ConfirmationRow }) {
   const [action, setAction] = useState<LocalAction>("default");
   const router = useRouter();
+  const tv = useTranslations("hrFormErrors");
   const days = daysUntilIST(row.dueDate);
   const due  = days !== null ? dueMeta(days) : { label: "Date not set", color: "var(--mut)" };
   const rec  = REC_CONFIG[row.managerRecommendation ?? "pending"] ?? REC_CONFIG.pending;
@@ -71,13 +75,20 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
   // carried through ConfirmDialog's own built-in reason field below.
   const [confirmDate, setConfirmDate] = useState(todayIsoIST());
   const [orderRef, setOrderRef] = useState("");
+  // Inline field errors only appear after the first confirm/extend attempt.
+  const [confirmTried, setConfirmTried] = useState(false);
+  const [extendTried, setExtendTried] = useState(false);
+  const confirmErrs = confirmTried ? translateFormErrors(validateConfirm({ confirmationDate: confirmDate, orderRef }), tv) : {};
 
   const {
     open: confirmOpen, busy: confirmBusy, error: confirmError,
     trigger: triggerConfirm, cancel: cancelConfirm, confirm: doConfirm,
   } = useConfirmAction({
     onConfirm: async (remark) => {
+      setConfirmTried(true);
       if (!orderRef.trim()) throw new Error("Order reference is required.");
+      const schemaErrs = translateFormErrors(validateConfirm({ confirmationDate: confirmDate, orderRef }), tv);
+      if (schemaErrs.orderRef || schemaErrs.confirmationDate) throw new Error((schemaErrs.orderRef ?? schemaErrs.confirmationDate) as string);
       const res = await fetch(`/api/proxy/v1/hrms/employees/${row.id}/confirm`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -109,12 +120,18 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
   // reason is required and carried through ConfirmDialog's built-in field.
   const [newEndDate, setNewEndDate] = useState(row.probationEnd && row.probationEnd !== "—" ? row.probationEnd : todayIsoIST());
   const [extendOrderRef, setExtendOrderRef] = useState("");
+  const extendErrs = extendTried ? translateFormErrors(validateExtend({ newEndDate, orderRef: extendOrderRef }), tv) : {};
 
   const {
     open: extendOpen, busy: extendBusy, error: extendError,
     trigger: triggerExtend, cancel: cancelExtend, confirm: doExtend,
   } = useConfirmAction({
     onConfirm: async (reason) => {
+      setExtendTried(true);
+      {
+        const schemaErrs = translateFormErrors(validateExtend({ newEndDate, orderRef: extendOrderRef }), tv);
+        if (schemaErrs.newEndDate || schemaErrs.orderRef) throw new Error((schemaErrs.newEndDate ?? schemaErrs.orderRef) as string);
+      }
       if (row.probationEnd && row.probationEnd !== "—" && newEndDate <= row.probationEnd) {
         throw new Error(`New end date must be after the current probation end (${formatIndianDate(row.probationEnd)}).`);
       }
@@ -256,7 +273,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
             <Button
               variant="primary"
               size="sm"
-              onClick={triggerConfirm}
+              onClick={() => { setConfirmTried(false); triggerConfirm(); }}
               aria-label={`Confirm ${row.employee}`}
             >
               Confirm
@@ -264,7 +281,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={triggerExtend}
+              onClick={() => { setExtendTried(false); triggerExtend(); }}
               aria-label={`Extend probation for ${row.employee}`}
             >
               Extend
@@ -282,26 +299,22 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
                 confirmed, per CCS Conduct Rules. This is a formal service-record action
                 and cannot be undone from here.
               </p>
-              <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                <span style={{ fontWeight: 600 }}>Confirmation date</span>
-                <input
+              <Field label="Confirmation date" required error={confirmErrs.confirmationDate}>
+                <Input
                   type="date"
                   value={confirmDate}
                   max={todayIsoIST()}
                   min={row.joiningDate && row.joiningDate !== "—" ? row.joiningDate : undefined}
                   onChange={(e) => setConfirmDate(e.target.value)}
-                  style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40 }}
                 />
-              </label>
-              <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                <span style={{ fontWeight: 600 }}>Order reference</span>
-                <input
+              </Field>
+              <Field label="Order reference" required error={confirmErrs.orderRef}>
+                <Input
                   value={orderRef}
                   onChange={(e) => setOrderRef(e.target.value)}
                   placeholder="e.g. CONFIRM/2026/014"
-                  style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40 }}
                 />
-              </label>
+              </Field>
             </div>
           }
           confirmLabel="Confirm service"
@@ -324,24 +337,20 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
                 Current probation end: <strong>{formatIndianDate(row.probationEnd)}</strong>.
                 Choose the new end date and record why.
               </p>
-              <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                <span style={{ fontWeight: 600 }}>New probation end date</span>
-                <input
+              <Field label="New probation end date" required error={extendErrs.newEndDate}>
+                <Input
                   type="date"
                   value={newEndDate}
                   onChange={(e) => setNewEndDate(e.target.value)}
-                  style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40 }}
                 />
-              </label>
-              <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                <span style={{ fontWeight: 600 }}>Order reference (optional)</span>
-                <input
+              </Field>
+              <Field label="Order reference (optional)" error={extendErrs.orderRef}>
+                <Input
                   value={extendOrderRef}
                   onChange={(e) => setExtendOrderRef(e.target.value)}
                   placeholder="e.g. EXT/2026/003"
-                  style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40 }}
                 />
-              </label>
+              </Field>
             </div>
           }
           confirmLabel="Extend probation"
@@ -421,26 +430,26 @@ export function ProbationConfirmationList({ rows, hasMore }: ListProps) {
           marginBottom: 14,
         }}
       >
-        <input
+        <Input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by employee or department…"
           aria-label="Search by employee or department"
-          style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40, flex: "1 1 220px" }}
+          style={{ flex: "1 1 220px", width: "auto" }}
         />
-        <select
+        <Select
           value={bucket}
           onChange={(e) => setBucket(e.target.value as Bucket)}
           aria-label="Filter by deadline"
-          style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40 }}
+          style={{ width: "auto" }}
         >
           <option value="all">All</option>
           <option value="overdue">Overdue</option>
           <option value="due_soon">Due in 30 days</option>
           <option value="timely">Timely</option>
           <option value="not_set">Date not set</option>
-        </select>
+        </Select>
       </div>
 
       {hasMore && (

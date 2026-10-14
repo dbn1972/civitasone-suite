@@ -7,6 +7,8 @@
  * another zone. Pin everything to Asia/Kolkata so the wall-clock a clerk sees
  * and schedules is always IST regardless of the device locale/TZ.
  */
+import { formatInIST } from "@/lib/formatters";
+
 export const IST_TIME_ZONE = "Asia/Kolkata";
 
 /** IST-friendly short time, e.g. "14:32". Falls back to "—" on bad input. */
@@ -14,12 +16,7 @@ export function fmtTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-    timeZone: IST_TIME_ZONE,
-  });
+  return formatInIST(d, { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 /** IST date-time with an explicit "IST" suffix, e.g. "01 Sep 2026, 10:00 IST". */
@@ -28,15 +25,8 @@ export function fmtDateTime(iso: string | null | undefined): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
   return (
-    d.toLocaleString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-      timeZone: IST_TIME_ZONE,
-    }) + " IST"
+    formatInIST(d, { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) +
+    " IST"
   );
 }
 

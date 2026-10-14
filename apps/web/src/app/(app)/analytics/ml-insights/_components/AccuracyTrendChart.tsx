@@ -1,5 +1,6 @@
 "use client";
 
+import { formatInIST } from "@/lib/formatters";
 import type { AccuracyTrendPoint } from "../_data";
 import { metricBand, type MetricThresholds } from "../_metrics";
 
@@ -31,11 +32,10 @@ function formatAxisLabel(iso: string, showYear: boolean): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso.slice(5);
-  return d.toLocaleDateString("en-IN", {
+  return formatInIST(d, {
     day: "2-digit",
     month: "short",
     year: showYear ? "numeric" : undefined,
-    timeZone: "Asia/Kolkata",
   });
 }
 

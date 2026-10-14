@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ProbationConfirmationList, type ConfirmationRow } from "./ProbationConfirmationCard";
 
@@ -26,7 +28,7 @@ describe("ProbationConfirmationCard", () => {
     const fetchMock = vi.fn(async () => ({ ok: true, status: 202, text: async () => "{}" }) as Response);
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ProbationConfirmationList rows={[ROW]} />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ProbationConfirmationList rows={[ROW]} /></NextIntlClientProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Confirm Priya Nair" }));
 
     // Must ask before doing anything irreversible-looking.
@@ -39,7 +41,7 @@ describe("ProbationConfirmationCard", () => {
     await waitFor(() => expect(screen.getByText(/order reference is required/i)).toBeInTheDocument());
     expect(fetchMock).not.toHaveBeenCalled();
 
-    fireEvent.change(screen.getByLabelText("Order reference"), { target: { value: "CONFIRM/2026/014" } });
+    fireEvent.change(screen.getByLabelText(/^Order reference/), { target: { value: "CONFIRM/2026/014" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirm service" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
@@ -60,11 +62,28 @@ describe("ProbationConfirmationCard", () => {
   // authorised") verbatim — the same class of leak useFormError closes
   // fleet-wide (UX-003). It must now show the catalogued clerk-safe message
   // instead, never the raw server text.
+  it("blocks an empty or over-long order reference with an inline field error (mirrors confirmEmployeeBody 1-64)", async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 202, text: async () => "{}" }) as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ProbationConfirmationList rows={[ROW]} /></NextIntlClientProvider>);
+    fireEvent.click(screen.getByRole("button", { name: "Confirm Priya Nair" }));
+    await screen.findByRole("alertdialog");
+
+    fireEvent.click(screen.getByRole("button", { name: "Confirm service" }));
+    expect(await screen.findByText("Enter the order reference.")).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Order reference/)).toHaveAttribute("aria-invalid", "true");
+
+    fireEvent.change(screen.getByLabelText(/^Order reference/), { target: { value: "X".repeat(65) } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirm service" }));
+    expect((await screen.findAllByText("Order reference must be 64 characters or fewer.")).length).toBeGreaterThan(0);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("surfaces a clerk-safe failure message instead of showing Confirmed anyway", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 403, text: async () => "not authorised" }) as Response));
-    render(<ProbationConfirmationList rows={[ROW]} />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ProbationConfirmationList rows={[ROW]} /></NextIntlClientProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Confirm Priya Nair" }));
-    fireEvent.change(await screen.findByLabelText("Order reference"), { target: { value: "CONFIRM/2026/014" } });
+    fireEvent.change(await screen.findByLabelText(/^Order reference/), { target: { value: "CONFIRM/2026/014" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirm service" }));
 
     await waitFor(() => expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument());
@@ -74,9 +93,9 @@ describe("ProbationConfirmationCard", () => {
 
   it("never surfaces a raw HTTP status code on a plain-text failure with no body", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 500, text: async () => "" }) as Response));
-    render(<ProbationConfirmationList rows={[ROW]} />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ProbationConfirmationList rows={[ROW]} /></NextIntlClientProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Confirm Priya Nair" }));
-    fireEvent.change(await screen.findByLabelText("Order reference"), { target: { value: "CONFIRM/2026/014" } });
+    fireEvent.change(await screen.findByLabelText(/^Order reference/), { target: { value: "CONFIRM/2026/014" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirm service" }));
 
     const errorMessage = await waitFor(() => screen.getByText(/We couldn't save the probation confirmation because of a problem on our side\. Your changes haven't been saved\. Try again in a few minutes\./));
@@ -94,11 +113,11 @@ describe("ProbationConfirmationCard", () => {
     const fetchMock = vi.fn(async () => ({ ok: true, status: 202, text: async () => "{}" }) as Response);
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ProbationConfirmationList rows={[ROW]} />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ProbationConfirmationList rows={[ROW]} /></NextIntlClientProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Extend probation for Priya Nair" }));
     expect(await screen.findByRole("alertdialog")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("New probation end date"), { target: { value: "2027-01-01" } });
+    fireEvent.change(screen.getByLabelText(/^New probation end date/), { target: { value: "2027-01-01" } });
     fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Performance improvement plan ongoing" } });
     fireEvent.click(screen.getByRole("button", { name: "Extend probation" }));
 
@@ -114,9 +133,9 @@ describe("ProbationConfirmationCard", () => {
 
   it("Extend's reason is required (at least 3 characters)", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 202, text: async () => "{}" }) as Response));
-    render(<ProbationConfirmationList rows={[ROW]} />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ProbationConfirmationList rows={[ROW]} /></NextIntlClientProvider>);
     fireEvent.click(screen.getByRole("button", { name: "Extend probation for Priya Nair" }));
-    fireEvent.change(await screen.findByLabelText("New probation end date"), { target: { value: "2027-01-01" } });
+    fireEvent.change(await screen.findByLabelText(/^New probation end date/), { target: { value: "2027-01-01" } });
 
     expect(screen.getByRole("button", { name: "Extend probation" })).toBeDisabled();
   });
@@ -125,7 +144,7 @@ describe("ProbationConfirmationCard", () => {
   // rely on a bare emoji for meaning -- redundant announcement fixed via
   // aria-hidden on the glyph, with the text label carrying the real name.
   it("gives the manager-recommendation badge an accessible name, with the emoji hidden from assistive tech", () => {
-    render(<ProbationConfirmationList rows={[ROW]} />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ProbationConfirmationList rows={[ROW]} /></NextIntlClientProvider>);
     const badge = screen.getByRole("status", { name: /manager recommendation: recommended/i });
     expect(badge).toBeInTheDocument();
   });

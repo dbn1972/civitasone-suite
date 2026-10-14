@@ -6,14 +6,16 @@
 "use client";
 
 import { UserFacingError } from "@/lib/userFacingError";
-import { useEffect, useState, useId } from "react";
+import { useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { useAsyncMutation } from "@/lib/useAsyncMutation";
-import { Button } from "../../../_components/ds";
+import { Button, Field, Input, Select, Textarea } from "../../../_components/ds";
 import { EmployeePicker } from "../../../_components/EmployeePicker";
 import { todayIST } from "@/lib/formatters";
+import { translateFormErrors } from "./translateFormErrors";
+import { validateWfhRequest, type WfhRequestErrors } from "./wfhRequestSchema";
 
 type CreatedRequest = { id: string };
 type WfhRequestsList = { data: Array<{ id: string }> };
@@ -62,6 +64,7 @@ export function WFHRequestForm({
 }: WFHRequestFormProps) {
   const router = useRouter();
   const t = useTranslations("wfhForm");
+  const tv = useTranslations("hrFormErrors");
   const [state, setState] = useState<SubmitState>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const formError = useFormError("WFH request");
@@ -72,11 +75,12 @@ export function WFHRequestForm({
   const [toDate, setToDate] = useState("");
   const [reason, setReason] = useState("");
 
-  const idEmp = useId();
-  const idFrom = useId();
-  const idTo = useId();
-  const idReason = useId();
   const errId = useId();
+  const [clientErrors, setClientErrors] = useState<WfhRequestErrors>({});
+  /** Client validation first, then a backend rejection for the same field. */
+  const errFor = (f: keyof WfhRequestErrors) => clientErrors[f] ?? formError.fieldError(f);
+  const clearClientError = (f: keyof WfhRequestErrors) =>
+    setClientErrors((e) => (e[f] ? { ...e, [f]: undefined } : e));
 
   // UX: replaces the raw "paste an employee UUID" text box below with a
   // searchable name-based dropdown, matching the pattern already used by
@@ -175,6 +179,8 @@ export function WFHRequestForm({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (isGazetted || weeklyCapReached) return; // belt-and-suspenders
+    const errs = translateFormErrors(validateWfhRequest({ employeeId, fromDate, toDate, reason }), tv);
+    setClientErrors(errs);
     if (!fromDate || !toDate) {
       setErrorMsg(t("errorBothDatesRequired"));
       setState("error");
@@ -182,6 +188,11 @@ export function WFHRequestForm({
     }
     if (toDate < fromDate) {
       setErrorMsg(t("errorToBeforeFrom"));
+      setState("error");
+      return;
+    }
+    if (Object.keys(errs).length > 0) {
+      setErrorMsg(!employeeId ? t("errorEmployeeRequired") : (Object.values(errs)[0] ?? ""));
       setState("error");
       return;
     }
@@ -250,16 +261,11 @@ export function WFHRequestForm({
       </div>
 
       {!prefillId && (
-        <div>
-          <label htmlFor={idEmp} style={labelStyle}>{t("labelEmployee")}</label>
+        <Field label={t("labelEmployee")} required error={errFor("employeeId")}>
           {employees.length > 0 ? (
-            <select
-              id={idEmp}
-              style={inputStyle}
+            <Select
               value={employeeId}
-              onChange={(e) => setEmployeeId(e.target.value)}
-              required
-              aria-required="true"
+              onChange={(e) => { setEmployeeId(e.target.value); clearClientError("employeeId"); }}
             >
               <option value="">{t("placeholderEmployee")}</option>
               {employees.map((emp) => (
@@ -267,70 +273,46 @@ export function WFHRequestForm({
                   {emp.name ?? emp.id}{emp.employeeNo ? ` (${emp.employeeNo})` : ""}
                 </option>
               ))}
-            </select>
+            </Select>
           ) : (
-            <EmployeePicker id={idEmp} value={employeeId || null} onChange={(id) => setEmployeeId(id ?? "")} />
+            <EmployeePicker value={employeeId || null} onChange={(id) => { setEmployeeId(id ?? ""); clearClientError("employeeId"); }} />
           )}
-        </div>
+        </Field>
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-        <div>
-          <label htmlFor={idFrom} style={labelStyle}>{t("labelFromDate")} <span aria-hidden>*</span></label>
-          <input
-            id={idFrom}
+        <Field label={t("labelFromDate")} required error={errFor("fromDate")}>
+          <Input
             type="date"
-            style={inputStyle}
             value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            required
-            aria-required="true"
+            onChange={(e) => { setFromDate(e.target.value); clearClientError("fromDate"); }}
             // GAP-HR-WFH-06: was new Date().toISOString().split("T")[0] — the
             // UTC calendar date, which is still "yesterday" in India between
             // 00:00 and 05:30 IST, so the min bound (and the matching To-date
             // min below) silently blocked "today" for the first 5.5 hours of
             // every IST day. todayIST() is the drop-in IST-correct equivalent.
             min={todayIST()}
-            aria-describedby={formError.fieldError("fromDate") ? "wfh-from-err" : undefined}
           />
-          {formError.fieldError("fromDate") && (
-            <span id="wfh-from-err" role="alert" style={{ display: "block", fontSize: 12, color: "var(--red, #dc2626)", marginTop: 4 }}>
-              {formError.fieldError("fromDate")}
-            </span>
-          )}
-        </div>
-        <div>
-          <label htmlFor={idTo} style={labelStyle}>{t("labelToDate")} <span aria-hidden>*</span></label>
-          <input
-            id={idTo}
+        </Field>
+        <Field label={t("labelToDate")} required error={errFor("toDate")}>
+          <Input
             type="date"
-            style={inputStyle}
             value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            required
-            aria-required="true"
+            onChange={(e) => { setToDate(e.target.value); clearClientError("toDate"); }}
             min={fromDate || todayIST()}
-            aria-describedby={formError.fieldError("toDate") ? "wfh-to-err" : undefined}
           />
-          {formError.fieldError("toDate") && (
-            <span id="wfh-to-err" role="alert" style={{ display: "block", fontSize: 12, color: "var(--red, #dc2626)", marginTop: 4 }}>
-              {formError.fieldError("toDate")}
-            </span>
-          )}
-        </div>
+        </Field>
       </div>
 
-      <div>
-        <label htmlFor={idReason} style={labelStyle}>{t("labelReason")}</label>
-        <textarea
-          id={idReason}
-          style={{ ...inputStyle, resize: "vertical", minHeight: 80 }}
+      <Field label={t("labelReason")} error={errFor("reason")}>
+        <Textarea
+          style={{ resize: "vertical", minHeight: 80 }}
           value={reason}
-          onChange={(e) => setReason(e.target.value)}
+          onChange={(e) => { setReason(e.target.value); clearClientError("reason"); }}
           placeholder={t("placeholderReason")}
           maxLength={500}
         />
-      </div>
+      </Field>
 
       {displayPhase !== "idle" && displayPhase !== "submitting" && (
         <p
@@ -371,20 +353,6 @@ export function WFHRequestForm({
     </form>
   );
 }
-
-const labelStyle: React.CSSProperties = {
-  display: "block",
-  fontSize: 13,
-  fontWeight: 500,
-  color: "var(--muted, #6b7280)",
-  marginBottom: 5,
-};
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  minHeight: 44,
-};
 
 const errorBannerStyle: React.CSSProperties = {
   background: "var(--error-bg, #fef2f2)",

@@ -1,5 +1,5 @@
-import { CdpListLoading } from "../_CdpListLoading";
+import { RouteSkeleton } from "@/app/_components/RouteSkeleton";
 
 export default function Loading() {
-  return <CdpListLoading />;
+  return <RouteSkeleton />;
 }

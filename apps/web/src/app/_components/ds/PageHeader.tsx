@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { safeInternalPath } from "@/lib/safeUrl";
 
 interface PageHeaderProps {
   /**
@@ -32,7 +33,7 @@ export function PageHeader({ title, subtitle, actions, back, backLabel, help }: 
             text-contrast heuristic.
           */}
           <ArrowLeft aria-hidden="true" size={14} />
-          <Link href={back}>{backLabel ?? 'Back'}</Link>
+          <Link href={safeInternalPath(back)}>{backLabel ?? 'Back'}</Link>
         </span>
       )}
       <div className="ph">

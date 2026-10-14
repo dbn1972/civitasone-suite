@@ -1,5 +1,6 @@
 "use client";
 
+import { formatInIST } from "@/lib/formatters";
 import { DataTable } from "@/app/_components/ds";
 import type { RecentPredictionRow } from "../_data";
 import type { PredictionKind } from "../_metrics";
@@ -48,7 +49,7 @@ function formatPrediction(value: number, kind: PredictionKind): string {
 function formatDate(iso: string): string {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleDateString("en-IN", {
+    return formatInIST(iso, {
       day: "2-digit",
       month: "short",
       hour: "2-digit",

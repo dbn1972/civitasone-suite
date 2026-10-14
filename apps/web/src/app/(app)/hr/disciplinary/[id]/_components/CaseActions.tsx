@@ -13,7 +13,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog, AcceptedNotice } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog, AcceptedNotice, Field, Input, Select } from "@/app/_components/ds";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { humanizeStatus } from "@/lib/formatters";
@@ -30,16 +30,6 @@ const FINDINGS = ["guilty", "not_guilty", "partly_guilty"] as const;
 const APPEAL_OUTCOMES = ["upheld", "modified", "set_aside"] as const;
 
 type Values = Record<string, string>;
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "8px 10px",
-  fontSize: 14,
-  border: "1px solid var(--line, #cbd5e1)",
-  borderRadius: 8,
-  minHeight: 40,
-};
 
 /** Fields each action collects, and which are required. */
 const FIELDS: Record<CaseActionKey, { name: string; kind: "text" | "date" | "select"; required: boolean; max?: number }[]> = {
@@ -220,30 +210,22 @@ export function CaseActions({
         >
           <div style={{ display: "grid", gap: 10, margin: "8px 0" }}>
             {FIELDS[active].map((f) => {
-              const id = `disc-${active}-${f.name}`;
               return (
-                <div key={f.name} style={{ display: "grid", gap: 4 }}>
-                  <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
-                    {t(`field_${f.name}`)}
-                    {f.required && <span aria-hidden="true" style={{ color: "var(--bad, #b91c1c)" }}> *</span>}
-                  </label>
+                <Field key={f.name} label={t(`field_${f.name}`)} required={f.required}>
                   {f.kind === "select" ? (
-                    <select id={id} value={values[f.name] ?? ""} onChange={set(f.name)} aria-required={f.required} style={inputStyle}>
+                    <Select value={values[f.name] ?? ""} onChange={set(f.name)}>
                       <option value="">{t("select")}</option>
                       {optionsFor(f.name).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
+                    </Select>
                   ) : (
-                    <input
-                      id={id}
+                    <Input
                       type={f.kind === "date" ? "date" : "text"}
                       value={values[f.name] ?? ""}
                       onChange={set(f.name)}
                       maxLength={f.max}
-                      aria-required={f.required}
-                      style={inputStyle}
                     />
                   )}
-                </div>
+                </Field>
               );
             })}
           </div>

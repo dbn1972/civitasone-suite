@@ -1,18 +1,12 @@
-const shimmer: React.CSSProperties = {
-  background: "linear-gradient(90deg,#eef1f4 25%,#e2e6ea 37%,#eef1f4 63%)",
-  backgroundSize: "400% 100%",
-  animation: "auditShimmer 1.4s ease infinite",
-  borderRadius: 8,
-};
+import { SkeletonBar } from "@/app/_components/ds/Skeleton";
 
 function Bar({ w, h, mb, r }: { w: number | string; h: number; mb?: number; r?: number }) {
-  return <div style={{ ...shimmer, width: w, height: h, marginBottom: mb, borderRadius: r ?? 8 }} />;
+  return <SkeletonBar w={w} h={h} style={{ marginBottom: mb, borderRadius: r ?? 8 }} />;
 }
 
 export default function AuditLoading() {
   return (
     <div className="wrap" aria-busy="true" aria-label="Loading audit page">
-      <style>{"@keyframes auditShimmer{0%{background-position:100% 0}100%{background-position:0 0}}"}</style>
       <Bar w={180} h={14} mb={12} />
       <div className="ph">
         <div>

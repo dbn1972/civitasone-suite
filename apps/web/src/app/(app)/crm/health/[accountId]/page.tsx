@@ -1,3 +1,4 @@
+import { formatIndianDateTime } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { Card, EmptyState, PageHeader, StatCard, StatGrid, StatusPill, HelpTip, LoadErrorState } from "../../../../_components/ds";
@@ -11,15 +12,8 @@ interface PageProps {
 }
 
 function formatDateTime(iso: string): string {
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return "—";
-  return parsed.toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  if (Number.isNaN(new Date(iso).getTime())) return "—";
+  return formatIndianDateTime(iso);
 }
 
 /**

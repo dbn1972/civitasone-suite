@@ -1,25 +1,17 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState } from "react";
-import type { CSSProperties } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { fiscalYearLabel, financialYearOf } from "@/lib/fiscalYear";
-import { Button, ConfirmDialog, EntityPicker } from "../../../../_components/ds";
+import { Button, ConfirmDialog, EntityPicker, Field, Input, Select } from "../../../../_components/ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 
 type LeaveTypeOption = { id: string; code: string; name: string };
 type ContextAlloc = { id: string; leaveTypeId: string; leaveTypeCode: string; leaveTypeName: string; fy: string; totalDays: number; balanceDays: number };
 type LeaveContext = { leaveTypes: Array<{ id: string; code: string; name: string; maxDays: number }>; allocations: ContextAlloc[] };
-
-const inputStyle: CSSProperties = {
-  width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
-  borderRadius: 8, background: "var(--bg2)", color: "var(--ink)", fontSize: 14,
-};
-const inputErrStyle: CSSProperties = { ...inputStyle, border: "1px solid var(--badbd, #ef4444)" };
-const fieldErrStyle: CSSProperties = { color: "var(--bad, #b91c1c)", fontSize: 12, margin: "3px 0 0" };
 
 /**
  * GAP-HR-LEAVE-ALLOCATE-05: three real FYs (current-1/current/current+1),
@@ -70,9 +62,6 @@ export function AllocateLeaveForm() {
   const [employeeLabel, setEmployeeLabel] = useState<string | null>(null);
   const [contextLoading, setContextLoading] = useState(false);
 
-  const empId = useId();
-  const ltId = useId();
-  const fyId = useId();
   const daysId = useId();
 
   useEffect(() => {
@@ -204,25 +193,18 @@ export function AllocateLeaveForm() {
           </p>
         )}
 
-        <div>
-          <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 4 }}>
-            {t("employeeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-          </label>
+        <Field label={t("employeeLabel")} required error={invalid.has("employee") ? t("employeeRequired") : formError.fieldError("employeeId")}>
           {/* GAP-HR-LEAVE-ALLOCATE-04: EntityPicker (GAP-HR-SF-06) replaces a
               <select> that fetched up to 500 employees in one uncached call
               with a debounced, cancellable, server-side search. */}
           <EntityPicker
-            id={empId}
             value={employeeId}
             onChange={(v) => { setEmployeeId(Array.isArray(v) ? (v[0] ?? null) : v); clearErr("employee"); }}
             search={searchEmployees}
             resolve={resolveEmployees}
             placeholder={t("employeeSearchPlaceholder")}
           />
-          {invalid.has("employee") && (
-            <p id={`${empId}-err`} role="alert" style={fieldErrStyle}>{t("employeeRequired")}</p>
-          )}
-        </div>
+        </Field>
 
         {employeeId && (
           <div style={{ padding: "10px 12px", background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 8, fontSize: 12 }}>
@@ -259,68 +241,41 @@ export function AllocateLeaveForm() {
                 own page changes — until that merges this link still opens the
                 balance page, just without preselecting the employee yet. */}
             <div style={{ marginTop: 6 }}>
-              <Link href={`/hr/leave/balance?empId=${employeeId}`} style={{ color: "var(--primary-d)" }}>
+              <Link href={`/hr/leave/balance?empId=${encodeURIComponent(employeeId)}`} style={{ color: "var(--primary-d)" }}>
                 {t("viewFullBalanceLink")}
               </Link>
             </div>
           </div>
         )}
 
-        <div>
-          <label htmlFor={ltId} style={{ fontSize: 13, fontWeight: 500 }}>
-            {t("leaveTypeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-          </label>
-          <select
-            id={ltId}
+        <Field label={t("leaveTypeLabel")} required error={invalid.has("leaveType") ? t("leaveTypeRequired") : formError.fieldError("leaveTypeId")}>
+          <Select
             value={leaveTypeId}
             onChange={(e) => { setLeaveTypeId(e.target.value); setForceExceed(false); clearErr("leaveType"); }}
-            style={invalid.has("leaveType") ? inputErrStyle : inputStyle}
-            aria-invalid={invalid.has("leaveType")}
-            aria-describedby={invalid.has("leaveType") ? `${ltId}-err` : undefined}
           >
             <option value="">{leaveTypes.length === 0 ? (status === "error" ? t("unableToLoadLeaveTypes") : t("loadingOption")) : t("selectLeaveTypePlaceholder")}</option>
             {leaveTypes.map((lt) => (
               <option key={lt.id} value={lt.id}>{lt.name} ({lt.code})</option>
             ))}
-          </select>
-          {invalid.has("leaveType") && (
-            <p id={`${ltId}-err`} role="alert" style={fieldErrStyle}>{t("leaveTypeRequired")}</p>
-          )}
-        </div>
+          </Select>
+        </Field>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-          <div>
-            <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 500 }}>
-              {t("financialYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-            </label>
-            <select
-              id={fyId}
-              value={fy}
-              onChange={(e) => setFy(e.target.value)}
-              style={inputStyle}
-            >
+          <Field label={t("financialYearLabel")} required error={formError.fieldError("fy")}>
+            <Select value={fy} onChange={(e) => setFy(e.target.value)}>
               {fyChoices.map((f) => <option key={f} value={f}>{f}</option>)}
-            </select>
-          </div>
-          <div>
-            <label htmlFor={daysId} style={{ fontSize: 13, fontWeight: 500 }}>
-              {t("totalDaysLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-            </label>
-            <input
-              id={daysId}
+            </Select>
+          </Field>
+          <Field id={daysId} label={t("totalDaysLabel")} required error={invalid.has("days") ? t("daysRangeError") : formError.fieldError("totalDays")}>
+            <Input
               type="number"
               min={1}
               max={365}
               value={totalDays}
               onChange={(e) => { setTotalDays(e.target.value); clearErr("days"); }}
               placeholder={t("daysPlaceholder")}
-              style={invalid.has("days") ? inputErrStyle : inputStyle}
-              aria-invalid={invalid.has("days")}
-              aria-describedby={invalid.has("days") ? `${daysId}-err` : overCap ? `${daysId}-cap-warn` : undefined}
+              aria-describedby={!invalid.has("days") && overCap ? `${daysId}-cap-warn` : undefined}
             />
-            {invalid.has("days") && (
-              <p id={`${daysId}-err`} role="alert" style={fieldErrStyle}>{t("daysRangeError")}</p>
-            )}
             {!invalid.has("days") && alreadyAllocated && (
               <p role="status" data-testid="already-allocated-warning" style={{ color: "var(--warn-d, #92620a)", fontSize: 12, margin: "3px 0 0" }}>
                 {t("alreadyAllocatedWarning", { typeName: selectedLeaveType?.name ?? "", fy })}
@@ -331,7 +286,7 @@ export function AllocateLeaveForm() {
                 {t("overCapWarning", { maxDays: selectedTypeMaxDays, typeName: selectedLeaveType?.name ?? "" })}
               </p>
             )}
-          </div>
+          </Field>
         </div>
 
         <div style={{ display: "flex", gap: 10, marginTop: 4 }}>

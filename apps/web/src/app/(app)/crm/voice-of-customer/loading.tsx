@@ -1,3 +1,4 @@
+import { SkeletonBar } from "@/app/_components/ds/Skeleton";
 import { useTranslations } from "next-intl";
 
 export default function Loading() {
@@ -12,10 +13,10 @@ export default function Loading() {
       <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} style={{ height: 80, borderRadius: 12, background: "#f1f5f9" }} />
+            <div key={i} style={{ height: 80, borderRadius: 12, background: "var(--line2)" }} />
           ))}
         </div>
-        <div style={{ height: 280, borderRadius: 12, background: "#f1f5f9" }} />
+        <SkeletonBar h={280} style={{ borderRadius: 12 }} />
       </div>
     </div>
   );

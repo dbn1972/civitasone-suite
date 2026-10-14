@@ -89,7 +89,7 @@ describe("DevicesTable", () => {
   it("shows Last Active as a formatted IST date-time, not the raw ISO string", () => {
     render(<DevicesTable items={[dev({ lastSeen: "2026-09-01T10:00:00Z" })]} />);
     expect(screen.queryByText("2026-09-01T10:00:00Z")).not.toBeInTheDocument();
-    expect(screen.getByText("01/09/2026 15:30")).toBeInTheDocument();
+    expect(screen.getByText("01 Sep 2026, 03:30 pm")).toBeInTheDocument();
   });
 
   it("humanizes the flag reason", () => {

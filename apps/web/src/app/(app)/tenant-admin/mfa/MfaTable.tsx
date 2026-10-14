@@ -1,5 +1,6 @@
 "use client";
 
+import { formatIndianDate } from "@/lib/formatters";
 import { DataTable, StatusPill, Masked, maskEmail } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -64,7 +65,7 @@ export function MfaTable({ users, source }: { users: MfaUserStatus[]; source: "a
           },
           { key: "department", label: "Department", render: (row) => (row.department ? String(row.department) : "—") },
           { key: "mfaStatus", label: "MFA Status", render: (row) => mfaPill(row.mfaStatus as string) },
-          { key: "enrolledAt", label: "Enrolled On", render: (row) => row.enrolledAt ? new Date(row.enrolledAt as string).toLocaleDateString("en-IN", { dateStyle: "medium" }) : "—" },
+          { key: "enrolledAt", label: "Enrolled On", render: (row) => row.enrolledAt ? formatIndianDate(row.enrolledAt as string) : "—" },
         ]}
         rows={data as (MfaUserStatus & Record<string, unknown>)[]}
         sortable

@@ -1,5 +1,6 @@
 "use client";
 
+import { formatDateTimeIST } from "@/lib/formatters";
 import { DataTable, EmptyState } from "../../../_components/ds";
 import type { AdminOperationProcess, AdminOperationScheduler } from "../../../_data/loaders";
 
@@ -26,7 +27,7 @@ function formatDate(value?: string): string {
   // label the value so there is no ambiguity about the zone.
   return Number.isNaN(date.getTime())
     ? "Not recorded"
-    : `${date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Kolkata" })} IST`;
+    : formatDateTimeIST(date);
 }
 
 type ProcessRow = AdminOperationProcess & Record<string, unknown>;

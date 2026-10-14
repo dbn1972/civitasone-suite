@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { AcceptedNotice, Button, Field, Input, Textarea, ConfirmDialog } from "../../../../_components/ds";
+import { AcceptedNotice, Button, Field, Input, Select, Textarea, ConfirmDialog } from "../../../../_components/ds";
+import { useFormError } from "@/lib/useFormError";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { acceptedCopy } from "@/lib/acceptedCopy";
 
@@ -68,6 +69,7 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
   const TYPE_LABEL = typeLabels(t);
   const router = useRouter();
   const accepted = useAcceptedWrite();
+  const formError = useFormError("JD template");
   const isEdit = !!templateId;
   const [name, setName] = useState("");
   const [vacancyType, setVacancyType] = useState("regular");
@@ -146,23 +148,25 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
     return value.split(",").map((v) => v.trim()).filter(Boolean).slice(0, maxCount).map((v) => v.slice(0, maxLen));
   }
 
-  function validate(): string | null {
-    if (!name.trim()) return t("nameRequired");
-    if (name.trim().length > LIMITS.name) return t("nameTooLong", { max: LIMITS.name });
-    if (description.trim().length > LIMITS.description) return t("descriptionTooLong", { max: LIMITS.description });
-    if (qualification.trim().length > LIMITS.qualification) return t("qualificationTooLong", { max: LIMITS.qualification });
-    if (payRange.trim().length > LIMITS.payRange) return t("payRangeTooLong", { max: LIMITS.payRange });
-    if (selectionProcess.trim().length > LIMITS.selectionProcess) return t("selectionProcessTooLong", { max: LIMITS.selectionProcess });
+  function validate(): { field: string; message: string } | null {
+    if (!name.trim()) return { field: "name", message: t("nameRequired") };
+    if (name.trim().length > LIMITS.name) return { field: "name", message: t("nameTooLong", { max: LIMITS.name }) };
+    if (description.trim().length > LIMITS.description) return { field: "description", message: t("descriptionTooLong", { max: LIMITS.description }) };
+    if (qualification.trim().length > LIMITS.qualification) return { field: "qualification", message: t("qualificationTooLong", { max: LIMITS.qualification }) };
+    if (payRange.trim().length > LIMITS.payRange) return { field: "payRange", message: t("payRangeTooLong", { max: LIMITS.payRange }) };
+    if (selectionProcess.trim().length > LIMITS.selectionProcess) return { field: "selectionProcess", message: t("selectionProcessTooLong", { max: LIMITS.selectionProcess }) };
     return null;
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFieldErrors({});
-    const validationMessage = validate();
-    if (validationMessage) {
+    formError.clear();
+    const invalid = validate();
+    if (invalid) {
+      setFieldErrors({ [invalid.field]: invalid.message });
       setStatus("error");
-      setMessage(validationMessage);
+      setMessage(invalid.message);
       return;
     }
 
@@ -189,15 +193,9 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
       );
 
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({ message: t("saveFailedGeneric") }))) as {
-          message?: string;
-          fieldErrors?: { field: string; message: string }[];
-        };
+        const resolved = await formError.fromResponse(res, "save");
         setStatus("error");
-        setMessage(err.message ?? (isEdit ? t("updateFailed") : t("createFailed")));
-        if (err.fieldErrors?.length) {
-          setFieldErrors(Object.fromEntries(err.fieldErrors.map((fe) => [fe.field, fe.message])));
-        }
+        setMessage(resolved.message);
         return;
       }
 
@@ -248,7 +246,7 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
   return (
     <>
       <form onSubmit={handleSubmit} style={{ maxWidth: 640, display: "grid", gap: 18 }}>
-        <Field label={t("nameLabel")} required error={fieldErrors.name}>
+        <Field label={t("nameLabel")} required error={fieldErrors.name ?? formError.fieldError("name")}>
           <Input
             value={name}
             onChange={(e) => { setName(e.target.value); markDirty(); }}
@@ -259,22 +257,17 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
         </Field>
 
         <Field label={t("typeLabel")} required>
-          <select
-            id="tpl-type"
+          <Select
             value={vacancyType}
             onChange={(e) => { setVacancyType(e.target.value); markDirty(); }}
-            style={{
-              width: "100%", padding: "10px 12px", fontSize: 14, border: "1px solid var(--line, #cbd5e1)",
-              borderRadius: 8, boxSizing: "border-box", color: "var(--ink, #0f172a)", background: "var(--panel, #fff)",
-            }}
           >
             {VACANCY_TYPE_VALUES.map((v) => (
               <option key={v} value={v}>{TYPE_LABEL[v]}</option>
             ))}
-          </select>
+          </Select>
         </Field>
 
-        <Field label={t("descriptionLabel")} error={fieldErrors.description}>
+        <Field label={t("descriptionLabel")} error={fieldErrors.description ?? formError.fieldError("description")}>
           <Textarea
             value={description}
             onChange={(e) => { setDescription(e.target.value); markDirty(); }}
@@ -284,7 +277,7 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
           />
         </Field>
 
-        <Field label={t("qualificationLabel")} error={fieldErrors.qualification}>
+        <Field label={t("qualificationLabel")} error={fieldErrors.qualification ?? formError.fieldError("qualification")}>
           <Input
             value={qualification}
             onChange={(e) => { setQualification(e.target.value); markDirty(); }}
@@ -293,7 +286,7 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
           />
         </Field>
 
-        <Field label={t("payRangeLabel")} error={fieldErrors.payRange}>
+        <Field label={t("payRangeLabel")} error={fieldErrors.payRange ?? formError.fieldError("payRange")}>
           <Input
             value={payRange}
             onChange={(e) => { setPayRange(e.target.value); markDirty(); }}
@@ -302,7 +295,7 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
           />
         </Field>
 
-        <Field label={t("selectionProcessLabel")} error={fieldErrors.selectionProcess}>
+        <Field label={t("selectionProcessLabel")} error={fieldErrors.selectionProcess ?? formError.fieldError("selectionProcess")}>
           <Textarea
             value={selectionProcess}
             onChange={(e) => { setSelectionProcess(e.target.value); markDirty(); }}

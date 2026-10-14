@@ -18,6 +18,7 @@
  * On a failed API load the page shows DataSourceBadge rather than an empty
  * state that could be mistaken for "data is clean".
  */
+import { formatIndianDate } from "@/lib/formatters";
 import { useCallback, useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button, PageHeader, EmptyState, ConfirmDialog } from "@/app/_components/ds";
@@ -85,11 +86,7 @@ function fmt(key: keyof DedupContactSnapshot, v: string | null | undefined): str
   if (v == null || v === "") return "—";
   if (key === "lastActivity") {
     try {
-      return new Date(v).toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      });
+      return formatIndianDate(v);
     } catch {
       return v;
     }

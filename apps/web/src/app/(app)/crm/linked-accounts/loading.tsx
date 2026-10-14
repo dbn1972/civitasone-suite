@@ -1,3 +1,4 @@
+import { SkeletonBar } from "@/app/_components/ds/Skeleton";
 import { useTranslations } from "next-intl";
 export default function Loading() {
   const t = useTranslations("crm.loading");
@@ -15,14 +16,14 @@ export default function Loading() {
           layout shift when the data loads. */}
       <div className="animate-pulse card" style={{ display: "grid", gap: 14, padding: 16 }}>
         {/* two input skeletons */}
-        <div style={{ height: 44, borderRadius: 8, background: "#f1f5f9" }} />
-        <div style={{ height: 44, borderRadius: 8, background: "#f1f5f9" }} />
+        <SkeletonBar h={44} style={{ borderRadius: 8 }} />
+        <SkeletonBar h={44} style={{ borderRadius: 8 }} />
         {/* request button */}
-        <div style={{ height: 44, width: 180, borderRadius: 8, background: "#f1f5f9" }} />
+        <SkeletonBar w={180} h={44} style={{ borderRadius: 8 }} />
         {/* three table-row skeletons */}
-        <div style={{ height: 40, borderRadius: 8, background: "#f1f5f9", marginTop: 8 }} />
-        <div style={{ height: 40, borderRadius: 8, background: "#f1f5f9" }} />
-        <div style={{ height: 40, borderRadius: 8, background: "#f1f5f9" }} />
+        <SkeletonBar h={40} style={{ borderRadius: 8, marginTop: 8 }} />
+        <SkeletonBar h={40} style={{ borderRadius: 8 }} />
+        <SkeletonBar h={40} style={{ borderRadius: 8 }} />
       </div>
     </div>
   );

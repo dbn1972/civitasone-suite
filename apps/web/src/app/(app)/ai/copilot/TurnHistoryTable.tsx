@@ -1,4 +1,5 @@
 "use client";
+import { formatInIST } from "@/lib/formatters";
 import { DataTable, StatusPill } from "../../../_components/ds";
 import type { CopilotTurn } from "@civitasone/types";
 import { maskIdentifiers } from "@/lib/pii";
@@ -18,14 +19,7 @@ type TurnRow = {
 };
 
 function formatDateTime(iso: string): string {
-  const parsed = new Date(iso);
-  if (Number.isNaN(parsed.getTime())) return "—";
-  return parsed.toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatInIST(iso, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 export function TurnHistoryTable({ turns }: { turns: CopilotTurn[] }) {

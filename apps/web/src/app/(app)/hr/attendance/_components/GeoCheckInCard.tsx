@@ -46,6 +46,11 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
+import { UserFacingError } from "@/lib/userFacingError";
+
+/** A device-side geolocation failure (browser-authored, never server text) -- safe to show as-is. */
+class LocationError extends Error {}
 
 type OfficeLocation = { id: string; name: string; address?: string | null; radiusMeters: number; isActive: boolean };
 type HistoryRow = {
@@ -86,10 +91,10 @@ export function GeoCheckInCard({ employeeId, employeeStatus }: { employeeId: str
   function getPosition(): Promise<GeolocationPosition> {
     return new Promise((resolve, reject) => {
       if (!("geolocation" in navigator)) {
-        reject(new Error(t("errNoGeolocation")));
+        reject(new LocationError(t("errNoGeolocation")));
         return;
       }
-      navigator.geolocation.getCurrentPosition(resolve, (err) => reject(new Error(err.message || t("errLocationDenied"))), {
+      navigator.geolocation.getCurrentPosition(resolve, (err) => reject(new LocationError(err.message || t("errLocationDenied"))), {
         enableHighAccuracy: true,
         timeout: 15000,
         maximumAge: 0,
@@ -115,10 +120,9 @@ export function GeoCheckInCard({ employeeId, employeeStatus }: { employeeId: str
           officeLocationId: officeId || undefined,
         }),
       });
-      const body = (await res.json().catch(() => ({}))) as Partial<CheckResult> & { message?: string; code?: string };
-      if (!res.ok) {
-        throw new Error(body.message ?? t("errGeneric"));
-      }
+      // Failure copy comes from the status/code catalogue, never the server `message`.
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save", "attendance");
+      const body = (await res.json().catch(() => ({}))) as Partial<CheckResult> & { message?: string };
       setResult({
         status: body.status ?? (kind === "in" ? "checked_in" : "checked_out"),
         message: body.message ?? (kind === "in" ? t("successCheckIn") : t("successCheckOut")),
@@ -132,7 +136,7 @@ export function GeoCheckInCard({ employeeId, employeeStatus }: { employeeId: str
         .then((b: { data?: HistoryRow[] }) => setHistory((b.data ?? []).slice(0, 5)))
         .catch(() => {});
     } catch (e) {
-      setError(e instanceof Error ? e.message : t("errGeneric"));
+      setError(e instanceof UserFacingError || e instanceof LocationError ? e.message : t("errGeneric"));
     } finally {
       setBusy(null);
     }

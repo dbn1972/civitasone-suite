@@ -12,7 +12,7 @@ import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
-import { Button, Card, ConfirmDialog } from "../../../_components/ds";
+import { Button, Card, ConfirmDialog, Field, Input } from "../../../_components/ds";
 import {
   RADIUS_DEFAULT_METERS,
   RADIUS_MAX_METERS,
@@ -22,19 +22,6 @@ import {
   type OfficeLocationBody,
   type OfficeLocationField,
 } from "./officeLocationValidation";
-
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "10px 12px",
-  fontSize: 14,
-  border: "1px solid var(--line, #cbd5e1)",
-  borderRadius: 10,
-  background: "var(--panel, #fff)",
-  color: "var(--ink, #0f172a)",
-  minHeight: 44,
-};
-const errStyle: React.CSSProperties = { fontSize: 12, color: "var(--bad, #b91c1c)" };
 
 export function OfficeLocationForm() {
   const t = useTranslations("officeLocations");
@@ -110,27 +97,19 @@ export function OfficeLocationForm() {
   const field = (key: OfficeLocationField, label: string, value: string, set: (v: string) => void, extra?: { inputMode?: "decimal" | "numeric"; placeholder?: string; required?: boolean; hint?: string }) => {
     const id = `${formId}-${key}`;
     const err = errorText(key) ?? formError.fieldError(key);
+    const hintId = `${id}-hint`;
     return (
-      <div style={{ display: "grid", gap: 6 }}>
-        <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
-          {label}
-          {extra?.required !== false && <span aria-hidden="true" style={{ color: "var(--bad, #b91c1c)" }}> *</span>}
-        </label>
-        <input
-          id={id}
+      <Field id={id} label={label} required={extra?.required !== false} error={err}>
+        <Input
           type="text"
           value={value}
           onChange={(e) => set(e.target.value)}
           inputMode={extra?.inputMode}
           placeholder={extra?.placeholder}
-          aria-required={extra?.required === false ? undefined : "true"}
-          aria-invalid={!!err || undefined}
-          aria-describedby={[extra?.hint ? `${id}-hint` : "", err ? `${id}-err` : ""].filter(Boolean).join(" ") || undefined}
-          style={inputStyle}
+          aria-describedby={[extra?.hint ? hintId : "", err ? `${id}-error` : ""].filter(Boolean).join(" ") || undefined}
         />
-        {extra?.hint && <span id={`${id}-hint`} style={{ fontSize: 12, color: "var(--mut)" }}>{extra.hint}</span>}
-        {err && <span id={`${id}-err`} role="alert" style={errStyle}>{err}</span>}
-      </div>
+        {extra?.hint && <span id={hintId} style={{ fontSize: 12, color: "var(--mut)" }}>{extra.hint}</span>}
+      </Field>
     );
   };
 

@@ -1,4 +1,5 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { useTranslations } from "next-intl";
 
 /**
  * Skeleton — shimmer placeholder components for HRMS pages.
@@ -6,8 +7,64 @@ import type { CSSProperties } from "react";
  * Uses the design-system CSS variables (--line2, --line, --panel)
  * so the shimmer automatically respects theming.
  *
- * @keyframes sk-shimmer is declared in globals-animations.css.
+ * @keyframes sk-shimmer is declared in globals-animations.css; the same
+ * shimmer is available to plain markup as the `.skeleton` class
+ * (civitas-ds.css). Both honour prefers-reduced-motion and dark mode, because
+ * they only use the --line/--line2/--panel tokens.
  */
+
+/**
+ * Localised, screen-reader "Loading" label. Falls back to the English literal
+ * when no NextIntlClientProvider is mounted (component tests render the ds
+ * without one), the same approach DataTable takes.
+ */
+export function useLoadingLabel(key: "loading" | "loadingData" = "loading"): string {
+  const fallback = key === "loadingData" ? "Loading data…" : "Loading…";
+  try {
+    return useTranslations("msg")(key);
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * SkeletonRegion — the accessible wrapper every skeleton layout sits in:
+ * a polite status region, aria-busy, with a visually-hidden "Loading" label
+ * for screen readers (the bars themselves are aria-hidden).
+ */
+export function SkeletonRegion({
+  label,
+  className,
+  style,
+  live = false,
+  quiet = false,
+  children,
+}: {
+  label?: string;
+  className?: string;
+  style?: CSSProperties;
+  /** Make this a polite role="status" live region. Leave false when an outer element already is one. */
+  live?: boolean;
+  /** Omit the visually-hidden label (an outer region already announces one). */
+  quiet?: boolean;
+  children: ReactNode;
+}) {
+  const fallback = useLoadingLabel("loading");
+  const text = label ?? fallback;
+  return (
+    <div
+      role={live ? "status" : undefined}
+      aria-live={live ? "polite" : undefined}
+      aria-busy="true"
+      aria-label={text}
+      className={className}
+      style={style}
+    >
+      {children}
+      {!quiet && <span className="sr-only">{text}</span>}
+    </div>
+  );
+}
 
 const SHIMMER_BASE: CSSProperties = {
   borderRadius: 6,
@@ -82,26 +139,25 @@ export function SkeletonCard() {
 }
 
 /** Full table skeleton: 4 stat cards + filter bar + header + N data rows. */
-export function SkeletonTable({ rows = 8 }: { rows?: number }) {
+export function SkeletonTable({ rows = 8, statCards = 4, quiet = false }: { rows?: number; statCards?: number; quiet?: boolean }) {
+  const label = useLoadingLabel("loadingData");
   return (
-    <div
-      aria-busy="true"
-      aria-label="Loading data…"
-      style={{ padding: "4px 0" }}
-    >
-      {/* stat cards */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 12,
-          marginBottom: 20,
-        }}
-      >
-        {[0, 1, 2, 3].map((i) => (
-          <SkeletonCard key={i} />
-        ))}
-      </div>
+    <SkeletonRegion label={label} quiet={quiet} style={{ padding: "4px 0" }}>
+      {/* stat cards (statCards={0} renders a plain table skeleton) */}
+      {statCards > 0 && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${statCards}, 1fr)`,
+            gap: 12,
+            marginBottom: 20,
+          }}
+        >
+          {Array.from({ length: statCards }, (_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      )}
 
       {/* filter toolbar */}
       <div style={{ display: "flex", gap: 10, marginBottom: 14 }}>
@@ -137,7 +193,7 @@ export function SkeletonTable({ rows = 8 }: { rows?: number }) {
       {Array.from({ length: rows }).map((_, i) => (
         <SkeletonRow key={i} />
       ))}
-    </div>
+    </SkeletonRegion>
   );
 }
 
@@ -152,12 +208,14 @@ export function SkeletonTable({ rows = 8 }: { rows?: number }) {
 export function TileHubSkeleton({
   sections = 5,
   tilesPerSection = 6,
+  quiet = false,
 }: {
   sections?: number;
   tilesPerSection?: number;
+  quiet?: boolean;
 }) {
   return (
-    <div aria-busy="true" aria-label="Loading…" className="animate-pulse space-y-6">
+    <SkeletonRegion className="space-y-6" quiet={quiet}>
       {/* header */}
       <div className="space-y-2">
         <Bar w={180} h={28} />
@@ -177,12 +235,13 @@ export function TileHubSkeleton({
             {Array.from({ length: tilesPerSection }).map((_, i) => (
               <div
                 key={i}
+                aria-hidden="true"
                 style={{ ...SHIMMER_BASE, height: 96, borderRadius: 12 }}
               />
             ))}
           </div>
         </div>
       ))}
-    </div>
+    </SkeletonRegion>
   );
 }

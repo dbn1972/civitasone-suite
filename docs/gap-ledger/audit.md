@@ -174,7 +174,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-CAG-05  ·  MEDIUM  ·  partly  ·  theme LOADING (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 2026-10-13 closed by #1872, verified on main 5a8bec9cc; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** loading.tsx is one bare box (cag/loading.tsx:1-3) — no header/KPI/table placeholders, unlike audit/loading.tsx; layout jumps on load.
 - **Verified evidence:** cag/loading.tsx:1-3 is a single <div class='skeleton'> versus audit/loading.tsx:12-40 which draws breadcrumb, header, 4 KPI cards and table rows. Real but cosmetic (layout shift); theme is not FABRICATED. Vigilance/investigation have their own loading.tsx files (not checked line by line).
 - **Files to change:** `apps/web/src/app/(app)/audit/cag/loading.tsx`, `apps/web/src/app/(app)/audit/loading.tsx`
@@ -1055,7 +1055,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-VIGILANCE-06  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 2026-10-13 closed by #1872, verified on main 5a8bec9cc; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** loading.tsx is a single box (vigilance/loading.tsx) — layout shift compared with audit/loading.tsx.
 - **Verified evidence:** vigilance/loading.tsx:2 is one `.skeleton` div with hard-coded English aria-label 'Loading…'. Nearest-segment rules mean it overrides audit/loading.tsx (header, 4 stat cards, table shimmer, audit/loading.tsx:15-37), so the page jumps from one box to header+KPIs+table. error.tsx already uses shared RouteError with back link (error.tsx:5-13) so that part of the fix text is already done.
 - **Files to change:** `apps/web/src/app/(app)/audit/vigilance/loading.tsx`

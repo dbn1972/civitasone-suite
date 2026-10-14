@@ -32,3 +32,46 @@ export function safeHttpUrl(url: string | null | undefined): string | null {
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
   return parsed.href;
 }
+
+/**
+ * An in-app route for a `<Link href>` (e.g. PageHeader `back`): only a
+ * same-origin path survives. Anything else (an absolute or protocol-relative
+ * URL, or a `javascript:` / `data:` scheme) returns `fallback`, so a back link
+ * can never leave the app or execute script.
+ *
+ *   safeInternalPath("/hr/leave?empId=1")  -> "/hr/leave?empId=1"
+ *   safeInternalPath("//evil.example/x")   -> "/"
+ *   safeInternalPath("javascript:alert(1)") -> "/"
+ *   safeInternalPath("https://x.gov.in")   -> "/"
+ */
+export function safeInternalPath(path: string | null | undefined, fallback = "/"): string {
+  if (!path || typeof path !== "string" || !/^\/(?![/\\])/.test(path)) return fallback;
+  const base = "http://in-app.invalid";
+  let parsed: URL;
+  try {
+    parsed = new URL(path, base);
+  } catch {
+    return fallback;
+  }
+  if (parsed.origin !== base) return fallback;
+  // Rebuild the path from URI-encoded parts so nothing from the input reaches
+  // the href unescaped. Decoding then re-encoding each part is lossless
+  // (an encoded "/" inside a segment stays %2F).
+  const path_ = parsed.pathname
+    .split("/")
+    .map((seg) => encodeURIComponent(safeDecode(seg)))
+    .join("/");
+  const query = [...parsed.searchParams]
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join("&");
+  const hash = parsed.hash ? encodeURIComponent(safeDecode(parsed.hash.slice(1))) : "";
+  return `${path_}${query ? `?${query}` : ""}${hash ? `#${hash}` : ""}`;
+}
+
+function safeDecode(part: string): string {
+  try {
+    return decodeURIComponent(part);
+  } catch {
+    return part;
+  }
+}

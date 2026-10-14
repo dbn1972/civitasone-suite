@@ -1,3 +1,4 @@
+import { SkeletonBar } from "@/app/_components/ds/Skeleton";
 import { PageHeader } from "../../../../_components/ds";
 import { getTranslations } from "next-intl/server";
 
@@ -17,8 +18,8 @@ export default async function NewLocationLoading() {
         <div className="pad" style={{ display: "grid", gap: 16 }}>
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} style={{ display: "grid", gap: 6 }}>
-              <div className="skeleton" style={{ height: 13, width: "30%", borderRadius: 4 }} />
-              <div className="skeleton" style={{ height: 44, borderRadius: 8 }} />
+              <SkeletonBar w="30%" h={13} style={{ borderRadius: 4 }} />
+              <SkeletonBar h={44} style={{ borderRadius: 8 }} />
             </div>
           ))}
         </div>

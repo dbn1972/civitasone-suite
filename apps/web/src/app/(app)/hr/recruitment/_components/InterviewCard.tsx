@@ -1,22 +1,7 @@
 "use client";
 
+import { formatIndianDateTime } from "@/lib/formatters";
 import { useTranslations } from "next-intl";
-
-function formatIndianDateTime(iso: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  const datePart = d.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-  const timePart = d.toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: true,
-  });
-  return `${datePart} ${timePart}`;
-}
 
 export interface InterviewCardProps {
   candidateName: string;

@@ -1,1 +1,5 @@
-export default function Loading() { return <div className="page-main wrap"><div className="skeleton" aria-label="Loading…" /></div>; }
+import { RouteSkeleton } from "@/app/_components/RouteSkeleton";
+
+export default function Loading() {
+  return <RouteSkeleton />;
+}

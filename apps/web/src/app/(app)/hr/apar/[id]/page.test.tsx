@@ -175,8 +175,8 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
 
     expect(screen.getByText("super_admin")).toBeInTheDocument();
     expect(screen.getByText("Yes — privileged override")).toBeInTheDocument();
-    // IST is UTC+5:30 -- 08:35 UTC on 2026-04-17 is 14:05 IST, same day.
-    expect(screen.getByText(/17\/04\/2026 14:05/)).toBeInTheDocument();
+    // IST is UTC+5:30 -- 08:35 UTC on 2026-04-17 is 02:05 pm IST, same day.
+    expect(screen.getByText(/17 Apr 2026, 02:05 pm/)).toBeInTheDocument();
   });
 
   it("DETAIL-04: a non-override row shows no Override marker text", async () => {

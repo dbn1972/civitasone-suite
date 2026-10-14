@@ -30,7 +30,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-HOME-02  ·  MEDIUM  ·  partly  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1871, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1871, verified on main 9c5e9e9e9; re-confirmed W1 SF-11 #2025: loading skeleton now on shared token-based ds Skeleton)
 - **First-pass claim:** loading.tsx is a tailwind block with min-h-screen and bg-slate-50 (loading.tsx) that fights the app shell background and is reused by every child route without its own loading file (campaigns/, compose/ have their own; hub inherits this) — it also ignores dark mode.
 - **Verified evidence:** notifications/loading.tsx:3 uses min-h-screen bg-slate-50 with bg-slate-200 blocks and no dark variant (dark mode is a .dark class, civitas-ds.css:317). True, but it is not unique to the hub or inherited by children: list, compose, and campaigns/[id]/deliveries/[id] each have their own loading.tsx, and the ones checked (list/loading.tsx, compose/loading.tsx) copy the same min-h-screen/bg-slate-50 pattern. The hub shows a 72-unit table block though it is tiles only.
 - **Files to change:** `apps/web/src/app/(app)/notifications/loading.tsx`, `apps/web/src/app/(app)/notifications/list/loading.tsx`, `apps/web/src/app/(app)/notifications/compose/loading.tsx`, `apps/web/src/app/_components/RouteSkeleton.tsx (new, shared)`
@@ -177,7 +177,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1871, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W1 SF-07b #2026: closed by #1871, verified on main 9c5e9e9e9)
 - **First-pass claim:** Scheduled at goes through formatIndianDate (CampaignDetail.tsx; formatters.ts) which returns dd/mm/yyyy with no time, so a scheduled send at 10:00 vs 23:00 is indistinguishable — for the one field where the hour matters.
 - **Verified evidence:** CampaignDetail.tsx:154 uses formatIndianDate(campaign.scheduledAt); lib/formatters.ts:2-7 uses toLocaleDateString en-IN with day/month/year only - no time, no explicit IST timeZone. A datetime-local value is submitted in CampaignList.tsx:257 as an ISO instant, so the hour is lost on display. Only formatIndianDate exists in formatters.ts; lib/admin/sftpIngestion.ts:280 has a local formatDateTime.
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/notifications/campaigns/_components/CampaignDetail.tsx`
@@ -516,7 +516,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-EXPERIMENTS-05  ·  LOW  ·  partly  ·  theme LOADING (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W1 SF-11: closed by #2025)
 - **W0 note:** partly fixed by #1871 — loading.tsx is now an animated skeleton but still uses the Tailwind min-h-screen bg-slate-50 wrapper rather than the shared RouteSkeleton; page strings still hard-coded English
 - **First-pass claim:** loading.tsx is only <p>Loading experiments…</p> (loading.tsx), inconsistent with the skeleton pattern of siblings; hard-coded English, no next-intl keys; CSV export offered with no role or PII consideration (winner ids only, low risk).
 - **Verified evidence:** experiments/loading.tsx is a single <p>Loading experiments…</p> in .page-main (true; siblings use pulse skeletons, though those are min-h-screen/bg-slate-50 blocks themselves). All strings in page.tsx are hard-coded English (no useTranslations). DataTable exportable (page.tsx:44) downloads CSV of name/status/winner id only - no PII, so the PII theme is wrong and risk is negligible.
