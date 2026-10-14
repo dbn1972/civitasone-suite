@@ -78,7 +78,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-AI-INSIGHTS-01  ·  HIGH  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 analytics INTERIM — NEEDS OWNER DECISION: web parts are in place (CSV export is audited via exportAudit="analytics/ai-insights" and carries a data-use notice, AiInsightsTable.tsx). Per-module role filtering is a product decision: GET /v1/analytics/ai-insights currently ALWAYS returns [] (services/analytics-service/src/modules/kpi/routes.ts, no producer exists), so there are no rows to scope or leak yet. Decide the module-entitlement rule before the insight producer ships)
 - **First-pass claim:** Insights are tenant-wide and role-agnostic (layout.tsx:5, page.tsx:8): rows named for HR, procurement or helpdesk (module column) are readable by every role and exportable to CSV (AiInsightsTable.tsx:39-40) with no DPDP purpose note or per-module role filter; server-side scoping cannot be verified.
 - **Verified evidence:** analytics/layout.tsx:5 wraps only ModuleGate (tenant module-enabled check, ModuleGate.tsx), no role check; page.tsx:8 calls getAnalyticsAiInsights (loaders.ts:5334) and AiInsightsTable.tsx:39-40 sets exportable, so DataTable.downloadCsv (DataTable.tsx:274) exports the client-side rows with no audit/purpose note. True that the module column exists and any user who can open /analytics sees all rows. Whether rows contain personal data, and whether /api/v1/analytics/ai-insights scopes by role, cannot be verified (analytics service absent; only hrms-service in snapshot). Theme PII is speculative; rows are titles/confidence/action strings.
 - **Files to change:** `apps/web/src/app/(app)/analytics/layout.tsx`, `apps/web/src/app/(app)/analytics/ai-insights/page.tsx`, `apps/web/src/app/(app)/analytics/ai-insights/AiInsightsTable.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -197,7 +197,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-DASHBOARDS-03  ·  MEDIUM  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045; owner by name via hrms client (SF-17b #2033), missing visibility now renders an em dash (DashboardsTable.tsx, dashboards/[id]/page.tsx; DashboardsTable.test.tsx), and the list is now filtered server-side to owned/shared-with-me for non-admins (analytics-service dashboards/repo.ts listVisibleToActor + queries.ts listVisibleDashboards; tests/dashboards-list-visibility-real-db.test.ts, real DB))
 - **W1 SF-17b note (#2033):** owner now shown by name (analytics-service resolves ownerName through hrms actorIds; unresolved shows "Unknown employee"). Left open: a missing visibility still renders as an "unknown" pill rather than "—", and server-side filtering of private dashboards is still unconfirmed.
 - **W0-10 note:** review found the W0 tick partly — Owner column shows truncated opaque ownerId (DashboardsTable.tsx:24, _data.ts ownerId) not a name; missing visibility shows "unknown" pill not "—"; no evidence backend filters private dashboards server-side (fix step 4)
 - **First-pass claim:** Visibility 'private' rows appear in a tenant-wide list; the page does not show owner, so a viewer cannot tell why they see or do not see a dashboard (owner column missing from AnalyticsDashboardRow, _data.ts:9-16).
@@ -284,7 +284,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-DATA-WAREHOUSE-04  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — ALREADY-FIXED on main 60ff08f47: data-warehouse/page.tsx has no Run Query action (empty state is message-only); data-warehouse/loading.tsx = SkeletonTable (4 stat cards + filter + rows, Skeleton.tsx default statCards=4); data-warehouse/page.test.tsx passes)
 - **First-pass claim:** Empty-state CTA 'Run Query' (page.tsx:33) is unrelated to why datasets are missing (events not yet processed); loading.tsx is a single blank block (loading.tsx:2).
 - **Verified evidence:** page.tsx:35 EmptyState action is <a href='/analytics/queries' className='btn primary'>Run Query</a>, unrelated to missing datasets (message says events not yet processed). loading.tsx:2 is one blank .skeleton. Also plain <a> instead of Link.
 - **Files to change:** `apps/web/src/app/(app)/analytics/data-warehouse/page.tsx`, `apps/web/src/app/(app)/analytics/data-warehouse/loading.tsx`
@@ -335,7 +335,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-KPI-03  ·  MEDIUM  ·  partly  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 analytics INTERIM — NEEDS OWNER DECISION: GET /v1/analytics/kpis returns placeholder em dashes for currentValue/target/trend/owner (services/analytics-service/src/modules/kpi/routes.ts) — there are no numeric values or units to format, so nothing fabricated is shown, but the numeric+unit contract (paise/percent/count/days, direction, target) is a KPI-definition feature that needs a product decision first)
 - **First-pass claim:** Numeric values arrive as display strings (loaders.ts:5291-5298) — '₹ 48,25,000' vs '48.25 lakh' cannot be sorted or compared, and Current/Target sorting in DataTable is lexical; money paise->rupee conversion cannot be verified (backend absent).
 - **Verified evidence:** loaders.ts:5291-5298 all KPI fields are strings; getAnalyticsKpis passes through getArrayPayload unmapped (5304). Mixed display formats cannot be compared. But DataTable.compareValues (DataTable.tsx:160-171) uses Number() then localeCompare numeric:true, so sorting is numeric-aware within one format, not purely lexical. Paise-to-rupee handling cannot be verified (analytics service absent); no money math occurs in web here.
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/analytics/kpi/KpiTable.tsx`
@@ -351,7 +351,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-KPI-04  ·  LOW  ·  confirmed  ·  theme LOADING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — ALREADY-FIXED on main 60ff08f47: kpi/loading.tsx = SkeletonTable (4 stat cards + table shape, Skeleton.tsx))
 - **First-pass claim:** loading.tsx is one undifferentiated block (kpi/loading.tsx:2) unlike the analytics segment loader with stat and table placeholders; layout shift on load.
 - **Verified evidence:** kpi/loading.tsx:2 is a single .skeleton div; the analytics/loading.tsx segment loader is overridden by it for this route. Theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/(app)/analytics/kpi/loading.tsx`
@@ -364,7 +364,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-KPI-05  ·  LOW  ·  partly  ·  theme DESIGN-TOKENS (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — ALREADY-FIXED on main 60ff08f47: kpi/page.tsx has no hex literals (tone props); KpiTable.tsx exportAudit="analytics/kpi" emits the export audit; kpi/page.test.tsx passes)
 - **First-pass claim:** Emoji stat icons and inline hex badge colours in page.tsx:24-27 instead of design tokens; CSV export exposes owner names with no DPDP note (KpiTable.tsx exportable).
 - **Verified evidence:** kpi/page.tsx:24-27 use emoji icons and hex iconBg inline: true. KpiTable.tsx:39-40 exportable exports owner column as CSV with no note or audit; owner is a colleague name (low sensitivity), so the PII framing is overstated.
 - **Files to change:** `apps/web/src/app/(app)/analytics/kpi/page.tsx`, `apps/web/src/app/(app)/analytics/kpi/KpiTable.tsx`
@@ -415,7 +415,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-LIST-03  ·  LOW  ·  confirmed  ·  theme COPY (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — ALREADY-FIXED on main 60ff08f47: list/page.tsx is a redirect to /analytics/dashboards, no API wording left; list/page.test.tsx passes)
 - **First-pass claim:** Title 'Analytics — Dashboards', description 'Read-only list loaded from the Analytics service API.' (list/page.tsx:8-9) exposes implementation wording; 'Records' card and 'Detail'/'Meta' columns are generic. Table has no filter/sort/pager, unlike sibling pages.
 - **Verified evidence:** list/page.tsx:8-9 title 'Analytics — Dashboards' and description 'Read-only list loaded from the Analytics service API.' (implementation wording); ModuleListTable.tsx:58 Card 'Records', headers 'Detail','Meta' (73,75); plain <table> with no filter, sort or pager. Not a dead route issue. Moot if list route is redirected.
 - **Files to change:** `apps/web/src/app/(app)/analytics/list/page.tsx`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -429,7 +429,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-LIST-04  ·  LOW  ·  partly  ·  theme NAVUX
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — ALREADY-FIXED on main 60ff08f47: route redirected (LIST-01), so no in-page back link is needed; list/page.test.tsx passes)
 - **First-pass claim:** No back link or breadcrumb inside the page (list/page.tsx); ModuleListPage omits PageHeader.back.
 - **Verified evidence:** ModuleListPage.tsx:22 renders PageHeader without back, so no in-page back link. However AppShell.tsx:30 shows a global AutoBreadcrumb in TopBar (with 'analytics' label), so navigation exists. Low impact; moot if list route is redirected.
 - **Files to change:** `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -450,7 +450,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 analytics #2045 with evidence — hub error branch RefreshErrorState; ml-insights/page.test.tsx 'shows a retry panel and no 0/6 on source=error' passes; closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Failed fetch reads as 'ML is off': on source 'error' only a badge is added (page.tsx:37) while stats show 0 / '0/6' (page.tsx:39-42) and all six cards render 'No model active' (page.tsx:76).
 - **Verified evidence:** ml-insights/page.tsx: getMLDomainOverview fallback is [] (_data.ts:67-71); on error the page renders only a DataSourceBadge (page.tsx:37), Total Predictions '0' (:39), Avg Accuracy/Fallback '—' (:40-41), Active Domains '0/6' (:42) and all six cards 'No model active' (:76). Lines are accurate.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/page.tsx`
@@ -466,7 +466,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-02  ·  HIGH  ·  confirmed  ·  theme METRIC (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 analytics #2045 with evidence — hub has no cross-metric average; cards show own metric (AUC-ROC/Precision/MAPE); page.test.tsx 'does not render an Avg. Accuracy stat card' passes; closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Avg. Accuracy averages `accuracy` across domains (page.tsx:22-24) whose metrics differ — AUC-ROC (leads, subscriptions), precision (tickets, transactions), MAPE (inventory, lower is better; inventory/page.tsx label) — so the headline number is meaningless, and a good MAPE of 12% drags it down.
 - **Verified evidence:** page.tsx:22-24 averages d.accuracy across all domains; the per-domain pages label the same field differently (subscriptions 'AUC-ROC' subscriptions/page.tsx:17, tickets 'Precision' tickets/page.tsx:17). Inventory/leads/anomalies/projects pages not each opened, but the inventory label MAPE is asserted in the finding; the mixed-metric average is arithmetically meaningless regardless. Card shows 'accuracy' for all too. Theme I18N is wrong. Whether MAPE is lower-is-better vs the API returning normalised accuracy is unverifiable (ms-service absent).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/page.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`
@@ -481,7 +481,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-03  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 analytics #2045 with evidence — per-card aria-label names the metric + direction; page.test.tsx leads + NEW inventory test ('MAPE 12% (lower is better)', no 'accuracy') pass; NEW axe-core run on the hub: found a heading-order violation (h3 under h1), fixed to h2, now 0 violations; closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Card aria-label and dl label say 'accuracy' for every domain (page.tsx:52,62), including 'MAPE (lower is better)'; screen-reader users hear '12% accuracy' for Demand Forecasting.
 - **Verified evidence:** page.tsx:52 card aria-label uses `${formatPct(accuracy)} accuracy` and :62 dt 'Accuracy' for every domain including the MAPE one; a formatPct of 0.12 would read '12% accuracy' for Demand Forecasting. Lines accurate. Depends on the actual inventory metric definition (finding -02).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/page.tsx`
@@ -497,7 +497,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-04  ·  MEDIUM  ·  confirmed  ·  theme STALE (was WIRING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 analytics #2045 with evidence — last-trained date + Stale pill + Active excludes stale; page.test.tsx 200-day test passes; closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Domain key 'tasks' is labelled 'Project Delay Prediction' and 'transactions' 'Anomaly Detection' (page.tsx:10-11); Active Domains counts modelVersion !== null (page.tsx:28) so a stale model last trained months ago counts as active — lastTrainedAt is fetched (_data.ts:100) but never shown.
 - **Verified evidence:** page.tsx:10-11 DOMAIN_META tasks -> 'Project Delay Prediction', transactions -> 'Anomaly Detection' (labels are consistent with hrefs projects/anomalies; the key/label mismatch is only naming, not a bug). Active Domains = domains.filter(modelVersion !== null) (:28); lastTrainedAt is mapped (_data.ts:84) but never rendered on the hub or domain pages. So stale models count active. The 'WIRING' claim about wrong labelling is not a defect; the stale-model point is real.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/page.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`
@@ -512,7 +512,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-05  ·  LOW  ·  confirmed  ·  theme DS (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045; hub card grid uses DS classes (.grid/.stat, var(--ink2)) instead of Tailwind utilities, next/link already in use, card headings h2 (axe heading-order violation found and fixed); ml-insights/page.test.tsx incl. axe-core run passes)
 - **First-pass claim:** Grid built with Tailwind-style utility classes (page.tsx:44,51) and emoji icons with hex backgrounds (page.tsx:6-11) rather than DS Card/StatCard tokens.
 - **Verified evidence:** page.tsx:44 and :51 use Tailwind classes (grid, border, rounded-lg, focus:ring-blue-400) on a raw <a>, and :5-12 emoji icons with inline hex iconBg; the file imports Card (:2) but does not use it. Note StatCard itself takes icon/iconBg props, so emoji/hex is the repo-wide DS convention (also DomainInsightPage.tsx:51-69) - only the card grid deviates. The raw <a> also causes full page navigation instead of next/link.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/page.tsx`
@@ -534,7 +534,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-ANOMALIES-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: DomainInsightPage.tsx source===error returns RefreshErrorState before any stat; DomainInsightPage.test.tsx 'renders a retry panel and NOT the model active copy' passes)
 - **First-pass claim:** Failed fetch reads as 'model inactive': getMLDomainEvaluation falls back to emptyEvaluation (_data.ts:177-185,229-238), DomainInsightPage adds only a badge (DomainInsightPage.tsx:48) and renders zero stats plus 'No trend/factor data available yet' and 'once the ML model is active' copy (RecentPredictionsTable.tsx:161-163); no retry.
 - **Verified evidence:** anomalies/page.tsx: getMLDomainEvaluation("transactions") returns {data: emptyEvaluation, source} on any failure (_data.ts:93-101,145-155; fetchJson returns empty+source 'error' for no base URL, 401, non-2xx, bad payload). DomainInsightPage.tsx:48 only adds <DataSourceBadge source='error'> and still renders totalPredictions '0' (:54), '—' for accuracy/fallback via formatPct (:26-28), topFactor '—', AccuracyTrendChart 'No trend data available yet' (AccuracyTrendChart.tsx:14-19), FactorBreakdown 'No factor data available yet' (FactorBreakdown.tsx:14-19) and the table empty state 'Predictions will appear here once the ML model is active' (RecentPredictionsTable.tsx:68-70, cited as 161-163 earlier - wrong lines). No retry (error.tsx only catches thrown errors, which never happen here). Overstated: accuracy/fallback already show '—', not 0; the badge does signal error. ms-service itself is not in the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`
@@ -588,7 +588,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-ANOMALIES-04  ·  MEDIUM  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: RecentPredictionsTable.tsx entityDisplay (label first) + formatPrediction by PredictionKind; RecentPredictionsTable.test.tsx passes. BE ml-service evaluations does not yet emit entityLabel/recentPredictions (see PR body))
 - **First-pass claim:** Entity column prints the raw entityId (RecentPredictionsTable.tsx:146,153), an opaque UUID; Prediction is formatted as a percentage for every domain (formatConfidence, RecentPredictionsTable.tsx:137) even where the model output is not a probability.
 - **Verified evidence:** RecentPredictionsTable.tsx:53 column {key:'entityId',label:'Entity'} prints p.entityId (mapped from API entityId, _data.ts:126) verbatim, and rowLinkKey='entityId' (:60) makes it the link text; no name lookup exists. Prediction is formatted with formatConfidence as a percentage for every domain (:13-15,44), even for inventory (demand forecast quantity) or task dates. Whether entityId is a UUID cannot be verified: ms-service is not in the snapshot. Original line refs 146,153,137 were wrong (actual 44,53,60,13-15). EntityPicker is not applicable (display, not input).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`, `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`
@@ -605,7 +605,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-ANOMALIES-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: _data.ts toNullableNumber + DomainInsightPage formatPct(0)=0%/null=em dash; _data.test.ts + DomainInsightPage.test.tsx pass)
 - **First-pass claim:** formatPct returns '—' for value 0 (DomainInsightPage.tsx:27), so a genuine 0% precision/fallback rate is indistinguishable from missing data.
 - **Verified evidence:** DomainInsightPage.tsx:26-28 formatPct returns '—' when value <= 0, so a real 0% (e.g. 0% false positive rate, 0% fallback) shows '—'; conversely the empty fallback (_data.ts:93-101 sets accuracy/fallbackRate 0, toNumber() coerces missing to 0 at :56-58) is indistinguishable from a real zero. Line ref 27 is correct. Hub page.tsx:22 has the same >0 pattern.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`
@@ -666,7 +666,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-INVENTORY-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: DomainInsightPage.tsx source===error returns RefreshErrorState before any stat; DomainInsightPage.test.tsx 'renders a retry panel and NOT the model active copy' passes)
 - **First-pass claim:** Failed fetch reads as 'model inactive': getMLDomainEvaluation falls back to emptyEvaluation (_data.ts:177-185,229-238), DomainInsightPage adds only a badge (DomainInsightPage.tsx:48) and renders zero stats plus 'No trend/factor data available yet' and 'once the ML model is active' copy (RecentPredictionsTable.tsx:161-163); no retry.
 - **Verified evidence:** inventory/page.tsx: getMLDomainEvaluation("inventory") returns {data: emptyEvaluation, source} on any failure (_data.ts:93-101,145-155; fetchJson returns empty+source 'error' for no base URL, 401, non-2xx, bad payload). DomainInsightPage.tsx:48 only adds <DataSourceBadge source='error'> and still renders totalPredictions '0' (:54), '—' for accuracy/fallback via formatPct (:26-28), topFactor '—', AccuracyTrendChart 'No trend data available yet' (AccuracyTrendChart.tsx:14-19), FactorBreakdown 'No factor data available yet' (FactorBreakdown.tsx:14-19) and the table empty state 'Predictions will appear here once the ML model is active' (RecentPredictionsTable.tsx:68-70, cited as 161-163 earlier - wrong lines). No retry (error.tsx only catches thrown errors, which never happen here). Overstated: accuracy/fallback already show '—', not 0; the badge does signal error. ms-service itself is not in the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`
@@ -700,7 +700,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-INVENTORY-03  ·  HIGH  ·  confirmed  ·  theme CHART (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 analytics #2045 with evidence — AccuracyTrendChart.test.tsx 'colours a 12% MAPE as good when lower-is-better' passes; DomainInsightPage card title '<metric> Trend (30 days) — lower is better'. FINDING: ledger step 5 (is accuracy MAPE or 1-MAPE?) — ml-service evaluations returns avgConfidence only, no MAPE/AUC/precision, trend, factors or recent predictions; see PR body NEEDS OWNER DECISION; closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** MAPE is lower-is-better (inventory/page.tsx:17 label) but AccuracyTrendChart colours by accuracy thresholds (>=0.7 green, >=0.4 amber, else red — AccuracyTrendChart.tsx:36), so a good 12% MAPE renders as red bars; the trend also reads upward when errors fall.
 - **Verified evidence:** inventory/page.tsx:17 labels the card 'MAPE (lower is better)' and DomainInsightPage.tsx:60 shows it via formatPct(evaluation.accuracy); AccuracyTrendChart.tsx:42 colours every bar by higher-is-better thresholds (>=0.7 green, >=0.4 amber, else red) and has no higherIsBetter prop, so a 12% MAPE is drawn as small red bars. Bar height is proportional to the value, so falling error shows as shrinking bars while the title says 'Accuracy Trend' (DomainInsightPage.tsx:76). Caveat: if the API returns 1-MAPE in `accuracy` the colours would be right but the label wrong; ms-service is absent so the semantics cannot be verified. Theme is not I18N.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/AccuracyTrendChart.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/inventory/page.tsx`
@@ -737,7 +737,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-INVENTORY-05  ·  MEDIUM  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: RecentPredictionsTable.tsx entityDisplay (label first) + formatPrediction by PredictionKind; RecentPredictionsTable.test.tsx passes. BE ml-service evaluations does not yet emit entityLabel/recentPredictions (see PR body))
 - **First-pass claim:** Entity column prints the raw entityId (RecentPredictionsTable.tsx:146,153), an opaque UUID; Prediction is formatted as a percentage for every domain (formatConfidence, RecentPredictionsTable.tsx:137) even where the model output is not a probability.
 - **Verified evidence:** RecentPredictionsTable.tsx:53 column {key:'entityId',label:'Entity'} prints p.entityId (mapped from API entityId, _data.ts:126) verbatim, and rowLinkKey='entityId' (:60) makes it the link text; no name lookup exists. Prediction is formatted with formatConfidence as a percentage for every domain (:13-15,44), even for inventory (demand forecast quantity) or task dates. Whether entityId is a UUID cannot be verified: ms-service is not in the snapshot. Original line refs 146,153,137 were wrong (actual 44,53,60,13-15). EntityPicker is not applicable (display, not input).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`, `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`
@@ -754,7 +754,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-INVENTORY-06  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: _data.ts toNullableNumber + DomainInsightPage formatPct(0)=0%/null=em dash; _data.test.ts + DomainInsightPage.test.tsx pass)
 - **First-pass claim:** formatPct returns '—' for value 0 (DomainInsightPage.tsx:27), so a genuine 0% precision/fallback rate is indistinguishable from missing data.
 - **Verified evidence:** DomainInsightPage.tsx:26-28 formatPct returns '—' when value <= 0, so a real 0% (e.g. 0% false positive rate, 0% fallback) shows '—'; conversely the empty fallback (_data.ts:93-101 sets accuracy/fallbackRate 0, toNumber() coerces missing to 0 at :56-58) is indistinguishable from a real zero. Line ref 27 is correct. Hub page.tsx:22 has the same >0 pattern.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`
@@ -796,7 +796,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-LEADS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: DomainInsightPage.tsx source===error returns RefreshErrorState before any stat; DomainInsightPage.test.tsx 'renders a retry panel and NOT the model active copy' passes)
 - **First-pass claim:** Failed fetch reads as 'model inactive': getMLDomainEvaluation falls back to emptyEvaluation (_data.ts:177-185,229-238), DomainInsightPage adds only a badge (DomainInsightPage.tsx:48) and renders zero stats plus 'No trend/factor data available yet' and 'once the ML model is active' copy (RecentPredictionsTable.tsx:161-163); no retry.
 - **Verified evidence:** leads/page.tsx: getMLDomainEvaluation("leads") returns {data: emptyEvaluation, source} on any failure (_data.ts:93-101,145-155; fetchJson returns empty+source 'error' for no base URL, 401, non-2xx, bad payload). DomainInsightPage.tsx:48 only adds <DataSourceBadge source='error'> and still renders totalPredictions '0' (:54), '—' for accuracy/fallback via formatPct (:26-28), topFactor '—', AccuracyTrendChart 'No trend data available yet' (AccuracyTrendChart.tsx:14-19), FactorBreakdown 'No factor data available yet' (FactorBreakdown.tsx:14-19) and the table empty state 'Predictions will appear here once the ML model is active' (RecentPredictionsTable.tsx:68-70, cited as 161-163 earlier - wrong lines). No retry (error.tsx only catches thrown errors, which never happen here). Overstated: accuracy/fallback already show '—', not 0; the badge does signal error. ms-service itself is not in the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`
@@ -834,7 +834,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-LEADS-03  ·  MEDIUM  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: RecentPredictionsTable.tsx entityDisplay (label first) + formatPrediction by PredictionKind; RecentPredictionsTable.test.tsx passes. BE ml-service evaluations does not yet emit entityLabel/recentPredictions (see PR body))
 - **First-pass claim:** Entity column prints the raw entityId (RecentPredictionsTable.tsx:146,153), an opaque UUID; Prediction is formatted as a percentage for every domain (formatConfidence, RecentPredictionsTable.tsx:137) even where the model output is not a probability.
 - **Verified evidence:** RecentPredictionsTable.tsx:53 column {key:'entityId',label:'Entity'} prints p.entityId (mapped from API entityId, _data.ts:126) verbatim, and rowLinkKey='entityId' (:60) makes it the link text; no name lookup exists. Prediction is formatted with formatConfidence as a percentage for every domain (:13-15,44), even for inventory (demand forecast quantity) or task dates. Whether entityId is a UUID cannot be verified: ms-service is not in the snapshot. Original line refs 146,153,137 were wrong (actual 44,53,60,13-15). EntityPicker is not applicable (display, not input).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`, `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`
@@ -851,7 +851,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-LEADS-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: _data.ts toNullableNumber + DomainInsightPage formatPct(0)=0%/null=em dash; _data.test.ts + DomainInsightPage.test.tsx pass)
 - **First-pass claim:** formatPct returns '—' for value 0 (DomainInsightPage.tsx:27), so a genuine 0% precision/fallback rate is indistinguishable from missing data.
 - **Verified evidence:** DomainInsightPage.tsx:26-28 formatPct returns '—' when value <= 0, so a real 0% (e.g. 0% false positive rate, 0% fallback) shows '—'; conversely the empty fallback (_data.ts:93-101 sets accuracy/fallbackRate 0, toNumber() coerces missing to 0 at :56-58) is indistinguishable from a real zero. Line ref 27 is correct. Hub page.tsx:22 has the same >0 pattern.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`
@@ -893,7 +893,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: DomainInsightPage.tsx source===error returns RefreshErrorState before any stat; DomainInsightPage.test.tsx 'renders a retry panel and NOT the model active copy' passes)
 - **First-pass claim:** Failed fetch reads as 'model inactive': getMLDomainEvaluation falls back to emptyEvaluation (_data.ts:177-185,229-238), DomainInsightPage adds only a badge (DomainInsightPage.tsx:48) and renders zero stats plus 'No trend/factor data available yet' and 'once the ML model is active' copy (RecentPredictionsTable.tsx:161-163); no retry.
 - **Verified evidence:** projects/page.tsx: getMLDomainEvaluation("tasks") returns {data: emptyEvaluation, source} on any failure (_data.ts:93-101,145-155; fetchJson returns empty+source 'error' for no base URL, 401, non-2xx, bad payload). DomainInsightPage.tsx:48 only adds <DataSourceBadge source='error'> and still renders totalPredictions '0' (:54), '—' for accuracy/fallback via formatPct (:26-28), topFactor '—', AccuracyTrendChart 'No trend data available yet' (AccuracyTrendChart.tsx:14-19), FactorBreakdown 'No factor data available yet' (FactorBreakdown.tsx:14-19) and the table empty state 'Predictions will appear here once the ML model is active' (RecentPredictionsTable.tsx:68-70, cited as 161-163 earlier - wrong lines). No retry (error.tsx only catches thrown errors, which never happen here). Overstated: accuracy/fallback already show '—', not 0; the badge does signal error. ms-service itself is not in the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`
@@ -913,7 +913,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-02  ·  HIGH  ·  confirmed  ·  theme DEADROUTE (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045; projects page links rows to the OWNING project's tasks via parentLinkTemplate=/projects/{parentId}/tasks (RecentPredictionsTable.tsx; RecentPredictionsTable.test.tsx: linked with parentId, plain text without). The wrong task-id->/projects/[id] link stays removed (drillRoutes.test.ts). NOTE: ml-service does not emit parentId yet, so rows are unlinked until it does — safe, not dead)
 - **First-pass claim:** Wrong drill-through target: the domain key is 'tasks' and stat label 'Tasks Scored' (projects/page.tsx:5,16) but rowLinkPrefix is '/projects/' (projects/page.tsx:14), whose [id] route expects a project id; a task id resolves to not-found or the wrong record.
 - **Verified evidence:** projects/page.tsx:5 loads domain 'tasks', label 'Tasks Scored' (:16) but rowLinkPrefix='/projects/' (:14). projects/[id]/page.tsx calls getProjectById(params.id) and shows 'Project not found' for unknown ids; projects/[id]/tasks contains only page.tsx (no task id route). So a task entityId links to a not-found page (or a wrong project if ids collide). Theme LOADING is wrong; this is a dead/wrong route.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/projects/page.tsx`, `apps/web/src/app/(app)/projects/[id]/tasks/page.tsx`
@@ -948,7 +948,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-04  ·  MEDIUM  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: RecentPredictionsTable.tsx entityDisplay (label first) + formatPrediction by PredictionKind; RecentPredictionsTable.test.tsx passes. BE ml-service evaluations does not yet emit entityLabel/recentPredictions (see PR body))
 - **First-pass claim:** Entity column prints the raw entityId (RecentPredictionsTable.tsx:146,153), an opaque UUID; Prediction is formatted as a percentage for every domain (formatConfidence, RecentPredictionsTable.tsx:137) even where the model output is not a probability.
 - **Verified evidence:** RecentPredictionsTable.tsx:53 column {key:'entityId',label:'Entity'} prints p.entityId (mapped from API entityId, _data.ts:126) verbatim, and rowLinkKey='entityId' (:60) makes it the link text; no name lookup exists. Prediction is formatted with formatConfidence as a percentage for every domain (:13-15,44), even for inventory (demand forecast quantity) or task dates. Whether entityId is a UUID cannot be verified: ms-service is not in the snapshot. Original line refs 146,153,137 were wrong (actual 44,53,60,13-15). EntityPicker is not applicable (display, not input).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`, `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`
@@ -965,7 +965,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: _data.ts toNullableNumber + DomainInsightPage formatPct(0)=0%/null=em dash; _data.test.ts + DomainInsightPage.test.tsx pass)
 - **First-pass claim:** formatPct returns '—' for value 0 (DomainInsightPage.tsx:27), so a genuine 0% precision/fallback rate is indistinguishable from missing data.
 - **Verified evidence:** DomainInsightPage.tsx:26-28 formatPct returns '—' when value <= 0, so a real 0% (e.g. 0% false positive rate, 0% fallback) shows '—'; conversely the empty fallback (_data.ts:93-101 sets accuracy/fallbackRate 0, toNumber() coerces missing to 0 at :56-58) is indistinguishable from a real zero. Line ref 27 is correct. Hub page.tsx:22 has the same >0 pattern.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`
@@ -1000,7 +1000,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-07  ·  LOW  ·  partly  ·  theme COPY (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 analytics #2045 with evidence — hub label, page title and stat labels all say 'Task Delay Prediction' / 'Tasks Scored'; route /analytics/ml-insights/projects unchanged (source: ml-insights/page.tsx DOMAIN_META, projects/page.tsx); closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Route segment 'projects' but data domain 'tasks' (ml-insights/page.tsx:10 vs projects/page.tsx:5) — hub label 'Project Delay Prediction' scores tasks.
 - **Verified evidence:** Hub ml-insights/page.tsx:12 maps key tasks -> label 'Project Delay Prediction' -> href /analytics/ml-insights/projects; projects/page.tsx:5 fetches domain 'tasks', title 'Project Delay Prediction Insights', stat 'Tasks Scored'. Naming is inconsistent (project vs task) but consistent internally: it scores task completion dates (subtitle). Low-severity copy/naming issue, not i18n; also the hub line ref 10 in the finding is actually :12.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/projects/page.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/page.tsx`
@@ -1022,7 +1022,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-SUBSCRIPTIONS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: DomainInsightPage.tsx source===error returns RefreshErrorState before any stat; DomainInsightPage.test.tsx 'renders a retry panel and NOT the model active copy' passes)
 - **First-pass claim:** Failed fetch reads as 'model inactive': getMLDomainEvaluation falls back to emptyEvaluation (_data.ts:177-185,229-238), DomainInsightPage adds only a badge (DomainInsightPage.tsx:48) and renders zero stats plus 'No trend/factor data available yet' and 'once the ML model is active' copy (RecentPredictionsTable.tsx:161-163); no retry.
 - **Verified evidence:** _data.ts has no lines 177-185/229-238 (file is 155 lines); real code: getMLDomainEvaluation (_data.ts:145-155) passes emptyEvaluation (:93-101, all zeros/empty arrays) as the fetchJson fallback, which returns {data: empty, source:'error'} on any failure (apiClient.ts:119-172). DomainInsightPage.tsx:48 adds only <DataSourceBadge source='error'>; StatCards then render totalPredictions '0' (:54), '—' for accuracy/fallback (formatPct :26-28 maps 0 to em-dash), trend/factor empty text ('No trend data available yet.' AccuracyTrendChart.tsx:14-19, 'No factor data available yet.' FactorBreakdown.tsx:14-19), and the table empty state 'once the ML model is active' (RecentPredictionsTable.tsx:68-70, not :161-163). No retry control on the page. Note: an empty-but-successful response is also indistinguishable from an error apart from the badge.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`
@@ -1074,7 +1074,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-SUBSCRIPTIONS-04  ·  MEDIUM  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: RecentPredictionsTable.tsx entityDisplay (label first) + formatPrediction by PredictionKind; RecentPredictionsTable.test.tsx passes. BE ml-service evaluations does not yet emit entityLabel/recentPredictions (see PR body))
 - **First-pass claim:** Entity column prints the raw entityId (RecentPredictionsTable.tsx:146,153), an opaque UUID; Prediction is formatted as a percentage for every domain (formatConfidence, RecentPredictionsTable.tsx:137) even where the model output is not a probability.
 - **Verified evidence:** RecentPredictionsTable.tsx: Entity column is key 'entityId' with no label mapping (:53) and rowLinkKey='entityId' (:60), so the raw id string is displayed as the link text (:43) - lines cited (146,153,137) do not exist, file is 73 lines. Prediction is formatted via formatConfidence -> Math.round(v*100)+'%' (:13-15,44) for every domain. Whether entityId is a UUID and whether prediction is a probability is not visible here (ms-service absent); for subscriptions/tickets the page subtitles say 'churn/SLA breach probability', so % is plausible there; it is wrong for inventory (MAPE/units) and anomalies. The table has no name lookup and no batch-resolve endpoint is visible.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`
@@ -1091,7 +1091,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-SUBSCRIPTIONS-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: _data.ts toNullableNumber + DomainInsightPage formatPct(0)=0%/null=em dash; _data.test.ts + DomainInsightPage.test.tsx pass)
 - **First-pass claim:** formatPct returns '—' for value 0 (DomainInsightPage.tsx:27), so a genuine 0% precision/fallback rate is indistinguishable from missing data.
 - **Verified evidence:** DomainInsightPage.tsx:26-28 formatPct returns '—' when value <= 0 (`value > 0 ? ... : '—'`), used for accuracy (:60) and fallback rate (:66). A real 0% fallback rate (the ideal) shows '—'. Note the observation says 'precision' but the same formatter covers all metrics. Also emptyEvaluation defaults to 0, so 0 cannot be told apart from missing at data layer (see -01).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`
@@ -1107,7 +1107,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-SUBSCRIPTIONS-06  ·  MEDIUM  ·  partly  ·  theme EMPTYSTATE (was DEADROUTE)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 analytics #2045 with evidence — DomainInsightPage.test.tsx 'shows a single honest empty state, not zero stat cards' passes; detail wording 'No active model for Churn Prediction' matches hub; closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** The hub shows this domain as 'No model active' whenever the evaluations list omits it (ml-insights/page.tsx:46,76) yet this page still renders zeros and 'once the ML model is active' copy with no link back to how to activate a model.
 - **Verified evidence:** Hub ml-insights/page.tsx:46 uses domains.find(...) and shows 'No model active' (:76) when absent - correct as described (the observed lines :46,76 are right). The subscriptions page, by contrast, renders zero stats plus 'once the ML model is active' copy (RecentPredictionsTable.tsx:68-70). The mismatch is real but the framing as DEADROUTE is wrong: there is no dead link, and no model-activation screen is visible in the web app (grep found none), so 'link back to how to activate' has no target. Hub also cannot distinguish an errored list (see ML-INSIGHTS-01) from a missing domain.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`
@@ -1146,7 +1146,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-TICKETS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: DomainInsightPage.tsx source===error returns RefreshErrorState before any stat; DomainInsightPage.test.tsx 'renders a retry panel and NOT the model active copy' passes)
 - **First-pass claim:** Failed fetch reads as 'model inactive': getMLDomainEvaluation falls back to emptyEvaluation (_data.ts:177-185,229-238), DomainInsightPage adds only a badge (DomainInsightPage.tsx:48) and renders zero stats plus 'No trend/factor data available yet' and 'once the ML model is active' copy (RecentPredictionsTable.tsx:161-163); no retry.
 - **Verified evidence:** _data.ts has no lines 177-185/229-238 (file is 155 lines); real code: getMLDomainEvaluation (_data.ts:145-155) passes emptyEvaluation (:93-101, all zeros/empty arrays) as the fetchJson fallback, which returns {data: empty, source:'error'} on any failure (apiClient.ts:119-172). DomainInsightPage.tsx:48 adds only <DataSourceBadge source='error'>; StatCards then render totalPredictions '0' (:54), '—' for accuracy/fallback (formatPct :26-28 maps 0 to em-dash), trend/factor empty text ('No trend data available yet.' AccuracyTrendChart.tsx:14-19, 'No factor data available yet.' FactorBreakdown.tsx:14-19), and the table empty state 'once the ML model is active' (RecentPredictionsTable.tsx:68-70, not :161-163). No retry control on the page. Note: an empty-but-successful response is also indistinguishable from an error apart from the badge.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`
@@ -1165,7 +1165,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-TICKETS-02  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 analytics #2045 with evidence — AccuracyTrendChart.test.tsx: 30% -> 30% height, sr-only date/value list, no aria-label on presentation bars, MAPE good band all pass; chart colours use var(--ok/--warn/--err) tokens; closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Trend bars are scaled to the series maximum, not 0-100% (AccuracyTrendChart.tsx:23,29), and coloured green/amber/red at fixed 0.7/0.4 cut-offs (AccuracyTrendChart.tsx:36); x labels are MM-DD only (slice(5), :55) with no year; per-bar aria-label sits on role='presentation' nodes (:44-45).
 - **Verified evidence:** AccuracyTrendChart.tsx: bar height = accuracy/maxAccuracy (:22,28) so bars scale to series max, not 0-100% (a flat 30% series looks full height); colour thresholds 0.7/0.4 hard-coded (:42, not :36); x labels point.date.slice(5) = MM-DD (:54) with no year; per-bar aria-label on a role='presentation' div (:44-45) which is ignored by AT (outer role='img' carries only a generic 'over N data points' label, :25). Bars also hard-code hex colours and English strings; colour is the only status cue (value label is shown above, partly mitigating). Also applies to inventory MAPE domain, where the 0.7/0.4 green/red semantics are inverted (lower is better).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/AccuracyTrendChart.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`
@@ -1183,7 +1183,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-TICKETS-03  ·  MEDIUM  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: RecentPredictionsTable.tsx entityDisplay (label first) + formatPrediction by PredictionKind; RecentPredictionsTable.test.tsx passes. BE ml-service evaluations does not yet emit entityLabel/recentPredictions (see PR body))
 - **First-pass claim:** Entity column prints the raw entityId (RecentPredictionsTable.tsx:146,153), an opaque UUID; Prediction is formatted as a percentage for every domain (formatConfidence, RecentPredictionsTable.tsx:137) even where the model output is not a probability.
 - **Verified evidence:** RecentPredictionsTable.tsx: Entity column is key 'entityId' with no label mapping (:53) and rowLinkKey='entityId' (:60), so the raw id string is displayed as the link text (:43) - lines cited (146,153,137) do not exist, file is 73 lines. Prediction is formatted via formatConfidence -> Math.round(v*100)+'%' (:13-15,44) for every domain. Whether entityId is a UUID and whether prediction is a probability is not visible here (ms-service absent); for subscriptions/tickets the page subtitles say 'churn/SLA breach probability', so % is plausible there; it is wrong for inventory (MAPE/units) and anomalies. The table has no name lookup and no batch-resolve endpoint is visible.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/RecentPredictionsTable.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`
@@ -1200,7 +1200,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-TICKETS-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045 — already fixed on main 60ff08f47: _data.ts toNullableNumber + DomainInsightPage formatPct(0)=0%/null=em dash; _data.test.ts + DomainInsightPage.test.tsx pass)
 - **First-pass claim:** formatPct returns '—' for value 0 (DomainInsightPage.tsx:27), so a genuine 0% precision/fallback rate is indistinguishable from missing data.
 - **Verified evidence:** DomainInsightPage.tsx:26-28 formatPct returns '—' when value <= 0, used for accuracy (:60) and fallback rate (:66); a real 0% is rendered as '—'. Shared by all six domain pages.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx`, `apps/web/src/app/(app)/analytics/ml-insights/_data.ts`
@@ -1254,7 +1254,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-QUERIES-01  ·  HIGH  ·  partly  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 analytics #2045 with evidence — queries/page.test.tsx 'renders — for every stat ... when the loader fails' + QueryResultsView.test.tsx error-no-data retry pass; closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Silent zeros on failure: stats use runs.length / completed / failed with no source gate (queries/page.tsx:10-11,41-43), so a failed fetch shows Runs 0 / Completed 0 / Failed 0 beside a badge — dashboards/page.tsx (UX-013) already null-gates for the same reason.
 - **Verified evidence:** queries/page.tsx:10-11,41-43: Runs/Completed/Failed StatCards use runs.length and filter counts with no source gate; on error runs=[] so the cards show 0. Correct. But the badge is not beside it any more: DataSourceBadge lives inside QueryResultsView (QueryResultsView.tsx:70), driven by useSeededResource, so a cached copy may exist and the stat cards (which use the server-side `runs`, not the hook's `rows`) can disagree with the table when offline/cached. dashboards/page.tsx:14,22-24 shows the `errored ? '—'` fix.
 - **Files to change:** `apps/web/src/app/(app)/analytics/queries/page.tsx`, `apps/web/src/app/(app)/analytics/queries/QueryResultsView.tsx`
@@ -1270,7 +1270,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-QUERIES-02  ·  HIGH  ·  confirmed  ·  theme MISSING-DETAIL (was DEADROUTE)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 analytics #2045 with evidence — QueryResultsView.test.tsx 'shows the failure reason for a failed run' + 'no error text for completed run' pass; server-side sanitizeRunError covered by tests/registry-catalog-units.test.ts (real run); closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Failed runs show only a FAILED pill: AnalyticsQueryRunRow.error is mapped (_data.ts:83) but never rendered (QueryResultsView.tsx:17-23), so a user cannot see why a run failed.
 - **Verified evidence:** _data.ts:83 maps error: string|null into AnalyticsQueryRunRow (field declared :29). QueryResultsView.tsx:17-23 runColumns has no error column and the StatusPill (:21) shows only 'FAILED'; the Result detail section lists only completed runs (:50). grep confirms `error` is never rendered. Theme DEADROUTE is wrong (missing feature).
 - **Files to change:** `apps/web/src/app/(app)/analytics/queries/QueryResultsView.tsx`
@@ -1285,7 +1285,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-QUERIES-03  ·  MEDIUM  ·  confirmed  ·  theme REFRESH (was DEADROUTE)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 analytics #2045 with evidence — QueryResultsView.test.tsx polling tests (schedules refresh while pending, stops when none) + RunQueryForm.test.tsx 'calls router.refresh after a 202' pass; closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Fire-and-forget with no refresh: after the 202 the form says results 'appear once processed' (RunQueryForm.tsx:200) but the page is a server component with no router.refresh or polling, so a queued run stays invisible until manual reload; a 'running' row never updates.
 - **Verified evidence:** RunQueryForm.tsx:200 sets 'Query queued - results appear in Query Results once processed.' then resetForm(); the file has no useRouter/router.refresh/interval (grep shows none). page.tsx is a server component with the initial `runs`; useSeededResource (QueryResultsView.tsx:43) only reseeds from props. So new/running rows appear only after manual reload. Theme should be REFRESH not DEADROUTE.
 - **Files to change:** `apps/web/src/app/(app)/analytics/queries/RunQueryForm.tsx`, `apps/web/src/app/(app)/analytics/queries/QueryResultsView.tsx`
@@ -1300,7 +1300,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-QUERIES-04  ·  MEDIUM  ·  partly  ·  theme UNITS (was MONEY)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045; metric/dimension labels and the unit now come from the backend catalog GET /v1/analytics/catalog (_data.ts getAnalyticsCatalogLabels, queries/page.tsx, QueryResultsView.tsx); catalog unit wins over the amount_ key heuristic, which stays only as fallback; unlabeled dimension keys are humanised (department_id -> Department). QueryResultsView.test.tsx + catalog-labels.test.ts)
 - **W0-10 note:** review found the W0 tick partly — Money units fixed (QueryResultsView.tsx:19-21 formatMoney for paise; metric label for value column :151) but unit is a client heuristic unitForMetric = key.startsWith("amount_") (analytics/_data.ts:37), not backend-declared; dimension headers still raw keys (QueryResultsView.tsx:146 label: d) so acceptance "Department not department_id" unmet
 - **First-pass claim:** Result values have no unit or currency: AccessibleBarChart takes a unit prop (AccessibleBarChart.tsx:20) that QueryResultsView never passes (QueryResultsView.tsx:117), so money metrics render as bare numbers (paise vs rupees ambiguous); result-row column headers are the raw dimension keys (QueryResultsView.tsx:59).
 - **Verified evidence:** AccessibleBarChart accepts unit (:18-26) and QueryResultsView.tsx:117 does not pass it; values are shown via toLocaleString('en-IN') (:38,67), so no currency/unit. Result table column headers are raw dimension keys (QueryResultsView.tsx:59: label: d). True. But whether any metric is money in paise cannot be verified: the catalog MetricDef only has key/label/agg (RunQueryForm.tsx:25) and the analytics service is absent, so the paise/rupee ambiguity is plausible but unconfirmed. Value column is fixed label 'Value' (:60).
@@ -1376,7 +1376,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-LEADS-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 analytics: closed by #2045; verified: ml-service GET /v1/ml/evaluations is role-gated (EVALUATION_ROLES) and returns aggregates only — no per-person rows or identifiers (services/ml-service/src/modules/evaluations/routes.ts); crm-service GET /v1/crm/contacts/:id requires CRM_ROLES (crm_user|crm_admin|super_admin) (contacts/routes.ts:23,33). Web: leads/page.tsx now offers the /crm/contacts/ drill-through only to viewers holding a CRM read role (roleGuard CRM_CONTACT_READ_ROLES); leads/page.test.tsx)
 - **First-pass claim:** Per-person scores drill through to CRM contact records (leads/page.tsx:37-39 rowLinkPrefix /crm/contacts/) from a page open to every analytics role; personal data and an automated score are exposed without a CRM role check on this route (DPDP purpose limitation); server-side check undeterminable.
 - **Service:** `ml-service`  ·  **Endpoint(s):** `GET /api/v1/ml/evaluations?domain=leads (row links to /api/v1/crm/contacts/{id})`
 - **Question:** Does the ml evaluations/leads response expose per-person data only to callers holding a CRM read role, and does crm-service still enforce its own role on /crm/contacts/{id}?
