@@ -6,14 +6,14 @@ import * as v from "./validators.js";
 import * as commands from "./commands.js";
 import {
   listScopes, listIssues, listExecutionProgress, listAllIssues, listClosures, countClosures,
-  getWorkScope, listScopeProgress, hasPhysicalCompletion,
+  getWorkScope, listScopeProgress, hasPhysicalCompletion, hasWorkClosure,
   countExecutionProgress, countAllIssues,
 } from "./repo.js";
 import { getAward, finalizedAgreementByWorkIds } from "../tender/repo.js";
-import { listSplits, getWorkHeaders } from "../proposal/repo.js";
+import { listSplits, getWorkHeaders, getProposal } from "../proposal/repo.js";
 import {
   canRecordPhysicalCompletion, canApplyProgressDelta, validateProgressNotExceedTarget,
-  closureEligibility, parentSplitConsistency,
+  closureEligibility, parentSplitConsistency, isTenantUploadKey,
 } from "./domain.js";
 import { paginationSchema } from "../masters/validators.js";
 import { z } from "zod";
@@ -26,6 +26,18 @@ const progressQuerySchema = paginationSchema.extend({
 
 const WRITE_ROLES = ["works_admin", "works_operator", "super_admin", "dao", "do", "sdo", "section_officer"];
 const READ_ROLES = ["works_admin", "works_operator", "works_viewer", "super_admin", "dao", "do", "sdo", "section_officer", "estimator"];
+
+/** The work an execution record is raised against must exist in this tenant (otherwise the async insert is blind). */
+async function assertWorkExists(tenantId: string, workId: string): Promise<void> {
+  const work = await getProposal(tenantId, workId);
+  if (!work) throw new HttpError(404, "NOT_FOUND", "work not found");
+}
+
+function assertTenantKey(tenantId: string, key: string | undefined, field: string): void {
+  if (key !== undefined && !isTenantUploadKey(tenantId, key)) {
+    throw new HttpError(422, "INVALID_FILE_KEY", `${field} must reference a file uploaded for this tenant`);
+  }
+}
 
 export async function executionRoutes(app: FastifyInstance): Promise<void> {
   // Tenant-wide execution progress register (paginated) — the FE execution list page.
@@ -161,6 +173,8 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.uploadPhotoSchema.parse(req.body);
+    assertTenantKey(ctx.tenantId, body.fileKey, "fileKey");
+    await assertWorkExists(ctx.tenantId, body.workId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.uploadPhotoCommand(ctx, body));
   });
 
@@ -169,6 +183,8 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.createIssueSchema.parse(req.body);
+    assertTenantKey(ctx.tenantId, body.attachmentKey, "attachmentKey");
+    await assertWorkExists(ctx.tenantId, body.workId);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createIssueCommand(ctx, body));
   });
 
@@ -199,6 +215,12 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ["dao", "do", "works_admin", "super_admin"]);
     const body = v.closeWorkSchema.parse(req.body);
+
+    // GAP-WORKS-EXECUTION-WORKID-07: closing is idempotent-by-refusal - a second close would insert a second
+    // closure row and re-emit the closed/handover events.
+    if (await hasWorkClosure(ctx.tenantId, body.workId)) {
+      throw new HttpError(409, "ALREADY_CLOSED", "This work has already been closed");
+    }
 
     const [award, hasCompletion, splits] = await Promise.all([
       getAward(ctx.tenantId, body.workId),
@@ -240,6 +262,7 @@ export async function executionRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ["dao", "do", "sdo", "works_admin", "super_admin"]);
     const body = v.physicalCompleteSchema.parse(req.body);
+    assertTenantKey(ctx.tenantId, body.certificateFileKey, "certificateFileKey");
     const award = await getAward(ctx.tenantId, body.workId);
     const hasAgreement = !!award && (award.status === "dao_finalized" || award.status === "do_finalized");
     if (!canRecordPhysicalCompletion(hasAgreement)) {

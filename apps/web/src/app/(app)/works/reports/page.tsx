@@ -4,6 +4,8 @@ import { formatMoney, formatIndianDate, humanizeStatus } from "@/lib/formatters"
 import { humanize } from "../_data/format";
 import { toHumanError } from "@/lib/messages";
 import { ReportFilters } from "./ReportFilters";
+import { StatusBars } from "./StatusBars";
+import { getTranslations } from "next-intl/server";
 
 // --- API response shapes ---
 interface SummaryApi {
@@ -59,6 +61,7 @@ interface PageProps {
 export default async function WorksReportsPage({ searchParams }: PageProps) {
   const sp = searchParams ?? {};
   const qs = buildQuery(sp);
+  const t = await getTranslations("works.reports");
 
   const [
     { data: summary, source: sSource },
@@ -168,6 +171,11 @@ export default async function WorksReportsPage({ searchParams }: PageProps) {
         </StatGrid>
       )}
 
+      {/* GAP-WORKS-REPORTS-07: say what the numbers mean, as works-service defines them. */}
+      <p role="note" style={{ margin: "0 0 16px", fontSize: 12, color: "var(--muted)" }}>
+        {t("definitions")}
+      </p>
+
       <Card title="Status Breakdown">
         {statusError ? (
           <RefreshErrorState
@@ -175,6 +183,8 @@ export default async function WorksReportsPage({ searchParams }: PageProps) {
             source={{ area: "status breakdown" }}
           />
         ) : (
+          <>
+          <StatusBars items={sortedStatus} ariaLabel={t("chartLabel")} />
           <DataTable
             columns={[
               { key: "label", label: "Status" },
@@ -187,6 +197,7 @@ export default async function WorksReportsPage({ searchParams }: PageProps) {
             emptyTitle="No status data"
             emptyMessage="No status breakdown available for the selected filters."
           />
+          </>
         )}
       </Card>
 

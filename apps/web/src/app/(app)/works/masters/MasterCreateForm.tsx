@@ -1,7 +1,8 @@
 "use client";
 
 import { UserFacingError } from "@/lib/userFacingError";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { AcceptedNotice, useToast, Button, EntityPicker, type EntityOption } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
@@ -191,9 +192,10 @@ export function MasterCreateForm({
   editItem,
   onDone,
   canWrite = true,
+  createLocked = false,
 }: {
   masterType: string;
-  onCreated?: () => void;
+  onCreated?: (submitted?: Record<string, unknown>) => void;
   /** Options for the parent picker (GAP-WORKS-MASTERS-03). */
   parentOptions?: ParentOption[];
   /** When set, the form edits this row (GAP-WORKS-MASTERS-04) rather than creating. */
@@ -206,10 +208,20 @@ export function MasterCreateForm({
    * The server remains the authority (POST/PATCH 403 non-admins).
    */
   canWrite?: boolean;
+  /**
+   * GAP-WORKS-MASTERS-05: true while an earlier create is still being processed
+   * (202 received, row not visible yet). The Add control is locked so the same
+   * entry cannot be queued twice.
+   */
+  createLocked?: boolean;
 }) {
   const router = useRouter();
   const accepted = useAcceptedWrite();
   const { toast } = useToast();
+  const t = useTranslations("works.masters");
+  // Synchronous re-entry guard: a double click can fire two submits before the
+  // `busy` state re-render disables the button.
+  const submittingRef = useRef(false);
 
   const isEdit = Boolean(editItem);
   const parent = PARENT_FIELD[masterType as keyof typeof PARENT_FIELD];
@@ -255,6 +267,8 @@ export function MasterCreateForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setBusy(true);
     setError("");
     formError.clear();
@@ -307,13 +321,15 @@ export function MasterCreateForm({
 
       toast.success(isEdit ? "Saved. Changes will reflect shortly." : "Created. Changes will reflect shortly.");
       handleClose();
-      onCreated?.();
-      // On create the write is a 202 CQRS command and the read model may lag (GAP-WORKS-MASTERS-05): show the honest
-      // accepted state with a manual refresh instead of guessing with timed refreshes.
-      void accepted.accept();
+      // The write is a 202 CQRS command and the read model may lag (GAP-WORKS-MASTERS-05). A parent that passes
+      // onCreated owns the pending row + confirmation poll; otherwise show the honest accepted state with a manual
+      // refresh instead of guessing with timed refreshes.
+      if (onCreated) onCreated(body);
+      else void accepted.accept();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
+      submittingRef.current = false;
       setBusy(false);
     }
   }
@@ -327,6 +343,8 @@ export function MasterCreateForm({
         <Button
           variant="primary"
           onClick={() => setOpen(true)}
+          disabled={createLocked}
+          title={createLocked ? t("createLocked") : undefined}
           style={{ minHeight: 38, marginBottom: 4 }}
         >
           + Add {typeLabel}

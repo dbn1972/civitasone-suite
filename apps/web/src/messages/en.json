@@ -15112,6 +15112,18 @@
         "masters": { "label": "Masters Registry", "desc": "Lookup values & categories" },
         "reports": { "label": "Reports", "desc": "Analytics and work register" }
       }
+    },
+    "masters": {
+      "pending": "Pending",
+      "createLocked": "The previous entry is still being processed. Wait for it to appear before adding another.",
+      "pendingNote": "Awaiting confirmation"
+    },
+    "execution": {
+      "duplicatePeriodWarning": "An entry for this scope in {month} {year} is already recorded. Submitting adds to it, so check you are not entering the same figure twice."
+    },
+    "reports": {
+      "definitions": "Active works = total works minus closed works. The division filter matches works executed by that exact division; sub-divisions are not included.",
+      "chartLabel": "Works by status"
     }
   },
   "mapsCommon": {

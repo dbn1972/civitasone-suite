@@ -9,10 +9,12 @@ import {
   Button,
   Field,
   Textarea,
+  FileUpload,
   EntityPicker,
   ConfirmDialog,
   SkeletonCard,
   type EntityOption,
+  type UploadedFileMeta,
 } from "@/app/_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
@@ -60,6 +62,9 @@ function RaiseIssueForm() {
   const [workId, setWorkId] = useState<string | null>(initialWorkId || null);
   const [issueTypeId, setIssueTypeId] = useState<string | null>(null);
   const [description, setDescription] = useState("");
+  // GAP-WORKS-EXECUTION-ISSUES-NEW-05: optional supporting photo/document (the backend already stores attachmentKey).
+  const [attachmentKey, setAttachmentKey] = useState("");
+  const [attachmentMeta, setAttachmentMeta] = useState<UploadedFileMeta | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -68,8 +73,8 @@ function RaiseIssueForm() {
   // GAP-WORKS-EXECUTION-ISSUES-NEW-02: a dirty form warns before an
   // accidental navigation / tab close; the back target follows ?workId=.
   const dirty = useMemo(
-    () => description.trim().length > 0 || !!issueTypeId || (workId ?? "") !== initialWorkId,
-    [description, issueTypeId, workId, initialWorkId],
+    () => description.trim().length > 0 || !!issueTypeId || !!attachmentKey || (workId ?? "") !== initialWorkId,
+    [description, issueTypeId, attachmentKey, workId, initialWorkId],
   );
   const backHref = initialWorkId ? `/works/execution/${initialWorkId}` : "/works/execution";
 
@@ -107,6 +112,7 @@ function RaiseIssueForm() {
         description: parsed.data.description,
       };
       if (parsed.data.issueTypeId) body.issueTypeId = parsed.data.issueTypeId;
+      if (attachmentKey) body.attachmentKey = attachmentKey;
 
       const res = await fetch("/api/proxy/v1/works/execution/issues", {
         method: "POST",
@@ -173,6 +179,39 @@ function RaiseIssueForm() {
       </Field>
       <div style={{ fontSize: 11, color: "var(--muted)", marginTop: -12, textAlign: "end" }}>
         {description.length}/2048
+      </div>
+
+      <div>
+        <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Attachment (optional)</p>
+        <FileUpload
+          category="attachment"
+          label="Attach a photo or document"
+          accept=".pdf,.jpg,.png"
+          maxSizeMb={10}
+          onUploaded={(key, meta) => {
+            setAttachmentKey(key);
+            setAttachmentMeta(meta);
+          }}
+        />
+        {attachmentKey && attachmentMeta ? (
+          <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ fontSize: 13 }}>
+              📎 {attachmentMeta.fileName}{" "}
+              <span style={{ color: "var(--muted)" }}>({Math.max(1, Math.round(attachmentMeta.size / 1024))} KB)</span>
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setAttachmentKey("");
+                setAttachmentMeta(null);
+              }}
+            >
+              Remove
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <div style={{ display: "flex", gap: 12 }}>

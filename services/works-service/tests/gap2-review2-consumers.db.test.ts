@@ -309,6 +309,26 @@ describe("contractorUpdate consumer: atomic write + audit, replay no-op, guards"
   });
 });
 
+describe("contractorCreate consumer: registration number uniqueness (GAP-WORKS-CONTRACTORS-NEW-05)", () => {
+  it("a second contractor with the same registration number (any case/padding) is dead-lettered inside the transaction", async () => {
+    const regNo = `REG-${randomUUID().slice(0, 8)}`;
+    const first = msg(MAKER, { id: randomUUID(), tenantId: TENANT, name: "First Co", registrationNo: regNo });
+    await deliver(COMMANDS.contractorCreate, first);
+    const dupId = randomUUID();
+    const dup = msg(MAKER, { id: dupId, tenantId: TENANT, name: "Second Co", registrationNo: ` ${regNo.toLowerCase()} ` });
+    await expect(deliver(COMMANDS.contractorCreate, dup)).rejects.toBeInstanceOf(NonRetryableError);
+    const rows = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(contractors).where(eq(contractors.id, dupId))));
+    expect(rows).toHaveLength(0);
+    expect(await outboxTopics(dup.messageId)).toEqual([]);
+    expect(await wasProcessed(dup.messageId)).toBe(false);
+  });
+
+  it("contractors without a registration number never collide", async () => {
+    await deliver(COMMANDS.contractorCreate, msg(MAKER, { id: randomUUID(), tenantId: TENANT, name: "No Reg A" }));
+    await expect(deliver(COMMANDS.contractorCreate, msg(MAKER, { id: randomUUID(), tenantId: TENANT, name: "No Reg B" }))).resolves.toBeUndefined();
+  });
+});
+
 describe("billing audit columns: consumer population + migration 0026 backfill", () => {
   it("mbIssue populates created_by/updated_by on measurement_books", async () => {
     const awardId = await seedAward(MAKER);

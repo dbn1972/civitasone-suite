@@ -45,6 +45,9 @@ export async function contractorRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
     const body = v.createContractorSchema.parse(req.body);
+    if (body.registrationNo && (await repo.findContractorByRegistrationNo(ctx.tenantId, body.registrationNo))) {
+      throw new HttpError(409, "DUPLICATE_REGISTRATION_NO", "A contractor with this registration number already exists");
+    }
     const result = await commands.createContractor(ctx, body);
     return reply.status(202).send(result);
   });
@@ -88,6 +91,9 @@ export async function contractorRoutes(app: FastifyInstance): Promise<void> {
     const body = v.updateContractorSchema.parse(req.body);
     const existing = await repo.findContractorById(ctx.tenantId, id);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "contractor not found");
+    if (body.registrationNo && (await repo.findContractorByRegistrationNo(ctx.tenantId, body.registrationNo, id))) {
+      throw new HttpError(409, "DUPLICATE_REGISTRATION_NO", "A contractor with this registration number already exists");
+    }
     const patch = Object.fromEntries(
       Object.entries(body).filter(([, val]) => val !== undefined),
     ) as Record<string, unknown>;

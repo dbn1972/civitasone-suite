@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataTable, Card, Button, ConfirmDialog, RefreshErrorState, useToast, AcceptedNotice } from "@/app/_components/ds";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { formatMoney } from "@/lib/formatters";
@@ -35,8 +36,36 @@ interface MastersTableProps {
 
 type DisplayRow = Record<string, string> & { __id: string; __version: string };
 
+/** A 202-accepted write whose effect is not yet visible in the read model (GAP-WORKS-MASTERS-05). */
+type PendingWrite =
+  | { kind: "create"; name: string; code: string; baselineTotal: number }
+  | { kind: "update"; id: string; version: number };
+
+const PENDING_ID = "__pending";
+
 export function MastersTable({ masterType, items, failed, canManage, parentOptions, total }: MastersTableProps) {
-  const accepted = useAcceptedWrite();
+  const t = useTranslations("works.masters");
+  const [pendingRow, setPendingRow] = useState<{ name: string; code: string; baselineTotal: number } | null>(null);
+  // Confirm the 202 against the type's own GET endpoints (bounded, backed-off polling; no timer refresh). When the
+  // change becomes visible the hook refreshes the page data and the pending row is dropped.
+  const accepted = useAcceptedWrite<PendingWrite, { total?: number; version?: number }>({
+    poll: async (w) => {
+      const url =
+        w.kind === "create"
+          ? `/api/proxy/v1/works/masters/${masterType}?page=1&pageSize=1`
+          : `/api/proxy/v1/works/masters/${masterType}/${w.id}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("not visible yet");
+      const body = (await res.json()) as { data?: { version?: number }; meta?: { total?: number } };
+      return w.kind === "create" ? { total: body.meta?.total } : { version: body.data?.version };
+    },
+    isDone: (p, w) => (w.kind === "create" ? (p.total ?? 0) > w.baselineTotal : (p.version ?? 0) > w.version),
+    onConfirmed: () => setPendingRow(null),
+  });
+  const currentTotal = total ?? items.length;
+  // The pending row is shown only until the read model reports a larger set (also true after a manual refresh).
+  const showPendingRow = pendingRow !== null && currentTotal <= pendingRow.baselineTotal && accepted.phase !== "idle" && accepted.phase !== "confirmed";
+  const createPending = showPendingRow && (accepted.phase === "pending" || accepted.phase === "accepted" || accepted.phase === "submitting");
   const { toast } = useToast();
   const formError = useFormError("master data");
   const typeLabel = humanizeMaster(masterType);
@@ -101,6 +130,14 @@ export function MastersTable({ masterType, items, failed, canManage, parentOptio
     row.__active = item.active == null ? "Not set" : item.active ? "Yes" : "No";
     return row;
   });
+  // GAP-WORKS-MASTERS-05: show the entry we just submitted as a pending row until the read model has it.
+  if (showPendingRow && pendingRow) {
+    const row: DisplayRow = { __id: PENDING_ID, __version: "1" };
+    for (const c of typeCols) row[c.key] = c.key === "name" ? pendingRow.name : c.key === "code" ? pendingRow.code || "—" : "—";
+    if (parent) row.__parent = "—";
+    row.__active = t("pending");
+    rows.unshift(row);
+  }
 
   async function doDeactivate(item: MasterItem) {
     setBusy(true);
@@ -116,7 +153,7 @@ export function MastersTable({ masterType, items, failed, canManage, parentOptio
       }
       toast.success("Deactivated. Changes will reflect shortly.");
       setDeactivating(null);
-      void accepted.accept();
+      void accepted.accept({ kind: "update", id: String(item.id), version: Number(item.version ?? 1) });
     } catch (err) {
       toast.error(formError.fromException("save", err).message);
     } finally {
@@ -126,9 +163,17 @@ export function MastersTable({ masterType, items, failed, canManage, parentOptio
 
   return (
     <>
-      <AcceptedNotice {...accepted.noticeProps} />
+      <AcceptedNotice {...accepted.noticeProps} onDismiss={() => { setPendingRow(null); accepted.reset(); }} />
       {canManage && !editing && (
-        <MasterCreateForm masterType={masterType} parentOptions={parentOptions} />
+        <MasterCreateForm
+          masterType={masterType}
+          parentOptions={parentOptions}
+          createLocked={createPending}
+          onCreated={(body) => {
+            setPendingRow({ name: String(body?.name ?? body?.itemCode ?? body?.keyword ?? ""), code: String(body?.code ?? ""), baselineTotal: currentTotal });
+            void accepted.accept({ kind: "create", name: String(body?.name ?? ""), code: String(body?.code ?? ""), baselineTotal: currentTotal });
+          }}
+        />
       )}
       {canManage && editing && (
         <MasterCreateForm
@@ -137,7 +182,7 @@ export function MastersTable({ masterType, items, failed, canManage, parentOptio
           editItem={editing}
           onDone={() => setEditing(null)}
           // The edit form unmounts on save, so the table owns the accepted notice (and its refresh).
-          onCreated={() => void accepted.accept()}
+          onCreated={() => void accepted.accept({ kind: "update", id: String(editing.id), version: Number(editing.version ?? 1) })}
         />
       )}
 
@@ -153,7 +198,9 @@ export function MastersTable({ masterType, items, failed, canManage, parentOptio
               c.key === "__actions"
                 ? {
                     ...c,
-                    render: (r: DisplayRow) => (
+                    render: (r: DisplayRow) => r.__id === PENDING_ID ? (
+                      <span style={{ color: "var(--muted)", fontSize: 12 }}>{t("pendingNote")}</span>
+                    ) : (
                       <span style={{ display: "inline-flex", gap: 8 }}>
                         <Button
                           variant="ghost"

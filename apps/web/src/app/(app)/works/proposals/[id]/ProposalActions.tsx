@@ -14,7 +14,18 @@ interface ProposalActionsProps {
 }
 
 export function ProposalActions({ id, status, roles }: ProposalActionsProps) {
-  const accepted = useAcceptedWrite();
+  // GAP-WORKS-PROPOSALS-DETAIL-09: follow the queued DAO-finalize through the proposal's own GET until its status
+  // really is dao_finalized (page then refreshes). If the consumer never applies it the notice ends at "still
+  // processing" with a manual refresh instead of silently looking done.
+  const accepted = useAcceptedWrite<void, { status?: string }>({
+    poll: async () => {
+      const res = await fetch(`/api/proxy/v1/works/proposals/${id}`);
+      if (!res.ok) throw new Error("not available");
+      const body = (await res.json()) as { data?: { status?: string } };
+      return { status: body.data?.status };
+    },
+    isDone: (p) => p.status === "dao_finalized",
+  });
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -59,6 +70,7 @@ export function ProposalActions({ id, status, roles }: ProposalActionsProps) {
         type="button"
         variant="primary"
         onClick={() => setOpen(true)}
+        disabled={accepted.isBusy}
       >
         DAO Finalize
       </Button>

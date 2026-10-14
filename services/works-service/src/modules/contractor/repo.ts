@@ -39,6 +39,42 @@ export async function findContractorByName(tenantId: string, name: string): Prom
   return rows[0] ?? null;
 }
 
+/**
+ * GAP-WORKS-CONTRACTORS-NEW-05: contractor registration numbers are unique per tenant (case-insensitive, trimmed).
+ * `excludeId` lets an update keep its own number.
+ */
+function registrationNoMatch(tenantId: string, registrationNo: string, excludeId?: string) {
+  return and(
+    eq(contractors.tenantId, tenantId),
+    sql`lower(${contractors.registrationNo}) = lower(${registrationNo.trim()})`,
+    ...(excludeId ? [sql`${contractors.id} <> ${excludeId}`] : []),
+  );
+}
+
+export async function findContractorByRegistrationNo(
+  tenantId: string,
+  registrationNo: string,
+  excludeId?: string,
+): Promise<ContractorRow | null> {
+  if (registrationNo.trim() === "") return null;
+  const rows = await scopedRead((tx) =>
+    tx.select().from(contractors).where(registrationNoMatch(tenantId, registrationNo, excludeId)).limit(1),
+  );
+  return rows[0] ?? null;
+}
+
+/** Same lookup inside the caller's transaction (consumers re-assert uniqueness where they write). */
+export async function findContractorByRegistrationNoTx(
+  tx: ScopedTx,
+  tenantId: string,
+  registrationNo: string,
+  excludeId?: string,
+): Promise<ContractorRow | null> {
+  if (registrationNo.trim() === "") return null;
+  const rows = await tx.select().from(contractors).where(registrationNoMatch(tenantId, registrationNo, excludeId)).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function listContractors(
   tenantId: string,
   opts?: { limit?: number; offset?: number },

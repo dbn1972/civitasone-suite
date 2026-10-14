@@ -72,6 +72,7 @@ export function TendersTable({
   const total = totalCount ?? rows.length;
   const upcoming = rows.filter((r) => r.statusKey === "upcoming").length;
   const passed = rows.filter((r) => r.statusKey === "opening_passed").length;
+  const awarded = rows.filter((r) => r.statusKey === "awarded").length;
   const dash = (n: number) => (errored ? "—" : String(n));
 
   return (
@@ -81,6 +82,7 @@ export function TendersTable({
         <StatCard icon="📢" iconBg="#eff6ff" label="Total Tenders" value={dash(total)} />
         <StatCard icon="📝" iconBg="#fffaeb" label="Upcoming" value={dash(upcoming)} />
         <StatCard icon="⏰" iconBg="#f0fdf4" label="Opening date passed" value={dash(passed)} />
+        <StatCard icon="🏆" iconBg="#ecfdf3" label="Awarded" value={dash(awarded)} />
       </StatGrid>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", margin: "8px 0" }}>
@@ -111,7 +113,11 @@ export function TendersTable({
         emptyIcon="📢"
         emptyTitle="No tenders found"
         emptyMessage="Tender records will appear here once created."
-        rowHref={(row) => "/works/tenders/" + String(row.id ?? "")}
+        // GAP-WORKS-TENDERS-05: an awarded tender opens straight at its quotations/award section; others open the
+        // tender detail (there is no standalone quotations/awards list route).
+        rowHref={(row) =>
+          "/works/tenders/" + String(row.id ?? "") + (row.statusKey === "awarded" ? "#quotations" : "")
+        }
       />
     </>
   );

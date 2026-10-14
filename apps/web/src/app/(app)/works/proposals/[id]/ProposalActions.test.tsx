@@ -78,4 +78,21 @@ describe("ProposalActions", () => {
     await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
     expect(screen.queryByText(/^Request failed$/)).not.toBeInTheDocument();
   });
+
+  it("GAP-WORKS-PROPOSALS-DETAIL-09: follows the queued finalize until the proposal really is dao_finalized, then refreshes the page", async () => {
+    let polls = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      if ((init as RequestInit | undefined)?.method === "POST") return new Response(JSON.stringify({ status: "accepted" }), { status: 202 });
+      polls += 1;
+      return new Response(JSON.stringify({ data: { status: polls >= 2 ? "dao_finalized" : "submitted" } }), { status: 200 });
+    });
+    renderWithToast(<ProposalActions id={ID} status="submitted" roles={["works_admin"]} />);
+    fireEvent.click(screen.getByRole("button", { name: "DAO Finalize" }));
+    fireEvent.click(screen.getByRole("button", { name: "Finalize" }));
+    // while the consumer has not applied it, the notice says it is still being applied and the button is locked
+    await waitFor(() => expect(document.querySelector('[data-accepted-phase="pending"]')).not.toBeNull());
+    expect(screen.getByRole("button", { name: "DAO Finalize" })).toBeDisabled();
+    await waitFor(() => expect(document.querySelector('[data-accepted-phase="confirmed"]')).not.toBeNull(), { timeout: 5000 });
+    expect(refreshMock).toHaveBeenCalled();
+  });
 });

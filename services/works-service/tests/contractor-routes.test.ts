@@ -102,6 +102,11 @@ vi.mock("../src/modules/contractor/repo.js", async (importOriginal) => {
     ...orig,
     findContractorById: vi.fn(async (_t: string, id: string) =>
       id === CONTRACTOR_ID ? { id, name: "ABC Constructions", pan: "AAAPZ1234C", active: true } : null),
+    // GAP-WORKS-CONTRACTORS-NEW-05: "REG-DUP" belongs to another contractor.
+    findContractorByRegistrationNo: vi.fn(async (_t: string, regNo: string, excludeId?: string) =>
+      regNo.trim().toLowerCase() === "reg-dup" && excludeId !== "00000000-cccc-4000-8000-0000000000dd"
+        ? { id: "00000000-cccc-4000-8000-0000000000dd", name: "Other Co", active: true }
+        : null),
     listContractors: vi.fn(async () => [{ id: CONTRACTOR_ID, name: "ABC Constructions", active: true }]),
     listRatingHistory: vi.fn(async () => [{ id: "r1", rating: 4, ratedBy: "u1", ratedAt: new Date().toISOString(), note: "good work" }]),
   };
@@ -156,6 +161,25 @@ describe("contractor detail routes (GAP-DETAIL-06)", () => {
   it("PATCH :id → 403 for a read-only role (works_viewer is not a write role)", async () => {
     const res = await app.inject({ method: "PATCH", url: `/v1/works/contractors/${CONTRACTOR_ID}`, headers: authHeader(["works_viewer"]), payload: { name: "New Name" } });
     expect(res.statusCode).toBe(403);
+  });
+});
+
+// ── GAP-WORKS-CONTRACTORS-NEW-05: registration number is unique per tenant ──
+describe("registration number uniqueness (GAP-NEW-05)", () => {
+  it("POST create -> 409 when another contractor already holds the registration number (case-insensitive)", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/works/contractors", headers: authHeader(["works_admin"]), payload: { name: "Dup", registrationNo: " Reg-Dup " } });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code ?? res.json().error?.code).toBe("DUPLICATE_REGISTRATION_NO");
+  });
+  it("POST create -> 202 for a fresh registration number", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/works/contractors", headers: authHeader(["works_admin"]), payload: { name: "Fresh", registrationNo: "REG-NEW-1" } });
+    expect(res.statusCode).toBe(202);
+  });
+  it("PATCH -> 409 when changing to another contractor's number, 202 when keeping its own", async () => {
+    const dup = await app.inject({ method: "PATCH", url: `/v1/works/contractors/${CONTRACTOR_ID}`, headers: authHeader(["works_admin"]), payload: { registrationNo: "REG-DUP" } });
+    expect(dup.statusCode).toBe(409);
+    const own = await app.inject({ method: "PATCH", url: `/v1/works/contractors/${CONTRACTOR_ID}`, headers: authHeader(["works_admin"]), payload: { registrationNo: "REG-NEW-2" } });
+    expect(own.statusCode).toBe(202);
   });
 });
 
