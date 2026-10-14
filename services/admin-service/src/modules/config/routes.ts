@@ -40,7 +40,7 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
     // (202) and later INSERTed as a brand-new module row, letting a tenant
     // admin self-grant a module outside its edition. Unknown key => 404.
     if (!(await queries.isTenantModuleConfigured(ctx.tenantId, key))) {
-      throw new HttpError(404, "NOT_FOUND", "module is not provisioned for this tenant");
+      throw new HttpError(404, "MODULE_NOT_PROVISIONED", "module is not provisioned for this tenant");
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.toggleModule(ctx, ctx.tenantId, key, body.enabled, body.reason));
   });

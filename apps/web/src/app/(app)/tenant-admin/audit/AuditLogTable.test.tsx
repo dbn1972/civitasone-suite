@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { render } from "@/test-utils/intl-render";
 import { AuditLogTable, type AuditEvent } from "./AuditLogTable";
 
 const ev = (o: Partial<AuditEvent>): AuditEvent => ({

@@ -96,6 +96,7 @@ describe("POST /v1/admin/tenant/modules/:key/toggle — route authz (inject)", (
     const res = await app.inject({ method: "POST", url: "/v1/admin/tenant/modules/not-a-real-module/toggle", headers: bearer(["tenant_admin"], T1), payload: { enabled: true } });
     await app.close();
     expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("MODULE_NOT_PROVISIONED");
     const rows = await runWithTenant(T1, () => db.transaction((tx) =>
       tx.select().from(adminModuleConfigs).where(and(eq(adminModuleConfigs.tenantId, T1), eq(adminModuleConfigs.moduleKey, "not-a-real-module")))));
     expect(rows).toHaveLength(0);
