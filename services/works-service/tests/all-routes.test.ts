@@ -253,6 +253,7 @@ const mbById: Record<string, { status: string; workId?: string; awardId?: string
 const billById: Record<string, { status: string } | undefined> = {};
 vi.mock("../src/modules/billing/repo.js", () => ({
   getMb: vi.fn(async (_tenantId: string, id: string) => mbById[id] ?? null),
+  getMbByNumber: vi.fn(async () => null), // NEW-MB-03 duplicate pre-check: no duplicate by default
   getBill: vi.fn(async (_tenantId: string, id: string) => billById[id] ?? null),
   listBillsForWork: vi.fn(async () => []),
   // No measurements seeded by default — routes' measured-value gate then
@@ -683,6 +684,32 @@ describe("Tender routes", () => {
       },
     });
     expect(res.statusCode).toBe(202);
+  });
+
+  it("POST /v1/works/tenders/quotation with contractorId → 202 when the name matches the registered contractor (DETAIL-01)", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/works/tenders/quotation", headers: authHeader(),
+      payload: {
+        tenderId: "00000000-1111-4000-8000-000000000001",
+        contractorId: "00000000-9999-4000-8000-000000000001",
+        contractorName: "Test Contractor",
+        method: "item_rate",
+      },
+    });
+    expect(res.statusCode).toBe(202);
+  });
+
+  it("POST /v1/works/tenders/quotation with contractorId → 422 when the name does not match the registered contractor (DETAIL-01)", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/works/tenders/quotation", headers: authHeader(),
+      payload: {
+        tenderId: "00000000-1111-4000-8000-000000000001",
+        contractorId: "00000000-9999-4000-8000-000000000001",
+        contractorName: "Some Other Firm",
+        method: "item_rate",
+      },
+    });
+    expect(res.statusCode).toBe(422);
   });
 
   it("POST /v1/works/tenders/quotation → 400 invalid method", async () => {

@@ -95,4 +95,23 @@ describe("WorkProposalDetailPage", () => {
     expect(screen.getByText("Ward 12")).toBeInTheDocument();
     expect(screen.getByText("Rural Roads")).toBeInTheDocument(); // humanized
   });
+
+  it("resolves workTypeId to its master name in a Work Type row (DETAIL-06)", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: { ...PROPOSAL, workTypeId: "wt-1" }, source: "api", status: 200 })
+      .mockResolvedValueOnce({ data: { "wt-1": "Rural Road" }, source: "api" });
+    const ui = await WorkProposalDetailPage({ params: { id: "p1" } });
+    render(ui);
+    expect(screen.getByText("Work Type")).toBeInTheDocument();
+    expect(screen.getByText("Rural Road")).toBeInTheDocument();
+  });
+
+  it("shows a dash, never a raw id, when the work-type lookup fails (DETAIL-06)", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: { ...PROPOSAL, workTypeId: "wt-9" }, source: "api", status: 200 })
+      .mockResolvedValueOnce({ data: {}, source: "error" });
+    const ui = await WorkProposalDetailPage({ params: { id: "p1" } });
+    render(ui);
+    expect(screen.queryByText("wt-9")).not.toBeInTheDocument();
+  });
 });

@@ -4,9 +4,13 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 const pushMock = vi.fn();
 let searchParamsMock = new URLSearchParams();
 
+const suspendSearchParams = { on: false };
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
-  useSearchParams: () => searchParamsMock,
+  useSearchParams: () => {
+    if (suspendSearchParams.on) throw new Promise(() => {}); // never resolves -> Suspense fallback stays
+    return searchParamsMock;
+  },
 }));
 
 vi.mock("@/app/_components/ds/Toast", () => ({
@@ -51,7 +55,7 @@ describe("Generate Bill form", () => {
   it("prefills work/award/mb from the query params passed by the billing detail page", async () => {
     mockFetch();
     render(<NewBillPage />);
-    expect(await screen.findByLabelText(/Work ID/i)).toHaveValue(WORK);
+    expect(await screen.findByLabelText(/^Work/i)).toHaveValue(WORK);
     // award/mb become selects once the per-work lists load; the seeded value stays selected
     await waitFor(() => expect(screen.getByLabelText(/^Award/i)).toHaveValue(AWARD));
     await waitFor(() => expect(screen.getByLabelText(/Measurement Book/i)).toHaveValue(MB));
@@ -60,7 +64,7 @@ describe("Generate Bill form", () => {
   it("posts to the real create-bill endpoint with rupee amounts converted to paise (minor units)", async () => {
     const fetchSpy = mockFetch();
     render(<NewBillPage />);
-    await screen.findByLabelText(/Work ID/i);
+    await screen.findByLabelText(/^Work/i);
     fireEvent.change(screen.getByLabelText(/Bill Number/i), { target: { value: "RA/2024-25/001" } });
     fireEvent.change(screen.getByLabelText(/Gross Amount/i), { target: { value: "1000" } });
     fireEvent.change(screen.getByLabelText(/Deductions/i), { target: { value: "100" } });
@@ -87,7 +91,7 @@ describe("Generate Bill form", () => {
   it("converts fractional rupees exactly with no float error (GAP-WORKS-BILLING-BILLS-NEW-02)", async () => {
     const fetchSpy = mockFetch();
     render(<NewBillPage />);
-    await screen.findByLabelText(/Work ID/i);
+    await screen.findByLabelText(/^Work/i);
     fireEvent.change(screen.getByLabelText(/Bill Number/i), { target: { value: "RA/2" } });
     fireEvent.change(screen.getByLabelText(/Gross Amount/i), { target: { value: "2.50" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate Bill" }));
@@ -99,7 +103,7 @@ describe("Generate Bill form", () => {
   it("rejects a non-positive gross amount rather than posting (BILLS-NEW-02 guard)", async () => {
     const fetchSpy = mockFetch();
     render(<NewBillPage />);
-    await screen.findByLabelText(/Work ID/i);
+    await screen.findByLabelText(/^Work/i);
     fireEvent.change(screen.getByLabelText(/Bill Number/i), { target: { value: "RA/3" } });
     fireEvent.change(screen.getByLabelText(/Gross Amount/i), { target: { value: "0" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate Bill" }));
@@ -110,7 +114,7 @@ describe("Generate Bill form", () => {
   it("blocks submission when deductions exceed the gross amount", async () => {
     const fetchSpy = mockFetch();
     render(<NewBillPage />);
-    await screen.findByLabelText(/Work ID/i);
+    await screen.findByLabelText(/^Work/i);
     fireEvent.change(screen.getByLabelText(/Bill Number/i), { target: { value: "RA/1" } });
     fireEvent.change(screen.getByLabelText(/Gross Amount/i), { target: { value: "100" } });
     fireEvent.change(screen.getByLabelText(/Deductions/i), { target: { value: "150" } });
@@ -122,7 +126,7 @@ describe("Generate Bill form", () => {
   it("shows a clerk-safe message, never the raw HTTP status, when the create fails (UX-016)", async () => {
     const fetchSpy = mockFetch(503);
     render(<NewBillPage />);
-    await screen.findByLabelText(/Work ID/i);
+    await screen.findByLabelText(/^Work/i);
     fireEvent.change(screen.getByLabelText(/Bill Number/i), { target: { value: "RA/2024-25/002" } });
     fireEvent.change(screen.getByLabelText(/Gross Amount/i), { target: { value: "1000" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate Bill" }));
@@ -131,5 +135,29 @@ describe("Generate Bill form", () => {
     await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
     expect(alert.textContent).not.toMatch(/\b503\b/);
     expect(fetchSpy).toHaveBeenCalled();
+  });
+});
+
+describe("Suspense fallback (BILLS-NEW-04 / MEASUREMENTS-NEW-04 / NEW-MB-04)", () => {
+  it("renders a skeleton, not an empty page, while useSearchParams() suspends", () => {
+    suspendSearchParams.on = true;
+    try {
+      const { container } = render(<NewBillPage />);
+      expect(container.querySelector('[aria-hidden="true"]')).not.toBeNull();
+      expect(screen.queryByRole("button", { name: /submit|generate bill|record measurement/i })).not.toBeInTheDocument();
+    } finally {
+      suspendSearchParams.on = false;
+    }
+  });
+});
+
+describe("Generate Bill form — single-option preselect (BILLS-NEW-01)", () => {
+  it("preselects the only award and the only DO-finalized MB from the work's lists", async () => {
+    vi.restoreAllMocks();
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+    mockFetch();
+    render(<NewBillPage />);
+    await waitFor(() => expect(screen.getByLabelText(/^Award/i)).toHaveValue(AWARD));
+    await waitFor(() => expect(screen.getByLabelText(/Measurement Book/i)).toHaveValue(MB));
   });
 });

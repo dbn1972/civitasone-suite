@@ -34,7 +34,16 @@ function isOpeningThisWeek(iso: string | null | undefined, now = Date.now()): bo
   return t >= now && t <= now + weekMs;
 }
 
-export function TendersTable({ tenders, source }: { tenders: Record<string, unknown>[]; source: "api" | "error" }) {
+export function TendersTable({
+  tenders,
+  source,
+  totalCount,
+}: {
+  tenders: Record<string, unknown>[];
+  source: "api" | "error";
+  /** Real tenant-wide total when the register is server-paged (DETAIL-03). */
+  totalCount?: number;
+}) {
   const { data, provenance, offline, cachedAt } = useSeededResource("works-tenders", tenders, source, (rows) => rows.length === 0);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
@@ -60,7 +69,7 @@ export function TendersTable({ tenders, source }: { tenders: Record<string, unkn
   // When the fetch errored with no cached rows to fall back on, show "—"
   // instead of a false 0.
   const errored = provenance === "error-no-data";
-  const total = rows.length;
+  const total = totalCount ?? rows.length;
   const upcoming = rows.filter((r) => r.statusKey === "upcoming").length;
   const passed = rows.filter((r) => r.statusKey === "opening_passed").length;
   const dash = (n: number) => (errored ? "—" : String(n));

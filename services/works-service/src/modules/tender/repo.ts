@@ -3,6 +3,16 @@ import { workProposals } from "../proposal/schema.js";
 import { scopedRead } from "../../shared/db.js";
 import { tenders, quotations, awards, preTenders } from "./schema.js";
 
+/** GAP-WORKS-TENDERS-NEW-06: a pre-tender reference number is unique per tenant. */
+export async function preTenderReferenceExists(tenantId: string, referenceNumber: string): Promise<boolean> {
+  return scopedRead(async (tx) => {
+    const rows = await tx.select({ id: preTenders.id }).from(preTenders)
+      .where(and(eq(preTenders.tenantId, tenantId), eq(preTenders.referenceNumber, referenceNumber)))
+      .limit(1);
+    return rows.length > 0;
+  });
+}
+
 export async function hasTenderForWork(tenantId: string, workId: string): Promise<boolean> {
   return scopedRead(async (tx) => {
     const rows = await tx.select().from(tenders)

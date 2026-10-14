@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader, Button, SkeletonCard } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { WorkField, safeWorkId } from "../WorkField";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
@@ -30,7 +31,8 @@ function NewMbForm() {
   // GAP-WORKS-BILLING-NEW-MB-04: the back/cancel target is derived from the
   // STABLE search param, not the live Work ID field — so typing in the field
   // can't repoint the back link mid-keystroke.
-  const paramWorkId = (searchParams.get("workId") ?? "").trim();
+  // NEW-MB-04: only a well-formed UUID may reach a route path.
+  const paramWorkId = safeWorkId(searchParams.get("workId")) ?? "";
   const backHref = paramWorkId ? `/works/billing/${paramWorkId}` : "/works/billing";
 
   const [form, setForm] = useState<MbForm>({
@@ -47,23 +49,28 @@ function NewMbForm() {
   // the clerk SELECTS the award instead of pasting a UUID the Tenders list
   // never exposed. Falls back to a guarded text input otherwise.
   const [awards, setAwards] = useState<Option[] | null>(null);
+  // Awards are looked up for whichever work is chosen (URL-supplied or picked).
+  const chosenWorkId = safeWorkId(form.workId) ?? "";
+  const [mbNumberError, setMbNumberError] = useState("");
   useEffect(() => {
-    if (!paramWorkId) return;
+    setAwards(null);
+    if (!chosenWorkId) return;
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/proxy/v1/works/billing/${paramWorkId}/awards`);
+        const res = await fetch(`/api/proxy/v1/works/billing/${chosenWorkId}/awards`);
         if (cancelled || !res.ok) return;
         const body = (await res.json()) as { data?: unknown };
         const rows = Array.isArray(body.data) ? body.data : [];
-        setAwards(
-          rows.map((r) => {
-            const row = r as Record<string, unknown>;
-            const agreement = row.agreementNumber ? String(row.agreementNumber) : null;
-            const id = String(row.id ?? "");
-            return { id, label: agreement ? `${agreement} — ${String(row.contractorName ?? "")}` : id };
-          }),
-        );
+        const opts = rows.map((r) => {
+          const row = r as Record<string, unknown>;
+          const agreement = row.agreementNumber ? String(row.agreementNumber) : null;
+          const id = String(row.id ?? "");
+          return { id, label: agreement ? `${agreement} — ${String(row.contractorName ?? "")}` : id };
+        });
+        setAwards(opts);
+        // A work with exactly one award has nothing to choose: preselect it.
+        if (opts.length === 1) setForm((f) => (f.awardId ? f : { ...f, awardId: opts[0].id }));
       } catch {
         /* leave null → guarded text input */
       }
@@ -71,7 +78,7 @@ function NewMbForm() {
     return () => {
       cancelled = true;
     };
-  }, [paramWorkId]);
+  }, [chosenWorkId]);
 
   function set(field: keyof MbForm) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -80,6 +87,11 @@ function NewMbForm() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    setMbNumberError("");
+    if (!safeWorkId(form.workId)) {
+      setError("Select the work this measurement book is for.");
+      return;
+    }
     setBusy(true);
     setMessage("");
     setError("");
@@ -98,12 +110,20 @@ function NewMbForm() {
         }),
       });
       if (!res.ok) {
+        // NEW-MB-03: 409 = duplicate MB number → field-level message, form kept.
+        if (res.status === 409) {
+          const code = ((await res.clone().json().catch(() => ({}))) as { error?: { code?: string } }).error?.code;
+          if (code === "DUPLICATE_MB_NUMBER") {
+            setMbNumberError("This MB number is already used for this work. Choose a different number.");
+            return;
+          }
+        }
         setError((await formError.fromResponse(res, "save")).message);
         return;
       }
       setMessage(SUCCESS_MESSAGE);
       toast.success(SUCCESS_MESSAGE);
-      const target = form.workId.trim() ? `/works/billing/${form.workId.trim()}` : "/works/billing";
+      const target = `/works/billing/${safeWorkId(form.workId)}`;
       setTimeout(() => router.push(target), 600);
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
@@ -137,8 +157,7 @@ function NewMbForm() {
           style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 640 }}
         >
           <p style={{ fontSize: 12, color: "var(--muted)" }}>
-            Fields marked * are required. Open a work from the Billing register to have the
-            Work and Award chosen for you.
+            Fields marked * are required. Choose the work, then its award.
           </p>
           <div
             style={{
@@ -148,16 +167,12 @@ function NewMbForm() {
             }}
           >
             <div>
-              <label htmlFor="new-mb-work-id" style={labelStyle}>Work ID (UUID) *</label>
-              <input
+              <label htmlFor="new-mb-work-id" style={labelStyle}>Work *</label>
+              <WorkField
                 id="new-mb-work-id"
-                type="text"
-                required
                 value={form.workId}
-                onChange={set("workId")}
-                style={inputStyle}
-                placeholder="UUID of the work"
-                readOnly={!!paramWorkId}
+                locked={!!paramWorkId}
+                onChange={(workId) => setForm((f) => ({ ...f, workId, awardId: "" }))}
               />
             </div>
 
@@ -182,7 +197,9 @@ function NewMbForm() {
                     placeholder="UUID of the award"
                   />
                   <p style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>
-                    Open this work from the Billing register to pick the award.
+                    {chosenWorkId
+                      ? "No awards were found for this work. An agreement must be awarded before a measurement book can be issued."
+                      : "Choose a work first; its awards will be listed here."}
                   </p>
                 </>
               )}
@@ -196,10 +213,20 @@ function NewMbForm() {
                 required
                 maxLength={64}
                 value={form.mbNumber}
-                onChange={set("mbNumber")}
+                onChange={(e) => {
+                  setMbNumberError("");
+                  set("mbNumber")(e);
+                }}
                 style={inputStyle}
                 placeholder="e.g. MB/2024-25/001"
+                aria-invalid={mbNumberError ? true : undefined}
+                aria-describedby={mbNumberError ? "new-mb-number-error" : undefined}
               />
+              {mbNumberError ? (
+                <p id="new-mb-number-error" role="alert" style={{ fontSize: 12, color: "#b42318", marginTop: 4 }}>
+                  {mbNumberError}
+                </p>
+              ) : null}
             </div>
           </div>
 

@@ -106,6 +106,36 @@ describe("TenderActions — DETAIL-01 contractor picker on quotations", () => {
   });
 });
 
+describe("TenderActions — DETAIL-01 quotation payload carries contractorId", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    refreshMock.mockReset();
+  });
+
+  it("posts contractorId and name for the picked registered contractor", async () => {
+    const spy = mockFetch();
+    renderWithToast(<TenderActions tenderId={TENDER_ID} workId="w1" awardId={null} />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Add Quotation" }));
+    const picker = screen.getAllByRole("combobox")[0];
+    fireEvent.change(picker, { target: { value: "ACME" } });
+    const option = await screen.findByRole("option", { name: /ACME Builders/ }, { timeout: 3000 });
+    fireEvent.mouseDown(option);
+    fireEvent.click(option);
+    // Let ContractorLabelSync resolve the chosen contractor to its name.
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 150));
+    });
+    fireEvent.change(screen.getByPlaceholderText("0.00"), { target: { value: "50000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit Quotation" }));
+    await waitFor(() => expect(spy.mock.calls.some((c) => String(c[0]).endsWith("/tenders/quotation"))).toBe(true));
+    const call = spy.mock.calls.find((c) => String(c[0]).endsWith("/tenders/quotation"))!;
+    const body = JSON.parse((call[1] as RequestInit).body as string);
+    expect(body.contractorId).toBe(CONTRACTOR_ID);
+    expect(body.contractorName).toBe("ACME Builders");
+    expect(body.quotedAmountMinor).toBe("5000000");
+  });
+});
+
 describe("TenderActions — DETAIL-06 award traces to a quotation", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
