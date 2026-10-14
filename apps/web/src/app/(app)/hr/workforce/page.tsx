@@ -16,6 +16,8 @@ import {
   type RetirementRow,
   type VacancyRow,
 } from "./_data";
+import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { WORKFORCE_READER_ROLES } from "@/lib/auth/workRoles";
 
 const GROUP_BY_VALUES = ["department", "grade", "type"] as const;
 const groupBySchema = z.enum(GROUP_BY_VALUES).catch("department");
@@ -30,6 +32,7 @@ export default async function WorkforcePage({
 }: {
   searchParams: { groupBy?: string | string[] };
 }) {
+  requireAnyRole(WORKFORCE_READER_ROLES);
   const t = await getTranslations("workforce");
   const groupBy = parseGroupBy(searchParams.groupBy);
 

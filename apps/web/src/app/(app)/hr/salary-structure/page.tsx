@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { PAYROLL_SALARY_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * GAP-HR-SALARY-STRUCTURE-02: this page duplicated /hr/payroll/structures
@@ -25,5 +27,6 @@ import { redirect } from "next/navigation";
  * separate.
  */
 export default function SalaryStructurePage() {
+  requireAnyRole(PAYROLL_SALARY_ADMIN_ROLES);
   redirect("/hr/payroll/structures");
 }

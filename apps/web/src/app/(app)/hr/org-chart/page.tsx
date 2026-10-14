@@ -5,6 +5,8 @@ import { getOrgChart } from '../../../_data/loaders'
 import { toHumanError } from "@/lib/messages";
 import type { OrgChartNode } from '@civitasone/types'
 import { OrgChartClient } from './OrgChartClient'
+import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { HR_SELF_SERVICE_ROLES } from "@/lib/auth/workRoles";
 
 function countAll(nodes: OrgChartNode[]): number {
   return nodes.reduce(
@@ -25,6 +27,7 @@ function flatten(nodes: OrgChartNode[]): OrgChartNode[] {
 export const metadata = { title: 'Organisation Chart — CivitasOne HRMS' }
 
 export default async function OrgChartPage() {
+  requireAnyRole(HR_SELF_SERVICE_ROLES);
   const t = await getTranslations("orgChart");
   const { data: nodes, source } = await getOrgChart()
   // GAP-HR-ORG-CHART-03: on a backend error `nodes` is `[]` and every stat

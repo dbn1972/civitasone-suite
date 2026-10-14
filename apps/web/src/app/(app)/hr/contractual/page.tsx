@@ -3,6 +3,8 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState } from 
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDate, todayIST } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
+import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
 
 type ApiContract = {
   id: string;
@@ -74,6 +76,7 @@ async function getContractual(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function ContractualPage() {
+  requireAnyRole(HR_STAFF_MANAGER_ROLES);
   const t = await getTranslations("contractual");
   const result = await getContractual();
   const { data: items, source } = result;
