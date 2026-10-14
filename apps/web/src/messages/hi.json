@@ -14619,9 +14619,19 @@
       "pendingNote": "पुष्टि की प्रतीक्षा"
     },
     "execution": {
+      "attachmentHeading": "संलग्नक (वैकल्पिक)",
+      "attachmentLabel": "फ़ोटो या दस्तावेज़ संलग्न करें",
+      "attachmentRemove": "हटाएँ",
+      "photoPreviewAlt": "{name} का पूर्वावलोकन",
       "duplicatePeriodWarning": "इस कार्यक्षेत्र के लिए {month} {year} की प्रविष्टि पहले से दर्ज है। जमा करने पर यह उसमें जुड़ जाएगी, इसलिए जाँच लें कि आप वही आँकड़ा दोबारा नहीं डाल रहे हैं।"
     },
     "reports": {
+      "chipFrom": "से {date}",
+      "chipTo": "तक {date}",
+      "chipDivision": "प्रभाग {name}",
+      "chipDivisionSelected": "प्रभाग (चयनित)",
+      "divisionSelectedFallback": "चयनित प्रभाग",
+      "divisionFilterAria": "प्रभाग के अनुसार फ़िल्टर करें",
       "definitions": "सक्रिय कार्य = कुल कार्य घटा बंद कार्य। प्रभाग फ़िल्टर केवल उसी प्रभाग द्वारा निष्पादित कार्यों से मेल खाता है; उप-प्रभाग शामिल नहीं हैं।",
       "chartLabel": "स्थिति के अनुसार कार्य"
     }

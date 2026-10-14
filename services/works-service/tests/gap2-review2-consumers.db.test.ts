@@ -329,6 +329,38 @@ describe("contractorCreate consumer: registration number uniqueness (GAP-WORKS-C
   });
 });
 
+describe("contractorUpdate consumer: registration number uniqueness (GAP-WORKS-CONTRACTORS-NEW-05)", () => {
+  async function seedWithRegNo(regNo: string): Promise<string> {
+    const id = randomUUID();
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(contractors).values({ id, tenantId: TENANT, name: "Holder", registrationNo: regNo, createdBy: MAKER, updatedBy: MAKER });
+    }));
+    return id;
+  }
+
+  it("changing to another contractor's registration number (any case/padding) is dead-lettered; nothing written", async () => {
+    const regNo = `REG-${randomUUID().slice(0, 8)}`;
+    await seedWithRegNo(regNo);
+    const otherId = await seedContractor();
+    const m = msg(CHECKER_1, { id: otherId, tenantId: TENANT, patch: { registrationNo: ` ${regNo.toLowerCase()} ` } });
+    await expect(deliver(COMMANDS.contractorUpdate, m)).rejects.toBeInstanceOf(NonRetryableError);
+    await expect(deliver(COMMANDS.contractorUpdate, m)).rejects.toThrow(/DUPLICATE_REGISTRATION_NO/);
+    const [row] = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(contractors).where(eq(contractors.id, otherId))));
+    expect(row!.registrationNo).toBeNull();
+    expect(await outboxTopics(m.messageId)).toEqual([]);
+    expect(await wasProcessed(m.messageId)).toBe(false);
+  });
+
+  it("re-saving a contractor's own registration number is not a duplicate", async () => {
+    const regNo = `REG-${randomUUID().slice(0, 8)}`;
+    const id = await seedWithRegNo(regNo);
+    const m = msg(CHECKER_1, { id, tenantId: TENANT, patch: { registrationNo: regNo, name: "Renamed" } });
+    await expect(deliver(COMMANDS.contractorUpdate, m)).resolves.toBeUndefined();
+    const [row] = await runWithTenant(TENANT, () => db.transaction((tx) => tx.select().from(contractors).where(eq(contractors.id, id))));
+    expect(row!.name).toBe("Renamed");
+  });
+});
+
 describe("billing audit columns: consumer population + migration 0026 backfill", () => {
   it("mbIssue populates created_by/updated_by on measurement_books", async () => {
     const awardId = await seedAward(MAKER);

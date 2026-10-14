@@ -864,6 +864,27 @@ describe("Execution routes", () => {
     }
   });
 
+  // certificateFileKey must be a file this tenant uploaded (assertTenantKey on physical-complete).
+  it("POST /v1/works/execution/physical-complete -> 422 for another tenant's or traversal certificate key; 202 for our own", async () => {
+    const workId = "00000000-1111-4000-8000-000000000001";
+    for (const certificateFileKey of [
+      "uploads/22222222-bbbb-4000-8000-000000000002/certificate/x/c.pdf",
+      `uploads/${TENANT}/../22222222-bbbb-4000-8000-000000000002/c.pdf`,
+    ]) {
+      const bad = await app.inject({
+        method: "POST", url: "/v1/works/execution/physical-complete", headers: authHeader(["dao"]),
+        payload: { workId, completionDate: "2026-01-10", certificateFileKey },
+      });
+      expect(bad.statusCode, certificateFileKey).toBe(422);
+      expect(bad.json().error.code).toBe("INVALID_FILE_KEY");
+    }
+    const good = await app.inject({
+      method: "POST", url: "/v1/works/execution/physical-complete", headers: authHeader(["dao"]),
+      payload: { workId, completionDate: "2026-01-10", certificateFileKey: `uploads/${TENANT}/certificate/${ACTOR}/c.pdf` },
+    });
+    expect(good.statusCode).toBe(202);
+  });
+
   // GAP-WORKS-EXECUTION-ISSUES-NEW-05: an issue for a missing work is a 404, not a blind 202 + dropped insert.
   it("POST /v1/works/execution/issues -> 404 when the work does not exist", async () => {
     const res = await app.inject({

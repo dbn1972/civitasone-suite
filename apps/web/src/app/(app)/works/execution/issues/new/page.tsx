@@ -16,6 +16,7 @@ import {
   type EntityOption,
   type UploadedFileMeta,
 } from "@/app/_components/ds";
+import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
 import { browserFetch } from "@/lib/api/browserClient";
@@ -56,6 +57,7 @@ function RaiseIssueForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const t = useTranslations("works.execution");
 
   const initialWorkId = searchParams.get("workId") ?? "";
 
@@ -182,10 +184,10 @@ function RaiseIssueForm() {
       </div>
 
       <div>
-        <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Attachment (optional)</p>
+        <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t("attachmentHeading")}</p>
         <FileUpload
           category="attachment"
-          label="Attach a photo or document"
+          label={t("attachmentLabel")}
           accept=".pdf,.jpg,.png"
           maxSizeMb={10}
           onUploaded={(key, meta) => {
@@ -208,7 +210,7 @@ function RaiseIssueForm() {
                 setAttachmentMeta(null);
               }}
             >
-              Remove
+              {t("attachmentRemove")}
             </Button>
           </div>
         ) : null}

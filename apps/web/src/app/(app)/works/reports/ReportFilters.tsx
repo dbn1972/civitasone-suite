@@ -1,5 +1,6 @@
 "use client";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useEffect, useState, useTransition, type FormEvent } from "react";
 import { Button, EntityPicker } from "@/app/_components/ds";
 import { searchDivisions, resolveDivisions } from "@/lib/entityAdapters/division";
@@ -15,6 +16,7 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 export function ReportFilters({ fromDate, toDate, divisionId }: ReportFiltersProps) {
   const router = useRouter();
+  const t = useTranslations("works.reports");
   const [pending, startTransition] = useTransition();
   // Controlled so To's min / From's max track live, and so we can block an
   // inverted range before navigating (GAP-WORKS-REPORTS-04).
@@ -82,9 +84,9 @@ export function ReportFilters({ fromDate, toDate, divisionId }: ReportFiltersPro
   }
 
   const activeChips: { label: string }[] = [];
-  if (fromDate) activeChips.push({ label: `From ${fromDate}` });
-  if (toDate) activeChips.push({ label: `To ${toDate}` });
-  if (divisionId) activeChips.push({ label: divisionName ? `Division ${divisionName}` : "Division (selected)" });
+  if (fromDate) activeChips.push({ label: t("chipFrom", { date: fromDate }) });
+  if (toDate) activeChips.push({ label: t("chipTo", { date: toDate }) });
+  if (divisionId) activeChips.push({ label: divisionName ? t("chipDivision", { name: divisionName }) : t("chipDivisionSelected") });
 
   return (
     <div style={{ marginBottom: 24 }}>
@@ -129,10 +131,10 @@ export function ReportFilters({ fromDate, toDate, divisionId }: ReportFiltersPro
               onChange={(v) => setDivision(Array.isArray(v) ? (v[0] ?? null) : v)}
               search={searchDivisions}
               resolve={resolveDivisions}
-              {...(divisionId ? { initialOptions: [{ id: divisionId, label: divisionName ?? "Selected division" }] } : {})}
+              {...(divisionId ? { initialOptions: [{ id: divisionId, label: divisionName ?? t("divisionSelectedFallback") }] } : {})}
               disabled={pending}
               minQueryLength={1}
-              aria-label="Filter by division"
+              aria-label={t("divisionFilterAria")}
               placeholder="Search division by name…"
             />
           </div>
