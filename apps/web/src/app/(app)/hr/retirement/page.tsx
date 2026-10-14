@@ -16,6 +16,7 @@ import type { RetirementRow } from "./_components/RetirementDashboard";
 import { RetirementCaseWorkspace } from "./_components/RetirementCaseWorkspace";
 import { InitiateSeparationAction } from "./_components/InitiateSeparationAction";
 import { getTranslations } from "next-intl/server";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 // GAP-HR-RETIREMENT-06: retirement/separation is a DPDP-sensitive
 // lifecycle event (separation types "death"/"termination" among them);
@@ -23,7 +24,7 @@ import { getTranslations } from "next-intl/server";
 // generic RefreshErrorState fallback for a 403, which reads like an
 // outage rather than a permission boundary. Matches the backend's own
 // HR_ROLES (lifecycle/m7-list-routes.ts's GET /v1/hrms/retirements).
-const RETIREMENT_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const RETIREMENT_ROLES = HR_STAFF_ROLES;
 
 async function getData(): Promise<LoaderResult<RetirementRow[]>> {
   return fetchJson<unknown, RetirementRow[]>("/api/v1/hrms/retirements", [], {

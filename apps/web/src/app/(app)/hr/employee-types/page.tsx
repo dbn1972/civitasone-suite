@@ -3,6 +3,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "@/app/_components/PermissionDenied";
 import { getTranslations } from "next-intl/server";
+import { HR_MASTERS_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 type EmpType = {
   id: string; code: string; name: string; description: string | null;
@@ -27,7 +28,7 @@ async function getTypes(): Promise<LoaderResult<EmpType[]>> {
  * gate the "new"/"edit" actions added here (GAP-HR-EMPLOYEE-TYPES-01), not
  * who may view the list (see EMPLOYEE_TYPE_READ_ROLES below).
  */
-const EMPLOYEE_TYPE_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
+const EMPLOYEE_TYPE_ADMIN_ROLES = HR_MASTERS_ADMIN_ROLES;
 
 /**
  * GAP-HR-EMPLOYEE-TYPES-04: mirrors the backend GET guard

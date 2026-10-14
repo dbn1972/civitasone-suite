@@ -5,7 +5,7 @@ import { getLeaveRequestDetails } from "../../../_data/loaders";
 import type { LeaveRequestDetail } from "@civitasone/types";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
-import { LEAVE_POLICY_ADMIN_ROLES } from "@/lib/auth/workRoles";
+import { LEAVE_POLICY_ADMIN_ROLES, HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 import { toHumanError } from "@/lib/messages";
 
 /**
@@ -13,7 +13,7 @@ import { toHumanError } from "@/lib/messages";
  * leave data. Employees see only their own applications; managers see their
  * direct reports (both enforced server-side — see GAP-HR-LEAVE-02/03/04).
  */
-const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const HR_ROLES = HR_STAFF_ROLES;
 const ADMIN_OR_MANAGER_ROLES = [...HR_ROLES, "manager"];
 
 export default async function LeaveManagementPage() {

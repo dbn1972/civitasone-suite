@@ -13,13 +13,14 @@ import {
   TALENT_POOL_PAGE_SIZE, TALENT_POOL_SOURCES, buildTalentPoolPath, candidateHref, hasActiveFilters,
   isEmptyPool, pageQuery, pageWindow, parsePage, parseSource, type TalentPoolParams,
 } from "./talentPoolView";
+import { HR_STAFF_ROLES, HR_ADMIN_TIER_ROLES } from "@/lib/auth/workRoles";
 
 // Mirrors HR_ROLES in services/hrms-service/src/modules/recruitment/routes.ts
 // (GET /v1/hrms/talent-pool) -- kept local rather than shared, matching how
 // the backend itself already re-declares this same list per route file.
-const TALENT_POOL_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const TALENT_POOL_ROLES = HR_STAFF_ROLES;
 // Revealing a past applicant's contact details (audited) is limited to these (the service enforces it again).
-const TALENT_POOL_REVEAL_ROLES = ["hr_admin", "super_admin"];
+const TALENT_POOL_REVEAL_ROLES = HR_ADMIN_TIER_ROLES;
 
 type Candidate = {
   id: string;

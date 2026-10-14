@@ -1,3 +1,4 @@
+import { HR_STAFF_MANAGER_ROLES, HR_STAFF_ROLES, PAYROLL_STAFF_ROLES } from "@/lib/auth/workRoles";
 export const dynamic = "force-dynamic";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
@@ -39,7 +40,7 @@ import { PayrollBanner } from "./_components/PayrollBanner";
  * HR_ROLES comment already documents as each page's job (hr/payroll/page.tsx
  * does the analogous thing with its own canAdminister flag).
  */
-const HR_DASHBOARD_READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager"];
+const HR_DASHBOARD_READER_ROLES = HR_STAFF_MANAGER_ROLES;
 
 /**
  * Mirrors hr/employees/new/page.tsx's EMPLOYEE_ADMIN_ROLES exactly (that
@@ -52,7 +53,7 @@ const HR_DASHBOARD_READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "man
  * that led straight to that page's PermissionDenied wall. Same bug class
  * the employee branch just below already avoids for plain "employee".
  */
-const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const EMPLOYEE_ADMIN_ROLES = HR_STAFF_ROLES;
 
 // GAP-HR-DASHBOARD-05: mirrors hr/payroll/page.tsx's own PAYROLL_ADMIN_ROLES
 // exactly (that page's own canAdminister flag, which hides its run-payroll
@@ -60,7 +61,6 @@ const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 // reuse of EMPLOYEE_ADMIN_ROLES above: payroll administration and employee
 // administration are different privileges in this app's role model, even
 // though both happen to be held by hr_admin/super_admin today.
-const PAYROLL_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 
 type EmpRow = {
   id: string;
@@ -263,10 +263,10 @@ export default async function HRDashboardPage() {
   const userName = sessionName ? sessionName.split(" ")[0] : (profile ? profile.name.split(" ")[0] : "there");
   const canManageEmployees = roles.some((r) => EMPLOYEE_ADMIN_ROLES.includes(r));
   // GAP-HR-DASHBOARD-05: mirrors hr/payroll/page.tsx's own canAdminister
-  // check exactly (PAYROLL_ADMIN_ROLES above) -- gates whether PayrollBanner
+  // check exactly (PAYROLL_STAFF_ROLES above) -- gates whether PayrollBanner
   // shows a "Start Run" link a manager would only reach a dead-end
   // PermissionDenied wall from.
-  const canRunPayroll = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
+  const canRunPayroll = roles.some((r) => PAYROLL_STAFF_ROLES.includes(r));
   // GAP-HR-DASHBOARD-08: safe non-decision fallback -- whether a manager
   // should see tenant-wide KPIs/dept-chart/leave-inbox at all (vs scoped to
   // direct reports) is a real DPDP-relevant access decision this fix does

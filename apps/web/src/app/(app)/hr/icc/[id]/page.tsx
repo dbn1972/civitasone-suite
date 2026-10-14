@@ -5,6 +5,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { formatIndianDate } from "@/lib/formatters";
 import { RecordHearingForm } from "./RecordHearingForm";
+import { ICC_IDENTITY_ROLES } from "@/lib/auth/workRoles";
 
 // Mirrors the backend's own IDENTITY_ROLES exactly (services/hrms-service/
 // src/modules/disciplinary/icc-routes.ts) -- GAP-HR-ICC-02's decision-
@@ -12,7 +13,7 @@ import { RecordHearingForm } from "./RecordHearingForm";
 // route. Deliberately excludes hr_admin/super_admin (see that file's own
 // comment) -- a chairing hr_admin needs the icc_member role granted to
 // them, not a code bypass here.
-const IDENTITY_ROLES = ["icc_member"];
+const IDENTITY_ROLES = ICC_IDENTITY_ROLES;
 
 // GAP-HR-ICC-03: statutory 90-day inquiry clock (POSH Act 2013, s.11 --
 // the Internal Committee must complete an inquiry within 90 days of the

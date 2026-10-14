@@ -7,6 +7,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 import { ShiftChangeRequestForm } from "../_components/ShiftChangeRequestForm";
 import { ShiftRequestsTable, type ShiftRequestRow } from "../_components/ShiftRequestsTable";
+import { HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * ShiftRequestsPage — employee requests to swap/change shift.
@@ -44,7 +45,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
   });
 }
 
-const SHIFT_APPROVER_ROLES = ["hr_admin", "hr_officer", "manager", "super_admin"];
+const SHIFT_APPROVER_ROLES = HR_STAFF_MANAGER_ROLES;
 
 export default async function ShiftRequestsPage() {
   const t = await getTranslations("shiftRequests");

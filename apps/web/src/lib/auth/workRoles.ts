@@ -241,12 +241,11 @@ export const PAYMENT_WRITE_ROLES = ["finance_officer", "finance_admin", "super_a
  * campaign's security-change convention, even though every one of these
  * four roles already had real, intentional backend access this list was
  * simply failing to let them reach. Deliberately NOT adding here (left
- * allowlisted, see hr-role-matrix.allowlist.json): "dept_head" (also a real
- * keycloak-catalog role, but zero existing web-side precedent anywhere in
- * apps/web, unlike the four above -- a first-time grant, not a reconciled
- * drift; needs its own product decision) and the ad hoc recruitment/audit/
- * device-trust panel roles (hiring_manager, audit_admin, it_admin,
- * interviewer, vigilance_officer), none of which any web page references.
+ * allowlisted, see hr-role-matrix.allowlist.json): the ad hoc audit/panel roles
+ * that no web page consumes (audit_admin, interviewer, vigilance_officer).
+ * W1 SF-09b later added "hiring_manager" and "dept_head" (a web page already
+ * depends on each; see the inline comment on the entries) and moved it_admin's
+ * device-trust routes to their real consumer, /admin/devices.
  */
 export const HR_ROLES = [
   "hr_admin",
@@ -269,7 +268,34 @@ export const HR_ROLES = [
   "officer",
   "finance_officer",
   "finance_admin",
+  // W1 SF-09b: the backend admits both, and a web page already depends on
+  // each. hiring_manager: hr/recruitment/requisitions/page.tsx lists it in
+  // its own gate and requisition-routes.ts admits it on all 7 routes, but
+  // this outer layout redirected a hiring_manager-only account first.
+  // dept_head: hr/goals consumes performance-dev-routes.ts (goals,
+  // development plans), which admits it. UI shell only -- every route keeps
+  // its own backend requireRole; no backend guard changes.
+  "hiring_manager",
+  "dept_head",
 ];
+
+/**
+ * W1 SF-09b: roles that may open recruitment requisitions
+ * (requisition-routes.ts CREATE_ROLES: list + create + submit + clone).
+ */
+export const RECRUITMENT_REQUISITION_ROLES = [...HR_STAFF_MANAGER_ROLES, "hiring_manager"];
+
+/** W1 SF-09b: hr/payroll config-write tier (payroll_admin + super_admin), e.g. disbursement config. */
+export const PAYROLL_CONFIG_ROLES = ["payroll_admin", "super_admin"];
+
+/** W1 SF-09b: payroll run/admin tier (mirrors roleGuard.PAYROLL_ADMIN_ROLES; kept here so pages whose tests mock roleGuard can share it). */
+export const PAYROLL_STAFF_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
+
+/** W1 SF-09b: payroll salary-slip / structure admin tier (payroll-service payroll/routes.ts). */
+export const PAYROLL_SALARY_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"];
+
+/** W1 SF-09b: icc-routes.ts GET /icc/complaints/:id (the only route that returns complainant/respondent identity) is icc_member-only by POSH Act s.16 design. */
+export const ICC_IDENTITY_ROLES = ["icc_member"];
 
 /**
  * GAP-HR-LEAVE-POLICIES-01/02: roles allowed to administer leave policy

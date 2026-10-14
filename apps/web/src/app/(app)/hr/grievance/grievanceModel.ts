@@ -1,3 +1,4 @@
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 /**
  * Grievance register constants shared by the list, detail and form (GAP-HR-GRIEVANCE-01/02/03/06).
  *
@@ -8,7 +9,7 @@
  */
 
 /** Same set as the backend's GRIEVANCE_ROLES (grievance/routes.ts). */
-export const GRIEVANCE_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+export const GRIEVANCE_ROLES = HR_STAFF_ROLES;
 
 export const GRIEVANCE_STATUSES = ["registered", "under_inquiry", "disposed"] as const;
 export type GrievanceStatus = (typeof GRIEVANCE_STATUSES)[number];

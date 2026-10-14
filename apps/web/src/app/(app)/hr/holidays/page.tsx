@@ -8,6 +8,7 @@ import { AddHolidayForm } from "./AddHolidayForm";
 import { HolidaysTableClient } from "./HolidaysTableClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
+import { HR_MASTERS_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 type ApiHoliday = {
   id: string;
@@ -65,7 +66,7 @@ async function getHolidays(year: number): Promise<LoaderResult<Row[]>> {
  * Mirrors holidays/routes.ts: POST/DELETE require
  * HR_ROLES = ["hr_admin", "super_admin", "admin"].
  */
-const HOLIDAY_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
+const HOLIDAY_ADMIN_ROLES = HR_MASTERS_ADMIN_ROLES;
 
 export default async function HolidaysPage({ searchParams }: { searchParams?: { year?: string } }) {
   const t = await getTranslations("holidays");

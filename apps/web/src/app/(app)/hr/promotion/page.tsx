@@ -5,6 +5,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PromoteWithApproval } from "./PromoteWithApproval";
 import { PromotionCard, type PromotionRow } from "./_components/PromotionCard";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 // GAP-HR-PROMOTION-03: matches employee/routes.ts's own HR_ROLES gate on
 // POST .../promotion/submit-approval exactly -- keep in sync if that ever
@@ -12,7 +13,7 @@ import { PromotionCard, type PromotionRow } from "./_components/PromotionCard";
 // layout.tsx admits manager and employee too), so an employee or manager
 // could fill in two steps of a confidential eFile action before hitting a
 // raw 403 on submit.
-const PROMOTION_SUBMIT_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const PROMOTION_SUBMIT_ROLES = HR_STAFF_ROLES;
 
 async function getData(): Promise<LoaderResult<PromotionRow[]>> {
   const r = await fetchJson<unknown, PromotionRow[]>("/api/v1/hrms/lifecycle/promotions", [], {

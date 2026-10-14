@@ -12,6 +12,7 @@ import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 type EmployeeOption = { id: string; name: string; employeeNo: string };
 type LeaveApp = {
@@ -41,7 +42,7 @@ type HistoryRow = {
 /**
  * Mirrors leave/routes.ts HR_ROLES.
  */
-const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const HR_ROLES = HR_STAFF_ROLES;
 const ADMIN_OR_MANAGER_ROLES = [...HR_ROLES, "manager"];
 
 interface Props {

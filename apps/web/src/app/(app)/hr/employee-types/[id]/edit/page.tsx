@@ -6,8 +6,9 @@ import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
 import { EmployeeTypeForm, type EmployeeTypeFormValues } from "../../_components/EmployeeTypeForm";
+import { HR_MASTERS_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
-const EMPLOYEE_TYPE_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
+const EMPLOYEE_TYPE_ADMIN_ROLES = HR_MASTERS_ADMIN_ROLES;
 
 type EmpType = EmployeeTypeFormValues & { id: string };
 

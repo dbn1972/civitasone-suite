@@ -11,6 +11,7 @@ import {
 } from "./_components/ProbationConfirmationCard";
 import { daysUntilIST } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 // GAP-HR-CONFIRMATION-07: the API caps at 500 rows and reports `hasMore` --
 // previously discarded by mapResponse, which only ever kept the `data` array.
@@ -54,7 +55,7 @@ export default async function ConfirmationPage() {
   // GAP-HR-CONFIRMATION-03: hr_admin/hr_officer/super_admin per m7-list-
   // routes.ts's own HR_ROLES for this endpoint -- keep in sync with that
   // list if it ever changes.
-  const CONFIRMATIONS_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+  const CONFIRMATIONS_ROLES = HR_STAFF_ROLES;
 
   return (
     <div className="page-main wrap">
