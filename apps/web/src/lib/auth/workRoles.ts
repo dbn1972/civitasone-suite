@@ -534,6 +534,28 @@ export const MB_STEP_AUTHORITY: Record<string, string> = {
 };
 
 /**
+ * GAP-WORKS-BILLING-WORKID-03: per-step finalize authority, keyed by the TARGET
+ * status. Mirrors works-service billing/domain.ts finalizeStepRoles() (the
+ * route requires it and answers 403 otherwise): the officer for the step plus
+ * the tenant admin overrides. The server stays the authority.
+ */
+const STEP_ADMIN_ROLES = ["works_admin", "super_admin"];
+export const FINALIZE_STEP_OFFICER_ROLE: Record<string, string> = {
+  so_finalized: "section_officer",
+  sdo_finalized: "sdo",
+  estimator_finalized: "estimator",
+  auditor_finalized: "auditor",
+  dao_finalized: "dao",
+  do_finalized: "do",
+};
+
+export function canAdvanceFinalizeStep(sessionRoles: string[], nextStatus: string): boolean {
+  const officer = FINALIZE_STEP_OFFICER_ROLE[nextStatus];
+  const allowed = officer ? [officer, ...STEP_ADMIN_ROLES] : STEP_ADMIN_ROLES;
+  return allowed.some((r) => sessionRoles.includes(r));
+}
+
+/**
  * GAP-WORKS-BILLING-ACCOUNT-COMPILE-02: roles the works-service accepts for
  * POST /v1/works/billing/account-compile. Mirrors billing/routes.ts exactly
  * (["dao","do","works_admin","super_admin"]). Used by the account-compile

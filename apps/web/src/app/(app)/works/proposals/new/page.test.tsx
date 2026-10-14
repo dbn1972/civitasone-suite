@@ -141,3 +141,14 @@ describe("NewProposalPage — GAP-WORKS-PROPOSALS-NEW-01 (work type picker)", ()
     expect(screen.queryByPlaceholderText(/UUID from masters/i)).not.toBeInTheDocument();
   });
 });
+
+describe("NewProposalPage — work type picker error state (PROPOSALS-NEW-01)", () => {
+  it("shows an error, not 'No matches', when the work-type fetch fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation((async () => new Response("{}", { status: 500 })) as typeof fetch);
+    render(<NewProposalPage />);
+    const picker = await screen.findByPlaceholderText(/work type/i);
+    fireEvent.change(picker, { target: { value: "road" } });
+    expect(await screen.findByText(/Couldn.t load results/i, undefined, { timeout: 3000 })).toBeInTheDocument();
+    expect(screen.queryByText("No matches")).not.toBeInTheDocument();
+  });
+});

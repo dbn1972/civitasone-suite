@@ -165,3 +165,36 @@ describe("BillingActions — UX-016 clerk-safe errors", () => {
     expect(screen.queryByText(/409/)).not.toBeInTheDocument();
   });
 });
+
+describe("BillingActions — WORKID-03 per-step authority", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("a viewer without the DAO role sees no button on an auditor_finalized bill, only the awaiting authority", async () => {
+    mockMbList();
+    renderWithToast(
+      <BillingActions
+        workId={WORK}
+        canFinalize
+        roles={["estimator"]}
+        bills={[{ id: "b1", billNo: "BILL/001", status: "auditor_finalized" }]}
+      />,
+    );
+    expect(await screen.findByText(/Awaiting: Divisional Accounts Officer/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /→ Dao finalized/i })).not.toBeInTheDocument();
+  });
+
+  it("a DAO sees the Dao finalized button", async () => {
+    mockMbList();
+    renderWithToast(
+      <BillingActions
+        workId={WORK}
+        canFinalize
+        roles={["dao"]}
+        bills={[{ id: "b1", billNo: "BILL/001", status: "auditor_finalized" }]}
+      />,
+    );
+    expect(await screen.findByRole("button", { name: /→ Dao finalized/i })).toBeInTheDocument();
+  });
+});

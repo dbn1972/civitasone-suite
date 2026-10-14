@@ -42,6 +42,41 @@ export function billFinalizationSequence(): string[] {
 }
 
 /**
+ * GAP-WORKS-BILLING-WORKID-03/07: per-step finalizer authority, keyed by the
+ * TARGET status. Each step may only be advanced by the officer it represents
+ * (or a tenant admin override). The blanket WRITE_ROLES gate let any role
+ * drive the whole chain; this narrows each step.
+ * NEEDS OWNER DECISION: the "auditor" role name for auditor_finalized and
+ * whether works_operator should retain a step are product choices.
+ */
+const ADMIN_STEP_ROLES = ["works_admin", "super_admin"];
+const STEP_OFFICER_ROLE: Record<string, string> = {
+  so_finalized: "section_officer",
+  sdo_finalized: "sdo",
+  estimator_finalized: "estimator",
+  auditor_finalized: "auditor",
+  dao_finalized: "dao",
+  do_finalized: "do",
+};
+
+export function finalizeStepRoles(nextStatus: string): string[] {
+  const officer = STEP_OFFICER_ROLE[nextStatus];
+  return officer ? [officer, ...ADMIN_STEP_ROLES] : [...ADMIN_STEP_ROLES];
+}
+
+/**
+ * GAP-WORKS-BILLING-WORKID-03: maker-checker. The actor who created/issued a
+ * bill or MB must not be the one who finalizes any step of it.
+ */
+export function isSelfFinalization(
+  actorId: string,
+  maker: { createdBy?: string | null; issuedBy?: string | null },
+): boolean {
+  const makers = [maker.createdBy, maker.issuedBy].filter((x): x is string => !!x);
+  return makers.includes(actorId);
+}
+
+/**
  * Check if a bill can be created from an MB.
  * MB must be fully finalized (do_finalized).
  */

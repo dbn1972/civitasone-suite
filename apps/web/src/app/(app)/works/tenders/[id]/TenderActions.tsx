@@ -71,11 +71,10 @@ export function TenderActions({
     setQuotError("");
     quotFormError.clear();
     try {
-      // The quotation command accepts contractorName (the schema has no
-      // contractorId yet); send the picked contractor's name. The picker
-      // guarantees it maps to a single registered firm, removing the
-      // spelling-variant ambiguity of free text.
-      const body: Record<string, unknown> = { tenderId, contractorName: contractorLabel, method };
+      // GAP-WORKS-TENDERS-DETAIL-01: send the registered contractor's id AND
+      // name; the backend validates the id against works.contractors and that
+      // it matches the name, so two bids by one firm resolve to one contractor.
+      const body: Record<string, unknown> = { tenderId, contractorId, contractorName: contractorLabel, method };
       if (method === "item_rate") {
         const minor = rupeesToMinorString(quotedAmountRs);
         if (minor === null) {

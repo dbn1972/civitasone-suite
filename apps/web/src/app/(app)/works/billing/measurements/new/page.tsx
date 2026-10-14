@@ -5,6 +5,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader, Button, SkeletonCard } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { WorkField, safeWorkId } from "../../WorkField";
 
 const inputStyle = {
   width: "100%",
@@ -47,7 +48,7 @@ const okBanner = {
  * precision). Empty string allowed for optional dimensions. */
 const QTY_RE = /^\d+(\.\d{1,3})?$/;
 
-type Option = { id: string; label: string; sublabel?: string };
+type Option = { id: string; label: string; sublabel?: string; unit?: string };
 
 /**
  * GAP-WORKS-BILLING-MEASUREMENTS-NEW-01: compute No. × L × B × D from the
@@ -99,7 +100,7 @@ function RecordMeasurementForm() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
-  const workId = (searchParams.get("workId") ?? "").trim();
+  const workId = safeWorkId(searchParams.get("workId")) ?? "";
 
   const [form, setForm] = useState<MeasurementForm>({
     mbId: searchParams.get("mbId") ?? "",
@@ -120,12 +121,48 @@ function RecordMeasurementForm() {
   // work's MBs as a select (and show the selected MB number) instead of a
   // pasted UUID.
   const [mbs, setMbs] = useState<Option[] | null>(null);
+  const [boqItems, setBoqItems] = useState<Option[] | null>(null);
+  // GAP-WORKS-BILLING-MEASUREMENTS-NEW-02: the work may arrive via ?workId= or
+  // be picked; MBs and BoQ items are then offered as selects for that work.
+  const [pickedWorkId, setPickedWorkId] = useState(workId);
+  const chosenWorkId = safeWorkId(pickedWorkId) ?? "";
   useEffect(() => {
-    if (!workId) return;
+    setMbs(null);
+    setBoqItems(null);
+    if (!chosenWorkId) return;
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/proxy/v1/works/billing/${workId}/mbs`);
+        const res = await fetch(`/api/proxy/v1/works/boq/${chosenWorkId}`);
+        if (cancelled || !res.ok) return;
+        const body = (await res.json()) as { data?: unknown };
+        const rows = Array.isArray(body.data) ? body.data : [];
+        setBoqItems(
+          rows.map((r) => {
+            const row = r as Record<string, unknown>;
+            const code = row.itemCode ? String(row.itemCode) : "";
+            const desc = String(row.itemDescription ?? "");
+            return {
+              id: String(row.id ?? ""),
+              label: [code, desc].filter(Boolean).join(" — ") || String(row.id ?? ""),
+              unit: row.unit ? String(row.unit) : undefined,
+            };
+          }),
+        );
+      } catch {
+        /* leave null → text input */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [chosenWorkId]);
+  useEffect(() => {
+    if (!chosenWorkId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/proxy/v1/works/billing/${chosenWorkId}/mbs`);
         if (cancelled || !res.ok) return;
         const body = (await res.json()) as { data?: unknown };
         const rows = Array.isArray(body.data) ? body.data : [];
@@ -142,13 +179,14 @@ function RecordMeasurementForm() {
     return () => {
       cancelled = true;
     };
-  }, [workId]);
+  }, [chosenWorkId]);
 
   function set(field: keyof MeasurementForm) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
   }
 
+  const selectedUnit = boqItems?.find((b) => b.id === form.boqItemId)?.unit;
   const computed = computeFromDimensions(form);
   // A mismatch is when a computed value exists and the typed quantity differs
   // from it (beyond a 0.001 tolerance). Then a remark is required before save.
@@ -223,7 +261,7 @@ function RecordMeasurementForm() {
       setMessage("Measurement recorded.");
       toast.success("Measurement recorded.");
       setTimeout(() => {
-        router.push(workId ? "/works/billing/" + workId : "/works/billing");
+        router.push(chosenWorkId ? "/works/billing/" + chosenWorkId : "/works/billing");
       }, 600);
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
@@ -232,7 +270,7 @@ function RecordMeasurementForm() {
     }
   }
 
-  const backHref = workId ? "/works/billing/" + workId : "/works/billing";
+  const backHref = chosenWorkId ? "/works/billing/" + chosenWorkId : "/works/billing";
 
   return (
     <>
@@ -261,6 +299,19 @@ function RecordMeasurementForm() {
           style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: 680 }}
         >
           <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>Fields marked * are required.</p>
+
+          <div>
+            <label style={labelStyle} htmlFor="measurement-work">Work *</label>
+            <WorkField
+              id="measurement-work"
+              value={pickedWorkId}
+              locked={!!workId}
+              onChange={(w) => {
+                setPickedWorkId(w);
+                setForm((prev) => ({ ...prev, mbId: "", boqItemId: "" }));
+              }}
+            />
+          </div>
 
           {/* MB + BoQ IDs */}
           <div
@@ -292,22 +343,31 @@ function RecordMeasurementForm() {
               )}
             </div>
             <div>
-              <label style={labelStyle} htmlFor="boqItemId">BoQ Item ID (UUID) *</label>
-              <input
-                id="boqItemId"
-                style={inputStyle}
-                type="text"
-                value={form.boqItemId}
-                onChange={set("boqItemId")}
-                placeholder="UUID of the BoQ line item"
-                required
-              />
+              <label style={labelStyle} htmlFor="boqItemId">BoQ Item *</label>
+              {boqItems && boqItems.length > 0 ? (
+                <select id="boqItemId" style={inputStyle} value={form.boqItemId} onChange={set("boqItemId")} required>
+                  <option value="">Select a BoQ item…</option>
+                  {boqItems.map((b) => (
+                    <option key={b.id} value={b.id}>{b.label}{b.unit ? ` (${b.unit})` : ""}</option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id="boqItemId"
+                  style={inputStyle}
+                  type="text"
+                  value={form.boqItemId}
+                  onChange={set("boqItemId")}
+                  placeholder="UUID of the BoQ line item"
+                  required
+                />
+              )}
             </div>
           </div>
 
           {/* Quantity */}
           <div>
-            <label style={labelStyle} htmlFor="quantity">Quantity *</label>
+            <label style={labelStyle} htmlFor="quantity">Quantity *{selectedUnit ? ` (${selectedUnit})` : ""}</label>
             <input
               id="quantity"
               style={inputStyle}

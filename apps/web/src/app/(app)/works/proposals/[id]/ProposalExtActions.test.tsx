@@ -13,6 +13,18 @@ function renderWithToast(ui: ReactElement) {
 
 // The accordion header's accessible name includes the expand/collapse glyph
 // ("▸"/"▾") appended with no separating space, so match on the label prefix.
+const DIV_ID = "11111111-1111-1111-1111-111111111111";
+
+/** Mock the division master and pick "North Division" in the Map Office picker. */
+async function pickDivision() {
+  vi.spyOn(globalThis, "fetch").mockImplementation((async () =>
+    new Response(JSON.stringify({ data: [{ id: DIV_ID, name: "North Division", code: "ND" }] }), { status: 200 })) as typeof fetch);
+  fireEvent.change(screen.getByLabelText("Division"), { target: { value: "North" } });
+  const option = await screen.findByRole("option", { name: /North Division/ }, { timeout: 3000 });
+  fireEvent.mouseDown(option);
+  fireEvent.click(option);
+}
+
 function openSection(label: string) {
   fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${label}`) }));
 }
@@ -174,17 +186,16 @@ describe("ProposalExtActions", () => {
   });
 
   describe("Map Office (append-only — no update/delete endpoint, so a wrong mapping is permanent)", () => {
-    it("does NOT fire the office-mapping POST on the bare submit click", () => {
-      const fetchSpy = vi.spyOn(globalThis, "fetch");
+    it("does NOT fire the office-mapping POST on the bare submit click", async () => {
       renderWithToast(<ProposalExtActions workId={WORK_ID} roles={["works_admin"]} />);
 
       openSection("Map Office");
-      fireEvent.change(screen.getByPlaceholderText("Division UUID"), {
-        target: { value: "11111111-1111-1111-1111-111111111111" },
-      });
+      await pickDivision();
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+      fetchSpy.mockClear();
       fireEvent.click(screen.getByRole("button", { name: "Map Office" }));
 
-      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes("/office-mapping"))).toBe(false);
       expect(screen.getByRole("alertdialog")).toBeInTheDocument();
       expect(
         screen.getByText(/cannot be edited or removed once submitted/),
@@ -192,22 +203,21 @@ describe("ProposalExtActions", () => {
     });
 
     it("fires the office-mapping POST only after confirming, then collapses the section", async () => {
-      const fetchSpy = vi
-        .spyOn(globalThis, "fetch")
-        .mockResolvedValue(new Response(JSON.stringify({ id: "x" }), { status: 202 }));
       renderWithToast(<ProposalExtActions workId={WORK_ID} roles={["works_admin"]} />);
 
       openSection("Map Office");
-      fireEvent.change(screen.getByPlaceholderText("Division UUID"), {
-        target: { value: "11111111-1111-1111-1111-111111111111" },
-      });
+      await pickDivision();
+      const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((async (input: RequestInfo | URL) =>
+        String(input).includes("/office-mapping")
+          ? new Response(JSON.stringify({ id: "x" }), { status: 202 })
+          : new Response(JSON.stringify({ data: [{ id: DIV_ID, name: "North Division", code: "ND" }] }), { status: 200 })) as typeof fetch);
       fireEvent.click(screen.getByRole("button", { name: "Map Office" }));
 
       const dialog = screen.getByRole("alertdialog");
       fireEvent.click(within(dialog).getByRole("button", { name: "Confirm Office Mapping" }));
 
-      await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
-      const [url, init] = fetchSpy.mock.calls[0];
+      await waitFor(() => expect(fetchSpy.mock.calls.some((c) => String(c[0]).includes("/office-mapping"))).toBe(true));
+      const [url, init] = fetchSpy.mock.calls.find((c) => String(c[0]).includes("/office-mapping"))!;
       expect(url).toBe("/api/proxy/v1/works/proposals/office-mapping");
       expect(JSON.parse((init as RequestInit).body as string)).toEqual({
         workId: WORK_ID,
@@ -216,7 +226,7 @@ describe("ProposalExtActions", () => {
       });
 
       await waitFor(() =>
-        expect(screen.queryByPlaceholderText("Division UUID")).not.toBeInTheDocument(),
+        expect(screen.queryByLabelText("Division")).not.toBeInTheDocument(),
       );
     });
   });
@@ -227,26 +237,26 @@ describe("ProposalExtActions — GAP-WORKS-PROPOSALS-DETAIL-04 (typo protection 
     vi.restoreAllMocks();
   });
 
-  it("blocks a non-UUID division id with an inline error and never opens the confirm", () => {
+  it("blocks a submit with no division chosen with an inline error and never opens the confirm", () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
     renderWithToast(<ProposalExtActions workId={WORK_ID} roles={["works_admin"]} />);
     openSection("Map Office");
-    fireEvent.change(screen.getByPlaceholderText("Division UUID"), { target: { value: "not-a-uuid" } });
     fireEvent.click(screen.getByRole("button", { name: "Map Office" }));
 
-    expect(screen.getByRole("alert").textContent).toMatch(/valid UUID/i);
+    expect(screen.getByRole("alert").textContent).toMatch(/Select a division/i);
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("shows the division id in the office confirm review summary", () => {
+  it("shows the division NAME in the office confirm review summary", async () => {
     renderWithToast(<ProposalExtActions workId={WORK_ID} roles={["works_admin"]} />);
     openSection("Map Office");
-    const div = "11111111-1111-1111-1111-111111111111";
-    fireEvent.change(screen.getByPlaceholderText("Division UUID"), { target: { value: div } });
+    await pickDivision();
+    // Let the label resolve before opening the permanent-record confirmation.
+    await new Promise((r) => setTimeout(r, 100));
     fireEvent.click(screen.getByRole("button", { name: "Map Office" }));
     const dialog = screen.getByRole("alertdialog");
-    expect(within(dialog).getByText(new RegExp(div))).toBeInTheDocument();
+    expect(within(dialog).getByText(/North Division/)).toBeInTheDocument();
   });
 
   it("blocks a non-numeric COA major head with an inline error", () => {
@@ -279,5 +289,19 @@ describe("ProposalExtActions — GAP-WORKS-PROPOSALS-DETAIL-05 (split parent con
     openSection("Split Proposal");
     expect(screen.getByText("WO-123 · ₹86,50,000.50")).toBeInTheDocument();
     expect(screen.queryByText(/aaaaaaaa…/)).not.toBeInTheDocument();
+  });
+
+  it("the confirm dialog repeats the captured parent and description (DETAIL-05)", () => {
+    renderWithToast(
+      <ProposalExtActions workId={WORK_ID} roles={["works_admin"]} workNumber="WO-123" estimatedCostMinor="865000050" />,
+    );
+    openSection("Split Proposal");
+    fireEvent.change(screen.getByPlaceholderText("Describe the sub-work scope"), {
+      target: { value: "Bridge approach road — sub-work" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Split Proposal" }));
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog.textContent).toContain("WO-123 · ₹86,50,000.50");
+    expect(dialog.textContent).toContain("Bridge approach road — sub-work");
   });
 });

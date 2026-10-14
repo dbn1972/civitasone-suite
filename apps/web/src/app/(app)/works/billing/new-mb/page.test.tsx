@@ -4,9 +4,13 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 const pushMock = vi.fn();
 let searchParamsMock = new URLSearchParams();
 
+const suspendSearchParams = { on: false };
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
-  useSearchParams: () => searchParamsMock,
+  useSearchParams: () => {
+    if (suspendSearchParams.on) throw new Promise(() => {}); // never resolves -> Suspense fallback stays
+    return searchParamsMock;
+  },
 }));
 
 const toastSuccess = vi.fn();
@@ -53,10 +57,43 @@ describe("Issue Measurement Book form", () => {
     expect(await screen.findByPlaceholderText("UUID of the work")).toHaveValue(WORK);
   });
 
-  it("leaves Work ID empty when no param is supplied (tenant-wide entry point)", async () => {
+  it("offers a work PICKER (not a UUID box) when no param is supplied (tenant-wide entry point)", async () => {
     mockFetch();
     render(<NewMbPage />);
-    expect(await screen.findByPlaceholderText("UUID of the work")).toHaveValue("");
+    expect(await screen.findByPlaceholderText("Search by work number or description…")).toHaveValue("");
+    expect(screen.queryByPlaceholderText("UUID of the work")).not.toBeInTheDocument();
+  });
+
+  it("blocks submit without a chosen work and never POSTs (UUID guard)", async () => {
+    const spy = mockFetch();
+    render(<NewMbPage />);
+    await screen.findByPlaceholderText("Search by work number or description…");
+    fireEvent.change(screen.getByPlaceholderText("e.g. MB/2024-25/001"), { target: { value: "MB/1" } });
+    fireEvent.change(screen.getByPlaceholderText("UUID of the award"), { target: { value: AWARD } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/Select the work/i);
+    expect(postCall(spy)).toBeUndefined();
+  });
+
+  it("a non-UUID ?workId= is ignored: back link and redirect never carry it (NEW-MB-04)", async () => {
+    mockFetch();
+    searchParamsMock = new URLSearchParams("workId=../../admin");
+    render(<NewMbPage />);
+    expect(await screen.findByPlaceholderText("Search by work number or description…")).toBeInTheDocument();
+    expect(document.body.innerHTML).not.toContain("../../admin");
+  });
+
+  it("maps a 409 DUPLICATE_MB_NUMBER to a field message and keeps the form data (NEW-MB-03)", async () => {
+    mockFetch({ postStatus: 409, postBody: { error: { code: "DUPLICATE_MB_NUMBER" } } });
+    searchParamsMock = new URLSearchParams(`workId=${WORK}`);
+    render(<NewMbPage />);
+    await screen.findByPlaceholderText("UUID of the work");
+    fireEvent.change(screen.getByPlaceholderText("UUID of the award"), { target: { value: AWARD } });
+    fireEvent.change(screen.getByPlaceholderText("e.g. MB/2024-25/001"), { target: { value: "MB/9" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit" }));
+    expect(await screen.findByText(/already used for this work/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("e.g. MB/2024-25/001")).toHaveValue("MB/9");
+    expect(pushMock).not.toHaveBeenCalled();
   });
 
   it("offers an award SELECT (not a UUID input) when the work's awards load (NEW-MB-01)", async () => {
@@ -114,3 +151,16 @@ describe("Issue Measurement Book form", () => {
 function within_options(select: HTMLSelectElement): string[] {
   return Array.from(select.options).map((o) => o.textContent ?? "");
 }
+
+describe("Suspense fallback (BILLS-NEW-04 / MEASUREMENTS-NEW-04 / NEW-MB-04)", () => {
+  it("renders a skeleton, not an empty page, while useSearchParams() suspends", () => {
+    suspendSearchParams.on = true;
+    try {
+      const { container } = render(<NewMbPage />);
+      expect(container.querySelector('[aria-hidden="true"]')).not.toBeNull();
+      expect(screen.queryByRole("button", { name: /submit|generate bill|record measurement/i })).not.toBeInTheDocument();
+    } finally {
+      suspendSearchParams.on = false;
+    }
+  });
+});
