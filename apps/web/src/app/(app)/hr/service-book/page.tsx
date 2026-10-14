@@ -10,8 +10,9 @@ import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { SERVICE_BOOK_TRANSFER_TYPES, SERVICE_BOOK_PROMOTION_TYPES } from "@/lib/serviceBookEventTypes";
 import { ServiceBookView, type ServiceEntry } from "./_components/ServiceBookView";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
-const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const HR_ROLES = HR_STAFF_ROLES;
 
 type ServiceBookPayload = {
   items: ServiceEntry[];

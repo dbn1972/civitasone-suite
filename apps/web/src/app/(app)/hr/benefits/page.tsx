@@ -2,6 +2,7 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState } from 
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
 import { ElectionForm, type BenefitPlan } from "./_components/ElectionForm";
+import { HR_SELF_SERVICE_ROLES } from "@/lib/auth/workRoles";
 
 type ApiElection = {
   id: string;
@@ -81,7 +82,7 @@ async function getPlans(): Promise<BenefitPlan[]> {
  * deliberately does not widen to those roles -- they get an honest
  * "access restricted" state (below) instead of a retryable load error.
  */
-const BENEFITS_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "employee"];
+const BENEFITS_ROLES = HR_SELF_SERVICE_ROLES;
 
 export default async function BenefitsPage() {
   const t = await getTranslations("benefits");

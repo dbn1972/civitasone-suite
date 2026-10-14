@@ -1,4 +1,4 @@
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { vaptScans, securityIncidents, complianceControls, controlEvidence } from "./schema.js";
 
@@ -24,6 +24,21 @@ export function listControls(tenantId: string, framework?: string) {
       ? and(eq(complianceControls.tenantId, tenantId), eq(complianceControls.framework, framework))
       : eq(complianceControls.tenantId, tenantId);
     return tx.select().from(complianceControls).where(where).orderBy(complianceControls.framework, complianceControls.controlKey);
+  });
+}
+/**
+ * GAP-TENANT-ADMIN-COMPLIANCE-02: number of evidence items recorded against each
+ * control, so the tenant-admin compliance view can show whether a check is
+ * backed by evidence. Counts only — evidence references/notes stay out of this
+ * read (they can name internal systems).
+ */
+export function countEvidenceByControl(tenantId: string): Promise<Record<string, number>> {
+  return scopedRead(async (tx) => {
+    const rows = await tx.select({ controlId: controlEvidence.controlId, n: sql<number>`count(*)::int` })
+      .from(controlEvidence).where(eq(controlEvidence.tenantId, tenantId)).groupBy(controlEvidence.controlId);
+    const out: Record<string, number> = {};
+    for (const r of rows) out[r.controlId] = Number(r.n);
+    return out;
   });
 }
 export function findControl(tenantId: string, id: string) {

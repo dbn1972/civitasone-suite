@@ -3,26 +3,33 @@
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
-  Button, PageHeader, StatusPill, DataTable, EmptyState, ErrorState,
+  Button, PageHeader, StatusPill, DataTable, EmptyState, ErrorState, EntityPicker,
   ConfirmDialog, // GAP-ESTAB-DAK-01: confirmation before opening file
 } from "../../../_components/ds";
-import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
+import { formatIndianDate, humanizeStatus, todayIST } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { useFormError } from "@/lib/useFormError";
+import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
+import { useSessionIdentity } from "@/lib/auth/useSessionIdentity";
+import { ESTAB_FILES_WRITE_ROLES } from "@/lib/estab/roles";
+import { useEstabT } from "@/lib/estab/useEstabT";
+import { useEstabDivisions } from "@/lib/estab/useEstabDivisions";
+import { usePagedRegister } from "@/lib/estab/usePagedRegister";
+import { DAK_MODES, EMPTY_DAK_FORM, validateDakForm, type DakFormState } from "@/lib/estab/dakForm";
 
 // GAP-ESTAB-DAK-01: classification is no longer hard-coded; the clerk chooses.
 const CLASSIFICATIONS = ["public", "confidential", "secret", "top_secret"] as const;
-const CLASS_LABEL: Record<string, string> = {
-  public: "Public",
-  confidential: "Confidential",
-  secret: "Secret",
-  top_secret: "Top Secret",
+const CLASS_KEY: Record<(typeof CLASSIFICATIONS)[number], string> = {
+  public: "classPublic",
+  confidential: "classConfidential",
+  secret: "classSecret",
+  top_secret: "classTopSecret",
 };
 
-// GAP-ESTAB-DAK-03: register form matches registerInwardBody on the server.
-const MODES = ["post", "email", "fax", "hand", "portal", "courier"] as const;
+/** Rows fetched per request; the register is paged and searched on the server (GAP-ESTAB-DAK-04). */
+const PAGE_SIZE = 50;
 
 type InwardRow = {
   id: string;
@@ -46,75 +53,59 @@ type OpenFileForm = {
 };
 
 export default function DakRegistryPage() {
+  const t = useEstabT();
   const router = useRouter();
   const formError = useFormError("DAK register");
-  const [rows, setRows] = useState<InwardRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  // GAP-ESTAB-DAK-03: extended form matching the server's registerInwardBody.
-  const [form, setForm] = useState({
-    dakNo: "", fromAddress: "", subject: "",
-    mode: "" as string, receivedDate: "", urgency: "" as string,
-  });
+  const identity = useSessionIdentity();
+  // The register/open-file routes are estab-officer only; an audit officer reads the register
+  // without dead write controls. The service stays the authority.
+  const canWrite = identity.roles.some((r) => ESTAB_FILES_WRITE_ROLES.includes(r));
+  const depts = useEstabDivisions();
+
+  const reg = usePagedRegister<InwardRow>("/api/proxy/v1/estab/inward", PAGE_SIZE);
+  const { rows, total, loading, failed: loadError, hasMore } = reg;
+  const [form, setForm] = useState<DakFormState>({ ...EMPTY_DAK_FORM });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   const [actionError, setActionError] = useState("");
-  const [loadError, setLoadError] = useState(false);
   // GAP-ESTAB-DAK-01: open-file dialog state
   const [openFileDialog, setOpenFileDialog] = useState<OpenFileForm | null>(null);
   const [openFileBusy, setOpenFileBusy] = useState(false);
   const [openFileError, setOpenFileError] = useState("");
 
-  const load = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
-    setLoadError(false);
-    try {
-      const res = await fetch("/api/proxy/v1/estab/inward?limit=100", { signal });
-      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
-      const body = await res.json() as { data?: InwardRow[] };
-      setRows(body.data ?? []);
-    } catch (e) {
-      if (e instanceof Error && e.name !== "AbortError") {
-        setLoadError(true);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
+  // A failed "Load more" keeps the rows on screen and says so.
   useEffect(() => {
-    const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
-  }, [load]);
+    if (reg.moreError) setActionError(formError.fromException("load", reg.moreError).message);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reg.moreError]);
 
-  // GAP-ESTAB-DAK-02: clerk-safe error on registerDak + capture dakNo in success.
+  // GAP-ESTAB-DAK-02: clerk-safe error on registerDak. GAP-ESTAB-DAK-03: validated payload.
   async function registerDak(e: React.FormEvent) {
     e.preventDefault();
     setMessage("");
     setActionError("");
+    const checked = validateDakForm(form, todayIST());
+    if (!checked.ok) {
+      const translated = Object.fromEntries(Object.entries(checked.errors).map(([k, v]) => [k, t(v)]));
+      setFieldErrors(translated);
+      setActionError(Object.values(translated)[0] ?? "");
+      return;
+    }
+    setFieldErrors({});
     try {
-      const payload: Record<string, string> = {
-        fromAddress: form.fromAddress,
-        subject: form.subject,
-      };
-      if (form.dakNo) payload.dakNo = form.dakNo;
-      // GAP-ESTAB-DAK-03: pass the optional mode/receivedDate/urgency fields.
-      if (form.mode) payload.mode = form.mode;
-      if (form.receivedDate) payload.receivedDate = form.receivedDate;
-      if (form.urgency) payload.urgency = form.urgency;
-
       const res = await fetch("/api/proxy/v1/estab/inward", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(checked.payload),
       });
       if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
-      // GAP-ESTAB-DAK-05: include the number in the success message.
-      const savedNo = form.dakNo || "(auto-assigned)";
-      setForm({ dakNo: "", fromAddress: "", subject: "", mode: "", receivedDate: "", urgency: "" });
-      setMessage(`DAK ${savedNo} registered.`);
-      await load();
-    } catch (e) {
-      setActionError(formError.fromException("save", e).message);
+      // The register is written asynchronously (202), so the DAK number and barcode the
+      // service assigns are not in the response; they show in the register once processed.
+      setForm({ ...EMPTY_DAK_FORM });
+      setMessage(form.dakNo.trim() ? t("dakRegisteredNo", { dakNo: form.dakNo.trim() }) : t("dakRegisteredAuto"));
+      await reg.reload();
+    } catch (err) {
+      setActionError(formError.fromException("save", err).message);
     }
   }
 
@@ -133,8 +124,8 @@ export default function DakRegistryPage() {
   // GAP-ESTAB-DAK-01 + DAK-02: confirmed open-file with chosen classification.
   async function confirmOpenFile() {
     if (!openFileDialog) return;
-    if (!openFileDialog.dept.trim()) { setOpenFileError("Department is required."); return; }
-    if (!openFileDialog.classification) { setOpenFileError("Select a classification."); return; }
+    if (!openFileDialog.dept) { setOpenFileError(t("errDeptRequired")); return; }
+    if (!openFileDialog.classification) { setOpenFileError(t("errClassRequired")); return; }
     setOpenFileBusy(true);
     setOpenFileError("");
     try {
@@ -142,7 +133,7 @@ export default function DakRegistryPage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          dept: openFileDialog.dept.trim(),
+          dept: openFileDialog.dept,
           classification: openFileDialog.classification,
         }),
       });
@@ -151,8 +142,8 @@ export default function DakRegistryPage() {
       setOpenFileDialog(null);
       if (body.id) router.push(`/estab/files/${body.id}`);
       else {
-        setMessage("File opening — refresh in a moment.");
-        await load();
+        setMessage(t("fileOpeningRefresh"));
+        await reg.reload();
       }
     } catch (e) {
       setOpenFileError(formError.fromException("save", e).message);
@@ -165,21 +156,19 @@ export default function DakRegistryPage() {
     width: "100%", padding: 8, borderRadius: 8,
     border: "1px solid var(--line)", minHeight: 44,
   } as const;
+  const dismissStyle = { marginInlineStart: 12, border: "none", background: "transparent", cursor: "pointer", fontSize: 12 } as const;
+  const fieldProps = { className: "fld", style: { flexDirection: "column", alignItems: "flex-start" } } as const;
 
   return (
     <>
-      <PageHeader
-        title="DAK / Inward Registry"
-        subtitle="Register incoming dak, link to digital files — NIC eOffice integrated flow."
-        back="/estab"
-      />
+      <PageHeader title={t("dakTitle")} subtitle={t("dakSubtitle")} back="/estab" />
 
       {/* GAP-ESTAB-DAK-06: DS tokens instead of hex literals */}
       <div role="status" aria-live="polite">
         {message ? (
           <div className="alert good" style={{ borderRadius: 12, padding: 12, marginBottom: 16, fontSize: 13 }}>
             {message}
-            <button type="button" style={{ marginInlineStart: 12, border: "none", background: "transparent", cursor: "pointer", fontSize: 12 }} onClick={() => setMessage("")}>Dismiss</button>
+            <button type="button" style={dismissStyle} onClick={() => setMessage("")}>{t("dismiss")}</button>
           </div>
         ) : null}
       </div>
@@ -187,115 +176,155 @@ export default function DakRegistryPage() {
         {actionError ? (
           <div className="alert bad" style={{ borderRadius: 12, padding: 12, marginBottom: 16, fontSize: 13 }}>
             {actionError}
-            <button type="button" style={{ marginInlineStart: 12, border: "none", background: "transparent", cursor: "pointer", fontSize: 12 }} onClick={() => setActionError("")}>Dismiss</button>
+            <button type="button" style={dismissStyle} onClick={() => setActionError("")}>{t("dismiss")}</button>
           </div>
         ) : null}
       </div>
 
-      <div className="card" style={{ marginBottom: 18 }}>
-        <div className="card-h"><h3>Register new DAK</h3></div>
-        <form onSubmit={registerDak} className="pad">
-          <div className="fields">
-            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l" htmlFor="dak-no">DAK number <span style={{ color: "var(--mut)", fontWeight: 400 }}>(auto if blank)</span></label>
-              <input id="dak-no" value={form.dakNo} onChange={(e) => setForm({ ...form, dakNo: e.target.value })} style={inputStyle} />
+      {canWrite ? (
+        <div className="card" style={{ marginBottom: 18 }}>
+          <div className="card-h"><h3>{t("dakRegisterHeading")}</h3></div>
+          <form onSubmit={registerDak} className="pad" noValidate>
+            <div className="fields">
+              <div {...fieldProps}>
+                <label className="l" htmlFor="dak-no">{t("dakNoLabel")} <span style={{ color: "var(--mut)", fontWeight: 400 }}>{t("dakNoAutoHint")}</span></label>
+                <input id="dak-no" value={form.dakNo} onChange={(e) => setForm({ ...form, dakNo: e.target.value })} style={inputStyle} />
+              </div>
+              <div {...fieldProps}>
+                <label className="l" htmlFor="dak-from">{t("dakFrom")}</label>
+                <input id="dak-from" required aria-invalid={Boolean(fieldErrors.fromAddress)} value={form.fromAddress} onChange={(e) => setForm({ ...form, fromAddress: e.target.value })} style={inputStyle} />
+              </div>
+              <div {...fieldProps}>
+                <label className="l" htmlFor="dak-subject">{t("dakSubject")}</label>
+                <input id="dak-subject" required aria-invalid={Boolean(fieldErrors.subject)} value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} style={inputStyle} />
+              </div>
+              {/* GAP-ESTAB-DAK-03: additional fields matching registerInwardBody */}
+              <div {...fieldProps}>
+                <label className="l" htmlFor="dak-mode">{t("dakMode")}</label>
+                <select id="dak-mode" value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })} style={inputStyle}>
+                  <option value="">{t("dakModeUnspecified")}</option>
+                  {DAK_MODES.map((m) => <option key={m} value={m}>{humanizeStatus(m)}</option>)}
+                </select>
+              </div>
+              <div {...fieldProps}>
+                <label className="l" htmlFor="dak-received">{t("dakReceivedDate")}</label>
+                <input id="dak-received" type="date" max={todayIST()} aria-invalid={Boolean(fieldErrors.receivedDate)} value={form.receivedDate} onChange={(e) => setForm({ ...form, receivedDate: e.target.value })} style={inputStyle} />
+              </div>
+              <div {...fieldProps}>
+                <label className="l" htmlFor="dak-urgency">{t("dakUrgency")}</label>
+                <select id="dak-urgency" value={form.urgency} onChange={(e) => setForm({ ...form, urgency: e.target.value })} style={inputStyle}>
+                  <option value="">{t("dakUrgNormal")}</option>
+                  <option value="urgent">{t("dakUrgUrgent")}</option>
+                  <option value="immediate">{t("dakUrgImmediate")}</option>
+                </select>
+              </div>
+              <div {...fieldProps}>
+                <span className="l" id="dak-addressee-l">{t("dakAddressee")}</span>
+                {/* Addressee officer: a searchable picker, returns a real hrms employee id. */}
+                <EntityPicker
+                  value={form.assignedTo}
+                  onChange={(v) => setForm({ ...form, assignedTo: Array.isArray(v) ? (v[0] ?? null) : v })}
+                  search={searchEmployees}
+                  resolve={resolveEmployees}
+                  placeholder={t("dakAddresseePlaceholder")}
+                  aria-label={t("dakAddressee")}
+                />
+              </div>
+              <div {...fieldProps}>
+                <label className="l" htmlFor="dak-source-section">{t("dakSourceSection")}</label>
+                <input id="dak-source-section" value={form.sourceSection} onChange={(e) => setForm({ ...form, sourceSection: e.target.value })} style={inputStyle} />
+              </div>
             </div>
-            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l" htmlFor="dak-from">From</label>
-              <input id="dak-from" required value={form.fromAddress} onChange={(e) => setForm({ ...form, fromAddress: e.target.value })} style={inputStyle} />
-            </div>
-            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l" htmlFor="dak-subject">Subject</label>
-              <input id="dak-subject" required value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} style={inputStyle} />
-            </div>
-            {/* GAP-ESTAB-DAK-03: additional fields matching registerInwardBody */}
-            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l" htmlFor="dak-mode">Mode</label>
-              <select id="dak-mode" value={form.mode} onChange={(e) => setForm({ ...form, mode: e.target.value })} style={inputStyle}>
-                <option value="">— not specified —</option>
-                {MODES.map((m) => <option key={m} value={m}>{humanizeStatus(m)}</option>)}
-              </select>
-            </div>
-            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l" htmlFor="dak-received">Received date</label>
-              <input id="dak-received" type="date" value={form.receivedDate} onChange={(e) => setForm({ ...form, receivedDate: e.target.value })} style={inputStyle} />
-            </div>
-            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l" htmlFor="dak-urgency">Urgency</label>
-              <select id="dak-urgency" value={form.urgency} onChange={(e) => setForm({ ...form, urgency: e.target.value })} style={inputStyle}>
-                <option value="">Normal</option>
-                <option value="urgent">Urgent</option>
-                <option value="immediate">Immediate</option>
-              </select>
-            </div>
-          </div>
-          <Button type="submit" style={{ marginTop: 12 }}>Register DAK</Button>
-        </form>
-      </div>
+            <Button type="submit" style={{ marginTop: 12 }}>{t("dakRegisterBtn")}</Button>
+          </form>
+        </div>
+      ) : null}
 
       <div className="card">
         <div className="card-h">
-          <h3>Inward register</h3>
-          {/* GAP-ESTAB-DAK-04: truncation notice */}
-          {!loading && !loadError && rows.length === 100 && (
-            <span style={{ fontSize: 12, color: "var(--mut)" }}>Showing latest 100 entries</span>
+          <h3>{t("dakRegisterListHeading")}</h3>
+          {/* GAP-ESTAB-DAK-04: how much of the register is on screen. */}
+          {!loading && !loadError && total > 0 && (
+            <span style={{ fontSize: 12, color: "var(--mut)" }}>{t("showingOf", { shown: rows.length, total })}</span>
           )}
         </div>
-        {loading ? (
-          <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>Loading…</p>
-        ) : loadError ? (
-          <div className="pad"><ErrorState error={toHumanError("load", { area: "inward register" })} onRetry={() => void load()} /></div>
-        ) : rows.length === 0 ? (
-          <EmptyState icon="📥" title="No DAK registered yet" message="Register incoming dak above to start tracking it here." />
-        ) : (
-          <DataTable<InwardRow>
-            columns={[
-              { key: "dakNo", label: "DAK No", render: (r) => <span className="mono">{r.dakNo}</span> },
-              { key: "barcode", label: "Barcode", render: (r) => <span className="mono" style={{ fontSize: 11 }}>{r.barcode ?? "—"}</span> },
-              {
-                key: "sourceSection", label: "Source",
-                // GAP-ESTAB-DAK-05: "—" for null, not the invented literal "manual".
-                render: (r) => <>{r.sourceSection ? humanizeStatus(r.sourceSection) : "—"}</>,
-              },
-              { key: "fromAddress", label: "From" },
-              { key: "subject", label: "Subject" },
-              { key: "receivedAt", label: "Received", render: (r) => <>{formatIndianDate(r.receivedAt)}</> },
-              {
-                key: "status", label: "Status",
-                // GAP-ESTAB-DAK-05: drop the label prop so StatusPill humanises internally.
-                render: (r) => <StatusPill status={r.status} />,
-              },
-              {
-                key: "fileId",
-                label: "File",
-                render: (r) =>
-                  r.fileId ? (
-                    <Link href={`/estab/files/${r.fileId}`} className="mono">{r.fileRef ?? r.fileId.slice(0, 8)}</Link>
-                  ) : (
-                    <>—</>
-                  ),
-              },
-              {
-                key: "id",
-                label: "Action",
-                sortable: false,
-                // GAP-ESTAB-DAK-01: opens a dialog instead of direct POST.
-                render: (r) =>
-                  !r.fileId && r.status === "received" ? (
-                    <Button type="button" variant="ghost" onClick={() => promptOpenFile(r)}>
-                      Open file
-                    </Button>
-                  ) : (
-                    <>—</>
-                  ),
-              },
-            ]}
-            rows={rows}
-            sortable
-            filterable
-            filterPlaceholder="Scan / search barcode or DAK no"
-            pageSize={15}
+        <div className="pad" style={{ paddingBottom: 0 }}>
+          {/* GAP-ESTAB-DAK-04: search runs on the server, over the whole register. */}
+          <label className="l" htmlFor="dak-search">{t("dakSearchLabel")}</label>
+          <input
+            id="dak-search"
+            type="search"
+            value={reg.searchInput}
+            onChange={(e) => reg.setSearchInput(e.target.value)}
+            placeholder={t("dakSearchPlaceholder")}
+            style={inputStyle}
           />
+        </div>
+        {loading ? (
+          <p className="pad" style={{ textAlign: "center", color: "var(--mut)" }}>{t("loading")}</p>
+        ) : loadError ? (
+          <div className="pad"><ErrorState error={toHumanError("load", { area: "inward register" })} onRetry={() => void reg.reload()} /></div>
+        ) : rows.length === 0 && reg.query ? (
+          <EmptyState icon="🔎" title={t("dakNoMatchTitle")} message={t("dakNoMatchMessage")} />
+        ) : rows.length === 0 ? (
+          <EmptyState icon="📥" title={t("dakEmptyTitle")} message={t("dakEmptyMessage")} />
+        ) : (
+          <>
+            <DataTable<InwardRow>
+              columns={[
+                { key: "dakNo", label: t("colDakNo"), render: (r) => <span className="mono">{r.dakNo}</span> },
+                { key: "barcode", label: t("colBarcode"), render: (r) => <span className="mono" style={{ fontSize: 11 }}>{r.barcode ?? "—"}</span> },
+                {
+                  key: "sourceSection", label: t("colSource"),
+                  // GAP-ESTAB-DAK-05: "—" for null, not the invented literal "manual".
+                  render: (r) => <>{r.sourceSection ? humanizeStatus(r.sourceSection) : "—"}</>,
+                },
+                { key: "fromAddress", label: t("dakFrom") },
+                { key: "subject", label: t("dakSubject") },
+                { key: "receivedAt", label: t("colReceived"), render: (r) => <>{formatIndianDate(r.receivedAt)}</> },
+                {
+                  key: "status", label: t("colStatus"),
+                  // GAP-ESTAB-DAK-05: drop the label prop so StatusPill humanises internally.
+                  render: (r) => <StatusPill status={r.status} />,
+                },
+                {
+                  key: "fileId",
+                  label: t("colFile"),
+                  // The file number, never an id fragment: a file with no number yet reads "View file".
+                  render: (r) =>
+                    r.fileId ? (
+                      <Link href={`/estab/files/${r.fileId}`} className="mono">{r.fileRef ?? t("viewFile")}</Link>
+                    ) : (
+                      <>—</>
+                    ),
+                },
+                ...(canWrite ? [{
+                  key: "id" as const,
+                  label: t("colAction"),
+                  sortable: false,
+                  // GAP-ESTAB-DAK-01: opens a dialog instead of direct POST.
+                  render: (r: InwardRow) =>
+                    !r.fileId && r.status === "received" ? (
+                      <Button type="button" variant="ghost" onClick={() => promptOpenFile(r)}>
+                        {t("openFile")}
+                      </Button>
+                    ) : (
+                      <>—</>
+                    ),
+                }] : []),
+              ]}
+              rows={rows}
+              sortable
+              pageSize={15}
+            />
+            {hasMore ? (
+              <div className="pad" style={{ textAlign: "center" }}>
+                <Button type="button" variant="ghost" disabled={reg.loadingMore} onClick={() => void reg.loadMore()}>
+                  {reg.loadingMore ? t("loading") : t("loadMore")}
+                </Button>
+              </div>
+            ) : null}
+          </>
         )}
       </div>
 
@@ -303,32 +332,50 @@ export default function DakRegistryPage() {
       {openFileDialog && (
         <ConfirmDialog
           open
-          title={`Open file from DAK ${openFileDialog.dakNo}`}
-          description={`Subject: ${openFileDialog.subject}. Choose the department and security classification for the new digital file.`}
-          confirmLabel={openFileBusy ? "Opening…" : "Open the file"}
+          title={t("openFileTitle", { dakNo: openFileDialog.dakNo })}
+          description={t("openFileDesc", { subject: openFileDialog.subject })}
+          confirmLabel={openFileBusy ? t("opening") : t("confirmOpenFile")}
           onConfirm={confirmOpenFile}
           onCancel={() => setOpenFileDialog(null)}
         >
           <div style={{ display: "grid", gap: 12, marginTop: 8 }}>
             <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-              <span>Department <span style={{ color: "var(--bad)" }}>*</span></span>
-              <input
-                value={openFileDialog.dept}
-                onChange={(e) => setOpenFileDialog({ ...openFileDialog, dept: e.target.value })}
-                placeholder="e.g. ADMIN, GA, Finance"
-                required
-              />
+              <span>{t("dept")} <span style={{ color: "var(--bad)" }}>*</span></span>
+              {/* GAP-ESTAB-FILES-NEW-03: a pick-list of real departments, never free text. */}
+              {depts.loaded && depts.divisions.length === 0 /* ux-001-ok: depts.failed is surfaced by the note below; both states fall back to typed entry */ ? (
+                /* No pick-list available (list not readable by this role, or no operators enrolled yet): type it. */
+                <input
+                  type="text"
+                  value={openFileDialog.dept}
+                  onChange={(e) => setOpenFileDialog({ ...openFileDialog, dept: e.target.value })}
+                  required
+                  maxLength={100}
+                />
+              ) : (
+                <select
+                  value={openFileDialog.dept}
+                  onChange={(e) => setOpenFileDialog({ ...openFileDialog, dept: e.target.value })}
+                  required
+                  disabled={!depts.loaded}
+                >
+                  <option value="">{t("deptSelect")}</option>
+                  {depts.divisions.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              )}
+              {depts.loaded && depts.divisions.length === 0 /* ux-001-ok: depts.failed picks the failure message */ ? (
+                <span role="note" style={{ color: "var(--mut)", fontSize: 12 }}>{depts.failed ? t("deptLoadFailed") : t("deptNone")}</span>
+              ) : null}
             </label>
             <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-              <span>Classification <span style={{ color: "var(--bad)" }}>*</span></span>
+              <span>{t("classification")} <span style={{ color: "var(--bad)" }}>*</span></span>
               <select
                 value={openFileDialog.classification}
                 onChange={(e) => setOpenFileDialog({ ...openFileDialog, classification: e.target.value })}
                 required
               >
-                <option value="">— select —</option>
+                <option value="">{t("classSelect")}</option>
                 {CLASSIFICATIONS.map((c) => (
-                  <option key={c} value={c}>{CLASS_LABEL[c]}</option>
+                  <option key={c} value={c}>{t(CLASS_KEY[c])}</option>
                 ))}
               </select>
             </label>

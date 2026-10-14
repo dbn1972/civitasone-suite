@@ -1,5 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 
+// W1 SF-09b: the page now opens with requireAnyRole(<its backend tier>). Role
+// admission is covered in ../pageGates.test.tsx; these suites test rendering,
+// so the gate is a no-op here (everything else in roleGuard stays real).
+vi.mock("@/lib/auth/roleGuard", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/auth/roleGuard")>()),
+  requireAnyRole: () => {},
+}));
+
 const redirectMock = vi.fn();
 vi.mock("next/navigation", () => ({
   redirect: (path: string) => redirectMock(path),

@@ -75,4 +75,36 @@ describe("MeetingsPage", () => {
     expect(labs).toContain("Meetings Held");
     expect(labs).not.toContain("Compliance");
   });
+
+  it("GAP-ESTAB-MEETINGS-05: the active view carries aria-current=page, the other does not", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    const { unmount } = render(await MeetingsPage({ searchParams: {} }));
+    expect(screen.getByRole("link", { name: "List" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Calendar" })).not.toHaveAttribute("aria-current");
+    unmount();
+    render(await MeetingsPage({ searchParams: { view: "calendar" } }));
+    expect(screen.getByRole("link", { name: "Calendar" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "List" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("GAP-ESTAB-MEETINGS-04: at 01:00 IST a meeting dated today counts as upcoming (the date is the IST day, not UTC)", async () => {
+    vi.useFakeTimers();
+    try {
+      // 2026-10-14T19:30:00Z is 2026-10-15 01:00 IST: UTC "today" is still the 14th.
+      vi.setSystemTime(new Date("2026-10-14T19:30:00.000Z"));
+      fetchJsonMock.mockResolvedValueOnce({
+        data: [
+          makeMeeting({ id: "today", scheduledDate: "2026-10-15", status: "scheduled" }),
+          makeMeeting({ id: "yesterday", scheduledDate: "2026-10-14", status: "scheduled" }),
+        ],
+        source: "api",
+      });
+      const { container } = render(await MeetingsPage({ searchParams: {} }));
+      const upcoming = Array.from(container.querySelectorAll(".stat")).find((c) => c.textContent?.includes("Upcoming Meetings"));
+      expect(upcoming?.textContent).toContain("1");
+      expect(upcoming?.textContent).not.toContain("2");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -2203,6 +2203,8 @@ export async function getBillingPlanById(id: string): Promise<LoaderResult<Recor
 export type ContractListRow = ModuleRowSummary & {
   expiry?: string;
   valueMinor?: string;
+  /** Linked purchase-order reference (GAP-PROCUREMENT-CONTRACTS-05). */
+  poRef?: string;
 };
 
 export function mapContractsListRows(payload: unknown): ModuleRowSummary[] | null {
@@ -2225,6 +2227,7 @@ export function mapContractsListRows(payload: unknown): ModuleRowSummary[] | nul
     // field is absent the column simply renders a dash — never a fabricated 0.
     const expiry = toText(row.expiry) ?? toText(row.validTo) ?? toText(row.expiryDate);
     const valueMinor = toText(row.valueMinor) ?? toText(row.value);
+    const poRef = toText(row.poRef);
     mapped.push({
       id,
       label,
@@ -2233,6 +2236,7 @@ export function mapContractsListRows(payload: unknown): ModuleRowSummary[] | nul
       ...(meta ? { meta } : {}),
       ...(expiry ? { expiry } : {}),
       ...(valueMinor ? { valueMinor } : {}),
+      ...(poRef ? { poRef } : {}),
     });
   }
   return mapped;
@@ -3270,7 +3274,7 @@ const PROCUREMENT_DASHBOARD_EMPTY: ProcurementDashboard = {
   pendingIndents: 0,
   activePOs: 0,
   grnsThisMonth: 0,
-  contractRenewalsDue: 0,
+  contractRenewalsDue: null,
 };
 
 export async function getProcurementDashboard(): Promise<LoaderResult<ProcurementDashboard>> {
@@ -5604,10 +5608,16 @@ export async function getAdminRoleById(id: string): Promise<LoaderResult<RoleDet
 }
 
 export async function getTenantModules(): Promise<LoaderResult<TenantModule[]>> {
-  return fetchJson<unknown, TenantModule[]>("/api/v1/admin/tenant/modules", [], {
+  // GAP-TENANT-ADMIN-SETTINGS-01: ?detail=1 asks admin-service for every module
+  // row with its real enabled flag. The bare endpoint returns only the enabled
+  // {name} list, which does not satisfy TenantModuleListSchema (moduleKey/
+  // moduleName) and left the Settings page permanently in its error state.
+  return fetchJson<unknown, TenantModule[]>("/api/v1/admin/tenant/modules?detail=1", [], {
     revalidateSeconds: 300,
     telemetryKey: "admin.modules",
-    responseSchema: TenantModuleListSchema,
+    // admin-service wraps the list as {data: [...]} (dataListSchema); the schema is
+    // validated against the RAW body, so it must accept the envelope as well as a bare array.
+    responseSchema: z.union([TenantModuleListSchema, z.object({ data: TenantModuleListSchema })]),
     mapResponse: (p) => getArrayPayload(p) as TenantModule[] | null,
   });
 }
@@ -5959,6 +5969,29 @@ export async function getTenantAuditLog(): Promise<LoaderResult<TenantAuditEvent
   });
 }
 
+/**
+ * GAP-TENANT-ADMIN-AUDIT-04/-06: server-side whole-history counts for the audit
+ * KPIs (audit-service GET /v1/audit/events/summary). The list endpoint returns
+ * a bounded page, so counting its rows made "Total Events" equal the page size.
+ */
+export type TenantAuditSummary = { total: number; success: number; failures: number; last24h: number; asOf: string };
+const TenantAuditSummarySchema: z.ZodType<TenantAuditSummary, z.ZodTypeDef, unknown> = z.object({
+  total: z.number().int().nonnegative(),
+  success: z.number().int().nonnegative(),
+  failures: z.number().int().nonnegative(),
+  last24h: z.number().int().nonnegative(),
+  asOf: z.string(),
+});
+
+export async function getTenantAuditSummary(): Promise<LoaderResult<TenantAuditSummary | null>> {
+  return fetchJson<unknown, TenantAuditSummary | null>("/api/v1/audit/events/summary", null, {
+    revalidateSeconds: 30,
+    telemetryKey: "admin.audit.summary",
+    responseSchema: TenantAuditSummarySchema as z.ZodType<TenantAuditSummary | null, z.ZodTypeDef, unknown>,
+    mapResponse: (p) => (isRecord(p) ? (p as TenantAuditSummary) : null),
+  });
+}
+
 // ── Reports / Analytics loaders ───────────────────────────────────────────────
 
 const REPORTS_DASHBOARD_EMPTY: ReportDashboard = { kpis: [] };
@@ -6279,6 +6312,36 @@ export type PlansData = {
   trialDaysLeft: number | null;
 };
 
+/**
+ * GAP-TENANT-ADMIN-PLANS-06: shape guard for the plans payload. billing-service's
+ * GET /v1/billing/plans returns a BARE ARRAY of plan rows ({priceMinor, code, ...}),
+ * not this {plans, currentPlanId, invoices} object; the old `isRecord(p) ? p as
+ * PlansData` cast let that array through, so plans/page.tsx threw on
+ * `plansData.plans.find` and the whole page fell to error.tsx. With the guard a
+ * mismatched payload becomes source "error" (honest empty/error state) instead.
+ * The real wiring (tenant-service /v1/tenant/plans + subscription/current, or a
+ * billing-service tenant-plans read) is an owner decision — see the PR notes.
+ */
+export const PlansDataSchema: z.ZodType<PlansData, z.ZodTypeDef, unknown> = z.object({
+  plans: z.array(z.object({
+    id: z.string(),
+    name: z.string(),
+    pricePerMonth: z.number(),
+    maxUsers: z.number(),
+    storageGb: z.number(),
+    maxApiCalls: z.number(),
+    modules: z.array(z.string()),
+  })),
+  currentPlanId: z.string(),
+  invoices: z.array(z.object({
+    id: z.string(),
+    date: z.string(),
+    amount: z.number(),
+    status: z.enum(["paid", "pending", "failed"]),
+  })),
+  trialDaysLeft: z.number().nullable(),
+});
+
 export async function getPlansData(): Promise<LoaderResult<PlansData>> {
   return fetchJson<unknown, PlansData>(
     "/api/v1/billing/plans",
@@ -6286,6 +6349,7 @@ export async function getPlansData(): Promise<LoaderResult<PlansData>> {
     {
       revalidateSeconds: 300,
       telemetryKey: "admin.plans",
+      responseSchema: PlansDataSchema,
       mapResponse: (p) => (isRecord(p) ? (p as PlansData) : null),
     },
   );
@@ -6453,11 +6517,19 @@ export type ComplianceCheck = {
   result: "pass" | "warn" | "fail";
 };
 
+/**
+ * GAP-TENANT-ADMIN-COMPLIANCE-02: how the scores were derived, so a board-level
+ * DPDP figure is defensible (method, scope, as-of). asOf is null when the tenant
+ * has no recorded control yet.
+ */
+export type ComplianceProvenance = { method: string; scope: string; asOf: string | null; complete: boolean };
+
 export type ComplianceOverview = {
   dpdpScore: number | null;
   certInReadiness: number | null;
   retentionStatus: string;
   checks: ComplianceCheck[];
+  provenance?: ComplianceProvenance | null;
 };
 
 // GAP-TENANT-ADMIN-COMPLIANCE-03: a zod schema so a malformed 200 body (missing
@@ -6468,7 +6540,10 @@ const ComplianceOverviewSchema: z.ZodType<ComplianceOverview, z.ZodTypeDef, unkn
   .object({
     dpdpScore: z.number().min(0).max(100).nullish().transform((v) => v ?? null),
     certInReadiness: z.number().min(0).max(100).nullish().transform((v) => v ?? null),
-    retentionStatus: z.string().nullish().transform((v) => v ?? "Unknown"),
+    // retentionStatus and checks are REQUIRED: the service always sends them, so a
+    // body that lacks them (e.g. `{}`) is malformed and must surface as an error
+    // state, not a plausible-looking empty dashboard (GAP-TENANT-ADMIN-COMPLIANCE-03).
+    retentionStatus: z.string(),
     checks: z
       .array(
         z.object({
@@ -6476,10 +6551,14 @@ const ComplianceOverviewSchema: z.ZodType<ComplianceOverview, z.ZodTypeDef, unkn
           timestamp: z.string(),
           title: z.string(),
           result: z.enum(["pass", "warn", "fail"]),
+          // GAP-TENANT-ADMIN-COMPLIANCE-02: evidence items recorded against the check.
+          evidenceCount: z.number().int().nonnegative().optional(),
         }),
-      )
+      ),
+    provenance: z
+      .object({ method: z.string(), scope: z.string(), asOf: z.string().nullable(), complete: z.boolean() })
       .nullish()
-      .transform((v) => v ?? []),
+      .transform((v) => v ?? null),
   })
   .passthrough() as unknown as z.ZodType<ComplianceOverview, z.ZodTypeDef, unknown>;
 
@@ -7550,9 +7629,40 @@ export async function getProcurementVendorScorecard(vendorId: string): Promise<L
     {
       revalidateSeconds: 120,
       telemetryKey: "procurement.vendor.scorecard",
-      mapResponse: (p) => ((p as { data?: VendorScorecard } | null)?.data ?? null),
+      mapResponse: mapVendorScorecard,
     }
   );
+}
+
+/**
+ * GAP-PROCUREMENT-VENDORS-DETAIL-SCORECARD-04: the API stamps the scorecard with
+ * `computedAt` (not `lastUpdated`), so the page's "As of" always read "-". Map
+ * it. GAP-...-SCORECARD-05: an UNRATED vendor (no orders yet) comes back with a
+ * placeholder overallRating of 0 - that is "not rated", not a score of 0, so it
+ * is mapped to null here and the page shows a dash.
+ */
+export function mapVendorScorecard(payload: unknown): VendorScorecard | null {
+  const raw = (payload as { data?: Record<string, unknown> } | null)?.data;
+  if (!raw || typeof raw !== "object") return null;
+  const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const band = typeof raw.ratingBand === "string" && raw.ratingBand ? raw.ratingBand : "unrated";
+  const totalOrders = num(raw.totalOrders);
+  const unrated = band === "unrated" || totalOrders === 0 || totalOrders === null;
+  const stamp = typeof raw.lastUpdated === "string" ? raw.lastUpdated : typeof raw.computedAt === "string" ? raw.computedAt : null;
+  return {
+    vendorId: typeof raw.vendorId === "string" ? raw.vendorId : "",
+    overallRating: unrated ? null : num(raw.overallRating),
+    ratingBand: band,
+    totalOrders,
+    onTimeDeliveries: num(raw.onTimeDeliveries),
+    lateDeliveries: num(raw.lateDeliveries),
+    qualityRejections: num(raw.qualityRejections),
+    slaBreaches: num(raw.slaBreaches),
+    deliveryScore: unrated ? null : num(raw.deliveryScore),
+    qualityScore: unrated ? null : num(raw.qualityScore),
+    slaScore: unrated ? null : num(raw.slaScore),
+    lastUpdated: stamp,
+  };
 }
 
 // ---- Procurement: Annual Plans --------------------------------------------

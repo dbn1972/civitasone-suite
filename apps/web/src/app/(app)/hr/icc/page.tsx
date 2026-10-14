@@ -7,7 +7,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
 import { FileIccComplaintAction } from "./_components/FileIccComplaintAction";
-import { ICC_ACCESS_ROLES } from "@/lib/auth/workRoles";
+import { ICC_ACCESS_ROLES, ICC_IDENTITY_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * POSH Act 2013, §16 — "contents of the complaint made under section 9,
@@ -61,7 +61,7 @@ export default async function IccPage({ searchParams }: { searchParams?: Record<
   // hr_admin/super_admin without that role would just get a 403 clicking
   // through, so the row link is offered only to sessions that can actually
   // use it.
-  const canViewDetail = roles.includes("icc_member");
+  const canViewDetail = roles.some((r) => ICC_IDENTITY_ROLES.includes(r));
 
   const t = await getTranslations("icc");
   const page = Math.max(1, parseInt(searchParams?.page ?? "1", 10) || 1);

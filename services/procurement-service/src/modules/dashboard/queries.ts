@@ -61,8 +61,10 @@ export async function getDashboard(tenantId: string) {
     // this dashboard has no cross-service read for it (see the precedent for
     // internal service-to-service reads in services/inventory-service/src/
     // modules/srn/grn-client.ts and services/payroll-service/src/shared/
-    // hrms-client.ts). Hardcoding 0 here is a known gap, not a real "zero due"
-    // — flagged for a follow-up rather than silently left looking correct.
-    contractRenewalsDue: 0,
+    // hrms-client.ts). GAP-PROCUREMENT-DASHBOARD-05: it is therefore reported as
+    // null ("not available here"), never a false zero; the web card renders a
+    // dash with an honest note. The renewal window (e.g. 90 days) must be
+    // defined with the contract-service owner before a real number is wired.
+    contractRenewalsDue: null as number | null,
   };
 }

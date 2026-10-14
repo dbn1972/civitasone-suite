@@ -3,11 +3,12 @@
 import { todayIST } from "@/lib/formatters";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { toHumanError } from "@/lib/messages";
 import { Button } from "@/app/_components/ds";
+import { RemoteSearchSelect, type RemoteOption } from "../../_components/RemoteSearchSelect";
 
-type VendorOption = { id: string; name: string };
 type POOption = { id: string; poNo: string; vendor?: string; vendorId?: string };
 type POItem = { ref: string; itemCode: string; quantity: number; unit: string };
 
@@ -37,15 +38,19 @@ function emptyLine(): GRNLine {
 //  - 03: received/accepted quantities are validated (non-negative integers,
 //        accepted<=received, received<=ordered) with per-row messages; unit
 //        comes from the PO item, not a hard-coded "nos".
-//  - 04: Vendor is locked to the PO's vendor when the PO carries one.
+//  - 04: Vendor is DERIVED from the selected PO (read-only) so it can never
+//        diverge from the PO's vendor; the PO is chosen through a server-side
+//        search combobox (?q=) so POs beyond the first page are reachable, and
+//        the server rejects a vendor/PO mismatch (commands.ts VENDOR_PO_MISMATCH).
 //  - 05: load failures surface an inline alert with Retry instead of a stuck
 //        "Loading…" placeholder.
 export function CreateGRNForm() {
   const router = useRouter();
-  const [vendors, setVendors] = useState<VendorOption[]>([]);
+  const t = useTranslations("procurement.poPicker");
   const [vendorId, setVendorId] = useState("");
-  const [vendorLocked, setVendorLocked] = useState(false);
-  const [pos, setPos] = useState<POOption[]>([]);
+  const [vendorName, setVendorName] = useState("");
+  const [selectedPo, setSelectedPo] = useState<RemoteOption | null>(null);
+  const poById = useRef(new Map<string, POOption>());
   const [poId, setPoId] = useState("");
   const [poRef, setPoRef] = useState("");
   const [poItems, setPoItems] = useState<POItem[]>([]);
@@ -55,62 +60,52 @@ export function CreateGRNForm() {
   const [message, setMessage] = useState("");
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({});
 
-  // GAP-PROCUREMENT-GRN-NEW-05 — explicit per-list load state.
-  const [vendorsLoad, setVendorsLoad] = useState<LoadState>("loading");
-  const [posLoad, setPosLoad] = useState<LoadState>("loading");
+  // GAP-PROCUREMENT-GRN-NEW-05 — explicit load state for the PO's items.
   const [poItemsLoad, setPoItemsLoad] = useState<LoadState>("ready");
 
   const nextLineRowId = useRef(0);
   const [lineRowIds, setLineRowIds] = useState<number[]>(() => [nextLineRowId.current++]);
   const lineKeyFor = (idx: number) => lineRowIds[idx] ?? idx;
 
-  const fetchVendors = useCallback(async (signal?: AbortSignal) => {
-    setVendorsLoad("loading");
-    try {
-      const res = await fetch("/api/proxy/v1/procurement/vendors?limit=100", { signal });
-      if (!res.ok) { setVendorsLoad("error"); return; }
-      const body = await res.json() as { data?: VendorOption[] } | VendorOption[];
-      const rows = Array.isArray(body) ? body : (body.data ?? []);
-      setVendors(rows.filter((v) => v.id && v.name));
-      setVendorsLoad("ready");
-    } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") return;
-      setVendorsLoad("error");
-    }
+  // GAP-PROCUREMENT-GRN-NEW-04 — PO search is server-side (?q=), 25 per query.
+  const searchPos = useCallback(async (q: string, signal: AbortSignal): Promise<RemoteOption[]> => {
+    const qs = new URLSearchParams({ limit: "25" });
+    if (q) qs.set("q", q);
+    const res = await fetch(`/api/proxy/v1/procurement/pos?${qs.toString()}`, { signal });
+    if (!res.ok) throw new Error("po search failed");
+    const body = await res.json() as { data?: POOption[] } | POOption[];
+    const rows = (Array.isArray(body) ? body : (body.data ?? [])).filter((p) => p.id && p.poNo);
+    for (const p of rows) poById.current.set(p.id, p);
+    return rows.map((p) => ({ id: p.id, label: p.poNo, ...(p.vendor ? { hint: p.vendor } : {}) }));
   }, []);
 
-  const fetchPos = useCallback(async (signal?: AbortSignal) => {
-    setPosLoad("loading");
-    try {
-      const res = await fetch("/api/proxy/v1/procurement/pos?limit=100", { signal });
-      if (!res.ok) { setPosLoad("error"); return; }
-      const body = await res.json() as { data?: POOption[] } | POOption[];
-      const rows = Array.isArray(body) ? body : (body.data ?? []);
-      setPos(rows.filter((p) => p.id && p.poNo));
-      setPosLoad("ready");
-    } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") return;
-      setPosLoad("error");
-    }
-  }, []);
+  function clearPo() {
+    setSelectedPo(null);
+    setPoId("");
+    setPoRef("");
+    setVendorId("");
+    setVendorName("");
+    setPoItems([]);
+    setPoItemsLoad("ready");
+    setLines([emptyLine()]);
+    setLineRowIds([nextLineRowId.current++]);
+  }
 
-  useEffect(() => {
-    const controller = new AbortController();
-    void fetchVendors(controller.signal);
-    void fetchPos(controller.signal);
-    return () => controller.abort();
-  }, [fetchVendors, fetchPos]);
+  function onPoChange(opt: RemoteOption | null) {
+    if (!opt) { clearPo(); return; }
+    const po = poById.current.get(opt.id);
+    if (!po) return;
+    setSelectedPo(opt);
+    void selectPo(po);
+  }
 
   async function selectPo(po: POOption) {
     setPoId(po.id);
     setPoRef(po.poNo);
-    // GAP-PROCUREMENT-GRN-NEW-04 — lock the vendor to the PO's vendor when known.
-    if (po.vendorId) {
-      setVendorId(po.vendorId);
-      setVendorLocked(true);
-    } else {
-      setVendorLocked(false);
-    }
+    // GAP-PROCUREMENT-GRN-NEW-04 — the vendor is derived from the PO (never
+    // chosen separately), so a GRN cannot be raised against the wrong vendor.
+    setVendorName(po.vendor ?? "");
+    setVendorId(po.vendorId ?? "");
     setPoItemsLoad("loading");
     try {
       const res = await fetch(`/api/proxy/v1/procurement/pos/${po.id}`);
@@ -119,7 +114,6 @@ export function CreateGRNForm() {
       // PO vendorId may only come back on the detail, not the list row.
       if (!po.vendorId && typeof detail.vendorId === "string") {
         setVendorId(detail.vendorId);
-        setVendorLocked(true);
       }
       const raw = Array.isArray(detail.items) ? detail.items
         : Array.isArray(detail.lineItems) ? detail.lineItems : [];
@@ -227,6 +221,13 @@ export function CreateGRNForm() {
       });
       const text = await res.text();
       if (!res.ok) {
+        let errCode = "";
+        try { errCode = (JSON.parse(text) as { code?: string }).code ?? ""; } catch { /* non-JSON error body */ }
+        if (errCode === "OVER_RECEIPT") {
+          setStatus("error");
+          setMessage(t("overReceipt"));
+          return;
+        }
         const human = toHumanError("save", { area: "goods receipt note" });
         setStatus("error");
         setMessage(`${human.what} ${human.next}`);
@@ -244,57 +245,28 @@ export function CreateGRNForm() {
     }
   }
 
-  const listsBusy = vendorsLoad === "loading" || posLoad === "loading";
-  const listsErrored = vendorsLoad === "error" || posLoad === "error";
-
-  function poPlaceholder(): string {
-    if (posLoad === "loading") return "Loading POs…";
-    if (posLoad === "error") return "Couldn't load — use Retry";
-    return pos.length === 0 ? "No purchase orders found" : "Select purchase order";
-  }
-  function vendorPlaceholder(): string {
-    if (vendorsLoad === "loading") return "Loading vendors…";
-    if (vendorsLoad === "error") return "Couldn't load — use Retry";
-    return vendors.length === 0 ? "No vendors found" : "Select vendor";
-  }
-
-  const selectedVendorName = vendors.find((v) => v.id === vendorId)?.name;
-
   return (
     <form className="card pad" onSubmit={(e) => void handleSubmit(e)} style={{ maxWidth: 860 }} noValidate>
-      {listsErrored ? (
-        <div role="alert" style={{ marginBottom: 12, padding: "10px 12px", border: "1px solid #fecaca", borderRadius: 8, background: "#fef2f2" }}>
-          <span style={{ fontSize: "0.875rem", color: "#b91c1c" }}>
-            Couldn&apos;t load {vendorsLoad === "error" ? "vendors" : ""}{vendorsLoad === "error" && posLoad === "error" ? " and " : ""}{posLoad === "error" ? "purchase orders" : ""}.
-          </span>{" "}
-          <Button type="button" variant="ghost" size="sm" onClick={() => { if (vendorsLoad === "error") void fetchVendors(); if (posLoad === "error") void fetchPos(); }}>Retry</Button>
-        </div>
-      ) : null}
-
       <div className="fields">
-        <label className="field" htmlFor="grn-po" style={{ background: "#fff", padding: "13px 16px" }}>
-          <span className="label">Purchase order *</span>
-          <select id="grn-po" value={poId} onChange={(e) => { const p = pos.find((x) => x.id === e.target.value); if (p) void selectPo(p); }} required aria-required="true" aria-describedby={status === "error" ? "grn-form-message" : undefined} style={{ minHeight: 44 }}>
-            <option value="">{poPlaceholder()}</option>
-            {pos.map((p) => (
-              <option key={p.id} value={p.id}>{p.poNo}{p.vendor ? ` — ${p.vendor}` : ""}</option>
-            ))}
-          </select>
-        </label>
         <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
-          <span className="label">Vendor *</span>
-          {vendorLocked ? (
-            // GAP-PROCUREMENT-GRN-NEW-04 — vendor is derived from the PO; shown as
-            // read-only text so it cannot diverge from the PO's vendor.
-            <span>{selectedVendorName ?? "Set from purchase order"}</span>
-          ) : (
-            <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} required aria-required="true" aria-label="Vendor *" aria-describedby={status === "error" ? "grn-form-message" : undefined} style={{ minHeight: 44 }}>
-              <option value="">{vendorPlaceholder()}</option>
-              {vendors.map((v) => (
-                <option key={v.id} value={v.id}>{v.name}</option>
-              ))}
-            </select>
-          )}
+          <label className="label" htmlFor="grn-po">Purchase order *</label>
+          <RemoteSearchSelect
+            inputId="grn-po"
+            value={selectedPo}
+            onChange={onPoChange}
+            search={searchPos}
+            required
+            describedBy={status === "error" ? "grn-form-message" : undefined}
+            labels={{
+              placeholder: t("placeholder"), loading: t("loading"), empty: t("empty"),
+              error: t("error"), retry: t("retry"), clear: t("clear"),
+            }}
+          />
+        </div>
+        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+          <span className="label">Vendor</span>
+          {/* GAP-PROCUREMENT-GRN-NEW-04 — read-only, derived from the PO. */}
+          <span>{vendorName || (vendorId ? t("vendorFromPo") : t("vendorPending"))}</span>
         </div>
         <label className="field" htmlFor="grn-received-date" style={{ background: "#fff", padding: "13px 16px" }}>
           <span className="label">Received date</span>
@@ -362,7 +334,7 @@ export function CreateGRNForm() {
         ) : null}
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-        <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={status === "submitting" || listsBusy}>
+        <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={status === "submitting"}>
           {status === "submitting" ? "Submitting…" : "Record GRN"}
         </Button>
         <Link href="/procurement/grn" className="btn ghost" style={{ minHeight: 44 }}>Cancel</Link>

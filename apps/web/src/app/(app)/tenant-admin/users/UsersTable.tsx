@@ -3,6 +3,7 @@
 import { UserFacingError } from "@/lib/userFacingError";
 import { useId, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, StatusPill, Segmented, ConfirmDialog, DataTable, useToast } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -23,6 +24,7 @@ const FILTERS = ["All", "Active", "Suspended"] as const;
 export function UsersTable({ users, source = "api" }: { users: AdminUser[]; source?: "api" | "error" }) {
   const router = useRouter();
   const { toast } = useToast();
+  const tw2 = useTranslations("tenantAdminW2.users");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<AdminUser[]>(
     "tenantAdmin.users",
     users,
@@ -133,6 +135,10 @@ export function UsersTable({ users, source = "api" }: { users: AdminUser[]; sour
         filterable
         filterPlaceholder="Search users…"
         pageSize={10}
+        exportable
+        exportAudit="tenant-admin/users"
+        exportFilename="users"
+        exportNotice={tw2("exportNotice")}
         {...(directoryEmpty
           ? {
               emptyIcon: "👥",

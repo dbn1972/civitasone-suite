@@ -176,16 +176,53 @@ export async function listFiles(tenantId: string, limit: number): Promise<Array<
   return list.map((f) => ({ ...f, createdByName: names.get(f.createdBy)?.fullName ?? null }));
 }
 
-export async function listInward(tenantId: string, limit: number) {
-  return repo.listInwardByTenant(tenantId, limit);
+export async function listInward(tenantId: string, limit: number, page: repo.RegisterPage = {}) {
+  return repo.listInwardByTenant(tenantId, limit, page);
+}
+
+/**
+ * GAP-ESTAB-FILES-NEW-02: can this DAK (inward) entry become the basis of a NEW file? It must exist in
+ * the tenant and not already be linked to a file; otherwise two files would carry one DAK.
+ * A detached DAK (fileId cleared) is available again.
+ */
+export async function inwardLinkState(
+  tenantId: string,
+  inwardId: string,
+): Promise<"missing" | "linked" | "available"> {
+  const row = await repo.findInwardById(inwardId, tenantId);
+  if (!row) return "missing";
+  return row.fileId ? "linked" : "available";
+}
+
+/** True when a file with this id exists in the tenant (used to validate a parent file id). */
+export async function fileExists(tenantId: string, fileId: string): Promise<boolean> {
+  return (await repo.findFileById(fileId, tenantId)) !== null;
+}
+
+/** One page of the inward register plus the total matching rows (for "Showing X of N"). */
+export async function listInwardPage(tenantId: string, limit: number, page: repo.RegisterPage) {
+  const [rows, total] = await Promise.all([
+    repo.listInwardByTenant(tenantId, limit, page),
+    repo.countInwardByTenant(tenantId, page.q),
+  ]);
+  return { rows, total };
 }
 
 export async function listNotings(tenantId: string, limit: number) {
   return repo.listNotingsByTenant(tenantId, limit);
 }
 
-export async function listDispatch(tenantId: string, limit: number) {
-  return repo.listDispatchByTenant(tenantId, limit);
+export async function listDispatch(tenantId: string, limit: number, page: repo.RegisterPage = {}) {
+  return repo.listDispatchByTenant(tenantId, limit, page);
+}
+
+/** One page of the dispatch register plus the total matching rows. */
+export async function listDispatchPage(tenantId: string, limit: number, page: repo.RegisterPage) {
+  const [rows, total] = await Promise.all([
+    repo.listDispatchByTenant(tenantId, limit, page),
+    repo.countDispatchByTenant(tenantId, page.q),
+  ]);
+  return { rows, total };
 }
 
 export async function listFileMovements(tenantId: string, fileId: string) {

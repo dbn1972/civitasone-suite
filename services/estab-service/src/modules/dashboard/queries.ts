@@ -1,8 +1,20 @@
-import { eq, and, sql, lt, isNull, or, gte, lte } from "drizzle-orm";
+import { eq, and, sql, isNull, or, gte, lte, notInArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { estabFiles, estabInward } from "../files/schema.js";
 import { estabMeetings, estabCompliance } from "../committee/schema.js";
 import { estabVehicles } from "../assets/schema.js";
+
+/**
+ * GAP-ESTAB-DASHBOARD-01: ONE definition of "open", "overdue" and "pendency" for every estab
+ * count, shared with apps/web/src/lib/estab/sla.ts (isOverdue / pendencyDays):
+ *  - open    = status is not closed, archived or disposed;
+ *  - overdue = open AND the due date (as an IST calendar day) is before today (IST);
+ *  - pendency = whole days since creation, averaged over open files.
+ * Before this the dashboard counted only status='active' and compared the raw timestamp to
+ * now() (server clock), so its "SLA Breached" differed from My Desk and the register.
+ */
+export const CLOSED_FILE_STATUSES = ["closed", "archived", "disposed"] as const;
+const IST_DAY = (ts: ReturnType<typeof sql>) => sql`((${ts}) AT TIME ZONE 'Asia/Kolkata')::date`;
 
 export async function getDashboard(tenantId: string) {
   const now = new Date();
@@ -25,8 +37,8 @@ export async function getDashboard(tenantId: string) {
     .from(estabFiles)
     .where(and(
       eq(estabFiles.tenantId, tenantId),
-      eq(estabFiles.status, "active"),
-      lt(estabFiles.dueBy, now),
+      notInArray(estabFiles.status, [...CLOSED_FILE_STATUSES]),
+      sql`${estabFiles.dueBy} IS NOT NULL AND ${IST_DAY(sql`${estabFiles.dueBy}`)} < ${IST_DAY(sql`now()`)}`,
     )));
 
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
@@ -43,9 +55,12 @@ export async function getDashboard(tenantId: string) {
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
   const [avgPendency] = await db.transaction((tx) => tx
-    .select({ avg: sql<number>`coalesce(avg(extract(epoch from (now() - ${estabFiles.createdAt}))/86400), 0)::int` })
+    .select({
+      // Whole IST calendar days since creation, averaged over open files, to one decimal.
+      avg: sql<number>`coalesce(round(avg(${IST_DAY(sql`now()`)} - ${IST_DAY(sql`${estabFiles.createdAt}`)}), 1), 0)::float8`,
+    })
     .from(estabFiles)
-    .where(and(eq(estabFiles.tenantId, tenantId), eq(estabFiles.status, "active"))));
+    .where(and(eq(estabFiles.tenantId, tenantId), notInArray(estabFiles.status, [...CLOSED_FILE_STATUSES]))));
 
   let meetingsToday = 0;
   try {

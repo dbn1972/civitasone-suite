@@ -18,6 +18,7 @@ import { IssuedBankFilesTable } from "./IssuedBankFilesTable";
 import { hasItems, mapIssuedFiles, mapSigningSettings, type IssuedFile, type SigningSettings } from "./signingState";
 // Plain (non-"use client") module: these are CALLED here on the server.
 import { toClientTransferRow, isCreditedTransfer, isFailedTransfer, type RawTransferRow } from "./transferRows";
+import { PAYROLL_CONFIG_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * GAP-PAYROLL-DISBURSEMENT-04: roles that may change the sponsor bank
@@ -25,7 +26,6 @@ import { toClientTransferRow, isCreditedTransfer, isFailedTransfer, type RawTran
  * payroll-service's ADMIN_ROLES on dsc-config, sponsor-config and
  * nach-return routes exactly (payroll_officer is NOT admitted server-side).
  */
-const PAYROLL_CONFIG_ROLES = ["payroll_admin", "super_admin"];
 
 type SponsorConfig = {
   tenantId: string;

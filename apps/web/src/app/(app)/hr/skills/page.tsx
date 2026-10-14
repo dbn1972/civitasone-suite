@@ -4,6 +4,8 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { SkillMatrix, type SkillRecord } from "./_components/SkillMatrix";
 import { getTranslations } from "next-intl/server";
+import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { HR_SELF_SERVICE_ROLES } from "@/lib/auth/workRoles";
 
 type Row = {
   id: string;
@@ -56,6 +58,7 @@ async function getData(): Promise<LoaderResult<SkillsPayload>> {
 }
 
 export default async function SkillsPage() {
+  requireAnyRole(HR_SELF_SERVICE_ROLES);
   const t = await getTranslations("skills");
   const { data, source } = await getData();
   const errored = source === "error";

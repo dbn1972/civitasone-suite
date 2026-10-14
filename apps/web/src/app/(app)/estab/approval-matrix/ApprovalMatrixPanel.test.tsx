@@ -176,3 +176,21 @@ describe("ApprovalMatrixPanel — async create (GAP-ESTAB-APPROVAL-MATRIX-06)", 
     await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(4));
   });
 });
+
+describe("ApprovalMatrixPanel — GAP-ESTAB-APPROVAL-MATRIX-04 (workflow column)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("Given a rule, When the matrix renders, Then the column is headed 'Workflow code' and the code stays visible as secondary mono text", async () => {
+    const rule = {
+      id: "r1", module: "finance", sourceType: "finance_sanction", label: "Big sanction",
+      minAmountMinor: 0, maxAmountMinor: null, workflowDefinitionCode: "finance.sanction.x",
+      startNodeKey: "s", steps: [{ role: "director", label: "Director" }], priority: 100,
+      active: true, updatedAt: "2026-09-01T00:00:00Z",
+    };
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(jsonResponse({ data: [rule] }));
+    render(<ApprovalMatrixPanel />);
+    await waitFor(() => expect(screen.getByRole("columnheader", { name: "Workflow code" })).toBeInTheDocument());
+    const code = screen.getByText("finance.sanction.x");
+    expect(code.className).toContain("mono");
+  });
+});

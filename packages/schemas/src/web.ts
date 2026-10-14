@@ -134,6 +134,11 @@ export const roleAssignmentSchema = z.object({
 
 export const tenantSettingSchema = z.object({
   name: z.string(),
+  // GAP-TENANT-ADMIN-SETTINGS-01: present on GET /v1/admin/tenant/modules?detail=1.
+  moduleKey: z.string().optional(),
+  moduleName: z.string().optional(),
+  enabled: z.boolean().optional(),
+  enabledAt: z.string().optional(),
 });
 
 export const auditEventApiSchema = z.object({
@@ -1186,7 +1191,9 @@ export const ProcurementDashboardSchema = z.object({
   pendingIndents: z.number().default(0),
   activePOs: z.number().default(0),
   grnsThisMonth: z.number().default(0),
-  contractRenewalsDue: z.number().default(0),
+  // GAP-PROCUREMENT-DASHBOARD-05: null = not available from procurement-service
+  // (contract data lives in contract-service) - never a fabricated 0.
+  contractRenewalsDue: z.number().nullable().default(null),
 });
 
 export const IndentSummarySchema = z.object({
@@ -1896,6 +1903,20 @@ export const MeetingDetailSchema = MeetingSummarySchema.extend({
   })).default([]),
 });
 
+/**
+ * GAP-ESTAB-VEHICLES-NEW-01: the request contract of POST /v1/estab/vehicles, shared by the
+ * estab-service validator and the web "Add vehicle" form so the two cannot drift apart.
+ * `ev` is how an electric vehicle is stored and posted; the summary below reports it as "electric".
+ */
+export const ESTAB_VEHICLE_FUEL_TYPES = ["petrol", "diesel", "cng", "ev"] as const;
+export const EstabCreateVehicleBodySchema = z.object({
+  regNo:       z.string().min(1),
+  makeModel:   z.string().min(1),
+  fuelType:    z.enum(ESTAB_VEHICLE_FUEL_TYPES).default("petrol"),
+  allocatedTo: z.string().uuid().optional(),
+});
+export type EstabCreateVehicleBody = z.infer<typeof EstabCreateVehicleBodySchema>;
+
 export const VehicleSummarySchema = z.object({
   id: z.string(),
   vehicleNo: z.string(),
@@ -2495,7 +2516,7 @@ export const RoleDetailSchema = z.object({
 export const SubscriptionSummarySchema = z.object({
   id: z.string(),
   plan: z.string(),
-  status: z.enum(["active", "past_due", "cancelled", "trial"]),
+  status: z.enum(["active", "past_due", "cancelled", "trial", "suspended"]),
   // Nullable: the billing service has no real period/usage data yet and must
   // not fabricate it (null = unknown, rendered as an em dash).
   currentPeriodStart: z.string().nullable(),

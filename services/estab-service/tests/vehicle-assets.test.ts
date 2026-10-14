@@ -219,3 +219,62 @@ describe("toVehicleSummary — officer name enrichment (GAP-ESTAB-VEHICLES-02)",
     expect(summary.assignedToName).toBeUndefined();
   });
 });
+
+// ─── 7. create contract and list mapping (GAP-ESTAB-VEHICLES-NEW-01) ─────────
+
+import { mapFuelType, splitMakeModel } from "../src/modules/assets/queries.js";
+import { createVehicleBody } from "../src/modules/assets/validators.js";
+import { EstabCreateVehicleBodySchema, ESTAB_VEHICLE_FUEL_TYPES } from "@civitasone/schemas/web";
+
+describe("create-vehicle contract shared with the web form (GAP-ESTAB-VEHICLES-NEW-01)", () => {
+  it("the service validator IS the shared schema the web form builds against", () => {
+    expect(createVehicleBody).toBe(EstabCreateVehicleBodySchema);
+  });
+
+  it("accepts exactly the payload keys the form posts: regNo, makeModel, fuelType, allocatedTo", () => {
+    const parsed = createVehicleBody.parse({
+      regNo: "DL 01 CA 1234", makeModel: "Toyota Innova Crysta", fuelType: "ev",
+      allocatedTo: "88888888-cccc-4000-8000-000000000002",
+    });
+    expect(parsed).toEqual({
+      regNo: "DL 01 CA 1234", makeModel: "Toyota Innova Crysta", fuelType: "ev",
+      allocatedTo: "88888888-cccc-4000-8000-000000000002",
+    });
+  });
+
+  it("every fuel option the form offers is accepted by the service", () => {
+    for (const fuelType of ESTAB_VEHICLE_FUEL_TYPES) {
+      expect(createVehicleBody.safeParse({ regNo: "X", makeModel: "Y", fuelType }).success).toBe(true);
+    }
+  });
+});
+
+describe("list mapping of a created vehicle (GAP-ESTAB-VEHICLES-NEW-01)", () => {
+  const row = {
+    id: "99999999-cccc-4000-8000-000000000001", regNo: "DL 01 CA 1234", makeModel: "Toyota Innova Crysta",
+    allocatedTo: null, fuelType: "ev", status: "available", odometerKm: 0,
+  };
+
+  it("an electric vehicle (stored as 'ev') is listed as electric, not petrol", () => {
+    expect(mapFuelType("ev")).toBe("electric");
+    expect(mapFuelType("electric")).toBe("electric");
+    expect(toVehicleSummary(row, new Map()).fuelType).toBe("electric");
+  });
+
+  it("petrol, diesel and CNG map to themselves; an unknown value falls back to petrol", () => {
+    expect(["petrol", "diesel", "cng", "lpg"].map(mapFuelType)).toEqual(["petrol", "diesel", "cng", "petrol"]);
+  });
+
+  it("make is the first word and model is the rest, so 'Toyota Innova Crysta' keeps its full model", () => {
+    expect(splitMakeModel("Toyota Innova Crysta")).toEqual({ make: "Toyota", model: "Innova Crysta" });
+    const summary = toVehicleSummary(row, new Map());
+    expect(summary).toMatchObject({ vehicleNo: "DL 01 CA 1234", make: "Toyota", model: "Innova Crysta" });
+    expect(() => VehicleSummarySchema.parse(summary)).not.toThrow();
+  });
+
+  it("a one-word entry has an empty model instead of repeating the make", () => {
+    expect(splitMakeModel("Innova")).toEqual({ make: "Innova", model: "" });
+    expect(splitMakeModel("  Maruti   Ertiga ")).toEqual({ make: "Maruti", model: "Ertiga" });
+    expect(toVehicleSummary({ ...row, makeModel: "Innova" }, new Map())).toMatchObject({ make: "Innova", model: "" });
+  });
+});

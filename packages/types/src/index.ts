@@ -1097,7 +1097,8 @@ export type ProcurementDashboard = {
   pendingIndents: number;
   activePOs: number;
   grnsThisMonth: number;
-  contractRenewalsDue: number;
+  /** null = not available from procurement-service (GAP-PROCUREMENT-DASHBOARD-05). */
+  contractRenewalsDue: number | null;
 };
 
 export type IndentSummary = {

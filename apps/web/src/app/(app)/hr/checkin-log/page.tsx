@@ -4,6 +4,8 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
 import { toHumanError } from "@/lib/messages";
 import { humanizeStatus } from "@/lib/formatters";
+import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
 
 type Row = {
   id: string;
@@ -47,6 +49,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function CheckinLogPage() {
+  requireAnyRole(HR_STAFF_MANAGER_ROLES);
   const t = await getTranslations("checkinLog");
   const { data: rawItems, source } = await getData();
 

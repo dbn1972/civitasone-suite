@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@/test-utils/intl-render";
 
 const push = vi.fn();
 const refresh = vi.fn();
@@ -15,9 +15,16 @@ function mockFetch(impl: (url: string, init?: RequestInit) => Promise<Partial<Re
   ) as unknown as typeof fetch;
 }
 
+/** Open the server-search combobox and pick a vendor by name (NEW-01: no auto-select). */
+async function pickVendor(name: string) {
+  const box = await screen.findByRole("combobox");
+  fireEvent.focus(box);
+  const opt = await screen.findByRole("option", { name });
+  fireEvent.mouseDown(opt);
+}
+
 async function fillValid() {
-  // Choose a vendor explicitly (NEW-01: no auto-select).
-  fireEvent.change(await screen.findByRole("combobox"), { target: { value: "v1" } });
+  await pickVendor("Acme");
   fireEvent.change(screen.getByLabelText("Contract no *"), { target: { value: "CON-1" } });
   fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "AMC" } });
   fireEvent.change(screen.getByLabelText("Contract value (₹) *"), { target: { value: "1000.50" } });
@@ -42,9 +49,9 @@ describe("CreateContractForm", () => {
       return { ok: true, json: async () => ({}) };
     });
     render(<CreateContractForm />);
-    // Vendor select starts blank (placeholder selected), not "Acme".
-    const select = await screen.findByRole("combobox");
-    await waitFor(() => expect((select as HTMLSelectElement).value).toBe(""));
+    // Vendor field starts blank, not "Acme".
+    const box = await screen.findByRole("combobox");
+    expect((box as HTMLInputElement).value).toBe("");
 
     // Fill everything EXCEPT vendor, then submit.
     fireEvent.change(screen.getByLabelText("Contract no *"), { target: { value: "CON-1" } });
@@ -63,11 +70,49 @@ describe("CreateContractForm", () => {
       return { ok: true, json: async () => ({}) };
     });
     render(<CreateContractForm />);
+    fireEvent.focus(await screen.findByRole("combobox"));
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent(/Couldn.t load vendors/i);
-    expect(screen.queryByText("Loading vendors…")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Create contract" })).toBeDisabled();
+    expect(screen.queryByText(/Searching/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    // NEW-02: submit stays disabled while the vendor list cannot be loaded.
+    expect(screen.getByRole("button", { name: "Create contract" })).toBeDisabled();
+  });
+
+  it("GAP-CONTRACTS-NEW-02: Retry with the API now healthy renders the options and re-enables submit", async () => {
+    let healthy = false;
+    mockFetch(async (url) => {
+      if (url.includes("/procurement/vendors")) {
+        return healthy ? { ok: true, json: async () => VENDORS } : { ok: false, status: 500, json: async () => ({}) };
+      }
+      return { ok: true, json: async () => ({}) };
+    });
+    render(<CreateContractForm />);
+    fireEvent.focus(await screen.findByRole("combobox"));
+    await screen.findByRole("alert");
+    expect(screen.getByRole("button", { name: "Create contract" })).toBeDisabled();
+    healthy = true;
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByRole("option", { name: "Acme" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create contract" })).not.toBeDisabled();
+  });
+
+  it("GAP-CONTRACTS-NEW-05: typing searches the SERVER (?q=) so a vendor beyond the first page is reachable", async () => {
+    const urls: string[] = [];
+    mockFetch(async (url) => {
+      urls.push(url);
+      if (url.includes("q=Zeta")) return { ok: true, json: async () => ({ data: [{ id: "v900", name: "Zeta Traders" }] }) };
+      if (url.includes("/procurement/vendors")) return { ok: true, json: async () => VENDORS };
+      return { ok: true, json: async () => ({}) };
+    });
+    render(<CreateContractForm />);
+    const box = await screen.findByRole("combobox");
+    fireEvent.focus(box);
+    fireEvent.change(box, { target: { value: "Zeta" } });
+    const opt = await screen.findByRole("option", { name: "Zeta Traders" });
+    fireEvent.mouseDown(opt);
+    expect((box as HTMLInputElement).value).toBe("Zeta Traders");
+    expect(urls.some((u) => u.includes("q=Zeta") && u.includes("limit=25"))).toBe(true);
   });
 
   it("GAP-CONTRACTS-NEW-03: an expiry on/before the start date is blocked client-side with no POST", async () => {
@@ -78,7 +123,7 @@ describe("CreateContractForm", () => {
       return { ok: true, json: async () => ({}) };
     });
     render(<CreateContractForm />);
-    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "v1" } });
+    await pickVendor("Acme");
     fireEvent.change(screen.getByLabelText("Contract no *"), { target: { value: "CON-1" } });
     fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "AMC" } });
     fireEvent.change(screen.getByLabelText("Contract value (₹) *"), { target: { value: "500" } });

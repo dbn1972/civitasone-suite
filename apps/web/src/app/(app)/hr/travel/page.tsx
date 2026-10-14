@@ -7,11 +7,12 @@ import { mapTravel, mapTravelTeam, type ApiTravelRow, type ApiTravelTeamRow, typ
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
 
 // GAP-HR-TRAVEL-01: only these roles can see/act on the team approval queue
 // -- mirrors the backend's own gate on scope=team and approve/reject
 // exactly (social/routes.ts).
-const TRAVEL_APPROVER_ROLES = ["manager", "hr_admin", "hr_officer", "super_admin"];
+const TRAVEL_APPROVER_ROLES = HR_STAFF_MANAGER_ROLES;
 
 async function getData(): Promise<LoaderResult<Row[]>> {
   return fetchJson<unknown, Row[]>("/api/v1/hrms/travel-requests", [], {

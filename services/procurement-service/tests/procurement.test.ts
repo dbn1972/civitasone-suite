@@ -57,6 +57,11 @@ const PO_GRN_1   = "dddddddd-0000-4000-8000-000000000001";
 const PO_GRN_2   = "dddddddd-1111-4000-8000-000000000001";
 const POITEM_1   = "eeeeeeee-0000-4000-8000-000000000001";
 const POITEM_2   = "eeeeeeee-1111-4000-8000-000000000001";
+// GAP-PROCUREMENT-GRN-NEW-06: PO_GRN_2 is fully received by the happy-path test, so the
+// SoD test below receives against its OWN PO line (a second full receipt on PO_GRN_2 is
+// now - correctly - an over-receipt).
+const PO_GRN_3   = "dddddddd-2222-4000-8000-000000000001";
+const POITEM_3   = "eeeeeeee-2222-4000-8000-000000000001";
 
 async function wipe() {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
@@ -373,6 +378,7 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
     // (now-ignored) client orderedQty, so behaviour is unchanged.
     await seedPoForGrn(PO_GRN_1, "PO-GRN-0001", POITEM_1, "aaaaaaaa-1111-4000-8000-000000000001", 10);
     await seedPoForGrn(PO_GRN_2, "PO-GRN-0002", POITEM_2, "aaaaaaaa-2222-4000-8000-000000000001", 5);
+    await seedPoForGrn(PO_GRN_3, "PO-GRN-0003", POITEM_3, "aaaaaaaa-2222-4000-8000-000000000001", 5);
   });
   afterAll(async () => { await wipe(); });
 
@@ -510,10 +516,10 @@ describe("GRN consumer — CQRS wiring (integration)", () => {
       schemaVersion: "1.0",
       payload: {
         id: selfGrnId, tenantId: TENANT, grnNo: "GRN-SELF-001",
-        poRef: `procurement_po:${PO_GRN_2}`,
+        poRef: `procurement_po:${PO_GRN_3}`,
         vendorId: "aaaaaaaa-2222-4000-8000-000000000001",
         items: [{
-          poItemRef: POITEM_2,
+          poItemRef: POITEM_3,
           itemCode: "SUP-001", orderedQty: 5, receivedQty: 5, acceptedQty: 5, unit: "nos",
         }],
       },

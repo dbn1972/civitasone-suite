@@ -144,6 +144,23 @@ describe("error catalogue: standard wording", () => {
     },
   );
 
+  it("DUPLICATE_EMAIL (GAP-TENANT-ADMIN-USERS-07) has specific en and hi copy, not the generic conflict", () => {
+    const en = resolveHumanError({ status: 409, code: "DUPLICATE_EMAIL", ctx: { locale: "en" } });
+    expect(en.what).toBe("A user with this email already exists.");
+    expect(en.what).not.toBe(resolveHumanError({ status: 409, ctx: { locale: "en" } }).what);
+    const hi = resolveHumanError({ status: 409, code: "DUPLICATE_EMAIL", ctx: { locale: "hi" } });
+    expect(hi.what).toBe("इस ईमेल वाला उपयोगकर्ता पहले से मौजूद है।");
+    expect(JSON.stringify(en)).not.toContain("DUPLICATE_EMAIL");
+  });
+
+  it("MODULE_NOT_PROVISIONED (GAP-TENANT-ADMIN-SETTINGS-07) has specific en and hi copy on a 404", () => {
+    const en = resolveHumanError({ status: 404, code: "MODULE_NOT_PROVISIONED", ctx: { locale: "en" } });
+    expect(en.what).toMatch(/not part of your office/);
+    const hi = resolveHumanError({ status: 404, code: "MODULE_NOT_PROVISIONED", ctx: { locale: "hi" } });
+    expect(hi.what).not.toBe(en.what);
+    expect(hi.what.trim()).not.toBe("");
+  });
+
   it("DUPLICATE_CODE keeps its more specific copy", () => {
     expect(resolveHumanError({ status: 409, code: "DUPLICATE_CODE", ctx: { locale: "en" } }).what).toBe("This code is already in use.");
   });

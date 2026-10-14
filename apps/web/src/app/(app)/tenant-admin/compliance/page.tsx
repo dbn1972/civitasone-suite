@@ -4,8 +4,11 @@ import { getComplianceOverview } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { formatPercent, formatIndianDateTime } from "@/lib/formatters";
+import { getTranslations } from "next-intl/server";
+import { ComplianceChecksTable } from "./ComplianceChecksTable";
 
 export default async function ComplianceDashboardPage() {
+  const t = await getTranslations("tenantAdminW2.compliance");
   const result = await getComplianceOverview();
   const { data: overview } = result;
   const resource = toResourceState(result, (data) => data.checks.length === 0);
@@ -32,6 +35,17 @@ export default async function ComplianceDashboardPage() {
         <StatCard icon="✅" iconBg="#ecfdf3" label="Checks Passed" value={errored ? "—" : `${overview.checks.filter((c) => c.result === "pass").length}/${overview.checks.length}`} />
       </StatGrid>
 
+      {/* GAP-TENANT-ADMIN-COMPLIANCE-02: provenance for the headline scores — how
+          they were derived, their scope and as-of — so a board-level figure is
+          defensible. Shown only when the service supplied it. */}
+      {!errored && overview.provenance ? (
+        <p style={{ fontSize: 12.5, color: "var(--ink2)", margin: "0 0 14px" }} data-testid="compliance-provenance">
+          {t("provenanceMethod")}{" "}
+          {overview.provenance.asOf ? t("asOf", { date: formatIndianDateTime(overview.provenance.asOf) }) : t("noControls")}{" "}
+          {overview.provenance.complete ? null : t("incomplete")}
+        </p>
+      ) : null}
+
       {errored ? (
         <Card title="Recent Compliance Checks" padding>
           <RefreshErrorState error={toHumanError("load", { area: "compliance checks" })} backHref="/tenant-admin" />
@@ -42,21 +56,7 @@ export default async function ComplianceDashboardPage() {
         </Card>
       ) : (
         <Card title="Recent Compliance Checks" padding>
-          <ol className="timeline" aria-label="Compliance check timeline" style={{ listStyle: "none", padding: 0, margin: 0 }}>
-            {overview.checks.map((check) => (
-              <li key={check.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--border, #e2e8f0)" }}>
-                <div style={{ flex: 1 }}>
-                  <p style={{ margin: 0, fontWeight: 500, fontSize: 14 }}>{check.title}</p>
-                  <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--ink2)" }}>
-                    {formatIndianDateTime(check.timestamp)}
-                  </p>
-                </div>
-                {/* GAP-TENANT-ADMIN-COMPLIANCE-01: token-based, contrast-checked
-                    pill instead of inline amber/green hex text. */}
-                <StatusPill status={check.result} />
-              </li>
-            ))}
-          </ol>
+          <ComplianceChecksTable checks={overview.checks} />
         </Card>
       )}
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -15,6 +16,8 @@ type EmdRow = {
   amount: string;
   validity: string;
   expiry: string;
+  /** Whole days until validity ends (IST); null when unparseable. Drives the 30-day filter. */
+  daysLeft: number | null;
   bank: string;
   status: string;
 } & Record<string, unknown>;
@@ -53,6 +56,7 @@ function toRows(entries: EmdBgEntry[]): EmdRow[] {
     // GAP-PROCUREMENT-EMD-BG-05: dd Mon yyyy, not the raw backend string.
     validity: formatIndianDate(e.validity),
     expiry: expiryLabel(e.validity),
+    daysLeft: daysUntilIST(e.validity),
     bank: e.bank,
     status: e.status,
   }));
@@ -70,6 +74,10 @@ export function EmdBgTable({ emdEntries, pbgEntries, emdSource = "api", pbgSourc
   // GAP-PROCUREMENT-EMD-BG-01: each register is cached and recovered under its
   // OWN key, so a partial failure falls back (or fails) per register instead
   // of one outage poisoning both.
+  const t = useTranslations("procurement.emdBg");
+  // GAP-PROCUREMENT-EMD-BG-05: "expiring within 30 days" filter - an instrument
+  // is live security, so the clerk needs the ones about to lapse in one click.
+  const [expiringOnly, setExpiringOnly] = useState(false);
   const emd = useSeededResource<EmdBgEntry[]>("procurement.emd", emdEntries, emdSource, (d) => d.length === 0);
   const pbg = useSeededResource<EmdBgEntry[]>("procurement.pbg", pbgEntries, pbgSource, (d) => d.length === 0);
 
@@ -79,6 +87,10 @@ export function EmdBgTable({ emdEntries, pbgEntries, emdSource = "api", pbgSourc
   const emdRows = useMemo(() => toRows(emd.data), [emd.data]);
   const pbgRows = useMemo(() => toRows(pbg.data), [pbg.data]);
   const allRows = useMemo(() => [...emdRows, ...pbgRows], [emdRows, pbgRows]);
+  const shownRows = useMemo(
+    () => (expiringOnly ? allRows.filter((r) => r.daysLeft !== null && r.daysLeft >= 0 && r.daysLeft <= 30) : allRows),
+    [allRows, expiringOnly],
+  );
 
   // GAP-PROCUREMENT-EMD-BG-02/04: stats are derived from the SAME rows the
   // tables render, split per instrument. An EMD is NOT a guarantee, so the
@@ -136,8 +148,21 @@ export function EmdBgTable({ emdEntries, pbgEntries, emdSource = "api", pbgSourc
               message="Earnest money deposits and bank guarantees will appear here."
             />
           ) : (
+            <>
+            <label style={{ display: "inline-flex", alignItems: "center", gap: 8, margin: "0 0 12px", minHeight: 44 }}>
+              <input type="checkbox" checked={expiringOnly} onChange={(e) => setExpiringOnly(e.target.checked)} style={{ width: 18, height: 18 }} />
+              <span>{t("filterExpiring")}</span>
+            </label>
+            {expiringOnly ? (
+              <p role="status" style={{ margin: "0 0 12px", fontSize: "0.875rem" }}>
+                {t("filterShowing", { count: shownRows.length, total: allRows.length })}
+              </p>
+            ) : null}
+            {expiringOnly && shownRows.length === 0 ? (
+              <EmptyState icon="✅" title={t("noneExpiringTitle")} message={t("noneExpiringMessage")} />
+            ) : (
             <DataTable<EmdRow>
-              rows={allRows}
+              rows={shownRows}
               sortable
               filterable
               filterPlaceholder="Search vendor, bank, type…"
@@ -156,6 +181,8 @@ export function EmdBgTable({ emdEntries, pbgEntries, emdSource = "api", pbgSourc
                 { key: "status", label: "Status", cellType: "status" },
               ]}
             />
+            )}
+            </>
           )}
         </Card>
       ) : null}

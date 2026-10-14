@@ -32,15 +32,24 @@ export function computeSla(dueDate?: string | null): Sla {
 
 // GAP-ESTAB-DASHBOARD-01: one SLA definition for inbox, list and dashboard.
 
+/** A file in one of these statuses is finished: it is never overdue and has no pendency. */
+const CLOSED_STATUSES = new Set(["closed", "archived", "disposed"]);
+
+/** True for a finished file (closed, archived or disposed). */
+export function isClosedStatus(status?: string | null): boolean {
+  return Boolean(status) && CLOSED_STATUSES.has(status as string);
+}
+
 /**
- * An estab file is "overdue" when dueDate < today (IST) and its status is
- * neither "archived" nor "disposed" — the same rule the dashboard endpoint
- * uses server-side. All client-side overdue checks should call this.
+ * An estab file is "overdue" when dueDate < today (IST) and its status is not
+ * closed, archived or disposed — the same rule the dashboard endpoint uses
+ * server-side (services/estab-service/src/modules/dashboard/queries.ts,
+ * GAP-ESTAB-DASHBOARD-01). All client-side overdue checks should call this.
  */
 export function isOverdue(
   file: { dueDate?: string | null; status?: string },
 ): boolean {
-  if (file.status === "archived" || file.status === "disposed") return false;
+  if (isClosedStatus(file.status)) return false;
   const d = daysLeft(file.dueDate);
   return d !== null && d < 0;
 }
@@ -53,7 +62,7 @@ export function pendencyDays(
   file: { createdDate?: string; status?: string },
 ): number | null {
   if (!file.createdDate || file.createdDate === "—") return null;
-  if (file.status === "archived" || file.status === "disposed") return null;
+  if (isClosedStatus(file.status)) return null;
   // daysLeft is "days until due", so for "days since created" we negate.
   const d = daysLeft(file.createdDate);
   return d !== null ? -d : null;

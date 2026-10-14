@@ -4,6 +4,7 @@ import { getEstabDashboard, getEstabFiles } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, DataTable, EmptyState, RefreshErrorState, Term } from "../../../_components/ds";
 import { formatIndianDate, formatDays } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 /** Sort rank for a date string: parseable → epoch ms, else -Infinity (sorts last). */
 function createdDateRank(d: string | undefined): number {
@@ -21,6 +22,7 @@ type RecentFileRow = {
 };
 
 export default async function EstabDashboardPage() {
+  const t = await getTranslations("estabW2");
   const [{ data, source }, { data: files, source: filesSource }] = await Promise.all([
     getEstabDashboard(),
     getEstabFiles(),
@@ -58,10 +60,11 @@ export default async function EstabDashboardPage() {
         }
       />
       <StatGrid>
-        <StatCard icon="📁" tone="info" href="/estab/list" label="Files Pending" value={errored ? "—" : data.filesPending.toLocaleString("en-IN")} />
-        <StatCard icon="⏱" tone="bad" href="/estab/inbox" hint="Files past their due date (not archived or disposed), computed in IST." label="SLA Breached" value={errored ? "—" : data.slaBreached.toLocaleString("en-IN")} />
+        {/* GAP-ESTAB-DASHBOARD-02: the service counts status='active' here, exactly what the File Register's "Active Files" tile counts, so the two tiles carry the same name and the same number. */}
+        <StatCard icon="📁" tone="info" href="/estab/list" hint={t("dashActiveFilesHint")} label={t("dashActiveFiles")} value={errored ? "—" : data.filesPending.toLocaleString("en-IN")} />
+        <StatCard icon="⏱" tone="bad" href="/estab/inbox" hint={t("dashSlaHint")} label="SLA Breached" value={errored ? "—" : data.slaBreached.toLocaleString("en-IN")} />
         <StatCard icon="📬" tone="info" href="/estab/dak" label="DAK Pending" value={errored ? "—" : data.dakPending.toLocaleString("en-IN")} />
-        <StatCard icon="📊" tone="warn" hint="Average days a pending file has been open." label="Avg Pendency (days)" value={errored ? "—" : formatDays(data.avgPendencyDays)} />
+        <StatCard icon="📊" tone="warn" hint={t("dashAvgPendencyHint")} label="Avg Pendency (days)" value={errored ? "—" : formatDays(data.avgPendencyDays)} />
         <StatCard icon="📅" tone="neutral" href="/estab/meetings" label="Meetings Today" value={errored ? "—" : data.meetingsToday.toLocaleString("en-IN")} />
         <StatCard icon="✅" tone="good" href="/estab/compliance" label="Compliance Due" value={errored ? "—" : data.complianceItemsDue.toLocaleString("en-IN")} />
       </StatGrid>
@@ -109,7 +112,7 @@ export default async function EstabDashboardPage() {
               <h3>Pendency snapshot</h3>
             </div>
             <div className="fields pad">
-              <div className="fld"><div className="l">Files pending</div><div className="v">{errored ? "—" : data.filesPending}</div></div>
+              <div className="fld"><div className="l">{t("dashActiveFilesSnapshot")}</div><div className="v">{errored ? "—" : data.filesPending}</div></div>
               <div className="fld"><div className="l">Unlinked DAK</div><div className="v">{errored ? "—" : data.dakPending}</div></div>
               <div className="fld"><div className="l">SLA breached</div><div className="v">{errored ? "—" : data.slaBreached}</div></div>
               {/* GAP-ESTAB-DASHBOARD-05: this row previously repeated the

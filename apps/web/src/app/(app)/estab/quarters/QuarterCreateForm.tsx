@@ -4,6 +4,9 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { useEstabT } from "@/lib/estab/useEstabT";
+import { useFormError } from "@/lib/useFormError";
+import { useEstabDivisions } from "@/lib/estab/useEstabDivisions";
 
 const QUARTER_TYPES = ["type_i", "type_ii", "type_iii", "type_iv", "type_v", "type_vi"] as const;
 
@@ -21,6 +24,11 @@ type FieldErrors = {
 
 export function QuarterCreateForm() {
   const router = useRouter();
+  const t = useEstabT();
+  const formError = useFormError("quarter");
+  // GAP-ESTAB-QUARTERS-04: the owning unit is picked from the real departments, so two quarters of one
+  // unit always carry the identical value (and appear under one filter), instead of whatever was typed.
+  const depts = useEstabDivisions();
 
   const [quarterNo, setQuarterNo] = useState("");
   const [quarterType, setQuarterType] = useState<(typeof QUARTER_TYPES)[number]>("type_iv");
@@ -88,7 +96,8 @@ export function QuarterCreateForm() {
         }),
       });
       setConfirmOpen(false);
-      setMessage(`Quarter ${quarterNo.trim()} submitted to the inventory.`);
+      // Created asynchronously (202): say so, so a quarter that has not shown up yet is not read as a failed create.
+      setMessage(t("quarterSubmitted", { quarterNo: quarterNo.trim() }));
       setQuarterNo("");
       setQuarterType("type_iv");
       setCategory("general");
@@ -99,7 +108,8 @@ export function QuarterCreateForm() {
       setErrors({});
       router.refresh();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      // Only an already user-safe error keeps its own text; anything else gets the standard copy (never a raw e.message).
+      setDialogError(formError.fromException("save", err).message);
     } finally {
       setBusy(false);
     }
@@ -112,7 +122,7 @@ export function QuarterCreateForm() {
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={quarterNoField} style={{ fontSize: 13, fontWeight: 600 }}>
-                Quarter No. <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Quarter No. <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={quarterNoField}
@@ -125,7 +135,7 @@ export function QuarterCreateForm() {
                 aria-describedby={errors.quarterNo ? quarterNoErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.quarterNo && <p id={quarterNoErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.quarterNo}</p>}
+              {errors.quarterNo && <p id={quarterNoErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.quarterNo}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -177,7 +187,7 @@ export function QuarterCreateForm() {
                 aria-describedby={errors.carpetAreaSqft ? areaErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.carpetAreaSqft && <p id={areaErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.carpetAreaSqft}</p>}
+              {errors.carpetAreaSqft && <p id={areaErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.carpetAreaSqft}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -203,14 +213,30 @@ export function QuarterCreateForm() {
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={orgUnitField} style={{ fontSize: 13, fontWeight: 600 }}>Org Unit</label>
-              <input
-                id={orgUnitField}
-                value={orgUnit}
-                onChange={(e) => setOrgUnit(e.target.value)}
-                placeholder="Owning department/unit"
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
+              <label htmlFor={orgUnitField} style={{ fontSize: 13, fontWeight: 600 }}>{t("quarterOrgUnit")}</label>
+              {depts.loaded && depts.divisions.length === 0 ? (
+                <input
+                  id={orgUnitField}
+                  value={orgUnit}
+                  onChange={(e) => setOrgUnit(e.target.value)}
+                  maxLength={100}
+                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                />
+              ) : (
+                <select
+                  id={orgUnitField}
+                  value={orgUnit}
+                  onChange={(e) => setOrgUnit(e.target.value)}
+                  disabled={!depts.loaded}
+                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                >
+                  <option value="">{t("quarterOrgUnitNone")}</option>
+                  {depts.divisions.map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              )}
+              {depts.loaded && depts.divisions.length === 0 ? (
+                <span role="note" style={{ fontSize: 12, color: "var(--mut)" }}>{depts.failed ? t("deptLoadFailed") : t("deptNone")}</span>
+              ) : null}
             </div>
           </div>
 

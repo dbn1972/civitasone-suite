@@ -1,9 +1,12 @@
 import { PageHeader, StatCard, StatusPill, EmptyState, Card, RefreshErrorState } from "../../../_components/ds";
 import { formatIndianDate, formatMoney, humanizeStatus } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 import { Breadcrumb } from "../Breadcrumb";
 import { getSubscription } from "../../../_data/loaders";
 import { PLANS_HREF } from "../navConstants";
+
+const STATUS_KEYS = new Set(["active", "past_due", "cancelled", "trial", "suspended"]);
 
 /** Human display name for a raw module key (fallback: humanized key). */
 function moduleDisplayName(key: string): string {
@@ -11,6 +14,7 @@ function moduleDisplayName(key: string): string {
 }
 
 export default async function SubscriptionPage() {
+  const tStatus = await getTranslations("tenantAdminW2.subscription.status");
   const result = await getSubscription();
   const { data: subscription } = result;
   // null-on-api (genuinely no subscription) is distinct from source:"error".
@@ -32,9 +36,12 @@ export default async function SubscriptionPage() {
           // outage — they would act on data we failed to load.
           errored ? undefined : (
             <>
-              {/* GAP-TENANT-ADMIN-SUBSCRIPTION-04: route the invoice download
-                  through the authenticated proxy, not /api/v1 directly. */}
-              <a href="/api/proxy/v1/billing/invoices/latest?format=pdf" className="btn ghost" style={{ minHeight: 44 }} download>Download invoice</a>
+              {/* GAP-TENANT-ADMIN-SUBSCRIPTION-04 (INTERIM, needs owner decision): the
+                  "Download invoice" link pointed at /v1/billing/invoices/latest?format=pdf,
+                  which no service implements (billing-service has GET
+                  /v1/billing/invoices/:id with a uuid id and no PDF renderer), so it was a
+                  dead control that always failed. Removed rather than left misleading; an
+                  invoice list + PDF download needs a billing-service invoice-PDF endpoint. */}
               {/* GAP-TENANT-ADMIN-SUBSCRIPTION-02: tenant upgrade -> tenant-admin plans. */}
               <a href={PLANS_HREF} className="btn primary" style={{ minHeight: 44 }}>Upgrade plan</a>
             </>
@@ -62,7 +69,7 @@ export default async function SubscriptionPage() {
                 <h3>Usage & quota</h3>
                 {/* GAP-TENANT-ADMIN-SUBSCRIPTION-05: let StatusPill humanize
                     ('Past Due') instead of a raw lowercased string. */}
-                <StatusPill status={subscription.status} />
+                <StatusPill status={subscription.status} label={STATUS_KEYS.has(subscription.status) ? tStatus(subscription.status) : undefined} />
               </div>
               <div className="pad">
                 <div style={{ marginBottom: 20 }}>

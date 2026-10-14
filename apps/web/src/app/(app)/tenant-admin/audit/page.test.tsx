@@ -1,14 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
+import { render } from "@/test-utils/intl-render";
 
 const getTenantAuditLogMock = vi.fn();
+const getTenantAuditSummaryMock = vi.fn();
 vi.mock("../../../_data/loaders", async () => {
   const actual = await vi.importActual<typeof import("../../../_data/loaders")>("../../../_data/loaders");
-  return { ...actual, getTenantAuditLog: (...a: unknown[]) => getTenantAuditLogMock(...a) };
+  return {
+    ...actual,
+    getTenantAuditLog: (...a: unknown[]) => getTenantAuditLogMock(...a),
+    getTenantAuditSummary: (...a: unknown[]) => getTenantAuditSummaryMock(...a),
+  };
 });
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 import TenantAuditPage from "./page";
+
+// "Failures" is also a table filter label, so pick the KPI tile specifically.
+const statTile = (label: string) => screen.getAllByText(label).map((el) => el.closest(".stat")).find((el) => el !== null) as HTMLElement;
 
 const EVENTS = [
   { id: "1", timestamp: new Date().toISOString(), actor: "a@b.in", ipAddress: "10.0.0.1", action: "login", resource: null, outcome: "success" },
@@ -16,7 +25,11 @@ const EVENTS = [
 ];
 
 describe("TenantAuditPage", () => {
-  beforeEach(() => getTenantAuditLogMock.mockReset());
+  beforeEach(() => {
+    getTenantAuditLogMock.mockReset();
+    getTenantAuditSummaryMock.mockReset();
+    getTenantAuditSummaryMock.mockResolvedValue({ data: null, source: "error" });
+  });
 
   it("GAP-TENANT-ADMIN-AUDIT-05: a failed load shows a retry state and '—' KPIs, not zeros", async () => {
     getTenantAuditLogMock.mockResolvedValue({ data: [], source: "error" });
@@ -40,6 +53,42 @@ describe("TenantAuditPage", () => {
   });
 });
 
+describe("TenantAuditPage — server-side totals (GAP-TENANT-ADMIN-AUDIT-04/-06)", () => {
+  beforeEach(() => {
+    getTenantAuditLogMock.mockReset();
+    getTenantAuditSummaryMock.mockReset();
+  });
+
+  it("Total events / Failures come from the server summary, not the size of the loaded page", async () => {
+    getTenantAuditLogMock.mockResolvedValue({ data: EVENTS, source: "api" });
+    getTenantAuditSummaryMock.mockResolvedValue({
+      data: { total: 500, success: 460, failures: 40, last24h: 37, asOf: new Date().toISOString() },
+      source: "api",
+    });
+    render(await TenantAuditPage({}));
+    expect(screen.getByText("Total events").closest(".stat")).toHaveTextContent("500");
+    expect(statTile("Failures")).toHaveTextContent("40");
+    expect(screen.getByText("Events (24h)").closest(".stat")).toHaveTextContent("37");
+    // The loaded-rows tile stays honest about being only the page.
+    expect(screen.getByText("Loaded events").closest(".stat")).toHaveTextContent("2");
+  });
+
+  it("shows '—' (never a count derived from the loaded page) when the summary is unavailable", async () => {
+    getTenantAuditLogMock.mockResolvedValue({ data: EVENTS, source: "api" });
+    getTenantAuditSummaryMock.mockResolvedValue({ data: null, source: "error" });
+    render(await TenantAuditPage({}));
+    expect(screen.getByText("Total events").closest(".stat")).toHaveTextContent("—");
+    expect(statTile("Failures")).toHaveTextContent("—");
+  });
+
+  it("exports through the audited table export, not window.print()", async () => {
+    getTenantAuditLogMock.mockResolvedValue({ data: EVENTS, source: "api" });
+    getTenantAuditSummaryMock.mockResolvedValue({ data: null, source: "error" });
+    render(await TenantAuditPage({}));
+    expect(screen.queryByRole("button", { name: /^Export$/ })).not.toBeInTheDocument();
+  });
+});
+
 // GAP-TENANT-ADMIN-NOTIFICATIONS-03: the "Audit changes" link from the
 // notification-preferences page deep-links here with ?entity=notification-prefs
 // and the page must scope the list + KPIs to the preference-change events.
@@ -50,7 +99,11 @@ const PREF_EVENTS = [
 ];
 
 describe("TenantAuditPage — notification-prefs entity filter", () => {
-  beforeEach(() => getTenantAuditLogMock.mockReset());
+  beforeEach(() => {
+    getTenantAuditLogMock.mockReset();
+    getTenantAuditSummaryMock.mockReset();
+    getTenantAuditSummaryMock.mockResolvedValue({ data: null, source: "error" });
+  });
 
   it("without the filter shows every action", async () => {
     getTenantAuditLogMock.mockResolvedValue({ data: PREF_EVENTS, source: "api" });

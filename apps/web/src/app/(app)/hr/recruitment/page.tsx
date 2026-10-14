@@ -7,6 +7,7 @@ import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { Globe, Users } from "lucide-react";
 import { buildHubCards, isNoOpenings, normaliseRosterStatus, type HubStats } from "./recruitmentHomeView";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 // Both "New Vacancy" and "Post First Job" used to render for every viewer
 // regardless of role, even though the destination page
@@ -16,7 +17,7 @@ import { buildHubCards, isNoOpenings, normaliseRosterStatus, type HubStats } fro
 // (that page's own comment: ALL_ROLES additionally includes "manager"), so
 // this page itself stays visible to more roles than may actually create a
 // vacancy -- only the two create affordances are restricted here.
-const RECRUITMENT_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const RECRUITMENT_ADMIN_ROLES = HR_STAFF_ROLES;
 
 type DashboardStats = HubStats;
 

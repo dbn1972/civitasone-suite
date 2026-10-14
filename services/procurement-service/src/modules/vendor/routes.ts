@@ -4,6 +4,7 @@ import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/com
 import { vendorListResponseSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { hasAnyRole } from "@civitasone/auth";
+import { searchQuerySchema } from "../../shared/search.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createVendorBody, empanelBody, blacklistBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
@@ -39,7 +40,8 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    const result = await queries.listVendors(ctx.tenantId, q.limit, q.offset);
+    const { q: search } = searchQuerySchema.parse(req.query);
+    const result = await queries.listVendors(ctx.tenantId, q.limit, q.offset, search);
 
     if (!hasPiiAccess(ctx)) {
       return reply.code(403).send({

@@ -1,18 +1,17 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
+import { ProcurementContractsTable, type ContractRow } from "./ProcurementContractsTable";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getContracts, getProcurementVendors } from "../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
-type ContractRow = {
-  id: string;
-  label: string;
-  sublabel: string;
-  meta: string;
-  status: string;
-} & Record<string, unknown>;
-
-export default async function ProcurementContractsPage() {
+export default async function ProcurementContractsPage({
+  searchParams,
+}: {
+  searchParams?: { status?: string };
+}) {
+  const t = await getTranslations("procurement.contractsPage");
   // GAP-PROCUREMENT-CONTRACTS-01: the contract list only carries a raw
   // vendorId, so resolve ids to names via the procurement vendor directory.
   // The vendors fetch is best-effort — if it fails, we fall back to a friendly
@@ -33,7 +32,14 @@ export default async function ProcurementContractsPage() {
   const expiring = contracts.filter((c) => c.status === "expiring").length;
   const expired = contracts.filter((c) => c.status === "expired").length;
 
-  const rows: ContractRow[] = contracts.map((c) => {
+  // GAP-PROCUREMENT-CONTRACTS-03: the "Expiring Soon" card drills into
+  // ?status=expiring; honour it so the card and the list agree.
+  // "renewal_due" is the dashboard card's deep-link name for the same set.
+  const rawStatus = (searchParams?.status ?? "").trim().toLowerCase();
+  const statusFilter = rawStatus === "renewal_due" ? "expiring" : rawStatus;
+  const visible = statusFilter ? contracts.filter((c) => (c.status ?? "").toLowerCase() === statusFilter) : contracts;
+
+  const rows: ContractRow[] = visible.map((c) => {
     // sublabel from the mapper is the raw vendorId; never print it.
     const rawVendorId = c.sublabel ?? "";
     const vendorName = rawVendorId ? vendorNames.get(rawVendorId) ?? "Unknown vendor" : "—";
@@ -43,6 +49,11 @@ export default async function ProcurementContractsPage() {
       sublabel: vendorName,
       meta: c.meta ?? "—",
       status: c.status ?? "",
+      // GAP-PROCUREMENT-CONTRACTS-03/05: raw expiry (ISO), valueMinor (paise
+      // string) and poRef travel to the client table, which formats them.
+      expiry: c.expiry ?? "",
+      valueMinor: c.valueMinor ?? "",
+      poRef: c.poRef ?? "",
     };
   });
 
@@ -68,11 +79,17 @@ export default async function ProcurementContractsPage() {
             fabricated 0 under the error state below. */}
         <StatCard icon="📄" iconBg="#e7edfd" label="Total Contracts" value={errored ? "—" : contracts.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={errored ? "—" : active} />
-        <StatCard icon="⏰" iconBg="#fffaeb" label="Expiring Soon" value={errored ? "—" : expiring} />
+        <StatCard icon="⏰" iconBg="#fffaeb" label="Expiring Soon" value={errored ? "—" : expiring} href={errored ? undefined : "/procurement/contracts?status=expiring"} />
         <StatCard icon="🔒" iconBg="#f1f5f9" label="Expired" value={errored ? "—" : expired} />
       </StatGrid>
 
       <Card title="Contracts list">
+        {statusFilter ? (
+          <p role="status" style={{ margin: "0 0 12px", fontSize: "0.875rem" }}>
+            {t("filteredBy", { status: statusFilter })}{" "}
+            <Link href="/procurement/contracts">{t("clearFilter")}</Link>
+          </p>
+        ) : null}
         {errored ? (
           // GAP-PROCUREMENT-CONTRACTS-04: RefreshErrorState gives a working
           // Retry (router.refresh re-runs the server fetch) from a server page.
@@ -85,26 +102,9 @@ export default async function ProcurementContractsPage() {
             action={<Link href="/procurement/contracts/new" className="btn primary">+ New Contract</Link>}
           />
         ) : (
-          <DataTable<ContractRow>
-            rows={rows}
-            sortable
-            filterable
-            filterPlaceholder="Filter by contract, vendor, status…"
-            pageSize={10}
-            // GAP-PROCUREMENT-CONTRACTS-03: link the contract title to the
-            // existing detail route /contracts/[id] so a row is openable.
-            rowLinkKey="id"
-            rowLinkPrefix="/contracts/"
-            columns={[
-              { key: "label", label: "Contract" },
-              { key: "sublabel", label: "Vendor / Counter-party" },
-              // Was labeled "Type": getContracts() has never had a contract
-              // "type" field to offer (contract-service has no such column) --
-              // meta is, and always was, the contract number.
-              { key: "meta", label: "Contract No." },
-              { key: "status", label: "Status", cellType: "status" },
-            ]}
-          />
+          // GAP-PROCUREMENT-CONTRACTS-03/05: the table is a client component so
+          // its date / money / PO-link cells can use render functions.
+          <ProcurementContractsTable rows={rows} />
         )}
       </Card>
     </>

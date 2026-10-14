@@ -8,6 +8,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 import { WFHRequestForm } from "../_components/WFHRequestForm";
 import { WfhRequestsTable, type WfhRow } from "../_components/WfhRequestsTable";
+import { HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * WfhPage — Work From Home requests: self-service create (any role) +
@@ -26,7 +27,7 @@ import { WfhRequestsTable, type WfhRow } from "../_components/WfhRequestsTable";
  * RegularisationTable already established for a sibling "manager decides
  * pending X" queue, via the shared WfhRequestsTable.
  */
-const WFH_APPROVER_ROLES = ["hr_admin", "hr_officer", "manager", "super_admin"];
+const WFH_APPROVER_ROLES = HR_STAFF_MANAGER_ROLES;
 
 /**
  * GAP-HR-WFH-01 (partial — see routes.ts POST /wfh-requests for what's

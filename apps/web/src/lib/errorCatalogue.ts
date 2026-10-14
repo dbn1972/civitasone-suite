@@ -345,6 +345,32 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
     },
     actions: ["retry", "help"],
   },
+  // GAP-TENANT-ADMIN-USERS-07: identity-service POST /identity/users answers
+  // 409 DUPLICATE_EMAIL when the email is already in the tenant's directory.
+  DUPLICATE_EMAIL: {
+    en: {
+      what: "A user with this email already exists.",
+      next: "Use a different email address, or open the existing user instead.",
+    },
+    hi: {
+      what: "इस ईमेल वाला उपयोगकर्ता पहले से मौजूद है।",
+      next: "कोई दूसरा ईमेल पता इस्तेमाल करें, या मौजूदा उपयोगकर्ता खोलें।",
+    },
+    actions: ["retry", "help"],
+  },
+  // GAP-TENANT-ADMIN-SETTINGS-07: admin-service tenant module toggle answers
+  // 404 MODULE_NOT_PROVISIONED for a module the tenant does not hold.
+  MODULE_NOT_PROVISIONED: {
+    en: {
+      what: "This module is not part of your office's setup.",
+      next: "Ask your platform administrator to add it, then try again.",
+    },
+    hi: {
+      what: "यह मॉड्यूल आपके कार्यालय की व्यवस्था में शामिल नहीं है।",
+      next: "अपने प्लेटफ़ॉर्म प्रशासक से इसे जुड़वाएँ, फिर प्रयास करें।",
+    },
+    actions: ["back", "help"],
+  },
 };
 
 /**

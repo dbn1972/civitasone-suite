@@ -135,3 +135,33 @@ export async function listGrnsByTenant(tenantId: string, limit = 100, offset = 0
     .limit(limit)
     .offset(offset));
 }
+
+/**
+ * GAP-PROCUREMENT-GRN-NEW-06 - quantity already committed per PO line by the
+ * PO's non-rejected GRNs: accepted qty for accepted GRNs, received qty for
+ * GRNs still draft/under inspection. `excludeGrnId` leaves out the GRN being
+ * amended. Runs inside the caller's transaction (tenant GUC already set).
+ */
+export async function committedQtyByPoItemTx(
+  tx: Writer,
+  tenantId: string,
+  poId: string,
+  excludeGrnId?: string,
+): Promise<Map<string, number>> {
+  const exclude = excludeGrnId ?? null;
+  const rows = await (tx as typeof db).execute(sql`
+    SELECT i.po_item_ref AS ref,
+           COALESCE(SUM(CASE WHEN g.status = 'accepted' THEN i.accepted_qty
+                             WHEN g.status IN ('draft', 'under_inspection') THEN i.received_qty
+                             ELSE 0 END), 0)::int AS committed
+    FROM grn.procurement_grn_items i
+    JOIN grn.procurement_grns g ON g.id = i.grn_id
+    WHERE g.tenant_id = ${tenantId}::uuid
+      AND g.po_ref IN (${poId}, ${"procurement_po:" + poId})
+      AND (${exclude}::uuid IS NULL OR g.id <> ${exclude}::uuid)
+    GROUP BY i.po_item_ref
+  `);
+  const out = new Map<string, number>();
+  for (const r of rows as unknown as Array<{ ref: string; committed: number }>) out.set(r.ref, Number(r.committed));
+  return out;
+}

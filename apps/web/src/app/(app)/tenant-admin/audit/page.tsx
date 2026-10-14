@@ -1,15 +1,16 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PrintExportButton } from "../../../_components/PrintExportButton";
 import { PageHeader, StatCard, RefreshErrorState } from "../../../_components/ds";
-import { getTenantAuditLog } from "../../../_data/loaders";
+import { getTenantAuditLog, getTenantAuditSummary } from "../../../_data/loaders";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { countLast24h } from "@/lib/formatters";
+import { getTranslations } from "next-intl/server";
 import { Breadcrumb } from "../Breadcrumb";
 import { AuditLogTable } from "./AuditLogTable";
 
 export default async function TenantAuditPage({ searchParams }: { searchParams?: { entity?: string } }) {
-  const result = await getTenantAuditLog();
+  const t = await getTranslations("tenantAdminW2.audit");
+  const [result, summaryResult] = await Promise.all([getTenantAuditLog(), getTenantAuditSummary()]);
   const { data: events, source } = result;
 
   // GAP-TENANT-ADMIN-AUDIT-05 (FAILMASK): on a failed load the page used to
@@ -29,6 +30,13 @@ export default async function TenantAuditPage({ searchParams }: { searchParams?:
   const actionFilter = entity ? ENTITY_ACTIONS[entity] : undefined;
   const scoped = actionFilter ? events.filter((e) => actionFilter.includes(e.action)) : events;
 
+  // GAP-TENANT-ADMIN-AUDIT-04/-06: whole-history counts come from the server
+  // summary (audit-service /v1/audit/events/summary), not from the size of the
+  // page the list returned. When the summary is unavailable the tiles show an em dash,
+  // never a number derived from the loaded page. A scoped view (?entity=) is a
+  // subset the summary cannot describe, so it falls back to the loaded rows.
+  const serverSummary = !actionFilter && summaryResult.source !== "error" ? summaryResult.data : null;
+  const summaryUnavailable = !actionFilter && serverSummary === null;
   // GAP-TENANT-ADMIN-AUDIT-01: rolling 24h window (not a UTC calendar day).
   const last24h = countLast24h(scoped);
   const loaded = scoped.length;
@@ -42,24 +50,17 @@ export default async function TenantAuditPage({ searchParams }: { searchParams?:
         back="/tenant-admin"
         title="Audit Log"
         subtitle="Tenant-scoped audit events — all actor actions and outcomes."
-        actions={
-          // GAP-TENANT-ADMIN-AUDIT-02: the dead "Filter" PlaceholderButton is
-          // removed — the table already provides a working text search and an
-          // All/Failures segmented filter. Export remains the browser print
-          // (a real audited CSV export is a backend follow-up noted in the
-          // gap report).
-          <PrintExportButton label="Export" style={{ minHeight: 44 }} documentTitle="Audit Log" />
-        }
       />
-      <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="📋" iconBg="#f1f5f9" label="Events (24h)" value={errored ? "—" : last24h} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Success" value={errored ? "—" : successes} />
-        <StatCard icon="❌" iconBg="#fef3f2" label="Failures" value={errored ? "—" : failures} />
-        {/* GAP-TENANT-ADMIN-AUDIT-04: these KPIs are computed from the events
-            the list endpoint returned, which is a page of history, not the
-            tenant's full total. Label it honestly as "Loaded events" until a
-            server-side summary/total endpoint exists (see gap report). */}
-        <StatCard icon="👥" iconBg="#eff6ff" label="Loaded events" value={errored ? "—" : loaded} />
+      {/* The summary tiles are whole-tenant totals from the server; "Loaded events"
+          is honestly just the rows in the table below. */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14, marginBottom: 18 }}>
+        {actionFilter ? null : (
+          <StatCard icon="🗂️" iconBg="#f1f5f9" label={t("total")} value={errored || summaryUnavailable ? t("noValue") : serverSummary!.total} />
+        )}
+        <StatCard icon="📋" iconBg="#f1f5f9" label={t("last24h")} value={errored ? t("noValue") : actionFilter ? last24h : summaryUnavailable ? t("noValue") : serverSummary!.last24h} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label={t("success")} value={errored ? t("noValue") : actionFilter ? successes : summaryUnavailable ? t("noValue") : serverSummary!.success} />
+        <StatCard icon="❌" iconBg="#fef3f2" label={t("failures")} value={errored ? t("noValue") : actionFilter ? failures : summaryUnavailable ? t("noValue") : serverSummary!.failures} />
+        <StatCard icon="👥" iconBg="#eff6ff" label={t("loaded")} value={errored ? t("noValue") : loaded} />
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
       {actionFilter && !errored && (

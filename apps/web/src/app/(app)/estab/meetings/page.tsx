@@ -5,6 +5,7 @@ import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from ".
 import { formatIndianDate } from "@/lib/formatters";
 import { MeetingsTable, type MeetingRow } from "./MeetingsTable";
 import { MeetingsCalendar } from "./MeetingsCalendar";
+import { getTranslations } from "next-intl/server";
 
 // GAP-ESTAB-MEETINGS-04: compute today in IST from local date parts, not
 // toISOString (which uses UTC and rolls to yesterday before 05:30 IST).
@@ -20,6 +21,7 @@ export default async function MeetingsPage({
 }: {
   searchParams?: { view?: string };
 }) {
+  const t = await getTranslations("estabW2");
   const { data: meetings, source } = await getMeetings();
   const calendarView = searchParams?.view === "calendar";
 
@@ -57,16 +59,25 @@ export default async function MeetingsPage({
         subtitle="Schedule meetings, prepare agenda, capture MOM & track actions."
         actions={
           <>
-            {/* GAP-ESTAB-MEETINGS-05: aria-current on the active view toggle */}
-            {calendarView ? (
-              <Link href="/estab/meetings" className="btn ghost" style={{ minHeight: 44 }} aria-current={undefined}>
-                List
+            {/* GAP-ESTAB-MEETINGS-05: a two-link view switch; the active view carries aria-current="page". */}
+            <nav aria-label={t("meetingsViewLabel")} style={{ display: "flex", gap: 6 }}>
+              <Link
+                href="/estab/meetings"
+                className={calendarView ? "btn ghost" : "btn primary"}
+                style={{ minHeight: 44 }}
+                aria-current={calendarView ? undefined : "page"}
+              >
+                {t("meetingsViewList")}
               </Link>
-            ) : (
-              <Link href="/estab/meetings?view=calendar" className="btn ghost" style={{ minHeight: 44 }} aria-current={undefined}>
-                Calendar
+              <Link
+                href="/estab/meetings?view=calendar"
+                className={calendarView ? "btn primary" : "btn ghost"}
+                style={{ minHeight: 44 }}
+                aria-current={calendarView ? "page" : undefined}
+              >
+                {t("meetingsViewCalendar")}
               </Link>
-            )}
+            </nav>
             {/* GAP-ESTAB-MEETINGS-02: the disabled schedule button's tooltip explains
                 that meetings are created from a committee. The empty state copy is also
                 updated to avoid instructing an unavailable action. */}

@@ -53,6 +53,15 @@ async function cleanup() {
   }));
 }
 
+// GAP-TENANT-ADMIN-SETTINGS-07: the tenant route only toggles modules the tenant
+// is provisioned with, so the route tests seed a row first.
+async function seedModule(enabled = true) {
+  await runWithTenant(T1, () => db.transaction(async (tx) => {
+    await tx.delete(adminModuleConfigs).where(and(eq(adminModuleConfigs.tenantId, T1), eq(adminModuleConfigs.moduleKey, MODULE_KEY)));
+    await tx.insert(adminModuleConfigs).values({ tenantId: T1, moduleKey: MODULE_KEY, enabled, createdBy: ACTOR, updatedBy: ACTOR });
+  }));
+}
+
 beforeAll(cleanup);
 afterAll(async () => { await cleanup(); await sqlClient.end(); });
 
@@ -81,7 +90,34 @@ describe("POST /v1/admin/tenant/modules/:key/toggle — route authz (inject)", (
     expect(res.statusCode).toBe(400);
   });
 
+  it("404 for a tenant_admin toggling a module the tenant is not provisioned with (GAP-TENANT-ADMIN-SETTINGS-07)", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "POST", url: "/v1/admin/tenant/modules/not-a-real-module/toggle", headers: bearer(["tenant_admin"], T1), payload: { enabled: true } });
+    await app.close();
+    expect(res.statusCode).toBe(404);
+    expect(res.json().code).toBe("MODULE_NOT_PROVISIONED");
+    const rows = await runWithTenant(T1, () => db.transaction((tx) =>
+      tx.select().from(adminModuleConfigs).where(and(eq(adminModuleConfigs.tenantId, T1), eq(adminModuleConfigs.moduleKey, "not-a-real-module")))));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("GET ?detail=1 lists enabled AND disabled modules with real flags (GAP-TENANT-ADMIN-SETTINGS-01)", async () => {
+    await seedModule(false);
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/admin/tenant/modules?detail=1", headers: bearer(["tenant_admin"], T1) });
+    const legacy = await app.inject({ method: "GET", url: "/v1/admin/tenant/modules", headers: bearer(["tenant_admin"], T1) });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    const row = (res.json().data as Array<{ moduleKey: string; enabled: boolean; moduleName: string }>).find((m) => m.moduleKey === MODULE_KEY);
+    expect(row).toMatchObject({ moduleKey: MODULE_KEY, enabled: false, moduleName: "Hrms" });
+    // Legacy readers still get the enabled-only {name} list: the disabled module is absent.
+    expect((legacy.json().data as Array<{ name: string }>).some((m) => m.name === MODULE_KEY)).toBe(false);
+  });
+
   it("202 for a tenant_admin toggling a module in their own tenant", async () => {
+    await seedModule(true);
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: `/v1/admin/tenant/modules/${MODULE_KEY}/toggle`, headers: bearer(["tenant_admin"], T1), payload: { enabled: false } });

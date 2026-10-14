@@ -123,6 +123,25 @@ export async function listEvents(tenantId: string, from: Date, to: Date, type?: 
   return rows.map(toView);
 }
 
+export type AuditEventSummary = { total: number; failures: number; success: number; last24h: number; asOf: string };
+
+/**
+ * GAP-TENANT-ADMIN-AUDIT-04/-06: server-side counts for the whole tenant history,
+ * so the audit KPIs are not just the size of whichever page the list endpoint
+ * returned. "failure" mirrors the list route's outcome rule (severity error or
+ * critical); everything else is "success".
+ */
+export async function summarizeEvents(tenantId: string): Promise<AuditEventSummary> {
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select({
+    total: sql<number>`count(*)::int`,
+    failures: sql<number>`(count(*) filter (where ${auditEvents.severity} in ('error', 'critical')))::int`,
+    last24h: sql<number>`(count(*) filter (where ${auditEvents.occurredAt} >= now() - interval '24 hours'))::int`,
+  }).from(auditEvents).where(eq(auditEvents.tenantId, tenantId))));
+  const r = rows[0] ?? { total: 0, failures: 0, last24h: 0 };
+  const total = Number(r.total), failures = Number(r.failures);
+  return { total, failures, success: total - failures, last24h: Number(r.last24h), asOf: new Date().toISOString() };
+}
+
 /** Return audit trail for a specific entity (identified by resourceType + resourceId). */
 export async function listEventsByEntity(
   tenantId: string,
