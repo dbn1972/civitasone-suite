@@ -23,7 +23,8 @@ export default async function LeadsInsightsPage() {
       // so lead predictions drill through to the contact record (route exists).
       // crm-service enforces its own role on GET /crm/contacts/:id — the real
       // control. GAP-ANALYTICS-ML-INSIGHTS-LEADS-05 (HUMAN REVIEW: DPDP).
-      rowLinkPrefix={canOpenContact ? "/crm/contacts/" : undefined}
+      rowLinkPrefix="/crm/contacts/"
+      canLinkRows={canOpenContact}
       canExport={canExport}
       statLabels={{
         predictions: "Leads Scored",

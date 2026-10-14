@@ -16,6 +16,8 @@ interface DomainInsightPageProps {
   source: "api" | "error";
   /** URL prefix for drill-through links from the predictions table */
   rowLinkPrefix?: string;
+  /** When false, rowLinkPrefix is ignored and rows render as plain text (viewer lacks the target record role). Defaults to true. */
+  canLinkRows?: boolean;
   /** Parent drill-through path template with `{parentId}` (see RecentPredictionsTable). */
   parentLinkTemplate?: string;
   /** Custom labels for the 4 stat cards */
@@ -56,6 +58,7 @@ export function DomainInsightPage({
   evaluation,
   source,
   rowLinkPrefix,
+  canLinkRows = true,
   parentLinkTemplate,
   statLabels,
   metric,
@@ -156,7 +159,7 @@ export function DomainInsightPage({
         <RecentPredictionsTable
           predictions={evaluation.recentPredictions}
           source={source}
-          rowLinkPrefix={rowLinkPrefix}
+          rowLinkPrefix={canLinkRows ? rowLinkPrefix : undefined}
           parentLinkTemplate={parentLinkTemplate}
           domain={domain}
           predictionKind={resolvedKind}
