@@ -3,11 +3,27 @@ import { getEmployeeDisplayMap } from "../../shared/hrms-client.js";
 import * as repo from "./repo.js";
 import type { VehicleRow } from "./schema.js";
 
-function mapFuelType(fuelType: string): "petrol" | "diesel" | "cng" | "electric" {
+/**
+ * The stored fuel type is the create-body value ("ev" for electric); the summary reports "electric".
+ * "ev" used to fall through to "petrol", so every electric vehicle was listed as a petrol one.
+ */
+export function mapFuelType(fuelType: string): "petrol" | "diesel" | "cng" | "electric" {
   if (fuelType === "diesel") return "diesel";
   if (fuelType === "cng") return "cng";
-  if (fuelType === "electric") return "electric";
+  if (fuelType === "ev" || fuelType === "electric") return "electric";
   return "petrol";
+}
+
+/**
+ * "Toyota Innova Crysta" -> make "Toyota", model "Innova Crysta". The model is everything after the
+ * first word (it used to be only the second word, dropping the rest), and is empty for a one-word
+ * entry rather than repeating the make.
+ */
+export function splitMakeModel(makeModel: string): { make: string; model: string } {
+  const trimmed = makeModel.trim();
+  const space = trimmed.indexOf(" ");
+  if (space === -1) return { make: trimmed, model: "" };
+  return { make: trimmed.slice(0, space), model: trimmed.slice(space + 1).trim() };
 }
 
 function mapVehicleStatus(status: string): "available" | "in_use" | "maintenance" | "reserved" | "disposed" {
@@ -38,14 +54,14 @@ export function toVehicleSummary(
   row: Pick<VehicleRow, "id" | "regNo" | "makeModel" | "allocatedTo" | "fuelType" | "status" | "odometerKm">,
   displayMap: Map<string, { fullName: string }>,
 ) {
-  const [make = row.makeModel, model = ""] = row.makeModel.split(" ");
+  const { make, model } = splitMakeModel(row.makeModel);
   const assignedTo = row.allocatedTo ?? undefined;
   const assignedToName = assignedTo ? displayMap.get(assignedTo)?.fullName : undefined;
   return {
     id: row.id,
     vehicleNo: row.regNo,
     make,
-    model: model || row.makeModel,
+    model,
     type: "other" as const,
     assignedTo,
     ...(assignedToName ? { assignedToName } : {}),

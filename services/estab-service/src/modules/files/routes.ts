@@ -7,7 +7,7 @@ import {
   idParam, createFileBody, addNotingBody, moveFileBody, closeFileBody,
   createDispatchBody, registerInwardBody, submitNotingBody, openFileFromInwardBody,
   addAttachmentBody, recallFileBody, reopenFileBody, attachInwardBody, detachInwardBody,
-  deliveryUpdateBody, fileSearchQuery, duplicateCheckQuery,
+  deliveryUpdateBody, fileSearchQuery, duplicateCheckQuery, registerListQuery,
   openVolumeBody, openPartFileBody, linkFileBody, setFileTypeBody,
 } from "./validators.js";
 import * as commands from "./commands.js";
@@ -22,6 +22,13 @@ import {
 } from "../operators/eligibility.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+
+/** 404 when the DAK entry does not exist, 409 when it is already linked to a file. */
+async function assertInwardAvailable(tenantId: string, inwardId: string): Promise<void> {
+  const state = await queries.inwardLinkState(tenantId, inwardId);
+  if (state === "missing") throw new HttpError(404, "INWARD_NOT_FOUND", "the DAK entry does not exist");
+  if (state === "linked") throw new HttpError(409, "DAK_ALREADY_LINKED", "this DAK is already linked to a file");
+}
 
 async function publishFileAccessAudit(
   ctx: { tenantId: string; actorId: string; correlationId: string },
@@ -60,6 +67,12 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
         classification: body.classification,
       });
       throw new HttpError(403, "FORBIDDEN", "insufficient security clearance to open a file at this classification");
+    }
+    // GAP-ESTAB-FILES-NEW-02: a file may only be based on a real, still-unlinked DAK and hang off a
+    // real parent file; a second file for an already-linked DAK is a records-integrity error (409).
+    if (body.inwardId) await assertInwardAvailable(ctx.tenantId, body.inwardId);
+    if (body.parentFileId && !(await queries.fileExists(ctx.tenantId, body.parentFileId))) {
+      throw new HttpError(404, "PARENT_FILE_NOT_FOUND", "the parent file does not exist");
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createFile(ctx, body));
   });
@@ -232,6 +245,8 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
       });
       throw new HttpError(403, "FORBIDDEN", "insufficient security clearance to open a file at this classification");
     }
+    // GAP-ESTAB-FILES-NEW-02: one DAK, one file.
+    await assertInwardAvailable(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.openFileFromInward(ctx, id, body));
   });
 
@@ -315,9 +330,12 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/estab/inward", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const q = listQuerySchema.parse(req.query);
-    const rows = await queries.listInward(ctx.tenantId, q.limit);
-    return reply.send({ data: rows, pagination: { hasMore: rows.length === q.limit, pageSize: q.limit } });
+    const q = registerListQuery.parse(req.query);
+    const { rows, total } = await queries.listInwardPage(ctx.tenantId, q.limit, { q: q.q, offset: q.offset });
+    return reply.send({
+      data: rows,
+      pagination: { hasMore: q.offset + rows.length < total, pageSize: q.limit, offset: q.offset, total },
+    });
   });
 
   app.get("/v1/estab/dak", async (req, reply) => {
@@ -339,9 +357,12 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/estab/dispatch", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const q = listQuerySchema.parse(req.query);
-    const rows = await queries.listDispatch(ctx.tenantId, q.limit);
-    return reply.send({ data: rows, pagination: { hasMore: rows.length === q.limit, pageSize: q.limit } });
+    const q = registerListQuery.parse(req.query);
+    const { rows, total } = await queries.listDispatchPage(ctx.tenantId, q.limit, { q: q.q, offset: q.offset });
+    return reply.send({
+      data: rows,
+      pagination: { hasMore: q.offset + rows.length < total, pageSize: q.limit, offset: q.offset, total },
+    });
   });
 
   app.get("/v1/estab/files/:id/movements", async (req, reply) => {

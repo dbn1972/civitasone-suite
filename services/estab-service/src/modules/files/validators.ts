@@ -1,6 +1,17 @@
 import { z } from "zod";
+import { listQuerySchema } from "@civitasone/schemas/common";
 
 export const idParam = z.object({ id: z.string().uuid() });
+
+/**
+ * Inward (DAK) and dispatch registers: the shared limit/offset plus an optional
+ * server-side search term, so an old entry is reachable past the first page
+ * (GAP-ESTAB-DAK-04 / GAP-ESTAB-DISPATCH-04).
+ */
+export const registerListQuery = listQuerySchema.extend({
+  q: z.string().trim().min(1).max(100).optional(),
+});
+export type RegisterListQuery = z.infer<typeof registerListQuery>;
 
 export const fileSearchQuery = z.object({
   q:     z.string().min(2).max(200),

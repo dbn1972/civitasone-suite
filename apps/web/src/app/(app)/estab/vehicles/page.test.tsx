@@ -91,4 +91,43 @@ describe("VehiclesPage", () => {
     render(await VehiclesPage());
     expect(screen.getAllByText("—").length).toBe(4);
   });
+
+  it("GAP-ESTAB-VEHICLES-NEW-01: an electric vehicle lists as Electric, a diesel one as Diesel, and the Fuel column is present", async () => {
+    getVehiclesMock.mockResolvedValue({ data: [vehicle({ fuelType: "electric", id: "e1", vehicleNo: "DL 02 EV 1" }), vehicle()], source: "api" });
+    render(await VehiclesPage());
+    expect(screen.getByRole("columnheader", { name: /Fuel/ })).toBeInTheDocument();
+    expect(screen.getByText("Electric (EV)")).toBeInTheDocument();
+    expect(screen.getByText("Diesel")).toBeInTheDocument();
+  });
+
+  it("GAP-ESTAB-VEHICLES-NEW-01: a missing odometer renders — instead of throwing, and a full model is shown once", async () => {
+    getVehiclesMock.mockResolvedValue({ data: [vehicle({ odometerKm: undefined, make: "Toyota", model: "Innova Crysta" })], source: "api" });
+    render(await VehiclesPage());
+    expect(screen.getByText("Toyota Innova Crysta")).toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  it("GAP-ESTAB-VEHICLES-NEW-01: a one-word make with no model is not repeated", async () => {
+    getVehiclesMock.mockResolvedValue({ data: [vehicle({ make: "Innova", model: "" })], source: "api" });
+    render(await VehiclesPage());
+    expect(screen.getByText("Innova")).toBeInTheDocument();
+    expect(screen.queryByText("Innova Innova")).not.toBeInTheDocument();
+  });
+
+  it("GAP-ESTAB-VEHICLES-03: exactly one 'Vehicle fleet' heading in the empty and error states too", async () => {
+    getVehiclesMock.mockResolvedValue({ data: [], source: "api" });
+    const { unmount } = render(await VehiclesPage());
+    expect(screen.getAllByRole("heading", { name: "Vehicle fleet" }).length).toBe(1);
+    unmount();
+    getVehiclesMock.mockResolvedValue({ data: [], source: "error" });
+    render(await VehiclesPage());
+    expect(screen.getAllByRole("heading", { name: "Vehicle fleet" }).length).toBe(1);
+  });
+
+  it("GAP-ESTAB-VEHICLES-05: the banner uses design tokens, not the old hard-coded teal hex", async () => {
+    getVehiclesMock.mockResolvedValue({ data: [vehicle()], source: "api" });
+    const { container } = render(await VehiclesPage());
+    expect(container.innerHTML).not.toMatch(/#e6f7f5|#99e6da|#0f766e/i);
+    expect(container.querySelector(".alert")?.getAttribute("style")).toContain("var(--infobg)");
+  });
 });

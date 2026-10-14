@@ -103,4 +103,32 @@ describe("MeetingDetailPage", () => {
     expect(absentPill).not.toBeNull();
     expect(absentPill?.textContent).toBe("Absent");
   });
+
+  it("GAP-ESTAB-MEETINGS-DETAIL-02: the timeline has no empty date slot, and a cancelled meeting does not show the agenda as circulated", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: makeMeeting({ status: "cancelled" }), source: "api" });
+    const { container } = render(await MeetingDetailPage({ params: { id: "m1" }, searchParams: {} }));
+    const slots = Array.from(container.querySelectorAll(".tl .d"));
+    expect(slots.map((d) => d.textContent)).toEqual(["01 Oct 2026"]);
+    const agenda = Array.from(container.querySelectorAll("li")).find((li) => li.textContent?.includes("Agenda circulated"));
+    expect(agenda?.className).toBe("todo");
+    expect(screen.getByText(/Stages are inferred from the meeting's status/)).toBeInTheDocument();
+  });
+
+  it("GAP-ESTAB-MEETINGS-DETAIL-04: a completed meeting with minutes shows them", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: makeMeeting({ status: "completed", minutes: "Budget approved." }), source: "api" });
+    render(await MeetingDetailPage({ params: { id: "m1" }, searchParams: {} }));
+    expect(screen.getByText("Captured")).toBeInTheDocument();
+    expect(screen.getByText("Budget approved.")).toBeInTheDocument();
+  });
+
+  it("GAP-ESTAB-MEETINGS-DETAIL-05: the header is the shared PageHeader (back link, h1 with the title and status) and the only Agenda route is the tab", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: makeMeeting(), source: "api" });
+    render(await MeetingDetailPage({ params: { id: "m1" }, searchParams: {} }));
+    const h1 = screen.getByRole("heading", { level: 1 });
+    expect(h1.id).toBe("page-heading");
+    expect(h1.textContent).toContain("Budget Review");
+    expect(screen.getByRole("link", { name: "Back" })).toHaveAttribute("href", "/estab/meetings");
+    expect(screen.getAllByRole("tab", { name: /^Agenda/ })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Generate MOM" })).toBeDisabled();
+  });
 });
