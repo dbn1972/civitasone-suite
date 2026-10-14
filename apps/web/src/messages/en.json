@@ -9655,6 +9655,7 @@
     "initiator": "Initiating officer",
     "officersLoadFailed": "Couldn't load officers.",
     "loadingOfficers": "Loading officers…",
+    "errInitiatorEqualsApprover": "The initiating officer and the approving officer must be different people.",
     "selectInitiator": "Select initiating officer…",
     "approver": "Forward to (approving officer)",
     "selectApprover": "Select approving officer…",

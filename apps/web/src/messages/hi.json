@@ -9149,6 +9149,7 @@
     "initiator": "आरंभकर्ता अधिकारी",
     "officersLoadFailed": "अधिकारी लोड नहीं हो सके।",
     "loadingOfficers": "अधिकारी लोड हो रहे हैं…",
+    "errInitiatorEqualsApprover": "प्रारंभकर्ता और स्वीकृतिकर्ता अधिकारी अलग-अलग होने चाहिए।",
     "selectInitiator": "आरंभकर्ता अधिकारी चुनें…",
     "approver": "अग्रेषित करें (अनुमोदन अधिकारी)",
     "selectApprover": "अनुमोदन अधिकारी चुनें…",

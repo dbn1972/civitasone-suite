@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as rtlRender, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
@@ -17,11 +17,16 @@ import { TransferWithApproval } from "./TransferWithApproval";
 
 const EMPLOYEES = [
   { id: "emp-1", name: "Asha Verma", designation: "Clerk", departmentId: "dept-1", department: "Finance" },
-  { id: "off-2", employeeNo: "E-002", name: "P. Iyer", designation: "Under Secretary", departmentId: "dept-1", department: "Finance" },
 ];
 const DEPARTMENTS = [
   { id: "dept-1", name: "Finance" },
   { id: "dept-2", name: "Works" },
+];
+// The forward-to officer is an HRMS employee (estab verifies currentWith as an employee id); these ids
+// are deliberately NOT identity-user ids.
+const OFFICERS = [
+  { id: "emp-off-1", employeeNo: "E-010", name: "S. Rao", department: "Finance" },
+  { id: "emp-off-2", employeeNo: "E-020", name: "P. Iyer", department: "Works" },
 ];
 const ME = { id: "me-1", fullName: "Meera Self", employeeNo: "E-009" };
 const PAY_STRUCTURES = [
@@ -34,7 +39,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 /**
- * Routes the four lookup GETs (employees/departments/identity users/payroll
+ * Routes the lookup GETs (employees, the HRMS-employee officer search, departments, payroll
  * structures) to fixed fixtures, and lets the test control what the two
  * mutating calls (submit-approval, from-module) return — while recording
  * both the URL and body of every call, which is the thing the fixes under
@@ -46,6 +51,7 @@ function mockFetchRouting(opts: { submitApproval: () => Response; fromModule: ()
   vi.spyOn(globalThis, "fetch").mockImplementation(((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.includes("/hrms/me/profile")) return Promise.resolve(jsonResponse(ME));
+    if (url.includes("/hrms/employees?q=") || url.includes("/hrms/employees?ids=")) return Promise.resolve(jsonResponse({ data: OFFICERS }));
     if (url.includes("/hrms/employees?")) return Promise.resolve(jsonResponse({ data: EMPLOYEES }));
     if (url.includes("/hrms/departments?")) return Promise.resolve(jsonResponse({ data: DEPARTMENTS }));
     if (url.includes("/payroll/structures?")) return Promise.resolve(jsonResponse({ data: PAY_STRUCTURES }));
@@ -73,11 +79,8 @@ async function openAndFillWizard() {
 
   // The initiator is the signed-in employee, shown read-only (the estab route rejects any other initiator).
   await waitFor(() => expect(screen.getByLabelText("Initiating officer")).toHaveValue("Meera Self (E-009)"));
-  await waitFor(() =>
-    expect(screen.getByLabelText(/^Forward to \(approving officer\)/)).toBeInTheDocument(),
-  );
-  fireEvent.change(screen.getByLabelText(/^Forward to \(approving officer\)/), { target: { value: "Iyer" } });
-  fireEvent.mouseDown(await screen.findByText("P. Iyer (E-002)"));
+  fireEvent.change(screen.getByLabelText("Forward to (approving officer)"), { target: { value: "Iyer" } });
+  fireEvent.mouseDown(await screen.findByText("P. Iyer (E-020)"));
   fireEvent.change(screen.getByPlaceholderText(/Why is this transfer being initiated/), {
     target: { value: "Administrative requirement" },
   });
@@ -133,7 +136,7 @@ describe("TransferWithApproval", () => {
     expect(screen.getByLabelText("Initiating officer")).toHaveAttribute("readonly");
     fireEvent.click(screen.getByRole("button", { name: "Submit transfer to eOffice" }));
     await waitFor(() => expect(fromModuleCalls).toHaveLength(1));
-    expect(fromModuleCalls[0]!.body).toMatchObject({ initiatedBy: ME.id, currentWith: "off-2" });
+    expect(fromModuleCalls[0]!.body).toMatchObject({ initiatedBy: ME.id, currentWith: "emp-off-2" });
   });
 
   it("raises the eFile and shows a success toast on the happy path", async () => {
