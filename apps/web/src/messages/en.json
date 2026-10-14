@@ -15059,6 +15059,9 @@
     "encashmentNegative": "Encashment days cannot be negative.",
     "remarksMax1000": "Remarks must be 1000 characters or fewer."
   },
+  "estabMigrationPanel": {
+    "openEfile": "Open eFile"
+  },
   "employeeFallback": {
     "unknownEmployee": "Unknown employee"
   }

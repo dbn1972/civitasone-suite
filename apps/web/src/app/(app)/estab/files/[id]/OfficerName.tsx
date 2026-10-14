@@ -126,3 +126,13 @@ export function OfficerName({ id, prefix }: { id: string; prefix?: string }) {
   const label = resolveLabel(id, maps, tFallback("unknownEmployee"));
   return <>{prefix ?? ""}{label}</>;
 }
+
+/**
+ * Renders an officer name the service has ALREADY resolved (note author, current
+ * holder). An empty/absent name is "unresolved" and shows the localised fallback;
+ * never looked up by id.
+ */
+export function ResolvedOfficerName({ name }: { name?: string | null }) {
+  const tFallback = useTranslations("employeeFallback");
+  return <>{name ? name : tFallback("unknownEmployee")}</>;
+}

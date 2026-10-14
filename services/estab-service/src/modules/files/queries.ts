@@ -63,11 +63,11 @@ export type FileDetailDto = {
 // dispatches author themselves). getEmployeeDisplayMap resolves both through
 // hrms-service (employee id, or hrms_employees.user_ref for a linked login),
 // batched and tenant-scoped. An actor with no linked employee record cannot be
-// named; that is shown as "Unknown employee", never as an id fragment.
-// SF-17b: an unresolvable officer is "Unknown employee", never an id fragment.
-export const UNKNOWN_OFFICER_LABEL = "Unknown employee";
-function officerLabel(id: string, employees: Map<string, EmployeeDisplay>): string {
-  return employees.get(id)?.fullName ?? UNKNOWN_OFFICER_LABEL;
+// named; that is returned as null (web shows the localised "Unknown employee"), never as an id fragment.
+// SF-17b: an unresolvable officer is null, never an id fragment or an English
+// literal; the web renders the localised employeeFallback.unknownEmployee.
+function officerLabel(id: string, employees: Map<string, EmployeeDisplay>): string | null {
+  return employees.get(id)?.fullName ?? null;
 }
 
 function mapNoting(n: NotingRow, employees: Map<string, EmployeeDisplay>) {
