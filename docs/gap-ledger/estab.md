@@ -110,7 +110,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-APPROVAL-MATRIX-04  ·  MEDIUM  ·  confirmed  ·  theme COPY (was I18N)
 
-- [x] **Status** (W2 estab: closed by #PRN)
+- [x] **Status** (W2 estab: closed by #2042)
 - **W2 estab note:** Source-type labels, group headings and the Module action select were already human-labelled (ApprovalMatrixPanel.test.tsx asserts option text 'Finance: Sanction' with value finance_sanction, and no snake_case heading). This PR heads the Workflow column 'Workflow code' (t(), en+hi) and keeps the code as mono secondary text; the code input itself is an admin-entered identifier.
 - **W0 note:** partly fixed by #1916 — Source-type labels humanised; Workflow column and code input still raw
 - **First-pass claim:** Group headings and the Module action select show raw codes (finance_sanction, hr_leave_special …) and the Workflow column shows the raw definition code (panel:24-40,176,221-235).
@@ -143,7 +143,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-APPROVAL-MATRIX-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: bounded poll + optimistic Pending row + timers cleared on unmount; ApprovalMatrixPanel.test.tsx 'shows a Pending row immediately and replaces it once the rule appears')
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: bounded poll + optimistic Pending row + timers cleared on unmount; ApprovalMatrixPanel.test.tsx 'shows a Pending row immediately and replaces it once the rule appears')
 - **First-pass claim:** Create and toggle are asynchronous ("queued") with a fixed 800 ms reload (panel:134-136,157): the new rule frequently will not be visible yet, with no pending row.
 - **Verified evidence:** apps/web/src/app/(app)/estab/approval-matrix/ApprovalMatrixPanel.tsx:134-136 (submit) sets message 'queued. It will appear once processed.' then setTimeout(load, 800); toggleActive :157 does the same. If the write is asynchronous the row can be absent (or stale active flag) after the fixed delay; there is no pending row/optimistic entry, and the timeout is never cleared on unmount. Whether backend is actually async cannot be verified (service absent); the 'queued' wording implies it.
 - **Files to change:** `apps/web/src/app/(app)/estab/approval-matrix/ApprovalMatrixPanel.tsx`
@@ -261,7 +261,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-COMPLIANCE-01  ·  MEDIUM  ·  confirmed  ·  theme LOGIC (was VALIDATION)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: complianceStats.ts (IST day, >7d overdue) with complianceStats.test.ts and page.test.tsx (1-day vs 10-day overdue))
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: complianceStats.ts (IST day, >7d overdue) with complianceStats.test.ts and page.test.tsx (1-day vs 10-day overdue))
 - **First-pass claim:** "Escalated" is overdue items whose dueDate < today (page.tsx:16); since "overdue" already implies a passed due date, Escalated ≈ Overdue and duplicates it — no escalation level, target or timestamp exists in the code.
 - **Verified evidence:** apps/web/src/app/(app)/estab/compliance/page.tsx:15-16: overdue = status==='overdue'; escalated = status==='overdue' && dueDate<today, a subset of overdue that only differs when an item is flagged overdue with a future due date. No escalation level/target/time is used (ComplianceSummary type is in @civitasone/types, absent from snapshot, so an escalation field cannot be ruled out). Also today is computed by toISOString() (UTC), off by up to a day in IST.
 - **Files to change:** `apps/web/src/app/(app)/estab/compliance/page.tsx`
@@ -276,7 +276,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-COMPLIANCE-02  ·  MEDIUM  ·  confirmed  ·  theme EMPTYSTATE (was WIRING)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: complianceRate() returns null on an empty register; compliance/page.test.tsx shows an em dash for [] and 50% for 1 of 2)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: complianceRate() returns null on an empty register; compliance/page.test.tsx shows an em dash for [] and 50% for 1 of 2)
 - **First-pass claim:** Zero items shows "0%" compliance rate (page.tsx:11-13) instead of "—", unlike the error branch.
 - **Verified evidence:** apps/web/src/app/(app)/estab/compliance/page.tsx:11-13 complianceRate is 0 when items.length===0 and :37 renders `${complianceRate}%` (only errored gives '—'). On empty data the page shows 0% Compliance Rate above the 'No compliance items' EmptyState (:53).
 - **Files to change:** `apps/web/src/app/(app)/estab/compliance/page.tsx`
@@ -289,7 +289,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-COMPLIANCE-03  ·  MEDIUM  ·  confirmed  ·  theme ACTION (was OTHER)
 
-- [x] **Status** (W2 estab: closed by #PRN)
+- [x] **Status** (W2 estab: closed by #2042)
 - **W2 estab note:** 'Mark complied' (requireReason, POST /v1/estab/compliance/:id/comply) already existed; this PR hides the action column from viewers the service refuses (audit_officer reads only), via getSessionRoles + ESTAB_COMMITTEE_WRITE_ROLES (compliance/page.tsx, ComplianceTable.tsx). The 'link the title to the meeting' step does not apply: ComplianceSummary is a statutory register item (complianceCode, frequency, dueDate) with no meeting or action-item id.
 - **W0 note:** partly fixed by #1916 — Mark complied ActionButton w/ reason added; title not linked to meeting.
 - **First-pass claim:** Rows do not link to the originating meeting or action item and there is no way to mark an item complied from this page (ComplianceTable.tsx:34-40) — a tracker with no next action.
@@ -343,7 +343,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DAK-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM (was PII)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: dak/page.test.tsx: open-file dialog forces a classification choice and posts it; no hard-coded 'public')
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: dak/page.test.tsx: open-file dialog forces a classification choice and posts it; no hard-coded 'public')
 - **First-pass claim:** Open file creates a file with hard-coded dept "ADMIN" and classification "public" and no confirmation (dak/page.tsx:77-90); a confidential or secret letter is silently turned into a public-classified file, and the action cannot be undone from this page.
 - **Verified evidence:** apps/web/src/app/(app)/estab/dak/page.tsx:87-90 openFile POSTs {dept:'ADMIN', classification:'public'} for every letter with no confirmation dialog; the register form (:27,133-152) captures no classification/department and the InwardRow type has no classification, so the file classification is never derived from the dak. The action is one click (:189). Undo is not offered here. Whether the server allows reclassification later cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/estab/dak/page.tsx`, `apps/web/src/app/(app)/estab/dak (new OpenFileDialog.tsx)`
@@ -359,7 +359,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DAK-02  ·  MEDIUM  ·  confirmed  ·  theme COPY (was I18N)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: dak/page.test.tsx: a 400 JSON body shows friendly text, not braces)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: dak/page.test.tsx: a 400 JSON body shows friendly text, not braces)
 - **First-pass claim:** Failed register/open shows the raw response body ("throw new Error(await res.text())") in the banner (page.tsx:68-73,94-103), which can be JSON or an internal message rather than clerk-safe copy.
 - **Verified evidence:** apps/web/src/app/(app)/estab/dak/page.tsx:68 throws new Error(await res.text()) and :73 sets actionError to e.message, rendered raw in the banner (:126-128); openFile does the same (:94-95,103). A JSON or stack-like body is shown to the clerk. Other panels use useFormError (ApprovalMatrixPanel).
 - **Files to change:** `apps/web/src/app/(app)/estab/dak/page.tsx`
@@ -372,7 +372,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DAK-03  ·  MEDIUM  ·  partly  ·  theme FORM (was DATEFMT)
 
-- [x] **Status** (W2 estab: closed by #PRN)
+- [x] **Status** (W2 estab: closed by #2042)
 - **W2 estab note:** Form now carries Mode, Received date, Urgency, Addressee officer (EntityPicker -> assignedTo) and Source section, validated with zod (lib/estab/dakForm.ts) before POST, keys identical to registerInwardBody. Not applicable: the barcode is allocated by the async consumer so it cannot be in the 202 (the message says it appears in the register once processed), and registerInwardBody has no classification field.
 - **W0 note:** partly fixed by #1916 — Mode/received date/urgency added; no addressee, no zod, barcode not in success msg.
 - **First-pass claim:** Register captures only number, sender and subject; there is no received date, mode, addressee section or classification, although the table later shows Barcode and Source columns that this form cannot populate (page.tsx:133-152,166-168).
@@ -389,7 +389,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DAK-04  ·  MEDIUM  ·  confirmed  ·  theme PAGINATION (was FAILMASK)
 
-- [x] **Status** (W2 estab: closed by #PRN)
+- [x] **Status** (W2 estab: closed by #2042)
 - **W2 estab note:** Server-side search and paging: GET /v1/estab/inward takes q (DAK no, barcode, sender, subject; LIKE metacharacters escaped) and offset, and returns pagination.total. Web shows 'Showing X of N', a Load more button and a server search box. Real-DB test: tests/register-search-paging-real-db.test.ts (250 rows, old barcode found, tenant isolation).
 - **W0 note:** partly fixed by #1916 — Only Showing latest 100 notice; search still client-side.
 - **First-pass claim:** Register is limit=100 then paged client-side at 15 (page.tsx:36,201); older dak beyond 100 is unreachable except via barcode search that also only searches the loaded 100.
@@ -421,7 +421,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DAK-06  ·  LOW  ·  confirmed  ·  theme TOKENS (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: dak/page.tsx has no hex literal (grep clean); alerts use the alert good/bad classes)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: dak/page.tsx has no hex literal (grep clean); alerts use the alert good/bad classes)
 - **First-pass claim:** Two hard-coded banner palettes (#ecfdf3 / #fef2f2) bypass the DS alert component (page.tsx:118-130).
 - **Verified evidence:** apps/web/src/app/(app)/estab/dak/page.tsx:119 uses inline #ecfdf3/#6ee7b7 and :126 #fef2f2/#fecaca/#b91c1c instead of tokens. civitas-ds.css defines .alert with .bad and .warn (:147-153) but no React Alert component and no .alert.good, so no DS component to reuse yet. Theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/(app)/estab/dak/page.tsx`, `apps/web/src/app/civitas-ds.css`
@@ -442,7 +442,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DASHBOARD-01  ·  HIGH  ·  partly  ·  theme OTHER (was CAP)
 
-- [x] **Status** (W2 estab: closed by #PRN)
+- [x] **Status** (W2 estab: closed by #2042)
 - **W2 estab note:** One definition: open = not closed/archived/disposed, overdue = open and due IST day before today IST, pendency = IST days since creation over open files. estab-service dashboard/queries.ts now uses it (it counted only status='active' and compared the raw timestamp to the server clock), lib/estab/sla.ts treats 'closed' the same, My Desk tile is 'Overdue on my desk' with a hint saying the dashboard counts the whole office. Real-DB test: tests/dashboard-sla-pendency-real-db.test.ts. NOTE: this changes reported numbers (draft/pending open files past due now count; closed files no longer do).
 - **W0 note:** partly fixed by #1916 — Shared lib/estab/sla.ts (isOverdue/pendencyDays) used; no On my desk relabel/estabSla.ts.
 - **First-pass claim:** Two SLA stories: dashboard shows an "SLA Breached" tile from the API (dashboard/page.tsx:49) while File Register removed its SLA tile because "there is no due-date/SLA field here" (list/page.tsx:89-93) and My Desk computes SLA from dueDate client-side (inbox/page.tsx:8-15). Officers get three different overdue numbers.
@@ -462,7 +462,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DASHBOARD-02  ·  MEDIUM  ·  confirmed  ·  theme COPY (was I18N)
 
-- [x] **Status** (W2 estab: closed by #PRN)
+- [x] **Status** (W2 estab: closed by #2042)
 - **W2 estab note:** The service's filesPending counts status='active' (dashboard/queries.ts), exactly the File Register's 'Active Files' tile, so the tile is now 'Active Files' on both. The W0 test that asserted 'Files Pending' encoded the wrong label and was replaced.
 - **W0-10 note:** review found the W0 tick wrong — Dashboard label renamed to "Files Pending" (estab/dashboard/page.tsx:61,112) but backend filesPending counts status='active' (estab-service dashboard/queries.ts:19); register list/page.tsx:29,105,107 shows Active Files=active and Pending=status pending, so same-named tiles still disagree and the label is now wrong; step 3 (rename to filesOpen / keep Active Files) not done
 - **First-pass claim:** "Active Files" tile is data.filesPending (page.tsx:48) but File Register counts status "active" and "pending" separately (list/page.tsx:9-10) — label and field disagree.
@@ -494,7 +494,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DASHBOARD-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was UUID)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: dashboard/page.test.tsx 'lists recent files newest-first by createdDate regardless of API order')
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: dashboard/page.test.tsx 'lists recent files newest-first by createdDate regardless of API order')
 - **First-pass claim:** "Recent files" is the first 8 of the register response with no sort (page.tsx:24); it is only recent if the API happens to order by creation time.
 - **Verified evidence:** dashboard/page.tsx:24 takes files.slice(0,8) from getEstabFiles() (loaders.ts:3658, no sort/limit params, GET /api/v1/estab/files). No client sort by createdDate, and EstabFileSummary rows expose createdDate, so ordering is whatever the API returns. DataTable sortable only reorders after render.
 - **Files to change:** `apps/web/src/app/(app)/estab/dashboard/page.tsx`
@@ -509,7 +509,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DASHBOARD-06  ·  LOW  ·  confirmed  ·  theme TOKENS (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: dashboard/page.tsx has no hex literal; tiles are links (test asserts the Active Files tile href /estab/list))
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: dashboard/page.tsx has no hex literal; tiles are links (test asserts the Active Files tile href /estab/list))
 - **First-pass claim:** Tile icon backgrounds are hex literals (page.tsx:48-53) rather than tokens; no per-tile links to the underlying lists.
 - **Verified evidence:** dashboard/page.tsx:48-53 pass hex literals to StatCard iconBg (#e6f7f5 etc.); StatCard (_components/ds/StatCard.tsx) also defaults to '#eef2ff' and has no href prop, so tiles are not links. The 'FABRICATED' tag is wrong; nothing is sample data (errored shows '—').
 - **Files to change:** `apps/web/src/app/_components/ds/StatCard.tsx`, `apps/web/src/app/civitas-ds.css`, `apps/web/src/app/(app)/estab/dashboard/page.tsx`
@@ -637,7 +637,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DISPATCH-01  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: dispatch/page.test.tsx: File link to /estab/files/<id> when fileId set, none otherwise)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: dispatch/page.test.tsx: File link to /estab/files/<id> when fileId set, none otherwise)
 - **First-pass claim:** fileId is in the row type but not rendered (dispatch/page.tsx:9-18,66-72): the register cannot be traced back to the file it belongs to, contrary to its own subtitle.
 - **Verified evidence:** dispatch/page.tsx:15 has fileId in DispatchRow but the columns (:66-73) omit it; subtitle (:53) says 'linked to eOffice files'. The row has no file number, only fileId.
 - **Files to change:** `apps/web/src/app/(app)/estab/dispatch/page.tsx`
@@ -650,7 +650,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DISPATCH-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W2 estab: closed by #PRN)
+- [x] **Status** (W2 estab: closed by #2042)
 - **W2 estab note:** Acknowledge (delivery proof / POD in deliveryProof, deliveredAt stamped and audited by the consumer) already existed; this PR adds a 'Log a dispatch' form (POST /v1/estab/dispatch: addressee, subject, mode), shows the delivery date and POD on delivered rows, and hides both write controls from read-only viewers. No separate podNo/PATCH endpoint is needed: deliveryProof + POST /dispatch/delivery cover it.
 - **W0 note:** partly fixed by #1916 — Acknowledge action via delivery endpoint added; no manual dispatch entry or podNo field.
 - **First-pass claim:** A register with no way to record acknowledgement, POD/speed-post number or a manual dispatch entry; it depends entirely on other screens to create rows (whole file has no mutation).
@@ -666,7 +666,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DISPATCH-03  ·  LOW  ·  confirmed  ·  theme COPY (was DATEFMT)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: dispatch/page.test.tsx: speed_post -> 'Speed Post', pending row -> 'Not yet dispatched')
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: dispatch/page.test.tsx: speed_post -> 'Speed Post', pending row -> 'Not yet dispatched')
 - **First-pass claim:** Mode is printed raw while Status has underscores replaced (page.tsx:69,72); Date is "—" for undispatched rows with no explanation.
 - **Verified evidence:** dispatch/page.tsx:70 prints mode raw (e.g. speed_post) while status is humanized (:72); :71 formatIndianDate(null) returns '—' (lib/formatters.ts:3) for undispatched rows with no explanation. Theme tag DATEFMT is loosely right only for the date part.
 - **Files to change:** `apps/web/src/app/(app)/estab/dispatch/page.tsx`
@@ -680,7 +680,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DISPATCH-04  ·  LOW  ·  confirmed  ·  theme OTHER (was CAP)
 
-- [x] **Status** (W2 estab: closed by #PRN)
+- [x] **Status** (W2 estab: closed by #2042)
 - **W2 estab note:** Same server-side search and paging as DAK-04 on GET /v1/estab/dispatch (q, offset, pagination.total). Real-DB test in tests/register-search-paging-real-db.test.ts.
 - **W0 note:** partly fixed by #1916 — Only Showing latest 100 notice; no server paging.
 - **First-pass claim:** limit=100 with client paging at 15 (page.tsx:28,78); nothing indicates when the register is truncated at 100.
@@ -826,7 +826,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-NEW-01  ·  HIGH  ·  confirmed  ·  theme CLASSIFICATION (was CAP)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: files/new/page.test.tsx: only the four server tiers offered, selected value posted unchanged)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: files/new/page.test.tsx: only the four server tiers offered, selected value posted unchanged)
 - **First-pass claim:** Classification is remapped client-side: Unclassified→public, Restricted→confidential, Confidential→confidential (CLASS_MAP, files/new/page.tsx:8-14). Restricted and Confidential become indistinguishable in the stored file, and the label "public" for an internal government file is never shown to the officer.
 - **Verified evidence:** files/new/page.tsx:8-14 CLASS_MAP sends unclassified->public, restricted->confidential, confidential->confidential (used at :42), so Restricted is lost. On read, mapEstabFileSummaries (apiMappers.ts:719-725) maps public->unclassified and also accepts a stored 'restricted', which suggests the API vocabulary includes restricted; the accepted server enum is cannot-verify (estab-service absent). dak/page.tsx:89 also hard-codes classification 'public'.
 - **Files to change:** `apps/web/src/app/(app)/estab/files/new/page.tsx`, `apps/web/src/app/(app)/estab/dak/page.tsx`, `estab-service classification enum (not in snapshot)`
@@ -842,7 +842,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-NEW-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W2 estab: closed by #PRN; the W0 tick #1916 covered only the web pickers)
+- [x] **Status** (W2 estab: closed by #2042; the W0 tick #1916 covered only the web pickers)
 - **W2 estab note:** Re-check found the W0 tick incomplete: the form posted a typed dakNo (never the inwardId), so the DAK stayed unlinked, and the service accepted a second file for an already-linked DAK and any parent id. Now: the form offers only unlinked DAK entries and posts inwardId; POST /v1/estab/files and POST /inward/:id/open-file return 409 DAK_ALREADY_LINKED / 404 INWARD_NOT_FOUND, a nonexistent or foreign parent returns 404 PARENT_FILE_NOT_FOUND, and the consumers re-check under a row lock so two simultaneous openings of one DAK produce one file. Real-DB test: tests/dak-one-file-real-db.test.ts (includes the race).
 - **First-pass claim:** Parent file is entered as a raw UUID and DAK as a typed number (page.tsx:149-190); no lookup, no validation that they exist, and the DAK can also be linked by "Open file" on the DAK page, allowing two files for one DAK.
 - **Verified evidence:** files/new/page.tsx:149-192 are free text inputs: dakNo (placeholder DAK/2026/001) and parentFileId ('UUID of main file'); only trimming, no format check or lookup (:47-48). dak/page.tsx:81 can open a file from an inward DAK independently. Server-side duplicate-DAK-link enforcement is cannot-verify. No EntityPicker exists in _components/ds (grep), it must be created.
@@ -878,7 +878,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was OTHER)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: files/new/page.test.tsx: error banner role=alert, focused, not auto-dismissed)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: files/new/page.test.tsx: error banner role=alert, focused, not auto-dismissed)
 - **First-pass claim:** The error banner auto-clears after 5 s (page.tsx:74) and the form is not scrolled/focused to it; role="alert" is missing on the banner div (page.tsx:93-108), unlike the guest house form.
 - **Verified evidence:** files/new/page.tsx:74 setTimeout(() => setToast(null), 5000) in finally clears error and success toasts after 5 s (timer not cleared on unmount); the banner div (:93-108) has no role, no aria-live, no focus/scroll. guesthouse/new/page.tsx:262 uses role="alert".
 - **Files to change:** `apps/web/src/app/(app)/estab/files/new/page.tsx`
@@ -892,7 +892,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-NEW-05  ·  MEDIUM  ·  confirmed  ·  theme DOUBLESUBMIT (was OTHER)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: files/new/page.test.tsx: double click makes exactly one POST, button latched disabled)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: files/new/page.test.tsx: double click makes exactly one POST, button latched disabled)
 - **First-pass claim:** finally re-enables Create File immediately (page.tsx:72-75) while the redirect waits 800 ms (page.tsx:62); a second click in that window opens a second file (the server allocates a new gapless number each time).
 - **Verified evidence:** files/new/page.tsx:72-73 finally setSubmitting(false) runs right after the success branch, while router.push waits 800 ms (:62); the button (:285) is enabled again in that window and Enter/click posts again, creating another file (server allocates a new number per the comment at :36-37). Also if body.id is missing nothing navigates and the form stays filled.
 - **Files to change:** `apps/web/src/app/(app)/estab/files/new/page.tsx`
@@ -909,7 +909,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-NEW-06  ·  LOW  ·  confirmed  ·  theme COPY (was I18N)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: files/new/page.test.tsx: success banner shows the server-allocated file number)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: files/new/page.test.tsx: success banner shows the server-allocated file number)
 - **First-pass claim:** Success message omits the allocated file number and redirects after 800 ms (page.tsx:57-62); an officer who is redirected away cannot copy the number from the banner.
 - **Verified evidence:** files/new/page.tsx:56-62 reads only body.id and shows a fixed message without the file number, then redirects after 800 ms. The response may carry fileNo but that is cannot-verify. Theme I18N is wrong; it is copy.
 - **Files to change:** `apps/web/src/app/(app)/estab/files/new/page.tsx`
@@ -1187,7 +1187,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-INBOX-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: inbox/page.test.tsx sources rows from the My-Desk loader; GET /v1/estab/files/mine filters to the actor (files/routes.ts:263))
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: inbox/page.test.tsx sources rows from the My-Desk loader; GET /v1/estab/files/mine filters to the actor (files/routes.ts:263))
 - **First-pass claim:** "My Desk" is not filtered to the signed-in officer: it uses getEstabFiles() for every file and counts status "active" as "Active on desk" (inbox/page.tsx:9,30,51). The register page even says this page is "the real per-desk view" (list/FilesTable.tsx:19-21) — but nothing compares currentHolder to the user.
 - **Verified evidence:** inbox/page.tsx:18 calls getEstabFiles() (all files, /api/v1/estab/files, loaders.ts:3658); :30 'Active on desk' = every status 'active' file; InboxPanel.tsx:48-55 filters only by status. currentHolder is mapped (apiMappers.ts:740) and shown but never compared to the user. list/FilesTable.tsx:17-19 comment states inbox is the per-desk view. The signed-in identity is available only via /api/auth/session (userId); whether userId equals the operator employeeId is unverified.
 - **Files to change:** `apps/web/src/app/(app)/estab/inbox/page.tsx`, `apps/web/src/app/(app)/estab/inbox/InboxPanel.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -1204,7 +1204,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-INBOX-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: inbox/page.test.tsx: a failed load shows an error state and em-dash stats)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: inbox/page.test.tsx: a failed load shows an error state and em-dash stats)
 - **First-pass claim:** A failed fetch reads as good news: only DataSourceBadge is added (inbox/page.tsx:43) while stats are 0 and the table says "Nothing on your desk" (InboxPanel.tsx:89-91). An officer with files due would believe the desk is clear.
 - **Verified evidence:** page.tsx:43 only renders DataSourceBadge on error; rows are empty and stats render 0 via toLocaleString (:51-54); InboxPanel.tsx:89-91 emptyTitle 'Nothing on your desk'. guesthouse/page.tsx:38-51 already implements the correct pattern (errored ? '—' and RefreshErrorState).
 - **Files to change:** `apps/web/src/app/(app)/estab/inbox/page.tsx`, `apps/web/src/app/(app)/estab/inbox/InboxPanel.tsx`
@@ -1219,7 +1219,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-INBOX-03  ·  MEDIUM  ·  partly  ·  theme DATEFMT (was CAP)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: lib/estab/sla.test.ts: due today (IST) = 0 days, yesterday = overdue 1 day, via fake system time across the IST/UTC day boundary)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: lib/estab/sla.test.ts: due today (IST) = 0 days, yesterday = overdue 1 day, via fake system time across the IST/UTC day boundary)
 - **First-pass claim:** SLA and overdue are recomputed client-side from dueDate in the browser timezone (InboxPanel.tsx:23-40, page.tsx:9-16) while the dashboard shows an API "SLA Breached" count — the two can disagree; the same date maths is duplicated in two files.
 - **Verified evidence:** Date maths is duplicated: daysLeft in page.tsx:8-15 (runs on the server, server timezone) and computeSla in InboxPanel.tsx:23-34 (runs in the browser). Both use local setHours(0,0,0,0) and dueDate slice(0,10) from the mapper, so the same file can differ between server-rendered stats and client pill near midnight or across zones. The dashboard does show an API count (estab/dashboard/page.tsx:49 'SLA Breached' = data.slaBreached), so disagreement is possible. Claim of 'capped fetch' does not apply.
 - **Files to change:** `apps/web/src/app/(app)/estab/inbox/page.tsx`, `apps/web/src/app/(app)/estab/inbox/InboxPanel.tsx`, `apps/web/src/lib/estab/sla.ts (new)`
@@ -1245,7 +1245,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-INBOX-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: inbox/page.test.tsx: in-transit 'pending' files counted under Awaiting receipt)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: inbox/page.test.tsx: in-transit 'pending' files counted under Awaiting receipt)
 - **First-pass claim:** "Total files" stat counts all files including archived (page.tsx:54), which is not a desk concept; pending files (status "pending", e.g. in transit) are excluded from the default Active segment.
 - **Verified evidence:** page.tsx:54 'Total files' = files.length (all statuses incl. archived/disposed); the default 'Active' segment (InboxPanel.tsx:44,53) shows only statusRaw==='active', so 'pending' (mapped from in-transit, apiMappers.ts ~:730; FilesTable 'In transit' = pending) is hidden until 'All'.
 - **Files to change:** `apps/web/src/app/(app)/estab/inbox/page.tsx`, `apps/web/src/app/(app)/estab/inbox/InboxPanel.tsx`
@@ -1606,7 +1606,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-MEETINGS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: meetings/page.test.tsx: all four stats show an em dash on error)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: meetings/page.test.tsx: all four stats show an em dash on error)
 - **First-pass claim:** On a failed fetch the badge and RefreshErrorState appear but Upcoming Meetings, MOM Pending and Action Items print real 0 (meetings/page.tsx:71-73); only Compliance is gated. Same pattern that compliance/library pages avoid.
 - **Verified evidence:** meetings/page.tsx:71-73 Upcoming, MOM Pending, Action Items print computed counts from [] (=0) even when source==='error'; error UI is shown at :40-42 and :77-89. Compliance (:74) shows '—' only incidentally because completed is 0. Compare list/page.tsx which gates with errored.
 - **Files to change:** `apps/web/src/app/(app)/estab/meetings/page.tsx`
@@ -1620,7 +1620,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-MEETINGS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: meetings/page.test.tsx: empty state does not instruct an unavailable action; + Schedule links to /meeting/meetings/new)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: meetings/page.test.tsx: empty state does not instruct an unavailable action; + Schedule links to /meeting/meetings/new)
 - **First-pass claim:** The only way to schedule from this module is a disabled "+ Schedule (coming soon)" button whose tooltip points to "a committee" (page.tsx:57-67), yet the empty state tells users to "Schedule a meeting". A different module (meeting/meetings/new/page.tsx) has a working form — two meeting systems with no cross-link.
 - **Verified evidence:** meetings/page.tsx:57-67 disabled '+ Schedule (coming soon)'; empty state :95 says 'Schedule a meeting to get started.'. A working form exists at apps/web/src/app/(app)/meeting/meetings/new; no link from estab. Tooltip refers to 'a committee'.
 - **Files to change:** `apps/web/src/app/(app)/estab/meetings/page.tsx`
@@ -1635,7 +1635,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-MEETINGS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: meetings/page.test.tsx: 'In Progress' and 'Meetings Held' labels)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: meetings/page.test.tsx: 'In Progress' and 'Meetings Held' labels)
 - **First-pass claim:** "MOM Pending" is the count of meetings with status "in_progress" (page.tsx:19), not meetings lacking minutes; "Compliance" is completed ÷ all meetings (page.tsx:74) and conflicts with the Compliance page's complied ÷ action items rate.
 - **Verified evidence:** meetings/page.tsx:19 momPending = status==='in_progress' count, not lacking minutes; :74 Compliance = completed/meetings.length. estab/compliance/page.tsx:12 uses complied items/all items. The two 'compliance' figures differ.
 - **Files to change:** `apps/web/src/app/(app)/estab/meetings/page.tsx`
@@ -1648,7 +1648,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-MEETINGS-04  ·  LOW  ·  partly  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: meetings/page.test.tsx: at 01:00 IST (fake timers, 19:30Z) a meeting dated today counts as upcoming)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: meetings/page.test.tsx: at 01:00 IST (fake timers, 19:30Z) a meeting dated today counts as upcoming)
 - **First-pass claim:** Statuses render raw with underscores replaced; dates are dd/mm/yyyy; Upcoming compares scheduledDate ≥ today as strings (page.tsx:13,17).
 - **Verified evidence:** Statuses render via StatusPill (MeetingsTable.tsx:41) after underscore replacement (page.tsx:34), so they are humanized, not raw. Dates are dd/mm/yyyy (formatIndianDate). Upcoming (:17,:35) compares date strings to a UTC today (:16), so between 00:00 and 05:30 IST it uses yesterday.
 - **Files to change:** `apps/web/src/app/(app)/estab/meetings/page.tsx`
@@ -1662,7 +1662,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-MEETINGS-05  ·  LOW  ·  partly  ·  theme OTHER
 
-- [x] **Status** (W2 estab: closed by #PRN)
+- [x] **Status** (W2 estab: closed by #2042)
 - **W2 estab note:** The view switch is two links in a labelled nav; the active one carries aria-current="page" (meetings/page.tsx; test in page.test.tsx).
 - **W0 note:** partly fixed by #1916 — Still a link toggle with aria-current undefined; not DS Tabs/Segmented
 - **First-pass claim:** Calendar toggle is a link that changes ?view= (page.tsx:15,48-55) and a11y of the grid depends on MeetingsCalendar's custom markup, not the DS Tabs/Segmented.
@@ -1684,7 +1684,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-MEETINGS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: MeetingTimeline.test.tsx and [id]/page.test.tsx: Actions closed is todo for [] and for a scheduled meeting, done only for a completed meeting with every action completed)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: MeetingTimeline.test.tsx and [id]/page.test.tsx: Actions closed is todo for [] and for a scheduled meeting, done only for a completed meeting with every action completed)
 - **First-pass claim:** The "Actions closed" step uses meeting.actionPoints.every(status === "completed"), which is true for an empty list, so a meeting with no action points shows "Actions closed" as done even while it is only scheduled (page.tsx:143).
 - **Verified evidence:** [id]/page.tsx:143 `meeting.actionPoints.every(a => a.status==='completed')` is true for []; a scheduled meeting shows 'Actions closed' as done. Other steps depend on status (:139-142).
 - **Files to change:** `apps/web/src/app/(app)/estab/meetings/[id]/page.tsx`
@@ -1699,7 +1699,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-MEETINGS-DETAIL-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was DATEFMT)
 
-- [x] **Status** (W2 estab: closed by #PRN)
+- [x] **Status** (W2 estab: closed by #2042)
 - **W2 estab note:** The timeline is a MeetingTimeline component: no empty date slot renders (only Scheduled has a date), a cancelled meeting does not show the agenda as circulated, and a note says stages are inferred from status because the service records no event dates or officers (relabel path of step 2). Tests in MeetingTimeline.test.tsx and page.test.tsx.
 - **W0 note:** partly fixed by #1916 — Cancelled handled; date slots still empty, no actor/time
 - **First-pass claim:** Workflow timeline is inferred from status only (page.tsx:136-144): "Agenda circulated" is marked done for any non-scheduled state, every <div className="d"> date slot is empty, and no actor or time is recorded.
@@ -1717,7 +1717,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-MEETINGS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: [id]/page.test.tsx: scheduled date formatted (01 Oct 2026); MeetingDetailTables.tsx formats dueDate with formatIndianDate)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: [id]/page.test.tsx: scheduled date formatted (01 Oct 2026); MeetingDetailTables.tsx formats dueDate with formatIndianDate)
 - **First-pass claim:** scheduledDate and dueDate print as raw API strings (page.tsx:119; MeetingDetailTables.tsx:25) while other estab screens format dates as dd Mon yyyy.
 - **Verified evidence:** [id]/page.tsx:119 prints raw meeting.scheduledDate; MeetingDetailTables.tsx:25 prints raw r.dueDate. List page uses formatIndianDate (meetings/page.tsx:31). Note formatIndianDate (lib/formatters.ts:2-7) outputs dd/mm/yyyy, not 'dd Mon yyyy'.
 - **Files to change:** `apps/web/src/app/(app)/estab/meetings/[id]/page.tsx`, `apps/web/src/app/(app)/estab/meetings/[id]/MeetingDetailTables.tsx`, `apps/web/src/lib/formatters.ts`
@@ -1748,7 +1748,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-MEETINGS-DETAIL-05  ·  LOW  ·  partly  ·  theme DS-CONSISTENCY (was VALIDATION)
 
-- [x] **Status** (W2 estab: closed by #PRN)
+- [x] **Status** (W2 estab: closed by #2042)
 - **W2 estab note:** The page uses the shared PageHeader (back link, h1 with title and status pill, actions); the header Agenda link is gone so the Agenda tab is the single route (page.test.tsx).
 - **W0 note:** partly fixed by #1916 — Duplicate Agenda link removed; legacy ph/tl/tabs classes remain
 - **First-pass claim:** The header "Agenda" link duplicates the Agenda tab (MeetingActions.tsx:13-22); tabs and page chrome use legacy classes (ph, tl, fields, tabs .on) rather than the DS Tabs/PageHeader.
@@ -2069,7 +2069,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-01  ·  HIGH  ·  partly  ·  theme CAP
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: quarters/page.test.tsx: summary-driven tiles, Other tile reconciles, truncation notice when rows < total)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: quarters/page.test.tsx: summary-driven tiles, Other tile reconciles, truncation notice when rows < total)
 - **First-pass claim:** Stats and the register are computed from whatever /estab/quarters returns; the request carries no limit or pagination (page.tsx:9), so on a large estate Total/Vacant may under-count, and statuses other than vacant/allotted/occupied are not counted anywhere so the tiles need not add up to Total (page.tsx:22-25).
 - **Verified evidence:** quarters/page.tsx:9 fetchJson('/api/v1/estab/quarters') with no limit/page (TRUE); stats :22-25 use quarters.length and three literal statuses (vacant/allotted/occupied), so any other status (not visible; estab-service absent) is in Total only and tiles need not sum (TRUE). The table itself (QuartersTable.tsx:35-38) filters/paginates client-side over whatever arrived. Whether the service actually caps the default list cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/estab/quarters/page.tsx`, `apps/web/src/app/(app)/estab/quarters/QuartersTable.tsx`, `estab-service quarters list/summary route (not in snapshot)`
@@ -2086,7 +2086,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: quarters/page.test.tsx: one RefreshErrorState and em-dash tiles on error)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: quarters/page.test.tsx: one RefreshErrorState and em-dash tiles on error)
 - **First-pass claim:** On error the DataSourceBadge is rendered three times in one view (page.tsx:35,44,50) and offers no retry or help link, unlike RefreshErrorState on sibling pages.
 - **Verified evidence:** quarters/page.tsx renders DataSourceBadge on error in three places: :35 header actions, :45 above the stat grid, :57 inside the Card when quarters is empty (review cited 35/44/50, actual 35/45/57). DataSourceBadge has no retry/help action. Stat tiles already show '—' when errored (:47-50), which is correct. loading/error.tsx route boundary exists (quarters/error.tsx) but that only catches thrown errors, not source==='error'.
 - **Files to change:** `apps/web/src/app/(app)/estab/quarters/page.tsx`
@@ -2118,7 +2118,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-05  ·  LOW  ·  partly  ·  theme TOKENS (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: quarters/loading.tsx is page-shaped; QuarterCreateForm.tsx no longer carries the #c0392b fallback (test asserts it); stat tiles use tone tokens)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: quarters/loading.tsx is page-shaped; QuarterCreateForm.tsx no longer carries the #c0392b fallback (test asserts it); stat tiles use tone tokens)
 - **First-pass claim:** Loading is a single bare skeleton block (loading.tsx) with no page-shape outline; form inputs use inline styles and a hard-coded #c0392b fallback rather than tokens.
 - **Verified evidence:** quarters/loading.tsx is a single <div className='skeleton'> (TRUE, 3 lines). Form inputs use inline styles throughout QuarterCreateForm.tsx/ApplyAllotmentForm.tsx (TRUE). Colour is written var(--bad, #c0392b): it is a token with a fallback, so 'hard-coded' is overstated. Real hard-coded hex: StatCard iconBg values in quarters/page.tsx:47-50 (#eff6ff, #ecfdf3, #fffaeb, #eef2ff).
 - **Files to change:** `apps/web/src/app/(app)/estab/quarters/loading.tsx`, `apps/web/src/app/(app)/estab/quarters/page.tsx`
@@ -2418,7 +2418,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-VEHICLES-01  ·  HIGH  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: vehicles/page.test.tsx: banner links to /assets/fleet/vehicles and /assets/fleet/maintenance)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: vehicles/page.test.tsx: banner links to /assets/fleet/vehicles and /assets/fleet/maintenance)
 - **First-pass claim:** Subtitle and banner promise "allocation, log books, fuel and maintenance" but the page offers none: rows are not links (VehiclesTable.tsx:38-51, no rowLinkKey), there is no /estab/vehicles/[id] route, and the banner names the Asset register without linking to it (page.tsx:48).
 - **Verified evidence:** vehicles/page.tsx:31 subtitle 'Allocation, log books, fuel and maintenance for the fleet.'; VehiclesTable.tsx:38-51 DataTable has no rowLinkKey/rowLinkPrefix; ls estab/vehicles shows only page.tsx, VehiclesTable.tsx and new/ (no [id] route, no logbook/fuel/maintenance pages under estab). Banner at page.tsx:48 says 'lives in the Asset register' as plain text. Routes that do exist elsewhere: apps/web/src/app/(app)/assets/fleet/{vehicles,devices,maintenance} and (app)/fleet/vehicles, so the capability partly lives under Assets but is not linked from here. The estab hub (estab/page.tsx:17) also promises 'Vehicle management & logbook'.
 - **Files to change:** `apps/web/src/app/(app)/estab/vehicles/page.tsx`, `apps/web/src/app/(app)/estab/page.tsx`
@@ -2434,7 +2434,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-VEHICLES-02  ·  MEDIUM  ·  partly  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: vehicles/page.test.tsx: officer name, Pool, or em dash, never a UUID)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: vehicles/page.test.tsx: officer name, Pool, or em dash, never a UUID)
 - **First-pass claim:** "Allocated to" prints v.assignedTo verbatim (page.tsx:20); if the API returns an officer id (the add form takes a UUID, vehicles/new/page.tsx:50) the column shows ids rather than names.
 - **Verified evidence:** vehicles/page.tsx:20 allocatedTo: v.assignedTo ?? 'Pool', printed verbatim in the 'Allocated to' column (VehiclesTable.tsx:44-45 region). The add form sends allocatedTo as a UUID (new/page.tsx:63), so the API plausibly returns the id. What assignedTo really contains (id vs resolved name) cannot be verified: estab-service and the VehicleSummary type (@civitasone/types) are absent from the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/estab/vehicles/page.tsx`, `estab-service vehicles list route (not in snapshot)`
@@ -2450,7 +2450,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-VEHICLES-03  ·  MEDIUM  ·  confirmed  ·  theme DUPLICATE (was I18N)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: vehicles/page.test.tsx: exactly one 'Vehicle fleet' heading in loaded, empty and error states)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: vehicles/page.test.tsx: exactly one 'Vehicle fleet' heading in loaded, empty and error states)
 - **First-pass claim:** Card heading "Vehicle fleet" is rendered twice when data exists: once in the page card header (page.tsx:59-61) and again inside VehiclesTable (VehiclesTable.tsx:34-37).
 - **Verified evidence:** vehicles/page.tsx:58-61 always renders a card with <div class='card-h'><h3>Vehicle fleet</h3></div>; when vehicles exist the else branch mounts VehiclesTable, whose own header at VehiclesTable.tsx:34-37 renders another <div class='card-h'><h3>Vehicle fleet</h3> + Segmented> inside the same .card. Two h3s with the same text (double heading, screen reader noise).
 - **Files to change:** `apps/web/src/app/(app)/estab/vehicles/page.tsx`, `apps/web/src/app/(app)/estab/vehicles/VehiclesTable.tsx`
@@ -2463,7 +2463,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-VEHICLES-04  ·  MEDIUM  ·  confirmed  ·  theme METRICS (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: vehicles/page.test.tsx: an Other tile makes the tiles sum to Fleet)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: vehicles/page.test.tsx: an Other tile makes the tiles sum to Fleet)
 - **First-pass claim:** Status tiles filter three literal statuses and Fleet is the total (page.tsx:11-14); retired/out-of-service vehicles are counted in Fleet but in no other tile.
 - **Verified evidence:** vehicles/page.tsx:11-14: total = vehicles.length; available/in_use/maintenance are exact-string filters; any other status (e.g. retired, out of service; the enum is not visible in the snapshot) is in Fleet only, so the four tiles need not reconcile. Values are real, not fabricated; only the completeness is at issue. Tiles do show '—' when errored (:53-56).
 - **Files to change:** `apps/web/src/app/(app)/estab/vehicles/page.tsx`
@@ -2478,7 +2478,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-VEHICLES-05  ·  LOW  ·  confirmed  ·  theme TOKENS (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: vehicles/page.test.tsx: banner uses var(--infobg), no #e6f7f5/#99e6da/#0f766e; vehicles/loading.tsx is page-shaped)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: vehicles/page.test.tsx: banner uses var(--infobg), no #e6f7f5/#99e6da/#0f766e; vehicles/loading.tsx is page-shaped)
 - **First-pass claim:** Info banner uses hard-coded teal hex and an emoji (page.tsx:37-48), ignoring tokens/dark mode; no vehicles/loading.tsx so the generic estab skeleton (tiles + block) is shown.
 - **Verified evidence:** vehicles/page.tsx:36-49 banner uses inline hex background #e6f7f5, border #99e6da, color #0f766e and an emoji 🔗 (:48); StatCard iconBg hexes at :53-56. No loading.tsx in estab/vehicles (directory holds page.tsx, VehiclesTable.tsx, new/), so Next falls back to estab/loading.tsx. Also observed: the page returns a bare fragment rather than the 'page-main wrap' container used by sibling pages, and shows a DataSourceBadge (:28) in addition to the RefreshErrorState (:63) when errored.
 - **Files to change:** `apps/web/src/app/(app)/estab/vehicles/page.tsx`, `apps/web/src/app/(app)/estab/vehicles/loading.tsx (new)`
@@ -2501,7 +2501,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-VEHICLES-NEW-01  ·  HIGH  ·  partly  ·  theme WIRING
 
-- [x] **Status** (W2 estab: closed by #PRN)
+- [x] **Status** (W2 estab: closed by #2042)
 - **W2 estab note:** The create payload is built and checked against EstabCreateVehicleBodySchema in @civitasone/schemas, which estab-service now validates with too (contract test in vehicle-assets.test.ts, web test vehiclePayload.test.ts). Found and fixed on the way: an electric vehicle ('ev') was listed as Petrol (mapFuelType), and 'Toyota Innova Crysta' lost its model words / one-word entries repeated the make (splitMakeModel). The Fuel column and the missing-odometer guard were already in place.
 - **W0 note:** partly fixed by #1916 — Fuel column + odometer guard done; POST payload keys (regNo/makeModel) still unaligned/unverified vs list fields; no contract test
 - **First-pass claim:** The form posts a combined makeModel and regNo/allocatedTo (page.tsx:58-64) while the list reads make, model, vehicleNo, assignedTo and odometerKm (vehicles/page.tsx:16-24); without the service the mapping cannot be verified, and fuelType and odometer are never shown back in the fleet list.
@@ -2521,7 +2521,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-VEHICLES-NEW-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: vehicles/new/page.test.tsx: choosing an officer from the picker posts allocatedTo, leaving it empty posts none, no UUID is typed or shown)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: vehicles/new/page.test.tsx: choosing an officer from the picker posts allocatedTo, leaving it empty posts none, no UUID is typed or shown)
 - **First-pass claim:** Allocated to requires an officer UUID typed by hand (page.tsx:50-54,205-212); clerks cannot know ids, and a valid-looking but wrong UUID allocates the vehicle to an unrelated person.
 - **Verified evidence:** vehicles/new/page.tsx:198-208 'Allocated to (optional)' is a plain text input with placeholder 'Officer ID (UUID)'; :50-55 validates only UUID format; :63 sends it. A well-formed but wrong UUID is accepted client-side. Note the app has no EntityPicker; the closest pattern is estab/operators/OperatorsPanel.tsx:72 which loads /api/proxy/v1/hrms/employees?limit=200 and lists names.
 - **Files to change:** `apps/web/src/app/(app)/estab/vehicles/new/page.tsx`, `apps/web/src/app/_components/ds/EmployeePicker.tsx (new, shared with QUARTERS-DETAIL-02)`, `apps/web/src/app/_components/ds/index.ts`
@@ -2538,7 +2538,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-VEHICLES-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme FEEDBACK (was OTHER)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: vehicles/new/page.test.tsx: one POST on double click, error banner persists past 6 s; router.refresh() after success)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: vehicles/new/page.test.tsx: one POST on double click, error banner persists past 6 s; router.refresh() after success)
 - **First-pass claim:** Success is declared on HTTP 202 (page.tsx:70) and the page redirects after 800 ms, but an accepted request may not yet be in the list; the error toast also auto-dismisses after 5 s (page.tsx:86), so a keyboard user can lose the message.
 - **Verified evidence:** vehicles/new/page.tsx:70 treats status 202 or res.ok as success; :75 router.push after 800 ms; :86 finally always schedules setToast(null) after 5000 ms, so the error toast (role=alert) is removed after 5 s (WCAG 2.2.1 timing). Extra defects found: finally also runs setSubmitting(false) (:85) so during the 800 ms the Add button is re-enabled and can double-submit and create a duplicate vehicle; the setTimeout redirect is not cleaned up. The list loader getVehicles uses revalidateSeconds: 120 (loaders.ts:3695), so the new vehicle may not appear for up to two minutes even after redirect; router.push does not bust that server data cache.
 - **Files to change:** `apps/web/src/app/(app)/estab/vehicles/new/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -2555,7 +2555,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-VEHICLES-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme FORMVALID (was CAP)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: vehicles/new/page.test.tsx: per-field errors, focus on Registration number, aria-invalid and aria-describedby)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: vehicles/new/page.test.tsx: per-field errors, focus on Registration number, aria-invalid and aria-describedby)
 - **First-pass claim:** Only the first validation error is shown, above the buttons, away from the offending field, with no aria-invalid or focus move; inputs use the browser's required bubbles as well (page.tsx:140,161).
 - **Verified evidence:** vehicles/new/page.tsx:36 holds a single fieldError string; :41-55 returns on the first failure; :211-220 renders it below the fields with role=alert but no aria-invalid/aria-describedby on the inputs (:135-143, :156-164, :201-208) and no focus move. Inputs at :140 and :161 have required and the form has no noValidate, so native browser bubbles fire first and the custom JS messages are reachable only for whitespace-only values. Contrast: quarters/[id]/ApplyAllotmentForm.tsx:39-50,98-109 already does per-field errors, aria-invalid, aria-describedby and focus.
 - **Files to change:** `apps/web/src/app/(app)/estab/vehicles/new/page.tsx`
@@ -2573,7 +2573,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-VEHICLES-NEW-05  ·  LOW  ·  confirmed  ·  theme TOKENS (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: vehicles/new/page.tsx has no hex literal (grep clean))
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: vehicles/new/page.tsx has no hex literal (grep clean))
 - **First-pass claim:** Hard-coded colours (#ef4444 asterisk, #ecfdf3/#fef2f2 toast) and a duplicated inline inputStyle instead of DS field components (page.tsx:17-24).
 - **Verified evidence:** vehicles/new/page.tsx:133 and :154 use style color '#ef4444' for the required asterisk; :105-107 toast uses #ecfdf3/#6ee7b7/#065f46 and #fef2f2/#fca5a5/#991b1b; :17-23 defines a local inputStyle constant (8px 12px padding, 13px font) that differs from the 10px 12px/44px style repeated in quarters forms. ds/index.ts has no Field/Input/Select component, so 'DS field components' do not yet exist; a Toast (ds/Toast.tsx) and ErrorState do.
 - **Files to change:** `apps/web/src/app/(app)/estab/vehicles/new/page.tsx`, `apps/web/src/app/_components/ds/FormField.tsx (new)`, `apps/web/src/app/_components/ds/index.ts`
@@ -2715,7 +2715,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DASHBOARD-05  ·  LOW  ·  partly  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #PRN: closed by #1916; evidence: dashboard/page.test.tsx: vehiclesInUse shown in the snapshot, Avg Pendency not duplicated)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: dashboard/page.test.tsx: vehiclesInUse shown in the snapshot, Avg Pendency not duplicated)
 - **First-pass claim:** Pendency snapshot repeats four of the six tiles (page.tsx:99-102), and vehiclesInUse is loaded but never displayed.
 - **Service:** `estab-service`  ·  **Endpoint(s):** `['GET /api/v1/estab/dashboard']`
 - **Question:** 
@@ -2738,7 +2738,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 estab: closed by #PRN)
+- [x] **Status** (W2 estab: closed by #2042)
 - **W2 estab note:** POST /v1/estab/quarters requires ESTAB_ROLES (quarters/routes.ts:28-30) and the form is shown only to ESTAB_QUARTER_ACTION_ROLES (quarters/page.tsx; page.roles.test.tsx). The create is asynchronous (202), so the success text now says the quarter appears in the list once processed. The form also no longer shows a raw e.message.
 - **W0 note:** partly fixed by main — POST quarters requires estab roles server-side; form not role-gated and refresh after async 202 not polled
 - **First-pass claim:** Create Quarter is not role-gated and the success message says only "submitted to the inventory" (QuarterCreateForm.tsx); whether the quarter appears immediately after router.refresh() is undeterminable.
