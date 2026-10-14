@@ -82,13 +82,13 @@ describe("Field", () => {
     expect(screen.getByText("Code")).toHaveAttribute("for", "explicit-id");
   });
 
-  it("does not announce the inline error by default (forms with a summary alert would double-announce)", () => {
+  it("always announces the inline error (role=alert, WCAG 4.1.3), with or without the deprecated announce prop", () => {
     render(
       <Field label="Code" error="Required.">
         <Input />
       </Field>,
     );
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Required.");
   });
 
   it("announces the inline error to assistive tech when announce is set (role=alert)", () => {
