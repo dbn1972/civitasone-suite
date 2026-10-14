@@ -159,6 +159,22 @@ describe("OrdersConsole", () => {
     );
   });
 
+  it("COURT-ORDERS-02 interim: warns that an untrusted-chain signature is not proof of a legal DSC", async () => {
+    render(
+      <OrdersConsole
+        caseId="case-1"
+        caseSummary={caseSummary}
+        initialOrders={[makeOrder({ status: "pending_approval", createdBy: "maker-x" })]}
+        ordersSource="api"
+        currentUserId="checker-y"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Approve and issue the/ }));
+    fireEvent.change(screen.getByLabelText(/Digital Signature Certificate/), { target: { value: "-----BEGIN PKCS7----- abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Verify signature" }));
+    expect(await screen.findByTestId("dsc-untrusted-warning")).toHaveTextContent(/not proof of a legally valid DSC/);
+  });
+
   it("blocks issue when server verification FAILS (fail-closed) and shows the issues", async () => {
     verifyOrderDscMock.mockResolvedValue({
       ok: false,

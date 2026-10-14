@@ -20,7 +20,7 @@ function nextFileNo(refType: string): string {
  */
 export async function raiseFileFromModule(
   ctx: RequestContext,
-  body: FileFromModuleBody,
+  body: FileFromModuleBody & { initiatedBy: string },
 ): Promise<Accepted> {
   const id = randomUUID();
   const fileNo = nextFileNo(body.refType);

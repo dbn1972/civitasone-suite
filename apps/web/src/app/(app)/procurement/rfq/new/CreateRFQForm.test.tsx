@@ -30,13 +30,13 @@ const VENDORS = {
   ],
 };
 
-function mockFetch(onPost?: (url: string, body: unknown) => void) {
+function mockFetch(onPost?: (url: string, body: unknown) => void, indents: unknown = INDENTS) {
   globalThis.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.includes("/procurement/indents")) {
       // Assert the form requests only approved indents.
       expect(url).toContain("status=approved");
-      return Promise.resolve({ ok: true, json: async () => INDENTS } as unknown as Response);
+      return Promise.resolve({ ok: true, json: async () => indents } as unknown as Response);
     }
     if (url.includes("/procurement/vendors")) {
       return Promise.resolve({ ok: true, json: async () => VENDORS } as unknown as Response);
@@ -60,6 +60,16 @@ async function selectIndentAndTitleAndDate() {
 describe("CreateRFQForm (GAP-PROCUREMENT-RFQ-NEW-01/02/04/05)", () => {
   beforeEach(() => { push.mockReset(); refresh.mockReset(); toastSuccess.mockReset(); searchParamValue = null; });
   afterEach(() => vi.restoreAllMocks());
+
+  it("NEW-01: shows each indent's status and drops a non-approved row the API returned anyway", async () => {
+    mockFetch(undefined, { data: [
+      { id: "ind-approved", indentNo: "IND/2026/1", department: "IT", status: "approved" },
+      { id: "ind-draft", indentNo: "IND/2026/2", department: "IT", status: "draft" },
+    ] });
+    render(<CreateRFQForm />);
+    expect(await screen.findByRole("option", { name: /IND\/2026\/1 .*\(approved\)/ })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /IND\/2026\/2/ })).not.toBeInTheDocument();
+  });
 
   it("NEW-01: does not auto-select an indent (placeholder stays selected)", async () => {
     mockFetch();

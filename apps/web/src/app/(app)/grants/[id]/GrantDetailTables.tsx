@@ -6,6 +6,7 @@ import { DataTable, StatusPill, ActionButton } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { isUcVerified } from "@/lib/grants/ucStatus";
+import { postDisburse } from "@/app/(app)/grants/postDisburse";
 import type { GrantDetail } from "@civitasone/types";
 
 type Installment = GrantDetail["installments"][number];
@@ -134,10 +135,7 @@ export function GrantInstallmentsTable({
               // GAP-GRANTS-DETAIL-03: the reason is the audit/approval reference,
               // NOT the payee bank ref. Send it as `reason`; the grantee's bank
               // account is resolved server-side from the grantee master.
-              await postAction(`/api/proxy/v1/grants/installments/${row.id}/disburse`, {
-                mode: "PFMS",
-                reason,
-              });
+              await postDisburse(row.id, reason);
               router.refresh();
             }}
           />

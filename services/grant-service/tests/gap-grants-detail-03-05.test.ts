@@ -40,9 +40,11 @@ describe("disburseBody (GAP-GRANTS-DETAIL-03)", () => {
   });
 
   it("still accepts an opaque beneficiaryBankRef when supplied separately", () => {
-    const parsed = disburseBody.parse({ mode: "PFMS", beneficiaryBankRef: "grant_bank_accounts:abc", reason: "x" });
-    expect(parsed.beneficiaryBankRef).toBe("grant_bank_accounts:abc");
-    expect(parsed.reason).toBe("x");
+    // Tightened by W2 PQ-B: the ref must be a real grant_bank_accounts pointer (prefix + uuid), the reason >= 3 chars.
+    const ref = "grant_bank_accounts:3f000000-cccc-4000-8000-0000000000a1";
+    const parsed = disburseBody.parse({ mode: "PFMS", beneficiaryBankRef: ref, reason: "GO 441" });
+    expect(parsed.beneficiaryBankRef).toBe(ref);
+    expect(parsed.reason).toBe("GO 441");
   });
 
   it("rejects an empty reason (trimmed, min 1)", () => {

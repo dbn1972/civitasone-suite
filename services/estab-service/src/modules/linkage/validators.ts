@@ -11,7 +11,9 @@ export const fileFromModuleBody = z.object({
   dept:           z.string().min(1),
   classification: z.enum(["top_secret", "secret", "confidential", "public"]).default("confidential"),
   priority:       z.enum(["normal", "urgent", "immediate"]).default("normal"),
-  initiatedBy:    z.string().uuid(),                 // HR employee raising the file
+  // Optional: the server derives the initiator from the authenticated session. A supplied value
+  // is only accepted when it equals the caller's own employee id (no raising in another officer's name).
+  initiatedBy:    z.string().uuid().optional(),
   currentWith:    z.string().uuid(),                 // first officer in the chain
   approvalChain:  z.string().min(1),                 // workflow definition code
   initialNote:    z.string().min(1),                 // the proposal/justification note
