@@ -14,5 +14,8 @@ export const parkingService: MunicipalServiceConfig = {
   // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: parking/bookings/domain.ts.
   statusVocabulary: ["booked", "active", "completed", "cancelled"],
   citizenServiceKey: "parking-pass",
+  // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
+  // parking-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
+  displayFields: ["bookingNumber", "vehicleNumber", "vehicleType", "entryTime", "exitTime", "durationMinutes", "paymentRef", "spaceNumber"],
   sec5: true,
 };

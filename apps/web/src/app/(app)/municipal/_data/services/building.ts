@@ -14,5 +14,8 @@ export const buildingService: MunicipalServiceConfig = {
   // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: building/applications/domain.ts.
   statusVocabulary: ["draft", "submitted", "under_scrutiny", "approved", "rejected", "withdrawn"],
   // citizenServiceKey intentionally omitted — no citizen-service manifest exists yet.
+  // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
+  // building-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
+  displayFields: ["plotArea", "builtUpArea", "proposedFloors", "fsiRequested", "farComputed", "architectName", "architectLicenceNo", "structuralEngineer", "feePaid", "feeTransactionId"],
   sec5: true,
 };
