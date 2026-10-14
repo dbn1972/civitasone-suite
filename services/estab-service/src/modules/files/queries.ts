@@ -12,7 +12,7 @@ export type FileDetailDto = {
   department: string;
   classification: string;
   currentWith: string;
-  currentHolder: string;
+  currentHolder: string | null;
   status: string;
   fileType: string;
   volumeNo: number;
@@ -25,7 +25,7 @@ export type FileDetailDto = {
   createdAt: string;
   noteSheets: Array<{
     id: string;
-    author: string;
+    author: string | null;
     content: string;
     timestamp: string;
     type: "note" | "order" | "remark";
@@ -44,7 +44,7 @@ export type FileDetailDto = {
   dispatchHistory: Array<{
     id: string;
     dispatchedTo: string;
-    dispatchedBy: string;
+    dispatchedBy: string | null;
     timestamp: string;
     remarks?: string;
   }>;

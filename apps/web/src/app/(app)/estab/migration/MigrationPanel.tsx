@@ -216,7 +216,7 @@ export function MigrationPanel() {
                 // GAP-ESTAB-MIGRATION-06: use next/link and CSS var instead of
                 // a hard-coded hex colour.
                 render: (r) => r.efileId
-                  ? <Link className="mono" style={{ color: "var(--accent, var(--primary))" }} href={`/estab/files/${r.efileId}`}>Open eFile</Link>
+                  ? <Link className="mono" style={{ color: "var(--accent, var(--primary))" }} href={`/estab/files/${r.efileId}`}>{tMig("openEfile")}</Link>
                   : <>—</>,
               },
               { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} /> },
