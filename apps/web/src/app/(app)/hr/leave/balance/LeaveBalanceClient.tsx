@@ -8,6 +8,7 @@ import { PrintButton } from "../../../../_components/PrintButton";
 import { useTranslations } from "next-intl";
 import { toHumanError } from "@/lib/messages";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 type Allocation = {
   id: string;
@@ -34,7 +35,7 @@ type LeaveContext = {
  * Mirrors leave/routes.ts HR_ROLES -- the roles that may view ANY employee's
  * leave balance. Others see only their own.
  */
-const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const HR_ROLES = HR_STAFF_ROLES;
 const ADMIN_OR_MANAGER_ROLES = [...HR_ROLES, "manager"];
 
 interface Props {

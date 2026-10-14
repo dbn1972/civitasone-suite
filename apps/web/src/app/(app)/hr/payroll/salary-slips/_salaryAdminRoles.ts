@@ -1,4 +1,5 @@
 // GAP-HR-SF09A-017: kept in sync with the identical arrays in
+import { PAYROLL_SALARY_ADMIN_ROLES } from "@/lib/auth/workRoles";
 // ./[id]/_salaryAdminRoles.ts and ../slips/[id]/_salaryAdminRoles.ts
 // (enforced by salary-admin-roles.test.ts) -- added "finance_officer" to
 // match the sibling PENSIONER_VIEW_ROLES (../pensioners/page.tsx), which
@@ -11,4 +12,4 @@
 // any named export from a page.tsx other than its own fixed set --
 // salary-admin-roles.test.ts needs a real import to check the 3 copies
 // haven't drifted, so this one constant can't just be a private const.
-export const SALARY_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"];
+export const SALARY_ADMIN_ROLES = PAYROLL_SALARY_ADMIN_ROLES;

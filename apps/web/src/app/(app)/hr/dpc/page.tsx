@@ -7,12 +7,13 @@ import { PromotionBatchView } from "./_components/PromotionBatchView";
 import { SeniorityListActions, type SeniorityListSummary } from "./_components/SeniorityListActions";
 import type { PromotionRow } from "../promotion/_components/PromotionCard";
 import { formatIndianDate } from "@/lib/formatters";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 // DOM-023: mirrors the backend's HR_ROLES guard exactly
 // (services/hrms-service/src/modules/seniority/routes.ts) for the
 // generate/approve write actions -- the broader read-only "manager" role
 // that can see the live GET views above is intentionally excluded.
-const SENIORITY_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const SENIORITY_ADMIN_ROLES = HR_STAFF_ROLES;
 
 type EligibleRow = {
   employeeId: string;

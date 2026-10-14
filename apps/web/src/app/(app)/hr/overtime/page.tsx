@@ -7,11 +7,12 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 // GAP-HR-OVERTIME-01: only these roles may approve/reject -- mirrors the
 // backend's own HR_ROLES for the approve/reject routes exactly
 // (attendance/routes.ts).
-const OVERTIME_DECIDE_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const OVERTIME_DECIDE_ROLES = HR_STAFF_ROLES;
 
 /**
  * GAP-HR-OVERTIME-04 (pagination half — the manager-scope half of this gap

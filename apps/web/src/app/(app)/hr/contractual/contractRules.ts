@@ -1,8 +1,9 @@
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 // GAP-HR-CONTRACTUAL-05: pure rules mirrored from hrms-service/contracts
 // (domain.ts CONTRACT_TRANSITIONS, routes.ts HR_ROLES/ALL_ROLES and the
 // renew status guard). The backend stays the enforcement point; these only
 // decide which controls to offer.
-export const CONTRACT_HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+export const CONTRACT_HR_ROLES = HR_STAFF_ROLES;
 export const CONTRACT_RENEW_ROLES = [...CONTRACT_HR_ROLES, "manager"];
 
 export function canRenew(status: string, roles: string[]): boolean {

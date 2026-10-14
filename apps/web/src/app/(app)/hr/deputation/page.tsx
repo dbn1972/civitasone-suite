@@ -3,9 +3,10 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { DeputationCard, type DeputationRow } from "./_components/DeputationCard";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 /** Mirrors deputation/routes.ts's own HR_ROLES for repatriate/cancel. */
-const DEPUTATION_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const DEPUTATION_ADMIN_ROLES = HR_STAFF_ROLES;
 
 async function getData(): Promise<LoaderResult<DeputationRow[]>> {
   return fetchJson<unknown, DeputationRow[]>("/api/v1/hrms/deputation", [], {

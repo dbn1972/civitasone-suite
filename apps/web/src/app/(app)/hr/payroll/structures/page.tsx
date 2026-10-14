@@ -8,6 +8,7 @@ import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PAYROLL_SALARY_ADMIN_ROLES, PAYROLL_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 // GAP-HR-SALARY-STRUCTURE-05: this page rendered the full pay-structure
 // list, the per-structure component composition, the full component
@@ -19,7 +20,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 // already 403 everyone outside this list -- same convention as
 // payroll/pensioners/page.tsx's PENSIONER_VIEW_ROLES and
 // payroll/salary-slips/page.tsx's SALARY_ADMIN_ROLES.
-const STRUCTURES_VIEW_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"];
+const STRUCTURES_VIEW_ROLES = PAYROLL_SALARY_ADMIN_ROLES;
 
 // Matches the backend's PAYROLL_ROLES for POST /v1/payroll/structures
 // (payroll-service payroll/routes.ts) -- a strict subset of
@@ -28,7 +29,7 @@ const STRUCTURES_VIEW_ROLES = ["payroll_admin", "payroll_officer", "super_admin"
 // would see a "Create Structure" form that always 403s on submit -- same
 // bug class already found and fixed on payroll/pensioners/page.tsx
 // (PENSIONER_CREATE_ROLES vs PENSIONER_VIEW_ROLES).
-const STRUCTURES_CREATE_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
+const STRUCTURES_CREATE_ROLES = PAYROLL_STAFF_ROLES;
 
 type Row = {
   id: string;

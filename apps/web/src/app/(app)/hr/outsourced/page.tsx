@@ -8,6 +8,7 @@ import { todayIST } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 import { mapContracts, type ApiContract, type ApiStats } from "./outsourcedModel";
 import { OutsourcedRegister } from "./OutsourcedRegister";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * GAP-HR-OUTSOURCED-01: the real vendor-supplied workforce register, served by
@@ -15,7 +16,7 @@ import { OutsourcedRegister } from "./OutsourcedRegister";
  * own role gate (hr_admin / hr_officer / super_admin) -- contract values are
  * commercially sensitive, so this is HR-only, same as the backend.
  */
-const OUTSOURCED_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const OUTSOURCED_ROLES = HR_STAFF_ROLES;
 const PAGE_SIZE = 50;
 
 type Page = { rows: ApiContract[]; total: number; offset: number; stats: ApiStats };

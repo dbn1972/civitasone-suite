@@ -7,6 +7,7 @@ import { TransferWithApproval } from "./TransferWithApproval";
 import type { TransferRow } from "./_components/TransferOrderCard";
 import { TransferListFilters } from "./_components/TransferListFilters";
 import { getTranslations } from "next-intl/server";
+import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * GAP-HR-TRANSFER-03: mirrors services/hrms-service's employee/routes.ts
@@ -18,7 +19,7 @@ import { getTranslations } from "next-intl/server";
  * so "+ Transfer with approval" rendered fully interactive for a role that
  * would only ever get a 403 on submit, after filling in both wizard steps.
  */
-const TRANSFER_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const TRANSFER_ROLES = HR_STAFF_ROLES;
 
 async function getData(): Promise<LoaderResult<TransferRow[]>> {
   // NOTE: this used to fall back to GET /api/v1/hrms/transfers whenever the

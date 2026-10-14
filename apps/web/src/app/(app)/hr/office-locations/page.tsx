@@ -5,6 +5,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
 import { OfficeLocationForm } from "./OfficeLocationForm";
+import { HR_MASTERS_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * GAP-HR-LOCATIONS-NEW-02: admin screen for the HRMS geofence master
@@ -12,7 +13,7 @@ import { OfficeLocationForm } from "./OfficeLocationForm";
  * /v1/hrms/office-locations exactly (geo-attendance/routes.ts) -- hr/layout
  * admits far more roles than may create a geofence.
  */
-const OFFICE_LOCATION_ADMIN_ROLES = ["super_admin", "admin", "hr_admin"];
+const OFFICE_LOCATION_ADMIN_ROLES = HR_MASTERS_ADMIN_ROLES;
 
 type OfficeLocation = {
   id: string;
