@@ -18,7 +18,7 @@
  */
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, PageHeader } from "../../../../../_components/ds";
+import { Alert, Button, PageHeader } from "../../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
@@ -26,7 +26,7 @@ import { budgetableHeads, headOptionLabel, type AccountRow } from "../../_lib/he
 import { validateSanction, type SanctionFormErrors } from "./validateSanction";
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
-const errStyle = { fontSize: 12, color: "#b91c1c" } as const;
+const errStyle = { fontSize: 12, color: "var(--bad)" } as const;
 const fieldStyle = { flexDirection: "column", alignItems: "flex-start" } as const;
 
 type LocalErrors = SanctionFormErrors;
@@ -117,10 +117,10 @@ export default function NewSanctionPage() {
         backLabel="Sanctions"
       />
       {message ? (
-        <div role="status" aria-live="polite" className="banner" style={{ background: isError ? "#fef2f2" : "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
+        <Alert variant={isError ? "danger" : "success"} aria-live="polite">{message}</Alert>
       ) : null}
       {loadError ? (
-        <div role="alert" className="banner" style={{ background: "#fef2f2", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{loadError}</div>
+        <Alert variant="danger">{loadError}</Alert>
       ) : null}
       <div className="card">
         <form onSubmit={submit} className="pad" noValidate>

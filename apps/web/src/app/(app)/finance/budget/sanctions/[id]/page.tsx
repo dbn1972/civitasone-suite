@@ -64,10 +64,10 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
       />
 
       <StatGrid>
-        <StatCard icon="₹" iconBg="#ecfdf5" label="Amount" value={formatMoney(sanction.amount)} />
-        <StatCard icon="📋" iconBg="#eff6ff" label="Status" value={sanction.status.replace(/_/g, " ")} />
-        <StatCard icon="👤" iconBg="#faf5ff" label="Sanctioned By" value={sanction.sanctionedBy} />
-        <StatCard icon="📅" iconBg="#fff7ed" label="Date" value={formatIndianDate(sanction.date)} />
+        <StatCard icon="₹" tone="good" label="Amount" value={formatMoney(sanction.amount)} />
+        <StatCard icon="📋" tone="info" label="Status" value={sanction.status.replace(/_/g, " ")} />
+        <StatCard icon="👤" tone="neutral" label="Sanctioned By" value={sanction.sanctionedBy} />
+        <StatCard icon="📅" tone="warn" label="Date" value={formatIndianDate(sanction.date)} />
       </StatGrid>
 
       <Card title="Sanction details" padding>

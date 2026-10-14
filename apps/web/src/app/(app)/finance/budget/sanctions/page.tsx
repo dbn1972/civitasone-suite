@@ -45,10 +45,10 @@ export default async function SanctionsPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🖊️" iconBg="#e7edfd" label="Active Sanctions" value={summaryErrored ? "—" : summary.active} />
-        <StatCard icon="💰" iconBg="#eff6ff" label="Sanctioned Value (approved)" value={summaryErrored ? "—" : formatMoney(summary.approvedMinor)} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label={SANCTION_STATUS_LABEL.pending} value={summaryErrored ? "—" : summary.pending} />
-        <StatCard icon="📊" iconBg="#ecfdf3" label={SANCTION_STATUS_LABEL.approved} value={summaryErrored ? "—" : summary.approved} />
+        <StatCard icon="🖊️" tone="info" label="Active Sanctions" value={summaryErrored ? "—" : summary.active} />
+        <StatCard icon="💰" tone="info" label="Sanctioned Value (approved)" value={summaryErrored ? "—" : formatMoney(summary.approvedMinor)} />
+        <StatCard icon="⏳" tone="warn" label={SANCTION_STATUS_LABEL.pending} value={summaryErrored ? "—" : summary.pending} />
+        <StatCard icon="📊" tone="good" label={SANCTION_STATUS_LABEL.approved} value={summaryErrored ? "—" : summary.approved} />
       </StatGrid>
 
       <Card title="Administrative & financial sanctions">

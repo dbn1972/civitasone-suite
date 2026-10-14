@@ -15,7 +15,7 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, PageHeader, Card, ConfirmDialog, Term } from "../../../../_components/ds";
+import { Alert, Button, PageHeader, Card, ConfirmDialog, Term } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type AccountRow = {
@@ -37,14 +37,14 @@ const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px so
 function FormBanner({ message, isError }: { message: string; isError: boolean }) {
   if (!message) return null;
   return (
-    <div
+    <Alert
+      variant={isError ? "danger" : "success"}
       role={isError ? "alert" : "status"}
       aria-live={isError ? "assertive" : "polite"}
-      className="banner"
-      style={{ background: isError ? "#fef2f2" : "#ecfdf3", padding: 12, borderRadius: 12, margin: "0 16px 16px", fontSize: 13 }}
+      style={{ margin: "0 16px 16px" }}
     >
       {message}
-    </div>
+    </Alert>
   );
 }
 
@@ -256,10 +256,13 @@ export default function MapHeadOfAccountPage() {
         backLabel="Chart of Accounts"
       />
       {loadError ? (
-        <div role="alert" aria-live="assertive" className="banner" style={{ background: "#fef2f2", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <span>{loadError}</span>
-          <Button type="button" variant="ghost" onClick={() => { setLoadError(""); void loadAccounts(); }}>Retry</Button>
-        </div>
+        <Alert
+          variant="danger"
+          aria-live="assertive"
+          action={<Button type="button" variant="ghost" onClick={() => { setLoadError(""); void loadAccounts(); }}>Retry</Button>}
+        >
+          {loadError}
+        </Alert>
       ) : null}
 
       <Card title="Create a new head of account">
@@ -270,14 +273,14 @@ export default function MapHeadOfAccountPage() {
               <label className="l" htmlFor="new-code">Code</label>
               <input id="new-code" required maxLength={20} value={code} onChange={(e) => setCode(e.target.value)} style={inputStyle} placeholder="e.g. 2110" />
               {createFormError.fieldError("code") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{createFormError.fieldError("code")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{createFormError.fieldError("code")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="new-name">Name</label>
               <input id="new-name" required minLength={2} maxLength={200} value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} placeholder="e.g. Sundry Creditors" />
               {createFormError.fieldError("name") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{createFormError.fieldError("name")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{createFormError.fieldError("name")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
@@ -326,7 +329,7 @@ export default function MapHeadOfAccountPage() {
                 style={inputStyle}
               />
               {createFormError.fieldError("hoaCode") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{createFormError.fieldError("hoaCode")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{createFormError.fieldError("hoaCode")}</span>
               )}
             </div>
           </div>
@@ -387,7 +390,7 @@ export default function MapHeadOfAccountPage() {
               />
               <span id="hoa-help" className="sub" style={{ fontSize: 12 }}>Exactly 18 digits (PFMS format).</span>
               {mapFormError.fieldError("hoaCode") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{mapFormError.fieldError("hoaCode")}</span>
+                <span style={{ fontSize: 12, color: "var(--bad)" }}>{mapFormError.fieldError("hoaCode")}</span>
               )}
             </div>
           </div>

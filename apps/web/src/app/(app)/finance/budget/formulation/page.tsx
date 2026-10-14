@@ -56,10 +56,10 @@ export default async function BudgetFormulationPage({
       />
 
       <StatGrid>
-        <StatCard icon="📝" iconBg="#e7edfd" label={`Budget Heads (FY ${fy})`} value={errored ? "—" : budgets.length} />
-        <StatCard icon="🏢" iconBg="#eff6ff" label="Major Heads" value={errored ? "—" : uniqueHeads} delta={errored ? undefined : `${BUDGET_STATUS_LABEL.approved.toLowerCase()} ${approved}`} up={true} />
-        <StatCard icon="💰" iconBg="#fffaeb" label={`Proposed Outlay (BE, FY ${fy})`} value={errored ? "—" : formatMoney(totalBe)} up={false} />
-        <StatCard icon="⏳" iconBg="#fef3f2" label={BUDGET_STATUS_LABEL.pending} value={errored ? "—" : pending} />
+        <StatCard icon="📝" tone="info" label={`Budget Heads (FY ${fy})`} value={errored ? "—" : budgets.length} />
+        <StatCard icon="🏢" tone="info" label="Major Heads" value={errored ? "—" : uniqueHeads} delta={errored ? undefined : `${BUDGET_STATUS_LABEL.approved.toLowerCase()} ${approved}`} up={true} />
+        <StatCard icon="💰" tone="warn" label={`Proposed Outlay (BE, FY ${fy})`} value={errored ? "—" : formatMoney(totalBe)} up={false} />
+        <StatCard icon="⏳" tone="bad" label={BUDGET_STATUS_LABEL.pending} value={errored ? "—" : pending} />
       </StatGrid>
 
       <Card title={`Budget estimates (BE) — FY ${fy}`}>

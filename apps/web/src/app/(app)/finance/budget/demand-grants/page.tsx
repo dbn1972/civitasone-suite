@@ -25,11 +25,11 @@ export default async function DemandGrantsPage() {
         back="/finance"
       />
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="#e7edfd" label="Total Demands" value={errored ? "—" : grants.length} />
-        <StatCard icon="🗳️" iconBg="#ecfdf3" label="Voted" value={errored ? "—" : voted} />
-        <StatCard icon="⚖️" iconBg="#fffaeb" label="Charged" value={errored ? "—" : charged} />
+        <StatCard icon="🏛️" tone="info" label="Total Demands" value={errored ? "—" : grants.length} />
+        <StatCard icon="🗳️" tone="good" label="Voted" value={errored ? "—" : voted} />
+        <StatCard icon="⚖️" tone="warn" label="Charged" value={errored ? "—" : charged} />
         {!errored && other > 0 ? <StatCard icon="❔" iconBg="var(--panel)" label="Other" value={other} /> : null}
-        <StatCard icon="📊" iconBg="#eff6ff" label="Services" value={errored ? "—" : new Set(grants.map((g) => g.service)).size} />
+        <StatCard icon="📊" tone="info" label="Services" value={errored ? "—" : new Set(grants.map((g) => g.service)).size} />
       </StatGrid>
       {/* UX-012: the data-source badge lives inside DemandGrantsTable. */}
       <Card title="Demand for Grants">

@@ -67,3 +67,5 @@ export { Stepper } from "./Stepper";
 export type { StepperProps } from "./Stepper";
 export { AcceptedNotice } from "./AcceptedNotice";
 export type { AcceptedNoticeProps } from "./AcceptedNotice";
+export { Alert } from "./Alert";
+export type { AlertProps, AlertVariant } from "./Alert";

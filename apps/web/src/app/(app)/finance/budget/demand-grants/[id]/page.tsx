@@ -41,10 +41,10 @@ export default async function DemandGrantDetailPage({ params }: { params: { id: 
     <div className="page-main wrap">
       <PageHeader title={`Demand ${demand.demandNo}`} subtitle={demand.service || undefined} back="/finance/budget/demand-grants" />
       <StatGrid>
-        <StatCard icon="₹" iconBg="#ecfdf3" label="Demand amount" value={formatMoney(demand.amountMinor)} />
-        <StatCard icon="🧮" iconBg="#eff6ff" label="Head-wise total" value={formatMoney(demand.linesTotalMinor)} />
-        <StatCard icon="🗳️" iconBg="#fffaeb" label="Class" value={humanizeStatus(demand.class)} />
-        <StatCard icon="📌" iconBg="#e7edfd" label="Status" value={humanizeStatus(demand.status)} />
+        <StatCard icon="₹" tone="good" label="Demand amount" value={formatMoney(demand.amountMinor)} />
+        <StatCard icon="🧮" tone="info" label="Head-wise total" value={formatMoney(demand.linesTotalMinor)} />
+        <StatCard icon="🗳️" tone="warn" label="Class" value={humanizeStatus(demand.class)} />
+        <StatCard icon="📌" tone="info" label="Status" value={humanizeStatus(demand.status)} />
       </StatGrid>
 
       <Card title="Demand Details" padding>
@@ -57,7 +57,7 @@ export default async function DemandGrantDetailPage({ params }: { params: { id: 
 
       <Card title="Head-wise lines">
         {demand.lines.length > 0 && !demand.linesReconciled ? (
-          <p role="alert" style={{ padding: "8px 16px", color: "#b91c1c", fontSize: 13 }}>
+          <p role="alert" style={{ padding: "8px 16px", color: "var(--bad)", fontSize: 13 }}>
             The head-wise lines total {formatMoney(demand.linesTotalMinor)}, which differs from the demand amount of {formatMoney(demand.amountMinor)}.
           </p>
         ) : null}

@@ -82,13 +82,13 @@ export default async function BudgetMonitoringPage({
         />
         <StatCard
           icon="🟢"
-          iconBg="#ecfdf3"
+          tone="good"
           label="On Track"
           value={summaryErr || onTrack === null ? "—" : onTrack}
         />
         <StatCard
           icon="🔴"
-          iconBg="#fef2f2"
+          tone="bad"
           label="Exceptions"
           value={summaryErr ? "—" : overCommitted + underUtilised + projOverspend}
           up={false}
