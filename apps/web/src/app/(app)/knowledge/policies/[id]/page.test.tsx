@@ -18,6 +18,7 @@ const getSessionRolesMock = vi.fn();
 vi.mock("@/lib/auth/roleGuard", () => ({
   getSessionUserId: () => getSessionUserIdMock(),
   getSessionRoles: () => getSessionRolesMock(),
+  KNOWLEDGE_POLICY_APPROVER_ROLES: ["knowledge_admin", "super_admin"],
 }));
 
 import Page from "./page";

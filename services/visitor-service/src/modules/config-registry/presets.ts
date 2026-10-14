@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { HttpError } from "../../shared/context.js";
@@ -78,10 +79,10 @@ export type ApplyPresetResult = { accepted: true; preset: string; entries: numbe
 
 /**
  * Apply a vertical preset to the caller's tenant: fan out one idempotent
- * config.set command per entry. Re-applying the same preset is a no-op (the
- * config id is deterministic per (tenant, namespace, key)). Unknown preset → 400.
+ * config.set command per entry. Re-applying the same preset re-writes the same values (the
+ * config id is deterministic per (tenant, namespace, key), so it is an upsert). Unknown preset → 400.
  */
-export async function applyPreset(ctx: RequestContext, presetName: string): Promise<ApplyPresetResult> {
+export async function applyPreset(ctx: RequestContext, presetName: string, reason: string): Promise<ApplyPresetResult> {
   const entries = getPreset(presetName);
   if (!entries) {
     throw new HttpError(400, "UNKNOWN_PRESET", `no vertical preset '${presetName}' (known: ${PRESET_NAMES.join(", ")})`);
@@ -89,7 +90,9 @@ export async function applyPreset(ctx: RequestContext, presetName: string): Prom
   for (const e of entries) {
     const configId = deriveConfigId(ctx.tenantId, e.namespace, e.configKey);
     await queue.publish(COMMANDS.setConfig, {
-      messageId: configId,
+      // Per-command messageId (see commands.setConfig): the entry id is stable per
+      // key, so reusing it as the messageId made re-applying a different preset a no-op.
+      messageId: randomUUID(),
       type: COMMANDS.setConfig,
       tenantId: ctx.tenantId,
       actorId: ctx.actorId,
@@ -102,6 +105,8 @@ export async function applyPreset(ctx: RequestContext, presetName: string): Prom
         label: e.label,
         id: configId,
         tenantId: ctx.tenantId,
+        // GAP-VISITOR-ADMIN-01: the consumer writes this into the config audit event.
+        reason: `preset ${presetName}: ${reason}`,
       },
     });
   }

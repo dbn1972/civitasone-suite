@@ -5588,7 +5588,8 @@
   "procurement": {
     "title": "Procurement",
     "poForm": {
-      "vendorBlacklisted": "This vendor is blacklisted and cannot be used on a purchase order. Choose a different vendor."
+      "vendorBlacklisted": "This vendor is blacklisted and cannot be used on a purchase order. Choose a different vendor.",
+      "created": "PO created as a draft. Raise it for approval from the PO page; the eOffice decision releases it for dispatch."
     },
     "gfr": {
       "band": {

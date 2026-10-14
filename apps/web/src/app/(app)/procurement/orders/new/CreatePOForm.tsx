@@ -159,7 +159,10 @@ export function CreatePOForm() {
       let parsed: { id?: string } = {};
       try { parsed = JSON.parse(text) as { id?: string }; } catch { /* ignore */ }
       setStatus("accepted");
-      setMessage("PO submitted for workflow approval.");
+      // GAP-PROCUREMENT-ORDERS-DETAIL-01: a PO is created as a draft; the single
+      // release path (eOffice approval) is raised from the PO page, so do not claim
+      // it was already submitted for workflow approval.
+      setMessage(t("procurement.poForm.created"));
       router.push(parsed.id ? `/procurement/orders/${parsed.id}` : "/procurement/orders");
       router.refresh();
     } catch (err) {

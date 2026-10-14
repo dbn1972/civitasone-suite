@@ -5,11 +5,14 @@ import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState, Button }
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDateTime } from "@/lib/formatters";
 import { countGuesthouseStats } from "@/lib/estab/guesthouseStats";
+import { getSessionRoles, ESTAB_DFA_DRAFTER_ROLES } from "@/lib/auth/roleGuard";
 import { BookingsTable, type BookingRow } from "./BookingsTable";
 
 export default async function GuesthousePage() {
   const { data: bookings, source } = await getGuesthouseBookings();
   const errored = source === "error";
+  // GAP-ESTAB-GUESTHOUSE-01: check-in/out are estab-officer actions (server: ESTAB_ROLES).
+  const canOperate = getSessionRoles().some((r) => ESTAB_DFA_DRAFTER_ROLES.includes(r));
   const { total, occupied, pendingApproval, upcoming } = countGuesthouseStats(bookings);
 
   const rows: BookingRow[] = bookings.map((b) => ({
@@ -29,7 +32,7 @@ export default async function GuesthousePage() {
       {source === "error" && <DataSourceBadge source={source} />}
       <PageHeader
         title="Guest House Management"
-        subtitle="Room booking and approvals."
+        subtitle="Room bookings, check-in and check-out."
         back="/estab"
         actions={
           <Link href="/estab/guesthouse/new" className="btn primary" style={{ minHeight: 44 }}>+ New Booking</Link>
@@ -61,7 +64,7 @@ export default async function GuesthousePage() {
             }
           />
         ) : (
-          <BookingsTable rows={rows} />
+          <BookingsTable rows={rows} canOperate={canOperate} />
         )}
       </div>
     </>
