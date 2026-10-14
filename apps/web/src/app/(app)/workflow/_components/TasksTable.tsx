@@ -18,11 +18,15 @@ import { DocVerificationChecklist, type DocChecklistState } from "./DocVerificat
 
 type Row = WorkflowTask & Record<string, unknown>;
 
-/** GAP-WORKFLOW-MY-TASKS-02 — a human subject label (refType + short refId). */
+/**
+ * GAP-WORKFLOW-MY-TASKS-02 - a human subject: the record type plus the parent
+ * instance name (what is being approved). Never an id fragment.
+ */
 function subjectLabel(r: WorkflowTask): string {
-  if (!r.refType) return "—";
-  const subject = titleCase(r.refType);
-  return r.refId ? `${subject} · ${r.refId.slice(0, 8)}…` : subject;
+  const type = r.refType ? titleCase(r.refType) : null;
+  const name = r.instanceName?.trim() || null;
+  if (type && name) return `${type} · ${name}`;
+  return name ?? type ?? "—";
 }
 
 /** GAP-WORKFLOW-MY-TASKS-05 — overdue when a due date exists and is in the past. */
@@ -166,6 +170,11 @@ export function TasksTable({ tasks, showInstance = true, currentUserId = null, s
             key: "refType",
             label: "Subject",
             render: (r) => subjectLabel(r),
+          },
+          {
+            key: "requesterId",
+            label: "Requested by",
+            render: (r) => (r.requesterId ? <UserRef id={r.requesterId} name={r.requesterName ?? null} /> : "—"),
           },
           {
             key: "createdAt",

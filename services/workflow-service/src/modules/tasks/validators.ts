@@ -22,6 +22,9 @@ export const taskViewSchema = z.object({
   dueAt: z.string().nullable().optional(),
   // GAP-WORKFLOW-MY-TASKS-05 — task age (ISO string); see repo.ts toView.
   createdAt: z.string().nullable().optional(),
+  // GAP-WORKFLOW-MY-TASKS-02 — parent-instance subject + requester (instance creator).
+  instanceName: z.string().nullable().optional(),
+  requesterId: z.string().uuid().nullable().optional(),
   version: z.number().int(),
 });
 

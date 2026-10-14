@@ -68,6 +68,11 @@ export type TaskView = {
   dueAt?: string | null;
   // GAP-WORKFLOW-MY-TASKS-05 — task age (ISO string). Same convention as dueAt.
   createdAt?: string | null;
+  // GAP-WORKFLOW-MY-TASKS-02 — subject enrichment from the parent instance, so
+  // an approver can see WHAT is being approved and WHO raised it without
+  // opening each instance. Added by queries.listTasks (not by toView).
+  instanceName?: string | null;
+  requesterId?: string | null;
   version: number;
 };
 

@@ -22,3 +22,17 @@ describe("mapStockItemSummaries: missing levels are unknown, not zero", () => {
     expect(rows[2]!.totalValue).toBe(0); // a reported zero stays 0
   });
 });
+
+describe("mapStockItemSummaries: no id fragments or invented units (GAP-STOCK-LIST-02)", () => {
+  it("a row with only ids maps unit/category/code to a dash", () => {
+    const [row] = mapStockItemSummaries({
+      data: [{ id: "a3f9c1d2-0000-4000-8000-000000000001", name: "Pen", uomId: "b7e1aaaa-1111", categoryId: "c9d2bbbb-2222" }],
+    })!;
+    expect(row).toMatchObject({ unit: "—", category: "—", itemCode: "—" });
+  });
+
+  it("uses real names when supplied", () => {
+    const [row] = mapStockItemSummaries({ data: [{ ...base, categoryName: "Stationery", uomCode: "BOX" }] })!;
+    expect(row).toMatchObject({ unit: "BOX", category: "Stationery", itemCode: "P-1" });
+  });
+});

@@ -519,6 +519,44 @@ export const HELP_MODULES: HelpModule[] = [
     ],
     terms: ["SKU", "GRN"],
   },
+  {
+    // GAP-CATALOGUE-HOME-05: a Help Centre guide so the Service Catalogue hub
+    // "How this works" link resolves instead of 404ing.
+    slug: "catalogue",
+    icon: "📚",
+    title: "Service Catalogue",
+    summary:
+      "The list of products and services your office offers, how they are grouped, and what each one costs.",
+    href: "/catalogue",
+    moduleKey: "catalogue",
+    major: false,
+    tasks: [
+      {
+        title: "Find a product or service",
+        steps: [
+          "Open Service Catalogue, then Products.",
+          "Look through the list, or open a Category to see only the items grouped under it.",
+          "Open an item to see its details.",
+        ],
+      },
+      {
+        title: "Check a rate",
+        steps: [
+          "Open Service Catalogue, then Rates.",
+          "Each rate card shows the price and the dates it applies from and to.",
+          "Use the rate that is in effect on the day of the service.",
+        ],
+      },
+      {
+        title: "See what a bundle includes",
+        steps: [
+          "Open Service Catalogue, then Bundles.",
+          "Open a bundle to see the items packed together and the combined offer.",
+        ],
+      },
+    ],
+    terms: ["SKU"],
+  },
 ];
 
 /** Find a single module guide by its slug. */
