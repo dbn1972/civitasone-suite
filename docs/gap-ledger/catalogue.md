@@ -58,7 +58,7 @@ Counts: ACTION 30, BACKEND-VERIFY 1
 
 ### GAP-CATALOGUE-HOME-05  ·  LOW  ·  defect  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2036)
 - **First-pass claim:** help='catalogue' links to /help/catalogue (PageHeader.tsx:46-50); whether that article exists is undeterminable from the snapshot.
 - **Service:** `web (no backend)`  ·  **Endpoint(s):** `['GET /help/catalogue']`
 - **Question:** Does a help article with slug 'catalogue' exist?
