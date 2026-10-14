@@ -1,7 +1,6 @@
-import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState, LoadErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { toHumanError } from "@/lib/messages";
 import { GoalsProgressRing, type CategoryScore } from "./_components/GoalsProgressRing";
 import { GoalTrackerCard, type GoalStatus } from "./_components/GoalTrackerCard";
 import { DevelopmentPlanTimeline, type DevActivity } from "./_components/DevelopmentPlanTimeline";
@@ -110,10 +109,11 @@ function inferCascade(category: string | undefined): CascadeLevel {
 export default async function GoalsPage() {
   requireAnyRole(HR_GOALS_ROLES);
   const t = await getTranslations("goals");
-  const [{ data: items, source }, devPlansResult] = await Promise.all([
+  const [goalsResult, devPlansResult] = await Promise.all([
     getGoals(),
     getDevPlans(),
   ]);
+  const { data: items, source } = goalsResult;
   const { data: devPlans, source: devPlansSource } = devPlansResult;
   const errored = source === "error";
   // Audit: this page destructured only the goals loader's `source` and threw
@@ -168,10 +168,10 @@ export default async function GoalsPage() {
 
       {/* Summary stats */}
       <StatGrid>
-<StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statOnTrack")} value={onTrack} />
-        <StatCard icon="⚠️" iconBg="var(--warnbg, #fff7e6)" label={t("statAtRisk")} value={atRisk} />
-        <StatCard icon="🏆" iconBg="var(--bg, #f5f5f5)" label={t("statCompleted")} value={completed} />
+<StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statOnTrack")} value={errored ? null : onTrack} />
+        <StatCard icon="⚠️" iconBg="var(--warnbg, #fff7e6)" label={t("statAtRisk")} value={errored ? null : atRisk} />
+        <StatCard icon="🏆" iconBg="var(--bg, #f5f5f5)" label={t("statCompleted")} value={errored ? null : completed} />
       </StatGrid>
 
       {/* Progress rings summary */}
@@ -188,7 +188,12 @@ export default async function GoalsPage() {
       {/* Individual goal tracker cards */}
       <Card title={t("goalsCardTitle")}>
         {errored ? (
-          <RefreshErrorState error={toHumanError("load", { area: "goals" })} />
+          // A 403 (e.g. dept_head, who may use development plans but not the
+          // goals list) must read as "Access restricted", not as a retryable
+          // failure -- LoadErrorState branches on the real status.
+          <div className="pad">
+            <LoadErrorState result={goalsResult} area="goals" />
+          </div>
         ) : items.length === 0 ? (
           <div style={{ padding: 32, textAlign: "center", color: "var(--mut)" }}>
             <p style={{ fontSize: 32, margin: "0 0 8px" }}>🎯</p>
