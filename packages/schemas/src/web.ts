@@ -134,6 +134,11 @@ export const roleAssignmentSchema = z.object({
 
 export const tenantSettingSchema = z.object({
   name: z.string(),
+  // GAP-TENANT-ADMIN-SETTINGS-01: present on GET /v1/admin/tenant/modules?detail=1.
+  moduleKey: z.string().optional(),
+  moduleName: z.string().optional(),
+  enabled: z.boolean().optional(),
+  enabledAt: z.string().optional(),
 });
 
 export const auditEventApiSchema = z.object({
@@ -2495,7 +2500,7 @@ export const RoleDetailSchema = z.object({
 export const SubscriptionSummarySchema = z.object({
   id: z.string(),
   plan: z.string(),
-  status: z.enum(["active", "past_due", "cancelled", "trial"]),
+  status: z.enum(["active", "past_due", "cancelled", "trial", "suspended"]),
   // Nullable: the billing service has no real period/usage data yet and must
   // not fabricate it (null = unknown, rendered as an em dash).
   currentPeriodStart: z.string().nullable(),

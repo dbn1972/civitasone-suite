@@ -18,6 +18,18 @@ export async function findById(tenantId: string, id: string): Promise<UserView |
   return rows[0] ? toView(rows[0]) : null;
 }
 
+/**
+ * GAP-TENANT-ADMIN-USERS-07: is this email already in the tenant's directory?
+ * Case-insensitive, so "Asha@dept.gov.in" cannot be invited alongside
+ * "asha@dept.gov.in" (the unique index itself is case-sensitive).
+ */
+export async function emailExists(tenantId: string, email: string): Promise<boolean> {
+  const rows = await scopedRead((tx) => tx.select({ id: users.id }).from(users)
+    .where(and(eq(users.tenantId, tenantId), sql`lower(${users.email}) = lower(${email})`))
+    .limit(1));
+  return rows.length > 0;
+}
+
 export async function findByTenantId(tenantId: string, limit = 50, offset = 0): Promise<UserView[]> {
   const rows = await scopedRead((tx) => tx.select().from(users)
     .where(eq(users.tenantId, tenantId))

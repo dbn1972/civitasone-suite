@@ -21,6 +21,10 @@ export async function listEvents(tenantId: string, from: Date, to: Date, type?: 
   return repo.listEvents(tenantId, from, to, type, limit, offset, filters);
 }
 
+export async function summarizeEvents(tenantId: string): Promise<repo.AuditEventSummary> {
+  return repo.summarizeEvents(tenantId);
+}
+
 /** Return the audit trail for a specific entity (entityType + entityId). */
 export async function listEventsByEntity(
   tenantId: string,

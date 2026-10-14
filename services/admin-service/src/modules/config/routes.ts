@@ -15,7 +15,13 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/admin/tenant/modules", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, TENANT_ADMIN);
-    sendValidated(reply, tenantModulesResponseSchema, { data: await queries.listTenantModules(ctx.tenantId) });
+    // GAP-TENANT-ADMIN-SETTINGS-01: ?detail=1 returns every module row with its
+    // enabled flag (the Settings page needs disabled modules too); the default
+    // stays the enabled-only {name} list the other readers rely on.
+    const detail = (req.query as { detail?: string } | undefined)?.detail === "1";
+    sendValidated(reply, tenantModulesResponseSchema, {
+      data: detail ? await queries.listTenantModulesDetailed(ctx.tenantId) : await queries.listTenantModules(ctx.tenantId),
+    });
   });
 
   // Tenant-admin module toggle (P0 — settings "Save changes" could not persist).
@@ -29,6 +35,13 @@ export async function configRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, TENANT_ADMIN);
     const { key } = moduleKeyParam.parse(req.params);
     const body = toggleBody.parse(req.body);
+    // GAP-TENANT-ADMIN-SETTINGS-07: a tenant admin may only toggle a module the
+    // tenant is actually provisioned with. An unknown key used to be accepted
+    // (202) and later INSERTed as a brand-new module row, letting a tenant
+    // admin self-grant a module outside its edition. Unknown key => 404.
+    if (!(await queries.isTenantModuleConfigured(ctx.tenantId, key))) {
+      throw new HttpError(404, "NOT_FOUND", "module is not provisioned for this tenant");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.toggleModule(ctx, ctx.tenantId, key, body.enabled, body.reason));
   });
 

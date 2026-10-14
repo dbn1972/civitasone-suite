@@ -38,12 +38,27 @@ describe("SubscriptionPage (GAP-TENANT-ADMIN-SUBSCRIPTION-01/02/04/05)", () => {
     expect(screen.getByText("No active subscription")).toBeInTheDocument();
   });
 
-  it("Upgrade links to /tenant-admin/plans and invoice goes through the proxy (SUBSCRIPTION-02/04)", async () => {
+  it("Upgrade links to /tenant-admin/plans (SUBSCRIPTION-02)", async () => {
     getSubscription.mockResolvedValue({ source: "api", data: SUB });
     const ui = await SubscriptionPage();
     render(ui);
     expect(screen.getByText("Upgrade plan").closest("a")).toHaveAttribute("href", "/tenant-admin/plans");
-    expect(screen.getByText("Download invoice").closest("a")).toHaveAttribute("href", "/api/proxy/v1/billing/invoices/latest?format=pdf");
+  });
+
+  it("renders no 'Download invoice' link: no service implements invoices/latest (SUBSCRIPTION-04, interim)", async () => {
+    getSubscription.mockResolvedValue({ source: "api", data: SUB });
+    const ui = await SubscriptionPage();
+    const { container } = render(ui);
+    expect(screen.queryByText("Download invoice")).not.toBeInTheDocument();
+    expect(container.querySelector('a[href*="invoices/latest"]')).toBeNull();
+  });
+
+  it("a suspended subscription shows as Suspended, not a trial (SUBSCRIPTION-06)", async () => {
+    getSubscription.mockResolvedValue({ source: "api", data: { ...SUB, status: "suspended" } });
+    const ui = await SubscriptionPage();
+    render(ui);
+    expect(screen.getByText("Suspended")).toBeInTheDocument();
+    expect(screen.queryByText(/trial/i)).not.toBeInTheDocument();
   });
 
   it("quota bar has progressbar semantics and status humanizes (SUBSCRIPTION-05)", async () => {
