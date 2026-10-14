@@ -32,7 +32,7 @@ export default function Loading() {
         {Array.from({ length: 6 }).map((_, i) => (
           <div
             key={i}
-            style={{ border: "1px solid var(--line, #e2e8f0)", borderRadius: 10, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}
+            style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <SkeletonBar w={38} h={38} style={{ borderRadius: "50%" }} />

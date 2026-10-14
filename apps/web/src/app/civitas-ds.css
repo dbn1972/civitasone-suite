@@ -589,3 +589,23 @@ tr.clickable:hover{background:var(--primary-soft)!important}
     width: 100%;
   }
 }
+
+/* ── .skeleton — shimmer placeholder for plain markup (SF-11) ─────────────
+   Token-only (--line2/--line), so it follows the .dark token swap; the
+   .dark rule below lifts contrast because --line2 is nearly the panel
+   colour in dark mode. @keyframes sk-shimmer lives in globals-animations.css.
+   Reduced motion: the shimmer stops and the block stays a flat placeholder. */
+.skeleton{
+  display:block;min-height:16px;border-radius:6px;
+  background-color:var(--line2);
+  background-image:linear-gradient(90deg,var(--line2) 0%,var(--line) 35%,var(--line2) 70%);
+  background-size:200% 100%;
+  animation:sk-shimmer 1.5s ease-in-out infinite;
+}
+.dark .skeleton{
+  background-color:var(--line);
+  background-image:linear-gradient(90deg,var(--line) 0%,color-mix(in srgb,var(--line) 70%,var(--ink2)) 35%,var(--line) 70%);
+}
+@media (prefers-reduced-motion:reduce){
+  .skeleton{animation:none;background-image:none}
+}

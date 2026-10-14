@@ -1,3 +1,4 @@
+import { SkeletonBar } from "@/app/_components/ds/Skeleton";
 import { useTranslations } from "next-intl";
 /**
  * GAP-CRM-CONTACTS-DETAIL-06: the loaded contact-detail page is a PageHeader
@@ -12,7 +13,7 @@ function CardSkeleton({ bodyHeight }: { bodyHeight: number }) {
   return (
     <div className="card" aria-hidden="true">
       <div className="card-h">
-        <div style={{ height: 16, width: 160, borderRadius: 6, background: "var(--line2)" }} />
+        <SkeletonBar w={160} h={16} style={{ borderRadius: 6 }} />
       </div>
       <div className="pad">
         <div style={{ height: bodyHeight, borderRadius: 8, background: "var(--line2)" }} />
@@ -28,9 +29,9 @@ export default function ContactDetailLoading() {
       {/* PageHeader placeholder (back link + title) */}
       <div className="ph">
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ height: 13, width: 90, borderRadius: 6, background: "var(--line2)" }} />
-          <div style={{ height: 26, width: 220, borderRadius: 6, background: "var(--line2)" }} />
-          <div style={{ height: 14, width: 160, borderRadius: 6, background: "var(--line2)" }} />
+          <SkeletonBar w={90} h={13} style={{ borderRadius: 6 }} />
+          <SkeletonBar w={220} h={26} style={{ borderRadius: 6 }} />
+          <SkeletonBar w={160} h={14} style={{ borderRadius: 6 }} />
         </div>
       </div>
       <div className="grid g-main" style={{ alignItems: "start" }}>

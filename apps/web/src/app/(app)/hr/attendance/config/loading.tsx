@@ -1,3 +1,4 @@
+import { SkeletonBar } from "@/app/_components/ds/Skeleton";
 import { PageHeader } from "../../../../_components/ds";
 import { getTranslations } from "next-intl/server";
 
@@ -27,10 +28,10 @@ export default async function Loading() {
     <div className="page-main wrap" aria-busy="true">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/attendance" backLabel={t("backLabel")} />
       <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>
-        <div style={{ height: 60, borderRadius: 12, background: "var(--bg, #f1f5f9)" }} />
+        <SkeletonBar h={60} style={{ borderRadius: 12 }} />
         <div className="grid g-2" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16 }}>
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} style={{ height: 180, borderRadius: 12, background: "var(--bg, #f1f5f9)" }} />
+            <div key={i} style={{ height: 180, borderRadius: 12, background: "var(--line2)" }} />
           ))}
         </div>
       </div>

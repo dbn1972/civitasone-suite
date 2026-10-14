@@ -1,3 +1,4 @@
+import { SkeletonBar } from "@/app/_components/ds/Skeleton";
 import { PageHeader } from "../../../../../_components/ds";
 import { getTranslations } from "next-intl/server";
 
@@ -12,8 +13,8 @@ export default async function EditEmployeeLoading() {
   const t = await getTranslations("employeeEdit");
   const fieldSkeleton = (
     <div style={{ display: "grid", gap: 6 }}>
-      <div className="skeleton" style={{ height: 13, width: "40%", borderRadius: 4 }} />
-      <div className="skeleton" style={{ height: 44, borderRadius: 10 }} />
+      <SkeletonBar w="40%" h={13} style={{ borderRadius: 4 }} />
+      <SkeletonBar h={44} style={{ borderRadius: 10 }} />
     </div>
   );
 
@@ -35,7 +36,7 @@ export default async function EditEmployeeLoading() {
             {fieldSkeleton}
           </div>
           <div style={{ borderTop: "1px solid var(--line)", paddingTop: 20 }}>
-            <div className="skeleton" style={{ height: 15, width: "30%", marginBottom: 16, borderRadius: 4 }} />
+            <SkeletonBar w="30%" h={15} style={{ marginBottom: 16, borderRadius: 4 }} />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 16 }}>
               {fieldSkeleton}
               {fieldSkeleton}

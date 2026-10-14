@@ -1,3 +1,5 @@
+import { SkeletonBar } from "@/app/_components/ds/Skeleton";
+
 /**
  * GAP-CRM-DOCUMENT-TYPES-05: the loaded page is a PageHeader over a single card
  * whose body is a list of stacked definition rows — NOT a grid of stat tiles.
@@ -12,12 +14,12 @@ export default function Loading() {
       <div className="ph">
         <div style={{ display: "grid", gap: 8 }}>
           <h1 id="page-heading">Document Types</h1>
-          <div style={{ height: 14, width: 320, borderRadius: 6, background: "var(--line2)" }} />
+          <SkeletonBar w={320} h={14} style={{ borderRadius: 6 }} />
         </div>
       </div>
       <div className="card animate-pulse">
         <div className="card-h">
-          <div style={{ height: 16, width: 160, borderRadius: 6, background: "var(--line2)" }} />
+          <SkeletonBar w={160} h={16} style={{ borderRadius: 6 }} />
         </div>
         <div className="pad" style={{ display: "grid", gap: 12 }}>
           {[1, 2, 3].map((i) => (

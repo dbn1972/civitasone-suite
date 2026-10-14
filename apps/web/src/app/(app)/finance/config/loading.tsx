@@ -1,16 +1,18 @@
+import { SkeletonBar } from "@/app/_components/ds/Skeleton";
+
 export default function Loading() {
   return (
     <div className="page-main wrap" style={{ animation: "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite" }} role="status" aria-live="polite" aria-label="Loading…">
       <div style={{ marginBottom: 24 }}>
-        <div style={{ height: 16, width: 160, borderRadius: 4, background: "#e5e7eb", marginBottom: 8 }} />
-        <div style={{ height: 32, width: 256, borderRadius: 4, background: "#e5e7eb" }} />
+        <SkeletonBar w={160} h={16} style={{ borderRadius: 4, marginBottom: 8 }} />
+        <SkeletonBar w={256} h={32} style={{ borderRadius: 4 }} />
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 16 }}>
-        {[0, 1].map((i) => (<div key={i} style={{ height: 96, borderRadius: 12, background: "#e5e7eb" }} />))}
+        {[0, 1].map((i) => (<div key={i} style={{ height: 96, borderRadius: 12, background: "var(--line2)" }} />))}
       </div>
-      <div style={{ height: 160, borderRadius: 12, background: "#e5e7eb", marginTop: 18 }} />
-      <div style={{ height: 160, borderRadius: 12, background: "#e5e7eb", marginTop: 18 }} />
-      <div style={{ height: 120, borderRadius: 12, background: "#e5e7eb", marginTop: 18 }} />
+      <SkeletonBar h={160} style={{ borderRadius: 12, marginTop: 18 }} />
+      <SkeletonBar h={160} style={{ borderRadius: 12, marginTop: 18 }} />
+      <SkeletonBar h={120} style={{ borderRadius: 12, marginTop: 18 }} />
     </div>
   );
 }

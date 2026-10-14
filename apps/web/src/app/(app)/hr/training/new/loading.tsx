@@ -1,3 +1,5 @@
+import { SkeletonBar } from "@/app/_components/ds/Skeleton";
+
 /**
  * GAP-HR-TRAINING-NEW-04: this used to be the legacy `.ph` dashboard header
  * ("New Training", hard-coded English) plus a 120px hero block + 4 stat
@@ -9,8 +11,8 @@
 function FieldSkeleton() {
   return (
     <div style={{ display: "grid", gap: 6 }}>
-      <div style={{ height: 12, width: 90, borderRadius: 4, background: "var(--bg, #f1f5f9)" }} />
-      <div style={{ height: 38, borderRadius: 8, background: "var(--bg, #f1f5f9)" }} />
+      <SkeletonBar w={90} h={12} style={{ borderRadius: 4 }} />
+      <SkeletonBar h={38} style={{ borderRadius: 8 }} />
     </div>
   );
 }
@@ -24,11 +26,11 @@ export default function Loading() {
       aria-label="Loading new training program form"
     >
       <div style={{ display: "grid", gap: 8, marginBottom: 20 }}>
-        <div style={{ height: 22, width: 260, borderRadius: 4, background: "var(--bg, #f1f5f9)" }} />
-        <div style={{ height: 14, width: 340, borderRadius: 4, background: "var(--bg, #f1f5f9)" }} />
+        <SkeletonBar w={260} h={22} style={{ borderRadius: 4 }} />
+        <SkeletonBar w={340} h={14} style={{ borderRadius: 4 }} />
       </div>
       <div
-        style={{ display: "grid", gap: 16, maxWidth: 672, borderRadius: 12, border: "1px solid var(--line, #e2e8f0)", padding: 24 }}
+        style={{ display: "grid", gap: 16, maxWidth: 672, borderRadius: 12, border: "1px solid var(--line)", padding: 24 }}
       >
         <FieldSkeleton />
         <FieldSkeleton />
@@ -43,7 +45,7 @@ export default function Loading() {
           <FieldSkeleton />
         </div>
         <FieldSkeleton />
-        <div style={{ height: 40, width: 160, borderRadius: 8, background: "var(--bg, #f1f5f9)" }} />
+        <SkeletonBar w={160} h={40} style={{ borderRadius: 8 }} />
       </div>
     </div>
   );

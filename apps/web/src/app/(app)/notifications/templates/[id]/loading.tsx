@@ -1,14 +1,5 @@
-export default function TemplateDetailLoading() {
-  return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <div className="mx-auto max-w-7xl animate-pulse space-y-5">
-        <div className="h-4 w-40 rounded bg-slate-200" />
-        <div className="h-9 w-64 rounded bg-slate-200" />
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="h-80 rounded-xl bg-slate-200" />
-          <div className="h-80 rounded-xl bg-slate-200" />
-        </div>
-      </div>
-    </div>
-  );
+import { RouteSkeleton } from "@/app/_components/RouteSkeleton";
+
+export default function Loading() {
+  return <RouteSkeleton variant="detail" />;
 }
