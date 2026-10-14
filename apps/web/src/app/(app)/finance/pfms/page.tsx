@@ -134,12 +134,12 @@ export default async function PfmsOpsConsolePage() {
       {source === "error" && <DataSourceBadge source="error" />}
 
       <StatGrid>
-        <StatCard icon="📦" iconBg="#eff6ff" label={t("statBatches")} value={batchesError ? "—" : batches.length} />
-        <StatCard icon="✍️" iconBg="#ecfdf3" label={t("statSigned")} value={batchesError ? "—" : signedCount} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPendingSignature")} value={batchesError ? "—" : pendingCount} />
+        <StatCard icon="📦" tone="info" label={t("statBatches")} value={batchesError ? "—" : batches.length} />
+        <StatCard icon="✍️" tone="good" label={t("statSigned")} value={batchesError ? "—" : signedCount} />
+        <StatCard icon="⏳" tone="warn" label={t("statPendingSignature")} value={batchesError ? "—" : pendingCount} />
         <StatCard
           icon="💰"
-          iconBg="#fef3f2"
+          tone="bad"
           label={t("statTotalBatchValue")}
           // Money formatting: amountMinor is paise (minor units) — use formatMoney,
           // not formatRupees. A failed batches fetch dashes it too (not "₹0.00").

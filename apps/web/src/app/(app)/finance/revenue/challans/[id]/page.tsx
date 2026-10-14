@@ -48,12 +48,12 @@ export default async function ChallanDetailPage({ params }: { params: { id: stri
         back="/finance/revenue/challans"
       />
       <StatGrid>
-        <StatCard icon="₹" iconBg="#ecfdf3" label="Amount" value={formatMoney(challan.amountMinor)} />
-        <StatCard icon="🧾" iconBg="#e7edfd" label="GRN No" value={challan.grnNo ?? "—"} />
-        <StatCard icon="📅" iconBg="#fffaeb" label="Created" value={formatIndianDate(challan.createdAt)} />
+        <StatCard icon="₹" tone="good" label="Amount" value={formatMoney(challan.amountMinor)} />
+        <StatCard icon="🧾" tone="info" label="GRN No" value={challan.grnNo ?? "—"} />
+        <StatCard icon="📅" tone="warn" label="Created" value={formatIndianDate(challan.createdAt)} />
         {/* GAP-FINANCE-REVENUE-CHALLANS-DETAIL-05: status is shown once, as the pill in the field
             grid below; this card carries the receipt head instead of repeating it raw. */}
-        <StatCard icon="🏛️" iconBg="#ecfdf3" label="Receipt Head" value={receiptHead} />
+        <StatCard icon="🏛️" tone="good" label="Receipt Head" value={receiptHead} />
       </StatGrid>
 
       <Card title="Challan Details" padding>

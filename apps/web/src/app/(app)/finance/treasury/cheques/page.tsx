@@ -28,12 +28,12 @@ export default async function ChequesPage() {
         ) : null}
       />
       <StatGrid>
-        <StatCard icon="📝" iconBg="#e7edfd" label="Total Instruments" value={n(c.total)} />
-        <StatCard icon="📤" iconBg="#eff6ff" label="Issued (outstanding)" value={n(c.issued)} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Presented" value={n(c.presented)} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Cleared" value={n(c.cleared)} />
-        <StatCard icon="❌" iconBg="#fce7ee" label="Bounced" value={n(c.bounced)} />
-        <StatCard icon="🚫" iconBg="#f2f4f7" label="Cancelled / other" value={n(c.cancelled + c.other)} />
+        <StatCard icon="📝" tone="info" label="Total Instruments" value={n(c.total)} />
+        <StatCard icon="📤" tone="info" label="Issued (outstanding)" value={n(c.issued)} />
+        <StatCard icon="⏳" tone="warn" label="Presented" value={n(c.presented)} />
+        <StatCard icon="✅" tone="good" label="Cleared" value={n(c.cleared)} />
+        <StatCard icon="❌" tone="bad" label="Bounced" value={n(c.bounced)} />
+        <StatCard icon="🚫" tone="neutral" label="Cancelled / other" value={n(c.cancelled + c.other)} />
       </StatGrid>
       {/* UX-012: the data-source badge now lives inside ChequesTable, driven
           by the same useSeededResource call that produces its rows — not a

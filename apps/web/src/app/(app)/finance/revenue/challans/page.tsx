@@ -26,13 +26,13 @@ export default async function ChallansPage() {
         ) : null}
       />
       <StatGrid>
-        <StatCard icon="📄" iconBg="#e7edfd" label="Total Challans" value={counts.total} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={counts.pending} />
-        <StatCard icon="🏦" iconBg="#eff6ff" label="Deposited" value={counts.deposited} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Reconciled" value={counts.reconciled} />
-        {counts.other > 0 ? <StatCard icon="❔" iconBg="#f2f4f7" label="Other" value={counts.other} /> : null}
+        <StatCard icon="📄" tone="info" label="Total Challans" value={counts.total} />
+        <StatCard icon="⏳" tone="warn" label="Pending" value={counts.pending} />
+        <StatCard icon="🏦" tone="info" label="Deposited" value={counts.deposited} />
+        <StatCard icon="✅" tone="good" label="Reconciled" value={counts.reconciled} />
+        {counts.other > 0 ? <StatCard icon="❔" tone="neutral" label="Other" value={counts.other} /> : null}
         {/* treasury.finance_challans has no "bank" column — "depositor" is the closest real field. */}
-        <StatCard icon="👤" iconBg="#eff6ff" label="Depositors" value={new Set(challans.map((c) => c.depositor)).size} />
+        <StatCard icon="👤" tone="info" label="Depositors" value={new Set(challans.map((c) => c.depositor)).size} />
       </StatGrid>
       {/* UX-012: the data-source badge now lives inside ChallansTable, driven
           by the same useSeededResource call that produces its rows — not a

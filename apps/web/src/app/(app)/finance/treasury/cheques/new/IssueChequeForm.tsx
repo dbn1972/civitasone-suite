@@ -12,14 +12,14 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSettledRefresh } from "@/lib/finance/useSettledRefresh";
 import { useTranslations } from "next-intl";
-import { Button, ConfirmDialog } from "@/app/_components/ds";
+import { Alert, Button, ConfirmDialog } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
 import { issueChequePayload, validateIssueCheque, type IssueChequeErrors } from "./issueCheque";
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
-const errStyle = { fontSize: 12, color: "#b91c1c" } as const;
+const errStyle = { fontSize: 12, color: "var(--bad)" } as const;
 
 /** Today's calendar date in IST (YYYY-MM-DD). */
 function todayIst(): string {
@@ -101,7 +101,7 @@ export function IssueChequeForm() {
   return (
     <>
       {message ? (
-        <div role={isError ? "alert" : "status"} aria-live={isError ? "assertive" : "polite"} className="banner" style={{ background: isError ? "#fef2f2" : "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
+        <Alert variant={isError ? "danger" : "success"} aria-live={isError ? "assertive" : "polite"}>{message}</Alert>
       ) : null}
       <div className="card">
         <form onSubmit={review} className="pad" noValidate>

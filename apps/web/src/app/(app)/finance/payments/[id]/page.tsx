@@ -91,10 +91,10 @@ export default async function PaymentDetailPage({ params }: { params: { id: stri
       />
 
       <StatGrid>
-        <StatCard icon="₹" iconBg="#ecfdf5" label="Amount" value={amountMinor != null ? formatMoney(amountMinor) : "—"} />
-        <StatCard icon="🏦" iconBg="#faf5ff" label="Mode" value={mode} />
-        <StatCard icon="💱" iconBg="#fff7ed" label="Currency" value={currency} />
-        <StatCard icon="🗓️" iconBg="#eff6ff" label="Created" value={createdAt !== "—" ? formatIndianDateTime(createdAt) : "—"} />
+        <StatCard icon="₹" tone="good" label="Amount" value={amountMinor != null ? formatMoney(amountMinor) : "—"} />
+        <StatCard icon="🏦" tone="neutral" label="Mode" value={mode} />
+        <StatCard icon="💱" tone="warn" label="Currency" value={currency} />
+        <StatCard icon="🗓️" tone="info" label="Created" value={createdAt !== "—" ? formatIndianDateTime(createdAt) : "—"} />
       </StatGrid>
 
       <Card title="Payment details" padding>
