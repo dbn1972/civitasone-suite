@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { EmptyState } from "@/app/_components/ds";
-import { Breadcrumb } from "../../Breadcrumb";
 
 // GAP-TENANT-ADMIN-ROLES-DETAIL-03: shown only for a genuine 404 (unknown role
 // id) via notFound(); a fetch failure renders the retryable error card in
@@ -8,7 +7,6 @@ import { Breadcrumb } from "../../Breadcrumb";
 export default function RoleNotFound() {
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Manage Roles", href: "/tenant-admin/roles" }, { label: "Not found" }]} />
       <EmptyState
         icon="🔑"
         title="Role not found"

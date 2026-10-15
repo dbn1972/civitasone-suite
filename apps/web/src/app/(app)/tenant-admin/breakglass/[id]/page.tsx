@@ -3,7 +3,6 @@ import { PageHeader, Card, StatusPill, RefreshErrorState } from "@/app/_componen
 import { getBreakglassEvent } from "@/app/_data/loaders";
 import { formatIndianDateTime, formatDuration } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
-import { Breadcrumb } from "../../Breadcrumb";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -26,7 +25,6 @@ export default async function BreakglassDetailPage({ params }: { params: { id: s
   if (result.source === "error" || result.data === null) {
     return (
       <div className="page-main wrap">
-        <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Break-Glass", href: "/tenant-admin/breakglass" }, { label: `Event ${params.id}` }]} />
         <PageHeader back="/tenant-admin/breakglass" title="Break-Glass Event Detail" />
         <Card title="Event Information" padding>
           <RefreshErrorState error={toHumanError("load", { area: "break-glass event" })} backHref="/tenant-admin/breakglass" />
@@ -39,7 +37,6 @@ export default async function BreakglassDetailPage({ params }: { params: { id: s
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Break-Glass", href: "/tenant-admin/breakglass" }, { label: `Event ${params.id}` }]} />
       <PageHeader
         back="/tenant-admin/breakglass"
         title="Break-Glass Event Detail"

@@ -1,5 +1,4 @@
 import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
-import { Breadcrumb } from "../Breadcrumb";
 import { getIdpProviders } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
@@ -29,9 +28,7 @@ export default async function IdpListPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Identity Providers" }]} />
       <PageHeader
-        back="/tenant-admin"
         title="Identity Providers"
         subtitle="Configured identity providers — Keycloak, LDAP, Azure AD, Google Workspace with sync status and user counts."
       />

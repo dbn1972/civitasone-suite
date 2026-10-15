@@ -1,6 +1,5 @@
 import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { Breadcrumb } from "../Breadcrumb";
 import { getOrgHierarchy, type OrgHierarchyNode } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
@@ -93,9 +92,7 @@ export default async function OrgHierarchyPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Organization Hierarchy" }]} />
       <PageHeader
-        back="/tenant-admin"
         title="Organization Hierarchy"
         subtitle="View your department structure and employee distribution across organizational units."
         actions={

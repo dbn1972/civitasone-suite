@@ -2,7 +2,6 @@ import { PageHeader, StatCard, StatusPill, EmptyState, Card, RefreshErrorState }
 import { formatIndianDate, formatMoney, humanizeStatus } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
-import { Breadcrumb } from "../Breadcrumb";
 import { getSubscription } from "../../../_data/loaders";
 import { PLANS_HREF } from "../navConstants";
 
@@ -26,9 +25,7 @@ export default async function SubscriptionPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Subscription" }]} />
       <PageHeader
-        back="/tenant-admin"
         title="Subscription"
         subtitle="Billing plan, usage limits, and module access for this tenant."
         actions={

@@ -4,7 +4,6 @@ import { getActiveSessions } from "../../../_data/loaders";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { getSessionUserId } from "@/lib/auth/roleGuard";
-import { Breadcrumb } from "../Breadcrumb";
 import { SessionsTable } from "./SessionsTable";
 import { distinctNetworkCount } from "./sessionHelpers";
 
@@ -28,9 +27,7 @@ export default async function AdminSessionsPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Active Sessions" }]} />
       <PageHeader
-        back="/tenant-admin"
         title="Active Sessions"
         subtitle="All active and recent user sessions for this tenant."
         actions={<PrintExportButton label="Export" style={{ minHeight: 44 }} documentTitle="Active Sessions" />}

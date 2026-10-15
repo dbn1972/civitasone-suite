@@ -30,8 +30,6 @@ export default async function NotificationChannelsPage() {
       <PageHeader
         title="Notification Channels"
         subtitle="Add the email, SMS or push channels your approvals and alerts are delivered through."
-        back="/tenant-admin"
-        backLabel="Office Admin"
       />
 
       <Card title="Configured Channels">

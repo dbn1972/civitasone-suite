@@ -84,3 +84,28 @@ describe("AutoBreadcrumb", () => {
     expect(modules).toHaveAttribute("aria-current", "page");
   });
 });
+
+// GAP-TENANT-ADMIN-USERS-06: the tenant-admin pages rely on this single trail, so the
+// acronym / hyphenated segments must read correctly and the root must stay a link.
+describe("AutoBreadcrumb — tenant-admin segments", () => {
+  it.each([
+    ["/tenant-admin/api-keys", "API Keys"],
+    ["/tenant-admin/ai-plugins", "AI Plugins"],
+    ["/tenant-admin/breakglass", "Break-Glass"],
+    ["/tenant-admin/mfa", "MFA"],
+    ["/tenant-admin/sso", "SSO"],
+    ["/tenant-admin/siem", "SIEM"],
+    ["/tenant-admin/idp", "Identity Providers"],
+    ["/tenant-admin/org-hierarchy", "Organization Hierarchy"],
+    ["/tenant-admin/org-type", "Organization Type"],
+    ["/tenant-admin/platform-config", "Platform Config"],
+    ["/tenant-admin/data-export", "Data Export"],
+  ])("%s ends in %s and links back to Tenant Admin", (path, label) => {
+    mockPathname = path;
+    render(<AutoBreadcrumb />);
+    expect(screen.getByText("Tenant Admin").closest("a")).toHaveAttribute("href", "/tenant-admin");
+    const last = screen.getByText(label);
+    expect(last.closest("a")).toBeNull();
+    expect(last).toHaveAttribute("aria-current", "page");
+  });
+});

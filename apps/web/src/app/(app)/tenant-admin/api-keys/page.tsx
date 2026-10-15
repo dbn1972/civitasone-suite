@@ -5,7 +5,6 @@ import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { APIKeysTable } from "./APIKeysTable";
 import { APIKeyActions } from "./APIKeyActions";
-import { Breadcrumb } from "../Breadcrumb";
 
 export default async function APIKeysPage() {
   const result = await getAPIKeys();
@@ -24,9 +23,7 @@ export default async function APIKeysPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "API Keys" }]} />
       <PageHeader
-        back="/tenant-admin"
         title="API Keys"
         subtitle="Service-to-service and external API access keys."
       />

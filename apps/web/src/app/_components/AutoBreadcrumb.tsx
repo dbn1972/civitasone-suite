@@ -57,6 +57,20 @@ const SEGMENT_LABELS: Record<string, string> = {
   modules: "Modules",
   silos: "Silo Provisions",
   "domain-packs": "Domain Packs",
+  // GAP-TENANT-ADMIN-USERS-06: tenant-admin segments whose Title Case fallback reads
+  // wrong (acronyms, hyphenated names), now that the pages dropped their local
+  // Breadcrumb and rely on this one global trail.
+  "api-keys": "API Keys",
+  "ai-plugins": "AI Plugins",
+  breakglass: "Break-Glass",
+  mfa: "MFA",
+  sso: "SSO",
+  siem: "SIEM",
+  idp: "Identity Providers",
+  "org-hierarchy": "Organization Hierarchy",
+  "org-type": "Organization Type",
+  "platform-config": "Platform Config",
+  "data-export": "Data Export",
   // HR sub-routes
   employees: "Employees",
   attendance: "Attendance",

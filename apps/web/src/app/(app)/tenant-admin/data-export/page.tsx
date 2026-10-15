@@ -13,7 +13,7 @@ export default async function DataExportPage() {
           driven by the same useSeededResource call that produces its rows —
           not a second, independent read of `source` here that could
           disagree with the client's own cache state (UX-002's pattern). */}
-      <PageHeader title="Data Export" subtitle="Export your organisation's data held in CivitasOne under DPDP Act 2023." back="/tenant-admin" />
+      <PageHeader title="Data Export" subtitle="Export your organisation's data held in CivitasOne under DPDP Act 2023." />
 
       {/* GAP-TENANT-ADMIN-DATA-EXPORT-04: the organisation is a data fiduciary
           exporting data it holds — not a data principal exercising a personal

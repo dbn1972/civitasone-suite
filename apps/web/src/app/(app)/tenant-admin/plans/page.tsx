@@ -9,7 +9,7 @@ export default async function PlansPage() {
 
   return (
     <div className="page-main wrap">
-      <PageHeader title="Plans & Subscription" subtitle="Compare plans, upgrade, or manage your subscription." back="/tenant-admin" />
+      <PageHeader title="Plans & Subscription" subtitle="Compare plans, upgrade, or manage your subscription." />
 
       <StatGrid>
         <StatCard icon="📋" iconBg="#eef2ff" label="Current Plan" value={currentPlan?.name ?? "—"} />

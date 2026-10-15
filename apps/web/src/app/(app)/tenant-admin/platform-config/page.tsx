@@ -74,7 +74,7 @@ export default async function PlatformConfigPage() {
   if (!config) {
     return (
       <div className="page-main wrap">
-        <PageHeader title="Platform Configuration" subtitle="Tunable parameters and read-only infrastructure view for platform operators." back="/tenant-admin" backLabel="Tenant Admin" />
+        <PageHeader title="Platform Configuration" subtitle="Tunable parameters and read-only infrastructure view for platform operators." />
         <Card title="Platform Configuration" padding>
           <RefreshErrorState error={toHumanError("load", { area: "platform configuration" })} backHref="/tenant-admin" />
         </Card>
@@ -89,9 +89,6 @@ export default async function PlatformConfigPage() {
       <PageHeader
         title="Platform Configuration"
         subtitle="Tunable parameters and read-only infrastructure view for platform operators."
-        back="/tenant-admin"
-        /* GAP-TENANT-ADMIN-PLATFORM-CONFIG-06: match the breadcrumb/nav term. */
-        backLabel="Tenant Admin"
       />
 
       {/* ─── CONTROLLABLE SETTINGS (GAP-...-01: real editors, not raw-endpoint helper text) ─── */}

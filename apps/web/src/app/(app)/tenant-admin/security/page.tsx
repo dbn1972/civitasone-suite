@@ -1,5 +1,4 @@
 import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
-import { Breadcrumb } from "../Breadcrumb";
 import { getSecurityOverview } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
@@ -12,9 +11,7 @@ export default async function SecurityCenterPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Security Center" }]} />
       <PageHeader
-        back="/tenant-admin"
         title="Security Center"
         subtitle="Overview of security posture — sessions, MFA adoption, device trust, and recent security events."
       />
