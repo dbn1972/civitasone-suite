@@ -1,21 +1,25 @@
 import { ModuleListPage } from "../../../_components/ModuleListPage";
 import { getTenantPlans } from "../_data";
-import { LABELS } from "@/lib/labels";
+import { getTranslations } from "next-intl/server";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
+  const t = await getTranslations("tenantPages");
   const { data, source } = await getTenantPlans();
   return (
     <div className="page-main">
       <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/tenant">{LABELS.tenantTitle}</a>
+        <ArrowLeft aria-hidden="true" size={14} /> <a href="/tenant">{t("office")}</a>
       </nav>
       <ModuleListPage
-        title={`${LABELS.tenantTitle} — Plans`}
-        description="Available plans with pricing and module entitlements."
+        title={t("plansTitle")}
+        description={t("plansSubtitle")}
         rows={data}
+        showId={false}
+        // Pinned: the title is translated, so the offline cache key must not derive from it.
+        cacheKey="module.office-plans"
         source={source}
         errorArea="plans"
       />

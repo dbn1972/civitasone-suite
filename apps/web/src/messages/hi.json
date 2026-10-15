@@ -14944,5 +14944,30 @@
     "eofficeRaiseIntro": "इसे उठाने पर यह {refType} औपचारिक, छेड़छाड़-रोधी निर्णय के लिए eOffice को भेजा जाता है। अनुमोदन शृंखला राशि के आधार पर स्वतः चुनी जाती है। फ़ाइल हमेशा आपके अपने नाम से उठाई जाती है।",
     "eofficeSelfFallback": "आप (साइन-इन अधिकारी)",
     "rfqIndentStatus": "({status})"
+  },
+  "tenantPages": {
+      "office": "कार्यालय",
+      "codeListsTitle": "कार्यालय — कोड सूचियाँ",
+      "codeListsSubtitle": "संदर्भ कोड सूचियाँ और उनके तिथि-आधारित मान।",
+      "consentExchangeTitle": "कार्यालय — सहमति विनिमय",
+      "consentExchangeSubtitle": "संगठनों के बीच सहमति अनुरोध (केवल पढ़ने के लिए)।",
+      "dataMigrationTitle": "कार्यालय — डेटा माइग्रेशन",
+      "dataMigrationSubtitle": "संगठन के डेटा माइग्रेशन और मिलान कार्य।",
+      "orgHierarchyTitle": "कार्यालय — संगठन पदानुक्रम",
+      "orgHierarchySubtitle": "संगठन इकाइयाँ और पदानुक्रम के नोड।",
+      "overviewTitle": "कार्यालय — अवलोकन",
+      "overviewSubtitle": "आपके संगठन की वर्तमान प्रोफ़ाइल।",
+      "plansTitle": "कार्यालय — योजनाएँ",
+      "plansSubtitle": "उपलब्ध योजनाएँ, मूल्य और मॉड्यूल पात्रता सहित।",
+      "positionsTitle": "कार्यालय — पद",
+      "positionsSubtitle": "स्वीकृत संख्या और रिक्तियों सहित पद मास्टर रिकॉर्ड।",
+      "quotasTitle": "कार्यालय — कोटा और उपयोग",
+      "quotasSubtitle": "इस कार्यालय के लिए योजना सीमाओं के विरुद्ध संसाधन खपत।",
+      "settingsTitle": "कार्यालय — सेटिंग्स",
+      "settingsSubtitle": "कार्यालय के कॉन्फ़िगरेशन कुंजी और उनके मान।",
+      "stewardshipTitle": "कार्यालय — डेटा संरक्षकता",
+      "stewardshipSubtitle": "डेटा गवर्नेंस डोमेन और उनके स्वामी।",
+      "subscriptionsTitle": "कार्यालय — सदस्यताएँ",
+      "subscriptionsSubtitle": "वर्तमान सदस्यता योजना, नवीनीकरण तिथि और जीवनचक्र की स्थिति।"
   }
 }

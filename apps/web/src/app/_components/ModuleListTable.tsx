@@ -79,6 +79,7 @@ export function ModuleListTable({
   source,
   errorArea,
   backHref,
+  showId = true,
 }: {
   cacheKey: string;
   rows: ModuleRowSummary[];
@@ -91,7 +92,10 @@ export function ModuleListTable({
   errorArea?: string;
   /** Optional "back" target for the error state's back action. */
   backHref?: string;
+  /** GAP-TENANT-*-02: false hides the raw ID column (default true). */
+  showId?: boolean;
 }) {
+  const columns = showId ? MODULE_COLUMNS : MODULE_COLUMNS.filter((c) => c.key !== "id");
   const { data, provenance, offline, cachedAt } = useSeededResource<ModuleRowSummary[]>(
     cacheKey,
     rows,
@@ -140,7 +144,7 @@ export function ModuleListTable({
         />
       ) : (
         <DataTable<ModuleRow>
-          columns={MODULE_COLUMNS}
+          columns={columns}
           rows={data as ModuleRow[]}
           sortable
           filterable
