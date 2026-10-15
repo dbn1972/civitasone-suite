@@ -162,7 +162,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DASHBOARD-01  ·  HIGH  ·  confirmed  ·  theme FABRICATED
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: no storage/quota card; test apps/web/src/app/(app)/knowledge/dashboard/page.test.tsx 'has no fabricated storage/quota card'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** "Storage — % of quota" is fabricated: storagePct = round(total documents / 500 × 100) (dashboard/page.tsx:93). A count of documents is presented as a storage quota; file bytes are never read.
 - **Verified evidence:** dashboard/page.tsx:93 storagePct = min(100, round(total/500*100)); StorageDonut (l.46-66, rendered l.165) labels it 'Storage usage: N% of quota'. 500 is a magic number; no file size or quota data is read. KnowledgeDocSummary/types show no size field (grep of _data/types.ts found none).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/dashboard/page.tsx`
@@ -176,7 +176,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DASHBOARD-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was DATEFMT)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: labels match computation; test apps/web/src/app/(app)/knowledge/dashboard/page.test.tsx 'labels match computation: Active and Archived cards'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** "Due for Archival" counts status==="archived" (already archived) and "Under Retention" counts approved+under_review (page.tsx:82-83); neither derives from a retention date.
 - **Verified evidence:** page.tsx:82 underRetention counts status approved or under_review; l.83 dueForArchival counts status==="archived" (already archived). Neither uses a retention date. A records loader exists (getKnowledgeRecords, loaders.ts:4421) with a records page; whether records carry retention/expiry dates cannot be verified from this file. Theme DATEFMT is wrong.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/dashboard/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -191,7 +191,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DASHBOARD-03  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: chips carry ?q= and no bulk link; test apps/web/src/app/(app)/knowledge/dashboard/page.test.tsx 'search chips carry the query param'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** Dead deep links: Bulk upload → ?bulk=true (page.tsx:116) and search chips → ?q= (page.tsx:178) are ignored — documents/new/page.tsx reads only searchParams.category and search/page.tsx reads no params.
 - **Verified evidence:** page.tsx:116 links /knowledge/documents/new?bulk=true; documents/new/page.tsx reads only searchParams.category and grep for 'bulk' in documents/ finds nothing. Search chips (l.178) link /knowledge/search?q=...; search/page.tsx takes no searchParams and passes only initialDocs; grep of SearchClient for searchParams/q found nothing.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/dashboard/page.tsx`, `apps/web/src/app/(app)/knowledge/documents/new/page.tsx`, `apps/web/src/app/(app)/knowledge/search/page.tsx`, `apps/web/src/app/(app)/knowledge/search/SearchClient.tsx`
@@ -206,7 +206,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DASHBOARD-04  ·  MEDIUM  ·  partly  ·  theme WIRING (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** Fixed: RecentDocsTable.tsx rowLinkKey=id -> /knowledge/documents/[id] (documents/[id] now exists); header already 'Author'. Test: apps/web/src/app/(app)/knowledge/dashboard/page.test.tsx 'Given a recent document, then the author column reads Author (not Dept) and the title links to the document detail'.
 - **First-pass claim:** Recent table labels doc.author as "Dept" (RecentDocsTable.tsx:21) and rows are not links; no document detail route exists under knowledge/.
 - **Verified evidence:** RecentDocsTable.tsx:21 labels the doc.author column 'Dept'; rows have no link (columns l.208-218 have no render for title). No generic document detail route: knowledge has policies/[id] only. Author may be a person, not a department (page.tsx:102 author ?? '—'). Theme I18N is not the accurate tag.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/dashboard/RecentDocsTable.tsx`
@@ -220,7 +221,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DASHBOARD-06  ·  LOW  ·  partly  ·  theme VISUAL (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: residual literal hex fallbacks (var(--brand, #4f46e5) etc, and --brand is not even defined) removed in this PR -> var(--primary)/var(--ink)/var(--mut); test apps/web/src/app/(app)/knowledge/dashboard/page.test.tsx 'announces the top categories with counts, labels each bar, and uses no literal hex colour'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** Chart: hard-coded #ca8a04 fill, single-series labels truncated at 9 chars, no values/axis and a generic aria-label (page.tsx:25,32,35).
 - **Verified evidence:** page.tsx:35 hard-codes fill="#ca8a04"; l.32 truncates labels at >10 chars to 9 + ellipsis (finding said 9); l.25 aria-label is 'Documents by category bar chart' with no data summary; bars have no value labels or axis, only <text> category names. Also fixed 9px text.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/dashboard/page.tsx`
@@ -235,7 +236,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DASHBOARD-07  ·  LOW  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** ALREADY-FIXED on main: StatCards/chart read the server aggregate GET /v1/knowledge/documents/summary (dashboard/page.tsx:73); the list feeds only the 5 recent rows and is capped by the service default page size. Tests: apps/web/src/app/(app)/knowledge/dashboard/page.test.tsx 'shows the repository-wide total, not the length of the capped list' and services/knowledge-service/tests/gap2-knowledge-dashboard-metrics.test.ts.
 - **First-pass claim:** All aggregates are computed client-side from the full documents list (no aggregate endpoint) — cost grows with the repository; list is cached 120s (loaders.ts:4414).
 - **Verified evidence:** page.tsx:77-98 loads the whole docs list via getKnowledgeDocs (loaders.ts:4412-4418, revalidateSeconds 120, fetch /api/v1/knowledge/documents, no limit) and computes counts, categories and recent 5 in the server component; no aggregate endpoint used. Cost is server-side render O(n) plus payload transfer, not client-side as stated (page is a server component). Cache is 120s as stated.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/dashboard/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -256,7 +258,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DOCUMENTS-NEW-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 knowledge INTERIM - needs owner decision: file upload. accessLevel is done (select, least-privilege default internal, server-side enum + clearance, restricted/confidential only for knowledge_admin). The create command has no fileKey and there is no object-storage upload flow; the form says so honestly instead of implying a file was stored.)
 - **First-pass claim:** The form is titled "Publish Document" but posts only { title, category } (CreateDocumentForm.tsx:36-39): no file/content, access level, version or approval path, although list/search/detail views display accessLevel, version and fileType. The created record is an empty shell.
 - **Verified evidence:** CreateDocumentForm.tsx:36-39 builds body {title, category} only; form renders just Title and Category inputs (:62-69). Button reads 'Publish document' (:81). No file, access level, version or content field, though list/KnowledgeDocsTable.tsx:23-25 and search show version/accessLevel. Backend createDocumentBody is only quoted in the comment at :9-12; knowledge-service is absent from the snapshot so accepted fields (file, accessLevel, version) cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/documents/new/CreateDocumentForm.tsx`, `apps/web/src/app/(app)/knowledge/documents/new/page.tsx`
@@ -273,7 +275,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DOCUMENTS-NEW-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** Decision (the ledger's own safe option): remove the entry points. Dashboard bulk link was already gone; this PR deletes list/ImportButton.tsx and repository/ImportButton.tsx and their usage. Test: apps/web/src/app/(app)/knowledge/repository/page.test.tsx 'GAP-NEW-02/LIST-04/NEW-04: no Import control; no link targets mode=import or bulk=true'.
 - **First-pass claim:** ?bulk=true (dashboard) and ?mode=import (Import buttons in list/repository) both land here and are ignored — page.tsx reads only searchParams.category (page.tsx:4-6). Users who click Bulk upload/Import see the single-document form.
 - **Verified evidence:** page.tsx:4-6 types searchParams as { category?: string } and reads only category; bulk and mode are never read. Producers: dashboard/page.tsx:116 (?bulk=true), list/ImportButton.tsx:11 and repository/ImportButton.tsx:11 (?mode=import). No bulk/import UI exists anywhere under knowledge/.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/documents/new/page.tsx`, `apps/web/src/app/(app)/knowledge/dashboard/page.tsx`, `apps/web/src/app/(app)/knowledge/list/ImportButton.tsx`, `apps/web/src/app/(app)/knowledge/repository/ImportButton.tsx`
@@ -289,7 +292,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DOCUMENTS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: category is a select from _data/categories.ts and the repository segment uses categorySegment stems; tests apps/web/src/app/(app)/knowledge/documents/new/CreateDocumentForm.test.tsx (NEW-03) and apps/web/src/app/(app)/knowledge/_data/statusLabels.test.ts categorySegment, apps/web/src/app/(app)/knowledge/repository/page.test.tsx 'choosing the Circulars segment keeps Circular documents'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** Category is free text (form:68) but the repository segments filter by substring of "circulars/policies/notifications" (RepositoryClient.tsx:24) — typos or "Circular Letter" silently fall out of filters.
 - **Verified evidence:** CreateDocumentForm.tsx:68 is a free-text input with placeholder 'Circular, Policy, Notification' (singular). RepositoryClient.tsx:24 filters with rawCategory.toLowerCase().includes(seg.toLowerCase()) where seg is 'Circulars'/'Policies'/'Notifications' (SEG_OPTIONS :17). So even the placeholder examples 'Circular', 'Policy', 'Notification' do NOT match (substring of plural), i.e. the documented usage silently drops out of segments. Stored category vocabulary in the backend is not visible.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/documents/new/CreateDocumentForm.tsx`, `apps/web/src/app/(app)/knowledge/repository/RepositoryClient.tsx`
@@ -305,7 +308,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DOCUMENTS-NEW-04  ·  MEDIUM  ·  partly  ·  theme COPY (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: residual: repository page still said '+ Publish Document' - now '+ Add Document' (t(), en+hi); tests apps/web/src/app/(app)/knowledge/repository/page.test.tsx 'the create action reads + Add Document' and apps/web/src/app/(app)/knowledge/documents/new/CreateDocumentForm.test.tsx 'submit button reads Add document'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** Button says "Publish" but no publish/approval semantics are visible; the maker-checker lifecycle lives on /knowledge/policies/[id] and this route does not create governed documents (POST /documents, not /policies).
 - **Verified evidence:** Submit label is 'Publish document' (CreateDocumentForm.tsx:81) and page title 'Publish Document' (page.tsx:11), POSTing to /api/proxy/v1/knowledge/documents (:41). The governed lifecycle (submit/approve/publish/acknowledge) lives in policies/[id]/PolicyActions.tsx:20-69 against /policies/{id}/... The copy is misleading. The proposed fix (ConfirmDialog with reason, maker!=checker, audit) is not appropriate for a plain create; whether the documents endpoint sets a published status is not visible (service absent).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/documents/new/CreateDocumentForm.tsx`, `apps/web/src/app/(app)/knowledge/documents/new/page.tsx`, `apps/web/src/app/(app)/knowledge/repository/page.tsx`, `apps/web/src/app/(app)/knowledge/dashboard/page.tsx`
@@ -321,7 +324,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DOCUMENTS-NEW-06  ·  LOW  ·  partly  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: no inline #fff on .field cards; banner uses tokens; test apps/web/src/app/(app)/knowledge/documents/new/CreateDocumentForm.test.tsx 'does not hard-code a white background on the field cards'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** Field wrappers hard-code background:#fff (form:62,66) and a fixed maxWidth 820, so dark mode shows white cards.
 - **Verified evidence:** CreateDocumentForm.tsx:62 and :66 set inline background:'#fff' on .field wrappers, overriding civitas-ds.css:221 .field{background:var(--panel)}; dark mode is a .dark class on <html> (civitas-ds.css:317), so these render white. Also page.tsx:20 hard-codes the info banner colours (#fffaeb/#92400e). The fixed maxWidth 820 (form :60, page :20) is a layout choice, not a dark-mode defect.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/documents/new/CreateDocumentForm.tsx`, `apps/web/src/app/(app)/knowledge/documents/new/page.tsx`
@@ -388,7 +391,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-FAQS-06  ·  LOW  ·  partly  ·  theme OTHER (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 knowledge INTERIM - needs backend field: the FAQ API/table has no sourcePolicyId/sourceDocId, so there is nothing to link. Not invented.)
 - **First-pass claim:** Answers render as pre-wrapped plain text (page.tsx:46): no links to the cited policy despite the assistant citing documents.
 - **Verified evidence:** Answer is rendered as <p style=whiteSpace:pre-wrap>{f.answer}</p> (faqs/page.tsx:46) - true. But the FAQ loader maps only id, question, answer, category, tags, status, updatedAt (loaders.ts:102-110); there is no policy/document reference field, so there is no dead link, just no data to link. Assistant citations exist separately (assistant/AssistantClient.tsx:97-101). Whether the API exposes a sourceDocId is not visible (service absent).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/_data/loaders.ts`, `apps/web/src/app/(app)/knowledge/_data/types.ts`, `apps/web/src/app/(app)/knowledge/faqs/page.tsx`
@@ -410,7 +413,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-LIST-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (W1 SF-02/03 re-check #2010: reopened — list rows (KnowledgeDocsTable) still have no row link although documents/[id] now exists; was: (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f))
+- [ ] **Status** (W2 knowledge partial in #2059 - needs owner decision for the rest: rows now open /knowledge/documents/[id] from repository, dashboard and search (list route redirects). Still open: download, archive-with-reason and version upload - knowledge-service has no archive/download command (only PATCH articles/:id/publish). Needs a product decision and a maker-checker/audit design before building. Was: W1 SF-02/03 re-check #2010 reopened.)
+- **W2 evidence:** Tests for the row link: apps/web/src/app/(app)/knowledge/repository/page.test.tsx 'GAP-LIST-01: a row title links to /knowledge/documents/<full id>'; apps/web/src/app/(app)/knowledge/documents/[id]/page.test.tsx.
 - **First-pass claim:** Dead-end table: rows have no link and no detail route exists (knowledge/ has documents/new only) — a document cannot be opened, downloaded, versioned or archived from any page.
 - **Verified evidence:** list/page.tsx:72 renders KnowledgeDocsTable; its DataTable (KnowledgeDocsTable.tsx:18-36) has no rowLinkKey/rowLinkPrefix (policies/page.tsx:75-76 shows the prop pair). rows.id is the truncated 8-char string (page.tsx:34), so the real id is not even in the row. knowledge/documents contains only new/ (no [id] route), no download/archive/version calls anywhere in apps/web/src knowledge. Backend endpoints for GET/archive/version are not visible (service absent).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/list/page.tsx`, `apps/web/src/app/(app)/knowledge/list/KnowledgeDocsTable.tsx`, `apps/web/src/app/(app)/knowledge/documents/[id]/page.tsx`, `apps/web/src/app/(app)/knowledge/repository/RepositoryClient.tsx`
@@ -427,7 +431,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-LIST-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: no truncated-UUID Doc ID column; test apps/web/src/app/(app)/knowledge/repository/page.test.tsx 'GAP-LIST-02: no Doc ID column and author header reads Author'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** "Doc ID" is the first 8 hex characters of the UUID upper-cased (page.tsx:34) — not a stable reference number and not what policies show (referenceNo).
 - **Verified evidence:** list/page.tsx:34 sets id: doc.id.slice(0,8).toUpperCase(); repository/page.tsx:43 does the same. Governed policies show referenceNo with the same slice only as a fallback (policies/page.tsx:22). Whether the documents API returns a referenceNo is not visible (KnowledgeDocSummary type is imported from a module absent in the snapshot).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/list/page.tsx`, `apps/web/src/app/(app)/knowledge/repository/page.tsx`
@@ -459,7 +463,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-LIST-04  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** Both ImportButton components deleted (list/ and repository/). Test: apps/web/src/app/(app)/knowledge/repository/page.test.tsx 'GAP-NEW-02/LIST-04/NEW-04: no Import control'.
 - **First-pass claim:** Import button is a plain navigation to ?mode=import, which the target page ignores (ImportButton.tsx:11, documents/new/page.tsx:4-6) — no import UI exists.
 - **Verified evidence:** list/ImportButton.tsx:10-12 sets window.location.href='/knowledge/documents/new?mode=import' (full page reload, not router push); documents/new/page.tsx:4-6 ignores mode. repository/ImportButton.tsx is an identical copy. No import UI exists.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/list/ImportButton.tsx`, `apps/web/src/app/(app)/knowledge/repository/ImportButton.tsx`
@@ -473,7 +478,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-LIST-06  ·  LOW  ·  confirmed  ·  theme OTHER (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: residual: the Access column did not exist on the surviving list (repository) - added in this PR with lock + spelled-out level; tests apps/web/src/app/(app)/knowledge/repository/page.test.tsx 'LIST-06: restricted documents show a lock and the spelled-out level' and apps/web/src/app/(app)/knowledge/documents/[id]/page.test.tsx 'shows lock icon for restricted access level'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** Access level printed raw (KnowledgeDocsTable.tsx:25) with no pill or lock icon for restricted documents (DPDP visibility cue).
 - **Verified evidence:** KnowledgeDocsTable.tsx:25 declares { key:'accessLevel', label:'Access' } with no render, so DataTable.cellValue (DataTable.tsx:138) prints the raw string. Restriction is not visually distinguished. The proposed <Masked> fix does not apply (nothing to mask; the mask helper does not exist in the shared tree, only a local MaskedInput in hr/employees/new/steps/Step4.tsx). Enforcement of access level on the server cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/list/KnowledgeDocsTable.tsx`, `apps/web/src/app/(app)/knowledge/repository/RepositoryClient.tsx`
@@ -494,7 +499,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: policies/new + CreatePolicyForm + role-gated '+ New'; empty state now has the create link inside it (this PR); tests apps/web/src/app/(app)/knowledge/policies/page.test.tsx 'GAP-POLICIES-01: + New action links to /knowledge/policies/new' and 'an author sees a working create link inside the empty state'; services/knowledge-service/tests/policies-lifecycle.test.ts 'creates a draft SOP'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** Empty state instructs "Create a SOP, policy or circular to begin the lifecycle" (page.tsx:62) but the route has no create action and there is no policies/new page; documents/new posts to /documents, not /policies, so governed documents cannot be authored from the web app.
 - **Verified evidence:** policies/page.tsx:62 EmptyState says 'Create a SOP, policy or circular...' yet PageHeader (:45-49) has no actions, and there is no policies/new directory. No web code POSTs to /knowledge/policies (only lifecycle calls at PolicyActions.tsx:20). documents/new posts to /documents (CreateDocumentForm.tsx:41). A draft-creating policies endpoint is implied by the lifecycle (submit on 'draft') but cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/page.tsx`, `apps/web/src/app/(app)/knowledge/policies/new/page.tsx`, `apps/web/src/app/(app)/knowledge/policies/new/CreatePolicyForm.tsx`
@@ -510,7 +515,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** ALREADY-FIXED on main (policies/page.tsx toRow docType uppercased, PoliciesTable has no cellType on Type). Test: apps/web/src/app/(app)/knowledge/policies/page.test.tsx 'GAP-POLICIES-02: the Type cell is plain text, not a status pill (and Status is)'.
 - **First-pass claim:** cellType "status" is applied to Type (page.tsx:67), so document type gets status-pill semantics (colour implies state).
 - **Verified evidence:** policies/page.tsx:67 sets cellType:'status' on docType; DataTable.cellValue (DataTable.tsx:127) renders StatusPill, which falls back to variant 'info' (blue) for unknown values (StatusPill.tsx), so every type gets a state-looking pill (label humanized, e.g. 'Sop').
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/page.tsx`
@@ -522,7 +528,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-03  ·  MEDIUM  ·  partly  ·  theme OTHER (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** ALREADY-FIXED on main for the acceptance criteria (overdue pill, Review-due stat links to ?filter=review-due). Author column deliberately not added: the API returns ids only (no names) - tracked under POLICIES-DETAIL-01. Tests: apps/web/src/app/(app)/knowledge/policies/page.test.tsx 'GAP-POLICIES-03: an overdue published review shows a red (bad) Overdue pill', 'Review due stat links to ?filter=review-due', '?filter=review-due shows review-due data only'.
 - **First-pass claim:** No owner/author, approver or overdue cue in the table although authorId/approverId are loaded (loaders.ts:42-43); "Review due" stat has no link to the list filtered to overdue reviews.
 - **Verified evidence:** Row type/columns (policies/page.tsx:8-17,65-73) omit author/approver although loaded (loaders.ts:42-43); reviewDue is plain text with no overdue cue (:27). The 'Review due' StatCard (:55) is not clickable and StatCard has no href prop (StatCard.tsx:4-11), so a link would need a wrapper. Data is UUIDs, so names need a lookup. It is missing feature, not a dead link (theme wrong).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/page.tsx`, `apps/web/src/app/_components/ds/StatCard.tsx`
@@ -538,7 +545,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-05  ·  LOW  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** ALREADY-FIXED on main (list and detail show 'Unassigned'). Tests: apps/web/src/app/(app)/knowledge/policies/page.test.tsx 'GAP-POLICIES-05' and apps/web/src/app/(app)/knowledge/policies/[id]/page.test.tsx 'GAP-POLICIES-05: a draft without referenceNo shows Unassigned in the header'.
 - **First-pass claim:** Reference falls back to id.slice(0,8) for drafts without referenceNo (page.tsx:22) — a truncated UUID shown as a document number.
 - **Verified evidence:** policies/page.tsx:22 uses p.referenceNo ?? p.id.slice(0,8).toUpperCase(); same fallback in [id]/page.tsx:30. Truncated UUID looks like a real document number.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/page.tsx`, `apps/web/src/app/(app)/knowledge/policies/[id]/page.tsx`
@@ -572,7 +580,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 knowledge INTERIM - needs identity lookup: DPDP part done server-side (acknowledgement list returns everyone only to approver roles; others get the total and their own id) and the page prints no UUIDs. Resolving ids to names needs a directory lookup the knowledge-service must not join to; owner decision on the source (hr/identity API) needed.)
+- **W2 evidence:** Tests: services/knowledge-service/tests/w2-knowledge-clearance-visibility.test.ts 'the acknowledgement list shows an approver everyone, but a knowledge_user only the total and their own id'; apps/web/src/app/(app)/knowledge/policies/[id]/page.test.tsx 'GAP-DETAIL-01'.
 - **First-pass claim:** Acknowledgement list prints raw employee UUIDs to every viewer (page.tsx:60-64): unreadable for the HR owner and a DPDP concern (who has/hasn’t acknowledged is personal data); no role gate is visible in the web tree.
 - **Verified evidence:** policies/[id]/page.tsx:60-64 maps acks.employeeIds to <li> monospace raw ids. No role check exists in page.tsx; roleGuard.getSessionRoles()/PermissionDenied are used elsewhere (hr/rti/page.tsx:37-40) but not here. No shared Masked component exists. Server-side authorisation of the /acknowledgements endpoint is not visible (service absent). Employee names would need a lookup (getEmployees, app/_data/loaders.ts:1122) - the ack payload carries ids only.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/[id]/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`, `apps/web/src/app/(app)/knowledge/_data/loaders.ts`
@@ -622,7 +631,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (W1 SF-02/03 re-check #2010: reopened — Reject exists, but reviewerId/approverId are still not displayed on policies/[id]/page.tsx; was: (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f))
+- [ ] **Status** (W2 knowledge INTERIM - names + reason: Return/Reject with a mandatory reason exists and an Approval trail card now shows author/reviewer/approver relative to the viewer without raw ids. Still open: names (see DETAIL-01) and showing the reject reason in the trail - the service keeps the reason only in the event/audit payload, not on the record; needs a schema decision. Was: W1 SF-02/03 re-check #2010 reopened.)
+- **W2 evidence:** Tests: apps/web/src/app/(app)/knowledge/policies/[id]/page.test.tsx 'GAP-DETAIL-04: the approval trail ...' (x2); apps/web/src/app/(app)/knowledge/policies/[id]/PolicyActions.test.tsx 'GAP-DETAIL-04'; services/knowledge-service/tests/reject-endpoint.test.ts.
 - **First-pass claim:** Under review has only Approve — no Reject / return-for-changes path (PolicyActions.tsx:46-53); reviewerId, approverId, authorId and supersedesId are loaded but never displayed (loaders.ts:42-43,71-72), so maker-checker evidence is invisible.
 - **Verified evidence:** PolicyActions.tsx:46-53 shows only Approve for under_review; there is no reject/return action and no reject endpoint call in the web tree. authorId/approverId are mapped in toPolicySummary (loaders.ts:42-43), reviewerId/supersedesId in the detail mapper (loaders.ts:77-78); page.tsx never renders them (only status/effective/review/ack count, :34-37). Line refs in the observation (71-72) are off by a few lines. Existence of a reject endpoint cannot be verified (service absent).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/[id]/PolicyActions.tsx`, `apps/web/src/app/(app)/knowledge/policies/[id]/page.tsx`
@@ -638,7 +648,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-DETAIL-05  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 re-confirmed W1 SF-02/03 (#2010): closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: server now returns the caller's own id to non-approvers so alreadyAcknowledged still works; was W0 re-confirmed W1 SF-02/03 (#2010): closed by #1916). Tests: apps/web/src/app/(app)/knowledge/policies/[id]/page.test.tsx 'GAP-DETAIL-05'; services/knowledge-service/tests/w2-knowledge-clearance-visibility.test.ts 'acknowledging twice yields one ack'
 - **First-pass claim:** "I have read & understood" stays available while status is published, with no per-user acknowledged state; repeat acknowledgements and the constant note "Read and understood" (PolicyActions.tsx:62-67) are unmanaged.
 - **Verified evidence:** canAcknowledge = status === 'published' (PolicyActions.tsx:32) and the note is the constant 'Read and understood' (:67) - true. But the component cannot know the current employee's ack state: page.tsx:47 passes only policyId/status, the ack list has employee ids only, and the session has no employee id helper. Whether the server ignores duplicate acknowledgements is not visible (service absent).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/policies/[id]/PolicyActions.tsx`, `apps/web/src/app/(app)/knowledge/policies/[id]/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`
@@ -675,7 +685,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-RECORDS-01  ·  HIGH  ·  confirmed  ·  theme OTHER (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: disposed/transferred labels and neutral pill; tests apps/web/src/app/(app)/knowledge/records/page.test.tsx 'GAP-RECORDS-01' and apps/web/src/app/(app)/knowledge/_data/statusLabels.test.ts recordStatusLabel/recordStatusPill; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** A record with status "disposed" (already destroyed) is labelled "Weeding due" with a red rejected pill and counted in "Weeding Due" (page.tsx:26,34,81) — the register shows finished disposals as pending work.
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/records/page.tsx:26,34 map status 'disposed' to pill 'rejected' and label 'Weeding due'; :81 counts disposed as 'Weeding Due' KPI. 'disposed' is a terminal state so the label presents a finished action as pending work. Strings are hard-coded English (no next-intl), which is the tagged theme but a minor part.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/records/page.tsx`
@@ -692,7 +702,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-RECORDS-02  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: isReviewDue/isWeedingDue boundaries; tests apps/web/src/app/(app)/knowledge/_data/recordDue.test.ts and apps/web/src/app/(app)/knowledge/records/page.test.tsx 'GAP-RECORDS-01/02'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** "Due" means three different things: KPI Due Review = active with disposalDueDate ≤ +30 days (page.tsx:17-21), KPI Weeding Due = disposed (page.tsx:81), Due segment = disposed OR transferred (RecordsClient.tsx:23-24). Counts will not reconcile with the filtered table.
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/records/page.tsx:17-21 Due Review = active with disposalDueDate<=now+30d; :81 Weeding Due = status disposed; RecordsClient.tsx:22-24 'Due' segment = disposed OR transferred. Three definitions; the Due segment matches neither KPI.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/records/page.tsx`, `apps/web/src/app/(app)/knowledge/records/RecordsClient.tsx`
@@ -709,7 +719,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-RECORDS-03  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** ALREADY-FIXED on main (Policy button -> /knowledge/policies, no ignored query params). Test: apps/web/src/app/(app)/knowledge/records/page.test.tsx 'GAP-RECORDS-03: Policy header button links to /knowledge/policies'.
 - **First-pass claim:** Header "Policy" button links to /knowledge/records?filter=policy (page.tsx:72); the page and RecordsClient never read searchParams, so it reloads the same view.
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/records/page.tsx:72 Link href '/knowledge/records?filter=policy'; KnowledgeRecordsPage takes no searchParams (page.tsx:8) and RecordsClient has no useSearchParams. The link reloads the same view. A policy list exists at /knowledge/policies.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/records/page.tsx`
@@ -723,7 +734,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-RECORDS-04  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 knowledge INTERIM - needs owner decision: disposal is GFR-governed and irreversible; there is no dispose/weed command or approval workflow in knowledge-service and none was invented. The page stays a read-only schedule.)
 - **First-pass claim:** Disposal is irreversible and GFR-governed, yet the page has no weed/dispose/transfer action, approval or certificate step — it is a read-only list; "+ Schedule" creates a categorised document, not a record (documents/new/page.tsx:22-24).
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/records/page.tsx is a read-only list with no dispose/weed/transfer control (confirmed). '+ Schedule' (page.tsx:73) goes to documents/new?category=Retention Schedule, and documents/new/page.tsx:22-24 states openly that records are projected from documents and there is no records-schedule command. The knowledge service is not in the snapshot, so whether a dispose command exists is cannot-verify; the gap is a missing feature and not a defect of existing code.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/records/page.tsx`, `apps/web/src/app/(app)/knowledge/records/RecordsClient.tsx`, `(new) apps/web/src/app/(app)/knowledge/records/DisposeDialog.tsx`
@@ -740,7 +751,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-RECORDS-06  ·  LOW  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** ALREADY-FIXED on main (recordStatusLabel/Pill cover archived+inactive; RecordRow has a Disposal due column). Tests: apps/web/src/app/(app)/knowledge/records/page.test.tsx 'Given archived and inactive records, then each row shows a labelled pill; disposal-due is formatted or a dash' and apps/web/src/app/(app)/knowledge/_data/statusLabels.test.ts recordStatusLabel/recordStatusPill cases.
 - **First-pass claim:** Status "archived" prints the raw lowercase value; "inactive" is labelled but no pill maps it (page.tsx:24-38). disposalDueDate is never shown as a column.
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/records/page.tsx:24-38: archived does have a pill ('archived', :28) but recordStatusLabel (:32-38) has no archived case, so raw 'archived' prints lowercase. 'inactive' has a label but recordStatusPill returns 'mut' (:29), so pill mapping is missing. disposalDueDate is fetched (used :18-19) but RecordRow (:40-50) and DataTable columns omit it (RecordsClient.tsx:139-150).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/records/page.tsx`, `apps/web/src/app/(app)/knowledge/records/RecordsClient.tsx`
@@ -755,7 +767,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-RECORDS-07  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: IST calendar-date cutoff; test apps/web/src/app/(app)/knowledge/_data/recordDue.test.ts 'at 20:00 UTC (01:30 IST next day) advances the date'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** 30-day window uses the server clock in server-local time (page.tsx:12-14), so the "Due Review" count can differ by a day from what IST users expect.
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/records/page.tsx:12-14 uses new Date() and setDate on the server (server TZ, default UTC) and compares to new Date(r.disposalDueDate) at :19; a date-only value parses as UTC midnight. Page is a server component with revalidate 120s in the loader, so boundaries shift by up to a day for IST users. Impact is small.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/records/page.tsx`
@@ -792,7 +804,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-REPOSITORY-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** ALREADY-FIXED on main (errored gate in repository/page.tsx). Tests: apps/web/src/app/(app)/knowledge/repository/page.test.tsx 'GAP-REPOSITORY-02: error state shows RefreshErrorState' and 'on a failed load the stat cards show dashes and no zero counts'.
 - **First-pass claim:** Failed fetch reads as an empty repository: only DataSourceBadge is added (page.tsx:55); stats stay 0 and RepositoryClient shows "No documents found in the repository." (RepositoryClient.tsx:36). Dashboard and list gate this (RefreshErrorState); repository does not.
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/repository/page.tsx:9 destructures source; :55 only shows DataSourceBadge when error; stats (:68-71) render 0 from empty array; RepositoryClient.tsx:35-36 shows 'No documents found in the repository.' The loader returns empty data with source 'error' (apiClient.ts:119-172). records and list pages already gate on errored with RefreshErrorState.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/repository/page.tsx`, `apps/web/src/app/(app)/knowledge/repository/RepositoryClient.tsx`
@@ -809,7 +822,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-REPOSITORY-03  ·  HIGH  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: archived hidden, footnote count equals hidden rows; tests apps/web/src/app/(app)/knowledge/repository/page.test.tsx 'GAP-REPOSITORY-03' (x2); was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** Footnote says archived documents are "not shown" (page.tsx:79-83) but rows = docs.map(...) includes archived documents (page.tsx:42) — the message is false.
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/repository/page.tsx:42 rows = docs.map(...) with no status filter (archived included, labelled 'Archived' at :19), while :79-83 says '{archived} archived documents not shown'. The message is false.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/repository/page.tsx`
@@ -839,7 +852,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-REPOSITORY-05  ·  MEDIUM  ·  partly  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: residual: row links pointed at /knowledge/policies/<id> and Import was a dead param - rows now open /knowledge/documents/<id> and Import is removed in this PR; tests apps/web/src/app/(app)/knowledge/repository/page.test.tsx 'GAP-LIST-01 ...' and 'GAP-NEW-02/LIST-04/NEW-04 ...'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** Import navigates to ?mode=import, ignored by the target form (ImportButton.tsx:11); rows have no link to a document detail (none exists).
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/repository/ImportButton.tsx:11 navigates to /knowledge/documents/new?mode=import; documents/new/page.tsx:4-5 reads only searchParams.category, so mode is ignored (confirmed). Rows have no link (RepositoryClient.tsx DataTable has no rowHref although DataTable supports a row link builder). A governed detail route does exist at knowledge/policies/[id] but it uses getKnowledgePolicy; whether it serves every category is cannot-verify without the service.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/repository/ImportButton.tsx`, `apps/web/src/app/(app)/knowledge/repository/RepositoryClient.tsx`, `apps/web/src/app/(app)/knowledge/documents/new/page.tsx`
@@ -854,7 +867,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-REPOSITORY-07  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: segment filter uses canonical stems; tests apps/web/src/app/(app)/knowledge/_data/statusLabels.test.ts categorySegment (x7) and apps/web/src/app/(app)/knowledge/repository/page.test.tsx 'choosing the Circulars segment keeps Circular documents and drops the others'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** Segments filter by substring of a free-text category; "Notifications" matches only categories containing that word (RepositoryClient.tsx:24).
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/repository/RepositoryClient.tsx:24 filters by rawCategory.toLowerCase().includes('circulars'|'policies'|'notifications'); a category 'Circular' (singular) does not match 'Circulars'. Category is a free string from the API type.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/repository/RepositoryClient.tsx`, `apps/web/src/app/(app)/knowledge/repository/page.tsx`
@@ -876,7 +889,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-SEARCH-01  ·  HIGH  ·  partly  ·  theme CAP
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: subtitle/placeholder honest; test apps/web/src/app/(app)/knowledge/search/page.test.tsx 'GAP-SEARCH-01: subtitle does not claim full-text or all modules'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** Search is a client-side substring score over whatever documents the list loader returned (SearchClient.tsx:28-37,66-74) yet is titled "Full-text + metadata search across all documents & modules". There is no full-text index, no other module and no server call; large repositories are capped by the list endpoint.
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/search/SearchClient.tsx:28-37 scores by substring on title, category, author, fileType and tags; :66-74 filters initialDocs client-side; search/page.tsx:5 loads getKnowledgeDocs (/api/v1/knowledge/documents). Subtitle at :124 claims full-text across all documents and modules and placeholder :178 mentions files and records. True: no full-text, no other modules. The list endpoint cap cannot be verified (knowledge service absent from snapshot).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/search/SearchClient.tsx`, `apps/web/src/app/(app)/knowledge/search/page.tsx`
@@ -892,7 +905,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-SEARCH-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: error shows retry state; test apps/web/src/app/(app)/knowledge/search/page.test.tsx 'GAP-SEARCH-02: failed fetch shows retry state, not No documents found'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** A failed documents fetch is invisible: page.tsx:6 drops source, so the user sees "No documents found" for every query (SearchClient.tsx:213-219).
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/search/page.tsx:5 destructures only data, dropping source; on failure the loader returns [] so SearchClient.tsx:213-219 renders 'No documents found'. No error indicator at all (not even DataSourceBadge).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/search/page.tsx`, `apps/web/src/app/(app)/knowledge/search/SearchClient.tsx`
@@ -906,7 +919,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-SEARCH-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: column is Status, segment filters rows; test apps/web/src/app/(app)/knowledge/search/SearchClient.test.tsx 'SEARCH-03: selecting Files keeps only documents with a fileType; the column header is Status'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** "Source module" column renders the document status pill (SearchClient.tsx:90-92); the All/Documents/Files segment keeps state in resultSeg but never filters rows (SearchClient.tsx:61,225-229).
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/search/SearchClient.tsx:90-92 the 'Source module' column renders StatusPill of doc.status; :61 resultSeg set by Segmented (:225-229) but resultRows is never filtered by it (matchedDocs at :66-74 ignores resultSeg). Files segment has no basis since fileType is not used to classify.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/search/SearchClient.tsx`
@@ -920,7 +933,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-SEARCH-04  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** q param already read on main; result links pointed at /knowledge/policies/<id> (wrong route for non-policy documents) - now /knowledge/documents/<id>. Tests: apps/web/src/app/(app)/knowledge/search/SearchClient.test.tsx 'Given a matching result, then its title links to the document detail route', 'Given a q param, results are shown immediately'; apps/web/src/app/(app)/knowledge/search/page.test.tsx 'GAP-SEARCH-04'.
 - **First-pass claim:** Result rows have no link to open a document; dashboard chips pass ?q= but the page never reads it (dashboard/page.tsx:178, search/page.tsx:4-6).
 - **Verified evidence:** SearchClient.tsx:83-92 result titleNode is plain text, DataTable given no row link; dashboard/page.tsx:174-178 chips link to /knowledge/search?q=..., but search/page.tsx:4-6 takes no searchParams and SearchClient starts with query '' and submitted false (:56-57).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/search/page.tsx`, `apps/web/src/app/(app)/knowledge/search/SearchClient.tsx`
@@ -955,7 +969,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-HOME-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** Every /v1/knowledge/* route authenticates (401), role-gates (403) and tenant-scopes (RLS GUC + tenant_id). Tests: services/knowledge-service/tests/w2-knowledge-clearance-visibility.test.ts (401/403 on documents, records, policies, faqs, guided-flows; tenant B never sees tenant A rows) and services/knowledge-service/tests/routes.test.ts.
 - **First-pass claim:** Backend knowledge-service is not in the snapshot (services/ holds only hrms-service): endpoints, roles, audit and payload validation for /v1/knowledge/* are undeterminable; shapes below come from the page/loader code only.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['GET /api/v1/knowledge/* (hub links only)']`
 - **Question:** The knowledge hub's downstream list endpoints must each authenticate, tenant-scope and be reachable by the roles the hub shows links to.
@@ -966,7 +981,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-ASSISTANT-06  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [ ] **Status** (W2 knowledge REOPENED in #2059 by PROVISIONAL re-check - needs owner decision: PII redaction before persistence is real and tested (gap-knowledge-faqs02-assistant06.test.ts), but there is no retention window/expiresAt column or purge job on assistant_interactions and no per-interaction audit event. Retention period needs an owner decision, then a migration + purge job. Was: W0 PROVISIONAL closed by #1916.)
 - **First-pass claim:** Free-text questions are stored as assistant interactions (metrics.total); DPDP retention/masking of personal data typed into the question is undeterminable. Backend knowledge-service is not in the snapshot (services/ holds only hrms-service): endpoints, roles, audit and payload validation for /v1/knowledge/* are undeterminable; shapes below come from the page/loader code only.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/knowledge/assistant/ask', 'POST /v1/knowledge/assistant/escalate', 'GET /v1/knowledge/assistant/metrics']`
 - **Question:** The assistant ask/escalate handlers must apply a retention limit and PII masking (Aadhaar, PAN, phone, email) to stored question text, and log an audit event per interaction.
@@ -977,7 +992,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DASHBOARD-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** GET documents is authenticated, tenant scoped, paginated; summary endpoint gives complete counts and excludes uncleared levels. Test: services/knowledge-service/tests/w2-knowledge-clearance-visibility.test.ts 'summary counts exclude uncleared documents' + 'paginates'; services/knowledge-service/tests/gap2-knowledge-dashboard-metrics.test.ts.
 - **First-pass claim:** Backend knowledge-service is not in the snapshot (services/ holds only hrms-service): endpoints, roles, audit and payload validation for /v1/knowledge/* are undeterminable; shapes below come from the page/loader code only.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['GET /api/v1/knowledge/documents']`
 - **Question:** GET /v1/knowledge/documents must require an authenticated role, tenant-scope, return category/status/createdAt per row and paginate so dashboard counts are complete.
@@ -988,7 +1004,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-DOCUMENTS-NEW-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [ ] **Status** (W2 knowledge REOPENED in #2059 by PROVISIONAL re-check - needs owner decision: title length (200) + trim and the document.created audit event are covered by tests, but duplicate-title handling is NOT implemented (acceptance: same title twice -> 409 DUPLICATE_TITLE or a new version). Choosing 409 vs versioning (and a unique index on lower(title) per tenant) is a product call. Was: W0 PROVISIONAL closed by #1916.)
 - **First-pass claim:** Audit event on document creation, title length limit and duplicate-title handling are undeterminable. Backend knowledge-service is not in the snapshot (services/ holds only hrms-service): endpoints, roles, audit and payload validation for /v1/knowledge/* are undeterminable; shapes below come from the page/loader code only.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/knowledge/documents']`
 - **Question:** POST /v1/knowledge/documents must zod-validate title (max length, trim), reject or version duplicate titles per tenant, restrict to a publisher role and emit a document.created audit event.
@@ -999,7 +1015,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-FAQS-02  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W2 knowledge re-confirmed in #2059: non-editors get published only on list; residual: by-id read leaked drafts - fixed in this PR; tests services/knowledge-service/tests/gap-knowledge-faqs02-assistant06.test.ts and services/knowledge-service/tests/w2-knowledge-clearance-visibility.test.ts 'draft by id is 404'; was W0 PROVISIONAL: closed by #1916)
 - **First-pass claim:** status is loaded for FAQs and flows (loaders.ts:108,130) but the page never filters on it (page.tsx:40,59); draft/retired entries would be shown to every viewer unless the API filters — undeterminable.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['GET /api/v1/knowledge/faqs', 'GET /api/v1/knowledge/guided-flows']`
 - **Question:** GET faqs and guided-flows must return only status=published items to non-editor roles (drafts/retired only for knowledge editors).
@@ -1010,7 +1026,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-FAQS-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** GET faqs/guided-flows: 401 without token, 403 foreign role, tenant scoped, published-only for non-editors; by-id read now applies the same status rule. Test: services/knowledge-service/tests/w2-knowledge-clearance-visibility.test.ts 'lists are authenticated, tenant scoped and published-only for knowledge_user; draft by id is 404'.
 - **First-pass claim:** Backend knowledge-service is not in the snapshot (services/ holds only hrms-service): endpoints, roles, audit and payload validation for /v1/knowledge/* are undeterminable; shapes below come from the page/loader code only.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['GET /api/v1/knowledge/faqs', 'GET /api/v1/knowledge/guided-flows']`
 - **Question:** GET faqs and guided-flows must require authentication, tenant-scope and return the fields the web maps (id, question, answer, status, category).
@@ -1021,7 +1038,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-LIST-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** Verified in services/knowledge-service/src/modules/documents/routes.ts: GET /v1/knowledge/documents authenticates (401), role-gated (403), tenant scoped (RLS + tenant_id), paginated (limit/offset) and now filters by accessLevel clearance in the query (clearance.ts). Test: services/knowledge-service/tests/w2-knowledge-clearance-visibility.test.ts 'Given restricted/confidential docs ... knowledge_user lists next', 'never returns another tenant rows', 'paginates', '401 without a token and 403 for a foreign role'.
 - **First-pass claim:** Backend knowledge-service is not in the snapshot (services/ holds only hrms-service): endpoints, roles, audit and payload validation for /v1/knowledge/* are undeterminable; shapes below come from the page/loader code only.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['GET /api/v1/knowledge/documents']`
 - **Question:** GET /v1/knowledge/documents must authenticate, tenant-scope, paginate and return status/category/accessLevel per row.
@@ -1032,7 +1050,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** Fixed in services/knowledge-service/src/modules/policies/{repo,queries,routes}.ts: draft/under_review/approved are returned only to approver roles and the document's own author/reviewer; others get published/superseded; review-due is tenant scoped, published only. Test: services/knowledge-service/tests/w2-knowledge-clearance-visibility.test.ts 'a draft is hidden from other knowledge_users ...', 'GET by id: a draft is 404 ...', 'policies are tenant scoped and need a token'.
 - **First-pass claim:** Backend knowledge-service is not in the snapshot (services/ holds only hrms-service): endpoints, roles, audit and payload validation for /v1/knowledge/* are undeterminable; shapes below come from the page/loader code only.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['GET /api/v1/knowledge/policies', 'GET /api/v1/knowledge/policies/review-due']`
 - **Question:** GET policies must return draft/under_review items only to editors and published to others; review-due must be tenant-scoped and computed server-side.
@@ -1043,7 +1062,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-POLICIES-DETAIL-06  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** Role per transition verified (approve/reject/publish/supersede/withdraw = approver roles; maker-checker 403; invalid state 409) and acknowledgement now binds to the caller (employeeId must equal the actor, 403 otherwise) and is an idempotent no-op on repeat (no duplicate event/audit). Tests: services/knowledge-service/tests/w2-knowledge-clearance-visibility.test.ts 'transitions are role gated ...', 'an acknowledgement cannot be forged for another employee (403) and acknowledging twice yields one ack'; services/knowledge-service/tests/policies-lifecycle.test.ts 'maker-checker: author cannot approve their own document (403)'.
 - **First-pass claim:** Backend knowledge-service is not in the snapshot (services/ holds only hrms-service): endpoints, roles, audit and payload validation for /v1/knowledge/* are undeterminable; shapes below come from the page/loader code only.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['GET /api/v1/knowledge/policies/{id}', 'GET /api/v1/knowledge/policies/{id}/acknowledgements', 'POST /v1/knowledge/policies/{id}/submit|approve|publish|acknowledge']`
 - **Question:** Policy transition endpoints must enforce role per transition (submit: author, approve: approver != author, publish: publisher), reject invalid state transitions with 409, emit audit events, and acknowledge must bind to the caller's own employee id.
@@ -1065,7 +1085,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-REPOSITORY-06  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** Service now applies accessLevel clearance on list/search/detail/records/summary (documents/clearance.ts, repo.ts). Test: services/knowledge-service/tests/w2-knowledge-clearance-visibility.test.ts (list, search, detail, summary, records cases; mutation-checked).
 - **First-pass claim:** Backend knowledge-service is not in the snapshot (services/ holds only hrms-service): endpoints, roles, audit and payload validation for /v1/knowledge/* are undeterminable; shapes below come from the page/loader code only.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['GET /api/v1/knowledge/documents']`
 - **Question:** GET /v1/knowledge/documents must apply accessLevel filtering for the caller and paginate, since the repository page lists everything returned.
@@ -1076,7 +1097,8 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-SEARCH-06  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by #2059)
+- **W2 evidence:** Restricted/confidential documents are absent from the list, search (POST /search) and by-id (404) for a non-admin, in the SQL WHERE (not hidden by the UI). Test: services/knowledge-service/tests/w2-knowledge-clearance-visibility.test.ts 'search (POST /search) omits restricted docs ...' and 'detail by id: 404 for an uncleared user'. Not covered here: GET /v1/knowledge/search (search_index), /documents/:id/versions and /ai/* read paths - see PR body remainder.
 - **First-pass claim:** Whether restricted documents (accessLevel) are already filtered out for the caller is undeterminable. Backend knowledge-service is not in the snapshot (services/ holds only hrms-service): endpoints, roles, audit and payload validation for /v1/knowledge/* are undeterminable; shapes below come from the page/loader code only.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['GET /api/v1/knowledge/documents (search filters client-side in SearchClient.tsx)']`
 - **Question:** GET /v1/knowledge/documents must exclude documents whose accessLevel exceeds the caller's clearance, because search runs client-side over whatever the list returns.
