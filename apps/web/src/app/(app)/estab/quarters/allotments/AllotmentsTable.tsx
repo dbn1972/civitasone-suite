@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { DataTable } from "@/app/_components/ds";
+import { DataTable, Segmented } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 
 export type AllotmentRow = {
@@ -18,9 +19,22 @@ export type AllotmentRow = {
   version: number;
 } & Record<string, unknown>;
 
+// GAP-ESTAB-QUARTERS-ALLOTMENTS-05: status filter segments (key -> i18n label key).
+const STATUS_SEGMENTS: ReadonlyArray<readonly [string, string]> = [
+  ["all", "allotSegAll"],
+  ["applied", "allotSegApplied"],
+  ["waitlisted", "allotSegWaitlisted"],
+  ["allotted", "allotSegAllotted"],
+  ["occupied", "allotSegOccupied"],
+  ["vacation_notice", "allotSegVacationNotice"],
+];
+
 export function AllotmentsTable({ allotments }: { allotments: AllotmentRow[] }) {
   const tFallback = useTranslations("employeeFallback");
-  const rows = allotments.map((a) => {
+  const tP2 = useTranslations("estabP2");
+  const [segment, setSegment] = useState("all");
+  const visible = segment === "all" ? allotments : allotments.filter((a) => a.status === segment);
+  const rows = visible.map((a) => {
     const unknownEmployee = tFallback("unknownEmployee");
     return {
       ...a,
@@ -49,6 +63,14 @@ export function AllotmentsTable({ allotments }: { allotments: AllotmentRow[] }) 
   ];
 
   return (
+    <>
+    <div style={{ margin: "0 16px 8px" }}>
+      <Segmented
+        options={STATUS_SEGMENTS.map(([value, key]) => ({ value, label: tP2(key) }))}
+        value={segment}
+        onChange={setSegment}
+      />
+    </div>
     <DataTable
       columns={columns}
       rows={rows}
@@ -67,5 +89,6 @@ export function AllotmentsTable({ allotments }: { allotments: AllotmentRow[] }) 
       emptyTitle="No allotment applications yet"
       emptyMessage="Applications employees submit for a quarter will appear here."
     />
+    </>
   );
 }

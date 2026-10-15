@@ -1987,6 +1987,10 @@ export const ComplianceSummarySchema = z.object({
   frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "annual", "one_time"]),
   dueDate: z.string(),
   assignedTo: z.string().optional(),
+  // GAP-ESTAB-COMPLIANCE-04: best-effort display name for `assignedTo` (an hrms
+  // employee id), resolved server-side. Absent when unresolvable; the web shows
+  // "Unknown employee", never the id.
+  assignedToName: z.string().optional(),
   status: z.enum(["pending", "complied", "overdue", "not_applicable"]),
   lastCompliedDate: z.string().optional(),
   remarks: z.string().optional(),

@@ -1,4 +1,5 @@
 import { cache } from "../../shared/infra.js";
+import { getEmployeeDisplayMap, type EmployeeDisplay } from "../../shared/hrms-client.js";
 import * as repo from "./repo.js";
 import type { MeetingRow, ComplianceRow } from "./schema.js";
 
@@ -110,7 +111,8 @@ function mapComplianceStatus(s: string): "pending" | "complied" | "overdue" | "n
   return "pending";
 }
 
-function mapComplianceRow(row: ComplianceRow) {
+function mapComplianceRow(row: ComplianceRow, employees: Map<string, EmployeeDisplay> = new Map()) {
+  const assignedToName = row.assignedTo ? employees.get(row.assignedTo)?.fullName : undefined;
   return {
     id: row.id,
     complianceCode: row.complianceCode,
@@ -119,6 +121,7 @@ function mapComplianceRow(row: ComplianceRow) {
     frequency: mapFrequency(row.frequency),
     dueDate: row.dueDate,
     assignedTo: row.assignedTo ?? undefined,
+    ...(assignedToName ? { assignedToName } : {}),
     status: mapComplianceStatus(row.status),
     lastCompliedDate: row.lastCompliedDate ?? undefined,
     remarks: row.remarks ?? undefined,
@@ -130,5 +133,13 @@ export async function listComplianceSummaries(tenantId: string, limit: number) {
     cache.makeKey(tenantId, "compliance", `list:${limit}`),
     () => repo.listComplianceItems(tenantId, limit),
   );
-  return (rows ?? []).map(mapComplianceRow);
+  const list = rows ?? [];
+  // GAP-ESTAB-COMPLIANCE-04: names for the ids on this page (batched, tenant-
+  // scoped, outside the cache so a rename is never stale). Best-effort: an
+  // unresolvable id simply has no name and the web shows "Unknown employee".
+  const employees = await getEmployeeDisplayMap(
+    tenantId,
+    list.flatMap((r) => (r.assignedTo ? [r.assignedTo] : [])),
+  );
+  return list.map((r) => mapComplianceRow(r, employees));
 }

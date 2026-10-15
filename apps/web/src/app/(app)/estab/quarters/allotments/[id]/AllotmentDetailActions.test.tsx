@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render as rtlRender, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { IntlWrapper } from "@/lib/testUtils/intl";
 
@@ -156,5 +156,47 @@ describe("AllotmentDetailActions", () => {
 
     expect(await screen.findByText(/No licence-fee rate is configured/)).toBeInTheDocument();
     expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+  });
+});
+
+describe("AllotmentDetailActions — GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01 (command outcome is reported)", () => {
+  beforeEach(() => {
+    browserJsonMock.mockReset();
+    refreshMock.mockReset();
+    vi.useFakeTimers();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const settle = async (ms = 0) => { await act(async () => { await vi.advanceTimersByTimeAsync(ms); }); };
+
+  async function allot(ui: ReactElement) {
+    const view = render(ui);
+    fireEvent.click(screen.getByRole("button", { name: "Allot quarter" }));
+    await settle();
+    fireEvent.click(screen.getAllByRole("button", { name: "Allot quarter" })[1]);
+    await settle();
+    return view;
+  }
+
+  it("Given the server never applies the command, When ~15s pass with no change, Then the officer is told it was not applied", async () => {
+    browserJsonMock.mockResolvedValue({ status: "accepted" });
+    await allot(<AllotmentDetailActions {...BASE_PROPS} status="applied" />);
+    expect(screen.getByText(/accepted for processing/)).toBeInTheDocument();
+    expect(screen.queryByTestId("allotment-not-applied")).not.toBeInTheDocument();
+    await settle(16_000);
+    expect(screen.getByTestId("allotment-not-applied").textContent).toMatch(/Not applied yet/);
+    expect(screen.queryByText(/accepted for processing/)).not.toBeInTheDocument();
+    expect(refreshMock).toHaveBeenCalled();
+  });
+
+  it("Given the status changes after the command, Then it says done and never warns", async () => {
+    browserJsonMock.mockResolvedValue({ status: "accepted" });
+    const view = await allot(<AllotmentDetailActions {...BASE_PROPS} status="applied" />);
+    await settle(3_000);
+    view.rerender(<AllotmentDetailActions {...BASE_PROPS} status="allotted" version={2} />);
+    await settle(3_000);
+    expect(screen.getByText(/allotment has been updated/)).toBeInTheDocument();
+    await settle(20_000);
+    expect(screen.queryByTestId("allotment-not-applied")).not.toBeInTheDocument();
   });
 });

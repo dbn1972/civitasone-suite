@@ -2,9 +2,11 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog, EntityPicker, Field, Input } from "@/app/_components/ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { browserJson } from "@/lib/api/browserClient";
+import { UserFacingError } from "@/lib/userFacingError";
 
 type FieldErrors = {
   employeeRef?: string;
@@ -13,6 +15,10 @@ type FieldErrors = {
 
 export function ApplyAllotmentForm({ quarterId }: { quarterId: string }) {
   const router = useRouter();
+  const tP2 = useTranslations("estabP2");
+  const tFallback = useTranslations("employeeFallback");
+  // GAP-ESTAB-QUARTERS-DETAIL-02: the chosen employee's name, shown in the confirmation.
+  const [employeeName, setEmployeeName] = useState<string | null>(null);
 
   const [employeeRef, setEmployeeRef] = useState<string | null>(null);
   const [designation, setDesignation] = useState("");
@@ -27,8 +33,6 @@ export function ApplyAllotmentForm({ quarterId }: { quarterId: string }) {
 
   const seniorityField = useId();
   const seniorityErrId = useId();
-  const designationField = useId();
-  const payLevelField = useId();
 
   const seniorityRef = useRef<HTMLInputElement>(null);
 
@@ -49,7 +53,12 @@ export function ApplyAllotmentForm({ quarterId }: { quarterId: string }) {
     setMessage(null);
     if (!validate()) return;
     setDialogError(undefined);
+    setEmployeeName(null);
     setConfirmOpen(true);
+    // Resolve the picked employee's name for the confirmation (never show the id).
+    void resolveEmployees(employeeRef ? [employeeRef] : [])
+      .then((opts) => setEmployeeName(opts[0]?.label ?? null))
+      .catch(() => setEmployeeName(null));
   }
 
   async function applyForAllotment() {
@@ -75,7 +84,8 @@ export function ApplyAllotmentForm({ quarterId }: { quarterId: string }) {
       setErrors({});
       router.refresh();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      // Never surface a raw error message: only the already user-facing copy.
+      setDialogError(err instanceof UserFacingError ? err.message : tP2("applyFailed"));
     } finally {
       setBusy(false);
     }
@@ -105,18 +115,16 @@ export function ApplyAllotmentForm({ quarterId }: { quarterId: string }) {
               />
             </Field>
 
-            <Field label="Designation">
+            <Field label={tP2("applyDesignationLabel")}>
               <Input
-                id={designationField}
                 value={designation}
                 onChange={(e) => setDesignation(e.target.value)}
                 placeholder="e.g. Section Officer"
               />
             </Field>
 
-            <Field label="Pay Level">
+            <Field label={tP2("applyPayLevelLabel")}>
               <Input
-                id={payLevelField}
                 value={payLevel}
                 onChange={(e) => setPayLevel(e.target.value)}
                 placeholder="e.g. 7"
@@ -166,8 +174,15 @@ export function ApplyAllotmentForm({ quarterId }: { quarterId: string }) {
             {/* GAP-ESTAB-QUARTERS-DETAIL-02: the employee is chosen from the
                 searchable picker (shows name + designation), so this is a
                 verified directory id rather than a hand-typed UUID. */}
-            <strong>the selected employee</strong> against this quarter. A designated
+            <strong>{employeeName ?? tFallback("unknownEmployee")}</strong> against this quarter. A designated
             allotting officer (not the applicant) must approve it before it becomes effective.
+            <br />
+            {/* Pay level drives entitlement and is entered by hand here (the HR directory does not
+                expose it), so the confirmation states exactly what will be recorded. */}
+            {tP2("applyConfirmRecorded", {
+              designation: designation.trim() || tP2("applyNotEntered"),
+              payLevel: payLevel.trim() || tP2("applyNotEntered"),
+            })}
           </>
         }
         onConfirm={() => void applyForAllotment()}

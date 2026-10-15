@@ -33,6 +33,12 @@ export const listOperatorsQuery = z.object({
   limit:    z.coerce.number().int().min(1).max(500).default(200),
 });
 
+/** GAP-ESTAB-FILES-DETAIL-04: ids on screen, comma-separated, bounded. */
+export const resolveOfficersQuery = z.object({
+  ids: z.string().min(1).transform((s) => [...new Set(s.split(",").map((i) => i.trim()).filter(Boolean))])
+    .pipe(z.array(z.string().uuid()).min(1).max(100)),
+});
+
 export const eligibilityQuery = z.object({
   employeeId: z.string().uuid(),
   division:   z.string().min(1).optional(),

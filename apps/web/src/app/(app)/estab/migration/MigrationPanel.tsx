@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { z } from "zod";
 import { useTranslations } from "next-intl";
-import { Button, DataTable, StatusPill, ErrorState } from "../../../_components/ds";
+import { Button, ConfirmDialog, DataTable, StatusPill, ErrorState } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { toHumanError } from "@/lib/messages";
 import { UserFacingError } from "@/lib/userFacingError";
@@ -17,6 +17,8 @@ type MigrationRow = {
   pageCount: number;
   scanRef: string | null;
   efileId: string | null;
+  /** Linked eFile number (GAP-ESTAB-MIGRATION-04); absent until linked. */
+  efileNo?: string | null;
   status: string;
   createdAt: string;
 };
@@ -34,6 +36,7 @@ const registerSchema = z.object({
 
 export function MigrationPanel() {
   const tMig = useTranslations("estabMigrationPanel");
+  const tP2 = useTranslations("estabP2");
   const [rows, setRows] = useState<MigrationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -42,6 +45,8 @@ export function MigrationPanel() {
   const [message, setMessage] = useState("");
   const [saveError, setSaveError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // GAP-ESTAB-MIGRATION-04: the validated payload awaiting the clerk's confirmation.
+  const [pending, setPending] = useState<z.infer<typeof registerSchema> | null>(null);
 
   const fldLegacyId = useId();
   const fldDeptId = useId();
@@ -73,8 +78,7 @@ export function MigrationPanel() {
     return () => controller.abort();
   }, [load]);
 
-  const register = useCallback(async () => {
-    setSaving(true);
+  const requestRegister = useCallback(() => {
     setMessage("");
     setSaveError("");
     setFieldErrors({});
@@ -94,7 +98,6 @@ export function MigrationPanel() {
         if (!errs[key]) errs[key] = issue.message;
       }
       setFieldErrors(errs);
-      setSaving(false);
       // Focus first invalid field.
       const firstKey = Object.keys(errs)[0];
       const map: Record<string, string> = {
@@ -108,13 +111,20 @@ export function MigrationPanel() {
       }
       return;
     }
+    // GAP-ESTAB-MIGRATION-04: confirm what is about to be entered into the register.
+    setPending(parsed.data);
+  }, [form, fldLegacyId, fldDeptId, fldSubjectId, fldPagesId]);
 
+  const register = useCallback(async () => {
+    if (!pending) return;
+    setSaving(true);
     try {
       // GAP-ESTAB-MIGRATION-06: use browserJson instead of raw fetch.
       await browserJson("v1/estab/migration", {
         method: "POST",
-        body: JSON.stringify(parsed.data),
+        body: JSON.stringify(pending),
       });
+      setPending(null);
       setMessage("Legacy file registered.");
       setForm({ ...EMPTY });
       setFieldErrors({});
@@ -123,10 +133,11 @@ export function MigrationPanel() {
       // GAP-ESTAB-MIGRATION-02: never expose raw server body (browserJson
       // uses userFacingErrorFromResponse internally via browserFetch).
       { const h = toHumanError("save", { area: "registration" }); setSaveError(err instanceof UserFacingError ? err.message : `${h.what} ${h.next}`); }
+      setPending(null);
     } finally {
       setSaving(false);
     }
-  }, [form, load, fldLegacyId, fldDeptId, fldSubjectId, fldPagesId]);
+  }, [pending, load]);
 
   return (
     <div style={{ display: "grid", gap: 18, marginTop: 18 }}>
@@ -185,11 +196,31 @@ export function MigrationPanel() {
           </div>
         </div>
         <div className="pad" style={{ paddingTop: 0 }}>
-          <Button disabled={saving} onClick={() => void register()}>
+          <Button disabled={saving} onClick={requestRegister}>
             {saving ? "Registering…" : "Register file"}
           </Button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={pending !== null}
+        title={tP2("migrationConfirmTitle")}
+        confirmLabel={tP2("migrationConfirmLabel")}
+        busy={saving}
+        description={pending ? (
+          <>
+            <p style={{ margin: 0 }}>{tP2("migrationConfirmIntro")}</p>
+            <dl style={{ margin: "8px 0 0", display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px" }}>
+              <dt>{tP2("migrationConfirmLegacyNo")}</dt><dd style={{ margin: 0 }}>{pending.legacyFileNo}</dd>
+              <dt>{tP2("migrationConfirmDept")}</dt><dd style={{ margin: 0 }}>{pending.dept}</dd>
+              <dt>{tP2("migrationConfirmSubject")}</dt><dd style={{ margin: 0 }}>{pending.subject}</dd>
+              <dt>{tP2("migrationConfirmPages")}</dt><dd style={{ margin: 0 }}>{pending.pageCount}</dd>
+            </dl>
+          </>
+        ) : null}
+        onConfirm={() => void register()}
+        onCancel={() => !saving && setPending(null)}
+      />
 
       <div className="card">
         <div className="card-h"><h3>Migration register</h3></div>
@@ -216,7 +247,7 @@ export function MigrationPanel() {
                 // GAP-ESTAB-MIGRATION-06: use next/link and CSS var instead of
                 // a hard-coded hex colour.
                 render: (r) => r.efileId
-                  ? <Link className="mono" style={{ color: "var(--accent, var(--primary))" }} href={`/estab/files/${r.efileId}`}>{tMig("openEfile")}</Link>
+                  ? <Link className="mono" style={{ color: "var(--accent, var(--primary))" }} href={`/estab/files/${r.efileId}`}>{r.efileNo || tMig("openEfile")}</Link>
                   : <>—</>,
               },
               { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} /> },

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { renderWithIntl as render } from "@/lib/testUtils/intl";
 import { ComplianceTable, type ComplianceRow } from "./ComplianceTable";
 
 // Mock next/navigation router.refresh

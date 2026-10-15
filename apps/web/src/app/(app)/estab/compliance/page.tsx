@@ -26,7 +26,9 @@ export default async function CompliancePage() {
     id: c.id,
     title: c.title,
     category: c.category,
-    assignedTo: c.assignedTo ?? null,
+    // GAP-ESTAB-COMPLIANCE-04: the service resolves the assignee's name; the raw id is
+    // never shown. null = nobody assigned ("—"); "" = assigned but unresolvable.
+    assignedTo: c.assignedTo ? (c.assignedToName ?? "") : null,
     due: formatIndianDate(c.dueDate),
     status: c.status.replace(/_/g, " "),
     statusRaw: c.status,

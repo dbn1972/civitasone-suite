@@ -1,6 +1,7 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { estabMigrationRegister } from "./schema.js";
+import { estabFiles } from "../files/schema.js";
 import type { MigrationRow, MigrationInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -20,6 +21,19 @@ export async function listMigrations(tenantId: string, limit: number): Promise<M
     .where(eq(estabMigrationRegister.tenantId, tenantId))
     .orderBy(desc(estabMigrationRegister.createdAt))
     .limit(limit));
+}
+
+/**
+ * GAP-ESTAB-MIGRATION-04: file numbers for the eFiles the register links to, so the
+ * register can show the number instead of an opaque id. Tenant-scoped, one query.
+ */
+export async function fileNosByIds(tenantId: string, ids: readonly string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db.transaction((tx) => tx
+    .select({ id: estabFiles.id, fileNo: estabFiles.fileNo })
+    .from(estabFiles)
+    .where(and(eq(estabFiles.tenantId, tenantId), inArray(estabFiles.id, [...ids]))));
+  return new Map(rows.map((r) => [r.id, r.fileNo]));
 }
 
 /**

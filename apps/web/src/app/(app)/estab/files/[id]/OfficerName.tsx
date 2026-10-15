@@ -7,10 +7,10 @@ import { useTranslations } from "next-intl";
  * Resolves an eOffice officer UUID (an HRMS employeeId, as used by the
  * file `currentWith` / movement `toOfficer` values) into a readable label.
  *
- * Strategy: fetch the operator roster (employeeId → {division, deskRole}) and
- * the HRMS employee directory (id → name) once, share them across every
- * instance via a module-level cache, and degrade gracefully to the short id
- * when a name/desk cannot be resolved (e.g. greenfield tenants, missing maps).
+ * Strategy: fetch the operator roster (employeeId → {division, deskRole}) once,
+ * share it across every instance via a module-level cache, and resolve any id
+ * the roster cannot name through ONE batched /estab/officers/resolve request.
+ * An officer that still cannot be named reads "Unknown employee" -- never an id.
  */
 
 type Operator = { employeeId: string; division: string; deskRole: string; employeeName?: string };
@@ -34,6 +34,59 @@ export type OfficerMaps = {
 let cache: OfficerMaps | null = null;
 let inflight: Promise<OfficerMaps> | null = null;
 
+// GAP-ESTAB-FILES-DETAIL-04 (SF-17b batched lookup): names for the ids a screen
+// actually renders are resolved by ONE batched GET /v1/estab/officers/resolve per
+// tick (the service returns only {id, displayName, departmentName}), so an
+// officer beyond the operator roster still gets a name. Only successful answers
+// are remembered (hit or confirmed miss); a failed request is retried next mount.
+const resolvedNames = new Map<string, string>();
+const confirmedMisses = new Set<string>();
+const wanted = new Set<string>();
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+let flushWaiters: Array<() => void> = [];
+const RESOLVE_CHUNK = 100;
+
+async function flushResolve(): Promise<void> {
+  flushTimer = null;
+  const ids = [...wanted];
+  wanted.clear();
+  const waiters = flushWaiters;
+  flushWaiters = [];
+  try {
+    for (let i = 0; i < ids.length; i += RESOLVE_CHUNK) {
+      const chunk = ids.slice(i, i + RESOLVE_CHUNK);
+      try {
+        const res = await fetch(`/api/proxy/v1/estab/officers/resolve?ids=${chunk.map(encodeURIComponent).join(",")}`);
+        if (!res.ok) continue;
+        const body = (await res.json()) as { data?: Array<{ id: string; displayName: string }> };
+        const hit = new Set<string>();
+        for (const o of body.data ?? []) {
+          if (o?.id && o.displayName) {
+            resolvedNames.set(o.id, o.displayName);
+            hit.add(o.id);
+          }
+        }
+        for (const id of chunk) if (!hit.has(id)) confirmedMisses.add(id);
+      } catch {
+        /* degrade to "Unknown employee"; retried on the next mount */
+      }
+    }
+  } finally {
+    for (const w of waiters) w();
+  }
+}
+
+/** Queue ids for the next batched resolve; resolves once that batch has been answered. */
+export function requestOfficerNames(ids: readonly string[]): Promise<void> {
+  const need = ids.filter((id) => /^[0-9a-f-]{36}$/i.test(id) && !resolvedNames.has(id) && !confirmedMisses.has(id));
+  if (need.length === 0) return Promise.resolve();
+  for (const id of need) wanted.add(id);
+  return new Promise<void>((resolve) => {
+    flushWaiters.push(resolve);
+    if (!flushTimer) flushTimer = setTimeout(() => void flushResolve(), 0);
+  });
+}
+
 /**
  * Test-only: reset the module-level officer-maps cache so a test can control
  * exactly which HRMS/operator payload resolveLabel sees. Not used in app code.
@@ -41,6 +94,12 @@ let inflight: Promise<OfficerMaps> | null = null;
 export function __resetOfficerMapsCacheForTest(): void {
   cache = null;
   inflight = null;
+  resolvedNames.clear();
+  confirmedMisses.clear();
+  wanted.clear();
+  flushWaiters = [];
+  if (flushTimer) clearTimeout(flushTimer);
+  flushTimer = null;
 }
 
 export async function loadMaps(): Promise<OfficerMaps> {
@@ -96,7 +155,7 @@ export async function loadMaps(): Promise<OfficerMaps> {
 export function resolveLabel(id: string, maps: OfficerMaps | null, unknownLabel: string): string {
   const shortId = unknownLabel;
   if (!maps) return shortId;
-  const name = maps.names.get(id);
+  const name = maps.names.get(id) ?? resolvedNames.get(id);
   const op = maps.operators.get(id);
   const desk = op ? (ROLE_LABEL[op.deskRole] ?? op.deskRole) : undefined;
   if (name && desk) return `${name} · ${desk}`;
@@ -122,6 +181,20 @@ export function OfficerName({ id, prefix }: { id: string; prefix?: string }) {
       active = false;
     };
   }, []);
+
+  // Batched lookup for an id the roster could not name (not an N+1: every
+  // OfficerName on the screen queues into the same single request).
+  const [, bump] = useState(0);
+  useEffect(() => {
+    if (!maps || maps.names.has(id)) return;
+    let active = true;
+    void requestOfficerNames([id]).then(() => {
+      if (active) bump((n) => n + 1);
+    });
+    return () => {
+      active = false;
+    };
+  }, [id, maps]);
 
   const label = resolveLabel(id, maps, tFallback("unknownEmployee"));
   return <>{prefix ?? ""}{label}</>;

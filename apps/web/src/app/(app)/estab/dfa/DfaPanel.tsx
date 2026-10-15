@@ -2,6 +2,7 @@
 
 import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, DataTable, StatusPill, ActionButton, Segmented, ErrorState } from "../../../_components/ds";
@@ -25,6 +26,8 @@ type Dfa = {
   returnedReason?: string | null;
   /** Drafter id (GAP-ESTAB-DFA-02): the maker cannot approve or sign. */
   createdBy?: string;
+  /** Drafter's name resolved by the service (GAP-ESTAB-DFA-04); null/absent = unresolvable. */
+  createdByName?: string | null;
 };
 
 const COMM_TYPES = ["letter", "order", "memo", "notification", "circular", "do_letter"] as const;
@@ -101,6 +104,8 @@ export function DfaPanel({
   // in and highlight its row when it is present in the current view.
   const searchParams = useSearchParams();
   const tFocus = useTranslations("estabDfaFocus");
+  const tP2 = useTranslations("estabP2");
+  const tFallback = useTranslations("employeeFallback");
   const focusId = searchParams?.get("focus") ?? "";
   const focusedRow = focusId ? rows.find((d) => d.id === focusId) : undefined;
 
@@ -379,6 +384,11 @@ export function DfaPanel({
               { key: "communicationType", label: "Type", render: (d) => <>{humanizeStatus(d.communicationType)}</> },
               { key: "subject", label: "Subject" },
               { key: "recipientName", label: "Recipient", render: (d) => <>{d.recipientName ?? "—"}</> },
+              // GAP-ESTAB-DFA-04: who drafted it (a name, never the id) and the linked eOffice file.
+              { key: "createdByName", label: tP2("dfaDraftedBy"), render: (d) => <>{d.createdByName || tFallback("unknownEmployee")}</> },
+              { key: "fileId", label: tP2("dfaFile"), sortable: false, render: (d) => (
+                d.fileId ? <Link href={`/estab/files/${d.fileId}`}>{tP2("dfaOpenFile")}</Link> : <>—</>
+              ) },
               // GAP-ESTAB-DFA-04: show updatedAt.
               { key: "updatedAt", label: "Updated", render: (d) => <>{formatIndianDate(d.updatedAt)}</> },
               { key: "status", label: "Status", render: (d) => <StatusPill status={d.status} /> },
@@ -396,12 +406,13 @@ export function DfaPanel({
  *  so the approver reads the body — not just the subject line. */
 function DraftPreview({ d }: { d: Dfa }) {
   return (
-    <div style={{ fontSize: 13, maxHeight: 200, overflow: "auto" }}>
+    <div style={{ fontSize: 13, maxHeight: 320, overflow: "auto" }}>
       <p><strong>{d.dfaNo}</strong> — {d.subject}</p>
       {d.recipientName && <p style={{ color: "var(--mut)" }}>To: {d.recipientName}</p>}
       {d.body ? (
         <div style={{ whiteSpace: "pre-wrap", marginTop: 4, padding: 8, background: "var(--bg2)", borderRadius: 8 }}>
-          {d.body.length > 500 ? `${d.body.slice(0, 500)}…` : d.body}
+          {/* GAP-ESTAB-DFA-04: the FULL body, so the approver reads everything before Approve. */}
+          {d.body}
         </div>
       ) : (
         <p style={{ color: "var(--mut)" }}>Draft body not available in this view.</p>

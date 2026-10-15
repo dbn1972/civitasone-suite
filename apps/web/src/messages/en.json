@@ -15297,5 +15297,37 @@
         "suspended": "Suspended"
       }
     }
+  },
+  "estabP2": {
+    "dfaDraftedBy": "Drafted by",
+    "dfaFile": "File",
+    "dfaOpenFile": "Open file",
+    "heldIntro": "The officer will no longer be markable a file. Hand over any files they currently hold before deactivating — this does not reassign them automatically.",
+    "heldLoading": "Checking the files this officer holds…",
+    "heldError": "We could not check the files this officer holds. Make sure they have handed over any files before deactivating.",
+    "heldNone": "This officer holds no files.",
+    "heldSome": "This officer currently holds {count, plural, one {# file} other {# files}}. Hand them over before deactivating.",
+    "heldOpenHandover": "Open Handover",
+    "migrationConfirmTitle": "Register this legacy file?",
+    "migrationConfirmLabel": "Register file",
+    "migrationConfirmIntro": "This adds the following entry to the migration register:",
+    "migrationConfirmLegacyNo": "Legacy file no",
+    "migrationConfirmDept": "Department",
+    "migrationConfirmSubject": "Subject",
+    "migrationConfirmPages": "Pages",
+    "applyFailed": "The request could not be completed. Please try again.",
+    "applyDesignationLabel": "Designation (as per service record)",
+    "applyPayLevelLabel": "Pay level (as per service record)",
+    "applyNotEntered": "not entered",
+    "applyConfirmRecorded": "Designation: {designation}; pay level: {payLevel}. These are recorded as entered — check them against the service record.",
+    "allotSegAll": "All",
+    "allotSegApplied": "Applied",
+    "allotSegWaitlisted": "Waitlisted",
+    "allotSegAllotted": "Allotted",
+    "allotSegOccupied": "Occupied",
+    "allotSegVacationNotice": "Vacation notice",
+    "allotScopeNote": "The tiles above count only the rows shown.",
+    "allotApplied": "Done — the allotment has been updated.",
+    "allotNotApplied": "Not applied yet — the server may have rejected this action (for example, you cannot allot your own application). Check the current status and try again."
   }
 }
