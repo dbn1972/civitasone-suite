@@ -17,7 +17,16 @@ ALTER TABLE support.admin_break_glass_log
 
 -- Backfill: grants the sweeper closed carry the sweeper's system actor in updated_by;
 -- every other closed grant was closed by an operator.
+-- NO FORCE ... FORCE: this migration runs as the table OWNER (admin_svc), which is
+-- NOBYPASSRLS, so FORCE RLS applies to it. The backfill is cross-tenant with no
+-- app.tenant_id GUC set, so under FORCE RLS it would match zero rows. Drop FORCE
+-- for the single statement and restore it immediately (house rule 4.3; same idiom
+-- as 0051). Rows are only updated in place, so none crosses a tenant.
+ALTER TABLE support.admin_break_glass_log NO FORCE ROW LEVEL SECURITY;
+
 UPDATE support.admin_break_glass_log
    SET close_reason = CASE WHEN updated_by = '00000000-0000-0000-0000-000000000099'::uuid
                            THEN 'auto_expired' ELSE 'manual' END
  WHERE closed_at IS NOT NULL AND close_reason IS NULL;
+
+ALTER TABLE support.admin_break_glass_log FORCE ROW LEVEL SECURITY;
