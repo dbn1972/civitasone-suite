@@ -88,7 +88,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-HOME-06  ·  LOW  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 audit: INTERIM, needs owner decision. Not changed: actor identity is the core content of an audit log and the page is role-gated; the ledger step is a documented lawful basis plus security-review sign-off, which only the owner can record. Related pending owner question: who the tenant-admin audit page is for (audit-service /v1/audit/events currently allows audit_officer, audit_admin, super_admin, platform_admin only; not changed by W2))
 - **First-pass claim:** Actor shown as raw email/name string; no masking for DPDP (mapAuditRows loaders.ts:420).
 - **Verified evidence:** Confirmed: apps/web/src/app/_data/loaders.ts:420 maps actor to raw string/email/name and AuditLogTable.tsx:19 prints it. But the page is role-gated (audit/layout.tsx:5) and actor identity is the core content of an audit log, so masking would defeat the purpose; DPDP concern applies mainly to export/IP/user-agent (see EXPORTS-02). Low severity.
 - **Files to change:** `apps/web/src/app/(app)/audit/AuditLogTable.tsx`
@@ -109,7 +109,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-CAG-01  ·  HIGH  ·  confirmed  ·  theme FABRICATED (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: cag/page.test.tsx 'GAP-AUDIT-CAG-01: KPIs are 3 paragraphs / 1 settled / 2 pending from real statuses'; loaders.cag.test.ts 'does not fabricate per-row totalParas/settled/pending')
 - **First-pass claim:** Each API row is mapped to totalParas: 1, settled 0|1, pending 1|0 (loaders.ts:4015-4017), so Total Paras/Settled/Pending columns are constants and the KPI “Total Paras” equals the row count; the “totals per report” the UI implies are never real.
 - **Verified evidence:** apps/web/src/app/_data/loaders.ts:4015-4017 hard-codes totalParas:1, settled = status==='settled'?1:0, pending = the inverse for every API row. cag/page.tsx:13-15 sums those, so Total Paras KPI == row count and the CagTable columns Total Paras/Settled/Pending (CagTable.tsx:23-25) are 1/0 or 0/1 per row. Whether the API returns real per-report totals cannot be seen (audit-service and @civitasone/types absent).
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/audit/cag/page.tsx`, `apps/web/src/app/(app)/audit/cag/CagTable.tsx`
@@ -126,7 +126,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-CAG-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: loaders.cag.test.ts 'GAP-AUDIT-CAG-02: a valid but EMPTY array is an empty register, not an error'; cag/page.test.tsx 'a valid empty list shows the honest empty state')
 - **First-pass claim:** Empty list → mapResponse returns null (loaders.ts:4021) → source "error"; the “No CAG paragraphs found” EmptyState (page.tsx:40-47) can never render and a tenant with no paras sees an outage message.
 - **Verified evidence:** apps/web/src/app/_data/loaders.ts:4021 returns null when mapped.length===0 (also when input array is empty), and apiClient.ts:155-158/164-167 turns null into source 'error'. page.tsx:33-38 then renders RefreshErrorState, so the EmptyState at page.tsx:39-46 is unreachable; an empty tenant sees a load-failure message. (The fix text about '—' KPIs is already done: page.tsx:27-30.) The same 'empty -> null' pattern is repeated in ~17 mappers in loaders.ts (e.g. 432, 448, 469).
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/audit/cag/page.tsx`
@@ -142,7 +142,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-CAG-03  ·  MEDIUM  ·  partly  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 audit: closed by #2058. loaders.ts maps an unmodelled/missing para status to 'unknown' with rawStatus kept; CagTable shows humanized raw text (neutral pill); Pending excludes unknown. Tests: loaders.cag.test.ts 'an unmodelled status becomes unknown with the raw value kept', cag/CagTable.test.tsx 'an unmodelled status xyz renders Xyz', cag/page.test.tsx 'an unknown-status para is counted in Paragraphs but not guessed into Pending or Settled'. Backend enum for paras (draft/issued/replied/settled/pending_recovery/closed) confirmed in audit-service para/schema.ts)
 - **W0-10 note:** review found the W0 tick partly — StatusPill tones added, but unknown API status still collapses to "Under Review" (loaders.ts:5353-5357 default "under_review") instead of humanized raw text; no unknown-status test (acceptance 'xyz' -> 'Xyz')
 - **First-pass claim:** Status mapping collapses API values: “replied” → Partially Settled, “pending_recovery” → Nearly Settled, all others (including unknown) → Under Review (loaders.ts:4009-4013) — status text is inferred, not stated by the backend.
 - **Verified evidence:** Mapping is real but line refs are off: apps/web/src/app/_data/loaders.ts:4004-4008 maps settled and closed -> settled (the observation omits 'closed'), replied -> partially_settled, pending_recovery -> nearly_settled, everything else -> under_review. CagTable.tsx:7-12,26 labels them and passes the label to StatusPill, but StatusPill STATUS_MAP has only 'under review' (warn); 'Settled', 'Partially Settled', 'Nearly Settled' fall to the neutral 'info' tone, so a settled para is not green. Unknown backend statuses silently become Under Review.
@@ -158,7 +158,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-CAG-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: CagTable.test.tsx 'a row with no department/report year renders —'; loaders.cag.test.ts 'a missing reportYear/department becomes null'; cag/page.test.tsx 'Departments counts a shared department once and ignores a missing one' (added in #2058))
 - **First-pass claim:** department falls back to deptRef and reportYear to sourceRef (loaders.ts:4005-4006): raw reference ids can reach the user; Departments KPI counts "" as a department.
 - **Verified evidence:** apps/web/src/app/_data/loaders.ts:4002-4003 (not 4005-4006): reportYear = row.reportYear ?? row.sourceRef ?? '' and department = row.department ?? row.deptRef ?? ''. Raw reference ids can show in the Report Year / Department cells; page.tsx:16 counts new Set(department).size so '' counts as a department.
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/audit/cag/page.tsx`, `apps/web/src/app/(app)/audit/cag/CagTable.tsx`
@@ -187,7 +187,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-CAG-06  ·  LOW  ·  confirmed  ·  theme PROVENANCE (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: CagTable.test.tsx 'GAP-AUDIT-CAG-06: cached provenance shows the saved-data badge with its timestamp')
 - **First-pass claim:** No DataSourceBadge / provenance chip on the page even though CagTable seeds from cache (CagTable.tsx:17 useSeededResource) — cached rows are not labelled.
 - **Verified evidence:** CagTable.tsx:15 destructures only { data } from useSeededResource and renders no DataSourceBadge (compare ModuleListTable.tsx which passes provenance/cachedAt/offline). Additionally page.tsx:33-38 renders RefreshErrorState instead of CagTable when the server load fails, so the cache fallback in useSeededResource can never surface; the cache seeding is effectively dead on this page.
 - **Files to change:** `apps/web/src/app/(app)/audit/cag/CagTable.tsx`, `apps/web/src/app/(app)/audit/cag/page.tsx`
@@ -334,7 +334,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-DASHBOARD-03  ·  MEDIUM  ·  confirmed  ·  theme NAVUX
 
-- [ ] **Status** (W1 SF-19 re-check reopened W0 tick #1872: six audit pages (exports, observations list and detail, plan, risk-register) still hard-code the breadcrumb to /audit/dashboard while the sidebar goes to /audit; AuditBreadcrumb exists but only compliance, dashboard and the Event Log use it)
+- [x] **Status** (W2 audit: closed by #2058. exports, observations list, observation detail, plan and risk-register pages now use AuditBreadcrumb, so every 'Audit' crumb goes to AUDIT_HOME (/audit, same as the sidebar). Tests: _components/AuditBreadcrumb.test.tsx, observations/page.test.tsx, observations/[id]/page.test.tsx, plan/page.test.tsx, risk-register/page.test.tsx (each asserts Audit crumb href=/audit))
 - **First-pass claim:** The sidebar “Audit” entry lands on /audit (Event Log) while every sub-page breadcrumb points to /audit/dashboard (e.g. compliance/page.tsx:39) — two competing homes.
 - **Verified evidence:** Sidebar.tsx:115 links Audit to /audit (Event Log; also GlobalSearch.tsx:75, dashboard/page.tsx of app). Breadcrumb 'Audit' links to /audit/dashboard in compliance/page.tsx:37 (not 39), audit/page.tsx:17, exports/page.tsx:17 and legal/cases/[id]/not-found.tsx:11. Two homes.
 - **Files to change:** `apps/web/src/app/_components/ds/Sidebar.tsx`, `apps/web/src/app/_components/GlobalSearch.tsx`, `apps/web/src/app/(app)/audit/page.tsx`, `apps/web/src/app/(app)/audit/compliance/page.tsx`, `apps/web/src/app/(app)/audit/exports/page.tsx`
@@ -373,7 +373,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-EXPORTS-01  ·  HIGH  ·  partly  ·  theme ENDPOINT (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: ExportConsole.test.tsx 'POSTs the create to /api/proxy/v1/audit/exports and reads data.id')
 - **First-pass claim:** Generate posts to /api/proxy/audit/exports (ExportConsole.tsx:127) while every other call uses /api/proxy/v1/audit/… (lines 91, 168, 301) — the v1 segment is missing; either the create route differs from the list/poll routes or the export cannot be created. Cannot be determined without audit-service.
 - **Verified evidence:** Confirmed inconsistency: ExportConsole.tsx:127 POSTs /api/proxy/audit/exports while :91, :168, :301 and loaders.ts:3979 use /v1/audit/exports. The catch-all proxy (api/proxy/[...path]/route.ts:36-41) just forwards to <gateway>/api/<subpath>, so create hits /api/audit/exports and list/poll hit /api/v1/audit/exports. loaders.ts:691 also GETs /api/audit/events without v1, so the gateway may alias both, but audit-service and gateway routes are not in the snapshot. Related mismatch: create reads body.id at top level (:136) whereas poll reads body.data (:96). Theme is not PII.
 - **Files to change:** `apps/web/src/app/(app)/audit/exports/ExportConsole.tsx`
@@ -407,7 +407,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-EXPORTS-03  ·  MEDIUM  ·  confirmed  ·  theme ACTIONS (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: ExportsTable.test.tsx 'shows Verify only on completed rows'; ExportConsole.recheck.test.tsx 'EXPORTS-03: verifying a completed export shows the integrity-verified result' (added in #2058))
 - **First-pass claim:** Footer tells users to “Use Verify integrity to re-validate an artifact” (page.tsx:39) but Verify exists only for the single Current job; rows in Recent exports have Download only (ExportsTable.tsx:40-47).
 - **Verified evidence:** exports/page.tsx:39 footer says to use Verify integrity to re-validate an artifact; ExportsTable.tsx:18-46 has only a Download column, no verify. runVerify exists only inside ExportConsole for the current job (:163-186, button :309).
 - **Files to change:** `apps/web/src/app/(app)/audit/exports/ExportsTable.tsx`, `apps/web/src/app/(app)/audit/exports/ExportConsole.tsx`, `apps/web/src/app/(app)/audit/exports/page.tsx`
@@ -422,7 +422,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-EXPORTS-04  ·  MEDIUM  ·  partly  ·  theme COLUMNS (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: ExportsTable.test.tsx 'renders distinguishing columns so same-day exports differ' and 'builds the download href through the tokenised proxy')
 - **First-pass claim:** Recent exports rows show jobType and date only — no id, window, row count, PII flag or requester — so two exports on the same day cannot be told apart; Download uses a raw downloadUrl (ExportsTable.tsx:42) whereas the console uses a tokenised proxy link (:301).
 - **Verified evidence:** ExportsTable.tsx:18-46 shows jobType, requested date, format pill, status and download (five columns), so the 'jobType and date only' description is overstated. It has no id, window, row count, PII flag or requester, so same-day exports are hard to tell apart. Download is the raw item.downloadUrl (:43, not :42) whereas ExportConsole uses /api/proxy/v1/audit/exports/:id/download?token=... (:301). What downloadUrl contains (AuditExportJob type) cannot be seen.
 - **Files to change:** `apps/web/src/app/(app)/audit/exports/ExportsTable.tsx`
@@ -438,7 +438,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-EXPORTS-05  ·  MEDIUM  ·  partly  ·  theme TIME (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: ExportConsole.test.tsx 'resumes polling from sessionStorage on mount'; ExportConsole.recheck.test.tsx 'EXPORTS-05: starting job B after job A keeps B polling past A's 120s safety timer' (added in #2058))
 - **First-pass claim:** Requested shows a date without time (formatIndianDate); polling state is lost on reload — a running job disappears from “Current job” (ExportConsole.tsx state is local).
 - **Verified evidence:** Date-only: ExportsTable.tsx:20 and ExportConsole.tsx:283,291 use formatIndianDate (date, no time). Job state is local useState (ExportConsole.tsx:63) so a reload clears Current job, but a running job still appears in Recent exports (server list, status Generating) though that list is not polled. Extra bug: the 120 s safety timer at :117 is never cleared, so a stale timer can stop polling of a later job.
 - **Files to change:** `apps/web/src/app/(app)/audit/exports/ExportConsole.tsx`, `apps/web/src/app/(app)/audit/exports/ExportsTable.tsx`, `apps/web/src/lib/formatters.ts`
@@ -453,7 +453,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-EXPORTS-06  ·  LOW  ·  confirmed  ·  theme THEME (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 audit: closed by #2058, ALREADY-FIXED on main (no hex colours remain in exports/, tokens used). Test added in #2058: exports/ExportConsole.recheck.test.tsx 'EXPORTS-06: no hard-coded hex colours remain in the exports folder sources')
 - **First-pass claim:** Inline hex colours in toasts/verify panel (#abefc6, #fecdca, #f6fef9) bypass tokens and dark mode (ExportConsole.tsx:253-330).
 - **Verified evidence:** ExportConsole.tsx:253 hard-codes #abefc6/#fecdca/#b2ddff and :322-323 #abefc6/#fecdca/#f6fef9/#fffbfa; also #667085 (:223,266,305) and #475467 in exports/page.tsx:39. civitas-ds.css:15-18 already defines --goodbd/--badbd/--infobd with exactly those values; #f6fef9/#fffbfa have no token (use --goodbg/--badbg).
 - **Files to change:** `apps/web/src/app/(app)/audit/exports/ExportConsole.tsx`, `apps/web/src/app/(app)/audit/exports/page.tsx`
@@ -475,7 +475,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-INVESTIGATION-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: loaders.investigation.test.ts 'a valid but EMPTY array stays source api', 'a 500 surfaces as source error', 'rows that ALL drop surface as an error'; investigation/page.test.tsx 'shows the error state')
 - **First-pass claim:** Empty list → null → source "error" (loaders.ts:4078): “No investigations found” (page.tsx:40-47) is unreachable; a fresh tenant sees a failure card.
 - **Verified evidence:** loaders.ts:4078 `return mapped.length > 0 ? mapped : null` (also drops rows lacking id at 4076), and apiClient.ts:162-166 turns a null map result into {source:'error'}. So a valid empty list (fresh tenant) makes page.tsx:11/33-38 render RefreshErrorState instead of the EmptyState at page.tsx:40-47, which is unreachable. The page itself already handles error correctly (RefreshErrorState, '—' KPIs, no notFound); the bug is in the loader.
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/audit/investigation/page.tsx`
@@ -493,7 +493,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-INVESTIGATION-02  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 audit: INTERIM, needs owner decision (which roles may see subject/findings and whether CSV export is allowed at all; step 1 of the ledger). In place on main: server-side redaction in investigation/page.tsx for roles outside AUDIT_INVESTIGATION_DETAIL_ROLES, table mask, export disabled and export guard exportAudit. Tests: investigation/page.test.tsx 'does not ship raw subject/findings to a role outside the detail set', InvestigationTable.test.tsx 'masks subject/findings and hides CSV export for a non-privileged role'. Not built: an audited per-row reveal control, and backend field redaction (GET /v1/audit/investigations only role-gates; it returns clear text to every reader role))
 - **First-pass claim:** Free-text findings and subject of internal investigations are shown in the table and exported to CSV for every audit-layout role (InvestigationTable.tsx:24-25, layout.tsx:5) — no masking or role gate for sensitive case content (DPDP).
 - **Verified evidence:** InvestigationTable.tsx:20-23 renders `subject` and `findings` in clear text for every row and line 31 sets `exportable` so DataTable.downloadCsv (DataTable.tsx:281-289) writes all columns to a client-side CSV. Access gate is only layout.tsx:5 ALLOWED (audit_officer, audit_admin, platform_admin, super_admin, finance_admin, dept_head) - finance_admin and dept_head can read every case. No shared <Masked> exists (only local MaskedInput in hr/employees/new/steps/Step4.tsx and admin/integrations), no export audit event. Backend redaction cannot be verified (audit-service absent).
 - **Files to change:** `apps/web/src/app/_components/ds/Masked.tsx (new)`, `apps/web/src/app/_components/ds/index.ts`, `apps/web/src/app/(app)/audit/investigation/InvestigationTable.tsx`, `apps/web/src/app/(app)/audit/investigation/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`
@@ -512,7 +512,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-INVESTIGATION-03  ·  MEDIUM  ·  partly  ·  theme FORMAT (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: investigation/InvestigationTable.test.tsx 'renders a formatted date, and a malformed value as its raw string, never Invalid Date' (added in #2058; format is DD Mon YYYY, sort uses the raw ISO key))
 - **First-pass claim:** Started is rendered as the raw API string (loaders.ts:4069 toText, InvestigationTable.tsx:23) — no formatIndianDate, unlike compliance/exports; sorting is lexical on the raw value.
 - **Verified evidence:** True that `started` is passed raw: loaders.ts:4070 `toText(row.started) ?? ''` and InvestigationTable.tsx:22 has no render fn (no formatIndianDate, which handles ISO strings, formatters.ts:2-7). Sorting is via DataTable compareValues (DataTable.tsx:160-170): string localeCompare numeric, so it is only 'lexical' - it is chronological if the API returns ISO-8601, wrong for any other format. The API date format cannot be verified (service absent). The 'fix' text on this finding (Masked/CSV) belongs to -02, not this one; theme PII is wrong.
 - **Files to change:** `apps/web/src/app/(app)/audit/investigation/InvestigationTable.tsx`
@@ -527,7 +527,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-INVESTIGATION-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 audit: closed by #2058, ALREADY-FIXED on main (loader maps unmodelled status to 'unknown'). Tests: _data/loaders.investigation.test.ts 'an unknown backend status becomes unknown, NOT in_progress'; added in #2058: investigation/page.test.tsx 'Active Investigations excludes unknown-status rows but Total Cases still counts them')
 - **First-pass claim:** Unknown status silently becomes in_progress (loaders.ts:4071-4073), inflating “Active Investigations”.
 - **Verified evidence:** loaders.ts:4071-4074 maps any status other than in_progress/findings_submitted/closed (and missing status) to 'in_progress'; page.tsx:13 counts 'in_progress' as Active, so unknown/new backend statuses (e.g. 'on_hold', 'reopened') inflate Active Investigations and show a wrong pill.
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/audit/investigation/InvestigationTable.tsx`, `apps/web/src/app/(app)/audit/investigation/page.tsx`
@@ -543,7 +543,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-INVESTIGATION-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 audit: INTERIM, needs owner decision / backend. audit-service has only GET /v1/audit/investigations; there is no detail, assign, submit-findings or close endpoint, and no maker-checker rule defined. Inventing them in the web is unsafe, so the tracker stays display-only)
 - **First-pass claim:** No case detail route or action: rows are not links and no mutation (assign, submit findings, close) exists in code — the tracker is display-only.
 - **Verified evidence:** InvestigationTable.tsx:17-32 passes no rowHref or action column to DataTable; there is no app/(app)/audit/investigation/[id] route (dir contains only InvestigationTable, error, loading, page) and no fetch/POST in the folder. Only /audit/page.tsx:24 links to the list. Display-only. Backend endpoints for assign/submit/close cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/audit/investigation/[id]/page.tsx (new)`, `apps/web/src/app/(app)/audit/investigation/InvestigationActions.tsx (new)`, `apps/web/src/app/(app)/audit/investigation/InvestigationTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -598,7 +598,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-OBSERVATIONS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: observations/page.test.tsx 'OBS-02: tile values equal the filtered row counts' (added in #2058); observationLabels.test.ts isOpen/isSettled/isUnderReply)
 - **First-pass claim:** “Open” KPI counts status==="open" only (page.tsx:13) while the Open segment lists every non-closed row (ObservationsTable.tsx:34) — the tile and the filtered list disagree; “Settled (FY)” counts all closed rows with no fiscal-year filter (page.tsx:15).
 - **Verified evidence:** page.tsx:12 Open KPI = status==='open' only; ObservationsTable.tsx:34 Open segment = status !== 'closed' (includes replied, partially_closed, compliance_pending), so tile and list disagree. Under Reply (14 line 13) counts only 'replied', so partially_closed/compliance_pending appear in no tile. page.tsx:14 'Settled (FY)' counts all closed rows with no date filter.
 - **Files to change:** `apps/web/src/app/(app)/audit/observations/page.tsx`, `apps/web/src/app/(app)/audit/observations/ObservationsTable.tsx`, `apps/web/src/lib/audit/observationLabels.ts (new)`
@@ -613,7 +613,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-OBSERVATIONS-03  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: observations/page.test.tsx 'OBS-03: string amounts are summed numerically' (added in #2058))
 - **First-pass claim:** Money Value KPI sums every observation including settled ones (page.tsx:16) and treats null as 0; the value is an audit exposure, not an outstanding amount. Cell shows “—” for missing amounts.
 - **Verified evidence:** page.tsx:15 `items.reduce((s,i)=>s+(i.amount ?? 0),0)` sums all observations including closed and treats null as 0 - true (line 15, not 16). The KPI is labelled 'Money Value' and the list column 'Money value' (table 62 shows '—' when falsy, including 0) so it is exposure, and the business intent is undecided. Extra risk: if amount arrives as a string (paise as bigint-string) `+` would concatenate; type is in absent @civitasone/types. formatMoney(totalAmount) is the correct paise formatter; fallback literal '₹0.00' is hard-coded.
 - **Files to change:** `apps/web/src/app/(app)/audit/observations/page.tsx`
@@ -658,7 +658,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-OBSERVATIONS-06  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 audit: closed by #2058, ALREADY-FIXED on main (ObservationsTable empty prompt; page error branch shows — tiles). Tests added in #2058: observations/page.test.tsx 'OBS-06: an empty tenant gets the guided Log your first observation prompt' and 'OBS-06: a fetch failure shows the error state and — tiles, never zeros or the empty prompt')
 - **First-pass claim:** Empty tenant: table shows no EmptyState / “Log your first observation” prompt (ObservationsTable.tsx).
 - **Verified evidence:** DataTable renders a generic EmptyState ('No records found', 'There are no items to display yet.') when no visible rows (DataTable.tsx:183-186,319-320), so it is not bare headers. ObservationsTable.tsx:55-71 passes no emptyIcon/emptyTitle/emptyMessage/emptyAction, so there is no guided 'Log your first observation' prompt; also a fetch error (source 'error', items []) shows the same empty state plus KPIs of 0 (page.tsx:35 only adds DataSourceBadge).
 - **Files to change:** `apps/web/src/app/(app)/audit/observations/ObservationsTable.tsx`, `apps/web/src/app/(app)/audit/observations/page.tsx`
@@ -679,7 +679,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-OBSERVATIONS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme FABRICATED
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 audit: closed by #2058, ALREADY-FIXED on main (lib/audit/observationWorkflow.ts deriveWorkflow drives the timeline). Tests: lib/audit/observationWorkflow.test.ts 'closed → every step done (Closure no longer stuck on todo)', 'replied → Committee review current'; added in #2058: observations/[id]/page.test.tsx 'DETAIL-01: a closed observation shows every workflow step done'. The 'by' column still reads 'Not tracked' (honest; no committee data in the payload))
 - **First-pass claim:** The workflow timeline and “Action & compliance” steps are fixed literals (page.tsx:23-28, 78-85): only the reply step reacts to data. Status closed/replied/partially_closed never advances “Committee review” or “Closure”, so a settled observation still shows Closure as “todo”.
 - **Verified evidence:** page.tsx:24-29 stepRows and 80-85 timeline are literals: 'Audit committee review' by 'ACO' status '—' and 'Closure / recovery' status '—' are fixed; 'Committee review' and 'Closure' <li> are always class 'todo' (83-84). Only reply step reads obs.replies.length. page.tsx never reads obs.status, so closed/replied/partially_closed observations (statuses used in ObservationsTable.tsx:18-24) still show Closure as todo. The AuditObservationDetail type is in @civitasone/types (absent) so whether detail carries status/closedAt/committee fields is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/audit/observations/[id]/page.tsx`, `apps/web/src/app/(app)/audit/observations/[id]/ObservationTables.tsx`, `apps/web/src/lib/audit/observationWorkflow.ts (new)`
@@ -714,7 +714,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-OBSERVATIONS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK (was LOADING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: observations/[id]/page.test.tsx 'DETAIL-03: a 404 renders the not-found page', 'a 500 renders the retry error state', 'a 403 renders the access-restricted copy' (added in #2058))
 - **First-pass claim:** Not-found and outage are the same screen: a failed fetch returns null (loaders.ts:3943-3948) → “Observation not found … the ID is invalid” (page.tsx:12-19), misleading during an outage.
 - **Verified evidence:** loaders.ts:3942-3948 fetchJson default is null; any 4xx/5xx/network/invalid payload returns {data:null, source:'error', status}. page.tsx:11-19 tests only `!obs` and shows 'Observation not found... ID is invalid' for outages too. Consequence: the DataSourceBadge at page.tsx:45 is dead code (obs is null whenever source==='error'). LoaderResult carries `status`/`errorMessage` (apiClient.ts:33-39) so 404 can be told apart; ds/LoadErrorState.tsx and RefreshErrorState exist. audit/error.tsx and not-found.tsx exist at the parent level.
 - **Files to change:** `apps/web/src/app/(app)/audit/observations/[id]/page.tsx`
@@ -729,7 +729,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-OBSERVATIONS-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme LABELS (was WIRING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: observations/[id]/page.test.tsx 'DETAIL-04: shows the shared status and risk pills' and 'an unknown status renders its raw text in a neutral pill' (added in #2058); observationLabels.test.ts)
 - **First-pass claim:** Header title is the observation no. and department only — no subtitle, no risk/status pill; status of the observation is not displayed anywhere on the page (page.tsx:38-42).
 - **Verified evidence:** page.tsx:40-44 PageHeader gets title `${obs.observationNo} · ${obs.department ?? '—'}` only (no subtitle); no status is rendered anywhere on the page (Details card 51-58 shows auditee, finding, money, risk as raw text, dates, period, para). The list page shows a status pill (ObservationsTable.tsx:18-25) so the detail regresses. Whether the detail type has `status` is cannot-verify (type package absent).
 - **Files to change:** `apps/web/src/app/(app)/audit/observations/[id]/page.tsx`, `apps/web/src/lib/audit/observationLabels.ts (new)`
@@ -760,7 +760,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-OBSERVATIONS-DETAIL-06  ·  LOW  ·  partly  ·  theme WIRING (was LOADING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: observations/[id]/page.test.tsx 'DETAIL-06: a payload without replies renders No replies yet and does not throw' (added in #2058))
 - **First-pass claim:** Detail payload is cast without mapping and obs.replies.map is called unguarded (page.tsx:22) — a missing replies array crashes the segment into error.tsx.
 - **Verified evidence:** Code is as described: loaders.ts:3947 `p as AuditObservationDetail` and page.tsx:22,26,61 call obs.replies.map/.length unguarded. But fetchJson runs AuditObservationDetailSchema.safeParse first (apiClient.ts:147-152; loaders.ts:3946), so a missing replies array is rejected as invalid_payload (-> 'not found' screen, see -03) unless the schema defaults/optionalises it. The schema lives in @civitasone/schemas/web (absent) - cannot-verify whether replies is required. Crash into audit/error.tsx is only possible if the schema allows undefined.
 - **Files to change:** `apps/web/src/app/(app)/audit/observations/[id]/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -781,7 +781,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-PLAN-01  ·  HIGH  ·  confirmed  ·  theme WIRING (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 audit: closed by #2058, ALREADY-FIXED on main 7554d78c8 (PlanTable.tsx reads r.riskLevel). Tests: plan/PlanTable.columns.test.tsx 'renders Risk from riskLevel (High) even for a routine audit' and 'falls back to — when a row has no parent-plan risk level'; audit-service plan-routes.test.ts 'projects planNo, title and riskLevel from the parent audit_plans row'. Closed by #2058 ledger)
 - **First-pass claim:** The Risk level chosen in the dialog (low/medium/high, PlanAuditButton.tsx:106-110) is posted but never shown: the table derives Risk from the audit type (special/compliance → High, performance → Medium, else Low; PlanTable.tsx:10-14). A planner who picks “High” for a routine audit sees “Low” after saving.
 - **Verified evidence:** PlanAuditButton.tsx:21,51,106-111 collects riskLevel low/medium/high and posts it; PlanTable.tsx:8-12,30 derives displayed Risk solely from `type` (special/compliance -> High, performance -> Medium, else Low) and never reads any risk field; the dialog does not send `type` at all. Whether AuditPlanItem has a riskLevel field is cannot-verify (@civitasone/types absent). Theme CONFIRM wrong.
 - **Files to change:** `apps/web/src/app/(app)/audit/plan/PlanTable.tsx`, `apps/web/src/app/(app)/audit/plan/PlanAuditButton.tsx`, `apps/web/src/lib/audit/observationLabels.ts (new)`
@@ -797,7 +797,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-PLAN-02  ·  MEDIUM  ·  confirmed  ·  theme FABRICATED
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: plan/page.test.tsx 'drops the hard-coded FY26 delta and the fabricated coverage/up badge' (tile is now an honest Non-routine share; no FY filter was built))
 - **First-pass claim:** “FY26” is hard-coded in the Planned Audits delta (page.tsx:29) and the plan is not filtered by financial year; “Risk-based %” is simply 100 − routine share (page.tsx:19), not a coverage of the audit universe.
 - **Verified evidence:** page.tsx:29 hard-codes delta='FY26' on Planned Audits; getAuditPlan (loaders.ts:3960) takes no FY parameter and page.tsx:11 counts all items. page.tsx:14 (not 19) riskBased = share of items whose type != 'routine'; page.tsx:32 renders it with delta='coverage' and `up`, showing an Increase arrow always - not coverage of an audit universe (no universe data on the page).
 - **Files to change:** `apps/web/src/app/(app)/audit/plan/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -812,7 +812,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-PLAN-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 audit: closed by #2058, ALREADY-FIXED on main (Plan no. and Title columns). Tests: plan/PlanTable.columns.test.tsx 'shows the Plan no. and Title entered by the planner'; added in #2058: 'two plans in one unit show distinct plan no. and title, and the filter box matches plan no.')
 - **First-pass claim:** Title entered in the dialog is not a table column — rows are identified by auditUnit · department (PlanTable.tsx:29), so two engagements in one unit look identical; Plan no. is not shown either.
 - **Verified evidence:** PlanTable.tsx:28 'Audit area' column shows `auditUnit · department`; no title or planNo column although both are collected (PlanAuditButton.tsx:46-48). Two engagements in one unit are indistinguishable. Whether AuditPlanItem exposes title/planNo is cannot-verify (types package absent). Theme CONFIRM wrong.
 - **Files to change:** `apps/web/src/app/(app)/audit/plan/PlanTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -841,7 +841,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-PLAN-05  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 audit: PARTIAL, INTERIM for the rest. Done in #2058: create now shows a confirm summary and sends nothing until confirmed (PlanAuditButton.test.tsx 'does not POST until the confirm dialog is confirmed, and the summary names the plan'). Not built: edit/defer/complete row actions; audit-service has only PATCH /v1/audit/plans/:id/start and no defer/complete endpoint or reason field, so a required 'defer reason' would be dropped silently. Needs owner/backend decision)
 - **First-pass claim:** Create is unconfirmed, and audit-on-mutation cannot be verified (audit-service absent); no edit, defer or complete action exists for existing rows.
 - **Verified evidence:** PlanAuditButton.tsx:34-70 posts to /api/proxy/v1/audit/plans with no ConfirmDialog; PlanTable.tsx has no rowHref/action column, while statuses deferred and completed exist in statusPill (15-18) - so no edit/defer/complete UI. Audit-on-mutation is cannot-verify (audit-service absent).
 - **Files to change:** `apps/web/src/app/(app)/audit/plan/PlanAuditButton.tsx`, `apps/web/src/app/(app)/audit/plan/PlanTable.tsx`, `apps/web/src/app/(app)/audit/plan/PlanActions.tsx (new)`
@@ -857,7 +857,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-PLAN-06  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 audit: closed by #2058, ALREADY-FIXED on main (emptyTitle/emptyMessage/emptyAction + RefreshErrorState). Tests: plan/page.test.tsx 'shows a guided empty prompt (not bare headers) for a tenant with no plans' and 'shows the error state and — KPIs on a fetch failure'. Closed by #2058 ledger)
 - **First-pass claim:** Empty plan renders bare table headers, no EmptyState or “Plan your first audit” prompt.
 - **Verified evidence:** DataTable supplies a generic EmptyState when there are no rows (DataTable.tsx:319-320), so it is not bare headers; PlanTable.tsx:26-39 gives no emptyTitle/emptyMessage/emptyAction so no 'Plan your first audit' prompt. An API error also shows KPIs 0 plus only DataSourceBadge (page.tsx:34).
 - **Files to change:** `apps/web/src/app/(app)/audit/plan/PlanTable.tsx`, `apps/web/src/app/(app)/audit/plan/page.tsx`
@@ -908,7 +908,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-RISK-REGISTER-03  ·  MEDIUM  ·  partly  ·  theme LABELS (was ROLEGATE)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: lib/audit/riskScoring.test.ts 'maps each status one-to-one and keeps unknown statuses visible as raw neutral text')
 - **First-pass claim:** Status labels are relabelled: “mitigated” → Mitigating (warn), “open” → Monitored (info) (RiskTable.tsx:16-21) — “mitigated” reads as still in progress and “open” as watched, not acted on.
 - **Verified evidence:** RiskTable.tsx:16-21: 'mitigated' -> 'Mitigating' (warn), 'closed' -> 'Controlled', 'escalated' -> 'Escalated', everything else (incl. 'open' and any unknown) -> 'Monitored' (info). The relabelling is real and 'open'->'Monitored' hides unknown statuses. Nothing here is a role gate; theme is wrong (labels). The status enum values cannot be verified (types absent).
 - **Files to change:** `apps/web/src/app/(app)/audit/risk-register/RiskTable.tsx`, `apps/web/src/lib/audit/riskScoring.ts (new)`
@@ -921,7 +921,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-RISK-REGISTER-04  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (W1 SF-19 re-check reopened W0 tick #1872: option labels are fixed, but there is still no close/edit risk action with a required reason and no confirm on Add; the acceptance 'Closing a risk requires reason and updates Controlled tile' is not met)
+- [ ] **Status** (W2 audit: PARTIAL, INTERIM for the rest. Done in #2058: create shows a confirm summary with the computed score and sends nothing until confirmed (AddRiskButton.test.tsx 'does not POST until the confirm dialog is confirmed, and the summary shows the score'); option labels were already fixed. Not built: Close/Change-status with required reason: PATCH /v1/audit/risks/:id accepts status but has no reason field (the body schema would strip it), so the reason would not be recorded. Needs backend change + owner decision; also there is no Controlled tile any more)
 - **First-pass claim:** Dialog options show raw enum text (“it”, “almost certain”, lowercase) (AddRiskButton.tsx:94-106); no ConfirmDialog and no way to edit or close a risk from the page.
 - **Verified evidence:** AddRiskButton.tsx:94 category options print raw enum value (`{c}`: 'it', 'financial'), 100 likelihood uses replace('_',' ') (lowercase 'almost certain'), 106 impact raw; no ConfirmDialog (submit at 38-71 posts directly); RiskTable.tsx has no rowHref or action column so risks cannot be edited or closed here (statuses closed/mitigated/escalated only arrive from elsewhere; endpoint unverified).
 - **Files to change:** `apps/web/src/app/(app)/audit/risk-register/AddRiskButton.tsx`, `apps/web/src/app/(app)/audit/risk-register/RiskTable.tsx`, `apps/web/src/app/(app)/audit/risk-register/RiskActions.tsx (new)`
@@ -937,7 +937,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-RISK-REGISTER-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 audit: closed by #2058. The All/High/Medium/Low band filter with ?band= was already in RiskTable.tsx on main but untested; test added: risk-register/RiskTable.test.tsx '?band=medium shows only the medium-band row' and 'picking Medium keeps the band in the URL'. Status filter (second fix step) not built; not in the acceptance)
 - **First-pass claim:** Segmented offers All / High only (RiskTable.tsx:9) though the tiles expose three bands; no status filter.
 - **Verified evidence:** RiskTable.tsx:8 FILTERS = ['All','High'] and rows filter at 28-31 handles only band=high; tiles in page.tsx:12-14 expose High/Medium/Low, and there is no status filter (free-text filterable only, line 57).
 - **Files to change:** `apps/web/src/app/(app)/audit/risk-register/RiskTable.tsx`, `apps/web/src/app/(app)/audit/risk-register/page.tsx`
@@ -951,7 +951,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-RISK-REGISTER-06  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 audit: closed by #2058, ALREADY-FIXED on main. Tests: risk-register/page.test.tsx 'shows a guided empty prompt for an empty register' and 'shows the error state and — tiles on a fetch failure'. Closed by #2058 ledger)
 - **First-pass claim:** Empty register shows bare table headers, no EmptyState.
 - **Verified evidence:** DataTable renders its default EmptyState when no rows (DataTable.tsx:319-320) rather than bare headers; RiskTable.tsx:47-60 sets no emptyTitle/emptyMessage/emptyAction so no 'Add your first risk' prompt; API error also shows zero tiles plus only DataSourceBadge (page.tsx:34).
 - **Files to change:** `apps/web/src/app/(app)/audit/risk-register/RiskTable.tsx`, `apps/web/src/app/(app)/audit/risk-register/page.tsx`
@@ -972,7 +972,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-VIGILANCE-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: loaders.vigilance.test.ts 'a valid but EMPTY array is an empty register' and 'rows that ALL drop surface as an error'; vigilance/page.test.tsx 'shows the error state - not zero stat cards or the empty-state prompt')
 - **First-pass claim:** Empty list → null → source "error" (loaders.ts:4050): “No vigilance cases found” (page.tsx:45-51) is unreachable; a department with no cases sees a failure card.
 - **Verified evidence:** loaders.ts:4048 `return mapped.length > 0 ? mapped : null` and apiClient.ts:154-158 turn null into source:"error". So a valid 200 [] (or a payload where every row lacks id) becomes error, and page.tsx:37-42 shows RefreshErrorState; the EmptyState at page.tsx:43-50 is unreachable for a genuinely empty department. Page itself already null-gates KPIs (page.tsx:13-20) and uses RefreshErrorState, so the fault is in the loader, not the page. Same `length>0 ? mapped : null` idiom recurs in sibling audit loaders (e.g. getInvestigations).
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/audit/vigilance/page.tsx`
@@ -1023,7 +1023,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-VIGILANCE-04  ·  MEDIUM  ·  confirmed  ·  theme SILENTDEFAULT (was ROLEGATE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 audit: closed by #2058. loaders.ts maps unrecognised/missing inquiryStatus/outcome to 'unknown' (raw kept, no longer preliminary_enquiry/pending); VigilanceTable shows 'Unrecognised' (t(), en+hi) in a neutral pill with the raw code in the title; page adds an Unrecognised stage tile so buckets reconcile. Schema boundary relaxed so one new stage cannot fail the whole list. Tests: loaders.vigilance.test.ts 'inquiryStatus appeal_pending maps to unknown' and 'a null outcome maps to unknown', vigilance/VigilanceTable.test.tsx 'an unrecognised stage and a null outcome render Unrecognised'. Telemetry-once step not built (no per-value emitter in this loader))
 - **First-pass claim:** Unknown inquiryStatus/outcome values silently default to preliminary_enquiry / pending (loaders.ts:4038-4043) — a new backend stage would display as the earliest stage.
 - **Verified evidence:** loaders.ts:4041-4046 coerce missing/unknown inquiryStatus to 'preliminary_enquiry' and unknown outcome to 'pending' with no logging. A new backend stage (or a null) is displayed as the earliest stage and a possibly-penalised case as 'Pending'. The row's raw value is lost before VigilanceTable's `?? String(row.inquiryStatus)` fallback (VigilanceTable.tsx:30-31) can show it. Not a role-gate issue; the theme tag is wrong. Whether the Zod list schema (VigilanceCaseSummaryListSchema, imported loaders.ts:323) already rejects unknown values is not visible (package not in snapshot).
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/audit/vigilance/VigilanceTable.tsx`
@@ -1040,7 +1040,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-VIGILANCE-05  ·  MEDIUM  ·  partly  ·  theme PROVENANCE (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1872, verified on main 5a8bec9cc)
+- [x] **Status** (W0 closed by #1872; PROVISIONAL cleared by W2 audit re-check against 7554d78c8: vigilance/VigilanceTable.test.tsx 'GAP-AUDIT-VIGILANCE-05: offline cached data renders the offline badge' (added in #2058))
 - **First-pass claim:** No DataSourceBadge though VigilanceTable seeds from a cache (VigilanceTable.tsx:26) — stale rows are unlabelled.
 - **Verified evidence:** True: page.tsx has no DataSourceBadge and VigilanceTable.tsx:22 destructures only `data` from useSeededResource, discarding provenance/offline/cachedAt. Overstated: the page renders the table only when source!=='error' and rows non-empty (page.tsx:37-55), so useSeededResource's cache branch (resource.ts:232-249) never runs here (serverUsable is always true) and stale cached rows cannot actually appear; the cache is written but never read. Badge would always say 'live' except for offline state.
 - **Files to change:** `apps/web/src/app/(app)/audit/vigilance/VigilanceTable.tsx`, `apps/web/src/app/(app)/audit/vigilance/page.tsx`
@@ -1073,7 +1073,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-HOME-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 audit: INTERIM, needs owner decision on audience (tenant_admin not in the /v1/audit/events role list; deliberately NOT changed). Verified on main: tests/events-routes.test.ts '403 for a role without audit access (employee)', '200 for audit_officer reading its own tenant', '403 for a non-admin role passing tenantId= a different tenant'; both /audit/events and /v1/audit/events routes exist. Gateway routing of the no-v1 path not verified)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/audit/events']`
 - **Question:** Is GET /audit/events role- and tenant-scoped, and is the path /api/audit/events (no v1) routed by the gateway?
@@ -1084,7 +1084,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-CAG-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 audit: closed by #2058, ALREADY-FIXED on main (verified against services/audit-service). Tests: tests/para-routes.test.ts 'GET /v1/audit/paras: 403 for role outside READER_ROLES (employee)' and '200 for audit_officer and contains the seeded row', plus cross-tenant isolation test. Closed by #2058 ledger)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/paras']`
 - **Question:** Does GET /audit/paras require an audit role, and does the payload match CagParaSummary (para no., status enum, amount)?
@@ -1095,7 +1095,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-COMPLIANCE-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 audit: NOT DONE. 403 for employee is tested (compliance.test.ts 'GET /v1/audit/compliance - 403 for employee role') but there is no test asserting the 200 response shape/status enum the page maps; needs a real-DB test)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/compliance']`
 - **Question:** Does GET /audit/compliance restrict to audit roles and return the item shape/status enum the page maps?
@@ -1106,7 +1106,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-DASHBOARD-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 audit: closed by #2058, ALREADY-FIXED on main. Tests: services/audit-service/tests/dashboard.test.ts '403 for a role without dashboard access (employee)' and 'GET /v1/audit/dashboard reflects the seeded open observation and risk for this tenant'. Closed by #2058 ledger)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/dashboard']`
 - **Question:** Does GET /audit/dashboard restrict to audit roles and return counts matching the AuditDashboard shape, scoped to the caller's tenant?
@@ -1117,7 +1117,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-EXPORTS-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 audit: NOT DONE. Create/status/download/verify role gates and a wrong-token 403 are tested (exports-routes.test.ts), but single-use/expiring token and 'each export writes an audit row' have no test)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/exports', 'POST /api/proxy/audit/exports', 'GET /api/proxy/v1/audit/exports/{id}', 'GET .../{id}/verify', 'GET .../{id}/download?token=']`
 - **Question:** Are export create/verify/download role-gated, is the download token single-use/expiring, and is each export itself written to the audit log?
@@ -1128,7 +1128,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-INVESTIGATION-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 audit: closed by #2058, ALREADY-FIXED on main. Tests: services/audit-service/tests/investigation.test.ts '403 for a role without read access (employee)', 'Tenant A sees the seeded investigation', 'Tenant B does NOT see Tenant A's investigation'. Closed by #2058 ledger)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/investigations']`
 - **Question:** Is GET /audit/investigations restricted to vigilance/audit roles and matches InvestigationSummary shape?
@@ -1139,7 +1139,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-OBSERVATIONS-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 audit: NOT DONE. GET 403/200 and tenant isolation are tested (observation-routes.test.ts); POST severity/status enum validation and exactly-one audit event per mutation have no test)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/observations', 'POST /api/proxy/v1/audit/observations']`
 - **Question:** Does POST observations validate severity/status enums, restrict to audit_officer and write an audit event?
@@ -1150,7 +1150,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-OBSERVATIONS-DETAIL-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 audit: NOT DONE. GET/reply/review role gates are tested (observation-routes.test.ts); draft-para role, audit event per mutation and status-transition enforcement have no route-level test)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/observations/{id}', 'POST .../{id}/reply', 'POST .../{id}/draft-para']`
 - **Question:** Do reply and draft-para require audit/auditee roles respectively, write an audit event, and enforce observation status transitions?
@@ -1161,7 +1161,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-PLAN-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 audit: NOT DONE. GET 403/200 and POST 403/400 are tested (plan-routes.test.ts); POST date-range validation and 'records who created' have no test)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/plan', 'POST /api/proxy/v1/audit/plans']`
 - **Question:** Does POST plans validate dates/scope, restrict to audit_admin and record who created the plan?
@@ -1172,7 +1172,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-RISK-REGISTER-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 audit: NOT DONE. POST 403 and invalid-likelihood 400 are tested (risk-routes.test.ts, risk.test.ts); 'exactly one audit event per mutation' has no test)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/risks', 'POST /api/proxy/v1/audit/risks']`
 - **Question:** Does POST risks validate likelihood/impact enums, restrict to audit roles and log the mutation?
@@ -1183,7 +1183,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-VIGILANCE-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 audit: closed by #2058, ALREADY-FIXED on main. Tests: services/audit-service/tests/vigilance.test.ts '403 when caller role is not a vigilance reader role', 'tenant A sees the seeded vigilance case', 'tenant B ... does NOT see tenant A's case'; clear officer/charges only via audited reveal (vigilance-reveal.test.ts), web masks in the RSC payload (vigilance/page.test.tsx). Closed by #2058 ledger)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/vigilance']`
 - **Question:** Is GET /audit/vigilance restricted to vigilance roles with case data masked for others?
