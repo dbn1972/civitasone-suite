@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getAuditExports } from "../../../_data/loaders";
@@ -6,6 +5,7 @@ import { getSessionRoles, hasAnyRole, AUDIT_PII_EXPORT_ROLES } from "@/lib/auth/
 import { toHumanError } from "@/lib/messages";
 import { ExportConsole } from "./ExportConsole";
 import { ExportsTable, type ExportRow } from "./ExportsTable";
+import { AuditBreadcrumb } from "../_components/AuditBreadcrumb";
 
 export default async function AuditExportsPage() {
   const { data: items, source } = await getAuditExports();
@@ -18,11 +18,7 @@ export default async function AuditExportsPage() {
 
   return (
     <div className="wrap">
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
-        <Link href="/audit/dashboard" className="lnk">Audit</Link>
-        <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
-        <span aria-current="page">Compliance Export</span>
-      </nav>
+      <AuditBreadcrumb current="Compliance Export" />
       <PageHeader
         title="Compliance Export"
         subtitle="Generate signed, tamper-evident audit exports for regulators."

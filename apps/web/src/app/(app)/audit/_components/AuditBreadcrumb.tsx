@@ -8,7 +8,7 @@ import { AUDIT_HOME, AUDIT_HOME_LABEL } from "./auditNav";
  * the overview at /audit/dashboard) the "Audit" crumb must not link back to
  * the current page, so pass `isHome` to render it as plain current-page text.
  */
-export function AuditBreadcrumb({ current, isHome = false }: { current: string; isHome?: boolean }) {
+export function AuditBreadcrumb({ current, isHome = false, parent }: { current: string; isHome?: boolean; parent?: { label: string; href: string } }) {
   return (
     <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
       {isHome ? (
@@ -17,6 +17,12 @@ export function AuditBreadcrumb({ current, isHome = false }: { current: string; 
         <>
           <Link href={AUDIT_HOME} className="lnk">{AUDIT_HOME_LABEL}</Link>
           <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
+          {parent ? (
+            <>
+              <Link href={parent.href} className="lnk">{parent.label}</Link>
+              <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
+            </>
+          ) : null}
           <span aria-current="page">{current}</span>
         </>
       )}

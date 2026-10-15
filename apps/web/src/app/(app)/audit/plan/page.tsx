@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { PageHeader, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { getAuditPlan } from "../../../_data/loaders";
 import { PlanTable } from "./PlanTable";
 import { PlanAuditButton } from "./PlanAuditButton";
+import { AuditBreadcrumb } from "../_components/AuditBreadcrumb";
 
 export default async function AuditPlanPage() {
   const { data: items, source } = await getAuditPlan();
@@ -20,11 +20,7 @@ export default async function AuditPlanPage() {
 
   return (
     <div className="wrap">
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
-        <Link href="/audit/dashboard" className="lnk">Audit</Link>
-        <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
-        <span aria-current="page">Audit Plan</span>
-      </nav>
+      <AuditBreadcrumb current="Audit Plan" />
       <PageHeader
         title="Internal Audit Planning"
         subtitle="Risk-based annual audit plan & universe."

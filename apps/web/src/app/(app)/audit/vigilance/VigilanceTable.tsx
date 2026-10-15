@@ -2,17 +2,18 @@
 
 import { DataTable, StatusPill, RevealableValue } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { useAuditT } from "@/lib/audit/useAuditT";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { VigilanceCaseSummary } from "@/app/_data/loaders";
 
-const INQUIRY_LABELS: Record<VigilanceCaseSummary["inquiryStatus"], string> = {
+const INQUIRY_LABELS: Record<Exclude<VigilanceCaseSummary["inquiryStatus"], "unknown">, string> = {
   preliminary_enquiry: "Preliminary Enquiry",
   under_investigation: "Under Investigation",
   charge_sheet_issued: "Charge Sheet Issued",
   inquiry_complete: "Inquiry Complete",
 };
 
-const OUTCOME_LABELS: Record<VigilanceCaseSummary["outcome"], string> = {
+const OUTCOME_LABELS: Record<Exclude<VigilanceCaseSummary["outcome"], "unknown">, string> = {
   pending: "Pending",
   major_penalty: "Major Penalty",
   minor_penalty: "Minor Penalty",
@@ -20,6 +21,7 @@ const OUTCOME_LABELS: Record<VigilanceCaseSummary["outcome"], string> = {
 };
 
 export function VigilanceTable({ rows, source, canViewPII = false }: { rows: VigilanceCaseSummary[]; source: "api" | "error"; canViewPII?: boolean }) {
+  const t = useAuditT();
   const { data, provenance, offline, cachedAt } = useSeededResource("audit.vigilance.cases", rows, source, (d) => d.length === 0);
 
   // GAP-AUDIT-VIGILANCE-02 (DPDP): officer identity + charge text are
@@ -52,8 +54,11 @@ export function VigilanceTable({ rows, source, canViewPII = false }: { rows: Vig
           { key: "caseNo", label: "Case No.", sortable: true },
           { key: "officer", label: "Officer", render: (row) => revealCell("officer", "officer")(row) },
           { key: "charges", label: "Charges", render: (row) => revealCell("charges", "charges")(row) },
-          { key: "inquiryStatus", label: "Inquiry Status", render: (row) => <StatusPill status={INQUIRY_LABELS[row.inquiryStatus as VigilanceCaseSummary["inquiryStatus"]] ?? String(row.inquiryStatus)} /> },
-          { key: "outcome", label: "Outcome", render: (row) => <StatusPill status={OUTCOME_LABELS[row.outcome as VigilanceCaseSummary["outcome"]] ?? String(row.outcome)} /> },
+          // GAP-AUDIT-VIGILANCE-04: an unrecognised/missing stage or outcome renders
+          // "Unrecognised" in a neutral pill with the raw code in the title, never as
+          // the earliest stage / "Pending".
+          { key: "inquiryStatus", label: "Inquiry Status", render: (row) => <span title={row.rawInquiryStatus ? String(row.rawInquiryStatus) : undefined}><StatusPill status={row.inquiryStatus === "unknown" ? t("vigilanceUnrecognised") : (INQUIRY_LABELS[row.inquiryStatus as Exclude<VigilanceCaseSummary["inquiryStatus"], "unknown">] ?? String(row.inquiryStatus))} variant={row.inquiryStatus === "unknown" ? "mut" : undefined} /></span> },
+          { key: "outcome", label: "Outcome", render: (row) => <span title={row.rawOutcome ? String(row.rawOutcome) : undefined}><StatusPill status={row.outcome === "unknown" ? t("vigilanceUnrecognised") : (OUTCOME_LABELS[row.outcome as Exclude<VigilanceCaseSummary["outcome"], "unknown">] ?? String(row.outcome))} variant={row.outcome === "unknown" ? "mut" : undefined} /></span> },
         ]}
         rows={data as (VigilanceCaseSummary & Record<string, unknown>)[]}
         sortable

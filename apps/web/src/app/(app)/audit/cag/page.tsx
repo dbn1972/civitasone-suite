@@ -15,7 +15,9 @@ export default async function CagPage() {
   // Settled / Pending are counts of the settled vs not-settled statuses.
   const totalParas = errored ? null : paras.length;
   const settled = errored ? null : paras.filter((p) => p.status === "settled").length;
-  const pending = errored ? null : paras.filter((p) => p.status !== "settled").length;
+  // GAP-AUDIT-CAG-03: unmodelled statuses are neither settled nor known-pending;
+  // they are excluded from Pending (and counted in Paragraphs) rather than guessed.
+  const pending = errored ? null : paras.filter((p) => p.status !== "settled" && p.status !== "unknown").length;
   // GAP-AUDIT-CAG-04: ignore rows with no department before counting distinct
   // departments, so a missing/blank department does not count as one.
   const departments = errored ? null : new Set(paras.map((p) => p.department).filter((d): d is string => !!d)).size;

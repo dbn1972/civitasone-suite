@@ -5369,11 +5369,16 @@ export async function getCagParas(): Promise<LoaderResult<CagParaSummary[]>> {
         // rather than leaking a reference id into a user-facing cell.
         const reportYear = toText(row.reportYear);
         const department = toText(row.department);
-        const status = row.status === "settled" ? "settled" :
-                       row.status === "closed" ? "settled" :
-                       row.status === "replied" ? "partially_settled" :
-                       row.status === "pending_recovery" ? "nearly_settled" :
-                       "under_review";
+        // GAP-AUDIT-CAG-03: only an explicit under_review/issued/open/pending is
+        // "Under Review"; an unmodelled status is "unknown" with the raw value
+        // kept so the table shows its humanized text, not a guessed stage.
+        const rawStatus = toText(row.status) ?? "";
+        const status: CagParaSummary["status"] =
+          rawStatus === "settled" || rawStatus === "closed" ? "settled" :
+          rawStatus === "replied" ? "partially_settled" :
+          rawStatus === "pending_recovery" ? "nearly_settled" :
+          rawStatus === "under_review" || rawStatus === "draft" || rawStatus === "issued" || rawStatus === "open" || rawStatus === "pending" ? "under_review" :
+          "unknown";
         if (!id) continue;
         // GAP-AUDIT-CAG-01: audit-service's GET /v1/audit/paras returns one
         // row PER paragraph (id, paraNo, deptRef, status, amount) and carries
@@ -5382,7 +5387,7 @@ export async function getCagParas(): Promise<LoaderResult<CagParaSummary[]>> {
         // row's own status, so those three table columns were constants and
         // the "Total Paras" KPI was just the row count dressed up as a total.
         // Dropped — the page now derives real counts from the row statuses.
-        mapped.push({ id, reportYear, paraNo, department, status });
+        mapped.push(status === "unknown" ? { id, reportYear, paraNo, department, status, rawStatus } : { id, reportYear, paraNo, department, status });
       }
       // GAP-AUDIT-CAG-02: a valid but EMPTY array is an empty register, not a
       // fetch failure. Return [] (source stays "api") so the "No CAG
@@ -5408,14 +5413,22 @@ export async function getVigilanceCases(): Promise<LoaderResult<VigilanceCaseSum
         const caseNo = toText(row.caseNo) ?? "";
         const officer = toText(row.officer) ?? "";
         const charges = toText(row.charges) ?? "";
-        const rawInquiry = toText(row.inquiryStatus) ?? "preliminary_enquiry";
-        const inquiryStatus = (rawInquiry === "preliminary_enquiry" || rawInquiry === "under_investigation" || rawInquiry === "charge_sheet_issued" || rawInquiry === "inquiry_complete")
-          ? rawInquiry : "preliminary_enquiry";
-        const rawOutcome = toText(row.outcome) ?? "pending";
-        const outcome = (rawOutcome === "pending" || rawOutcome === "major_penalty" || rawOutcome === "minor_penalty" || rawOutcome === "exonerated")
-          ? rawOutcome : "pending";
+        // GAP-AUDIT-VIGILANCE-04: a missing or unrecognised stage/outcome is
+        // "unknown" (raw kept), NOT silently the earliest stage / "Pending".
+        const rawInquiry = toText(row.inquiryStatus) ?? "";
+        const inquiryStatus: VigilanceCaseSummary["inquiryStatus"] =
+          rawInquiry === "preliminary_enquiry" || rawInquiry === "under_investigation" || rawInquiry === "charge_sheet_issued" || rawInquiry === "inquiry_complete"
+            ? rawInquiry : "unknown";
+        const rawOutcome = toText(row.outcome) ?? "";
+        const outcome: VigilanceCaseSummary["outcome"] =
+          rawOutcome === "pending" || rawOutcome === "major_penalty" || rawOutcome === "minor_penalty" || rawOutcome === "exonerated"
+            ? rawOutcome : "unknown";
         if (!id) continue;
-        mapped.push({ id, caseNo, officer, charges, inquiryStatus, outcome });
+        mapped.push({
+          id, caseNo, officer, charges, inquiryStatus, outcome,
+          ...(inquiryStatus === "unknown" ? { rawInquiryStatus: rawInquiry } : {}),
+          ...(outcome === "unknown" ? { rawOutcome } : {}),
+        });
       }
       // GAP-AUDIT-VIGILANCE-01: a valid array (incl. an empty one) must stay
       // source:"api" so the "No vigilance cases found" empty state is reachable

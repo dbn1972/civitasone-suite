@@ -64,3 +64,23 @@ describe("InvestigationPage", () => {
     expect(container.innerHTML).toContain("SECRET-SUBJECT-TEXT");
   });
 });
+
+describe("InvestigationPage unknown status (GAP-AUDIT-INVESTIGATION-04)", () => {
+  beforeEach(() => { fetchJsonMock.mockReset(); sessionRoles = ["audit_officer"]; });
+
+  it("Active Investigations excludes unknown-status rows but Total Cases still counts them", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        { id: "a", caseId: "I-1", subject: "s", findings: "f", assignedTo: "x", started: "2026-01-01", status: "in_progress" },
+        { id: "b", caseId: "I-2", subject: "s", findings: "f", assignedTo: "x", started: "2026-01-02", status: "unknown" },
+        { id: "c", caseId: "I-3", subject: "s", findings: "f", assignedTo: "x", started: "2026-01-03", status: "unknown" },
+      ],
+      source: "api",
+    });
+    render(await InvestigationPage());
+    const val = (label: string) => screen.getAllByText(label).find((el) => el.classList.contains("lab"))?.parentElement?.querySelector(".val")?.textContent;
+    expect(val("Active Investigations")).toBe("1");
+    expect(val("Total Cases")).toBe("3");
+    expect(screen.getAllByText("Unknown").length).toBe(2);
+  });
+});

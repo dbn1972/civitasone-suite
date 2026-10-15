@@ -10,6 +10,7 @@ import { toHumanError } from "@/lib/messages";
 import { ObservationActions } from "./ObservationActions";
 import { RepliesTable, StepsTable, type ReplyRow, type StepRow } from "./ObservationTables";
 import { ArrowLeft } from "lucide-react";
+import { AuditBreadcrumb } from "../../_components/AuditBreadcrumb";
 
 export default async function AuditObservationDetailPage({ params }: { params: { id: string } }) {
   const { data: obs, source, status } = await getAuditObservationById(params.id);
@@ -70,13 +71,7 @@ export default async function AuditObservationDetailPage({ params }: { params: {
 
   return (
     <div className="wrap">
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
-        <Link href="/audit/dashboard" className="lnk">Audit</Link>
-        <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
-        <Link href="/audit/observations" className="lnk">Observations</Link>
-        <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
-        <span aria-current="page">{obs.observationNo}</span>
-      </nav>
+      <AuditBreadcrumb current={obs.observationNo} parent={{ label: "Observations", href: "/audit/observations" }} />
       <PageHeader
         back="/audit/observations"
         title={`${obs.observationNo} · ${obs.department ?? "—"}`}

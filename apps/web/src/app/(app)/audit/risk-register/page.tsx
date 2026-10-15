@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { PageHeader, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { getRiskRegister } from "../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
 import { band } from "@/lib/audit/riskScoring";
 import { RiskTable } from "./RiskTable";
 import { AddRiskButton } from "./AddRiskButton";
+import { AuditBreadcrumb } from "../_components/AuditBreadcrumb";
 
 export default async function RiskRegisterPage() {
   const { data: items, source } = await getRiskRegister();
@@ -20,11 +20,7 @@ export default async function RiskRegisterPage() {
 
   return (
     <div className="wrap">
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
-        <Link href="/audit/dashboard" className="lnk">Audit</Link>
-        <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
-        <span aria-current="page">Risk Register</span>
-      </nav>
+      <AuditBreadcrumb current="Risk Register" />
       <PageHeader
         title="Enterprise Risk Register"
         subtitle="Identify, score (likelihood × impact) and own risks."

@@ -15444,5 +15444,17 @@
     "eofficeRaiseIntro": "Raising sends this {refType} to eOffice for a formal, tamper-proof decision. The approval chain is selected automatically by amount. The file is always raised in your own name.",
     "eofficeSelfFallback": "You (the signed-in officer)",
     "rfqIndentStatus": "({status})"
+  },
+  "auditW2": {
+    "cagStatusUnknown": "Unknown",
+    "vigilanceUnrecognised": "Unrecognised",
+    "vigilanceUnrecognisedStage": "Unrecognised stage",
+    "cancel": "Cancel",
+    "planConfirmTitle": "Create audit plan {planNo}?",
+    "planConfirmDescription": "{title} · {area} · {from} to {to} · Risk: {risk}. This will be recorded in the audit trail.",
+    "planConfirmLabel": "Confirm & plan",
+    "riskConfirmTitle": "Add risk {riskCode}?",
+    "riskConfirmDescription": "{title} · {category} · Score {score} ({band}). The score is recomputed and stored server-side. This will be recorded in the audit trail.",
+    "riskConfirmLabel": "Confirm & add"
   }
 }
