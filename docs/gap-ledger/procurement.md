@@ -136,7 +136,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-APPROVALS-04  ·  MEDIUM  ·  partly  ·  theme DATA (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2056)
 - **W0 note:** partly fixed by #1866 — dueAt date-based overdue count + raw ID column dropped; Reference cell in page table still plain text (no link)
 - **First-pass claim:** "Overdue / Today" is computed by substring-matching the display string dueDisplay for "overdue" or "today" (page.tsx:18) — breaks with any localisation or wording change; the table shows raw "Approval ID" and reference codes, unlinked (page.tsx:63-68).
 - **Verified evidence:** page.tsx:18 confirmed: overdue = dueDisplay.toLowerCase() includes 'overdue' or 'today' (also counts 'Due today' as overdue). dueDisplay is a server-provided display string (loaders.ts:621). Table (l.63-68) prints 'Approval ID' from id and Reference as plain text with no link. Note the queue in the Panel does link references (refLink).
@@ -154,7 +154,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-APPROVALS-05  ·  MEDIUM  ·  partly  ·  theme MISSING-LINK (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2056)
 - **First-pass claim:** Reference link missing for procurement_po_amendment: refLink handles indent, PO and plan only (Panel:102-108) though REF_TYPES includes amendments (Panel:34), so amendment tasks show a bare id.
 - **Verified evidence:** Panel refLink (l.102-111) handles indent, po and plan; amendments intentionally return null (comment l.106-109): refId is the amendment id and no per-amendment route exists. So bare id is real but deliberate; orders/[id]/amend exists but needs the PO id, which the task does not carry. Not a bug of omission in the UI alone.
 - **Files to change:** `apps/web/src/app/(app)/procurement/approvals/ProcurementApprovalsPanel.tsx`
@@ -184,7 +184,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-APPROVALS-07  ·  LOW  ·  confirmed  ·  theme MISSING-DATA (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2056)
 - **First-pass claim:** Row Approve/Reject buttons are the only actions; approving requires no visibility of the indent value (Task name + ref id only), so the approver must open the document first.
 - **Verified evidence:** Panel columns (l.138-181) are Task name, Reference (id), Role, Actions; the ConfirmDialog description shows name and refId only. WorkflowTask type (l.11-19) carries no amount, so the value is not available without another fetch or a backend addition.
 - **Files to change:** `apps/web/src/app/(app)/procurement/approvals/ProcurementApprovalsPanel.tsx`
@@ -208,7 +208,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-APPROVALS-ESCALATION-02  ·  LOW  ·  confirmed  ·  theme COPY (was MONEY)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2056 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Overlapping bands: "Up to ₹1,00,000" and "₹1,00,000 – ₹10,00,000" both include ₹1,00,000, and "₹10,00,000" sits in both the middle and "Above" bands (page.tsx:14-16); bands are free text, not numeric, so nothing can be compared or exported.
 - **Verified evidence:** escalation/page.tsx:14-16 bands are literal strings: 'Up to ₹1,00,000', '₹1,00,000 – ₹10,00,000', 'Above ₹10,00,000'; boundary values appear in two bands each. Rows are static (comment l.9-12), EscalationRow fields are strings, not numbers. Nothing verifies they match the workflow service routing.
 - **Files to change:** `apps/web/src/app/(app)/procurement/approvals/escalation/page.tsx`
@@ -224,7 +224,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-APPROVALS-ESCALATION-03  ·  LOW  ·  partly  ·  theme COPY (was DEADROUTE)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2056 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Escalates after N working days" has no calendar reference (no holiday list or SLA owner) and there is no link to the approvals it affects other than the back link (page.tsx:36-37).
 - **Verified evidence:** escalation/page.tsx:22,36-37: 'Escalates after' shows '2 working days' etc.; no holiday calendar or owner is referenced, and only the back link (backLabel) leads elsewhere. True but this is a static reference page; the calendar source cannot be verified (workflow service absent).
 - **Files to change:** `apps/web/src/app/(app)/procurement/approvals/escalation/page.tsx`
@@ -238,7 +238,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-APPROVALS-ESCALATION-04  ·  LOW  ·  confirmed  ·  theme STYLE (was WIRING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2056 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** SoD list uses inline styles instead of a DS list/Card body (page.tsx:49) — one of the few places this module bypasses the design system.
 - **Verified evidence:** escalation/page.tsx:49 uses <ul style={{margin:0,paddingLeft:20,fontSize:14,lineHeight:1.7}}> inline. Low-impact style deviation.
 - **Files to change:** `apps/web/src/app/(app)/procurement/approvals/escalation/page.tsx`
@@ -289,7 +289,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-BID-EVALUATION-03  ·  MEDIUM  ·  confirmed  ·  theme METRICS (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2056 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Total Bidders" is the row count (evaluations.length, page.tsx:25) so a bidder in two tenders is counted twice; "Active Evaluations" counts unique tender ref strings regardless of whether evaluation is closed (page.tsx:10).
 - **Verified evidence:** page.tsx:25 Total Bidders = evaluations.length (one row per bidder-tender pair), so a bidder in two tenders counts twice; l.10 Active Evaluations = unique tender strings, with no status filter. BidEvaluation type (loaders.ts:2604-2613) has no vendor id or evaluation-closed flag; only bidder name and status strings.
 - **Files to change:** `apps/web/src/app/(app)/procurement/bid-evaluation/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -323,7 +323,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-BID-EVALUATION-05  ·  LOW  ·  partly  ·  theme MISSING-LINK (was DEADROUTE)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2056 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Tender Ref is plain text: no link to /procurement/tenders/[id] (Table:68).
 - **Verified evidence:** Tender is a plain string column (BidEvaluationTable.tsx:101, obs said 68) and DataTable rows don't link. Tender detail route /procurement/tenders/[id] exists, but BidEvaluation has only `tender: string` (a ref) and no tenderId, so a correct link needs an id the API may not return (unverifiable).
 - **Files to change:** `apps/web/src/app/(app)/procurement/bid-evaluation/BidEvaluationTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -1225,7 +1225,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-INDENTS-01  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [ ] **Status** (W2 procurement #2056 re-check REOPENED: acceptance says the stat totals match the server total, not the slice length, but indents/page.tsx has no total (the list API returns none); was W0 PROVISIONAL: closed by #1866)
 - **First-pass claim:** Hard cap: limit 500 with client-side paging and stats computed on that slice (page.tsx:31,33-35); no truncation cue for a busy department.
 - **Verified evidence:** indents/page.tsx:31 getProcurementIndents({limit:500}); stats at l.33-35 and indents.length (l.64) are computed on that slice; DataTable is client-side pageSize 10 (l.89) with client filter; no cue when 500 rows returned. Loader supports limit/offset/q (loaders.ts:2408-2425) but page never passes them.
 - **Files to change:** `apps/web/src/app/(app)/procurement/indents/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -1275,7 +1275,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-INDENTS-04  ·  LOW  ·  partly  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2056 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** "Requested By" and "Department" print whatever strings the mapper returns (raw ids if the backend returns ids); "Required By" is "—" when absent (page.tsx:45).
 - **Verified evidence:** page.tsx:41-42,45 passes i.requestedBy and i.department straight to the table; mapper apiMappers.ts:217 does toText(row.requestedBy) ?? '—'. Code does print whatever string arrives, but I cannot confirm the backend returns ids rather than names (procurement-service absent). 'Required By' '—' at l.45 is true.
 - **Files to change:** `apps/web/src/app/(app)/procurement/indents/page.tsx`, `apps/web/src/app/_data/apiMappers.ts`
@@ -1311,7 +1311,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-INDENTS-DETAIL-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2056 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Purpose / justification is captured on the create form (purpose, CreateIndentForm.tsx:59) but never shown here — an approver reading the indent cannot see why it is needed (page.tsx:81-112).
 - **Verified evidence:** CreateIndentForm.tsx:21,50,59,138-139 collect and submit `purpose` (required, min 3). The detail path never maps it: mapProcurementIndentDetail (_data/apiMappers.ts:229-268) has no purpose handling (grep finds none in apiMappers.ts) and IndentDetail rendering (page.tsx:81-112) has no purpose field. Whether GET /procurement/indents/:id returns purpose is not verifiable (service absent).
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/procurement/indents/[id]/page.tsx`, `IndentDetail type in web types/loaders`
@@ -1327,7 +1327,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-INDENTS-DETAIL-03  ·  MEDIUM  ·  partly  ·  theme FORMAT (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2056 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Approval-trail timestamp is printed raw (step.timestamp, page.tsx:134-146) — an ISO string rather than an Indian-format date/time — and there is no reason column emphasis for rejections.
 - **Verified evidence:** page.tsx:134 prints {step.timestamp} raw; mapper (apiMappers.ts:257-263) passes toText(step.timestamp) unchanged, so an ISO string is shown. formatters.ts exports only formatIndianDate (no date-time helper). Remarks are shown for all steps in the same small grey style (:135) with no emphasis for rejected steps. No confirm/approval action exists on this page, so the CONFIRM theme is wrong.
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/procurement/indents/[id]/page.tsx`
@@ -1343,7 +1343,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-INDENTS-DETAIL-04  ·  LOW  ·  confirmed  ·  theme WIRING (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2056 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Status pill appears twice (header and details card, page.tsx:75,109); trail dot colour and text colours are hard-coded hex (page.tsx:128-140).
 - **Verified evidence:** page.tsx:75 (header) and :109 (details card) both render the same StatusPill. Hard-coded colours at :129 (#818cf8), :131 (#1e293b) and :132 (#64748b), :135 (#64748b). Not fabricated data; theme is styling/duplication.
 - **Files to change:** `apps/web/src/app/(app)/procurement/indents/[id]/page.tsx`
@@ -2023,7 +2023,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-PRE-BID-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2056 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Dead-end log: no action to schedule a conference, record minutes or publish a corrigendum, and the Tender cell is plain text (PreBidTable.tsx) — an officer cannot get from a conference to its tender or its queries.
 - **Verified evidence:** pre-bid/page.tsx has no action buttons; PageHeader has no actions (:19-22). PreBidTable.tsx:99-106 renders tender as a plain text column; DataTable supports rowHref/rowLinkKey (ds/DataTable.tsx:56,207-212) but it is not used. PreBidConference (loaders.ts:2703-2711) has no tenderId, so linking needs the API to provide it. Whether schedule/minutes/corrigendum endpoints exist is cannot-verify (procurement-service absent).
 - **Files to change:** `apps/web/src/app/(app)/procurement/pre-bid/PreBidTable.tsx`, `apps/web/src/app/(app)/procurement/pre-bid/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -2190,7 +2190,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-RFQ-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2056 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Raw reference in a user column: Indent Ref prints r.indentRef verbatim (page.tsx) — the create form stores "procurement_indent:{uuid}" (CreateRFQForm.tsx), so officers see an internal id and cannot click through to the indent.
 - **Verified evidence:** rfq/page.tsx:30 maps indentRef: r.indentRef ?? '—' and it is shown as plain text in column 'Indent Ref' (line 81). CreateRFQForm.tsx:77 sends indentRef: `procurement_indent:${indentId}`, so the list prints 'procurement_indent:<uuid>'. rfq/[id]/page.tsx:86 also prints it raw in a mono span. An indent detail route exists (/procurement/indents/[id]) so a link is possible. Whether the RFQ list API also returns an indent number is cannot-verify (RFQSummary type lives in absent @civitasone/types).
 - **Files to change:** `apps/web/src/app/(app)/procurement/rfq/page.tsx`, `apps/web/src/app/(app)/procurement/rfq/[id]/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -2470,7 +2470,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-TENDERS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2056 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Technical evaluation form pre-ticks "Qualified" only for bids already technically_qualified (Actions.tsx), so saving an untouched form disqualifies every bidder; there is no reason/remark field per bidder — a disqualification is recorded as a boolean plus an optional score (Actions.tsx) with no justification for the audit trail.
 - **Verified evidence:** TenderLifecycleActions.tsx:290 initial state qualified = (b.status === 'technically_qualified'), so bids not yet qualified start unticked. submit() (303-329) sends every bid with qualified:row.qualified and optional score to /technical-evaluation with no confirm dialog, so pressing Save on an untouched form marks all pending bids disqualified. Payload (line 311) is {bidId,qualified,score} - no remark/reason per bidder; table columns are Vendor/Qualified/Score only. Maker-checker and audit emission are server-side (cannot-verify).
 - **Files to change:** `apps/web/src/app/(app)/procurement/tenders/[id]/TenderLifecycleActions.tsx`, `services/procurement-service technical-evaluation route (absent)`
@@ -2487,7 +2487,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-TENDERS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2056 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** The action set is inferred, not stated: because the summary collapses technical and financial evaluation into "evaluation", the component guesses phase from whether any bidAmount is visible (Actions.tsx). "Open financial bids" stays enabled after opening, and Award appears as soon as one amount is revealed — premature clicks fail only with the server's raw error text.
 - **Verified evidence:** TenderLifecycleActions.tsx:190 anyFinancialOpened = bids.some(b => b.bidAmount !== undefined) is the inferred phase signal (comment at 165-175 admits it). 'Open financial bids' (252-259) is rendered whenever status==='evaluation' and stays enabled after opening; 'Award tender' (260-270) appears as soon as any amount is visible, even if other qualified bids are still sealed. Errors surface as `throw new Error(await res.text())` (lines 194/199/208), i.e. raw server body in ActionButton's error text. Technical form disappears once any amount is revealed (236).
 - **Files to change:** `apps/web/src/app/(app)/procurement/tenders/[id]/TenderLifecycleActions.tsx`, `apps/web/src/app/(app)/procurement/tenders/[id]/page.tsx`, `services/procurement-service queries.ts mapTenderStatus (absent)`
@@ -2524,6 +2524,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-TENDERS-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme PII (was DATEFMT)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** Names are masked ('Bidder N') only in the UI while the tender is published. Who may see the bidder register before opening, and having the API omit vendorName, is a vigilance decision. Left open.**
 - **W0 note:** partly fixed by #1866 — tenders/[id]/page.tsx:72-75 shows Bidder N while published (display masking only); API still returns vendorName, no role gate or audited reveal
 - **First-pass claim:** Bidder names are shown while bids are sealed (page.tsx): only the amount is hidden; before the opening date the register of who bid is visible to any module user, weakening bid confidentiality.
 - **Verified evidence:** tenders/[id]/page.tsx:50-62 maps every tender.bids entry with vendorName and only masks the amount ('Sealed' at :58). The page never compares against the opening date, so bidder names are shown to any module user for whatever bids the API returns. Whether the API already hides bids/vendors before opening is cannot-verify (service absent). Theme DATEFMT is wrong.
@@ -2539,7 +2540,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-TENDERS-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2056)
 - **W0-10 note:** review found the W0 tick partly — EMD shown (tenders/[id]/page.tsx:152-155) and NIT-missing banner (:126), but Publish is not disabled/confirm-gated: TenderLifecycleActions has no hasNit prop; acceptance 'Publish disabled with Attach NIT first' unmet
 - **First-pass claim:** EMD amount is captured on create (CreateTenderForm.tsx) but never displayed on the detail page; NIT / corrigendum documents live on a separate route with no indicator here of how many exist or whether a NIT was attached before Publish.
 - **Verified evidence:** CreateTenderForm.tsx:45 sends emdAmountMinor, but tenders/[id]/page.tsx fields (lines 84-123) show Tender No, Est. Value, Publish, Closing, Opening, Bids Received, Scope, Eligibility - no EMD. The only link to documents is a 'Documents' button (line 74) with no count; nothing warns Publish (TenderLifecycleActions.tsx:214) that no NIT exists. Whether TenderDetail carries emdAmount is cannot-verify (type in absent @civitasone/types).
@@ -2563,7 +2564,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-TENDERS-DETAIL-DOCUMENTS-01  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [ ] **Status** (W2 procurement #2056 re-check REOPENED: acceptance says voiding a corrigendum keeps the row visible as Superseded, but there is no void command and no Superseded label (docs-consumer has create and republish only); the 'POST returns 403' claim was also false until #2056 added an error handler to the documents plugin (it returned 500). Needs a product decision on corrigendum void; was W0 PROVISIONAL: closed by #1866)
 - **First-pass claim:** Corrigendum has no special handling: it is just another docType (page.tsx) with no version number, no effect on the bid closing date and no notice to bidders — the legally binding amendment of a live tender is a file in a list. Anyone with module access can upload it (no role gate) and there is no delete/replace/void action.
 - **Verified evidence:** documents/page.tsx: DOC_TYPES (line 18-25) lists 'corrigendum' as one option; handleSave (120-165) posts only {docType,title,storageRef}. No version/effective date, no update of bid closing date, no notify-bidders call. Upload form is rendered unconditionally (lines 194-277); table Actions column only has Download (365); no delete/replace/void. Layout only has ModuleGate moduleKey='procurement' (procurement/layout.tsx), so any procurement user sees upload. Server-side role enforcement and any corrigendum endpoint are cannot-verify (procurement-service absent).
 - **Files to change:** `apps/web/src/app/(app)/procurement/tenders/[id]/documents/page.tsx`, `apps/web/src/app/(app)/procurement/tenders/[id]/page.tsx`, `services/procurement-service (absent from snapshot)`
@@ -2598,7 +2599,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-TENDERS-DETAIL-DOCUMENTS-03  ·  MEDIUM  ·  partly  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2056 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Field mismatch risk: the page reads doc.createdAt (page.tsx) but the shared loader type for the same endpoint is uploadedAt (loaders.ts:5611); if the API sends uploadedAt every row shows "—" for Uploaded, and sizeBytes typed string here vs number there.
 - **Verified evidence:** Types do disagree: documents/page.tsx:8-16 TenderDoc has createdAt?: string and sizeBytes?: string, rendered at :360 (createdAt) and :358 (formatBytes accepts string|number). loaders.ts:5611-5620 TenderDocumentSummary (getProcurementTenderDocuments, unused by any page - grep shows only its definition) declares uploadedAt: string and sizeBytes: number|null. Which name the API actually sends is cannot-verify (procurement-service absent). formatBytes tolerates both number and string so size works either way; only the date could show '—'.
 - **Files to change:** `apps/web/src/app/(app)/procurement/tenders/[id]/documents/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -3086,6 +3087,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-APPROVALS-ESCALATION-01  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** No source of the real thresholds exists to compare against: the bands are developer-maintained and nothing reads the workflow routing config. #2056 makes the page say 'Reference only' (not live routing). Loading them from workflow-service depends on the single-approvals-source decision. Left open.**
 - **First-pass claim:** Thresholds are hard-coded in the page (ESCALATION_ROWS, page.tsx:13-17) while real routing lives in the workflow service (page.tsx:25-28): the reference can silently drift from actual behaviour, and per-tenant delegation of powers cannot differ. Workflow service is not in the snapshot — the true thresholds are undeterminable.
 - **Service:** `workflow-service`  ·  **Endpoint(s):** `['(none; ESCALATION_ROWS hard-coded in page)', 'approval routing config']`
 - **Question:** Do the workflow-service procurement approval thresholds and escalation times equal ESCALATION_ROWS, and are they per-tenant configurable?
@@ -3261,7 +3263,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-INDENTS-DETAIL-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2056)
 - **First-pass claim:** GET /procurement/indents/:id and the shape of approvalTrail are not in the snapshot — completeness of the trail (actors, rejection reasons) undeterminable.
 - **Service:** `procurement-service`  ·  **Endpoint(s):** `['GET /api/v1/procurement/indents/:id']`
 - **Question:** approvalTrail must include actor, action, timestamp and rejection reason for every step.
@@ -3506,6 +3508,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-TENDERS-DETAIL-DOCUMENTS-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 procurement note (partly fixed in #2056):** document registration now enforces a 50 MiB cap, a MIME allowlist and an executable/script extension block, and the documents routes return 400/403/404 instead of a bare 500. Still open: no malware scan or quarantine anywhere in procurement-service (needs an upload-service decision).**
 - **W0 note:** partly fixed by main — Documents add/list role-gated and audited. Remaining: only a storageRef is registered; no size/type limits and no malware scan or quarantine anywhere in procurement-service.
 - **First-pass claim:** Presigned upload/download service (admin uploads), malware scanning and the documents endpoints are not in the snapshot — undeterminable.
 - **Service:** `procurement-service`  ·  **Endpoint(s):** `['GET/POST /api/proxy/v1/procurement/tenders/:id/documents', 'GET /api/proxy/v1/admin/uploads/:storageRef']`
