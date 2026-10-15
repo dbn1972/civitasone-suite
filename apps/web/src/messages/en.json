@@ -15296,6 +15296,29 @@
         "trial": "Trial",
         "suspended": "Suspended"
       }
+    },
+    "apiKeys": {
+      "scopesLabel": "Scopes",
+      "scopesHint": "Choose what this key may access. Grant only what the service needs.",
+      "scopesLoading": "Loading the scopes you can grant…",
+      "scopesLoadFailed": "We couldn't load the scopes you can grant. Refresh the page to try again.",
+      "scopesNone": "You can't grant any scopes. Ask a platform administrator.",
+      "scopeRequired": "Choose at least one scope."
+    },
+    "channels": {
+      "actionsHeader": "Actions",
+      "disable": "Disable",
+      "enable": "Enable",
+      "disableTitle": "Disable \"{name}\"?",
+      "disableDescription": "Notifications that use this channel will stop being delivered until you enable it again. This is recorded in the audit log.",
+      "defaultWarning": "This is your default channel, so approvals and alerts may stop reaching anyone.",
+      "disableConfirm": "Disable channel",
+      "reasonLabel": "Reason for disabling (recorded in the audit log)",
+      "enabledOk": "Channel \"{name}\" enabled.",
+      "disabledOk": "Channel \"{name}\" disabled."
+    },
+    "breakglass": {
+      "platformAdminOnly": "Platform administrators only"
     }
   }
 }

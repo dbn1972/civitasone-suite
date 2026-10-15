@@ -1,5 +1,6 @@
 import { and, eq, isNull, lte } from "drizzle-orm";
 import { db, scopedRead, scopedPlatformRead } from "../../shared/db.js";
+import { auditEvent } from "../../shared/audit.js";
 import { adminBreakGlassLog, adminDataCorrections, type AdminBreakGlassLogInsert, type AdminDataCorrectionRow, type AdminDataCorrectionInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -108,6 +109,17 @@ export async function findBreakGlassById(id: string, tenantId?: string): Promise
   return rows[0];
 }
 
+
+// GAP-TENANT-ADMIN-BREAKGLASS-DETAIL-03: a break-glass record being opened is a
+// sensitive read; leave a `breakglass.viewed` audit event in the transactional
+// outbox. Throws on failure so an unaudited view is never served.
+export async function recordBreakGlassViewed(
+  ctx: { tenantId: string; actorId: string; correlationId: string },
+  grantId: string,
+  grantTenantId: string,
+): Promise<void> {
+  await db.transaction((tx) => auditEvent(tx, ctx, "breakglass.viewed", "breakglass", grantId, { grantTenantId }));
+}
 
 // ── data corrections (maker-checker governance) ──────────────────────────────
 

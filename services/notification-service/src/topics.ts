@@ -5,6 +5,7 @@ export const COMMANDS = {
   updatePrefs:      "notification.prefs.update",
   sendNotification: "notification.send",
   createChannel:    "notification.channel.create",
+  setChannelEnabled: "notification.channel.set_enabled",
   createAlertRule:  "notification.alert_rule.create",
   enableAlertRule:  "notification.alert_rule.enable",
   disableAlertRule: "notification.alert_rule.disable",
@@ -91,6 +92,7 @@ export const EVENTS = {
   permanentlyFailed:     "notification.delivery.permanently_failed",
   prefSet:               "notification.prefs.changed",
   channelCreated:        "notification.channel.created",
+  channelEnabledChanged: "notification.channel.enabled_changed",
   alertRuleCreated:      "notification.alert_rule.created",
   campaignCreated:       "notification.campaign.created",
   // Scheduling

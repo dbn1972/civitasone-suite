@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, within, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, within, fireEvent, waitFor } from "@/test-utils/intl-render";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
@@ -7,21 +7,35 @@ vi.mock("next/navigation", () => ({
 
 import { APIKeyActions } from "./APIKeyActions";
 
+const SCOPES_URL = "/api/proxy/v1/admin/api-keys/scopes";
+const CATALOGUE = ["config:read", "config:write", "api-keys:read"];
+
+/** fetch mock: the scope catalogue GET always succeeds; everything else goes to `rest`. */
+function mockFetch(rest: () => Response) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) =>
+    String(input) === SCOPES_URL
+      ? new Response(JSON.stringify({ data: CATALOGUE }), { status: 200, headers: { "content-type": "application/json" } })
+      : rest(),
+  );
+}
+const writeCalls = (spy: ReturnType<typeof mockFetch>) => spy.mock.calls.filter((c) => String(c[0]) !== SCOPES_URL);
+async function pickScope(scope: string) {
+  fireEvent.click(await screen.findByRole("checkbox", { name: scope }));
+}
+
 describe("APIKeyActions — UX-016 clerk-safe errors", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
   it("shows a clerk-safe message, never the raw response body, when creating a key fails", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response("internal error: connection to vault timed out", { status: 500 }),
-    );
+    mockFetch(() => new Response("internal error: connection to vault timed out", { status: 500 }));
 
     render(<APIKeyActions keys={[]} />);
     fireEvent.change(screen.getByLabelText(/Key name/i), { target: { value: "Reporting service" } });
     // GAP-TENANT-ADMIN-API-KEYS-04: scopes now default to empty, so a scope
-    // must be provided for the request to be attempted at all.
-    fireEvent.change(screen.getByLabelText(/Scopes/i), { target: { value: "finance:read" } });
+    // must be chosen for the request to be attempted at all.
+    await pickScope("config:read");
     fireEvent.click(screen.getByRole("button", { name: "Create API Key" }));
 
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/couldn't save/i));
@@ -56,46 +70,66 @@ describe("APIKeyActions — UX-016 clerk-safe errors", () => {
 describe("APIKeyActions — GAP-TENANT-ADMIN-API-KEYS-04 (least-privilege create)", () => {
   beforeEach(() => vi.restoreAllMocks());
 
-  it("does not pre-fill 'read:*' and refuses to submit with no scope selected", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+  it("offers the server catalogue as checkboxes, none pre-selected (no 'read:*'), and refuses to submit with none chosen", async () => {
+    const fetchSpy = mockFetch(() => new Response("{}", { status: 200 }));
     render(<APIKeyActions keys={[]} />);
-    const scopes = screen.getByLabelText(/Scopes/i) as HTMLInputElement;
-    expect(scopes.value).toBe("");
+    const boxes = (await screen.findAllByRole("checkbox")) as HTMLInputElement[];
+    expect(boxes.map((b) => b.closest("label")!.textContent)).toEqual(CATALOGUE);
+    expect(boxes.every((b) => !b.checked)).toBe(true);
+    expect(screen.queryByText("read:*")).toBeNull();
     fireEvent.change(screen.getByLabelText(/Key name/i), { target: { value: "Reporting service" } });
     fireEvent.click(screen.getByRole("button", { name: "Create API Key" }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/at least one scope/i));
-    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(writeCalls(fetchSpy)).toHaveLength(0);
+  });
+
+  it("a hyphenated catalogue scope (api-keys:read) is accepted and sent", async () => {
+    const fetchSpy = mockFetch(() => new Response(JSON.stringify({ key: "k" }), { status: 202, headers: { "content-type": "application/json" } }));
+    render(<APIKeyActions keys={[]} />);
+    fireEvent.change(screen.getByLabelText(/Key name/i), { target: { value: "Svc" } });
+    await pickScope("api-keys:read");
+    await pickScope("config:read");
+    fireEvent.click(screen.getByRole("button", { name: "Create API Key" }));
+    await waitFor(() => expect(writeCalls(fetchSpy)).toHaveLength(1));
+    expect(JSON.parse(String(writeCalls(fetchSpy)[0]![1]!.body)).scopes).toEqual(["api-keys:read", "config:read"]);
+  });
+
+  it("when the catalogue cannot be loaded it says so and sends nothing", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("nope", { status: 500 }));
+    render(<APIKeyActions keys={[]} />);
+    expect(await screen.findByText(/couldn't load the scopes you can grant/i)).toBeInTheDocument();
+    expect(screen.queryAllByRole("checkbox")).toHaveLength(0);
   });
 
   it("sends an expiresAt ISO datetime with the create request (default 90 days)", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    const fetchSpy = mockFetch(() =>
       new Response(JSON.stringify({ key: "sk_test" }), { status: 200, headers: { "content-type": "application/json" } }),
     );
     render(<APIKeyActions keys={[]} />);
     fireEvent.change(screen.getByLabelText(/Key name/i), { target: { value: "Reporting service" } });
-    fireEvent.change(screen.getByLabelText(/Scopes/i), { target: { value: "finance:read" } });
+    await pickScope("config:read");
     fireEvent.click(screen.getByRole("button", { name: "Create API Key" }));
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    await waitFor(() => expect(writeCalls(fetchSpy)).toHaveLength(1));
     // GAP-TENANT-ADMIN-API-KEYS-03: writes target the same admin-service store
     // the list is read from, with the admin create field name `keyName`.
-    expect(String(fetchSpy.mock.calls[0]![0])).toBe("/api/proxy/v1/admin/api-keys");
-    const body = JSON.parse(String(fetchSpy.mock.calls[0]![1]!.body));
-    expect(body).toMatchObject({ keyName: "Reporting service", scopes: ["finance:read"] });
+    expect(String(writeCalls(fetchSpy)[0]![0])).toBe("/api/proxy/v1/admin/api-keys");
+    const body = JSON.parse(String(writeCalls(fetchSpy)[0]![1]!.body));
+    expect(body).toMatchObject({ keyName: "Reporting service", scopes: ["config:read"] });
     expect(typeof body.expiresAt).toBe("string");
     expect(Number.isNaN(Date.parse(body.expiresAt))).toBe(false);
   });
 
   it("omits expiresAt when 'No expiry' is chosen", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    const fetchSpy = mockFetch(() =>
       new Response(JSON.stringify({ key: "sk_test" }), { status: 200, headers: { "content-type": "application/json" } }),
     );
     render(<APIKeyActions keys={[]} />);
     fireEvent.change(screen.getByLabelText(/Key name/i), { target: { value: "Svc" } });
-    fireEvent.change(screen.getByLabelText(/Scopes/i), { target: { value: "finance:read" } });
+    await pickScope("config:read");
     fireEvent.change(screen.getByLabelText(/Expiry/i), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "Create API Key" }));
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
-    const body = JSON.parse(String(fetchSpy.mock.calls[0]![1]!.body));
+    await waitFor(() => expect(writeCalls(fetchSpy)).toHaveLength(1));
+    const body = JSON.parse(String(writeCalls(fetchSpy)[0]![1]!.body));
     expect(body.expiresAt).toBeUndefined();
   });
 });
@@ -113,7 +147,7 @@ describe("APIKeyActions — GAP-TENANT-ADMIN-API-KEYS-01 (rotate safety)", () =>
   });
 
   it("GAP-TENANT-ADMIN-API-KEYS-03: rotate PATCHes the admin-service rotate path (same store as the list)", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    const fetchSpy = mockFetch(() =>
       new Response(JSON.stringify({ key: "civ_new" }), { status: 202, headers: { "content-type": "application/json" } }),
     );
     render(<APIKeyActions keys={[{ id: "k1", keyName: "Reporting service", status: "active" }]} />);
@@ -122,8 +156,8 @@ describe("APIKeyActions — GAP-TENANT-ADMIN-API-KEYS-01 (rotate safety)", () =>
     fireEvent.change(within(dialog).getByLabelText(/Reason/i), { target: { value: "scheduled rotation" } });
     const confirm = Array.from(dialog.querySelectorAll("button")).find((b) => b.textContent === "Rotate key");
     fireEvent.click(confirm!);
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
-    expect(String(fetchSpy.mock.calls[0]![0])).toBe("/api/proxy/v1/admin/api-keys/k1/rotate");
-    expect(fetchSpy.mock.calls[0]![1]!.method).toBe("PATCH");
+    await waitFor(() => expect(writeCalls(fetchSpy)).toHaveLength(1));
+    expect(String(writeCalls(fetchSpy)[0]![0])).toBe("/api/proxy/v1/admin/api-keys/k1/rotate");
+    expect(writeCalls(fetchSpy)[0]![1]!.method).toBe("PATCH");
   });
 });

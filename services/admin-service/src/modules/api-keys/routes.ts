@@ -8,7 +8,7 @@ import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/com
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
-import { disallowedScopes } from "./scopes.js";
+import { disallowedScopes, grantableScopes } from "./scopes.js";
 import * as commands from "./commands.js";
 
 const ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
@@ -16,7 +16,9 @@ const idParam = z.object({ id: z.string().uuid() });
 const createBody = z.object({
   keyName: z.string().min(1).max(120),
   scopes: z.array(z.string().min(1).max(80)).default([]),
-  expiresAt: z.string().datetime().optional(),
+  // GAP-TENANT-ADMIN-API-KEYS-04: an expiry in the past would mint a key that is
+  // dead on arrival; reject it rather than accept and silently store it.
+  expiresAt: z.string().datetime().refine((v) => new Date(v).getTime() > Date.now(), "expiresAt must be in the future").optional(),
 });
 
 const SCRYPT_PARAMS = { N: 16384, r: 8, p: 1 };
@@ -39,6 +41,14 @@ export async function apiKeyRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, APIKeySummaryListSchema, await queries.listApiKeys(ctx.tenantId, q.limit));
+  });
+
+  // GAP-TENANT-ADMIN-API-KEYS-04: scopes the caller may put on a new key (the create
+  // form renders these as a multi-select instead of free text).
+  app.get("/v1/admin/api-keys/scopes", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    return reply.send({ data: grantableScopes(ctx) });
   });
 
   app.post("/v1/admin/api-keys", async (req, reply) => {

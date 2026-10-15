@@ -44,6 +44,24 @@ export async function insertChannel(tx: Writer, row: ChannelInsert): Promise<voi
   await tx.insert(notificationChannels).values(row);
 }
 
+/**
+ * Guarded write: only the caller's tenant's row, and only when the value
+ * actually changes. Returns the previous state (null = no such channel / no-op).
+ */
+export async function setChannelEnabledTx(
+  tx: Writer, id: string, tenantId: string, enabled: boolean, actorId: string,
+): Promise<{ previous: boolean } | null> {
+  const found = await tx.select().from(notificationChannels)
+    .where(and(eq(notificationChannels.id, id), eq(notificationChannels.tenantId, tenantId))).limit(1);
+  const row = found[0];
+  if (!row) return null;
+  if (row.enabled === enabled) return { previous: row.enabled };
+  await tx.update(notificationChannels)
+    .set({ enabled, updatedBy: actorId, updatedAt: new Date(), version: row.version + 1 })
+    .where(and(eq(notificationChannels.id, id), eq(notificationChannels.tenantId, tenantId)));
+  return { previous: row.enabled };
+}
+
 export async function insertChannelConfig(tx: Writer, row: typeof notificationChannelConfigs.$inferInsert): Promise<void> {
   await tx.insert(notificationChannelConfigs).values(row);
 }
