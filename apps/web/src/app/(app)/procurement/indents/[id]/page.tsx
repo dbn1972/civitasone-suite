@@ -4,6 +4,7 @@ import { PageHeader, Card, StatusPill, EmptyState, ErrorState, DataTable } from 
 import { getProcurementIndentById } from "../../../../_data/loaders";
 import { formatMoney, formatIndianDate, formatIndianDateTime } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
@@ -49,6 +50,7 @@ const LINE_ITEM_COLUMNS: { key: keyof LineItemRow; label: string; align?: "left"
 ];
 
 export default async function IndentDetailPage({ params }: { params: { id: string } }) {
+  const tw = await getTranslations("procurement.w2b.indentDetail");
   const { data: indent, source } = await getProcurementIndentById(params.id);
 
   if (!indent) {
@@ -145,6 +147,15 @@ export default async function IndentDetailPage({ params }: { params: { id: strin
             pageSize={50}
           />
         </Card>
+      )}
+
+      {/* GAP-PROCUREMENT-INDENTS-DETAIL-05: the trail comes from the workflow engine.
+          If it could not be asked, say so - an empty trail on an indent that WAS
+          decided must not read as "no decisions". */}
+      {indent.approvalTrailAvailable === false && (
+        <div className="card pad" role="status" style={{ marginTop: 12, borderInlineStart: "3px solid var(--warn)" }}>
+          {tw("trailUnavailable")}
+        </div>
       )}
 
       {indent.approvalTrail.length > 0 && (

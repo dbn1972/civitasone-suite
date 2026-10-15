@@ -4,6 +4,8 @@ import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useFormError } from "@/lib/useFormError";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { ActionButton } from "@/app/_components/ds";
 
 export type LifecycleBid = {
@@ -50,6 +52,7 @@ export function TenderLifecycleActions({
   bids,
   canAward = true,
   awardBlockReason,
+  hasNit = true,
 }: {
   tenderId: string;
   status: string;
@@ -58,8 +61,15 @@ export function TenderLifecycleActions({
   canAward?: boolean;
   /** Why Award is blocked (shown as the disabled button's title). */
   awardBlockReason?: string;
+  /**
+   * GAP-PROCUREMENT-TENDERS-DETAIL-05: a current NIT document is attached.
+   * Publish is disabled without one (the server answers 409 NIT_REQUIRED).
+   * Defaults to true so a caller that cannot tell never blocks on a guess.
+   */
+  hasNit?: boolean;
 }) {
   const router = useRouter();
+  const tw = useTranslations("procurement.w2b.tenderActions");
   const [sanctionRef, setSanctionRef] = useState("");
 
   const evaluableBids = useMemo(
@@ -101,9 +111,16 @@ export function TenderLifecycleActions({
 
   if (status === "draft") {
     return (
-      <div className="card pad" style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+      <div className="card pad" style={{ marginTop: 12, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        {!hasNit ? (
+          <span role="note" style={{ fontSize: "0.8125rem", color: "var(--mut)" }}>
+            {tw("attachNitFirst")}{" "}
+            <Link href={`/procurement/tenders/${tenderId}/documents`}>{tw("addDocuments")}</Link>
+          </span>
+        ) : null}
         <ActionButton
           label="Publish tender"
+          disabled={!hasNit}
           confirmTitle="Publish this tender?"
           confirmDescription="This makes the tender visible to vendors for bidding."
           confirmLabel="Publish"

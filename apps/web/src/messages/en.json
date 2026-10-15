@@ -5682,6 +5682,25 @@
     "purchase": "Purchase Order",
     "vendors": "Vendors",
     "contracts": "Contracts",
+    "w2b": {
+      "tenderActions": {
+        "attachNitFirst": "Attach the Notice Inviting Tender (NIT) before publishing.",
+        "addDocuments": "Add documents"
+      },
+      "indentDetail": {
+        "trailUnavailable": "The approval trail could not be loaded just now, so it is not shown. This does not mean the indent has no decisions. Please try again shortly."
+      },
+      "approvals": {
+        "value": "Value",
+        "requestedBy": "Requested by",
+        "summaryFailed": "Couldn’t load the value and requester for these tasks. They are shown as “—”.",
+        "dialogValue": "Value: {value}."
+      },
+      "escalation": {
+        "referenceOnlyTitle": "Reference only.",
+        "referenceOnlyBody": "These bands are maintained with the application. They are not read from the workflow routing configuration, so the routing applied to a request can differ. Confirm against the delegation of financial powers."
+      }
+    },
     "hub": {
       "subtitle": "Requisitions, vendors, purchase orders, and tenders with approval controls.",
       "allModules": "View all modules",

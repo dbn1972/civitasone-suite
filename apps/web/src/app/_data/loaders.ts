@@ -752,7 +752,8 @@ function mapApprovals(payload: unknown): ApprovalSummary[] | null {
     const dueDisplay = toText(row.dueDisplay) ?? toText(row.due) ?? "—";
     if (!id || !referenceId || !owner) continue;
     const dueAt = toText(row.dueAt) ?? toText(row.dueDate);
-    mapped.push({ id, referenceId, owner, dueDisplay, ...(dueAt ? { dueAt } : {}) });
+    const refType = row.refType === "procurement_indent" || row.refType === "procurement_po" ? row.refType : undefined;
+    mapped.push({ id, referenceId, owner, dueDisplay, ...(dueAt ? { dueAt } : {}), ...(refType ? { refType } : {}) });
   }
   // GAP-PROCUREMENT-APPROVALS-02: return the mapped array as-is, even when
   // empty. A tenant with zero pending approvals is a normal, successful 200

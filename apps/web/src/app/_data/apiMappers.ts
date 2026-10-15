@@ -310,7 +310,15 @@ export function mapProcurementIndentDetail(payload: unknown): IndentDetail | nul
     });
   }
 
-  return { ...base, purpose: toText(payload.purpose) ?? undefined, lineItems, approvalTrail };
+  return {
+    ...base,
+    purpose: toText(payload.purpose) ?? undefined,
+    lineItems,
+    approvalTrail,
+    // GAP-PROCUREMENT-INDENTS-DETAIL-05: only an explicit `false` means the
+    // decision source was unreachable.
+    ...(payload.approvalTrailAvailable === false ? { approvalTrailAvailable: false } : {}),
+  };
 }
 
 export function mapProcurementVendorDetail(payload: unknown): VendorDetail | null {

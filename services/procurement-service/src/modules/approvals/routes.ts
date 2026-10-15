@@ -1,9 +1,16 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import { approvalsListResponseSchema } from "@civitasone/schemas/web";
 import { sendValidated } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as queries from "./queries.js";
+
+const refSummariesBody = z.object({
+  refs: z.array(z.object({
+    refType: z.enum(queries.APPROVAL_REF_TYPES),
+    refId: z.string().uuid(),
+  })).min(1).max(50),
+});
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
@@ -13,6 +20,16 @@ export async function approvalsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     sendValidated(reply, approvalsListResponseSchema, await queries.listApprovals(ctx.tenantId));
+  });
+
+  // GAP-PROCUREMENT-APPROVALS-05/07: value + requester + parent PO for the
+  // approvals queue's task refs. A read (POST only because the id list is
+  // a body, capped at 50 like the other internal ref lookups).
+  app.post("/v1/procurement/approvals/ref-summaries", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const body = refSummariesBody.parse(req.body);
+    return reply.send({ data: await queries.resolveApprovalRefs(ctx.tenantId, body.refs) });
   });
 
   app.setErrorHandler(errorHandler);

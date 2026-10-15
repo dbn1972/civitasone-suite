@@ -136,6 +136,7 @@ export default async function TenderDetailPage({ params }: { params: { id: strin
         bids={tender.bids}
         canAward={canAward}
         awardBlockReason={awardBlockReason}
+        hasNit={nitPresent}
       />
 
       <Card title="Tender details" padding>

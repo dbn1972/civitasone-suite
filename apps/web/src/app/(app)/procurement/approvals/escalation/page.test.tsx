@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "@/test-utils/intl-render";
 import EscalationRulesPage from "./page";
 
 describe("EscalationRulesPage (GAP-PROCUREMENT-APPROVALS-ESCALATION-02/03/04)", () => {
@@ -32,5 +32,11 @@ describe("EscalationRulesPage (GAP-PROCUREMENT-APPROVALS-ESCALATION-02/03/04)", 
     expect(screen.getByText(/and below$/)).toBeInTheDocument();
     const overs = screen.getAllByText(/^Over /);
     expect(overs.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("GAP-ESCALATION-01: says the bands are a reference, not read from the workflow routing configuration", () => {
+    render(<EscalationRulesPage />);
+    expect(screen.getByText("Reference only.")).toBeInTheDocument();
+    expect(screen.getByText(/not read from the workflow routing configuration/)).toBeInTheDocument();
   });
 });

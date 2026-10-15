@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent } from "@/test-utils/intl-render";
 
 // useOfflineResource touches IndexedDB via responseCache — mock it directly so
 // this test exercises only ProcurementApprovalsPanel's own filtering/linking
@@ -264,5 +264,75 @@ describe("ProcurementApprovalsPanel -- role gate (GAP-PROCUREMENT-APPROVALS-02)"
     unmount();
     render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
     expect(screen.getAllByRole("button", { name: "Approve" })).toHaveLength(2);
+  });
+});
+
+// ── GAP-PROCUREMENT-APPROVALS-05 / 07 (Wave 2 part 2) ───────────────────────
+describe("ProcurementApprovalsPanel — value, requester and amendment link", () => {
+  const IND = "11111111-1111-4111-8111-111111111111";
+  const AMD = "22222222-2222-4222-8222-222222222222";
+  const PO = "33333333-3333-4333-8333-333333333333";
+
+  beforeEach(() => {
+    mockUseOfflineResource.mockClear();
+    mockFetchOrQueue.mockReset();
+    mockRefresh.mockReset();
+    mockError = null;
+    rawPayload = [
+      { id: "t1", instanceId: "i1", name: "Approve indent", status: "pending", roleRef: "procurement_admin", refType: "procurement_indent", refId: IND },
+      { id: "t2", instanceId: "i2", name: "Approve amendment", status: "pending", roleRef: "procurement_admin", refType: "procurement_po_amendment", refId: AMD },
+    ];
+  });
+
+  function stubSummaries(ok = true) {
+    return vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      ok
+        ? new Response(JSON.stringify({ data: [
+            { refType: "procurement_indent", refId: IND, label: "IND-2026-007", amountMinor: "12345600", requestedBy: "Asha Verma" },
+            { refType: "procurement_po_amendment", refId: AMD, label: "PO-2026-004 / Amendment 2", amountMinor: "-25000", poId: PO, requestedBy: "Ravi Iyer" },
+          ] }), { status: 200 })
+        : new Response(null, { status: 500 }));
+  }
+
+  it("APPROVALS-07: shows the document value and requester next to each task (money from minor units)", async () => {
+    const spy = stubSummaries();
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
+    expect(await screen.findByText("₹1,23,456.00")).toBeInTheDocument();
+    expect(screen.getByText("Asha Verma")).toBeInTheDocument();
+    // An amendment's value is the signed CHANGE.
+    expect(screen.getByText("-₹250.00")).toBeInTheDocument();
+    const call = spy.mock.calls[0]!;
+    expect(String(call[0])).toBe("/api/proxy/v1/procurement/approvals/ref-summaries");
+    expect(JSON.parse(String((call[1] as RequestInit).body))).toEqual({ refs: [
+      { refType: "procurement_indent", refId: IND },
+      { refType: "procurement_po_amendment", refId: AMD },
+    ] });
+  });
+
+  it("APPROVALS-05: the reference shows the readable label and an amendment links to its parent PO", async () => {
+    stubSummaries();
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
+    const amendmentLink = await screen.findByRole("link", { name: "PO-2026-004 / Amendment 2" });
+    expect(amendmentLink).toHaveAttribute("href", `/procurement/orders/${PO}`);
+    expect(screen.getByRole("link", { name: "IND-2026-007" })).toHaveAttribute("href", `/procurement/indents/${IND}`);
+    // No bare UUID is shown for a resolved reference.
+    expect(screen.queryByText(AMD)).not.toBeInTheDocument();
+  });
+
+  it("APPROVALS-07: the approve dialog restates the value being decided", async () => {
+    stubSummaries();
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
+    await screen.findByText("Asha Verma");
+    fireEvent.click(screen.getAllByRole("button", { name: "Approve" })[0]!);
+    expect(await screen.findByText(/Value: ₹1,23,456\.00\./)).toBeInTheDocument();
+  });
+
+  it("when the lookup fails the columns show '—' and the failure is reported (not a value of zero)", async () => {
+    stubSummaries(false);
+    render(<ProcurementApprovalsPanel viewerRoles={["procurement_admin"]} />);
+    expect(await screen.findByText(/Couldn’t load the value and requester/)).toBeInTheDocument();
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
+    // The bare id is the honest fallback; the amendment is plain text (no parent PO known).
+    expect(screen.queryByRole("link", { name: AMD })).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "@/test-utils/intl-render";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", async () => {
@@ -106,5 +106,22 @@ describe("mapApprovals empty-list behaviour (GAP-PROCUREMENT-APPROVALS-02)", () 
     // Unreadable payload -> null: fetchJson flips to source 'error'.
     expect(captured!.mapResponse({ nope: true })).toBeNull();
     expect(captured!.mapResponse("garbage")).toBeNull();
+  });
+
+  it("GAP-APPROVALS-04: the register's Reference is a link to the indent / PO it names", async () => {
+    mockApprovals({
+      data: [
+        { id: "ind-uuid-1", refType: "procurement_indent", referenceId: "IND-1", owner: "Dept A", dueDisplay: "—" },
+        { id: "po-uuid-1", refType: "procurement_po", referenceId: "PO-1", owner: "Dept B", dueDisplay: "—" },
+        { id: "x-1", referenceId: "LEGACY-1", owner: "Dept C", dueDisplay: "—" },
+      ],
+      source: "api",
+    });
+    render(await ApprovalsPage());
+    expect(screen.getByRole("link", { name: "IND-1" })).toHaveAttribute("href", "/procurement/indents/ind-uuid-1");
+    expect(screen.getByRole("link", { name: "PO-1" })).toHaveAttribute("href", "/procurement/orders/po-uuid-1");
+    // A row whose kind is unknown stays plain text rather than linking somewhere wrong.
+    expect(screen.getByText("LEGACY-1")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "LEGACY-1" })).toBeNull();
   });
 });
