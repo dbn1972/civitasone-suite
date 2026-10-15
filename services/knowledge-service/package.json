@@ -8,6 +8,7 @@
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
     "worker": "tsx src/worker.ts",
+    "reindex:search": "tsx src/reindex-search.ts",
     "test": "vitest run",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",

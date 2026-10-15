@@ -15,6 +15,11 @@ function getEngine(): SearchEngine {
   return engine;
 }
 
+/** Allow injection for testing */
+export function setEngine(e: SearchEngine | null): void {
+  engine = e;
+}
+
 /** Initialize the search engine (call once at startup). */
 export async function initializeSearch(): Promise<void> {
   await getEngine().initialize({ indexName: "knowledge_documents" });

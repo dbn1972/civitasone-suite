@@ -34,17 +34,19 @@ export class MeilisearchEngine implements SearchEngine {
           method: "POST",
           body: JSON.stringify({ uid: this.indexName, primaryKey: "id" }),
         });
-        // Configure filterable & searchable attributes
-        await this.fetch(`/indexes/${this.indexName}/settings`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            filterableAttributes: ["tenantId", "category", "tags", "accessLevel"],
-            searchableAttributes: ["title", "content", "tags"],
-            sortableAttributes: ["indexedAt"],
-          }),
-        });
         log.info({ indexName: this.indexName }, "Meilisearch index created");
       }
+      // Always (re)apply the settings, for new AND existing indexes, so that
+      // accessLevel is filterable in production without a manual step. The
+      // PATCH is idempotent.
+      await this.fetch(`/indexes/${this.indexName}/settings`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          filterableAttributes: ["tenantId", "category", "tags", "accessLevel"],
+          searchableAttributes: ["title", "content", "tags"],
+          sortableAttributes: ["indexedAt"],
+        }),
+      });
     } catch (err) {
       log.warn({ err }, "Meilisearch initialization failed — search will use DB fallback");
     }

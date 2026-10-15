@@ -94,6 +94,13 @@ export class OpenSearchEngine implements SearchEngine {
           },
         });
         log.info({ indexName: this.indexName }, "OpenSearch index created");
+      } else {
+        // Existing index: add the accessLevel keyword mapping (additive, idempotent)
+        // so clearance filtering works without a manual step.
+        await this.client.indices.putMapping({
+          index: this.indexName,
+          body: { properties: { accessLevel: { type: "keyword" } } },
+        });
       }
     } catch (err) {
       log.warn({ err }, "OpenSearch initialization failed — search may be unavailable");
