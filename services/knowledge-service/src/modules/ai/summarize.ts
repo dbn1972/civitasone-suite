@@ -14,7 +14,7 @@
  * Validates: Requirements 20.4, 20.5, 20.7
  */
 
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { documents } from "../documents/schema.js";
 import { documentVersions } from "../versions/schema.js";
@@ -70,6 +70,7 @@ Rules:
 export async function summarizeDocument(
   documentId: string,
   tenantId: string,
+  levels?: readonly string[] | null,
 ): Promise<SummarizeResult> {
   // Step 1: Verify document exists and belongs to tenant
   const docRows = await scopedRead((tx) =>
@@ -77,6 +78,9 @@ export async function summarizeDocument(
       .where(and(
         eq(documents.id, documentId),
         eq(documents.tenantId, tenantId),
+        // Clearance is part of the retrieval query: an uncleared document is
+        // never loaded, so it cannot be read, sent to the LLM or summarised.
+        ...(levels ? [inArray(documents.accessLevel, [...levels])] : []),
       ))
       .limit(1)
   );

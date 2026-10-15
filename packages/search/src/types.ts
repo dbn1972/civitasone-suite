@@ -21,6 +21,12 @@ export interface SearchDocument {
   tags: string[];
   /** Optional category for filtering. */
   category?: string | undefined;
+  /**
+   * Access level of the source document (e.g. public/internal/restricted/confidential).
+   * Indexed so a query can be restricted to the levels the caller is cleared for.
+   * Defaults to "internal" when omitted.
+   */
+  accessLevel?: string | undefined;
   /** Additional fields for extended search (e.g. department, priority). */
   metadata?: Record<string, unknown> | undefined;
 }
@@ -35,6 +41,12 @@ export interface SearchQuery {
   category?: string | undefined;
   /** Optional tag filter (AND logic). */
   tags?: string[] | undefined;
+  /**
+   * When set, only documents whose indexed accessLevel is in this list are
+   * retrieved (applied inside the engine query). Documents indexed without a
+   * level never match a restricted query.
+   */
+  accessLevels?: string[] | undefined;
   /** Results limit (default 20, max 200). */
   limit?: number | undefined;
   /** Offset for pagination. */
