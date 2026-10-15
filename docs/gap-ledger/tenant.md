@@ -733,7 +733,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-QUOTAS-02  ·  MEDIUM  ·  confirmed  ·  theme STATUS (was OTHER)
 
-- [x] **Status** (W2 tenant: closed by #2060; StatusPill maps near limit->warn, exceeded->bad, ok->good, asserted by apps/web/src/app/_components/ds/StatusPill.quota.test.tsx. Note: unknown snake_case values render via humanizeStatus Title Case ('Foo Bar'), not sentence case; per-row highlight at threshold NOT built — the text label is the non-colour cue)
+- [x] **Status** (W2 tenant: closed by #2060; QuotaStatusPill (ds/StatusPill.tsx) renders amber/red tones, an aria-hidden icon + text for near limit and exceeded, and sentence-case fallback (foo_bar -> Foo bar), scoped to the quotas page via ModuleListPage statusStyle=quota so humanizeStatus is unchanged elsewhere; asserted by apps/web/src/app/_components/ds/StatusPill.quota.test.tsx. Per-row highlight at threshold NOT built)
 - **W0-10 note:** review found the W0 tick partly — tenant/_data.ts:126-130 emits "Near limit"/"Exceeded"/"OK" and StatusPill humanizes, but ds/StatusPill.tsx STATUS_MAP has no near limit/exceeded/ok keys so pill falls to default "info" blue (:508), not amber; no icon cue and no row highlight in ModuleListTable.tsx:66.
 - **First-pass claim:** Status shows raw snake_case values such as near_limit (ModuleListTable.tsx:53) and there is no threshold colouring or warning.
 - **Verified evidence:** ModuleListTable.tsx:53 renders {row.status ?? "—"} raw; mapTenantRows passes row.status/state unchanged (_data.ts:58), so near_limit (if returned) is shown verbatim, with no colour or warning. Whether the API emits near_limit cannot be verified (service absent).
