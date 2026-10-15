@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "@/test-utils/intl-render";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
@@ -8,10 +8,13 @@ vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...a: unknown[]) => fetchJsonMock(...a),
 }));
 
+let mockRoles: string[] = [];
+vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => mockRoles }));
+
 import NotificationChannelsPage from "./page";
 
 describe("NotificationChannelsPage — GAP-TENANT-ADMIN-NOTIFICATIONS-CHANNELS", () => {
-  beforeEach(() => fetchJsonMock.mockReset());
+  beforeEach(() => { fetchJsonMock.mockReset(); mockRoles = []; });
 
   // CHANNELS-01: the Add form is on the page (no raw API snippet).
   it("renders an Add-channel form and no API snippet / dev copy", async () => {
@@ -43,5 +46,20 @@ describe("NotificationChannelsPage — GAP-TENANT-ADMIN-NOTIFICATIONS-CHANNELS",
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
     render(await NotificationChannelsPage());
     expect(screen.getByText(/couldn't load notification channels/i)).toBeInTheDocument();
+  });
+
+  // CHANNELS-01: enable/disable is offered to tenant admins only (server enforces too).
+  it("shows a Disable action to a tenant_admin and none to a plain viewer", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [{ id: "c1", name: "Office email", type: "email", isDefault: true, enabled: true }],
+      source: "api",
+    });
+    mockRoles = ["tenant_admin"];
+    const { unmount } = render(await NotificationChannelsPage());
+    expect(within(screen.getByRole("table")).getByRole("button", { name: "Disable" })).toBeInTheDocument();
+    unmount();
+    mockRoles = ["employee"];
+    render(await NotificationChannelsPage());
+    expect(within(screen.getByRole("table")).queryByRole("button", { name: "Disable" })).toBeNull();
   });
 });

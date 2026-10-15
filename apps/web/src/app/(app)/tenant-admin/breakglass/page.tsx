@@ -5,6 +5,7 @@ import { getBreakglassLog } from "../../../_data/loaders";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { Breadcrumb } from "../Breadcrumb";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { BreakglassTable } from "./BreakglassTable";
 
 export default async function BreakglassPage() {
@@ -65,6 +66,7 @@ export default async function BreakglassPage() {
         </div>
       ) : (
       <BreakglassTable
+        canClose={getSessionRoles().some((r) => r === "platform_admin" || r === "super_admin")}
         events={events.map((e) => ({
           id: e.id,
           actor: e.actor,

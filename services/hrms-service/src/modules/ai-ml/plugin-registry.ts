@@ -205,6 +205,7 @@ const configUpdateSchema = z.object({
   notifyOnPrediction: z.boolean().optional(),
   autoAction: z.boolean().optional(), // auto-act on prediction (e.g., auto-shortlist)
   maxPredictionsPerDay: z.number().int().min(0).max(100000).optional(),
+  reason: z.string().trim().min(1).max(500).optional(), // audited reason (autoAction enable)
 });
 
 export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void> {
@@ -289,7 +290,13 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
     // the web layout already gates the page on (tenant-admin/layout.tsx).
     requireRole(ctx, ["tenant_admin", "platform_admin", "super_admin"]);
     const { pluginId } = req.params as { pluginId: string };
-    const body = configUpdateSchema.parse(req.body);
+    // GAP-TENANT-ADMIN-AI-PLUGINS-01: a bad value (e.g. threshold 101) is the
+    // caller's 400, not an unhandled ZodError 500.
+    const parsedBody = configUpdateSchema.safeParse(req.body);
+    if (!parsedBody.success) {
+      throw new HttpError(400, "VALIDATION_FAILED", parsedBody.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+    }
+    const body = parsedBody.data;
 
     // Validate plugin exists
     const plugin = ML_PLUGINS.find((p) => p.id === pluginId);
@@ -304,7 +311,15 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
     // freshly-enabled plugin starts at its intended threshold. The ON CONFLICT
     // UPDATE branch keeps using COALESCE against the existing row so a partial
     // PATCH of an already-configured plugin only changes the fields supplied.
-    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+    // GAP-TENANT-ADMIN-AI-PLUGINS-01: before/after snapshot + audit row in the
+    // SAME tenant-scoped transaction as the write (no config change without a trail).
+    await withTenantGuc(ctx.tenantId, async (pool) => {
+      const before = await pool.query(
+        `SELECT enabled, mode, confidence_threshold, notify_on_prediction, auto_action, max_predictions_per_day
+           FROM hrms.ai_plugin_configs WHERE tenant_id = $1 AND plugin_id = $2`,
+        [ctx.tenantId, pluginId],
+      );
+      await pool.query(
       `INSERT INTO hrms.ai_plugin_configs (id, tenant_id, plugin_id, enabled, mode,
         confidence_threshold, notify_on_prediction, auto_action, max_predictions_per_day, updated_at)
        VALUES ($1, $2, $3, COALESCE($4, false), COALESCE($5, 'disabled'),
@@ -325,9 +340,26 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
         body.autoAction ?? null, body.maxPredictionsPerDay ?? null,
         plugin.defaultThreshold,
       ],
-    ));
+    );
+      const after = await pool.query(
+        `SELECT enabled, mode, confidence_threshold, notify_on_prediction, auto_action, max_predictions_per_day
+           FROM hrms.ai_plugin_configs WHERE tenant_id = $1 AND plugin_id = $2`,
+        [ctx.tenantId, pluginId],
+      );
+      await pool.query(
+        `INSERT INTO employee.hrms_audit_log
+           (id, tenant_id, actor_id, action, resource_type, resource_id, payload, correlation_id)
+         VALUES ($1, $2, $3, $4, $5, NULL, $6::jsonb, $7)`,
+        [
+          randomUUID(), ctx.tenantId, ctx.actorId, "ai_plugin_config_update", "ai_plugin_config",
+          JSON.stringify({ pluginId, reason: body.reason ?? null, before: before.rows[0] ?? null, after: after.rows[0] ?? null }),
+          ctx.correlationId,
+        ],
+      );
+    });
 
-    return reply.send({ pluginId, status: "updated", config: body });
+    const { reason: _reason, ...appliedConfig } = body;
+    return reply.send({ pluginId, status: "updated", config: appliedConfig });
   });
 
   /** GET /v1/hrms/ai/plugins/:pluginId/stats — detailed stats for a plugin */

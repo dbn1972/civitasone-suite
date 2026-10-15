@@ -3,6 +3,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { ChannelForm } from "./ChannelForm";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { ChannelsTable, type Channel } from "./ChannelsTable";
 
 // The notification-service channel model is { id, type, name, isDefault,
@@ -43,14 +44,15 @@ export default async function NotificationChannelsPage() {
             message="Add an email or SMS channel below so notifications can be delivered. Without this, approval reminders and alerts won't reach anyone."
           />
         ) : (
-          <ChannelsTable channels={channels} />
+          <ChannelsTable channels={channels} canManage={getSessionRoles().some((r) => r === "tenant_admin" || r === "platform_admin" || r === "super_admin")} />
         )}
       </Card>
 
       {/* GAP-CHANNELS-01: a real Add form (POST /notifications/channels) replaces
-          the raw API snippet. Edit / test-send / disable are intentionally NOT
-          shown — the notification-service exposes only create + list, so dead
-          buttons would be worse than their absence (fix step 5). */}
+          the raw API snippet, and rows can be enabled / disabled (audited PATCH).
+          Edit and test-send are intentionally NOT shown — the notification-service
+          has no such endpoint, so dead buttons would be worse than their absence
+          (fix step 5). Test-send needs an owner decision (no provider send path). */}
       <ChannelForm />
     </div>
   );

@@ -8,6 +8,11 @@ import { NextIntlClientProvider } from "next-intl";
 import en from "./en.json";
 import hi from "./hi.json";
 import { ComplianceChecksTable } from "../app/(app)/tenant-admin/compliance/ComplianceChecksTable";
+import { ChannelRowActions } from "../app/(app)/tenant-admin/notifications/channels/ChannelRowActions";
+import { BreakglassTable } from "../app/(app)/tenant-admin/breakglass/BreakglassTable";
+import { vi } from "vitest";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 type Tree = { [k: string]: string | Tree };
 const flat = (o: Tree, pre = ""): Record<string, string> =>
@@ -47,5 +52,19 @@ describe("tenantAdminW2 messages", () => {
     expect(screen.getByText("साक्ष्य")).toBeInTheDocument();
     expect(screen.getByText("कोई दर्ज नहीं")).toBeInTheDocument();
     expect(screen.getByText("2 आइटम")).toBeInTheDocument();
+  });
+
+  it("channel and break-glass controls render Hindi", () => {
+    render(
+      <NextIntlClientProvider locale="hi" messages={hi}>
+        <ChannelRowActions id="c1" name="Office" enabled isDefault={false} />
+        <BreakglassTable
+          canClose={false}
+          events={[{ id: "b", actor: "A", actorEmail: "", reason: "r", startedAt: "2026-01-01T10:00:00Z", status: "active" }]}
+        />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByRole("button", { name: "निष्क्रिय करें" })).toBeInTheDocument();
+    expect(screen.getByText("केवल प्लेटफ़ॉर्म प्रशासक")).toBeInTheDocument();
   });
 });

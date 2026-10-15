@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Segmented, DataTable } from "../../../_components/ds";
 import { formatIndianDate, formatDuration } from "@/lib/formatters";
+import { useTranslations } from "next-intl";
 import { BreakglassActions } from "./BreakglassActions";
 
 type Event = {
@@ -18,7 +19,16 @@ type Event = {
 
 const FILTERS = ["All", "Active", "Ended"] as const;
 
-export function BreakglassTable({ events }: { events: Event[] }) {
+/**
+ * GAP-TENANT-ADMIN-BREAKGLASS-05: closing an emergency session is a platform
+ * authority (identity-service POST /identity/break-glass/:id/close is
+ * platform_admin / super_admin only). `canClose` mirrors that gate so the
+ * control is not offered to a role the server will refuse; the server remains
+ * the enforcement. Whether the requester may close their own session is a
+ * policy decision (closing reduces risk) -- left to the owner, not invented here.
+ */
+export function BreakglassTable({ events, canClose }: { events: Event[]; canClose: boolean }) {
+  const t = useTranslations("tenantAdminW2.breakglass");
   const [filter, setFilter] = useState<string>("All");
 
   const rows = useMemo(() => {
@@ -82,7 +92,9 @@ export function BreakglassTable({ events }: { events: Event[] }) {
             sortable: false,
             render: (event) =>
               event.status === "active"
-                ? <BreakglassActions id={event.id} requester={event.actor} />
+                ? (canClose
+                  ? <BreakglassActions id={event.id} requester={event.actor} />
+                  : <span style={{ fontSize: 12, color: "var(--mut)" }}>{t("platformAdminOnly")}</span>)
                 : <span style={{ fontSize: 12, color: "var(--mut)" }}>—</span>,
           },
         ]}

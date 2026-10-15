@@ -1,14 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { z } from "zod";
 import { Button, ConfirmDialog } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type KeyRow = { id: string; keyName: string; status: string };
 
-const SCOPE_RE = /^(\*|[a-z][a-z0-9_]*):(\*|[a-z][a-z0-9_]*)$/;
+// resource:action, e.g. finance:read, api-keys:read (resources may contain a hyphen).
+const SCOPE_RE = /^(\*|[a-z][a-z0-9_-]*):(\*|[a-z][a-z0-9_-]*)$/;
 
 // GAP-TENANT-ADMIN-API-KEYS-03 + 04: validate the create body with zod at the
 // boundary and target the SAME service the list is read from. The list loader
@@ -35,7 +37,12 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
   const [name, setName] = useState("");
   // GAP-TENANT-ADMIN-API-KEYS-04: default to empty (force an explicit scope
   // choice) rather than the over-broad "read:*".
-  const [scopes, setScopes] = useState("");
+  // GAP-TENANT-ADMIN-API-KEYS-04: scopes are chosen from the catalogue the server
+  // says this caller may grant (GET /v1/admin/api-keys/scopes), never free text.
+  const t = useTranslations("tenantAdminW2.apiKeys");
+  const [catalogue, setCatalogue] = useState<string[] | null>(null);
+  const [catalogueFailed, setCatalogueFailed] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
   const [expiryDays, setExpiryDays] = useState<number | null>(90);
   const [busy, setBusy] = useState(false);
   const [createdKey, setCreatedKey] = useState("");
@@ -57,8 +64,28 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
   const nameErrId = useId();
   const scopeErrId = useId();
 
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/proxy/v1/admin/api-keys/scopes");
+        if (!res.ok) throw new Error("scopes");
+        const body = (await res.json()) as { data?: unknown };
+        const list = Array.isArray(body.data) ? body.data.filter((x): x is string => typeof x === "string") : [];
+        if (live) setCatalogue(list);
+      } catch {
+        if (live) setCatalogueFailed(true);
+      }
+    })();
+    return () => { live = false; };
+  }, []);
+
   function parsedScopes(): string[] {
-    return scopes.split(",").map((s) => s.trim()).filter(Boolean);
+    return selected;
+  }
+
+  function toggleScope(scope: string, on: boolean) {
+    setSelected((cur) => (on ? [...new Set([...cur, scope])] : cur.filter((x) => x !== scope)));
   }
 
   function validate(): boolean {
@@ -71,14 +98,8 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
     }
     const list = parsedScopes();
     if (list.length === 0) {
-      setScopeError("At least one scope is required (e.g. finance:read).");
+      setScopeError(t("scopeRequired"));
       ok = false;
-    } else {
-      const bad = list.filter((s) => !SCOPE_RE.test(s));
-      if (bad.length > 0) {
-        setScopeError(`Invalid scope${bad.length > 1 ? "s" : ""}: ${bad.join(", ")}. Use resource:action (e.g. finance:read).`);
-        ok = false;
-      }
     }
     return ok;
   }
@@ -120,7 +141,7 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
       setCreatedKey(resBody.key ?? "");
       setOkMessage("API key issued. Copy the secret now — it is shown only once.");
       setName("");
-      setScopes("");
+      setSelected([]);
       router.refresh();
     } catch (caught) {
       setMessage(formError.fromException("save", caught).message);
@@ -194,16 +215,32 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
         />
         {nameError ? <p id={nameErrId} className="ta-field-err" role="alert">{nameError}</p> : null}
 
-        <label htmlFor={scopesId} className="ta-lbl">Scopes <span style={{ fontWeight: 400, color: "var(--mut)" }}>(resource:action, comma separated)</span></label>
-        <input
-          id={scopesId}
-          value={scopes}
-          onChange={(e) => setScopes(e.target.value)}
-          placeholder="finance:read, audit:*"
+        <fieldset
+          aria-describedby={scopeError ? scopeErrId : scopesId}
           aria-invalid={scopeError ? true : undefined}
-          aria-describedby={scopeError ? scopeErrId : undefined}
-          className="ta-input"
-        />
+          style={{ border: 0, padding: 0, margin: "0 0 8px" }}
+        >
+          <legend className="ta-lbl">{t("scopesLabel")}</legend>
+          <p id={scopesId} style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 6px" }}>{t("scopesHint")}</p>
+          {catalogueFailed ? (
+            <p role="alert" className="ta-field-err">{t("scopesLoadFailed")}</p>
+          ) : catalogue === null ? (
+            <p role="status" style={{ fontSize: 12.5, color: "var(--mut)" }}>{t("scopesLoading")}</p>
+          ) : catalogue.length === 0 ? (
+            <p style={{ fontSize: 12.5, color: "var(--mut)" }}>{t("scopesNone")}</p>
+          ) : (
+            catalogue.map((scope) => (
+              <label key={scope} style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 32, fontSize: 13 }}>
+                <input
+                  type="checkbox"
+                  checked={selected.includes(scope)}
+                  onChange={(e) => toggleScope(scope, e.target.checked)}
+                />
+                <span className="mono">{scope}</span>
+              </label>
+            ))
+          )}
+        </fieldset>
         {scopeError ? <p id={scopeErrId} className="ta-field-err" role="alert">{scopeError}</p> : null}
 
         {/* GAP-TENANT-ADMIN-API-KEYS-04: a required expiry (identity-service
