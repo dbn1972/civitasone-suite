@@ -1,23 +1,21 @@
 # W0-08: recount after Wave 0 reconciliation
 
-Total: **501 open**, 4134 closed, 16 blocked or obsolete.
+Total: **443 open**, 4192 closed, 16 blocked or obsolete.
 
 Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed module items).
 
 | Module | Open | Closed | Blocked/obsolete |
 |---|---|---|---|
-| audit | 28 | 47 | 0 |
-| tenant | 28 | 45 | 0 |
-| procurement | 27 | 189 | 0 |
 | citizen | 26 | 108 | 0 |
-| knowledge | 26 | 43 | 0 |
 | stock | 24 | 21 | 1 |
 | revenue | 23 | 56 | 0 |
+| procurement | 22 | 194 | 0 |
 | designer | 20 | 50 | 0 |
 | legal | 18 | 34 | 0 |
 | crm | 16 | 343 | 0 |
 | helpdesk | 15 | 52 | 0 |
 | tenant-admin | 15 | 180 | 0 |
+| audit | 13 | 62 | 0 |
 | projects | 13 | 72 | 0 |
 | billing | 12 | 42 | 4 |
 | court | 11 | 25 | 0 |
@@ -27,6 +25,7 @@ Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | estab | 9 | 153 | 1 |
 | field | 9 | 17 | 0 |
 | grants | 9 | 77 | 0 |
+| knowledge | 9 | 60 | 0 |
 | loyalty | 9 | 11 | 0 |
 | recommendations | 9 | 11 | 0 |
 | meeting | 8 | 25 | 0 |
@@ -34,6 +33,7 @@ Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | catalogue | 7 | 24 | 0 |
 | install | 7 | 30 | 0 |
 | telephony | 7 | 26 | 0 |
+| tenant | 7 | 66 | 0 |
 | visitor | 7 | 17 | 0 |
 | auth | 6 | 12 | 0 |
 | notifications | 6 | 44 | 0 |
