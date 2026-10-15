@@ -129,7 +129,7 @@ export function RecentPredictionsTable({
   return (
     <DataTable<TableRow>
       columns={[
-        { key: "entity", label: "Entity" },
+        { key: "entity", label: "Entity", render: (r) => <span title={r.entityTitle}>{r.entity}</span> },
         { key: "prediction", label: "Prediction", align: "right" },
         { key: "confidence", label: "Confidence", align: "right" },
         { key: "outcome", label: "Outcome", cellType: "status" },

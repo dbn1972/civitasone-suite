@@ -93,3 +93,12 @@ describe("GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-02: parent drill-through", () => {
     expect(screen.getByText("Orphan task").closest("a")).toBeNull();
   });
 });
+
+describe("GAP-ANALYTICS-ML-INSIGHTS-*-UUID (W2): full id kept in title", () => {
+  it("a row without a label shows the shortened id with the FULL id in the title", () => {
+    show({ predictions: [row()], source: "api", domain: "inventory", rowLinkPrefix: "/inventory/" });
+    const cell = screen.getByText("…77778888");
+    expect(cell.getAttribute("title")).toBe("11112222-3333-4444-5555-666677778888");
+    expect(cell.closest("a")?.getAttribute("href")).toBe("/inventory/11112222-3333-4444-5555-666677778888");
+  });
+});
