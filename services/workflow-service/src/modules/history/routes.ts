@@ -20,6 +20,25 @@ export async function historyRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(200).send({ data: rows });
   });
 
+  // GAP-PROCUREMENT-INDENTS-DETAIL-05: internal read for procurement-service.
+  // Only a service-account context (x-internal + INTERNAL_SERVICE_SECRET) may
+  // call it - an end-user token is refused - and it is tenant-scoped, so the
+  // owning domain service can assemble a record's approval trail without
+  // granting every officer a workflow role. Returns decisions only.
+  app.post("/v1/workflow/internal/ref-decisions", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["service_account"]);
+    if (ctx.actorType !== "service_account") throw new HttpError(403, "FORBIDDEN", "internal service call only");
+    const body = z.object({ refType: z.string().min(1).max(64), refId: z.string().uuid() }).parse(req.body ?? {});
+    const rows = await repo.listDecisionsForRef(ctx.tenantId, body.refType, body.refId);
+    return reply.code(200).send({
+      data: rows.map((r) => ({
+        action: r.action, decision: r.decision, actorId: r.actorId,
+        nodeKey: r.nodeKey, reason: r.reason, at: r.createdAt.toISOString(),
+      })),
+    });
+  });
+
   // GET /v1/workflow/history/audit
   // Tenant-wide audit export (date-ranged, keyset-cursor-paginated).
   // Query params: from (ISO), to (ISO), limit, afterCreatedAt, afterId

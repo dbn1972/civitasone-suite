@@ -586,6 +586,11 @@ export interface ApprovalSummary {
    * (GAP-PROCUREMENT-APPROVALS-04). Optional: some approvals have no due date.
    */
   dueAt?: string;
+  /**
+   * Kind of document the row is, so the register can link its reference to the
+   * right detail route (GAP-PROCUREMENT-APPROVALS-04). Optional for older payloads.
+   */
+  refType?: "procurement_indent" | "procurement_po";
 }
 
 export interface EmployeeSummary {
@@ -1137,6 +1142,12 @@ export type IndentDetail = IndentSummary & {
     timestamp: string;
     remarks?: string;
   }>;
+  /**
+   * GAP-PROCUREMENT-INDENTS-DETAIL-05: false when the workflow engine could not
+   * be asked, so an empty trail must not be read as "never decided". Absent on
+   * older servers (treated as available).
+   */
+  approvalTrailAvailable?: boolean;
 };
 
 export type VendorDetail = {

@@ -1,7 +1,8 @@
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
-import { resolveContext, requireRole } from "../../shared/context.js";
+import { ZodError } from "zod";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as commands from "./docs-commands.js";
 import * as docsRepo from "./docs-repo.js";
 import {
@@ -95,4 +96,23 @@ export async function tenderDocsRoutes(app: FastifyInstance): Promise<void> {
     const rows = await docsRepo.listPrebidQueriesByTender(id, ctx.tenantId);
     return reply.send({ data: rows });
   });
+
+  // GAP-PROCUREMENT-TENDERS-DETAIL-DOCUMENTS-06: this plugin had no error
+  // handler of its own (the sibling tenderRoutes handler is encapsulated), so a
+  // validation failure or a 403/404 from these routes surfaced as a bare 500.
+  app.setErrorHandler(docsErrorHandler);
+}
+
+function docsErrorHandler(err: unknown, req: any, reply: any): void {
+  const correlationId = (req.headers["x-correlation-id"] as string) ?? req.id;
+  if (err instanceof ZodError) {
+    void reply.code(400).send({ code: "VALIDATION_FAILED", message: "invalid request", correlationId, retryable: false, fieldErrors: err.issues.map((i) => ({ field: i.path.join("."), message: i.message })) });
+    return;
+  }
+  if (err instanceof HttpError) {
+    void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    return;
+  }
+  req.log.error({ err }, "unhandled error");
+  void reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
 }

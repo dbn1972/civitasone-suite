@@ -2,6 +2,7 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import type { IndentRow } from "./schema.js";
 import { fetchUserSummaries } from "../../shared/identity-client.js";
+import { fetchRefDecisions } from "../../shared/workflow-client.js";
 
 // Bug fix (raw-id-leaked-to-ui): indent.procurement_indents has no
 // requester_id/requester_name column -- created_by (the indent creator) IS
@@ -35,9 +36,10 @@ export async function getIndent(id: string, tenantId: string): Promise<Record<st
   );
   if (!indent || indent.tenantId !== tenantId) return null;
 
-  const [items, [enriched]] = await Promise.all([
+  const [items, [enriched], trail] = await Promise.all([
     repo.findIndentItemsByIndentId(id),
     withRequestedBy(tenantId, [indent]),
+    indentApprovalTrail(tenantId, id),
   ]);
   return {
     ...enriched,
@@ -52,7 +54,35 @@ export async function getIndent(id: string, tenantId: string): Promise<Record<st
       estimatedUnitPrice: Number(i.unitPriceMinor),
       totalPrice: Number(i.unitPriceMinor) * i.quantity,
     })),
-    approvalTrail: [],
+    approvalTrail: trail.entries,
+    // GAP-PROCUREMENT-INDENTS-DETAIL-05: false = the workflow engine could not
+    // be asked, so an empty trail must NOT be read as "never decided".
+    approvalTrailAvailable: trail.available,
+  };
+}
+
+export type ApprovalTrailEntry = { actor: string; action: string; timestamp: string; remarks?: string };
+
+const TRAIL_ACTIONS: Record<string, string> = { complete: "Approved", reject: "Rejected", return: "Returned" };
+
+/**
+ * GAP-PROCUREMENT-INDENTS-DETAIL-05: the indent's approval trail, from the
+ * decisions the workflow engine recorded (actor, action, time, and the reason
+ * given on a rejection / return). The actor is resolved to a display name - a
+ * raw user id is never surfaced.
+ */
+export async function indentApprovalTrail(tenantId: string, indentId: string): Promise<{ available: boolean; entries: ApprovalTrailEntry[] }> {
+  const { available, decisions } = await fetchRefDecisions(tenantId, "procurement_indent", indentId);
+  if (!available || decisions.length === 0) return { available, entries: [] };
+  const users = await fetchUserSummaries(tenantId);
+  return {
+    available,
+    entries: decisions.map((d) => ({
+      actor: users.get(d.actorId)?.name ?? "Unknown user",
+      action: TRAIL_ACTIONS[d.action] ?? d.action,
+      timestamp: d.at,
+      ...(d.reason ? { remarks: d.reason } : {}),
+    })),
   };
 }
 

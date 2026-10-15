@@ -1,16 +1,11 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, ErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, ErrorState } from "../../../_components/ds";
 import { getProcurementApprovals } from "../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { ProcurementApprovalsPanel } from "./ProcurementApprovalsPanel";
-
-type ApprovalRow = {
-  referenceId: string;
-  owner: string;
-  dueDisplay: string;
-} & Record<string, unknown>;
+import { ApprovalsRegisterTable, type RegisterRow } from "./ApprovalsRegisterTable";
 
 /**
  * GAP-PROCUREMENT-APPROVALS-04: an approval is overdue/due-today when its ISO
@@ -40,12 +35,16 @@ export default async function ApprovalsPage() {
 
   const dueSoon = countDueTodayOrOverdue(approvals);
 
-  const rows: ApprovalRow[] = approvals.map((a) => ({
+  const rows: RegisterRow[] = approvals.map((a) => ({
     // GAP-PROCUREMENT-APPROVALS-04: drop the raw internal UUID column — it is
     // not actionable to a clerk. The human-readable Reference stays.
     referenceId: a.referenceId,
     owner: a.owner,
     dueDisplay: a.dueDisplay,
+    // GAP-PROCUREMENT-APPROVALS-04: the reference links to its document.
+    href: a.refType === "procurement_indent" ? `/procurement/indents/${a.id}`
+      : a.refType === "procurement_po" ? `/procurement/orders/${a.id}`
+        : null,
   }));
 
   return (
@@ -91,18 +90,7 @@ export default async function ApprovalsPage() {
         ) : rows.length === 0 ? (
           <EmptyState icon="✅" title="No pending approvals" message="All items are up to date." />
         ) : (
-          <DataTable<ApprovalRow>
-            rows={rows}
-            sortable
-            filterable
-            filterPlaceholder="Filter by reference, owner, due…"
-            pageSize={10}
-            columns={[
-              { key: "referenceId", label: "Reference" },
-              { key: "owner", label: "Owner" },
-              { key: "dueDisplay", label: "Due" },
-            ]}
-          />
+          <ApprovalsRegisterTable rows={rows} />
         )}
       </Card>
 

@@ -1,6 +1,7 @@
-import { eq, asc, and, gte, lte, sql } from "drizzle-orm";
+import { eq, asc, and, gte, lte, inArray, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { transitionHistory, type TransitionInsert, type TransitionRow } from "./schema.js";
+import { instances } from "../instances/schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "select">;
 
@@ -13,6 +14,49 @@ export async function listForInstance(instanceId: string, tenantId: string): Pro
   return scopedRead((tx) => tx.select().from(transitionHistory)
     .where(and(eq(transitionHistory.instanceId, instanceId), eq(transitionHistory.tenantId, tenantId)))
     .orderBy(asc(transitionHistory.createdAt)));
+}
+
+export type RefDecision = {
+  action: string;
+  decision: string | null;
+  actorId: string;
+  nodeKey: string | null;
+  reason: string | null;
+  createdAt: Date;
+};
+
+/**
+ * GAP-PROCUREMENT-INDENTS-DETAIL-05: the DECISIONS (approve / reject / return)
+ * recorded against every workflow instance attached to one business record
+ * (refType + refId), oldest first. Tenant-scoped. Only decision-bearing
+ * transitions are returned - not splits/blocks - so a caller can render an
+ * approval trail without interpreting engine internals.
+ */
+export async function listDecisionsForRef(tenantId: string, refType: string, refId: string): Promise<RefDecision[]> {
+  const rows = await scopedRead((tx) => tx.select({
+    action: transitionHistory.action,
+    decision: transitionHistory.decision,
+    actorId: transitionHistory.actorId,
+    nodeKey: transitionHistory.fromNode,
+    detail: transitionHistory.detail,
+    createdAt: transitionHistory.createdAt,
+  }).from(transitionHistory)
+    .innerJoin(instances, and(eq(instances.id, transitionHistory.instanceId), eq(instances.tenantId, tenantId)))
+    .where(and(
+      eq(transitionHistory.tenantId, tenantId),
+      eq(instances.refType, refType),
+      eq(instances.refId, refId),
+      inArray(transitionHistory.action, ["complete", "reject", "return"]),
+    ))
+    .orderBy(asc(transitionHistory.createdAt)));
+  return rows.map((r) => ({
+    action: r.action,
+    decision: r.decision,
+    actorId: r.actorId,
+    nodeKey: r.nodeKey,
+    reason: typeof r.detail?.reason === "string" ? r.detail.reason : null,
+    createdAt: r.createdAt,
+  }));
 }
 
 /**
