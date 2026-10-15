@@ -15117,6 +15117,7 @@
   },
   "auditW2": {
     "cagStatusUnknown": "अज्ञात",
+    "cagUnrecognised": "अपरिचित",
     "vigilanceUnrecognised": "अपरिचित",
     "vigilanceUnrecognisedStage": "अपरिचित चरण",
     "cancel": "रद्द करें",
