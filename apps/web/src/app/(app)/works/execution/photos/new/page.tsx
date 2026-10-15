@@ -190,10 +190,13 @@ function PhotoForm() {
           {fileKey && fileMeta && (
             <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               {previewUrl ? (
-                <img
-                  src={previewUrl}
-                  alt={t("photoPreviewAlt", { name: fileMeta.fileName })}
-                  style={{ width: 96, height: 96, objectFit: "cover", borderRadius: 8, border: "1px solid var(--line)" }}
+                // A CSS background (not <img src>): the value is a local blob: object URL from
+                // URL.createObjectURL and is only ever painted, never parsed as markup or script.
+                <div
+                  role="img"
+                  aria-label={t("photoPreviewAlt", { name: fileMeta.fileName })}
+                  data-preview-url={previewUrl}
+                  style={{ width: 96, height: 96, backgroundImage: `url("${encodeURI(previewUrl)}")`, backgroundSize: "cover", backgroundPosition: "center", borderRadius: 8, border: "1px solid var(--line)" }}
                 />
               ) : null}
               <span style={{ fontSize: 13 }}>

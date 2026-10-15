@@ -7,6 +7,7 @@ import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
+import { registerRateLimit } from "@civitasone/rate-limit";
 import { randomUUID } from "node:crypto";
 import { filesRoutes }     from "./modules/files/routes.js";
 import { committeeRoutes } from "./modules/committee/routes.js";
@@ -43,6 +44,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
 
   await app.register(authPlugin);
+  // Plugin must be registered for the per-route rate limits (eFile raise from other modules).
+  await registerRateLimit(app, { max: 200, timeWindow: "1 minute" });
 
   // G2: RLS enforcement — set app.tenant_id GUC per request so RLS policies
   // enforce tenant isolation even if app-layer WHERE is accidentally omitted.

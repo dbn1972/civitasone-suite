@@ -148,8 +148,9 @@ describe("PhotoNewPage (GAP-WORKS-EXECUTION-PHOTOS-NEW-01/02/03/04)", () => {
     Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
     render(<PhotoNewPage />);
     fireEvent.click(screen.getByText("mock-upload-with-file"));
-    const img = screen.getByAltText("Preview of site.jpg");
-    expect(img).toHaveAttribute("src", "blob:preview-1");
+    const img = screen.getByRole("img", { name: "Preview of site.jpg" });
+    expect(img).toHaveAttribute("data-preview-url", "blob:preview-1");
+    expect(img.style.backgroundImage).toContain("blob:preview-1");
     expect(created).toEqual(["site.jpg"]);
   });
 });

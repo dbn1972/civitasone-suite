@@ -29,7 +29,7 @@ export async function linkageRoutes(app: FastifyInstance): Promise<void> {
    * Any module raises an eFile for formal, auditable approval.
    * The approved decision flows back to the source module automatically.
    */
-  app.post("/v1/estab/files/from-module", async (req, reply) => {
+  app.post("/v1/estab/files/from-module", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, INITIATOR_ROLES);
     const parsed = fileFromModuleBody.parse(req.body);

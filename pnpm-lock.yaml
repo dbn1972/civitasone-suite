@@ -2102,6 +2102,9 @@ importers:
       '@civitasone/queue':
         specifier: workspace:*
         version: link:../../packages/queue
+      '@civitasone/rate-limit':
+        specifier: workspace:*
+        version: link:../../packages/rate-limit
       '@civitasone/scan-link':
         specifier: workspace:*
         version: link:../../packages/scan-link
