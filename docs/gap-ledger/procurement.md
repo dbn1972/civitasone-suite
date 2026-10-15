@@ -2777,7 +2777,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-03  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [x] **Status** (W2 procurement: closed by #2055)
+- [ ] **Status** (W2 procurement #2055: PARTIAL, stays open for W2 — server total/counts and q filter landed, but the table is still client-paged over the first 500, so with 600 vendors paging does not reach all; needs server pagination)
 - **W0 note:** partly fixed by #1866 — vendors/page.tsx:14 + VendorsTable.tsx:121 truncation notice when cap 500 hit (interim step); no server total/counts or server pagination
 - **First-pass claim:** limit=500 with a client-side DataTable: vendor masters above 500 are silently truncated, and stat tiles are computed from the same truncated set (page.tsx).
 - **Verified evidence:** apps/web/src/app/(app)/procurement/vendors/page.tsx:142 getProcurementVendors({limit:500}); tiles (l.144-146,163) computed from that array; VendorsTable.tsx does client-side filter/paging (pageSize 10, l.251). q filtering in loaders.ts:2462-2469 is also client-side after the fetch. No truncation indicator. Total count from the API is cannot-verify (envelope unknown).
