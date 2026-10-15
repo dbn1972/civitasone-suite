@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent } from "@/test-utils/intl-render";
 import { VendorsTable } from "./VendorsTable";
 import { useSeededResource } from "@/lib/sync/resource";
 
@@ -82,5 +82,66 @@ describe("VendorsTable", () => {
     seeded(MIX);
     render(<VendorsTable vendors={MIX as never} source="api" truncated={false} />);
     expect(screen.queryByText(/Showing the first/)).toBeNull();
+  });
+
+  // ── GAP-PROCUREMENT-VENDORS-03 / 05 (Wave 2 part 2) ──────────────────────
+  const SUMMARY = { total: 600, empanelled: 400, registered: 150, blacklisted: 50 };
+
+  it("VENDORS-03: with a server summary the tiles show TRUE totals (not the 500 fetched) and reconcile", () => {
+    const rows = Array.from({ length: 5 }, (_, n) => vendor({ name: `Row ${n}` }));
+    seeded(rows);
+    const { container } = render(<VendorsTable vendors={rows as never} source="api" truncated limit={500} summary={SUMMARY} />);
+    expect(tileValue(container, "Total Vendors")).toBe("600");
+    expect(tileValue(container, "Empanelled")).toBe("400");
+    expect(tileValue(container, "Not Empanelled")).toBe("150");
+    expect(tileValue(container, "Blacklisted")).toBe("50");
+    // The three states are exhaustive, so the tiles add up to Total by construction.
+    expect(400 + 150 + 50).toBe(SUMMARY.total);
+    // No always-zero Provisional tile (vendors have no such state).
+    expect(tileValue(container, "Provisional")).toBeNull();
+  });
+
+  it("VENDORS-03: says how many of the total are shown", () => {
+    const rows = [vendor({ name: "Only" })];
+    seeded(rows);
+    render(<VendorsTable vendors={rows as never} source="api" summary={SUMMARY} />);
+    expect(screen.getByText(/Showing 1 of 600 vendors/)).toBeInTheDocument();
+  });
+
+  it("VENDORS-03: a vendor beyond the first page is found by the full-directory search (server ?q=)", async () => {
+    const rows = [vendor({ name: "Alpha" })];
+    seeded(rows);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ id: "far-1", name: "Vendor 599", category: "goods", vendorType: "empanelled", gstin: "27AAPFU0939F1ZV" }] }), { status: 200 }),
+    );
+    render(<VendorsTable vendors={rows as never} source="api" summary={SUMMARY} />);
+    fireEvent.change(screen.getByLabelText("Search the full vendor directory"), { target: { value: "599" } });
+    expect(await screen.findByText("Vendor 599")).toBeInTheDocument();
+    expect(screen.queryByText("Alpha")).toBeNull();
+    const url = String(fetchSpy.mock.calls[0]![0]);
+    expect(url).toContain("/api/proxy/v1/procurement/vendors");
+    expect(url).toContain("q=599");
+    // vendorType is mapped to the real standing, not "not empanelled".
+    expect(screen.getAllByText("Empanelled").length).toBeGreaterThan(0);
+    fetchSpy.mockRestore();
+  });
+
+  it("VENDORS-03: a failed full-directory search shows an error with Retry, not 'No vendors found'", async () => {
+    seeded([vendor({ name: "Alpha" })]);
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
+    render(<VendorsTable vendors={[vendor({ name: "Alpha" })] as never} source="api" summary={SUMMARY} />);
+    fireEvent.change(screen.getByLabelText("Search the full vendor directory"), { target: { value: "zzz" } });
+    expect(await screen.findByText("Couldn’t search the vendor directory.")).toBeInTheDocument();
+    expect(screen.queryByText("No vendors found")).toBeNull();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    fetchSpy.mockRestore();
+  });
+
+  it("VENDORS-05: the table's rating column says it is the buyer rating out of 5", () => {
+    const rows = [vendor({ name: "Rated", rating: 4 })];
+    seeded(rows);
+    render(<VendorsTable vendors={rows as never} source="api" />);
+    expect(screen.getByText("Buyer rating (/5)")).toBeInTheDocument();
+    expect(screen.getByText("4/5")).toBeInTheDocument();
   });
 });

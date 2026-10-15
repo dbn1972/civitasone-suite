@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createIndentBody, approveIndentBody, rejectIndentBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { searchQuerySchema } from "../../shared/search.js";
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
@@ -61,7 +62,8 @@ export async function indentRoutes(app: FastifyInstance): Promise<void> {
     // tenant-wide. (repo.findIndentsByTenantAndDepartment exists for a future
     // narrower reader role; no current caller reaches it.) The status filter is
     // applied in SQL so limit/offset page over matching rows only.
-    const list = await queries.listIndents(ctx.tenantId, q.limit, q.offset, undefined, statusRaw);
+    const { q: search } = searchQuerySchema.parse(req.query);
+    const list = await queries.listIndents(ctx.tenantId, q.limit, q.offset, undefined, statusRaw, search);
     return reply.send(list);
   });
 

@@ -5,6 +5,7 @@ export const COMMANDS = {
   vendorCreate:    "procurement.vendor.create",
   vendorEmpanel:   "procurement.vendor.empanel",
   vendorBlacklist: "procurement.vendor.blacklist",
+  vendorSuspend:   "procurement.vendor.suspend",
   rfqCreate:       "procurement.rfq.create",
   rfqRespond:      "procurement.rfq.respond",
   // DOM-011: RFQ close/award lifecycle (mirrors poClose/tenderAward naming).

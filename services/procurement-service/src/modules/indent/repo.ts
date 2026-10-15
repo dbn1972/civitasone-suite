@@ -1,4 +1,5 @@
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, asc, desc, ilike, sql } from "drizzle-orm";
+import { likePattern } from "../../shared/search.js";
 import { db } from "../../shared/db.js";
 import { procurementIndents, procurementIndentItems, type IndentRow, type IndentInsert, type IndentItemInsert } from "./schema.js";
 
@@ -20,7 +21,16 @@ export async function findIndentItemsByIndentId(indentId: string): Promise<(type
   return db.transaction((tx) => tx.select().from(procurementIndentItems).where(eq(procurementIndentItems.indentId, indentId)));
 }
 
-export async function findIndentsByTenant(tenantId: string, limit = 100, offset = 0, status?: string): Promise<IndentRow[]> {
+export async function findIndentsByTenant(tenantId: string, limit = 100, offset = 0, status?: string, q?: string): Promise<IndentRow[]> {
+  // GAP-PROCUREMENT-ORDERS-NEW-03: optional indent-number search so the PO form's
+  // indent picker can reach indents past the first page (same pattern as the
+  // vendor / PO searches).
+  if (q) {
+    const conds = [eq(procurementIndents.tenantId, tenantId), ilike(procurementIndents.indentNo, likePattern(q))];
+    if (status) conds.push(eq(procurementIndents.status, status));
+    return db.transaction((tx) => tx.select().from(procurementIndents).where(and(...conds))
+      .orderBy(asc(procurementIndents.indentNo)).limit(limit).offset(offset));
+  }
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
   // `status` is a SQL predicate (not a post-filter) so limit/offset page over

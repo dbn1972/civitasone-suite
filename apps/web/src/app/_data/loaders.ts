@@ -3290,6 +3290,8 @@ export type ProcurementListQuery = {
   limit?: number;
   offset?: number;
   q?: string;
+  /** GAP-PROCUREMENT-VENDORS-DETAIL-04: restrict a list to one vendor (server-side). */
+  vendorId?: string;
 };
 
 function buildListPath(base: string, query?: ProcurementListQuery): string {
@@ -3298,6 +3300,7 @@ function buildListPath(base: string, query?: ProcurementListQuery): string {
   if (query.limit != null) params.set("limit", String(query.limit));
   if (query.offset != null) params.set("offset", String(query.offset));
   if (query.q?.trim()) params.set("q", query.q.trim());
+  if (query.vendorId) params.set("vendorId", query.vendorId);
   const qs = params.toString();
   return qs ? `${base}?${qs}` : base;
 }
@@ -3348,6 +3351,25 @@ export async function getProcurementVendors(query?: ProcurementListQuery): Promi
       || (row.gstin?.toLowerCase().includes(needle) ?? false)
       || row.category.toLowerCase().includes(needle)),
   };
+}
+
+/** GAP-PROCUREMENT-VENDORS-03: whole-directory counts (not the capped page). */
+export type VendorSummaryCounts = { total: number; empanelled: number; registered: number; blacklisted: number };
+
+export async function getProcurementVendorSummary(): Promise<LoaderResult<VendorSummaryCounts | null>> {
+  return fetchJson<unknown, VendorSummaryCounts | null>("/api/v1/procurement/vendors/summary", null, {
+    revalidateSeconds: 60,
+    telemetryKey: "procurement.vendors.summary",
+    mapResponse: (p) => {
+      const d = isRecord(p) && isRecord(p.data) ? p.data : null;
+      if (!d) return null;
+      const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+      const total = n(d.total), empanelled = n(d.empanelled), registered = n(d.registered), blacklisted = n(d.blacklisted);
+      return total === null || empanelled === null || registered === null || blacklisted === null
+        ? null
+        : { total, empanelled, registered, blacklisted };
+    },
+  });
 }
 
 export async function getProcurementVendorById(id: string): Promise<LoaderResult<VendorDetail | null>> {

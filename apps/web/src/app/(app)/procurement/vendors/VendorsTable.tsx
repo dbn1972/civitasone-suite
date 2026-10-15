@@ -1,11 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Card, DataTable, StatusPill, EmptyState, Segmented, RefreshErrorState } from "../../../_components/ds";
 import { maskPhone } from "../../../_components/ds/Masked";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { toHumanError } from "@/lib/messages";
+import { mapProcurementVendorDetails } from "../../../_data/apiMappers";
+import type { VendorSummaryCounts } from "../../../_data/loaders";
 
 type Vendor = {
   id: string;
@@ -46,7 +49,10 @@ const FILTER_TO_STATUS: Record<string, string | null> = {
   Blacklisted: "blacklisted",
 };
 
-export function VendorsTable({ vendors, source = "api", truncated = false, limit }: { vendors: Vendor[]; source?: "api" | "error"; truncated?: boolean; limit?: number }) {
+type SearchState = "idle" | "loading" | "ready" | "error";
+
+export function VendorsTable({ vendors, source = "api", truncated = false, limit, summary = null }: { vendors: Vendor[]; source?: "api" | "error"; truncated?: boolean; limit?: number; summary?: VendorSummaryCounts | null }) {
+  const tw = useTranslations("procurement.w2.vendors");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Vendor[]>(
     "procurement.vendors",
     vendors,
@@ -62,20 +68,61 @@ export function VendorsTable({ vendors, source = "api", truncated = false, limit
   // a retryable error state, not "No vendors found".
   const erroredNoData = rows.length === 0 && source === "error";
   const countOf = (status: string) => rows.filter((v) => v.empanelmentStatus === status).length;
+  // GAP-PROCUREMENT-VENDORS-03: when the server supplied whole-directory counts
+  // the tiles use THEM (the table may hold only the first page), and because
+  // those three states are exhaustive they sum to Total by construction.
   // GAP-...-VENDORS-05: a "Not Empanelled" tile is included so the status
   // tiles sum to Total Vendors (previously not_empanelled was uncounted).
-  const tiles = [
-    { icon: "🏢", label: "Total Vendors", value: erroredNoData ? "—" : rows.length },
-    { icon: "✅", label: "Empanelled", value: erroredNoData ? "—" : countOf("empanelled") },
-    { icon: "⏳", label: "Provisional", value: erroredNoData ? "—" : countOf("provisional") },
-    { icon: "📝", label: "Not Empanelled", value: erroredNoData ? "—" : countOf("not_empanelled") },
-    { icon: "🚫", label: "Blacklisted", value: erroredNoData ? "—" : countOf("blacklisted") },
-  ];
+  const tiles = summary
+    ? [
+        { icon: "🏢", label: "Total Vendors", value: summary.total },
+        { icon: "✅", label: "Empanelled", value: summary.empanelled },
+        { icon: "📝", label: "Not Empanelled", value: summary.registered },
+        { icon: "🚫", label: "Blacklisted", value: summary.blacklisted },
+      ]
+    : [
+        { icon: "🏢", label: "Total Vendors", value: erroredNoData ? "—" : rows.length },
+        { icon: "✅", label: "Empanelled", value: erroredNoData ? "—" : countOf("empanelled") },
+        { icon: "⏳", label: "Provisional", value: erroredNoData ? "—" : countOf("provisional") },
+        { icon: "📝", label: "Not Empanelled", value: erroredNoData ? "—" : countOf("not_empanelled") },
+        { icon: "🚫", label: "Blacklisted", value: erroredNoData ? "—" : countOf("blacklisted") },
+      ];
+
+  // GAP-PROCUREMENT-VENDORS-03: the table only holds the first page, so a vendor
+  // beyond it must still be findable - search the FULL directory on the server.
+  const beyondPage = truncated || (summary != null && summary.total > rows.length);
+  const [serverQuery, setServerQuery] = useState("");
+  const [serverRows, setServerRows] = useState<Vendor[]>([]);
+  const [searchState, setSearchState] = useState<SearchState>("idle");
+  const [searchNonce, setSearchNonce] = useState(0);
+  useEffect(() => {
+    const q = serverQuery.trim();
+    if (!q) { setServerRows([]); setSearchState("idle"); return; }
+    const controller = new AbortController();
+    setSearchState("loading");
+    const handle = setTimeout(() => {
+      fetch(`/api/proxy/v1/procurement/vendors?limit=50&q=${encodeURIComponent(q)}`, { signal: controller.signal })
+        .then(async (res) => {
+          if (!res.ok) throw new Error("vendor search failed");
+          const mapped = mapProcurementVendorDetails(await res.json());
+          if (!mapped) throw new Error("vendor search returned an unreadable payload");
+          setServerRows(mapped as unknown as Vendor[]);
+          setSearchState("ready");
+        })
+        .catch((err: unknown) => {
+          if (err instanceof Error && err.name === "AbortError") return;
+          setServerRows([]);
+          setSearchState("error");
+        });
+    }, 250);
+    return () => { clearTimeout(handle); controller.abort(); };
+  }, [serverQuery, searchNonce]);
+  const searching = serverQuery.trim() !== "";
 
   const wantStatus = FILTER_TO_STATUS[statusFilter];
   const tableRows = useMemo<VendorRow[]>(
     () =>
-      rows
+      (searching ? serverRows : rows)
         .filter((v) => wantStatus === null || v.empanelmentStatus === wantStatus)
         .map((v) => ({
           id: v.id,
@@ -92,7 +139,7 @@ export function VendorsTable({ vendors, source = "api", truncated = false, limit
           // cell nor the DataTable global filter indexes the clear value.
           contact: v.contactPerson ?? (v.phone ? maskPhone(v.phone) : "—"),
         })),
-    [rows, wantStatus],
+    [rows, serverRows, searching, wantStatus],
   );
 
   return (
@@ -118,10 +165,30 @@ export function VendorsTable({ vendors, source = "api", truncated = false, limit
         <Segmented options={[...STATUS_FILTERS]} value={statusFilter} onChange={setStatusFilter} />
       </div>
 
-      {truncated && !erroredNoData ? (
-        <p role="status" className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
-          Showing the first {limit ?? vendors.length} vendors. Refine your search to find vendors beyond this list.
-        </p>
+      {beyondPage && !erroredNoData ? (
+        <div style={{ marginBottom: 12 }}>
+          <p role="status" className="muted" style={{ fontSize: 12, margin: "0 0 8px" }}>
+            {summary
+              ? tw("showingOfTotal", { shown: rows.length, total: summary.total })
+              : `Showing the first ${limit ?? vendors.length} vendors. Refine your search to find vendors beyond this list.`}
+          </p>
+          <input
+            className="inp"
+            type="search"
+            value={serverQuery}
+            onChange={(e) => setServerQuery(e.target.value)}
+            placeholder={tw("searchAll")}
+            aria-label={tw("searchAllLabel")}
+            style={{ minHeight: 40, maxWidth: 420 }}
+          />
+          {searchState === "loading" ? <p role="status" style={{ fontSize: 12, margin: "6px 0 0" }}>{tw("searching")}</p> : null}
+          {searchState === "error" ? (
+            <p role="alert" style={{ fontSize: 12, margin: "6px 0 0", color: "var(--bad)" }}>
+              {tw("searchFailed")}{" "}
+              <button type="button" className="btn ghost" style={{ padding: "2px 8px" }} onClick={() => setSearchNonce((n) => n + 1)}>{tw("retry")}</button>
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {erroredNoData ? (
@@ -129,7 +196,7 @@ export function VendorsTable({ vendors, source = "api", truncated = false, limit
           error={toHumanError("load", { area: "vendors" })}
           source={{ area: "vendors" }}
         />
-      ) : tableRows.length === 0 ? (
+      ) : searchState === "error" ? null : tableRows.length === 0 ? (
         <EmptyState
           icon="🏢"
           title="No vendors found"
@@ -159,7 +226,7 @@ export function VendorsTable({ vendors, source = "api", truncated = false, limit
                 />
               ),
             },
-            { key: "rating", label: "Rating", align: "right" },
+            { key: "rating", label: tw("buyerRating"), align: "right" },
             { key: "contact", label: "Contact" },
           ]}
         />

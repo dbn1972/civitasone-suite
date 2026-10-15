@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@/test-utils/intl-render";
 
 const pushMock = vi.fn();
 const refreshMock = vi.fn();
@@ -92,5 +92,55 @@ describe("RegisterVendorForm", () => {
   it("NEW-03: a DPDP collection notice is shown", () => {
     render(<RegisterVendorForm />);
     expect(screen.getByText(/collected for vendor onboarding/i)).toBeInTheDocument();
+  });
+
+  // ── GAP-PROCUREMENT-VENDORS-NEW-02/04/06 (Wave 2 part 2) ─────────────────
+  function fillValid() {
+    fill("Vendor name *", "Acme");
+    fireEvent.change(screen.getByLabelText("Category *"), { target: { value: "goods" } });
+    fill("GSTIN", "27AAPFU0939F1ZV");
+    fill("PAN", "AAPFU0939F");
+  }
+
+  it("NEW-02/06: a 409 VENDOR_DUPLICATE shows a field error and a link to the existing vendor, with no navigation", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      code: "VENDOR_DUPLICATE", message: "raw server text", field: "gstin",
+      existingVendorId: "v-existing", existingVendorName: "Acme Traders",
+    }), { status: 409 }));
+    render(<RegisterVendorForm />);
+    fillValid();
+    fireEvent.click(screen.getByRole("button", { name: /Register vendor/ }));
+    expect(await screen.findByText("A vendor with this GSTIN is already registered.")).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: "View Acme Traders" });
+    expect(link).toHaveAttribute("href", "/procurement/vendors/v-existing");
+    expect(screen.queryByText(/raw server text/)).not.toBeInTheDocument();
+    expect(pushMock).not.toHaveBeenCalled();
+  });
+
+  it("NEW-02/06: a duplicate PAN is reported on the PAN field", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      code: "VENDOR_DUPLICATE", field: "pan", existingVendorId: "v-existing", existingVendorName: "",
+    }), { status: 409 }));
+    render(<RegisterVendorForm />);
+    fillValid();
+    fireEvent.click(screen.getByRole("button", { name: /Register vendor/ }));
+    expect(await screen.findByText("A vendor with this PAN is already registered.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View the existing vendor" })).toBeInTheDocument();
+  });
+
+  it("NEW-02: a server-side GSTIN rejection (400 VALIDATION_FAILED) is shown on the GSTIN field with fixed copy", async () => {
+    vi.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      code: "VALIDATION_FAILED", fieldErrors: [{ field: "gstin", message: "GSTIN check digit is invalid" }],
+    }), { status: 400 }));
+    render(<RegisterVendorForm />);
+    fillValid();
+    fireEvent.click(screen.getByRole("button", { name: /Register vendor/ }));
+    expect(await screen.findByText(/The GSTIN failed validation/)).toBeInTheDocument();
+    expect(screen.queryByText(/check digit is invalid/)).not.toBeInTheDocument();
+  });
+
+  it("NEW-04: GSTIN and PAN are honestly labelled as format-checked, not verified", () => {
+    render(<RegisterVendorForm />);
+    expect(screen.getAllByText(/Not verified against the GST \/ income-tax portals/)).toHaveLength(2);
   });
 });

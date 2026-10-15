@@ -175,7 +175,10 @@ export function mapProcurementVendorDetails(payload: unknown): VendorDetail[] | 
     if (!name) continue;
     const id = toText(row.id) ?? name;
     const category = toText(row.category) ?? toText(row.vendorType) ?? "General";
-    const rawEmp = (toText(row.empanelmentStatus) ?? toText(row.vendorType) ?? "registered").toLowerCase();
+    // GAP-PROCUREMENT-VENDORS-03: the list now carries vendorType + blacklisted
+    // (they used to be stripped by the response schema, so every vendor read as
+    // "not empanelled"). An explicit blacklisted flag wins.
+    const rawEmp = (row.blacklisted === true ? "blacklisted" : (toText(row.empanelmentStatus) ?? toText(row.vendorType) ?? "registered")).toLowerCase();
     // GAP-PROCUREMENT-VENDORS-NEW-03: a freshly 'registered' vendor is NOT yet
     // empanelled — it must not show an Empanelled pill (and must not be counted
     // as empanelled) until KYC/empanelment completes. Only an explicit
@@ -325,6 +328,9 @@ export function mapProcurementVendorDetail(payload: unknown): VendorDetail | nul
     address: toText(payload.address) ?? undefined,
     bankAccountNo: toText(payload.bankAccount) ?? toText(payload.bankAccountNo) ?? undefined,
     ifscCode: toText(payload.ifsc) ?? toText(payload.ifscCode) ?? undefined,
+    // GAP-PROCUREMENT-VENDORS-DETAIL-04: empanelment validity for the profile.
+    ...(typeof payload.empanelmentValidTill === "string" ? { empanelmentValidTill: payload.empanelmentValidTill } : {}),
+    ...(typeof payload.empanelmentLapsed === "boolean" ? { empanelmentLapsed: payload.empanelmentLapsed } : {}),
   };
 }
 
