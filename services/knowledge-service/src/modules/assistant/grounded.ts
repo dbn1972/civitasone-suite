@@ -7,6 +7,7 @@ import { runWithTenant } from "@civitasone/db";
 import { sendPrompt, isEnabled, AiAdapterError, CircuitBreakerOpenError } from "../ai/adapter.js";
 import * as policyRepo from "../policies/repo.js";
 import * as docRepo from "../documents/repo.js";
+import type { Clearance } from "../documents/repo.js";
 import * as repo from "./repo.js";
 import {
   assembleCitations,
@@ -36,13 +37,14 @@ export async function gatherSources(
   tenantId: string,
   question: string,
   perSource = 5,
+  levels?: Clearance,
 ): Promise<GroundingSource[]> {
   const keyword = extractKeyword(question);
 
   const [policies, docs, faqRows] = await Promise.all([
     policyRepo.searchPublished(tenantId, keyword, perSource),
     // The documents repo uses a bare scopedRead; wrap it so the tenant GUC is set.
-    Promise.resolve(runWithTenant(tenantId, () => docRepo.searchByTenant(tenantId, keyword, undefined, perSource))),
+    Promise.resolve(runWithTenant(tenantId, () => docRepo.searchByTenant(tenantId, keyword, undefined, perSource, levels))),
     repo.searchFaqs(tenantId, keyword, perSource),
   ]);
 
@@ -63,8 +65,12 @@ export async function gatherSources(
  * Produce a grounded answer + citations. Uses the AI adapter when enabled;
  * otherwise falls back to a deterministic extractive answer from the top source.
  */
-export async function answerQuestion(tenantId: string, question: string): Promise<GroundedAnswer> {
-  const sources = await gatherSources(tenantId, question);
+export async function answerQuestion(
+  tenantId: string,
+  question: string,
+  levels?: Clearance,
+): Promise<GroundedAnswer> {
+  const sources = await gatherSources(tenantId, question, 5, levels);
   const citations = assembleCitations(sources);
   const grounded = sources.length > 0;
 

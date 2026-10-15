@@ -7,6 +7,7 @@ import { cache } from "../../shared/infra.js";
 import { EVENTS } from "../../topics.js";
 import { normalizeSteps, type Citation } from "./domain.js";
 import { answerQuestion } from "./grounded.js";
+import { clearedAccessLevels } from "../documents/clearance.js";
 import { redactPii } from "../ai/pii-redact.js";
 import * as repo from "./repo.js";
 import type {
@@ -122,7 +123,7 @@ export async function updateFlow(ctx: RequestContext, id: string, body: UpdateFl
 
 // ── Grounded assistant ──────────────────────────────────────────────
 export async function ask(ctx: RequestContext, body: AskBody): Promise<AskResult> {
-  const result = await answerQuestion(ctx.tenantId, body.question);
+  const result = await answerQuestion(ctx.tenantId, body.question, clearedAccessLevels(ctx));
   const interactionId = randomUUID();
   // GAP-KNOWLEDGE-ASSISTANT-06 (DPDP): redact PII (Aadhaar, PAN, phone, email)
   // from the free-text question BEFORE persisting it to the interactions table,
