@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { getKnowledgePolicy, getPolicyAcknowledgements } from "../../_data/loaders";
@@ -29,6 +30,7 @@ export default async function Page({ params }: { params: { id: string } }) {
   const acksErrored = acksSource === "error";
   const isPublished = policy.status === "published";
 
+  const t = await getTranslations("knowledgeW2.trail");
   const currentUserId = getSessionUserId();
   const sessionRoles = getSessionRoles();
   const isAdmin = POLICY_ADMIN_ROLES.some((r) => sessionRoles.includes(r));
@@ -37,6 +39,18 @@ export default async function Page({ params }: { params: { id: string } }) {
   const alreadyAcknowledged = currentUserId
     ? acks.employeeIds.includes(currentUserId)
     : false;
+
+  // GAP-KNOWLEDGE-POLICIES-DETAIL-04: maker-checker evidence. The service only
+  // returns identifiers (no names), so the trail says who it was relative to the
+  // viewer ("You" / another user) rather than printing raw UUIDs.
+  const person = (id: string | null) =>
+    id == null || id === "" ? t("pending") : id === currentUserId ? t("you") : t("otherUser");
+  const trail: Array<{ label: string; value: string }> = [
+    { label: t("author"), value: person(policy.authorId) },
+    { label: t("reviewer"), value: person(policy.reviewerId) },
+    { label: t("approver"), value: person(policy.approverId) },
+  ];
+  const makerChecked = policy.approverId != null && policy.approverId !== "" && policy.approverId !== policy.authorId;
 
   return (
     <>
@@ -75,6 +89,22 @@ export default async function Page({ params }: { params: { id: string } }) {
           </div>
         </div>
       )}
+
+      <div className="card">
+        <div className="card-h"><h3>{t("title")}</h3></div>
+        <div className="pad">
+          <dl style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "6px 16px", margin: 0 }}>
+            {trail.map((row) => (
+              <div key={row.label} style={{ display: "contents" }}>
+                <dt style={{ color: "var(--mut)", fontSize: 13 }}>{row.label}</dt>
+                <dd style={{ margin: 0, fontSize: 14 }}>{row.value}</dd>
+              </div>
+            ))}
+          </dl>
+          {makerChecked && <p role="note" style={{ margin: "10px 0 0", fontSize: 13, color: "var(--mut)" }}>{t("distinct")}</p>}
+          <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--mut)" }}>{t("namesNote")}</p>
+        </div>
+      </div>
 
       <PolicyActions
         policyId={policy.id}

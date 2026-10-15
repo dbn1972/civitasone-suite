@@ -73,3 +73,28 @@ describe("CreateDocumentForm (NEW-01, NEW-03, NEW-04)", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("CreateDocumentForm access levels (GAP-KNOWLEDGE-DOCUMENTS-NEW-01)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("offers restricted/confidential only to a caller with clearance, defaulting to internal", () => {
+    const { unmount } = render(<CreateDocumentForm canSetRestricted={false} />);
+    const select = screen.getByLabelText("Access level") as HTMLSelectElement;
+    expect(select.value).toBe("internal");
+    expect(within(select).queryByRole("option", { name: "Restricted" })).toBeNull();
+    expect(within(select).queryByRole("option", { name: "Confidential" })).toBeNull();
+    unmount();
+    render(<CreateDocumentForm canSetRestricted />);
+    expect(within(screen.getByLabelText("Access level")).getByRole("option", { name: "Restricted" })).toBeInTheDocument();
+  });
+});
+
+describe("CreateDocumentForm dark-mode safety (GAP-KNOWLEDGE-DOCUMENTS-NEW-06)", () => {
+  it("does not hard-code a white background on the field cards", () => {
+    const { container } = render(<CreateDocumentForm />);
+    for (const el of Array.from(container.querySelectorAll(".field"))) {
+      expect((el as HTMLElement).style.background).toBe("");
+      expect((el as HTMLElement).style.backgroundColor).toBe("");
+    }
+  });
+});

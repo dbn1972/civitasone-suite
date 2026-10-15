@@ -7,12 +7,13 @@ export async function listPolicies(
   filters: { status?: string; docType?: string },
   limit: number,
   offset: number,
+  viewer?: repo.Viewer,
 ): Promise<PolicyView[]> {
-  return repo.listByTenant(tenantId, filters, limit, offset);
+  return repo.listByTenant(tenantId, filters, limit, offset, viewer);
 }
 
-export async function getPolicy(tenantId: string, id: string): Promise<PolicyView | null> {
-  return repo.getById(tenantId, id);
+export async function getPolicy(tenantId: string, id: string, viewer?: repo.Viewer): Promise<PolicyView | null> {
+  return repo.getById(tenantId, id, viewer);
 }
 
 export async function reviewDuePolicies(tenantId: string, asOf?: string): Promise<PolicyView[]> {

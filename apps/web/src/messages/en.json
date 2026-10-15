@@ -15444,5 +15444,27 @@
     "eofficeRaiseIntro": "Raising sends this {refType} to eOffice for a formal, tamper-proof decision. The approval chain is selected automatically by amount. The file is always raised in your own name.",
     "eofficeSelfFallback": "You (the signed-in officer)",
     "rfqIndentStatus": "({status})"
+  },
+  "knowledgeW2": {
+    "accessColumn": "Access",
+    "accessLevels": {
+      "public": "Public",
+      "internal": "Internal",
+      "restricted": "Restricted",
+      "confidential": "Confidential"
+    },
+    "createFirst": "Create a governed document",
+    "addDocument": "+ Add Document",
+    "trail": {
+      "title": "Approval trail",
+      "author": "Author",
+      "reviewer": "Reviewer",
+      "approver": "Approver",
+      "you": "You",
+      "otherUser": "Another user (recorded in the audit log)",
+      "pending": "Not yet assigned",
+      "distinct": "Maker-checker: the approver is a different person from the author.",
+      "namesNote": "Names are shown once a staff directory lookup is available; the identifiers are kept in the audit log."
+    }
   }
 }

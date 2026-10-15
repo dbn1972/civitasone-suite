@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
@@ -105,5 +105,54 @@ describe("Policies Page", () => {
     render(await Page({ searchParams: { filter: "review-due" } }));
     expect(screen.getByText("Due Policy")).toBeInTheDocument();
     expect(screen.getByText("Documents due for review")).toBeInTheDocument();
+  });
+});
+
+describe("Policies Page w2 closures", () => {
+  beforeEach(() => {
+    getKnowledgePoliciesMock.mockReset();
+    getReviewDuePoliciesMock.mockReset();
+    getReviewDuePoliciesMock.mockResolvedValue({ data: [], source: "api" });
+  });
+
+  it("GAP-POLICIES-02: the Type cell is plain text, not a status pill (and Status is)", async () => {
+    getKnowledgePoliciesMock.mockResolvedValue({ data: [pol({ docType: "circular", status: "published" })], source: "api" });
+    render(await Page({ searchParams: {} }));
+    expect(screen.getByText("CIRCULAR").closest(".pill")).toBeNull();
+    const table = within(screen.getByRole("table"));
+    expect(table.getByText("Published").closest(".pill")).not.toBeNull();
+  });
+
+  it("GAP-POLICIES-03: an overdue published review shows a red (bad) Overdue pill; a future date does not", async () => {
+    getKnowledgePoliciesMock.mockResolvedValue({
+      data: [
+        pol({ id: "late", title: "Late", status: "published", reviewDueDate: "2020-01-01" }),
+        pol({ id: "ok", title: "Fine", status: "published", reviewDueDate: "2999-01-01" }),
+      ],
+      source: "api",
+    });
+    render(await Page({ searchParams: {} }));
+    const pills = screen.getAllByText(/Overdue/);
+    expect(pills).toHaveLength(1);
+    expect(pills[0]!.closest(".pill")).toHaveClass("bad");
+  });
+});
+
+describe("Policies Page empty state (GAP-KNOWLEDGE-POLICIES-01)", () => {
+  beforeEach(() => {
+    getKnowledgePoliciesMock.mockReset();
+    getReviewDuePoliciesMock.mockReset();
+    getReviewDuePoliciesMock.mockResolvedValue({ data: [], source: "api" });
+  });
+
+  it("an author sees a working create link inside the empty state; a viewer without author roles does not", async () => {
+    getKnowledgePoliciesMock.mockResolvedValue({ data: [], source: "api" });
+    getSessionRolesMock.mockReturnValue(["knowledge_admin"]);
+    const { unmount } = render(await Page({ searchParams: {} }));
+    expect(screen.getByRole("link", { name: "Create a governed document" })).toHaveAttribute("href", "/knowledge/policies/new");
+    unmount();
+    getSessionRolesMock.mockReturnValue(["employee"]);
+    render(await Page({ searchParams: {} }));
+    expect(screen.queryByRole("link", { name: "Create a governed document" })).not.toBeInTheDocument();
   });
 });

@@ -27,6 +27,8 @@ export function RecentDocsTable({ rows }: { rows: RecentDocRow[] }) {
         },
       ]}
       rows={rows}
+      rowLinkKey="id"
+      rowLinkPrefix="/knowledge/documents/"
       sortable
       filterable
       pageSize={15}

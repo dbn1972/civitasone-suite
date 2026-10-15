@@ -6,7 +6,22 @@ import type { DocRow } from "./page";
 
 const SEG_OPTIONS = ["All", "Circulars", "Policies", "Notifications"];
 
-export function RepositoryClient({ rows }: { rows: DocRow[] }) {
+/**
+ * GAP-KNOWLEDGE-LIST-06: access level is shown as a pill, with a lock and the
+ * level spelled out for restricted / confidential documents so the cue is not
+ * colour-only. Display only - the service enforces access (clearance filter).
+ */
+function AccessCell({ level, label }: { level: string; label: string }) {
+  const restricted = level === "restricted" || level === "confidential";
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      {restricted && <span aria-hidden="true">🔒</span>}
+      <StatusPill status={restricted ? "rejected" : level === "public" ? "active" : "info"} label={label} />
+    </span>
+  );
+}
+
+export function RepositoryClient({ rows, accessHeader }: { rows: DocRow[]; accessHeader: string }) {
   const [seg, setSeg] = useState("All");
 
   // GAP-KNOWLEDGE-REPOSITORY-07: match on canonical segment, not substring
@@ -30,6 +45,7 @@ export function RepositoryClient({ rows }: { rows: DocRow[] }) {
             { key: "category", label: "Type" },
             { key: "author", label: "Author" },
             { key: "version", label: "Version" },
+            { key: "accessLabel", label: accessHeader, render: (row) => <AccessCell level={row.accessLevel} label={row.accessLabel} /> },
             {
               key: "statusLabel",
               label: "Status",
@@ -38,7 +54,7 @@ export function RepositoryClient({ rows }: { rows: DocRow[] }) {
           ]}
           rows={filtered}
           rowLinkKey="fullId"
-          rowLinkPrefix="/knowledge/policies/"
+          rowLinkPrefix="/knowledge/documents/"
           sortable
           filterable
           pageSize={15}
