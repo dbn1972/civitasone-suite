@@ -523,3 +523,30 @@ export function StatusPill({ status, label, variant: variantOverride }: StatusPi
   // raw string; callers that need exact custom wording still can via label.
   return <span className={`pill ${variant}`}>{label ?? humanizeStatus(status)}</span>;
 }
+
+/**
+ * GAP-TENANT-QUOTAS-02: quota/usage status. Same tones as StatusPill, plus a
+ * non-colour cue (aria-hidden icon + the text) for "near limit" and
+ * "exceeded", and a sentence-case fallback for unknown values ('foo_bar' ->
+ * 'Foo bar'). Scoped here so the shared humanizeStatus (Title Case) is
+ * unchanged for every other module.
+ */
+const QUOTA_ICONS: Record<string, string> = { "near limit": "\u26A0", exceeded: "\u2716" };
+
+export function quotaStatusLabel(status: string): string {
+  const key = normalizeStatusKey(status);
+  if (key === "ok") return "OK";
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+export function QuotaStatusPill({ status }: { status: string }) {
+  const key = normalizeStatusKey(status);
+  const variant: PillVariant = STATUS_MAP[key] ?? "info";
+  const icon = QUOTA_ICONS[key];
+  return (
+    <span className={`pill ${variant}`}>
+      {icon ? <span aria-hidden="true">{icon} </span> : null}
+      {quotaStatusLabel(status)}
+    </span>
+  );
+}

@@ -38,13 +38,15 @@ interface ModuleListPageProps {
    * true so every other ModuleListPage consumer is unchanged.
    */
   showId?: boolean;
+  /** GAP-TENANT-QUOTAS-02: pass "quota" for quota status rendering. */
+  statusStyle?: "quota";
 }
 
 function slugify(s: string): string {
   return `module.${s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`;
 }
 
-export function ModuleListPage({ title, description, rows, source, children, back, backLabel, errorArea, cacheKey, showId }: ModuleListPageProps) {
+export function ModuleListPage({ title, description, rows, source, children, back, backLabel, errorArea, cacheKey, showId, statusStyle }: ModuleListPageProps) {
   return (
     <>
       <PageHeader
@@ -64,6 +66,7 @@ export function ModuleListPage({ title, description, rows, source, children, bac
         source={source === "error" ? "error" : "api"}
         {...(errorArea ? { errorArea } : {})}
         {...(showId === false ? { showId: false } : {})}
+        {...(statusStyle ? { statusStyle } : {})}
         {...(back ? { backHref: back } : {})}
       />
     </>

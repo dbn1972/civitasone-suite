@@ -16,6 +16,7 @@ export default async function Page() {
         description={t("quotasSubtitle")}
         rows={data}
         showId={false}
+        statusStyle="quota"
         // Pinned: the title is translated, so the offline cache key must not derive from it.
         cacheKey="module.office-quotas-usage"
         source={source}
