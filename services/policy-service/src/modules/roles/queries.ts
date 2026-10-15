@@ -9,6 +9,12 @@ export async function getRole(tenantId: string, id: string): Promise<RoleView | 
   return view && view.tenantId === tenantId ? view : null;
 }
 
+/** Case-insensitive duplicate check for create / rename (excludes `exceptId`). */
+export async function roleNameTaken(tenantId: string, name: string, exceptId?: string): Promise<boolean> {
+  const hit = await repo.findRoleByNameInsensitive(tenantId, name);
+  return hit !== null && hit.id !== exceptId;
+}
+
 export async function listRoles(tenantId: string): Promise<RoleView[]> {
   return cache.getOrLoad<RoleView[]>(
     cache.makeKey(tenantId, `${RESOURCE.role}_list`, tenantId),

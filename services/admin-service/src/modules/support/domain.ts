@@ -4,6 +4,22 @@ export function breakGlassExpiresAt(openedAt: Date): Date {
   return new Date(openedAt.getTime() + BREAK_GLASS_TTL_MS);
 }
 
+export type BreakGlassStatus = "active" | "ended" | "auto_expired";
+
+/**
+ * GAP-TENANT-ADMIN-BREAKGLASS-06: one definition of a grant's status for the list
+ * and the detail. A closed grant is "auto_expired" when the TTL sweeper closed it
+ * (stored close reason), otherwise "ended"; an open grant past its expiry is
+ * "auto_expired" until the sweeper's next tick closes it.
+ */
+export function breakGlassStatus(
+  row: { closedAt: Date | null; closeReason: string | null; expiresAt: Date },
+  now = new Date(),
+): BreakGlassStatus {
+  if (row.closedAt) return row.closeReason === "auto_expired" ? "auto_expired" : "ended";
+  return row.expiresAt < now ? "auto_expired" : "active";
+}
+
 export function isBreakGlassExpired(expiresAt: Date, now = new Date()): boolean {
   return now >= expiresAt;
 }

@@ -30,7 +30,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL cleared by W2 tenant-admin #PR2 re-check against main: page.test.tsx: a failed load shows the retry state, never a false 'down' and never 'No modules'; closed by #1864)
 - **First-pass claim:** On source==='error' only KPIs are blanked; health pill falls back to 'down' and modules card to 'No modules', so a transient failure reads as a platform outage (page.tsx:19-46, loaders.ts fallback {status:'down'}).
 - **Verified evidence:** page.tsx:19 errored = source==='error'; KPIs blank at line 38 but health pill (line 46) reads health.status and the Enabled-modules card (lines 59-72) reads modules.length. getTenantAdminDashboard (_data/loaders.ts:914-955) sets source='error' if ANY of users/modules/health/readiness fails and health falls back to {status:'down', services:[]} (loaders.ts:919), modules to [] -> pill shows 'down' (class 'bad') and EmptyState 'No modules'. Only a small DataSourceBadge (line 41) explains it, placed below the KPIs.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -716,7 +716,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-DATA-EXPORT-03  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [ ] **Status** (W2 tenant-admin REOPENED: acceptance 'download of a ready export returns a file' is unmet)
+- **W2 note (needs owner decision):** the Download link is real and authenticated, and Single Entity now requires an id, but the export itself is a stub: the process consumer marks the request ready with fileSizeBytes 0 and no file is generated; `GET /v1/admin/data-export/:id/download` returns a JSON `{downloadUrl, expiresAt}` whose URL points back at itself. A real export needs a generator and storage (S3 or signed URL) - not invented here.
 - **First-pass claim:** 'Single Entity' type offers no entity selector, so the request cannot say which entity; and the Download button has no href/handler in code (DataExportClient.tsx:85,141-143).
 - **Verified evidence:** DataExportClient.tsx:85 offers <option value="entity">Single Entity</option>, but the form renders only a Module select for type==='module' (lines 89-97); the POST body (line 53) has no entity field, so an 'entity' request is unspecified. The Download Button at line 141 has no onClick and is not an anchor with href; DataExportRequest (loaders) contains no download URL that could be used - a download endpoint is not visible in the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/data-export/DataExportClient.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -1365,7 +1366,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-ORG-TYPE-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL cleared by W2 tenant-admin #PR2 re-check against main: OrgTypeSelector marks the current type, confirms with a reason and PATCHes merged settings; the server now validates, audits, refuses another tenant, and persists (tenant-update-cross-tenant.test.ts); closed by #1864)
 - **First-pass claim:** The page invites 'Pick the one that best describes you' but cards are not interactive and none indicates the current org type; the only route is a raw PATCH shown as text (page.tsx:14-20,54-57).
 - **Verified evidence:** org-type/page.tsx: cards (128-151) are plain <div>s with no handler; the page never loads the tenant's current orgType (no loader call; grep finds no orgType consumer in loaders), so nothing marks the active one; change instructions are text (155-157) 'PATCH /v1/tenants/:id ... coming soon'. Whether that PATCH endpoint exists cannot be verified (tenant/admin service absent).
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/org-type/page.tsx`, `apps/web/src/app/(app)/tenant-admin/org-type/OrgTypeSelector.tsx (new)`, `apps/web/src/app/_data/loaders.ts (getTenantSettings if missing)`
@@ -1776,7 +1777,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-ROLES-DETAIL-01  ·  HIGH  ·  partly  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL cleared by W2 tenant-admin #PR2 re-check against main: PermissionGrid.test.tsx: a saved cell toggles allow/deny only, never back to inherit; closed by #1864)
 - **First-pass claim:** The grid offers "Inherit" as a cell state but there is no removal endpoint, so any reset-to-inherit is skipped on save; the dialog admits it only after the user has made the change (PermissionGrid.tsx:73-74,159-168,195-197).
 - **Verified evidence:** PermissionGrid.tsx:69 cycle includes 'inherit'; l.79-82 unremovable = changed cells going to inherit; l.89 loop saves only savable; l.103-106 notice reports skipped resets. Confirm dialog l.191-193 states resets will be skipped BEFORE Save is confirmed (so not only after), but the grid hint (l.166-168) still advertises 'Inherit' as a normal step and the button count (l.155) excludes them. Removal endpoint absence is from the code comment; backend cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/roles/[id]/PermissionGrid.tsx`
@@ -1792,7 +1793,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-ROLES-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL cleared by W2 tenant-admin #PR2 re-check against main: PermissionGrid.test.tsx: a mid-way failure reports N of M saved and drops the succeeded cells; closed by #1864)
 - **First-pass claim:** Save issues one POST per changed cell in a loop; a failure mid-way leaves earlier cells applied while the draft is retained, so the role can be left half-updated with only one error line (PermissionGrid.tsx:96-111).
 - **Verified evidence:** PermissionGrid.tsx:89-100 sequential awaited POST per changed cell; on !res.ok it throws (l.96-98); catch (l.108-110) sets error, keeps draft (setDraft not called) and does not router.refresh, so cells already applied show stale baseline and a retry re-POSTs them. No bulk endpoint referenced; atomicity is backend cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/roles/[id]/PermissionGrid.tsx`
@@ -1823,7 +1824,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-ROLES-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL cleared by W2 tenant-admin #PR2 re-check against main: PermissionGrid.test.tsx: the reason travels in the body, not x-correlation-id; closed by #1864)
 - **First-pass claim:** The audit reason is sent as the x-correlation-id header truncated to 64 chars, not as a body field, so the "audited" reason may not be stored (PermissionGrid.tsx:100-104).
 - **Verified evidence:** PermissionGrid.tsx:91-95 sends reason only as header x-correlation-id sliced to 64 chars; body has {resource, action, effect}. Proxy (app/api/proxy/[...path]/route.ts:7) forwards x-correlation-id, but whether policy-service stores it as audit reason is cannot-verify (service absent). A correlation id is meant for tracing, and long reasons are truncated.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/roles/[id]/PermissionGrid.tsx`
@@ -2011,7 +2012,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SESSIONS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme FABRICATED
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL cleared by W2 tenant-admin #PR2 re-check against main: sessions/[id]/page.tsx loads getSessionById; 404 -> notFound, other errors -> RefreshErrorState (page.test.tsx); no sample record remains; closed by #1864)
 - **First-pass claim:** Every session id renders the same hard-coded session (Rajesh Verma, 15 Jan 2025); the route never fetches and never uses params.id for data, so an admin reading it sees another person's details (page.tsx:21-35,49).
 - **Verified evidence:** sessions/[id]/page.tsx:21-35 const session (Rajesh Verma, 2025-01-15) is rendered for every params.id; params.id is used only in the breadcrumb (l.49). No fetch. Loader for list exists (getActiveSessions, loaders ~4298 GET /api/identity/sessions) but no by-id loader; GET /identity/sessions/:id existence cannot-verify. SessionSummary lacks os/browser/location fields shown here.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/sessions/[id]/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -2721,7 +2722,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-WEBHOOKS-02  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1864, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL cleared by W2 tenant-admin #PR2 re-check against main: create returns the secret once (admin-service webhookCreate) and WebhooksClient.test.tsx shows it once in a modal, cleared on close; closed by #1864)
 - **First-pass claim:** The "signing secret … shown once after creation" promised in the dialog is never displayed: the create response is only pushed into the list, so the secret needed to verify HMAC signatures is lost (WebhooksClient.tsx:69-71,221-224).
 - **Verified evidence:** Dialog text at WebhooksClient.tsx:215 promises the secret is shown once; handleCreate (67-70) casts response to WebhookSummary (no secret field in the type, loaders.ts:4753-4761) and pushes into list; nothing renders a secret. Whether backend returns a secret in the create response cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/webhooks/WebhooksClient.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -2804,7 +2805,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-HOME-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** verified against admin-service. `GET /v1/admin/health` rolls up each service's /health probe to ok|degraded|down; `GET /v1/admin/health/readiness` derives four gates from that rollup (overall = share of gates passing) and answers `{available:false}` when the rollup cannot be produced. Defect fixed: the dashboard loader mapped `{available:false}` to null, which fetchJson treats as a failed load, so a healthy 'not available' answer blanked every KPI on the home page; it is now an honest no-readiness state. Test `apps/web/src/app/_data/loaders.tenantAdminDashboard.test.ts`. Caveat (READINESS-03, still INTERIM): the gates measure service health, not the tenant's go-live readiness.
 - **First-pass claim:** Backends for /api/v1/admin/* are not in this snapshot (only hrms-service present) — health and readiness semantics undeterminable.
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/health', 'GET /api/v1/admin/health/readiness (loaders.ts:919,928)']`
 - **Question:** What do health.status (ok/degraded/down) and readiness percent mean, and is readiness computed from real checks rather than static values?
@@ -2815,7 +2817,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-ACTIVATION-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** two real defects found by a real-DB test as the non-superuser service role. (1) `fact_events_event_type_check` never listed the activation steps, so EVERY `POST /v1/analytics/activation/events` failed with a check violation (HTTP 500) on a migrated DB and the funnel stayed empty: migration 0018 adds the eight steps. (2) The platform funnel read under the caller's own tenant GUC, so a platform admin saw only their own office: migration 0019 adds a SELECT-only `app.platform_bypass` policy and `scopedPlatformRead()` (same design as admin-service 0011). Test `services/analytics-service/tests/activation-funnel-real-db.test.ts`.
 - **First-pass claim:** analytics-service is not in this snapshot — endpoint contracts undeterminable.
 - **Service:** `analytics-service`  ·  **Endpoint(s):** `['GET /api/v1/analytics/activation/funnel', 'GET /api/v1/analytics/activation/funnel/platform']`
 - **Question:** Do both funnel endpoints exist, is /platform restricted to platform admins, and are responses tenant-scoped?
@@ -2850,7 +2853,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-BREAKGLASS-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** `auto_expired` semantics verified and fixed. The TTL sweeper closed an expired grant by setting closed_at, and status was derived `closed_at ? ended : ...`, so an auto-expired grant read back as plain `ended` within a minute of expiring and the sweeper's system actor leaked as 'closed by'. Migration 0052 stores `close_reason` (backfilled); one `breakGlassStatus()` derives status for list and detail; `closeReason` is returned and the closer is null for an auto-expiry. Also fixed: a platform admin asking for ANOTHER tenant's grants got nothing (RLS used the caller's tenant); those reads now use the SELECT-only platform bypass. Test `services/admin-service/tests/breakglass-auto-expired-status.test.ts`.
 - **First-pass claim:** identity-service / admin-service backends are not in this snapshot; auto_expired semantics undeterminable.
 - **Service:** `identity-service (and admin-service)`  ·  **Endpoint(s):** `['GET /api/v1/admin/breakglass', 'POST /api/proxy/identity/break-glass/{id}/close']`
 - **Question:** What does status auto_expired mean, when is it set (TTL job), and is it distinct from closed?
@@ -2885,7 +2889,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-DATA-EXPORT-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** verified: the consumer stamps expires_at = now + 48h and the download route answers 410 EXPIRED afterwards. Defect fixed: nothing ever flips a ready export to `expired`, so the list kept showing a Download link that 410s; the list now reports the effective status (expired, no download URL). Test `services/admin-service/tests/data-export-expiry.test.ts`. Found while here: export generation is a stub (fileSizeBytes 0; the download route returns a JSON `{downloadUrl}` that points back at itself, no file) - see DATA-EXPORT-03, REOPENED, owner decision.
 - **First-pass claim:** admin-service export pipeline is not in this snapshot; the 48-hour expiry is undeterminable server-side.
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['GET/POST /api/v1/admin/data-exports (DataExportClient.tsx:49 POST returns 202)']`
 - **Question:** Do completed data exports expire and become undownloadable exactly 48 hours after completion, with expiresAt returned in the API?
@@ -2896,7 +2901,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-DOMAIN-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** auth handling is identical: `/api/proxy/v1/admin/custom-domains*` and the server loader's `/api/v1/admin/custom-domains` both go through the gateway with the session bearer. The mismatch is the ROLE contract: every custom-domains route is platform_admin/super_admin only (tenant_admin gets 403 on list, add, verify and dns-instructions - `services/admin-service/tests/custom-domains.test.ts`) while the page is reachable by tenant_admin. NEEDS OWNER DECISION: widen the backend to own-tenant tenant_admin, or restrict the page.
 - **W0 note:** partly fixed by #1864 — DomainClient now uses /api/proxy/v1/admin/custom-domains; backend authz/tenant scoping unverified
 - **First-pass claim:** Writes go to /api/v1/admin/... directly while other tenant-admin writes use /api/proxy/...; auth handling difference undeterminable (backend absent).
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['POST /api/v1/admin/custom-domains', 'POST /api/v1/admin/custom-domains/:id/verify', 'DELETE /api/v1/admin/custom-domains/:id (DomainClient.tsx:40,65,70, direct fetch, credentials same-origin)']`
@@ -2909,6 +2915,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 ### GAP-TENANT-ADMIN-IDP-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 note (INTERIM, needs owner decision):** the status vocabulary cannot be defined yet: `GET /v1/admin/idp/providers` answers 501 NOT_IMPLEMENTED because no IdP-provider store exists (same blocker as SSO-01 / SSO-06). The page therefore always shows its load-error state.
 - **First-pass claim:** Identity backend is not in this snapshot; status vocabulary beyond 'active' undeterminable.
 - **Service:** `identity-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/idp/providers (loaders.ts ~L4701)']`
 - **Question:** What is the complete enum of IdP provider status values returned (beyond 'active')?
@@ -2919,7 +2926,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-INSTALL-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** steps are a 1:1 view over the same stage rows `/v1/install/stages` returns (one step per stage, status derived from the stage) - pinned by `services/install-service/tests/steps-stages-mapping.test.ts`; roles include tenant_admin. Observation, not fixed: `PATCH /v1/install/steps/:id/:verb` publishes with messageId = the stage id and a payload the orchestrator consumer does not read; nothing in tenant-admin calls it.
 - **First-pass claim:** install-service is not in this snapshot; /api/v1/install/steps vs /install/stages (installer) relationship undeterminable.
 - **Service:** `install-service`  ·  **Endpoint(s):** `['GET /api/v1/install/steps (loaders.ts:4344)', 'GET /api/v1/install/stages (loaders.ts:748)']`
 - **Question:** Are install steps and installer stages the same resource at two granularities, and is step status consistent with the stage rollup?
@@ -2930,7 +2938,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-MFA-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** the vocabulary is exactly `enabled | disabled` (`mfaStatusLabel(mfaEnabled)`), pinned by `services/admin-service/tests/mfa-export-audit.test.ts`; there is no pending/locked state.
 - **First-pass claim:** Identity/admin backend not in this snapshot; the set of mfaStatus values is undeterminable.
 - **Service:** `identity-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/mfa/users (loaders.ts ~L4683)']`
 - **Question:** What is the full enum of mfaStatus (e.g. enrolled, pending, disabled, exempt) returned?
@@ -2941,7 +2950,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-NOTIFICATIONS-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** verified: `PATCH /notifications/prefs/:id` is admin-gated (403), tenant-scoped (404 cross-tenant), accepts the {email, inApp} body the page sends and the consumer mutates the row and audits - `services/notification-service/tests/prefs-update.test.ts` (real DB).
 - **First-pass claim:** notification-service is not in this snapshot; per-row PATCH contract undeterminable.
 - **Service:** `notification-service`  ·  **Endpoint(s):** `['GET /api/notification/preferences (loaders.ts:4335)', 'PATCH /api/proxy/notification/prefs/:id (NotificationPrefActions.tsx:82)']`
 - **Question:** Does PATCH /prefs/:id accept the body web sends (enabled flag), validate with zod, enforce tenant/user ownership and emit an audit event?
@@ -2952,7 +2962,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-NOTIFICATIONS-CHANNELS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** the channel model is {id, type, name, isDefault, enabled, version}; delivery health is the boolean `enabled`, there is no status enum - pinned by `services/notification-service/tests/channel-create-contract.test.ts`.
 - **First-pass claim:** notification-service not in this snapshot; status values undeterminable.
 - **Service:** `notification-service`  ·  **Endpoint(s):** `['GET /api/notification/channels (channels/page.tsx:21)']`
 - **Question:** What are the possible channel status values (active, degraded, disabled, unconfigured)?
@@ -2963,7 +2974,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-OPERATIONS-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** log lines are redacted server-side (email, Aadhaar, PAN, JWT, bearer, phone, DB URL, public IPs) before they leave admin-service - `services/admin-service/tests/operations-redaction.test.ts`.
 - **First-pass claim:** Log excerpts are shown to platform admins in a 'redacted' column, but redaction is claimed 'server-side' with no client safeguard and the backend is not in this snapshot — undeterminable; DPDP risk if PII leaks in error lines (OperationsTables.tsx:72-80).
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/operations (loaders.ts:4292)']`
 - **Question:** Is log excerpt redaction (emails, phones, Aadhaar, PAN, tokens) applied in admin-service before the response, and is the endpoint limited to platform_admin/super_admin?
@@ -2974,7 +2986,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-OPERATIONS-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** PM2 dependence is handled: when `pm2` is absent the snapshot reports available=false with no processes instead of throwing - `operations-redaction.test.ts`.
 - **First-pass claim:** admin-service /api/v1/admin/operations not in this snapshot; PM2 dependence (hosting assumption) undeterminable.
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/operations']`
 - **Question:** Is the PM2 fleet snapshot a deployment-agnostic abstraction, or does it fail (with a clear status) on hosts/containers without PM2?
@@ -2985,7 +2998,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-ORG-HIERARCHY-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** `headCount` is neither direct nor rolled up: tenant.org_units has no head/staff-count column at all and GET /v1/org/hierarchy returns the raw unit rows, so the UI correctly shows a dash - pinned by `services/tenant-service/tests/org-hierarchy-headcount.test.ts`.
 - **First-pass claim:** admin-service /api/v1/admin/org-hierarchy not in this snapshot; whether headCount is direct or rolled-up is undeterminable.
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/org-hierarchy (loaders.ts:4666)']`
 - **Question:** Is headCount direct reports/employees of the node only, or rolled up including descendants?
@@ -2996,7 +3010,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-ORG-TYPE-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** verified: `settings.orgType` is validated against the platform enum (400 on a bogus value) and an accepted update emits an audit event. Security defect fixed: `PATCH /v1/tenants/:tenantId` allowed any tenant_admin and published the command under the URL's tenant, so a tenant_admin of tenant A could rename or re-configure tenant B; a non-platform caller must now name their own tenant (403 otherwise, B's row untouched). Test `services/tenant-service/tests/tenant-update-cross-tenant.test.ts`. Note: the update replaces `settings` wholesale (the web selector merges first), and the web two-card read-modify-write is last-writer-wins.
 - **First-pass claim:** Tenant service (PATCH /v1/tenants/:id) is not in this snapshot; whether orgType is validated or audited is undeterminable.
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['PATCH /v1/tenants/:id with {settings:{orgType}} (org-type/page.tsx:55)']`
 - **Question:** Does PATCH /v1/tenants/:id validate orgType against a fixed enum, restrict to tenant_admin, and emit an audit event with old/new value?
@@ -3019,7 +3034,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-PLATFORM-CONFIG-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** verified and hardened. The server redacted only `user:pass@` Redis URLs, so a credential without a colon (`redis://token@host`) or one embedded in AWS_ENDPOINT_URL (the queue and storage endpoints, returned unredacted) could reach the browser. `redactEndpoint()` now returns scheme://host[:port] for all three; the web `sanitizeEndpoint` stays as defence in depth. Test `services/admin-service/tests/platform-config-redaction.test.ts` (secret absent from the whole body; tenant_admin 403). Observation, not fixed: `redis.status` is the constant 'connected' and `databases` the constant 31 (not probed).
 - **First-pass claim:** Infrastructure card prints Redis URL, DB host, queue and bucket endpoints verbatim to the browser; a Redis URL can embed credentials (page.tsx:124,150,160,196). Backend (admin-service) is absent from this snapshot so redaction is undeterminable.
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/platform-config (page.tsx:25)']`
 - **Question:** Does admin-service strip credentials from redisUrl/dbHost/queue/bucket endpoints (userinfo, passwords, access keys) and limit the endpoint to platform_admin/super_admin?
@@ -3030,7 +3046,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-READINESS-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** scoring rules are determinable and pinned: four gates derived from the live per-service health rollup (all healthy, platform responsive, no service down, quorum), overall = share of gates passing, null when the rollup cannot be produced - `services/admin-service/tests/readiness-live-signals.test.ts`; the web side is covered by `loaders.tenantAdminDashboard.test.ts`. Still INTERIM under READINESS-03: these are platform service-health gates, not tenant go-live gates.
 - **First-pass claim:** Dashboard endpoint and readiness computation live in an admin backend not present in this snapshot; scoring rules are undeterminable.
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/health/readiness (loaders.ts:928)']`
 - **Question:** How is the readiness percentage computed (checks, weights, pass criteria) and is it derived from live state?
@@ -3041,7 +3058,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-ROLES-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** verified against policy-service and fixed. Permission to create is tenant_admin/platform_admin/super_admin. Role-name uniqueness existed only as a DB unique index that fired inside the async consumer, so a duplicate was a 202 that silently failed: create and rename now answer 409 ROLE_NAME_TAKEN synchronously (case-insensitive, trimmed, per tenant). Role/permission lists were read-through cached and never invalidated after a write; the consumer now invalidates them. Test `services/policy-service/tests/roles-duplicate-and-permission-upsert.test.ts`; en/hi copy in errorCatalogue.
 - **First-pass claim:** Policy service (/api/policy/roles, /api/proxy/policy/roles) is not in this snapshot; role name uniqueness and permission on create are undeterminable.
 - **Service:** `policy-service`  ·  **Endpoint(s):** `['POST /api/proxy/policy/roles (RolesTable.tsx:121)', 'GET /api/policy/roles']`
 - **Question:** Does POST /roles enforce unique name per tenant (409), create with zero permissions by default, and emit an audit event?
@@ -3052,7 +3070,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-ROLES-DETAIL-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** verified and fixed. Permission POST used `onConflictDoNothing`, so flipping an existing cell allow -> deny in the grid reported 'saved' and changed nothing; it is now an upsert of the effect (version bumped, cache invalidated). The grid split cell keys on the FIRST colon, so a module containing a colon was mis-sent; it now splits on the last. Resource/action are free strings on the server (no colon restriction). Tests: `roles-duplicate-and-permission-upsert.test.ts`, `PermissionGrid.test.tsx`.
 - **First-pass claim:** Cell keys are "module:action" and split on ":" so a module or resource containing a colon breaks the mapping; the optional resource field of Perm is ignored (PermissionGrid.tsx:15-17,97-98). Policy backend absent; role/permission semantics undeterminable.
 - **Service:** `policy-service`  ·  **Endpoint(s):** `['GET /api/policy/roles/:id', 'POST /api/proxy/policy/roles/:id/permissions (PermissionGrid.tsx:91)']`
 - **Question:** Can a permission's module/action contain ':' and does Perm carry a resource field that must be part of the grant key?
@@ -3063,7 +3082,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SECURITY-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** the outcome pill mapping is explicit in SecurityTable (success good; failure/failed/denied bad; flagged/pending/challenged warn; unknown neutral). The backend half is moot today: `GET /v1/admin/security/overview` answers 501 NOT_IMPLEMENTED (no service tracks failed logins), so the Security Center shows its load-error state until that store exists - NEEDS OWNER DECISION, tracked in the PR body.
 - **First-pass claim:** Outcome maps every value other than success/flagged to a red pill, so a "pending" or "challenged" event reads as a failure; the set of outcome values is undeterminable (backend absent) (SecurityTable.tsx:24).
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/security/overview (loaders.ts:4629)']`
 - **Question:** What is the complete enum of security event outcome values?
@@ -3074,7 +3094,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-SESSIONS-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** DELETE /identity/sessions/:id is tenant-scoped (another tenant's session is 404 and stays active) and the consumer revokes and audits an own-tenant revoke - `services/identity-service/tests/sessions-cross-tenant-revoke.db.test.ts` (real DB).
 - **First-pass claim:** Identity service is not in this snapshot; whether DELETE is tenant-scoped and audited server-side is undeterminable.
 - **Service:** `identity-service`  ·  **Endpoint(s):** `['GET /api/identity/sessions', 'DELETE /api/proxy/identity/sessions/:id (SessionsTable.tsx:57)']`
 - **Question:** Does DELETE /sessions/:id only revoke sessions in the caller's tenant (404 otherwise) and emit an audit event?
@@ -3145,7 +3166,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-USAGE-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** `GET /v1/admin/usage` relays tenant-service `/v1/tenant/usage` (caller's bearer, tenant_admin+). The projection model is documented and pinned: exhaustion = ceil((limit - used) / dailyGrowthRate) days from now, with the rate derived as max(1, round(used/30)) - `services/tenant-service/tests/tenant-modules.test.ts`.
 - **First-pass claim:** Usage service not in this snapshot; the resource list and projection model are undeterminable.
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/usage (loaders.ts:4550)']`
 - **Question:** Which resources does the usage endpoint return, and is the projection (forecast/exhaustion date) computed server-side with a documented model?
@@ -3168,7 +3190,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-USERS-DETAIL-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** verified: reset-password is admin-gated, tenant-scoped (404 cross-tenant) and audited with the reason (user-security.test.ts). It was not rate limited: it now allows 3 requests per user per 15 minutes (429 RESET_RECENTLY_REQUESTED, no command published, 404 does not consume budget). Test `services/identity-service/tests/reset-password-throttle.test.ts`; en/hi copy in errorCatalogue.
 - **First-pass claim:** Identity service not in this snapshot; whether reset-password is audited and rate-limited is undeterminable.
 - **Service:** `identity-service`  ·  **Endpoint(s):** `['POST /api/proxy/identity/users/:id/reset-password', 'POST /api/proxy/identity/users/:id/sessions/revoke-all (UserSecurityActions.tsx:51,59)']`
 - **Question:** Is reset-password tenant-scoped, role-restricted, audited and rate-limited per target user and per actor?
@@ -3179,7 +3202,8 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-WEBHOOKS-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant-admin: closed by #PR2)
+- **W2 note:** verified at the server. `POST /v1/admin/webhooks` rejects private/loopback/link-local/non-http targets (zod refine, 400), re-resolves DNS (422 SSRF_BLOCKED) and requires at least one event; PUT re-validates a changed URL. New route-level test `services/admin-service/tests/webhook-create-ssrf.test.ts`. Observation: event names are free strings server-side (the web's 12-event list is not a catalogue), so a typo'd event never fires.
 - **First-pass claim:** Create accepts any type=url (including http or private hosts) and zero events; the event list is a hard-coded 12-event constant, not from the backend; server-side SSRF validation is undeterminable (WebhooksClient.tsx:10-15,200-215).
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['POST /api/v1/admin/webhooks (WebhooksClient.tsx:61)', 'GET /api/v1/admin/webhooks', 'POST /api/v1/admin/webhooks/:id/test']`
 - **Question:** Does the server reject non-https, private/loopback/link-local/metadata (SSRF) targets, empty events, and unknown event names, and re-check the resolved IP at delivery time?
