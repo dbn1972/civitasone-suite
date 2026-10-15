@@ -81,5 +81,7 @@ describe("CagPage KPIs (GAP-AUDIT-CAG-04 / CAG-03)", () => {
     expect(statValue("Paragraphs")).toBe("3");
     expect(statValue("Settled")).toBe("1");
     expect(statValue("Pending")).toBe("1");
+    // Settled + Pending + Unrecognised reconciles with Paragraphs.
+    expect(statValue("Unrecognised")).toBe("1");
   });
 });
