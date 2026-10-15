@@ -24,6 +24,7 @@ import { StatCard } from "@/app/_components/ds/StatCard";
 import { EmptyState } from "@/app/_components/ds/EmptyState";
 import { CivitasMap, type MapMarker } from "@/app/_components/maps";
 import { useFormError } from "@/lib/useFormError";
+import { formatInIST } from "@/lib/formatters";
 
 const API = "/api/proxy/v1/locations/map-markers";
 
@@ -275,7 +276,7 @@ export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
           </button>
           {updatedAt ? (
             <span role="status" style={{ fontSize: 12, color: "var(--ink2)" }}>
-              {t("updatedAt", { time: updatedAt.toLocaleTimeString() })}
+              {t("updatedAt", { time: formatInIST(updatedAt, { hour: "2-digit", minute: "2-digit" }) })}
             </span>
           ) : null}
         </div>
