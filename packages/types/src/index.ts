@@ -1914,6 +1914,8 @@ export type ComplianceSummary = {
   frequency: "daily" | "weekly" | "monthly" | "quarterly" | "annual" | "one_time";
   dueDate: string;
   assignedTo?: string;
+  /** Display name for `assignedTo`, resolved by the service (GAP-ESTAB-COMPLIANCE-04); absent when unresolvable. */
+  assignedToName?: string;
   status: "pending" | "complied" | "overdue" | "not_applicable";
   lastCompliedDate?: string;
   remarks?: string;

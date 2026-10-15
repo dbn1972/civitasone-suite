@@ -1,4 +1,5 @@
 import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "@/app/_components/ds";
+import { getTranslations } from "next-intl/server";
 import { toHumanError } from "@/lib/messages";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { AllotmentsTable, type AllotmentRow } from "./AllotmentsTable";
@@ -16,6 +17,7 @@ async function getAllotments(): Promise<LoaderResult<{ rows: AllotmentRow[]; tot
 }
 
 export default async function QuarterAllotmentsPage() {
+  const tP2 = await getTranslations("estabP2");
   const { data: result, source } = await getAllotments();
   const allotments = result.rows;
   const total = result.total;
@@ -50,6 +52,8 @@ export default async function QuarterAllotmentsPage() {
             {total > allotments.length && (
               <p style={{ margin: "0 16px 8px", fontSize: 13, color: "var(--ink2)" }}>
                 Showing {allotments.length.toLocaleString("en-IN")} of {total.toLocaleString("en-IN")} allotments.
+                {/* GAP-ESTAB-QUARTERS-ALLOTMENTS-02: the tiles count only the rows shown, so say so. */}
+                {" "}{tP2("allotScopeNote")}
               </p>
             )}
             <AllotmentsTable allotments={allotments} />

@@ -8,6 +8,7 @@ import { toHumanError } from "@/lib/messages";
 import { humanizeStatus } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
+import { HeldFilesNotice } from "./HeldFilesNotice";
 
 type Operator = {
   id: string;
@@ -196,7 +197,7 @@ export function OperatorsPanel({ canAdminister }: { canAdminister: boolean }) {
             danger={o.active}
             confirmTitle={`${o.active ? "Deactivate" : "Reactivate"} this desk?`}
             confirmDescription={o.active
-              ? "The officer will no longer be markable a file. Hand over any files they currently hold before deactivating — this does not reassign them automatically."
+              ? <HeldFilesNotice employeeId={o.employeeId} />
               : "The officer will again be eligible to hold and operate files."}
             confirmLabel={o.active ? "Deactivate" : "Reactivate"}
             onConfirm={() => toggle(o)}

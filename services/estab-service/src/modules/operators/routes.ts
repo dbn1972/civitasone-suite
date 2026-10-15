@@ -3,7 +3,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { enrolOperatorBody, updateOperatorBody, listOperatorsQuery, eligibilityQuery } from "./validators.js";
+import { enrolOperatorBody, updateOperatorBody, listOperatorsQuery, eligibilityQuery, resolveOfficersQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { checkEligibility } from "./eligibility.js";
@@ -19,6 +19,18 @@ export async function operatorRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = listOperatorsQuery.parse(req.query);
     const data = await queries.listOperators(ctx.tenantId, { division: q.division, deskRole: q.deskRole, activeOnly: q.activeOnly }, q.limit);
+    return reply.send({ data });
+  });
+
+  /**
+   * Resolve officer ids (employee ids or actor ids) to display names for the
+   * ids a screen renders. Replaces pulling a whole directory into the browser.
+   */
+  app.get("/v1/estab/officers/resolve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = resolveOfficersQuery.parse(req.query);
+    const data = await queries.resolveOfficerLabels(ctx.tenantId, q.ids);
     return reply.send({ data });
   });
 

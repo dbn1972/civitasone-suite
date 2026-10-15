@@ -41,6 +41,25 @@ export function toOperatorDto(
   };
 }
 
+export type OfficerLabelDto = { id: string; displayName: string; departmentName?: string };
+
+/**
+ * GAP-ESTAB-FILES-DETAIL-04 (DPDP data minimisation): batched, tenant-scoped
+ * name resolution for exactly the ids a screen renders. Returns ONLY
+ * {id, displayName, departmentName} for the ids that resolve (an id may be an
+ * hrms employee id or an identity-provider actor id); unresolvable ids are
+ * omitted and the web shows "Unknown employee". Never returns other HR fields.
+ */
+export async function resolveOfficerLabels(tenantId: string, ids: readonly string[]): Promise<OfficerLabelDto[]> {
+  const map = await getEmployeeDisplayMap(tenantId, ids);
+  return ids.flatMap((id) => {
+    const d = map.get(id);
+    return d?.fullName
+      ? [{ id, displayName: d.fullName, ...(d.departmentName ? { departmentName: d.departmentName } : {}) }]
+      : [];
+  });
+}
+
 export async function listOperators(
   tenantId: string,
   filter: { division?: string | undefined; deskRole?: string | undefined; activeOnly: boolean },

@@ -39,7 +39,7 @@ export async function dfaRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = req.params as { id: string };
-    const dfa = await queries.getDfa(ctx.tenantId, id);
+    const dfa = await queries.getDfa(ctx.tenantId, id, { withNames: true });
     if (!dfa) throw new HttpError(404, "NOT_FOUND", "DFA not found");
     return reply.send({ data: dfa });
   });

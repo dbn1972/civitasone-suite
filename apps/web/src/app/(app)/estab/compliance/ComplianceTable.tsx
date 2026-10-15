@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { DataTable, Segmented, ActionButton, StatusPill } from "@/app/_components/ds";
 import { humanizeStatus } from "@/lib/formatters";
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
@@ -10,7 +11,7 @@ export type ComplianceRow = {
   id: string;
   title: string;
   category: string;
-  assignedTo: string | null; // GAP-ESTAB-COMPLIANCE-04: null → "—"
+  assignedTo: string | null; // GAP-ESTAB-COMPLIANCE-04: name; null → "—"; "" → Unknown employee
   due: string;
   status: string;
   statusRaw: string;
@@ -27,6 +28,7 @@ const SEGMENTS = Object.keys(SEGMENT_MAP);
 
 export function ComplianceTable({ rows, canComply = false }: { rows: ComplianceRow[]; canComply?: boolean }) {
   const router = useRouter();
+  const tFallback = useTranslations("employeeFallback");
   const [seg, setSeg] = useState("All");
   const [error, setError] = useState("");
 
@@ -69,7 +71,7 @@ export function ComplianceTable({ rows, canComply = false }: { rows: ComplianceR
             key: "assignedTo",
             label: "Assigned to",
             // GAP-ESTAB-COMPLIANCE-04: show "—" for null
-            render: (r) => <>{r.assignedTo ?? "—"}</>,
+            render: (r) => <>{r.assignedTo === null ? "—" : r.assignedTo || tFallback("unknownEmployee")}</>,
           },
           { key: "due", label: "Due" },
           {
