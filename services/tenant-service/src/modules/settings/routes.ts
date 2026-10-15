@@ -14,6 +14,17 @@ import * as repo from "./repo.js";
 const ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
 const RESOURCE = "setting";
 
+// GAP-TENANT-SETTINGS-01: a configuration key whose name marks it as a
+// credential must never leave the service in the LIST response (the registry
+// view is for review, not for retrieving secrets). The per-key read stays
+// admin-only and unmasked for the owner who maintains the value.
+const SECRET_KEY_RE = /(?:secret|password|passwd|token|api[_-]?key|private[_-]?key|credential)/i;
+export const MASKED_SETTING_VALUE = "********";
+
+export function maskSecretSettings<T extends { key: string; value: unknown }>(rows: T[]): T[] {
+  return rows.map((r) => (SECRET_KEY_RE.test(r.key) ? { ...r, value: MASKED_SETTING_VALUE } : r));
+}
+
 export async function settingRoutes(app: FastifyInstance): Promise<void> {
   // UPSERT setting
   app.put("/v1/settings", async (req, reply) => {
@@ -41,7 +52,7 @@ export async function settingRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     if (!ctx.tenantId) throw new HttpError(401, "UNAUTHENTICATED", "no tenant in context");
     const settings = await repo.findAllByTenant(ctx.tenantId);
-    return reply.send(settings);
+    return reply.send(maskSecretSettings(settings));
   };
   // GAP2-TENANT-WIRING-01: web settings loader calls /api/v1/tenant/settings
   // (gateway forwards verbatim). Alias so it resolves instead of 404.
@@ -72,6 +83,6 @@ export async function settingRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ["platform_admin", "super_admin"]);
     const { tenantId } = tenantIdParam.parse(req.params);
     const settings = await repo.findAllByTenant(tenantId);
-    return reply.send(settings);
+    return reply.send(maskSecretSettings(settings));
   });
 }

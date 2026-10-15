@@ -15649,5 +15649,30 @@
       "distinct": "Maker-checker: the approver is a different person from the author.",
       "namesNote": "Names are shown once a staff directory lookup is available; the identifiers are kept in the audit log."
     }
+  },
+  "tenantPages": {
+      "office": "Office",
+      "codeListsTitle": "Office — Code Lists",
+      "codeListsSubtitle": "Reference code lists and their dated values.",
+      "consentExchangeTitle": "Office — Consent Exchange",
+      "consentExchangeSubtitle": "Cross-organisation consent requests (read-only).",
+      "dataMigrationTitle": "Office — Data Migration",
+      "dataMigrationSubtitle": "Organisation data migrations and reconciliation jobs.",
+      "orgHierarchyTitle": "Office — Org Hierarchy",
+      "orgHierarchySubtitle": "Organisation units and hierarchy nodes.",
+      "overviewTitle": "Office — Overview",
+      "overviewSubtitle": "Your organisation's current profile.",
+      "plansTitle": "Office — Plans",
+      "plansSubtitle": "Available plans with pricing and module entitlements.",
+      "positionsTitle": "Office — Positions",
+      "positionsSubtitle": "Position master records with sanctioned strength and vacancies.",
+      "quotasTitle": "Office — Quotas & Usage",
+      "quotasSubtitle": "Resource consumption against plan limits for this office.",
+      "settingsTitle": "Office — Settings",
+      "settingsSubtitle": "Office configuration keys and their values.",
+      "stewardshipTitle": "Office — Stewardship",
+      "stewardshipSubtitle": "Data governance domains and their owners.",
+      "subscriptionsTitle": "Office — Subscriptions",
+      "subscriptionsSubtitle": "Current subscription plan, renewal date and lifecycle state."
   }
 }

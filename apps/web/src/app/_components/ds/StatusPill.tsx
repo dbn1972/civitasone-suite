@@ -469,6 +469,14 @@ const STATUS_MAP: Record<string, PillVariant> = {
   // GAP-PROCUREMENT-TENDERS-03: bid-window overdue cue. A published tender past
   // its close with zero bids is the exception the register exists to surface.
   "closed no bids": "bad",
+
+  // GAP-TENANT-QUOTAS-02: quota/usage status words from tenant/_data.ts
+  // mapQuotaRows. Without keys all three fell to the neutral "info" blue, so a
+  // quota past its limit looked like a healthy one. The label text itself
+  // ("Near limit" / "Exceeded" / "OK") is the non-colour cue.
+  "near limit": "warn",
+  exceeded: "bad",
+  ok: "good",
 };
 // Deliberately NOT added: a generic "flagged" key. tenant-admin/security/SecurityTable.tsx
 // has its own inline outcome->variant mapping that fails closed to "bad" for any

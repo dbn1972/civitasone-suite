@@ -15,7 +15,7 @@
  *    past the auth layer; this file used to assert that 500. It now asserts the
  *    real round trip. (tenant_quotas, the table /stats reads, always existed.)
  *
- * 2. (STILL OPEN, pinned below as-is.) GET /v1/tenants/:tenantId/feature-flags's
+ * 2. (FIXED in W2 tenant part 1; the pinned assertions were flipped to the correct contract. Text below is the historical root cause.) GET /v1/tenants/:tenantId/feature-flags's
  *    cross-tenant guard is broken: `if (ctx.tenantId !== req.params && ...)`
  *    compares a string (ctx.tenantId) to req.params, THE WHOLE OBJECT
  *    (`{tenantId: "..."}`), not the destructured tenantId string its two sibling
@@ -123,21 +123,30 @@ describe("COMP-007: tenant-extensions -- auth layer + GET /stats", () => {
   });
 });
 
-describe("COMP-007: tenant-extensions -- OPEN BUG: GET /feature-flags's cross-tenant guard (see file header)", () => {
-  it("a non-PLAT caller reading their OWN tenant's flags is incorrectly 403'd (should be allowed, like GET /stats above)", async () => {
+describe("COMP-007: tenant-extensions -- GET /feature-flags cross-tenant guard (formerly an OPEN BUG, now fixed)", () => {
+  it("a same-tenant tenant_admin reads their OWN tenant's flags (200)", async () => {
     const tid = randomUUID();
     const res = await app.inject({
       method: "GET",
       url: `/v1/tenants/${tid}/feature-flags`,
       headers: { authorization: `Bearer ${token(["tenant_admin"], tid)}` },
     });
-    // This IS the bug: compare to the equivalent GET /stats test above,
-    // which correctly returns 200 for the identical same-tenant/non-PLAT
-    // shape. This should also be 200, not 403.
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ tenantId: tid, featureFlags: {} });
+  });
+
+  it("a caller from ANOTHER tenant is refused (403)", async () => {
+    const tid = randomUUID();
+    const other = randomUUID();
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/tenants/${tid}/feature-flags`,
+      headers: { authorization: `Bearer ${token(["tenant_admin"], other)}` },
+    });
     expect(res.statusCode).toBe(403);
   });
 
-  it("a PLAT caller passes the (accidentally permissive-for-them) guard and reads the default, empty flags from tenant_configs", async () => {
+  it("a PLAT caller reads the default, empty flags from tenant_configs (200)", async () => {
     const tid = randomUUID();
     const res = await app.inject({
       method: "GET",
