@@ -153,6 +153,20 @@ describe("error catalogue: standard wording", () => {
     expect(JSON.stringify(en)).not.toContain("DUPLICATE_EMAIL");
   });
 
+  it("ROLE_NAME_TAKEN (GAP-TENANT-ADMIN-ROLES-06) and RESET_RECENTLY_REQUESTED (USERS-DETAIL-06) have specific en and hi copy", () => {
+    for (const [status, code, enWhat] of [
+      [409, "ROLE_NAME_TAKEN", "A role with this name already exists."],
+      [429, "RESET_RECENTLY_REQUESTED", "A password reset was already requested for this user a moment ago."],
+    ] as const) {
+      const en = resolveHumanError({ status, code, ctx: { locale: "en" } });
+      expect(en.what).toBe(enWhat);
+      const hi = resolveHumanError({ status, code, ctx: { locale: "hi" } });
+      expect(hi.what).not.toBe(en.what);
+      expect(hi.what.trim()).not.toBe("");
+      expect(JSON.stringify(en)).not.toContain(code);
+    }
+  });
+
   it("MODULE_NOT_PROVISIONED (GAP-TENANT-ADMIN-SETTINGS-07) has specific en and hi copy on a 404", () => {
     const en = resolveHumanError({ status: 404, code: "MODULE_NOT_PROVISIONED", ctx: { locale: "en" } });
     expect(en.what).toMatch(/not part of your office/);

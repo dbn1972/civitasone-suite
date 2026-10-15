@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@/test-utils/intl-render";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -220,5 +220,19 @@ describe("TenderLifecycleActions", () => {
     await waitFor(() => expect(screen.getAllByRole("alert").length).toBeGreaterThan(0));
     const text = screen.getAllByRole("alert").map((n) => n.textContent).join(" ");
     expect(text).not.toMatch(/Internal Server Error|\b500\b|srv\/tender/);
+  });
+
+  // GAP-PROCUREMENT-TENDERS-DETAIL-05: Publish needs a NIT.
+  it("DETAIL-05: Publish is disabled with an 'Attach the NIT' cue and a link to the documents page when no NIT exists", () => {
+    render(<TenderLifecycleActions tenderId={TENDER_ID} status="draft" bids={[]} hasNit={false} />);
+    expect(screen.getByRole("button", { name: "Publish tender" })).toBeDisabled();
+    expect(screen.getByText(/Attach the Notice Inviting Tender \(NIT\) before publishing/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Add documents" })).toHaveAttribute("href", `/procurement/tenders/${TENDER_ID}/documents`);
+  });
+
+  it("DETAIL-05: Publish is enabled (and no cue is shown) once a NIT is attached", () => {
+    render(<TenderLifecycleActions tenderId={TENDER_ID} status="draft" bids={[]} hasNit />);
+    expect(screen.getByRole("button", { name: "Publish tender" })).toBeEnabled();
+    expect(screen.queryByText(/Attach the Notice Inviting Tender/)).toBeNull();
   });
 });

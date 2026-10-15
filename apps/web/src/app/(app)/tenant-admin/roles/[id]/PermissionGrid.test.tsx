@@ -78,3 +78,20 @@ describe("PermissionGrid — GAP-TENANT-ADMIN-ROLES-DETAIL-01/-02/-04", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("PermissionGrid — GAP-TENANT-ADMIN-ROLES-DETAIL-06 (colon in module)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  it("a module whose name contains a colon is sent as resource 'a:b', action 'read' (split on the last colon)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
+    render(<PermissionGrid roleId="r-1" permissions={[{ module: "fin:ops", action: "read", allowed: true }]} editable />);
+    fireEvent.click(screen.getByRole("button", { name: /fin:ops read: allow/i })); // allow -> deny
+    fireEvent.click(screen.getByRole("button", { name: /Save 1 change/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/Reason for change/i), { target: { value: "tighten access" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body).toMatchObject({ resource: "fin:ops", action: "read", effect: "deny" });
+  });
+});

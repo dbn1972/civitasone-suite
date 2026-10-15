@@ -10,8 +10,11 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as sessionCommands from "../sessions/commands.js";
 import * as keycloak from "../../shared/keycloak.js";
+import { cache } from "../../shared/infra.js";
 
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
+export const PASSWORD_RESET_MAX_PER_WINDOW = 3;
+export const PASSWORD_RESET_WINDOW_SECONDS = 15 * 60;
 
 export async function userRoutes(app: FastifyInstance): Promise<void> {
   app.post("/identity/users", async (req, reply) => {
@@ -141,6 +144,14 @@ export async function userRoutes(app: FastifyInstance): Promise<void> {
     const { reason } = reasonBody.parse(req.body ?? {});
     const view = await queries.getUser(ctx.tenantId, id);
     if (!view) throw new HttpError(404, "NOT_FOUND", "user not found");
+    // GAP-TENANT-ADMIN-USERS-DETAIL-06: a reset sends the user an email, so an admin
+    // (or a script holding an admin token) must not be able to flood one account's
+    // inbox. At most PASSWORD_RESET_MAX_PER_WINDOW requests per user per window;
+    // the counter is per tenant+user and expires on its own.
+    const attempts = await cache.incr(cache.makeKey(ctx.tenantId, "pwreset_rate", id), PASSWORD_RESET_WINDOW_SECONDS);
+    if (attempts > PASSWORD_RESET_MAX_PER_WINDOW) {
+      throw new HttpError(429, "RESET_RECENTLY_REQUESTED", "a password reset was already requested for this user recently");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.requestPasswordReset(ctx, id, reason));
   });
 

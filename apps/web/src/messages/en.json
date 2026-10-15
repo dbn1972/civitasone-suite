@@ -5682,6 +5682,25 @@
     "purchase": "Purchase Order",
     "vendors": "Vendors",
     "contracts": "Contracts",
+    "w2b": {
+      "tenderActions": {
+        "attachNitFirst": "Attach the Notice Inviting Tender (NIT) before publishing.",
+        "addDocuments": "Add documents"
+      },
+      "indentDetail": {
+        "trailUnavailable": "The approval trail could not be loaded just now, so it is not shown. This does not mean the indent has no decisions. Please try again shortly."
+      },
+      "approvals": {
+        "value": "Value",
+        "requestedBy": "Requested by",
+        "summaryFailed": "Couldn’t load the value and requester for these tasks. They are shown as “—”.",
+        "dialogValue": "Value: {value}."
+      },
+      "escalation": {
+        "referenceOnlyTitle": "Reference only.",
+        "referenceOnlyBody": "These bands are maintained with the application. They are not read from the workflow routing configuration, so the routing applied to a request can differ. Confirm against the delegation of financial powers."
+      }
+    },
     "hub": {
       "subtitle": "Requisitions, vendors, purchase orders, and tenders with approval controls.",
       "allModules": "View all modules",
@@ -15435,6 +15454,29 @@
         "trial": "Trial",
         "suspended": "Suspended"
       }
+    },
+    "apiKeys": {
+      "scopesLabel": "Scopes",
+      "scopesHint": "Choose what this key may access. Grant only what the service needs.",
+      "scopesLoading": "Loading the scopes you can grant…",
+      "scopesLoadFailed": "We couldn't load the scopes you can grant. Refresh the page to try again.",
+      "scopesNone": "You can't grant any scopes. Ask a platform administrator.",
+      "scopeRequired": "Choose at least one scope."
+    },
+    "channels": {
+      "actionsHeader": "Actions",
+      "disable": "Disable",
+      "enable": "Enable",
+      "disableTitle": "Disable \"{name}\"?",
+      "disableDescription": "Notifications that use this channel will stop being delivered until you enable it again. This is recorded in the audit log.",
+      "defaultWarning": "This is your default channel, so approvals and alerts may stop reaching anyone.",
+      "disableConfirm": "Disable channel",
+      "reasonLabel": "Reason for disabling (recorded in the audit log)",
+      "enabledOk": "Channel \"{name}\" enabled.",
+      "disabledOk": "Channel \"{name}\" disabled."
+    },
+    "breakglass": {
+      "platformAdminOnly": "Platform administrators only"
     }
   },
   "pqbMoney": {
@@ -15444,5 +15486,40 @@
     "eofficeRaiseIntro": "Raising sends this {refType} to eOffice for a formal, tamper-proof decision. The approval chain is selected automatically by amount. The file is always raised in your own name.",
     "eofficeSelfFallback": "You (the signed-in officer)",
     "rfqIndentStatus": "({status})"
+  },
+  "estabP2": {
+    "dfaDraftedBy": "Drafted by",
+    "dfaFile": "File",
+    "dfaOpenFile": "Open file",
+    "heldIntro": "The officer will no longer be markable a file. Hand over any files they currently hold before deactivating — this does not reassign them automatically.",
+    "heldLoading": "Checking the files this officer holds…",
+    "heldError": "We could not check the files this officer holds. Make sure they have handed over any files before deactivating.",
+    "heldNone": "This officer holds no files.",
+    "heldSome": "This officer currently holds {count, plural, one {# file} other {# files}}. Hand them over before deactivating.",
+    "heldOpenHandover": "Open Handover",
+    "migrationConfirmTitle": "Register this legacy file?",
+    "migrationConfirmLabel": "Register file",
+    "migrationConfirmIntro": "This adds the following entry to the migration register:",
+    "migrationConfirmLegacyNo": "Legacy file no",
+    "migrationConfirmDept": "Department",
+    "migrationConfirmSubject": "Subject",
+    "migrationConfirmPages": "Pages",
+    "applyFailed": "The request could not be completed. Please try again.",
+    "applyDesignationLabel": "Designation (as per service record)",
+    "applyPayLevelLabel": "Pay level (as per service record)",
+    "applyNotEntered": "not entered",
+    "applyConfirmRecorded": "Designation: {designation}; pay level: {payLevel}. These are recorded as entered — check them against the service record.",
+    "allotSegAll": "All",
+    "allotSegApplied": "Applied",
+    "allotSegWaitlisted": "Waitlisted",
+    "allotSegAllotted": "Allotted",
+    "allotSegOccupied": "Occupied",
+    "allotSegVacationNotice": "Vacation notice",
+    "allotScopeNote": "The tiles above count only the rows shown.",
+    "allotApplied": "Done — the allotment has been updated.",
+    "allotNotApplied": "Not applied yet — the server may have rejected this action (for example, you cannot allot your own application). Check the current status and try again.",
+    "dfaLinkFileLabel": "Link to an eOffice file (optional)",
+    "dfaLinkFilePlaceholder": "Search by file number or subject…",
+    "allotSelfApplicant": "You cannot allot a quarter you applied for (maker-checker policy). Another officer must allot it."
   }
 }

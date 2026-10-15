@@ -1,5 +1,4 @@
 import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
-import { Breadcrumb } from "../Breadcrumb";
 import { getMfaUsers } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
@@ -32,9 +31,7 @@ export default async function MfaManagementPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "MFA Management" }]} />
       <PageHeader
-        back="/tenant-admin"
         title="MFA Management"
         subtitle="Multi-factor authentication enrollment status. Open a user to manage their security."
       />

@@ -307,7 +307,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-COMPLIANCE-04  ·  LOW  ·  partly  ·  theme ID_DISPLAY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 estab: closed by #2052)
 - **W0 note:** partly fixed by #1916 — null -> em dash done; still shows raw assignedTo, OfficerName not used.
 - **First-pass claim:** "Assigned to" prints the raw assignedTo string with "—" fallback (page.tsx:23); unlike files pages it does not resolve officer ids to names via OfficerName.
 - **Verified evidence:** apps/web/src/app/(app)/estab/compliance/page.tsx:22 passes c.assignedTo ?? '—' unchanged; ComplianceTable.tsx:31 shows it. OfficerName (estab/files/[id]/OfficerName.tsx:93) resolves employee UUIDs, but whether assignedTo is a UUID or a name here cannot be verified (type absent). True that it does not resolve.
@@ -581,7 +581,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DFA-04  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 estab: closed by #2052)
+- **W2 note:** Drafted-by name, the full body in the approve dialog, a file picker on the create form (existing estab file search; the service checks the file exists in the tenant and is within the drafter's clearance) and a file-number link are in. A dedicated dfa/[id] page is not built (remainder).
 - **W0 note:** partly fixed by #1949 — Body preview in Approve/Sign dialog and Updated column; no Drafted by or detail page.
 - **First-pass claim:** Drafts are not linked to an eOffice file and the list never shows the body, date or drafter (Dfa type, DfaPanel.tsx:8-17,230-238); approvers approve a subject line.
 - **Verified evidence:** Dfa type (DfaPanel.tsx:22-31) and columns (:245-252) show dfaNo, type, subject, recipient, status, action only. updatedAt is fetched but not shown; body, drafter and linked file are not in the type; there is no detail route (dfa/ contains only page.tsx and DfaPanel.tsx) and create payload (:101-107) has no fileId. Whether the API returns body/fileId/createdBy is cannot-verify (estab-service absent). Approve/Sign are therefore done on a subject line only.
@@ -735,6 +736,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 ### GAP-ESTAB-FILES-DETAIL-03  ·  MEDIUM  ·  partly  ·  theme CONFIRM (was OTHER)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 note:** W2 estab re-check: still decision-first (who may sign directly vs submit; server allowedActions). Draft selection is already latest-first. Left open. (#2052)
 - **W0 note:** partly fixed by #1916 — Helper text clarified, draft chosen explicitly; no server allowedActions.
 - **First-pass claim:** Submit for approval and Sign note both act on the first draft yellow note (page.tsx:51-53). "Sign at your level" (FileDetailActions.tsx:209-211) lets one officer create a green note without the workflow task, so it is unclear which path is the approved chain.
 - **Verified evidence:** page.tsx:51-54 picks the first note with noteType==='yellow' && noteStatus==='draft' and passes it as draftNotingId; both 'Submit for approval' (FileDetailActions.tsx:100-114, POST submit-for-approval) and 'Sign note (green)' (:122-134, POST notings/:id/sign) act on it. True that both are offered side by side (:206-212) and the sign tooltip says 'at your level'. Whether sign bypasses the workflow task is cannot-verify (server absent). Also .find picks the first, not latest, draft when several exist.
@@ -751,7 +753,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 estab: closed by #2052)
 - **W1 SF-17b note (#2033):** OfficerName already reads only the operator roster (no /hrms/employees pull; failures not cached), and its labels now say "Unknown employee" instead of "Officer <id8>". Left open: names still come from the roster rather than a batched resolve for the ids on screen.
 - **W0 note:** partly fixed by #1916 — Uses operator roster names only, cache only on success; no resolve endpoint or TTL.
 - **First-pass claim:** OfficerName pulls GET /hrms/employees?limit=200 into every viewer's browser to resolve names (OfficerName.tsx:61-67) — over-fetching PII for a label, silently falling back to "Officer 3f9a1c2e" beyond 200 employees or without HR permission; the module-level cache is never refreshed.
@@ -1473,6 +1475,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 ### GAP-ESTAB-LIBRARY-ISSUES-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 note:** W2 estab re-check: the stats-gating step is already on main (loan stats depend on the issues loader only). Renewal, fine and condition-on-return still need a product decision. Left open. (#2052)
 - **W0 note:** partly fixed by #1916 — Stats gated per loader fixed; no renewal/fine/condition-on-return capture
 - **First-pass claim:** Either loader failing blanks all three stats even if the other loaded (page.tsx:15-17,39-41); no renewal, fine or "condition on return" capture on Return (IssuesTable.tsx:34-46).
 - **Verified evidence:** page.tsx:18-19 errored = issues OR books error; all three stats then show '—' (:39-41) even if issues loaded fine (books failure alone hides valid loan counts). Return does a bodyless PATCH (IssuesTable.tsx:41) with no fine, renewal or condition input; no renew action exists. Whether the API supports those fields cannot be verified (estab-service absent).
@@ -1510,7 +1513,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-LIST-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 estab: closed by #2052)
+- **W2 note:** Server-side clearance filter on the register and search, plus the existing [Classified] masking; reveal-with-audit and CSV-export gating are not built (remainder).
 - **W0 note:** partly fixed by #1916 — secret/top_secret subjects masked; confidential still shown; no Masked/clearance gate
 - **First-pass claim:** Confidential/secret/top-secret files appear in the same client-side register for every viewer with their subject line (list/page.tsx:29-37, FilesTable.tsx:34-70); the UI applies no classification gate or redaction (DPDP / official-secrets exposure) and depends on unverifiable server filtering.
 - **Verified evidence:** list/page.tsx:27-36 maps every file including subject and classification (lowercased/underscore-stripped) into FilesTable.tsx:47-52 columns with no classification-based masking; apiMappers.ts:718-733 keeps confidential/secret/top_secret. Also createdBy shown. No shared <Masked> component exists in the repo (grep only hits unrelated integrations files). Server-side filtering by clearance cannot be verified (estab-service absent).
@@ -1586,7 +1590,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-LIST-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 estab #2052 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1916, verified on main 9c5e9e9e9)
 - **First-pass claim:** "In transit" segment is just status "pending" (FilesTable.tsx:21-38) — two names for one status across stats ("Pending") and segments.
 - **Verified evidence:** FilesTable.tsx:21 segment 'In transit' filters statusRaw==='pending' (:30-31); page stat is 'Pending' (list/page.tsx:98) and pill shows 'pending'. Pending does not necessarily mean in transit; the mapper only knows active/pending/archived/disposed.
 - **Files to change:** `apps/web/src/app/(app)/estab/list/FilesTable.tsx`
@@ -1831,7 +1835,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-MIGRATION-04  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 estab: closed by #2052)
 - **W1 SF-17b note (#2033):** the eFile column no longer shows an 8-character id prefix (link text is "Open eFile"). Left open: the register mutates with no confirmation and validation failures still use one combined message.
 - **W0 note:** partly fixed by #1916 — Per-field errors+aria done; no ConfirmDialog; eFile link still shows id prefix not efileNo
 - **First-pass claim:** Register mutates with no confirmation and validation failures use one combined message; the eFile column shows an 8-character id prefix rather than a file number (MigrationPanel.tsx:55-57,131).
@@ -2001,6 +2005,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 ### GAP-ESTAB-OPERATORS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 note:** INTERIM, needs owner decision: the deactivate dialog warns with the held-file count and a Handover link; block vs warn vs auto-reassign, listing the files, and a server-side audit are not decided. (#2052)
 - **W0 note:** partly fixed by #1916 — Deactivate confirm warns about held files; no held-file count/block, server audit not visible
 - **First-pass claim:** Deactivate warns that held files "should be handed over first" (OperatorsPanel.tsx:223) but neither checks nor lists the files held; a desk can be deactivated with live files.
 - **Verified evidence:** apps/web/src/app/(app)/estab/operators/OperatorsPanel.tsx:222-224 Deactivate confirmDescription says 'Files they currently hold should be handed over first', toggle() (:136-146) just PATCHes {active:false}; nothing fetches or lists files held by the operator, and no such endpoint is referenced in the web code. Whether the backend blocks deactivation with live files is cannot-verify.
@@ -2159,6 +2164,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 ### GAP-ESTAB-QUARTERS-DETAIL-02  ·  HIGH  ·  partly  ·  theme PICKER (was CONFIRM)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 note:** INTERIM, needs owner decision: the confirmation names the employee and the entered designation and pay level (labelled as per service record); locking them to HRMS needs an HRMS endpoint exposing designation and pay level, and the backend ignoring client values. (#2052)
 - **W0 note:** partly fixed by #1916 — EntityPicker replaces UUID input; designation/payLevel still editable, dialog says 'selected employee'
 - **First-pass claim:** Apply for allotment asks the clerk to type an employee UUID (ApplyAllotmentForm.tsx) with designation and pay level typed by hand, so an officer can apply on behalf of anyone with unverified pay level; the confirm dialog then shows only the id prefix.
 - **Verified evidence:** ApplyAllotmentForm.tsx:98-108 Employee ID is a free text input validated only against UUID_PATTERN (:8,41); designation (:114-120) and payLevel (:125-131) are free text and sent as-is (:69-70); the confirm description shows only employeeRef.slice(0,8)+ellipsis (:174). TRUE. STALE part of the suggested fix: a <ConfirmDialog> already exists (:165-180), the description states a designated allotting officer (not the applicant) must approve, and the approval step lives in quarters/allotments/[id]/AllotmentDetailActions.tsx, so maker!=checker is at approval time. Whether the backend re-derives designation/pay level from HRMS or checks the employee exists cannot be verified (estab-service absent; page.tsx:73-75 comment says the service enriches employeeName from hrms-client).
@@ -2247,7 +2253,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-ALLOTMENTS-02  ·  HIGH  ·  partly  ·  theme COPY (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 estab: closed by #2052)
 - **First-pass claim:** Caption claims "current financial year" (AllotmentsTable.tsx:49) but fetchJson("/api/v1/estab/quarter-allotments") sends no date/FY parameter (page.tsx:7), so the caption is unverifiable and may mislead an auditor.
 - **Verified evidence:** apps/web/src/app/(app)/estab/quarters/allotments/AllotmentsTable.tsx:49 caption 'Quarter allotments — current financial year' (true) while apps/web/src/app/(app)/estab/quarters/allotments/page.tsx:6-13 requests /api/v1/estab/quarter-allotments with no FY/date parameter; the caption and the stat cards (:38-41) could be wrong if the service returns all years, and whether it defaults to the current FY is cannot-verify. Appearance of a 'DATEFMT' issue is wrong: dates already use formatIndianDate (LT:31).
 - **Files to change:** `apps/web/src/app/(app)/estab/quarters/allotments/page.tsx`, `apps/web/src/app/(app)/estab/quarters/allotments/AllotmentsTable.tsx`
@@ -2292,7 +2298,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-ALLOTMENTS-05  ·  LOW  ·  partly  ·  theme LISTUX (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 estab: closed by #2052)
 - **W0 note:** partly fixed by #1916 — Eligibility column added; still no status Segmented filter (text filter only)
 - **First-pass claim:** eligibilityScore is returned but never shown in the list, so the waitlist order rationale is invisible; status filter is text search only.
 - **Verified evidence:** apps/web/src/app/(app)/estab/quarters/allotments/AllotmentsTable.tsx:13 defines eligibilityScore but columns (:35-43) omit it (true), though it is shown on the detail page (AD:95). Claim that waitlist order rationale is invisible is inferential: no rank/position field exists in AllotmentRow. Filtering is DataTable's text filter (:54-55, placeholder mentions status), no status dropdown (true).
@@ -2315,7 +2321,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 estab #2052: partly done, the rejection reason is not surfaced)
+- **W2 note:** Client-side maker-checker pre-check disables Allot for the applicant with an explanation (en and hi), and the page reports Done / Not applied yet after a command. The consumer swallows the rejection (no stored last-command error), so the reason is not shown; exposing it needs a schema column and migration (db/schema.sql, models, Alembic kept in sync) and is left as the remainder.
 - **W0 note:** partly fixed by #1916 — Maker-checker pre-check + 3x refresh poll added; no 'not applied yet' message or rejection reason surfaced
 - **First-pass claim:** Commands are fire-and-forget: the UI says "accepted for processing" then router.refresh() (AllotmentDetailActions.tsx); if the server later rejects it (maker-checker: allotting officer = applicant) the status simply does not change and nothing tells the officer why.
 - **Verified evidence:** apps/web/src/app/(app)/estab/quarters/allotments/[id]/AllotmentDetailActions.tsx:139-143 copy states commands are 'accepted' asynchronously and the maker-checker check runs later in the background; onSuccess (:159-162, :181-184) sets 'accepted for processing' and router.refresh(). Nothing polls or shows a rejected outcome: if the server drops the command, status just stays. Sync errors do surface because browserJson throws (browserClient.ts). Actions already use ActionButton confirm dialogs; a mandatory reason is not used. Whether estab-service really returns 202 and exposes rejection status is cannot-verify.

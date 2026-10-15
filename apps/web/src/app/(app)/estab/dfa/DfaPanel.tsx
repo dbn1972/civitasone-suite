@@ -2,9 +2,10 @@
 
 import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, DataTable, StatusPill, ActionButton, Segmented, ErrorState } from "../../../_components/ds";
+import { Button, DataTable, StatusPill, ActionButton, Segmented, ErrorState, EntityPicker, type EntityOption } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { humanizeStatus, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
@@ -20,11 +21,15 @@ type Dfa = {
   editable: boolean;
   recipientName: string | null;
   fileId: string | null;
+  /** Linked file number (GAP-ESTAB-DFA-04). */
+  fileNo?: string | null;
   createdAt?: string;
   updatedAt: string;
   returnedReason?: string | null;
   /** Drafter id (GAP-ESTAB-DFA-02): the maker cannot approve or sign. */
   createdBy?: string;
+  /** Drafter's name resolved by the service (GAP-ESTAB-DFA-04); null/absent = unresolvable. */
+  createdByName?: string | null;
 };
 
 const COMM_TYPES = ["letter", "order", "memo", "notification", "circular", "do_letter"] as const;
@@ -32,7 +37,15 @@ const COMM_TYPES = ["letter", "order", "memo", "notification", "circular", "do_l
 // GAP-ESTAB-DFA-03: add "returned" filter so returned drafts are reachable.
 const FILTERS = ["all", "draft", "pending_approval", "returned", "approved", "signed", "dispatched"] as const;
 
-const EMPTY = { communicationType: "letter", subject: "", body: "", recipientName: "", recipientAddress: "" };
+const EMPTY = { communicationType: "letter", subject: "", body: "", recipientName: "", recipientAddress: "", fileId: "" };
+
+// GAP-ESTAB-DFA-04: the existing estab file search, as an EntityPicker adapter (file no + subject).
+async function searchFiles(query: string, signal: AbortSignal): Promise<EntityOption[]> {
+  const res = await fetch(`/api/proxy/v1/estab/files/search?q=${encodeURIComponent(query)}&limit=10`, { signal });
+  if (!res.ok) return [];
+  const body = (await res.json()) as { data?: Array<{ id: string; fileNo: string; subject: string }> };
+  return (body.data ?? []).map((f) => ({ id: f.id, label: f.fileNo, sublabel: f.subject }));
+}
 
 // GAP-ESTAB-DFA-05: human-readable action → done message map.
 const ACTION_DONE: Record<string, string> = {
@@ -101,6 +114,8 @@ export function DfaPanel({
   // in and highlight its row when it is present in the current view.
   const searchParams = useSearchParams();
   const tFocus = useTranslations("estabDfaFocus");
+  const tP2 = useTranslations("estabP2");
+  const tFallback = useTranslations("employeeFallback");
   const focusId = searchParams?.get("focus") ?? "";
   const focusedRow = focusId ? rows.find((d) => d.id === focusId) : undefined;
 
@@ -175,6 +190,7 @@ export function DfaPanel({
         body: form.body.trim(),
         ...(form.recipientName.trim() ? { recipientName: form.recipientName.trim() } : {}),
         ...(form.recipientAddress.trim() ? { recipientAddress: form.recipientAddress.trim() } : {}),
+        ...(form.fileId ? { fileId: form.fileId } : {}),
       };
       const res = await fetch("/api/proxy/v1/estab/dfa", {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload),
@@ -340,6 +356,16 @@ export function DfaPanel({
               <span>Recipient address (external, optional)</span>
               <input value={form.recipientAddress} onChange={(e) => setForm((f) => ({ ...f, recipientAddress: e.target.value }))} />
             </label>
+            <div style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
+              <span id="dfa-file-label">{tP2("dfaLinkFileLabel")}</span>
+              <EntityPicker
+                value={form.fileId || null}
+                onChange={(v) => setForm((f) => ({ ...f, fileId: typeof v === "string" ? v : "" }))}
+                search={searchFiles}
+                placeholder={tP2("dfaLinkFilePlaceholder")}
+                aria-label={tP2("dfaLinkFileLabel")}
+              />
+            </div>
             <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
               <span>Draft body</span>
               <textarea rows={6} value={form.body} onChange={(e) => setForm((f) => ({ ...f, body: e.target.value }))} />
@@ -379,6 +405,11 @@ export function DfaPanel({
               { key: "communicationType", label: "Type", render: (d) => <>{humanizeStatus(d.communicationType)}</> },
               { key: "subject", label: "Subject" },
               { key: "recipientName", label: "Recipient", render: (d) => <>{d.recipientName ?? "—"}</> },
+              // GAP-ESTAB-DFA-04: who drafted it (a name, never the id) and the linked eOffice file.
+              { key: "createdByName", label: tP2("dfaDraftedBy"), render: (d) => <>{d.createdByName || tFallback("unknownEmployee")}</> },
+              { key: "fileId", label: tP2("dfaFile"), sortable: false, render: (d) => (
+                d.fileId ? <Link href={`/estab/files/${d.fileId}`}>{d.fileNo || tP2("dfaOpenFile")}</Link> : <>—</>
+              ) },
               // GAP-ESTAB-DFA-04: show updatedAt.
               { key: "updatedAt", label: "Updated", render: (d) => <>{formatIndianDate(d.updatedAt)}</> },
               { key: "status", label: "Status", render: (d) => <StatusPill status={d.status} /> },
@@ -396,12 +427,13 @@ export function DfaPanel({
  *  so the approver reads the body — not just the subject line. */
 function DraftPreview({ d }: { d: Dfa }) {
   return (
-    <div style={{ fontSize: 13, maxHeight: 200, overflow: "auto" }}>
+    <div style={{ fontSize: 13, maxHeight: 320, overflow: "auto" }}>
       <p><strong>{d.dfaNo}</strong> — {d.subject}</p>
       {d.recipientName && <p style={{ color: "var(--mut)" }}>To: {d.recipientName}</p>}
       {d.body ? (
         <div style={{ whiteSpace: "pre-wrap", marginTop: 4, padding: 8, background: "var(--bg2)", borderRadius: 8 }}>
-          {d.body.length > 500 ? `${d.body.slice(0, 500)}…` : d.body}
+          {/* GAP-ESTAB-DFA-04: the FULL body, so the approver reads everything before Approve. */}
+          {d.body}
         </div>
       ) : (
         <p style={{ color: "var(--mut)" }}>Draft body not available in this view.</p>

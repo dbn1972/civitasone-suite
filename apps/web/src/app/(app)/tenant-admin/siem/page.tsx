@@ -1,5 +1,4 @@
 import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
-import { Breadcrumb } from "../Breadcrumb";
 import { getSiemAlerts } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
@@ -18,9 +17,7 @@ export default async function SiemPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "SIEM & Threat Monitoring" }]} />
       <PageHeader
-        back="/tenant-admin"
         title="SIEM & Threat Monitoring"
         subtitle="Security alerts detected for this tenant. Near real-time (refreshes about every 30 seconds)."
       />

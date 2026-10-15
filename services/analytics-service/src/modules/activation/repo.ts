@@ -22,7 +22,7 @@
  * secondary net against a genuine PK collision.
  */
 import { and, eq } from "drizzle-orm";
-import { db, scopedRead } from "../../shared/db.js";
+import { db, scopedRead, scopedPlatformRead } from "../../shared/db.js";
 import { factEvents } from "../facts/schema.js";
 
 export async function recordActivation(tenantId: string, step: string): Promise<void> {
@@ -71,12 +71,13 @@ export type ActivationRowWithTenant = ActivationRow & { tenantId: string };
 
 /**
  * Cross-tenant activation events for the platform-wide funnel. Route-gated to
- * platform admins. NOTE: in a production posture with RLS enforced and the
- * tenant GUC set, this must run via a BYPASSRLS analytics-reporting role; in
- * dev/UAT the service role bypasses RLS so it returns all offices' rows.
+ * platform admins. Under FORCE RLS the request GUC is the caller's own tenant, so
+ * this reads through scopedPlatformRead() (SELECT-only app.platform_bypass policy,
+ * migration 0019) -- verified against a non-superuser role by
+ * tests/activation-funnel-real-db.test.ts.
  */
 export async function listActivationAllTenants(): Promise<ActivationRowWithTenant[]> {
-  const rows = await scopedRead(async (tx) =>
+  const rows = await scopedPlatformRead(async (tx) =>
     tx
       .select({ tenantId: factEvents.tenantId, step: factEvents.eventType, at: factEvents.occurredAt })
       .from(factEvents)

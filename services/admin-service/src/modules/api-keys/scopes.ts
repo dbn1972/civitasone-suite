@@ -17,6 +17,26 @@ const TENANT_ADMIN_SCOPES = new Set<string>([
   "api-keys:read",
 ]);
 
+/**
+ * GAP-TENANT-ADMIN-API-KEYS-04: the catalogue the create form offers. A
+ * platform role sees every scope the platform defines; a tenant_admin sees only
+ * what disallowedScopes() would let them grant -- the form can then never offer
+ * a scope the server will 403.
+ */
+export const PLATFORM_SCOPE_CATALOGUE: readonly string[] = [
+  ...TENANT_ADMIN_SCOPES,
+  "audit:read",
+  "finance:read",
+  "hrms:read",
+  "users:read",
+  "webhooks:write",
+];
+
+export function grantableScopes(ctx: RequestContext): string[] {
+  const all = allowsAllScopes(ctx) ? PLATFORM_SCOPE_CATALOGUE : [...TENANT_ADMIN_SCOPES];
+  return [...new Set(all)].sort();
+}
+
 export function allowsAllScopes(ctx: RequestContext): boolean {
   return ctx.roles.some((r) => PLATFORM_ROLES.includes(r));
 }

@@ -11,6 +11,7 @@ import {
   assertJustification,
   assertCorrectionApproverDistinct,
   assertCorrectionPending,
+  breakGlassStatus,
 } from "./domain.js";
 import { breakGlassBody, closeParam, breakGlassListQuery, breakGlassIdParam } from "./validators.js";
 import * as commands from "./commands.js";
@@ -129,7 +130,7 @@ export async function supportRoutes(app: FastifyInstance): Promise<void> {
       resourceAccessed: row.ticketId,
       startedAt: new Date(row.openedAt as unknown as string).toISOString(),
       endedAt: row.closedAt?.toISOString(),
-      status: (row.closedAt ? "ended" : row.expiresAt < new Date() ? "auto_expired" : "active") as "active" | "ended" | "auto_expired",
+      status: breakGlassStatus(row),
     })));
   });
 
@@ -144,6 +145,15 @@ export async function supportRoutes(app: FastifyInstance): Promise<void> {
     const q = breakGlassListQuery.pick({ tenantId: true }).parse(req.query);
     const row = await repo.findBreakGlassById(id, q.tenantId);
     if (!row) throw new HttpError(404, "NOT_FOUND", "break-glass grant not found");
+    // GAP-TENANT-ADMIN-BREAKGLASS-DETAIL-03: opening a break-glass record is itself
+    // a sensitive read; leave a `breakglass.viewed` audit event (viewer + grant) in
+    // the transactional outbox. A failed audit write fails the request rather than
+    // leaving an unaudited view. The response carries labels/timestamps only --
+    // never secret paths or credentials (resourcesAccessed is null until a
+    // labels-only source exists).
+    await repo.recordBreakGlassViewed(
+      { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId }, row.id, row.tenantId,
+    );
     return reply.send({
       id: row.id,
       actor: row.actorId,
@@ -151,9 +161,10 @@ export async function supportRoutes(app: FastifyInstance): Promise<void> {
       reason: row.reason,
       startedAt: new Date(row.openedAt as unknown as string).toISOString(),
       endedAt: row.closedAt ? row.closedAt.toISOString() : null,
-      status: row.closedAt ? "ended" : row.expiresAt < new Date() ? "auto_expired" : "active",
-      closedBy: row.closedAt ? row.updatedBy : null,
-      closeReason: null,
+      status: breakGlassStatus(row),
+      // The sweeper's system actor is not a person: report no closer for an auto-expiry.
+      closedBy: row.closedAt && row.closeReason !== "auto_expired" ? row.updatedBy : null,
+      closeReason: row.closeReason ?? null,
       resourcesAccessed: null,
       approvalChain: null,
     });

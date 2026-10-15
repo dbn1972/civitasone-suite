@@ -42,8 +42,9 @@ describe("PlatformConfigPage — GAP-TENANT-ADMIN-PLATFORM-CONFIG-02/-03/-05/-06
   it("renders the editors + sanitised endpoints on success (-01/-03/-06)", async () => {
     fetchJsonMock.mockResolvedValue({ data: GOOD, source: "api" });
     render(await PlatformConfigPage());
-    // -06: back label matches the breadcrumb term.
-    expect(screen.getByText("Tenant Admin")).toBeInTheDocument();
+    // -06: the way back is the single global trail (its 'Tenant Admin' term is pinned in
+    // AutoBreadcrumb.test.tsx); the page no longer renders a second, local back link.
+    expect(screen.queryByRole("link", { name: /tenant admin/i })).toBeNull();
     // -01: TTL editor input present.
     expect(screen.getByLabelText(/Finance cache TTL/i)).toBeInTheDocument();
     // -03: redis credentials are never shown; only host:port.

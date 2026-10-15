@@ -104,6 +104,26 @@ type PlatformConfig = {
   };
 };
 
+/**
+ * GAP-TENANT-ADMIN-PLATFORM-CONFIG-03: reduce a connection string / endpoint to
+ * `scheme://host[:port]` before it leaves the service. The previous Redis-only
+ * regex (`//user:pass@` -> `//***:***@`) missed every URL whose userinfo has no
+ * colon (`redis://token@host`), and the queue / storage endpoints were not
+ * redacted at all, so a credential embedded in AWS_ENDPOINT_URL or REDIS_URL
+ * could reach the browser. Path, query, fragment and userinfo are dropped.
+ */
+export function redactEndpoint(value: string): string {
+  if (!value) return value;
+  try {
+    const u = new URL(value.includes("://") ? value : `scheme://${value}`);
+    const scheme = value.includes("://") ? `${u.protocol}//` : "";
+    return `${scheme}${u.hostname}${u.port ? `:${u.port}` : ""}`;
+  } catch {
+    // Not parseable as a URL: drop anything that could be userinfo and any path/query.
+    return value.replace(/^[a-z][a-z0-9+.-]*:\/\//i, "").replace(/^[^@/]*@/, "").split(/[/?#]/)[0] ?? "";
+  }
+}
+
 function getInfrastructureParams(): PlatformConfig["infrastructure"] {
   const dbUrl = process.env.DATABASE_URL || "postgres://...@localhost:5435/civitas_admin";
   const dbHost = dbUrl.match(/@([^:/]+)/)?.[1] || "localhost";
@@ -119,12 +139,12 @@ function getInfrastructureParams(): PlatformConfig["infrastructure"] {
       rlsEnabled: true,
     },
     redis: {
-      url: (process.env.REDIS_URL || "redis://localhost:6381").replace(/\/\/[^:]*:[^@]*@/, "//***:***@"),
+      url: redactEndpoint(process.env.REDIS_URL || "redis://localhost:6381"),
       status: "connected",
     },
     queue: {
       driver: process.env.QUEUE_DRIVER || "sqs",
-      endpoint: process.env.AWS_ENDPOINT_URL || "http://localhost:4566",
+      endpoint: redactEndpoint(process.env.AWS_ENDPOINT_URL || "http://localhost:4566"),
       region: process.env.AWS_DEFAULT_REGION || "ap-south-1",
     },
     auth: {
@@ -148,7 +168,7 @@ function getInfrastructureParams(): PlatformConfig["infrastructure"] {
     storage: {
       driver: "S3",
       bucket: process.env.AWS_S3_BUCKET || "civitasone",
-      endpoint: process.env.AWS_ENDPOINT_URL || "http://localhost:4566",
+      endpoint: redactEndpoint(process.env.AWS_ENDPOINT_URL || "http://localhost:4566"),
     },
   };
 }

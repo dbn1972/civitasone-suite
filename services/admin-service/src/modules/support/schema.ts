@@ -11,6 +11,8 @@ export const adminBreakGlassLog = supportSchema.table("admin_break_glass_log", {
   openedAt: timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   closedAt: timestamp("closed_at", { withTimezone: true }),
+  // GAP-TENANT-ADMIN-BREAKGLASS-06: how it was closed ("manual" | "auto_expired").
+  closeReason: varchar("close_reason", { length: 32 }),
   correlationId: varchar("correlation_id", { length: 64 }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

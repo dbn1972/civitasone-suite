@@ -1,5 +1,4 @@
 import { PageHeader, StatCard, StatGrid, Card, ProgressBar, StatusPill, EmptyState, RefreshErrorState } from "@/app/_components/ds";
-import { Breadcrumb } from "../Breadcrumb";
 import { getInstallSteps } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
@@ -46,9 +45,7 @@ export default async function InstallStatusPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Installer Status" }]} />
       <PageHeader
-        back="/tenant-admin"
         title="Installer Status"
         subtitle="Setup wizard progress — track completed and pending installation steps."
         actions={

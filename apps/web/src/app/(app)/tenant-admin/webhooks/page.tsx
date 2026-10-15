@@ -13,7 +13,7 @@ export default async function WebhooksPage() {
           driven by the same useSeededResource call that produces its rows —
           not a second, independent read of `source` here that could
           disagree with the client's own cache state (UX-002's pattern). */}
-      <PageHeader title="Outbound Webhooks" subtitle="Configure HTTP callbacks for domain events with HMAC-SHA256 signatures." back="/tenant-admin" />
+      <PageHeader title="Outbound Webhooks" subtitle="Configure HTTP callbacks for domain events with HMAC-SHA256 signatures." />
 
       <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: 16, marginBottom: 24 }}>
         <p style={{ margin: 0, fontSize: 14, color: "#166534" }}>

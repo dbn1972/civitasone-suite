@@ -17,7 +17,11 @@ export async function roleRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const body = createRoleBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createRole(ctx, body));
+    // GAP-TENANT-ADMIN-ROLES-06: answer a duplicate name synchronously.
+    if (await queries.roleNameTaken(ctx.tenantId, body.name.trim())) {
+      throw new HttpError(409, "ROLE_NAME_TAKEN", "a role with this name already exists");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createRole(ctx, { ...body, name: body.name.trim() }));
   });
 
   app.get("/policy/roles/:id", async (req, reply) => {
@@ -79,7 +83,11 @@ export async function roleRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN);
     const { id } = roleIdParam.parse(req.params);
     const body = updateRoleBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.updateRole(ctx, id, body));
+    // GAP-TENANT-ADMIN-ROLES-06: renaming onto another role's name is a synchronous 409.
+    if (body.name !== undefined && (await queries.roleNameTaken(ctx.tenantId, body.name.trim(), id))) {
+      throw new HttpError(409, "ROLE_NAME_TAKEN", "a role with this name already exists");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.updateRole(ctx, id, body.name !== undefined ? { ...body, name: body.name.trim() } : body));
   });
 
   app.get("/policy/roles/:id/permissions", async (req, reply) => {

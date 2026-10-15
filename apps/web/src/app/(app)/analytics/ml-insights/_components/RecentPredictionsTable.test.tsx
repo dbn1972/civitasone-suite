@@ -70,3 +70,35 @@ describe("GAP-ANALYTICS-ML-INSIGHTS-*-07/08: export gating", () => {
     expect(screen.getByText(/Export leaves the system/)).toBeInTheDocument();
   });
 });
+
+describe("GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-02: parent drill-through", () => {
+  it("links a row to its parent via the template, never via the task entity id", () => {
+    show({
+      predictions: [row({ entityLabel: "Task 1", parentId: "99990000-aaaa-bbbb-cccc-ddddeeeeffff" })],
+      source: "api",
+      domain: "tasks",
+      parentLinkTemplate: "/projects/{parentId}/tasks",
+    });
+    const link = screen.getByText("Task 1").closest("a") as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toBe("/projects/99990000-aaaa-bbbb-cccc-ddddeeeeffff/tasks");
+  });
+
+  it("a row with no parentId is plain text, not a link", () => {
+    show({
+      predictions: [row({ entityLabel: "Orphan task", parentId: null })],
+      source: "api",
+      domain: "tasks",
+      parentLinkTemplate: "/projects/{parentId}/tasks",
+    });
+    expect(screen.getByText("Orphan task").closest("a")).toBeNull();
+  });
+});
+
+describe("GAP-ANALYTICS-ML-INSIGHTS-*-UUID (W2): full id kept in title", () => {
+  it("a row without a label shows the shortened id with the FULL id in the title", () => {
+    show({ predictions: [row()], source: "api", domain: "inventory", rowLinkPrefix: "/inventory/" });
+    const cell = screen.getByText("…77778888");
+    expect(cell.getAttribute("title")).toBe("11112222-3333-4444-5555-666677778888");
+    expect(cell.closest("a")?.getAttribute("href")).toBe("/inventory/11112222-3333-4444-5555-666677778888");
+  });
+});

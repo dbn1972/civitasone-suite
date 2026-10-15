@@ -1,12 +1,15 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import { isEditable } from "./domain.js";
+import { getEmployeeDisplayMap, type EmployeeDisplay } from "../../shared/hrms-client.js";
 import type { DfaRow } from "./schema.js";
 
 export type DfaDto = {
   id: string;
   dfaNo: string;
   fileId: string | null;
+  /** Number of the linked eOffice file (GAP-ESTAB-DFA-04); null when unlinked or not found. */
+  fileNo: string | null;
   communicationType: string;
   templateCode: string | null;
   subject: string;
@@ -29,13 +32,16 @@ export type DfaDto = {
   updatedAt: string;
   /** Drafter (JWT sub). Lets the UI hide Approve/Sign for the maker (GAP-ESTAB-DFA-02). */
   createdBy: string;
+  /** Drafter's display name (GAP-ESTAB-DFA-04). Null when unresolvable; the web shows "Unknown employee", never the id. */
+  createdByName: string | null;
 };
 
-function toDto(r: DfaRow): DfaDto {
+function toDto(r: DfaRow, employees: Map<string, EmployeeDisplay> = new Map(), fileNos: Map<string, string> = new Map()): DfaDto {
   return {
     id: r.id,
     dfaNo: r.dfaNo,
     fileId: r.fileId,
+    fileNo: r.fileId ? (fileNos.get(r.fileId) ?? null) : null,
     communicationType: r.communicationType,
     templateCode: r.templateCode,
     subject: r.subject,
@@ -57,15 +63,22 @@ function toDto(r: DfaRow): DfaDto {
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
     createdBy: r.createdBy,
+    createdByName: employees.get(r.createdBy)?.fullName ?? null,
   };
 }
 
-export async function getDfa(tenantId: string, id: string): Promise<DfaDto | null> {
+/** `withNames` adds the drafter's display name (one hrms lookup); the maker-checker guard doesn't need it. */
+export async function getDfa(tenantId: string, id: string, opts: { withNames?: boolean } = {}): Promise<DfaDto | null> {
   const row = await cache.getOrLoad<DfaRow>(
     cache.makeKey(tenantId, "dfa", id),
     () => repo.findDfaById(id, tenantId),
   );
-  return row ? toDto(row) : null;
+  if (!row) return null;
+  return toDto(
+    row,
+    opts.withNames ? await getEmployeeDisplayMap(tenantId, [row.createdBy]) : undefined,
+    opts.withNames && row.fileId ? await repo.fileNosByIds(tenantId, [row.fileId]) : undefined,
+  );
 }
 
 export async function listDfa(
@@ -74,7 +87,10 @@ export async function listDfa(
   limit: number,
 ): Promise<DfaDto[]> {
   const rows = await repo.listDfa(tenantId, filter, limit);
-  return rows.map(toDto);
+  // GAP-ESTAB-DFA-04: "Drafted by" shows a name; one batched, tenant-scoped lookup per page.
+  const employees = await getEmployeeDisplayMap(tenantId, rows.map((r) => r.createdBy));
+  const fileNos = await repo.fileNosByIds(tenantId, rows.flatMap((r) => (r.fileId ? [r.fileId] : [])));
+  return rows.map((r) => toDto(r, employees, fileNos));
 }
 
 export type DfaVersionDto = {

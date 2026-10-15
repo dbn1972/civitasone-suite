@@ -1,11 +1,12 @@
 "use client";
 
-import { useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, ActionButton, Card, ConfirmDialog } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { browserJson } from "@/lib/api/browserClient";
+import { UserFacingError } from "@/lib/userFacingError";
 import { formatMoney, formatIndianDate, todayIST } from "@/lib/formatters";
 
 type Props = {
@@ -39,6 +40,15 @@ export function AllotmentDetailActions({
   const [message, setMessage] = useState<string | null>(null);
   // GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01: polling after a command.
   const [polling, setPolling] = useState(false);
+  // GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01: true when the command was accepted but the
+  // allotment did not change within the polling window (the server dropped/rejected it).
+  const [notApplied, setNotApplied] = useState(false);
+  const tP2 = useTranslations("estabP2");
+  // The status/version the server renders NOW (props refresh after router.refresh()).
+  const currentKeyRef = useRef(`${status}:${version}`);
+  currentKeyRef.current = `${status}:${version}`;
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => () => { if (pollTimerRef.current) clearInterval(pollTimerRef.current); }, []);
 
   async function patch(action: string, body: Record<string, unknown>): Promise<void> {
     await browserJson<{ status: string }>(`v1/estab/quarter-allotments/${allotmentId}/${action}`, {
@@ -76,17 +86,34 @@ export function AllotmentDetailActions({
   // command to detect whether the status changed (CQRS async). Shows a message
   // then polls 3 times at 3s intervals.
   function pollRefresh(successMsg: string) {
+    if (pollTimerRef.current) clearInterval(pollTimerRef.current);
     setMessage(successMsg);
+    setNotApplied(false);
     setPolling(true);
+    const startKey = currentKeyRef.current;
     let tries = 0;
     const iv = setInterval(() => {
       tries++;
-      router.refresh();
-      if (tries >= 3) {
+      // Each tick first looks at what the previous refresh rendered.
+      if (currentKeyRef.current !== startKey) {
         clearInterval(iv);
+        pollTimerRef.current = null;
         setPolling(false);
+        setMessage(tP2("allotApplied"));
+        return;
       }
+      if (tries > 4) {
+        // ~12s with no change: tell the officer instead of leaving a stale "accepted".
+        clearInterval(iv);
+        pollTimerRef.current = null;
+        setPolling(false);
+        setMessage(null);
+        setNotApplied(true);
+        return;
+      }
+      router.refresh();
     }, 3000);
+    pollTimerRef.current = iv;
   }
 
   // ── Vacation-notice date field ─────────────────────────────────────
@@ -125,7 +152,7 @@ export function AllotmentDetailActions({
       setVacationConfirmOpen(false);
       pollRefresh("Vacation notice issued — accepted for processing.");
     } catch (err) {
-      setVacationDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setVacationDialogError(err instanceof UserFacingError ? err.message : tP2("applyFailed"));
     } finally {
       setVacationBusy(false);
     }
@@ -172,7 +199,7 @@ export function AllotmentDetailActions({
             {/* GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01: pre-check maker-checker */}
             {isApplicant && (
               <p style={{ margin: "0 0 8px", fontSize: 13, color: "var(--bad)" }}>
-                You cannot allot a quarter you applied for (maker-checker policy).
+                {tP2("allotSelfApplicant")}
               </p>
             )}
             <ActionButton
@@ -314,6 +341,11 @@ export function AllotmentDetailActions({
         <div role="status">
           {message && <p className="pill good" style={{ width: "fit-content" }}>{message}</p>}
         </div>
+        {notApplied && (
+          <p role="alert" data-testid="allotment-not-applied" style={{ margin: 0, fontSize: 13, color: "var(--bad)" }}>
+            {tP2("allotNotApplied")}
+          </p>
+        )}
       </div>
 
       <ConfirmDialog

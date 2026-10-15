@@ -2,7 +2,6 @@ import { DataSourceBadge } from "../../_components/DataSourceBadge";
 import { PageHeader, StatCard, DataTable, EmptyState, RefreshErrorState } from "../../_components/ds";
 import { getTenantAdminDashboard } from "../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
-import { Breadcrumb } from "./Breadcrumb";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 const KPI_ICONS = ["👥", "🧩", "💚", "🎯"];
@@ -62,7 +61,6 @@ export default async function TenantAdminPage({ searchParams }: { searchParams?:
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin" }]} />
       {deniedArea && (
         <div className="alert warn" role="status" aria-live="polite" style={{ marginBottom: 12 }}>
           <strong>Access restricted</strong>

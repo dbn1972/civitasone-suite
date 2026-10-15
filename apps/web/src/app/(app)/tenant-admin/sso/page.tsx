@@ -1,5 +1,4 @@
 import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
-import { Breadcrumb } from "../Breadcrumb";
 import { getSsoProviders } from "@/app/_data/loaders";
 import { SsoTable } from "./SsoTable";
 import { toResourceState } from "@/app/_data/useResource";
@@ -34,7 +33,6 @@ export default async function SSOPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "SSO & Identity Providers" }]} />
       {/* GAP-TENANT-ADMIN-SSO-01 (DECISION, recorded): there is no SSO/IdP
           provider store yet — admin-service GET /v1/admin/sso/providers returns
           501 and identity-service's SAML config route is an unfinished stub
@@ -44,7 +42,6 @@ export default async function SSOPage() {
           501, this page is honestly read-only until the backend provider store
           + test-connection flow exists (HUMAN REVIEW). No circular link. */}
       <PageHeader
-        back="/tenant-admin"
         title="SSO & Identity Providers"
         subtitle="SAML/OIDC identity providers configured for single sign-on. Read-only — providers are provisioned by platform operations."
       />

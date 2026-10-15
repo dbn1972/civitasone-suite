@@ -29,7 +29,9 @@ function buildColumns(unknownEmployee: string): Col[] {
   // GAP-ANALYTICS-DASHBOARDS-04: let StatusPill humanize the value itself
   // ("Shared"/"Private"/"Unknown") instead of forcing SHOUTING uppercase; the
   // visibility/status words now have tones in STATUS_MAP.
-  { key: "visibility", label: "Visibility", render: (r) => <StatusPill status={r.visibility} /> },
+  // A visibility the API did not send maps to "unknown" in _data.ts; show
+  // "—" (unknown value), never a pill that reads like a real access level.
+  { key: "visibility", label: "Visibility", render: (r) => (r.visibility === "unknown" ? "—" : <StatusPill status={r.visibility} />) },
   { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} /> },
   // GAP-ANALYTICS-DASHBOARDS-04: show a version like "v3", not a bare number.
   { key: "version", label: "Version", align: "right", render: (r) => `v${r.version}` },

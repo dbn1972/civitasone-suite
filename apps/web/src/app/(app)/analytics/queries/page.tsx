@@ -1,11 +1,14 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
-import { getAnalyticsQueryRuns } from "../_data";
+import { getAnalyticsQueryRuns, getAnalyticsCatalogLabels } from "../_data";
 import { QueryResultsView } from "./QueryResultsView";
 import { RunQueryForm } from "./RunQueryForm";
 import { ArrowLeft } from "lucide-react";
 
 export default async function AnalyticsQueriesPage() {
-  const { data: runs, source } = await getAnalyticsQueryRuns();
+  const [{ data: runs, source }, { data: catalogLabels }] = await Promise.all([
+    getAnalyticsQueryRuns(),
+    getAnalyticsCatalogLabels(),
+  ]);
 
   // GAP-ANALYTICS-QUERIES-01: `source` was fetched (and handed to
   // QueryResultsView's badge, UX-012) but never gated the stat values. On a
@@ -50,7 +53,7 @@ export default async function AnalyticsQueriesPage() {
             <StatCard icon="⚠️" iconBg="#fee2e2" label="Failed" value={errored ? "—" : failed} />
           </StatGrid>
           <Card title="Query runs">
-            <QueryResultsView runs={runs} source={source} />
+            <QueryResultsView runs={runs} source={source} catalog={catalogLabels} />
           </Card>
         </section>
       </div>

@@ -4,6 +4,7 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import * as docsRepo from "./docs-repo.js";
 import { assertDistinctMakerChecker, assertTechEvaluatorDistinct, DomainError } from "./domain.js";
 import { assertModeAllowedForValue, modeForTenderType, GfrModeError } from "../gfr/mode-bands.js";
 import type { CreateTenderBody, SubmitBidBody, TechEvaluateBody, AwardTenderBody } from "./validators.js";
@@ -48,6 +49,18 @@ export async function createTender(ctx: RequestContext, body: CreateTenderBody):
 }
 
 export async function publishTender(ctx: RequestContext, tenderId: string): Promise<Accepted> {
+  // GAP-PROCUREMENT-TENDERS-DETAIL-05: a tender is published as its NIT - without
+  // a current NIT document there is nothing to publish. The detail page disables
+  // the button with the same rule; this is the real control (HTTP entry point;
+  // the consumer stays unchanged so already-queued publishes are not stranded).
+  const tender = await repo.findTenderById(tenderId);
+  if (!tender || tender.tenantId !== ctx.tenantId) {
+    throw new HttpError(404, "NOT_FOUND", "tender not found");
+  }
+  const docs = await docsRepo.listDocsByTender(tenderId, ctx.tenantId);
+  if (!docs.some((d) => d.docType === "nit" && d.isCurrent)) {
+    throw new HttpError(409, "NIT_REQUIRED", "attach the NIT document before publishing this tender");
+  }
   await queue.publish(COMMANDS.tenderPublish, {
     messageId: randomUUID(), type: COMMANDS.tenderPublish,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

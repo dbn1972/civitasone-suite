@@ -7,6 +7,7 @@ import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { humanizeKey, type AnalyticsCatalogLabels } from "../catalog-labels";
 import type { AnalyticsQueryRunRow, AnalyticsResultRow, MetricUnit } from "../_data";
 import { AccessibleBarChart, type BarDatum } from "./AccessibleBarChart";
 
@@ -21,6 +22,16 @@ function formatMetricValue(value: number, unit: MetricUnit): string {
   return value.toLocaleString("en-IN");
 }
 
+/** Catalog label for a metric key; the whitelisted key itself when the catalog is unavailable. */
+function metricLabelOf(catalog: AnalyticsCatalogLabels | undefined, key: string): string {
+  return catalog?.metrics[key]?.label ?? key;
+}
+
+/** Backend-declared unit (catalog) wins; the key-derived unit is the fallback. */
+function metricUnitOf(catalog: AnalyticsCatalogLabels | undefined, run: AnalyticsQueryRunRow): MetricUnit {
+  return catalog?.metrics[run.metric]?.unit ?? run.metricUnit;
+}
+
 type RunCol = {
   key: keyof AnalyticsQueryRunRow & string;
   label: string;
@@ -28,9 +39,10 @@ type RunCol = {
   render?: (row: AnalyticsQueryRunRow) => ReactNode;
 };
 
-const runColumns: RunCol[] = [
+function buildRunColumns(catalog: AnalyticsCatalogLabels | undefined): RunCol[] {
+  return [
   { key: "queryName", label: "Query" },
-  { key: "metric", label: "Metric" },
+  { key: "metric", label: "Metric", render: (r) => metricLabelOf(catalog, r.metric) },
   { key: "kind", label: "Kind" },
   { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} label={r.status.toUpperCase()} /> },
   { key: "resultRows", label: "Rows", align: "right" },
@@ -62,7 +74,8 @@ const runColumns: RunCol[] = [
         </span>
       ) : null,
   },
-];
+  ];
+}
 
 function barsFor(run: AnalyticsQueryRunRow): BarDatum[] {
   return run.rows.map((row: AnalyticsResultRow) => {
@@ -84,9 +97,12 @@ function isPending(status: string): boolean {
 export function QueryResultsView({
   runs,
   source = "api",
+  catalog,
 }: {
   runs: AnalyticsQueryRunRow[];
   source?: "api" | "error";
+  /** Backend catalog labels/units (GAP-ANALYTICS-QUERIES-04). Optional: falls back to humanised keys. */
+  catalog?: AnalyticsCatalogLabels;
 }) {
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<AnalyticsQueryRunRow[]>(
     "analytics.queries",
@@ -143,13 +159,13 @@ export function QueryResultsView({
     // and format the value in the metric's unit (money → ₹). Dimension headers
     // stay the dimension keys the run carries (the catalog label isn't stored
     // per run); keys are the whitelisted, human-readable registry keys.
-    const dimCols = selected.dimensions.map((d) => ({ key: d, label: d }));
-    const unit = selected.metricUnit;
+    const dimCols = selected.dimensions.map((d) => ({ key: d, label: catalog?.dimensions[d] ?? humanizeKey(d) }));
+    const unit = metricUnitOf(catalog, selected);
     return [
       ...dimCols,
       {
         key: "value",
-        label: selected.metric,
+        label: metricLabelOf(catalog, selected.metric),
         align: "right" as const,
         render: (row: AnalyticsResultRow) => {
           const n = typeof row.value === "number" ? row.value : Number(row.value ?? 0);
@@ -157,7 +173,8 @@ export function QueryResultsView({
         },
       },
     ];
-  }, [selected]);
+  }, [selected, catalog]);
+  const runColumns = useMemo(() => buildRunColumns(catalog), [catalog]);
 
   // GAP-ANALYTICS-QUERIES-01: when the live fetch failed AND there is no cached
   // copy to fall back on, show an honest retry affordance instead of an empty
@@ -225,7 +242,7 @@ export function QueryResultsView({
                       cursor: "pointer",
                     }}
                   >
-                    {r.queryName} — {r.metric}
+                    {r.queryName} — {metricLabelOf(catalog, r.metric)}
                   </button>
                 </li>
               );
@@ -235,9 +252,9 @@ export function QueryResultsView({
           {selected ? (
             <div aria-live="polite" style={{ display: "grid", gap: 16 }}>
               <AccessibleBarChart
-                title={`${selected.queryName} (${selected.metric})`}
+                title={`${selected.queryName} (${metricLabelOf(catalog, selected.metric)})`}
                 data={barsFor(selected)}
-                formatValue={(v) => formatMetricValue(v, selected.metricUnit)}
+                formatValue={(v) => formatMetricValue(v, metricUnitOf(catalog, selected))}
               />
               <div>
                 <h4 style={{ fontSize: 14, margin: "0 0 6px" }}>Result rows</h4>

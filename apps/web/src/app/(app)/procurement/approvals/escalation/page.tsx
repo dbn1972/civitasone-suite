@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader, Card, DataTable } from "../../../../_components/ds";
 import { ESCALATION_BANDS, bandLabel } from "./escalationBands";
+import { ReferenceOnlyNotice } from "./ReferenceOnlyNotice";
 
 type EscalationRow = {
   estimatedValue: string;
@@ -44,6 +45,8 @@ export default function EscalationRulesPage() {
           <Link href="/procurement/approvals" className="btn ghost">View pending approvals</Link>
         }
       />
+
+      <ReferenceOnlyNotice />
 
       <Card title="Routing thresholds">
         <DataTable<EscalationRow>

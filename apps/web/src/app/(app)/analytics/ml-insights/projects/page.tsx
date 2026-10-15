@@ -14,12 +14,12 @@ export default async function ProjectsInsightsPage() {
       domain="tasks"
       evaluation={evaluation}
       source={source}
-      // Drill-through deliberately unset: the domain scores TASKS, but
-      // /projects/[id] expects a PROJECT id, so a task entityId resolved to
-      // "Project not found" (or, worse, a wrong project). The owning project
-      // id (parentId) is not yet in the evaluations payload; once ms-service
-      // returns it, link to /projects/${projectId}/tasks (route exists).
-      // GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-02 (HUMAN REVIEW).
+      // The domain scores TASKS but /projects/[id] expects a PROJECT id, so a
+      // task entityId must never be the link target. Rows link to the OWNING
+      // project's task list via parentId (route exists); a row the API sends
+      // without a parentId is plain text, not a link.
+      // GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-02.
+      parentLinkTemplate="/projects/{parentId}/tasks"
       canExport={canExport}
       statLabels={{
         predictions: "Tasks Scored",

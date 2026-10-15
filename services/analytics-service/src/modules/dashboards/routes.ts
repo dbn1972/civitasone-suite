@@ -96,7 +96,7 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, dashboardsListSchema, await queries.listDashboards(ctx.tenantId, q.limit, q.offset));
+    sendValidated(reply, dashboardsListSchema, await queries.listVisibleDashboards(ctx, q.limit, q.offset));
   });
 
   app.get("/v1/analytics/dashboards/:id", async (req, reply) => {

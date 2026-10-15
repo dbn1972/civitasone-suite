@@ -5,7 +5,6 @@ import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { countLast24h } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
-import { Breadcrumb } from "../Breadcrumb";
 import { AuditLogTable } from "./AuditLogTable";
 
 export default async function TenantAuditPage({ searchParams }: { searchParams?: { entity?: string } }) {
@@ -45,9 +44,7 @@ export default async function TenantAuditPage({ searchParams }: { searchParams?:
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Audit Log" }]} />
       <PageHeader
-        back="/tenant-admin"
         title="Audit Log"
         subtitle="Tenant-scoped audit events — all actor actions and outcomes."
       />

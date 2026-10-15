@@ -119,6 +119,7 @@ export const approvalSummarySchema = z.object({
   // GAP-PROCUREMENT-APPROVALS-04: optional ISO due timestamp for date-based
   // overdue computation (the UI must not substring-match dueDisplay).
   dueAt: z.string().optional(),
+  refType: z.enum(["procurement_indent", "procurement_po"]).optional(),
 });
 
 export const tenantUserSchema = z.object({
@@ -1226,6 +1227,7 @@ export const IndentDetailSchema = IndentSummarySchema.extend({
     timestamp: z.string(),
     remarks: z.string().optional(),
   })).default([]),
+  approvalTrailAvailable: z.boolean().optional(),
 });
 
 export const VendorDetailSchema = z.object({
@@ -1987,6 +1989,10 @@ export const ComplianceSummarySchema = z.object({
   frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "annual", "one_time"]),
   dueDate: z.string(),
   assignedTo: z.string().optional(),
+  // GAP-ESTAB-COMPLIANCE-04: best-effort display name for `assignedTo` (an hrms
+  // employee id), resolved server-side. Absent when unresolvable; the web shows
+  // "Unknown employee", never the id.
+  assignedToName: z.string().optional(),
   status: z.enum(["pending", "complied", "overdue", "not_applicable"]),
   lastCompliedDate: z.string().optional(),
   remarks: z.string().optional(),

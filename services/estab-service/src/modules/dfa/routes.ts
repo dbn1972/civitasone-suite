@@ -8,6 +8,8 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import { findFileById } from "../files/repo.js";
+import { isAccessAllowed } from "../operators/eligibility.js";
 
 const DRAFTER_ROLES = ["estab_officer", "estab_admin", "super_admin"];
 const APPROVER_ROLES = ["estab_admin", "super_admin", "estab_deputy_secretary"];
@@ -39,7 +41,7 @@ export async function dfaRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = req.params as { id: string };
-    const dfa = await queries.getDfa(ctx.tenantId, id);
+    const dfa = await queries.getDfa(ctx.tenantId, id, { withNames: true });
     if (!dfa) throw new HttpError(404, "NOT_FOUND", "DFA not found");
     return reply.send({ data: dfa });
   });
@@ -64,6 +66,15 @@ export async function dfaRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, DRAFTER_ROLES);
     const body = createDfaBody.parse(req.body);
+    // GAP-ESTAB-DFA-04: a DFA may only be linked to a file of this tenant that the drafter is
+    // cleared to see; otherwise the link would leak the file number to anyone reading the DFA.
+    if (body.fileId) {
+      const file = await findFileById(body.fileId, ctx.tenantId);
+      if (!file) throw new HttpError(422, "FILE_NOT_FOUND", "the linked file does not exist");
+      if (!(await isAccessAllowed(ctx.tenantId, ctx.actorId, file.classification))) {
+        throw new HttpError(403, "FORBIDDEN", "insufficient security clearance for the linked file");
+      }
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createDfa(ctx, body));
   });
 

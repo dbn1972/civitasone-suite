@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "@/test-utils/intl-render";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", async () => {
@@ -102,5 +102,20 @@ describe("IndentDetailPage", () => {
     expect(screen.queryByRole("link", { name: "Create purchase order" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "View in approvals" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Create tender" })).not.toBeInTheDocument();
+  });
+
+  // GAP-PROCUREMENT-INDENTS-DETAIL-05: the trail comes from the workflow engine.
+  it("DETAIL-05: an unreachable decision source is reported, not rendered as an empty trail", async () => {
+    route({ ...BASE, status: "approved", approvalTrail: [], approvalTrailAvailable: false });
+    render(await IndentDetailPage({ params: { id: "ind-1" } }));
+    expect(screen.getByText(/approval trail could not be loaded just now/i)).toBeInTheDocument();
+    expect(screen.queryByText("Approval trail")).toBeNull();
+  });
+
+  it("DETAIL-05: with the source available, decisions render and no 'unavailable' note appears", async () => {
+    route({ ...BASE, status: "rejected", approvalTrailAvailable: true });
+    render(await IndentDetailPage({ params: { id: "ind-1" } }));
+    expect(screen.getByText("Approval trail")).toBeInTheDocument();
+    expect(screen.queryByText(/approval trail could not be loaded/i)).toBeNull();
   });
 });

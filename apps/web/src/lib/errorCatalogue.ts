@@ -358,6 +358,32 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
     },
     actions: ["retry", "help"],
   },
+  // GAP-TENANT-ADMIN-ROLES-06: policy-service answers 409 ROLE_NAME_TAKEN when a role
+  // is created or renamed onto a name already used in the tenant (any letter case).
+  ROLE_NAME_TAKEN: {
+    en: {
+      what: "A role with this name already exists.",
+      next: "Choose a different name, or open the existing role instead.",
+    },
+    hi: {
+      what: "इस नाम की भूमिका पहले से मौजूद है।",
+      next: "कोई दूसरा नाम चुनें, या मौजूदा भूमिका खोलें।",
+    },
+    actions: ["retry", "help"],
+  },
+  // GAP-TENANT-ADMIN-USERS-DETAIL-06: identity-service limits password-reset requests
+  // per user (429 RESET_RECENTLY_REQUESTED) so one account cannot be mail-bombed.
+  RESET_RECENTLY_REQUESTED: {
+    en: {
+      what: "A password reset was already requested for this user a moment ago.",
+      next: "Ask them to check their email, or wait a few minutes before sending another.",
+    },
+    hi: {
+      what: "इस उपयोगकर्ता के लिए अभी कुछ देर पहले ही पासवर्ड रीसेट का अनुरोध किया जा चुका है।",
+      next: "उनसे अपना ईमेल देखने को कहें, या दूसरा भेजने से पहले कुछ मिनट प्रतीक्षा करें।",
+    },
+    actions: ["back", "help"],
+  },
   // GAP-TENANT-ADMIN-SETTINGS-07: admin-service tenant module toggle answers
   // 404 MODULE_NOT_PROVISIONED for a module the tenant does not hold.
   MODULE_NOT_PROVISIONED: {

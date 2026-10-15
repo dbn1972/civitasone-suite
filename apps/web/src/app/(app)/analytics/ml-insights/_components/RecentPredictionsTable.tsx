@@ -16,6 +16,14 @@ interface RecentPredictionsTableProps {
   source?: "api" | "error";
   /** URL prefix for drill-through links to entity detail pages */
   rowLinkPrefix?: string;
+  /**
+   * Drill-through to the row's PARENT (e.g. a task's owning project), as a
+   * path template with a `{parentId}` placeholder. A row without a parentId is
+   * plain text, never a link. Takes precedence over rowLinkPrefix. A template
+   * (not a function) so it can cross the server -> client boundary.
+   * GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-02.
+   */
+  parentLinkTemplate?: string;
   /** Domain key, used for the export filename and audit action. */
   domain: string;
   /** How to format the per-row prediction value. */
@@ -78,6 +86,7 @@ type TableRow = {
   entityId: string;
   entity: string;
   entityTitle: string;
+  parentId: string | null;
   prediction: string;
   confidence: string;
   outcome: string;
@@ -100,6 +109,7 @@ export async function recordMlPredictionsExport(
 export function RecentPredictionsTable({
   predictions,
   rowLinkPrefix,
+  parentLinkTemplate,
   domain,
   predictionKind = "probability",
   canExport = false,
@@ -109,6 +119,7 @@ export function RecentPredictionsTable({
     entityId: p.entityId,
     entity: entityDisplay(p),
     entityTitle: p.entityId,
+    parentId: p.parentId,
     prediction: formatPrediction(p.prediction, predictionKind),
     confidence: formatPercent(p.confidence),
     outcome: p.outcome ?? "Pending",
@@ -118,7 +129,7 @@ export function RecentPredictionsTable({
   return (
     <DataTable<TableRow>
       columns={[
-        { key: "entity", label: "Entity" },
+        { key: "entity", label: "Entity", render: (r) => <span title={r.entityTitle}>{r.entity}</span> },
         { key: "prediction", label: "Prediction", align: "right" },
         { key: "confidence", label: "Confidence", align: "right" },
         { key: "outcome", label: "Outcome", cellType: "status" },
@@ -126,8 +137,13 @@ export function RecentPredictionsTable({
       ]}
       rows={rows}
       // Display the label but build the drill-through href from the real id.
-      rowLinkKey="entityId"
-      rowLinkPrefix={rowLinkPrefix}
+      rowLinkKey={parentLinkTemplate ? undefined : "entityId"}
+      rowLinkPrefix={parentLinkTemplate ? undefined : rowLinkPrefix}
+      rowHref={
+        parentLinkTemplate
+          ? (r) => (r.parentId ? parentLinkTemplate.replace("{parentId}", encodeURIComponent(r.parentId)) : undefined)
+          : undefined
+      }
       identifyingColumnKey="entity"
       sortable
       filterable

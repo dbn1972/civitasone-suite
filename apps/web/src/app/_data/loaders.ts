@@ -752,7 +752,8 @@ function mapApprovals(payload: unknown): ApprovalSummary[] | null {
     const dueDisplay = toText(row.dueDisplay) ?? toText(row.due) ?? "—";
     if (!id || !referenceId || !owner) continue;
     const dueAt = toText(row.dueAt) ?? toText(row.dueDate);
-    mapped.push({ id, referenceId, owner, dueDisplay, ...(dueAt ? { dueAt } : {}) });
+    const refType = row.refType === "procurement_indent" || row.refType === "procurement_po" ? row.refType : undefined;
+    mapped.push({ id, referenceId, owner, dueDisplay, ...(dueAt ? { dueAt } : {}), ...(refType ? { refType } : {}) });
   }
   // GAP-PROCUREMENT-APPROVALS-02: return the mapped array as-is, even when
   // empty. A tenant with zero pending approvals is a normal, successful 200
@@ -1150,6 +1151,21 @@ function mapAggregateHealth(payload: unknown): TenantAdminDashboard["health"] | 
   return { status, services };
 }
 
+/** Sentinel: admin-service answered {available:false} (readiness not computable). */
+export const READINESS_UNAVAILABLE = "unavailable" as const;
+
+/**
+ * GAP-TENANT-ADMIN-HOME-06: GET /v1/admin/health/readiness answers {available:false,
+ * checkedAt} when the health rollup it derives readiness from cannot be produced.
+ * mapReadiness() returns null for that body, and fetchJson turns a null mapping into
+ * source:"error", which blanked every KPI on the dashboard for what is a healthy
+ * response. Distinguish it from a genuinely malformed body (still null -> error).
+ */
+export function mapReadinessOrUnavailable(payload: unknown): TenantAdminReadiness | typeof READINESS_UNAVAILABLE | null {
+  if (isRecord(payload) && payload.available === false) return READINESS_UNAVAILABLE;
+  return mapReadiness(payload);
+}
+
 export function mapReadiness(payload: unknown): TenantAdminReadiness | null {
   if (!isRecord(payload)) return null;
   const overall = typeof payload.overall === "number" ? Math.round(payload.overall) : null;
@@ -1225,20 +1241,22 @@ export async function getTenantAdminDashboard(): Promise<LoaderResult<TenantAdmi
         mapResponse: mapAggregateHealth,
       },
     ),
-    fetchJson<unknown, TenantAdminReadiness | null>(
+    fetchJson<unknown, TenantAdminReadiness | typeof READINESS_UNAVAILABLE | null>(
       "/api/v1/admin/health/readiness",
       null,
       {
         revalidateSeconds: 300,
         telemetryKey: "tenant_admin.readiness",
-        mapResponse: mapReadiness,
+        mapResponse: mapReadinessOrUnavailable,
       },
     ),
   ]);
 
   const activeUsers = usersResult.data.filter((u) => u.status === "Active").length;
   const health = healthResult.data;
-  const readiness = readinessResult.data;
+  // GAP-TENANT-ADMIN-HOME-06: "readiness cannot be computed right now" is a valid,
+  // successful answer from admin-service ({available:false}); it is not a failed load.
+  const readiness = readinessResult.data === READINESS_UNAVAILABLE ? null : readinessResult.data;
   const modules = modulesResult.data;
 
   const source =

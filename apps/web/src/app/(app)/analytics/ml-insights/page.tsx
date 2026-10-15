@@ -73,7 +73,11 @@ export default async function MLInsightsHubPage() {
       {domains.length === 0 && (
         <p style={{ color: "var(--mut)", marginTop: 12 }}>No ML models are active yet.</p>
       )}
-      <section aria-label="ML domain cards" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+      <section
+        aria-label="ML domain cards"
+        className="grid"
+        style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", marginTop: 24 }}
+      >
         {Object.entries(DOMAIN_META).map(([key, meta]) => {
           const domainData = domains.find((d) => d.domain === key);
           const metric = metricForDomain(key);
@@ -90,26 +94,28 @@ export default async function MLInsightsHubPage() {
               style={{ display: "block", color: "inherit", textDecoration: "none" }}
               aria-label={ariaLabel}
             >
-              <div className="flex items-center gap-3 mb-2">
-                <span className="text-2xl" style={{ background: meta.iconBg, borderRadius: 8, padding: "4px 8px" }} aria-hidden>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+                <span style={{ background: meta.iconBg, borderRadius: 8, padding: "4px 8px", fontSize: 22 }} aria-hidden>
                   {meta.icon}
                 </span>
-                <h3 className="text-base font-semibold">{meta.label}</h3>
+                <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0 }}>{meta.label}</h2>
                 {stale && <StatusPill status="stale" label="Stale" />}
               </div>
               {domainData ? (
-                <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-600">
+                <dl
+                  style={{ display: "grid", gridTemplateColumns: "1fr auto", columnGap: 16, rowGap: 4, fontSize: 14, color: "var(--ink2)", margin: 0 }}
+                >
                   <dt>{metric.label}{metric.higherIsBetter ? "" : " ↓"}</dt>
-                  <dd className="text-end font-medium">{formatPct(domainData.accuracy)}</dd>
+                  <dd style={{ textAlign: "end", fontWeight: 500, margin: 0 }}>{formatPct(domainData.accuracy)}</dd>
                   <dt>Predictions</dt>
-                  <dd className="text-end font-medium">{domainData.totalPredictions.toLocaleString("en-IN")}</dd>
+                  <dd style={{ textAlign: "end", fontWeight: 500, margin: 0 }}>{domainData.totalPredictions.toLocaleString("en-IN")}</dd>
                   <dt>Fallback Rate</dt>
-                  <dd className="text-end font-medium">{formatPct(domainData.fallbackRate)}</dd>
+                  <dd style={{ textAlign: "end", fontWeight: 500, margin: 0 }}>{formatPct(domainData.fallbackRate)}</dd>
                   <dt>Last trained</dt>
-                  <dd className="text-end font-medium">{domainData.lastTrainedAt ? formatIndianDate(domainData.lastTrainedAt) : "—"}</dd>
+                  <dd style={{ textAlign: "end", fontWeight: 500, margin: 0 }}>{domainData.lastTrainedAt ? formatIndianDate(domainData.lastTrainedAt) : "—"}</dd>
                 </dl>
               ) : (
-                <p className="text-sm" style={{ color: "var(--mut)" }}>No model active</p>
+                <p style={{ color: "var(--mut)", fontSize: 14, margin: 0 }}>No model active</p>
               )}
             </Link>
           );

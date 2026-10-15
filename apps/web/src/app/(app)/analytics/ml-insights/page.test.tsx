@@ -70,3 +70,20 @@ describe("GAP-ANALYTICS-ML-INSIGHTS-03: honest aria-label per card", () => {
     expect(link).toBeInTheDocument();
   });
 });
+
+describe("GAP-ANALYTICS-ML-INSIGHTS-03 (W2 re-check): inventory card + axe", () => {
+  it("the inventory card aria-label says MAPE and 'lower is better', never 'accuracy'", async () => {
+    state.result = { data: [domain({ domain: "inventory", accuracy: 0.12 })], source: "api" };
+    await show();
+    const link = screen.getByLabelText(/Demand Forecasting — MAPE 12% \(lower is better\)/i);
+    expect(link.getAttribute("aria-label")).not.toMatch(/accuracy/i);
+  });
+
+  it("the hub has no axe violations (contrast needs a real browser and is excluded)", async () => {
+    const axe = (await import("axe-core")).default;
+    state.result = { data: [domain({}), domain({ domain: "inventory", accuracy: 0.12 })], source: "api" };
+    const { container } = await show();
+    const out = await axe.run(container, { rules: { "color-contrast": { enabled: false } } });
+    expect(out.violations.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
+  });
+});

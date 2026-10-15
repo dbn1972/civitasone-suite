@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
+import { renderWithIntl as render } from "@/lib/testUtils/intl";
 
 const getEstabCompliance = vi.fn();
 const getSessionRoles = vi.fn();

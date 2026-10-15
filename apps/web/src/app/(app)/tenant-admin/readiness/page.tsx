@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { PageHeader, StatCard, StatGrid, Card, ProgressBar, StatusPill, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { Breadcrumb } from "../Breadcrumb";
 import { getTenantAdminDashboard, type ReadinessGate } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
@@ -49,9 +48,7 @@ export default async function ReadinessPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Readiness Score" }]} />
       <PageHeader
-        back="/tenant-admin"
         title="Tenant Readiness Score"
         subtitle="Overall readiness assessment — track configuration progress and go-live checklist completion."
       />

@@ -17,8 +17,6 @@ export default async function OrgTypePage() {
       <PageHeader
         title="Organisation Type"
         subtitle="Choose what kind of organisation you are — this adjusts terminology, default policies, and which features are shown."
-        back="/tenant-admin"
-        backLabel="Office Admin"
       />
 
       <Card padding>

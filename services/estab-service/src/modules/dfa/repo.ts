@@ -1,6 +1,7 @@
-import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { estabDfa, estabDfaVersion } from "./schema.js";
+import { estabFiles } from "../files/schema.js";
 import type { DfaRow, DfaInsert, DfaVersionRow, DfaVersionInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -21,6 +22,16 @@ export async function allocateDfaSeq(tx: Exec, tenantId: string, communicationTy
     RETURNING last_seq
   `);
   return Number((rows as unknown as Array<{ last_seq: number }>)[0]?.last_seq ?? 1);
+}
+
+/** GAP-ESTAB-DFA-04: file numbers for the files DFAs are linked to (tenant-scoped, one query). */
+export async function fileNosByIds(tenantId: string, ids: readonly string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db.transaction((tx) => tx
+    .select({ id: estabFiles.id, fileNo: estabFiles.fileNo })
+    .from(estabFiles)
+    .where(and(eq(estabFiles.tenantId, tenantId), inArray(estabFiles.id, [...ids]))));
+  return new Map(rows.map((r) => [r.id, r.fileNo]));
 }
 
 // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id

@@ -1,5 +1,6 @@
 import { and, eq, isNull, lte } from "drizzle-orm";
 import { db, scopedRead, scopedPlatformRead } from "../../shared/db.js";
+import { auditEvent } from "../../shared/audit.js";
 import { adminBreakGlassLog, adminDataCorrections, type AdminBreakGlassLogInsert, type AdminDataCorrectionRow, type AdminDataCorrectionInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -34,7 +35,7 @@ export async function closeBreakGlass(
 ): Promise<BreakGlassRow | undefined> {
   const now = new Date();
   const rows = await tx.update(adminBreakGlassLog)
-    .set({ closedAt: now, updatedBy: actorId, updatedAt: now })
+    .set({ closedAt: now, closeReason: reason, updatedBy: actorId, updatedAt: now })
     .where(and(eq(adminBreakGlassLog.id, id), isNull(adminBreakGlassLog.closedAt)))
     .returning();
   return rows[0];
@@ -81,7 +82,11 @@ export async function findExpiredOpenTenantIds(now: Date, limit = 500): Promise<
 // using the normal strict-RLS scopedRead() path (no bypass needed or wanted).
 export async function listBreakGlass(limit: number, tenantId?: string) {
   if (tenantId) {
-    return scopedRead((tx) => tx.select().from(adminBreakGlassLog)
+    // GAP-TENANT-ADMIN-BREAKGLASS-06: the request's RLS GUC is the CALLER's tenant, so
+    // scopedRead() returned nothing whenever a platform admin asked for ANOTHER tenant's
+    // grants. The route is requireSuperAdmin()-gated and the explicit tenant_id predicate
+    // still confines the rows, so read under the SELECT-only platform bypass.
+    return scopedPlatformRead((tx) => tx.select().from(adminBreakGlassLog)
       .where(eq(adminBreakGlassLog.tenantId, tenantId))
       .limit(limit).orderBy(adminBreakGlassLog.openedAt));
   }
@@ -97,7 +102,8 @@ export async function listBreakGlass(limit: number, tenantId?: string) {
 // grant by id. Returns undefined when no such grant exists.
 export async function findBreakGlassById(id: string, tenantId?: string): Promise<BreakGlassRow | undefined> {
   if (tenantId) {
-    const rows = await scopedRead((tx) => tx.select().from(adminBreakGlassLog)
+    // Same reason as listBreakGlass(): an explicit tenant other than the caller's.
+    const rows = await scopedPlatformRead((tx) => tx.select().from(adminBreakGlassLog)
       .where(and(eq(adminBreakGlassLog.id, id), eq(adminBreakGlassLog.tenantId, tenantId)))
       .limit(1));
     return rows[0];
@@ -108,6 +114,17 @@ export async function findBreakGlassById(id: string, tenantId?: string): Promise
   return rows[0];
 }
 
+
+// GAP-TENANT-ADMIN-BREAKGLASS-DETAIL-03: a break-glass record being opened is a
+// sensitive read; leave a `breakglass.viewed` audit event in the transactional
+// outbox. Throws on failure so an unaudited view is never served.
+export async function recordBreakGlassViewed(
+  ctx: { tenantId: string; actorId: string; correlationId: string },
+  grantId: string,
+  grantTenantId: string,
+): Promise<void> {
+  await db.transaction((tx) => auditEvent(tx, ctx, "breakglass.viewed", "breakglass", grantId, { grantTenantId }));
+}
 
 // ── data corrections (maker-checker governance) ──────────────────────────────
 

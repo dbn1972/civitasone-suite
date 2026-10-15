@@ -1,7 +1,6 @@
 import { formatDateTimeIST } from "@/lib/formatters";
 import { PageHeader, StatCard, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getAdminOperationsDashboard } from "../../../_data/loaders";
-import { Breadcrumb } from "../Breadcrumb";
 import { requireAnyRole } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 import { ProcessesTable, SchedulersTable, RecentErrorsTable } from "./OperationsTables";
@@ -69,9 +68,7 @@ export default async function AdminOperationsPage() {
   if (source === "error") {
     return (
       <div className="page-main wrap">
-        <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Operations" }]} />
         <PageHeader
-          back="/tenant-admin"
           title="Admin Operations Dashboard"
           subtitle="Monitor PM2 services, workers, queues, schedulers, cron activity, outbox backlog, and recent operational errors."
         />
@@ -93,9 +90,7 @@ export default async function AdminOperationsPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Operations" }]} />
       <PageHeader
-        back="/tenant-admin"
         title="Admin Operations Dashboard"
         subtitle="Monitor PM2 services, workers, queues, schedulers, cron activity, outbox backlog, and recent operational errors."
         actions={<span className={`pill ${ops.pm2Available ? "good" : "warn"}`}>PM2 {ops.pm2Available ? "connected" : "unavailable"}</span>}

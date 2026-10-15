@@ -21,6 +21,7 @@ export function registerRoleConsumers(q: Queue): void {
         await repo.insertRole(tx, { id: p.id, tenantId: p.tenantId, name: p.name, description: p.description ?? null, status: "active", createdBy: msg.actorId, updatedBy: msg.actorId, version: 1 });
         await emitAudit(tx, msg, EVENTS.roleCreated, { roleId: p.id }, "create", p.id, p.reason ?? null);
       });
+      await cache.invalidate(cache.makeKey(msg.tenantId, `${RESOURCE.role}_list`, msg.tenantId));
     }
   );
 
@@ -36,6 +37,7 @@ export function registerRoleConsumers(q: Queue): void {
       await emitAudit(tx, msg, EVENTS.roleUpdated, { roleId: msg.payload.id }, "update", msg.payload.id, msg.payload.reason ?? null);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.role, msg.payload.id));
+    await cache.invalidate(cache.makeKey(msg.tenantId, `${RESOURCE.role}_list`, msg.tenantId));
   });
 
   q.subscribe<{ id: string; roleId: string; tenantId: string; resource: string; action: string; effect: string; reason?: string | null }>(
@@ -46,6 +48,9 @@ export function registerRoleConsumers(q: Queue): void {
         await repo.insertPermission(tx, { id: p.id, tenantId: p.tenantId, roleId: p.roleId, resource: p.resource, action: p.action, effect: p.effect, createdBy: msg.actorId, updatedBy: msg.actorId, version: 1 });
         await emitAudit(tx, msg, EVENTS.permissionAdded, { roleId: p.roleId, resource: p.resource, action: p.action }, "add_permission", p.id, p.reason ?? null);
       });
+      // The permission list is read-through cached per role; without this a changed
+      // effect kept reading back the old value until the TTL expired.
+      await cache.invalidate(cache.makeKey(msg.tenantId, `${RESOURCE.role}_perms`, msg.payload.roleId));
     }
   );
 

@@ -23,6 +23,23 @@ import {
 
 const AUDIT_TOPIC = "audit.event.record";
 
+/**
+ * GAP-ESTAB-LIST-01: drop files above the viewer's clearance from a LIST/SEARCH result, so a
+ * classified subject line never reaches an uncleared viewer's browser (the detail route has
+ * always enforced this; the register and search did not). Same rule as isAccessAllowed:
+ * public is always visible; once the tenant has adopted the operator model, a file is
+ * visible only to an actor whose clearance rank is at least the file's classification rank.
+ * One adoption lookup + one clearance lookup per request, not one per row.
+ */
+async function withinClearance<T extends { classification: string }>(
+  ctx: { tenantId: string; actorId: string },
+  rows: T[],
+): Promise<T[]> {
+  if (!(await tenantHasOperators(ctx.tenantId))) return rows;
+  const rank = await clearanceRankFor(ctx.tenantId, ctx.actorId);
+  return rows.filter((r) => (CLASSIFICATION_RANK[r.classification] ?? 1) <= Math.max(rank, 1));
+}
+
 /** 404 when the DAK entry does not exist, 409 when it is already linked to a file. */
 async function assertInwardAvailable(tenantId: string, inwardId: string): Promise<void> {
   const state = await queries.inwardLinkState(tenantId, inwardId);
@@ -289,8 +306,9 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    const files = await queries.listFiles(ctx.tenantId, q.limit);
-    return reply.send({ data: files, pagination: { hasMore: files.length === q.limit, pageSize: q.limit } });
+    const all = await queries.listFiles(ctx.tenantId, q.limit);
+    const files = await withinClearance(ctx, all);
+    return reply.send({ data: files, pagination: { hasMore: all.length === q.limit, pageSize: q.limit } });
   });
 
   // GAP-ESTAB-WORKSPACE-03: expose which classifications the authenticated
@@ -314,7 +332,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { q, limit } = fileSearchQuery.parse(req.query);
-    const hits = await queries.searchFiles(ctx.tenantId, q, limit);
+    const hits = await withinClearance(ctx, await queries.searchFiles(ctx.tenantId, q, limit));
     return reply.send({ data: hits, query: q });
   });
 

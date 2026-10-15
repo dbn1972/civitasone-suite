@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useOfflineResource } from "@/lib/sync/resource";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
 import { ConfirmDialog, DataTable, EmptyState, ErrorState, Button } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
+import { formatMoney } from "@/lib/formatters";
 
 type WorkflowTask = {
   id: string;
@@ -51,6 +53,13 @@ const TASKS_PATH = `/v1/workflow/tasks?status=pending&limit=${TASKS_LIMIT}${[...
   .join("")}`;
 
 type TasksResult = { tasks: WorkflowTask[]; maybeIncomplete: boolean };
+
+// GAP-PROCUREMENT-APPROVALS-05/07: what procurement-service knows about the
+// document a task is about (value, requester, parent PO for an amendment).
+type RefSummary = { refType: string; refId: string; label: string; amountMinor: string; requestedBy?: string; poId?: string };
+type SummaryState = "idle" | "loading" | "ready" | "error";
+const SUMMARY_REF_TYPES = new Set(["procurement_indent", "procurement_po", "procurement_po_amendment"]);
+const SUMMARY_BATCH = 50;
 
 function rawTaskRows(payload: unknown): WorkflowTask[] {
   return Array.isArray(payload)
@@ -102,6 +111,43 @@ export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: 
   );
   const tasks = result.tasks;
   const maybeIncomplete = result.maybeIncomplete;
+  const tw = useTranslations("procurement.w2b.approvals");
+
+  // Value / requester / parent PO for the visible tasks, in batches of 50. A
+  // failed lookup is reported (the columns show "-" and a note), never shown as
+  // a value of zero.
+  const [summaries, setSummaries] = useState<Map<string, RefSummary>>(new Map());
+  const [summaryState, setSummaryState] = useState<SummaryState>("idle");
+  const refKey = useMemo(
+    () => tasks.filter((t) => t.refId && t.refType && SUMMARY_REF_TYPES.has(t.refType)).map((t) => `${t.refType}:${t.refId}`).sort().join(","),
+    [tasks],
+  );
+  useEffect(() => {
+    if (!refKey) { setSummaries(new Map()); setSummaryState("idle"); return; }
+    const refs = refKey.split(",").map((k) => { const i = k.indexOf(":"); return { refType: k.slice(0, i), refId: k.slice(i + 1) }; });
+    const controller = new AbortController();
+    setSummaryState("loading");
+    (async () => {
+      const out = new Map<string, RefSummary>();
+      for (let i = 0; i < refs.length; i += SUMMARY_BATCH) {
+        const res = await fetch("/api/proxy/v1/procurement/approvals/ref-summaries", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ refs: refs.slice(i, i + SUMMARY_BATCH) }),
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error("ref summaries failed");
+        const body = await res.json() as { data?: RefSummary[] };
+        for (const r of body.data ?? []) out.set(r.refId, r);
+      }
+      setSummaries(out);
+      setSummaryState("ready");
+    })().catch((err: unknown) => {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setSummaryState("error");
+    });
+    return () => controller.abort();
+  }, [refKey]);
 
   const complete = useCallback(
     async (task: WorkflowTask, decision: "approve" | "reject", reason?: string) => {
@@ -161,14 +207,29 @@ export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: 
     [refresh, router],
   );
 
+  /** Signed value of the document: an amendment shows its CHANGE (+/-), not a total. */
+  function taskValue(task: WorkflowTask): string | null {
+    const sum = task.refId ? summaries.get(task.refId) : undefined;
+    if (!sum) return null;
+    const minor = BigInt(sum.amountMinor);
+    if (task.refType === "procurement_po_amendment") {
+      return `${minor > 0n ? "+" : minor < 0n ? "-" : ""}${formatMoney(minor < 0n ? -minor : minor)}`;
+    }
+    return formatMoney(minor);
+  }
+
   function refLink(task: WorkflowTask): string | null {
     if (task.refType === "procurement_indent" && task.refId) return `/procurement/indents/${task.refId}`;
     if (task.refType === "procurement_po" && task.refId) return `/procurement/orders/${task.refId}`;
     if (task.refType === "procurement_plan" && task.refId) return `/procurement/planning/${task.refId}`;
-    // procurement_po_amendment: refId is the amendment's own id, not the PO's —
-    // there is no per-amendment detail route to link to, so fall back to plain
-    // text (same as any other unrecognised refType) rather than link somewhere
-    // wrong. The row is still fully actionable via Approve/Reject below.
+    // procurement_po_amendment: refId is the amendment's own id and there is no
+    // per-amendment route, so link to the PARENT PO - but only when
+    // procurement-service told us which PO it is (GAP-PROCUREMENT-APPROVALS-05).
+    // Without it the row stays plain text rather than linking somewhere wrong.
+    if (task.refType === "procurement_po_amendment" && task.refId) {
+      const poId = summaries.get(task.refId)?.poId;
+      return poId ? `/procurement/orders/${poId}` : null;
+    }
     return null;
   }
 
@@ -179,6 +240,8 @@ export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: 
 
   const dialogTask = pending?.task;
   const isReject = pending?.decision === "reject";
+  // GAP-PROCUREMENT-APPROVALS-07: the approver sees the value they are deciding on, in the dialog.
+  const dialogValue = dialogTask ? taskValue(dialogTask) : null;
 
   // Build table rows as plain records for DataTable
   type TaskRow = {
@@ -186,14 +249,20 @@ export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: 
     name: string;
     refId: string;
     roleRef: string;
+    value: string;
+    requestedBy: string;
     _task: WorkflowTask;
   };
 
   const tableRows: TaskRow[] = tasks.map((task) => ({
     id: task.id,
     name: task.name,
-    refId: task.refId ?? "—",
+    // Human reference (indent no / PO no / "PO / Amendment n") when known; the
+    // bare id only as a last resort.
+    refId: (task.refId ? summaries.get(task.refId)?.label : undefined) ?? task.refId ?? "—",
     roleRef: task.roleRef ?? "any",
+    value: taskValue(task) ?? "—",
+    requestedBy: (task.refId ? summaries.get(task.refId)?.requestedBy : undefined) ?? "—",
     _task: task,
   }));
 
@@ -211,6 +280,8 @@ export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: 
         );
       },
     },
+    { key: "value", label: tw("value") },
+    { key: "requestedBy", label: tw("requestedBy") },
     { key: "roleRef", label: "Role" },
     {
       key: "id",
@@ -271,6 +342,11 @@ export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: 
               Showing the first {TASKS_LIMIT} pending tasks — more may exist and are not loaded here.
             </p>
           ) : null}
+          {summaryState === "error" ? (
+            <p className="pad" role="alert" style={{ color: "var(--bad)", fontSize: "0.8125rem", paddingBottom: 0 }}>
+              {tw("summaryFailed")}
+            </p>
+          ) : null}
           <DataTable<TaskRow>
             columns={columns}
             rows={tableRows}
@@ -285,8 +361,8 @@ export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: 
         description={
           dialogTask
             ? isReject
-              ? <>Rejecting <strong>{dialogTask.name}</strong> ({dialogTask.refId ?? "—"}) returns it to the originator. A reason is mandatory and recorded in the audit trail.</>
-              : <>This approves <strong>{dialogTask.name}</strong> ({dialogTask.refId ?? "—"}) and advances the workflow. This action cannot be undone.</>
+              ? <>Rejecting <strong>{dialogTask.name}</strong> ({dialogTask.refId ?? "—"}) returns it to the originator. A reason is mandatory and recorded in the audit trail.{dialogValue ? <> {tw("dialogValue", { value: dialogValue })}</> : null}</>
+              : <>This approves <strong>{dialogTask.name}</strong> ({dialogTask.refId ?? "—"}) and advances the workflow. This action cannot be undone.{dialogValue ? <> {tw("dialogValue", { value: dialogValue })}</> : null}</>
             : undefined
         }
         confirmLabel={isReject ? "Reject" : "Approve"}
