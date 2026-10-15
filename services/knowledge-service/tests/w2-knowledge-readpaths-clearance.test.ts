@@ -200,3 +200,22 @@ describe("POST /v1/knowledge/ai/search", () => {
     }
   });
 });
+
+describe("POST /v1/knowledge/assistant/ask (grounded citations)", () => {
+  const ask = async (t: string) => {
+    sendPromptMock.mockReset().mockResolvedValue("an answer");
+    const res = await app.inject({ method: "POST", url: "/v1/knowledge/assistant/ask", headers: hdr(t), payload: { question: `${marker} documents` } });
+    expect(res.statusCode).toBe(200);
+    const cites = (res.json() as { data: { citations: Array<{ id?: string; sourceId?: string }> } }).data.citations;
+    const raw = JSON.stringify(cites);
+    return LEVELS.filter((l) => raw.includes(DOC[l]!));
+  };
+
+  it("a knowledge_user is never given a restricted/confidential document as a citation", async () => {
+    expect(await ask(userTok)).toEqual(["public", "internal"]);
+  });
+
+  it("a knowledge_admin can be cited the restricted and confidential documents", async () => {
+    expect(await ask(adminTok)).toEqual(expect.arrayContaining(["restricted", "confidential"]));
+  });
+});
