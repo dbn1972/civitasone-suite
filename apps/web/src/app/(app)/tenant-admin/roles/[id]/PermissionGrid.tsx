@@ -104,7 +104,12 @@ export function PermissionGrid({
     let failureMessage: string | null = null;
     try {
       for (const [k, v] of savable) {
-        const [resource, action] = k.split(":");
+        // GAP-TENANT-ADMIN-ROLES-DETAIL-06: cell keys are "<module>:<action>" and a
+        // module may itself contain a colon, so split on the LAST colon (actions
+        // never contain one) instead of the first.
+        const sep = k.lastIndexOf(":");
+        const resource = k.slice(0, sep);
+        const action = k.slice(sep + 1);
         const res = await fetch(`/api/proxy/policy/roles/${roleId}/permissions`, {
           method: "POST",
           headers: { "content-type": "application/json" },

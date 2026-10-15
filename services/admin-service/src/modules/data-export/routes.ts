@@ -26,6 +26,14 @@ const PERSONAL_DATA_MODULES = new Set(["payroll", "hrms"]);
 
 const idParam = z.object({ id: z.string().uuid() });
 
+/** A ready export whose expiry has passed is "expired" (and offers no download URL). */
+export function effectiveExportStatus<T extends { status: string; expiresAt: Date | string | null; downloadUrl: string | null }>(row: T, now = Date.now()): T {
+  if (row.status === "ready" && row.expiresAt && new Date(row.expiresAt).getTime() < now) {
+    return { ...row, status: "expired", downloadUrl: null };
+  }
+  return row;
+}
+
 function safeParse<T>(schema: z.ZodSchema<T>, data: unknown): T {
   const result = schema.safeParse(data);
   if (!result.success) {
@@ -77,7 +85,11 @@ export async function dataExportRoutes(app: FastifyInstance): Promise<void> {
       .where(eq(exportRequests.tenantId, ctx.tenantId))
       .orderBy(desc(exportRequests.createdAt))
       .limit(50));
-    return reply.send({ data: rows });
+    // GAP-TENANT-ADMIN-DATA-EXPORT-06: nothing ever flips a ready export to
+    // "expired" in the table, so after 48h the list kept offering a Download link
+    // that the download route answers with 410. Report the EFFECTIVE status.
+    const now = Date.now();
+    return reply.send({ data: rows.map((r) => effectiveExportStatus(r, now)) });
   });
 
   // DOWNLOAD export (returns signed URL or triggers download)

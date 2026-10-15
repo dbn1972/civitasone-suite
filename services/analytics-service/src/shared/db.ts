@@ -5,6 +5,7 @@
  * See packages/db/src/create-tenant-db.ts for the createTenantDb() contract.
  */
 import { createTenantDb } from "@civitasone/db";
+import { sql } from "drizzle-orm";
 import { schema as dashboardsModule } from "../modules/dashboards/schema.js";
 import { schema as queriesModule } from "../modules/queries/schema.js";
 import { schema as metricsModule } from "../modules/metrics/schema.js";
@@ -40,4 +41,20 @@ export type Db = typeof db;
 type ScopedTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 export function scopedRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
   return db.transaction(fn as Parameters<Db["transaction"]>[0]) as Promise<T>;
+}
+
+/**
+ * A genuinely cross-tenant READ (the platform-wide activation funnel) with the
+ * `app.platform_bypass` GUC set for the transaction, per the SELECT-only RLS policy
+ * in migration 0019. SECURITY: call ONLY from a route that has already authorized a
+ * platform role; the flag is never derived from a header, query param or JWT claim,
+ * and the policy is SELECT-only so it can never widen a write.
+ */
+export function scopedPlatformRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await (tx as unknown as { execute: (q: unknown) => Promise<unknown> }).execute(
+      sql`SELECT set_config('app.platform_bypass', 'true', true)`,
+    );
+    return fn(tx);
+  }) as Promise<T>;
 }

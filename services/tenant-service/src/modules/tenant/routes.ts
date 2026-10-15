@@ -78,6 +78,13 @@ export async function tenantRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     const { tenantId } = tenantIdParam.parse(req.params);
     requireRole(ctx, [...PLATFORM_ADMIN, "tenant_admin"]);
+    // GAP-TENANT-ADMIN-ORG-TYPE-05: the command is published with tenantId = the
+    // URL's tenant (the consumer then runs under THAT tenant's RLS), so without
+    // this guard a tenant_admin of tenant A could rename / re-configure tenant B.
+    // GET /v1/tenants/:tenantId already has the same cross-tenant guard.
+    if (ctx.tenantId !== tenantId && !ctx.roles.some((r) => PLATFORM_ADMIN.includes(r))) {
+      throw new HttpError(403, "FORBIDDEN", "cross-tenant access denied");
+    }
     const body = updateTenantBody.parse(req.body);
     return sendAccepted(
       reply,
