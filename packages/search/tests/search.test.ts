@@ -163,6 +163,34 @@ describe("MeilisearchEngine", () => {
     expect(body.filter.some((f: string) => f.includes("attendance"))).toBe(true);
   });
 
+  it("search restricts to the caller's access levels inside the engine query; an empty list matches nothing", async () => {
+    const meiliResponse = { hits: [], estimatedTotalHits: 0, processingTimeMs: 1 };
+    fetchSpy.mockImplementation(async () => new Response(JSON.stringify(meiliResponse), { status: 200 }));
+
+    await engine.search({ q: "x", tenantId: "t1", accessLevels: ["public", "internal"] });
+    const limited = JSON.parse(fetchSpy.mock.calls[0]![1]!.body as string) as { filter: string[] };
+    expect(limited.filter).toContain('(accessLevel = "public" OR accessLevel = "internal")');
+
+    await engine.search({ q: "x", tenantId: "t1", accessLevels: [] });
+    const none = JSON.parse(fetchSpy.mock.calls[1]![1]!.body as string) as { filter: string[] };
+    expect(none.filter).toContain('accessLevel = "__none__"');
+
+    await engine.search({ q: "x", tenantId: "t1" });
+    const all = JSON.parse(fetchSpy.mock.calls[2]![1]!.body as string) as { filter: string[] };
+    expect(all.filter.some((f) => f.includes("accessLevel"))).toBe(false);
+  });
+
+  it("index stores the document accessLevel (default internal)", async () => {
+    fetchSpy.mockImplementation(async () => new Response("{}", { status: 202 }));
+    const base = { id: "i", tenantId: "t1", documentId: "d", title: "T", content: "C", tags: [] };
+    await engine.index({ ...base, accessLevel: "restricted" });
+    await engine.index(base);
+    const first = JSON.parse(fetchSpy.mock.calls[0]![1]!.body as string) as Array<{ accessLevel: string }>;
+    const second = JSON.parse(fetchSpy.mock.calls[1]![1]!.body as string) as Array<{ accessLevel: string }>;
+    expect(first[0]!.accessLevel).toBe("restricted");
+    expect(second[0]!.accessLevel).toBe("internal");
+  });
+
   it("bulkIndex sends documents in batches", async () => {
     fetchSpy.mockResolvedValue(new Response(JSON.stringify({ taskUid: 1 }), { status: 202 }));
 

@@ -11,6 +11,7 @@
  */
 
 import { sendPrompt, isEnabled, AiAdapterError, CircuitBreakerOpenError } from "./adapter.js";
+import { clearedSearch } from "../search/repo.js";
 import { createSearchEngine, type SearchEngine, type SearchResponse } from "@civitasone/search";
 
 // ── Types ─────────────────────────────────────────────────────────
@@ -119,6 +120,7 @@ export async function translateAndSearch(
   query: string,
   tenantId: string,
   userModules?: string[],
+  levels?: readonly string[] | null,
 ): Promise<NlSearchResult> {
   // Step 1: Extract intent via Claude
   const rawIntent = await sendPrompt(SYSTEM_PROMPT, query, { maxTokens: 256 });
@@ -143,10 +145,18 @@ export async function translateAndSearch(
       category,
       limit: 20,
       offset: 0,
+      // Clearance is part of the retrieval query: uncleared documents are never fetched or cited.
+      ...(levels ? { accessLevels: [...levels] } : {}),
     });
   } catch {
-    // Search engine unavailable — return intent with empty results
-    return { intent, results: [] };
+    // Search engine unavailable — fall back to the local index (same as GET /search)
+    // rather than silently returning nothing; clearance still applies.
+    try {
+      const hits = await clearedSearch(tenantId, searchQuery, undefined, undefined, 20, 0, levels ?? null);
+      return { intent, results: hits.map((h) => ({ id: h.id, documentId: h.documentId, title: h.title, content: h.content, tags: h.tags })) };
+    } catch {
+      return { intent, results: [] };
+    }
   }
 
   // Step 4: Filter results by user's accessible modules if provided

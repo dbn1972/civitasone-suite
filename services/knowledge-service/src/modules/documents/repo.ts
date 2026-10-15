@@ -33,7 +33,7 @@ function clearanceCond(levels: Clearance): SQL[] {
   return levels ? [inArray(documents.accessLevel, [...levels])] : [];
 }
 
-function clearanceSql(levels: Clearance): SQL {
+export function clearanceSql(levels: Clearance): SQL {
   return levels
     ? sql`AND d.access_level IN (${sql.join(levels.map((l) => sql`${l}`), sql`, `)})`
     : sql``;

@@ -17,6 +17,7 @@ import {
 import { translateAndSearch } from "./nl-search.js";
 import { summarizeDocument, DocumentNotFoundError } from "./summarize.js";
 import { classifyDocument } from "./classify.js";
+import { clearedAccessLevels } from "../documents/clearance.js";
 
 // ── Request schemas ───────────────────────────────────────────────
 
@@ -175,7 +176,7 @@ export async function aiRoutes(app: FastifyInstance): Promise<void> {
     const deadline = AbortSignal.timeout(5000);
 
     try {
-      const resultPromise = translateAndSearch(query, ctx.tenantId);
+      const resultPromise = translateAndSearch(query, ctx.tenantId, undefined, clearedAccessLevels(ctx));
 
       // Race the search against the 5s deadline
       const result = await Promise.race([
@@ -288,7 +289,7 @@ export async function aiRoutes(app: FastifyInstance): Promise<void> {
     const { documentId } = parseResult.data;
 
     try {
-      const result = await summarizeDocument(documentId, ctx.tenantId);
+      const result = await summarizeDocument(documentId, ctx.tenantId, clearedAccessLevels(ctx));
       return reply.code(200).send({ data: result });
     } catch (err) {
       if (err instanceof DocumentNotFoundError) {
