@@ -1,5 +1,4 @@
 import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState, StatusPill } from "@/app/_components/ds";
-import { Breadcrumb } from "../Breadcrumb";
 import { getComplianceOverview } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
@@ -16,9 +15,7 @@ export default async function ComplianceDashboardPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Compliance" }]} />
       <PageHeader
-        back="/tenant-admin"
         title="Compliance Dashboard"
         subtitle="DPDP Act compliance, CERT-In readiness, data retention policy status, and recent compliance checks."
       />

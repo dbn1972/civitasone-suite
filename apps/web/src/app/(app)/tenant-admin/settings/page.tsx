@@ -3,7 +3,6 @@ import { formatIndianDate } from "@/lib/formatters";
 import { getTenantModules, getCurrentTenantOrgType } from "../../../_data/loaders";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
-import { Breadcrumb } from "../Breadcrumb";
 import { ModuleToggleActions } from "./ModuleToggleActions";
 import { ModulesConfirmCard } from "./ModulesConfirmCard";
 
@@ -18,9 +17,7 @@ export default async function TenantSettingsPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Settings & Modules" }]} />
       <PageHeader
-        back="/tenant-admin"
         title="Settings & Modules"
         subtitle="Module configuration and toggle state for this tenant."
         actions={

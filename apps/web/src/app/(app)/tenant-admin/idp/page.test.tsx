@@ -51,4 +51,10 @@ describe("IdpListPage — FABRICATED (IDP-01) + DEADROUTE (IDP-02)", () => {
     render(withIntl(await IdpListPage()));
     expect(screen.getByText(/Last Sync \(stale\)/)).toBeTruthy();
   });
+
+  it("shows a dash when no active provider has a valid lastSync", async () => {
+    getIdpProvidersMock.mockResolvedValue({ data: [provider({ lastSync: "not-a-date" }), provider({ id: "p2", status: "inactive" })], source: "api" });
+    render(withIntl(await IdpListPage()));
+    expect(screen.getByText("Last Sync", { selector: ".lab" }).closest(".stat")).toHaveTextContent("—");
+  });
 });

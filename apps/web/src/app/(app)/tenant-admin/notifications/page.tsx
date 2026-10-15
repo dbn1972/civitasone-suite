@@ -1,5 +1,4 @@
 import { PageHeader, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
-import { Breadcrumb } from "../Breadcrumb";
 import { getNotificationPreferences } from "../../../_data/loaders";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
@@ -21,9 +20,7 @@ export default async function NotificationPrefsPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Notification Preferences" }]} />
       <PageHeader
-        back="/tenant-admin"
         title="Notification Preferences"
         subtitle="Tenant-wide default channels (Email and In-app) for each event type."
         actions={

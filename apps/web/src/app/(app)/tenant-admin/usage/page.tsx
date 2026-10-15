@@ -1,6 +1,5 @@
 import { PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
 import { getUsageQuotas } from "@/app/_data/loaders";
-import { Breadcrumb } from "../Breadcrumb";
 import { UsageDisplay } from "./UsageDisplay";
 import { WARN_PCT, CRIT_PCT, usageBand } from "./thresholds";
 
@@ -33,12 +32,11 @@ export default async function UsagePage() {
     <div className="page-main wrap">
       {/* GAP-TENANT-ADMIN-USAGE-05: sibling tenant-admin pages carry a
           Breadcrumb; this one had none. */}
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Usage & Quotas" }]} />
       {/* UX-012: the data-source badge now lives inside UsageDisplay, driven
           by the same useSeededResource call that produces its data — not a
           second, independent read of `source` here that could disagree
           with the component's own cache state (UX-002's pattern). */}
-      <PageHeader title="Usage & Quotas" subtitle="Monitor your resource consumption and plan upgrades." back="/tenant-admin" />
+      <PageHeader title="Usage & Quotas" subtitle="Monitor your resource consumption and plan upgrades." />
 
       <StatGrid>
         <StatCard icon="📊" iconBg="#eef2ff" label="Total Resources" value={tileValue(bounded.length)} />

@@ -2,7 +2,6 @@ import { PageHeader, StatusPill, EmptyState, RefreshErrorState } from "../../../
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { getAdminUserById } from "../../../../_data/loaders";
-import { Breadcrumb } from "../../Breadcrumb";
 import { UserSecurityActions } from "./UserSecurityActions";
 import { UserSessionsTable } from "./UserSessionsTable";
 
@@ -18,7 +17,6 @@ export default async function AdminUserDetailPage({ params }: { params: { id: st
   if (source === "error") {
     return (
       <div className="page-main wrap">
-        <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Users", href: "/tenant-admin/users" }, { label: "Error" }]} />
         <RefreshErrorState error={toHumanError("load", { area: "user" })} backHref="/tenant-admin/users" />
       </div>
     );
@@ -27,7 +25,6 @@ export default async function AdminUserDetailPage({ params }: { params: { id: st
   if (!user) {
     return (
       <div className="page-main wrap">
-        <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Users", href: "/tenant-admin/users" }, { label: "Not found" }]} />
         <EmptyState icon="👤" title="User not found" message="This user may have been removed or the ID is invalid." />
       </div>
     );
@@ -37,7 +34,6 @@ export default async function AdminUserDetailPage({ params }: { params: { id: st
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Users", href: "/tenant-admin/users" }, { label: user.name ?? user.email }]} />
       <PageHeader
         back="/tenant-admin/users"
         title={user.name ?? user.email}

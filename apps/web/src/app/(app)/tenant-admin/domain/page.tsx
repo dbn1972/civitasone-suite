@@ -16,7 +16,6 @@ export default async function DomainPage() {
       <PageHeader
         title="Custom Domains"
         subtitle="Register and verify custom domains for your organisation's login and portal URLs."
-        back="/tenant-admin"
         actions={<a href="/settings/branding" className="btn ghost" style={{ minHeight: 44 }}>Manage branding</a>}
       />
 

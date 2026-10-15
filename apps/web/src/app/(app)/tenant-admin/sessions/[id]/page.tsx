@@ -4,7 +4,6 @@ import { formatIndianDateTime } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { getSessionById } from "@/app/_data/loaders";
 import { getSessionUserId } from "@/lib/auth/roleGuard";
-import { Breadcrumb } from "../../Breadcrumb";
 import { deviceLabel, networkLabel } from "../sessionHelpers";
 import { RevokeButton } from "./RevokeButton";
 
@@ -44,7 +43,6 @@ export default async function SessionDetailPage({ params }: { params: { id: stri
   if (source === "error") {
     return (
       <div className="page-main wrap">
-        <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Sessions", href: "/tenant-admin/sessions" }, { label: "Session" }]} />
         <PageHeader back="/tenant-admin/sessions" title="Session Detail" subtitle="Could not load this session." />
         <Card title="Session">
           <RefreshErrorState error={toHumanError("load", { area: "session" })} backHref="/tenant-admin/sessions" />
@@ -61,7 +59,6 @@ export default async function SessionDetailPage({ params }: { params: { id: stri
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Sessions", href: "/tenant-admin/sessions" }, { label: `Session ${params.id}` }]} />
       <PageHeader
         back="/tenant-admin/sessions"
         title="Session Detail"

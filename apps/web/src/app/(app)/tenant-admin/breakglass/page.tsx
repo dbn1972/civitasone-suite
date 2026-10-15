@@ -4,7 +4,6 @@ import { PageHeader, StatCard, RefreshErrorState } from "../../../_components/ds
 import { getBreakglassLog } from "../../../_data/loaders";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
-import { Breadcrumb } from "../Breadcrumb";
 import { BreakglassTable } from "./BreakglassTable";
 
 export default async function BreakglassPage() {
@@ -27,7 +26,6 @@ export default async function BreakglassPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Break-Glass Access" }]} />
       {errored ? (
         <div className="banner" role="alert" style={{ background: "#fef3f2", border: "1px solid #fca5a5", color: "#991b1b", borderRadius: 12, padding: "13px 16px", marginBottom: 18, fontSize: 13 }}>
           🚨 <b>Cannot determine active break-glass sessions.</b> The access log could not be loaded, so a live emergency session may be in progress but hidden. Refresh to try again.
@@ -40,7 +38,6 @@ export default async function BreakglassPage() {
         </div>
       ) : null}
       <PageHeader
-        back="/tenant-admin"
         title="Break-Glass Access Log"
         subtitle="Emergency support access events — all instances require justification and are fully audited."
         actions={

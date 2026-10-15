@@ -4,7 +4,6 @@ import { getAdminRoles } from "../../../_data/loaders";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
-import { Breadcrumb } from "../Breadcrumb";
 import { RolesTable } from "./RolesTable";
 import { LABELS } from "@/lib/labels";
 
@@ -29,9 +28,7 @@ export default async function AdminRolesPage() {
 
   return (
     <div className="page-main wrap">
-      <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Manage Roles" }]} />
       <PageHeader
-        back="/tenant-admin"
         title="Manage Roles"
         subtitle={`Role definitions and permission assignment for your ${LABELS.tenant}.`}
         help="tenant-admin"
