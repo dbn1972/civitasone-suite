@@ -74,14 +74,24 @@ describe("MeilisearchEngine", () => {
 
     expect(fetchSpy).toHaveBeenCalledTimes(3);
     expect(fetchSpy.mock.calls[1]![0]).toContain("/indexes");
+    expect((JSON.parse(fetchSpy.mock.calls[2]![1]!.body as string) as { filterableAttributes: string[] }).filterableAttributes).toContain("accessLevel");
   });
 
-  it("initialize skips creation if index exists", async () => {
-    fetchSpy.mockResolvedValueOnce(new Response(JSON.stringify({ uid: "knowledge_documents" }), { status: 200 }));
+  it("initialize skips creation if index exists but still registers the settings (accessLevel filterable)", async () => {
+    fetchSpy
+      .mockResolvedValueOnce(new Response(JSON.stringify({ uid: "knowledge_documents" }), { status: 200 })) // GET index
+      .mockResolvedValueOnce(new Response(JSON.stringify({ taskUid: 3 }), { status: 202 })); // PATCH settings
 
     await engine.initialize();
 
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    // contract: GET index, then PATCH settings (no POST /indexes)
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy.mock.calls[0]![0]).toContain("/indexes/knowledge_documents");
+    expect(fetchSpy.mock.calls.some((c) => c[1]?.method === "POST")).toBe(false);
+    const [url, init] = fetchSpy.mock.calls[1]!;
+    expect(url).toContain("/indexes/knowledge_documents/settings");
+    expect(init!.method).toBe("PATCH");
+    expect((JSON.parse(init!.body as string) as { filterableAttributes: string[] }).filterableAttributes).toContain("accessLevel");
   });
 
   it("search returns hits with scores", async () => {
@@ -227,6 +237,25 @@ describe("MeilisearchEngine", () => {
 // OpenSearchEngine — constructor and interface shape
 // ─────────────────────────────────────────────────────────────────────────────
 describe("OpenSearchEngine", () => {
+  it("initialize maps accessLevel as a keyword for a new index and adds it to an existing one", async () => {
+    const engine = new OpenSearchEngine({ node: "http://localhost:9200" });
+    const indices = {
+      exists: vi.fn().mockResolvedValueOnce({ body: false }).mockResolvedValueOnce({ body: true }),
+      create: vi.fn().mockResolvedValue({}),
+      putMapping: vi.fn().mockResolvedValue({}),
+    };
+    (engine as unknown as { client: { indices: typeof indices } }).client = { indices };
+
+    await engine.initialize();
+    const created = indices.create.mock.calls[0]![0] as { body: { mappings: { properties: Record<string, unknown> } } };
+    expect(created.body.mappings.properties.accessLevel).toEqual({ type: "keyword" });
+    expect(indices.putMapping).not.toHaveBeenCalled();
+
+    await engine.initialize();
+    expect(indices.putMapping).toHaveBeenCalledTimes(1);
+    expect(indices.putMapping.mock.calls[0]![0]).toMatchObject({ body: { properties: { accessLevel: { type: "keyword" } } } });
+  });
+
   it("constructs without error", () => {
     const engine = new OpenSearchEngine({ node: "http://localhost:9200" });
     expect(engine).toBeInstanceOf(OpenSearchEngine);
