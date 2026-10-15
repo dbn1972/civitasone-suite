@@ -37,8 +37,8 @@ import { useToast } from "@/app/_components/ds/Toast";
 import { Button, Field, Input, Textarea, EntityPicker, ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { searchDesignations, resolveDesignations } from "@/lib/entityAdapters/designation";
-import { searchIdentityUsers, resolveIdentityUsers } from "@/lib/entityAdapters/identityUser";
 import { useFormError } from "@/lib/useFormError";
+import { useSelfEmployee } from "@/app/_components/useSelfEmployee";
 
 function todayIsoIST(): string {
   return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -68,7 +68,9 @@ export function PromoteWithApproval() {
   const [toDesigName, setToDesigName] = useState("");
   const [effectiveDate, setEffectiveDate] = useState("");
   const [orderRef, setOrderRef] = useState("");
-  const [initiatedBy, setInitiatedBy] = useState<string | null>(null);
+  // The initiating officer is always the signed-in employee (the estab route rejects any other initiator).
+  const self = useSelfEmployee(open);
+  const initiatedBy = self?.id ?? null;
   const [currentWith, setCurrentWith] = useState<string | null>(null);
   const [approverName, setApproverName] = useState("");
   const [note, setNote] = useState("");
@@ -84,7 +86,7 @@ export function PromoteWithApproval() {
   const reset = () => {
     setEmployeeId(null); setEmployeeName(""); setCurrentDesignation(null);
     setToDesigId(null); setToDesigName("");
-    setEffectiveDate(""); setOrderRef(""); setInitiatedBy(null); setCurrentWith(null);
+    setEffectiveDate(""); setOrderRef(""); setCurrentWith(null);
     setApproverName(""); setNote(""); setFieldErrors({});
     setSubmittedPromotionId(null);
     setStep(1);
@@ -144,7 +146,7 @@ export function PromoteWithApproval() {
   useEffect(() => {
     if (!currentWith) { setApproverName(""); return; }
     let cancelled = false;
-    resolveIdentityUsers([currentWith]).then((opts) => {
+    resolveEmployees([currentWith]).then((opts) => {
       if (!cancelled && opts[0]) setApproverName(opts[0].label);
     }).catch(() => { /* leave showing the fallback */ });
     return () => { cancelled = true; };
@@ -167,7 +169,7 @@ export function PromoteWithApproval() {
 
   const validateStep2 = (): boolean => {
     const errs: Partial<Record<FieldKey, string>> = {};
-    if (!initiatedBy) errs.initiatedBy = t("errSelectInitiator");
+    if (!initiatedBy) errs.initiatedBy = t("errInitiatorUnknown");
     if (!currentWith) errs.currentWith = t("errSelectApprover");
     else if (currentWith === initiatedBy) errs.currentWith = t("errInitiatorEqualsApprover");
     if (note.trim().length < 3) errs.note = t("errJustificationNote");
@@ -364,13 +366,7 @@ export function PromoteWithApproval() {
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
                 <Field label={t("initiatingOfficerLabel")} required error={fieldErrors.initiatedBy}>
-                  <EntityPicker
-                    value={initiatedBy}
-                    onChange={(v) => setInitiatedBy(Array.isArray(v) ? (v[0] ?? null) : v)}
-                    search={searchIdentityUsers}
-                    resolve={resolveIdentityUsers}
-                    placeholder={t("selectInitiatorOption")}
-                  />
+                  <Input readOnly value={self?.label ?? ""} />
                 </Field>
 
                 <Field label={t("forwardToLabel")} required error={fieldErrors.currentWith}>
@@ -380,8 +376,8 @@ export function PromoteWithApproval() {
                       const id = Array.isArray(v) ? (v[0] ?? null) : v;
                       setCurrentWith(id);
                     }}
-                    search={searchIdentityUsers}
-                    resolve={resolveIdentityUsers}
+                    search={searchEmployees}
+                    resolve={resolveEmployees}
                     placeholder={t("selectApproverOption")}
                   />
                 </Field>

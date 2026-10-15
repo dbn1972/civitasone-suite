@@ -252,6 +252,15 @@ export function registerExecutionConsumers(q: Queue): void {
       const workId = p.workId as string;
       const closureType = p.closureType as string;
 
+      // GAP-WORKS-EXECUTION-WORKID-07: defense in depth for the route's ALREADY_CLOSED check (two concurrent close
+      // commands can both pass the route). Dead-letter the loser instead of inserting a second closure row.
+      const existingClosure = await tx.select().from(workClosures)
+        .where(and(eq(workClosures.tenantId, msg.tenantId), eq(workClosures.workId, workId)))
+        .limit(1);
+      if (existingClosure.length > 0) {
+        throw new NonRetryableError("ALREADY_CLOSED: this work has already been closed");
+      }
+
       // Gather the state the domain rules depend on.
       const agreementRows = await tx.select().from(awards)
         .where(and(eq(awards.tenantId, msg.tenantId), eq(awards.workId, workId)));

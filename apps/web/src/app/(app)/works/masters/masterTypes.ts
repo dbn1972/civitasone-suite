@@ -86,6 +86,11 @@ export interface MasterColumn {
 }
 
 export const TYPE_COLUMNS: Partial<Record<MasterType, MasterColumn[]>> = {
+  // GAP-WORKS-MASTERS-04: scopes carry a mandatory unit; show it (scopes have no code).
+  "scopes": [
+    { key: "name", label: "Name" },
+    { key: "unit", label: "Unit" },
+  ],
   "sr-items": [
     { key: "itemCode", label: "Item Code" },
     { key: "description", label: "Description" },

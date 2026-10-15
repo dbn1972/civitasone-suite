@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "@/test-utils/intl-render";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -14,6 +14,12 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
 
+let mockRoles: string[] = ["works_admin"];
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => mockRoles,
+  hasAnyRole: (roles: string[], allowed: string[]) => allowed.some((r) => roles.includes(r)),
+}));
+
 import BoqDetailPage from "./page";
 
 const WORK = "11111111-1111-1111-1111-111111111111";
@@ -23,7 +29,9 @@ function mockResults(items: unknown, recap: unknown) {
   fetchJsonMock.mockReset();
   notFoundMock.mockClear();
   fetchJsonMock.mockImplementation(async (url: string) =>
-    String(url).includes("/recapitulation") ? recap : items,
+    String(url).includes("/works/proposals/")
+      ? { data: { workNumber: "WK-2026-0042", description: "Canal lining" }, source: "api" }
+      : String(url).includes("/recapitulation") ? recap : items,
   );
 }
 
@@ -92,5 +100,36 @@ describe("BoqDetailPage", () => {
     // 9007199254740993 + 1 = 9007199254740994 paise -> exact only via BigInt.
     expect(screen.getByText("₹9,00,71,99,25,47,409.94")).toBeInTheDocument();
     expect(screen.getByText("Sum of items")).toBeInTheDocument();
+  });
+
+  it("GAP-WORKS-BOQ-WORKID-04: the subtitle shows the work number and description, not a UUID prefix", async () => {
+    mockResults({ data: [], source: "api" }, { data: null, source: "api" });
+    const ui = await BoqDetailPage({ params: { workId: WORK } });
+    render(ui);
+    expect(screen.getByText(/WK-2026-0042 — Canal lining/)).toBeInTheDocument();
+    expect(screen.queryByText(/11111111/)).not.toBeInTheDocument();
+  });
+
+  it("GAP-WORKS-BILLING-MEASUREMENTS-NEW-02: each BoQ line offers Record measurement pre-filled with the work and item", async () => {
+    mockRoles = ["works_admin"];
+    mockResults(
+      { data: [{ id: "item-1", workId: WORK, itemDescription: "PCC", itemCode: "SR-1", unit: "cum", rate: "12500", quantity: "2", amountMinor: "2500000", scopeId: "", srItemId: "" }], source: "api" },
+      { data: null, source: "api" },
+    );
+    const ui = await BoqDetailPage({ params: { workId: WORK } });
+    render(ui);
+    const link = screen.getByRole("link", { name: /Record measurement for SR-1/ });
+    expect(link).toHaveAttribute("href", `/works/billing/measurements/new?workId=${WORK}&boqItemId=item-1`);
+  });
+
+  it("hides the Record measurement action from a read-only role", async () => {
+    mockRoles = ["works_viewer"];
+    mockResults(
+      { data: [{ id: "item-1", workId: WORK, itemDescription: "PCC", itemCode: "SR-1", unit: "cum", rate: "12500", quantity: "2", amountMinor: "2500000", scopeId: "", srItemId: "" }], source: "api" },
+      { data: null, source: "api" },
+    );
+    const ui = await BoqDetailPage({ params: { workId: WORK } });
+    render(ui);
+    expect(screen.queryByRole("link", { name: /Record measurement/ })).not.toBeInTheDocument();
   });
 });

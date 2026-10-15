@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+
+// The money-identity strings are translated client-side (pqbMoney), so every render needs an intl provider.
+const render = (ui: ReactElement) =>
+  rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
 const recordOrderMock = vi.fn();
 const submitOrderForApprovalMock = vi.fn();
@@ -157,6 +164,22 @@ describe("OrdersConsole", () => {
     await waitFor(() =>
       expect(screen.getByText(/SELF_APPROVAL_REJECTED: approver must differ from maker/)).toBeInTheDocument(),
     );
+  });
+
+  it("COURT-ORDERS-02 interim: warns that an untrusted-chain signature is not proof of a legal DSC", async () => {
+    render(
+      <OrdersConsole
+        caseId="case-1"
+        caseSummary={caseSummary}
+        initialOrders={[makeOrder({ status: "pending_approval", createdBy: "maker-x" })]}
+        ordersSource="api"
+        currentUserId="checker-y"
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Approve and issue the/ }));
+    fireEvent.change(screen.getByLabelText(/Digital Signature Certificate/), { target: { value: "-----BEGIN PKCS7----- abc" } });
+    fireEvent.click(screen.getByRole("button", { name: "Verify signature" }));
+    expect(await screen.findByTestId("dsc-untrusted-warning")).toHaveTextContent(/not proof of a legally valid DSC/);
   });
 
   it("blocks issue when server verification FAILS (fail-closed) and shows the issues", async () => {

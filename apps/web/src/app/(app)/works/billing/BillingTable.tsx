@@ -93,7 +93,11 @@ function RegisterTable({ rows }: { rows: BillRowLike[] }) {
       emptyIcon="💰"
       emptyTitle="No bills found"
       emptyMessage="Works billing records will appear here."
-      rowHref={(row) => "/works/billing/" + String(row.workId ?? "")}
+      // GAP-WORKS-BILLING-02: there is no bill-detail route, so open the work's bills page with THIS bill
+      // called out (?bill=) instead of an anonymous work-level list where sibling bills look identical.
+      rowHref={(row) =>
+        "/works/billing/" + String(row.workId ?? "") + (row.id ? "?bill=" + encodeURIComponent(String(row.id)) : "")
+      }
     />
   );
 }

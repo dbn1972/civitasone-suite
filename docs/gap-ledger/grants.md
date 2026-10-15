@@ -113,7 +113,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-DETAIL-03  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2035)
 - **W0-10 note:** review found the W0 tick partly — Reason no longer sent as beneficiaryBankRef: GrantDetailTables.tsx:137-140 and InstallmentsTable.tsx:141 send {mode,reason}; backend disbursement/validators.ts + consumer.ts:241,260 audit the reason. But comment GrantDetailTables.tsx:135-137 claims bank ref is resolved server-side from grantee master - no such resolution exists (disbursement/consumer.ts:194 requires p.beneficiaryBankRef for live PFMS, row stored with null at :228), so acceptance "PFMS bankRef is grantee's account ref" unmet; no shared postDisburse helper (payload duplicated in both tables)
 - **First-pass claim:** Release sends the clerk's free-text "Reason / approval reference" as beneficiaryBankRef (GrantDetailTables.tsx:77-80). Either the audit reason is lost or a non-bank string becomes the payee bank reference on a PFMS payment; there is no separate bank-ref input.
 - **Verified evidence:** GrantDetailTables.tsx:77-80 POSTs {mode:"PFMS", beneficiaryBankRef: reason} where reason is the ActionButton's required free-text "Reason / approval reference" (line 75). Same payload in installments/InstallmentsTable.tsx:85-88. There is no bank-ref input and no separate reason field, so the audit reason is either lost or written into the payee bank reference.
@@ -132,7 +132,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme CONFIRM (was MONEY)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1865, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-B #2035: closed by #1865, verified on main 9c5e9e9e9)
 - **First-pass claim:** Release is offered for any pending installment regardless of grant status (suspended/cancelled), installment order, or outstanding UC (GrantDetailTables.tsx:62); the dialog shows amount but not payee or masked account before an irreversible ₹ crore transfer.
 - **Verified evidence:** Release is shown when row.status==="pending" only (GrantDetailTables.tsx:62); no check of grant.status (suspended/cancelled), installmentNo order, or outstanding UCs on the client. Dialog text (67-71) shows amount and mode but not grantee/payee or masked account (unlike InstallmentsTable.tsx:76-77 which names the grantee). Amounts go through formatMoney (paise) - no float math found, so the MONEY tag is wrong; this is a CONFIRM/guard issue. Server-side guards not verifiable.
 - **Files to change:** `apps/web/src/app/(app)/grants/[id]/GrantDetailTables.tsx`, `apps/web/src/app/(app)/grants/[id]/page.tsx`
@@ -499,7 +499,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-DISBURSEMENTS-DETAIL-03  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2035)
 - **W0 note:** partly fixed by #1840 — UUID text inputs replaced by EmployeePicker name search (initiator defaults to signed-in employee), but initiatedBy is still user-selectable and not derived from the session, so a file can still be raised in another officer's name
 - **First-pass claim:** RaiseEOfficeNote asks the clerk to type "Initiating officer ID" and "Forward to officer ID" as employee UUIDs (RaiseEOfficeNote.tsx: UUID_RE checks, placeholders "employee UUID"/"approver UUID"). Clerks cannot know UUIDs, and the initiator is not the signed-in user, so a file can be raised in someone else's name.
 - **Verified evidence:** RaiseEOfficeNote.tsx:71-72,102-103,175,179: two free-text inputs 'Initiating officer ID' and 'Forward to officer ID' with placeholders 'employee UUID'/'approver UUID', validated only by UUID_RE (line 25). initiatedBy is user-typed, never derived from the session, so a file can be raised in another officer's name. Component is shared (used by other modules too).
@@ -532,7 +532,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-DISBURSEMENTS-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1804, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-B #2035: closed by #1804, verified on main 9c5e9e9e9)
 - **First-pass claim:** Closing the loop is best-effort: the POST to …/disbursements/{id}/submit-approval is wrapped in try/catch and swallowed (RaiseEOfficeNote.tsx notifyPath block), so the eFile can exist while the disbursement never moves to "pending approval"; the loader comment says grant-service exposes no by-id read, so this route is unverified.
 - **Verified evidence:** RaiseEOfficeNote.tsx:123-129 awaits fetch(notifyPath) inside try/catch that ignores errors and does not even check res.ok, then shows success (line 130). If submit-approval fails the eFile exists but the disbursement never goes pending-approval. loaders.ts comment confirms grant-service has no by-id read; existence of the submit-approval route cannot be verified (service absent).
 - **Files to change:** `apps/web/src/app/_components/RaiseEOfficeNote.tsx`, `apps/web/src/app/(app)/grants/disbursements/[id]/page.tsx`
@@ -680,7 +680,7 @@ Counts: ACTION 85, BACKEND-VERIFY 1
 
 ### GAP-GRANTS-INSTALLMENTS-01  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1865, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-B #2035: closed by #1865, verified on main 9c5e9e9e9)
 - **First-pass claim:** No role gate anywhere in the grants tree: layout.tsx:5 only wraps ModuleGate moduleKey="grants" (tenant enablement), and no page calls requireAnyRole / getSessionRoles. Every signed-in user who can open the module sees the maker actions on these routes; the grant-service guard is not verifiable (services/ contains only hrms-service).
 - **Verified evidence:** grants/layout.tsx:5 only wraps <ModuleGate moduleKey="grants">; a repo-wide check shows no grants file imports requireAnyRole, whereas crm/layout.tsx:2-9 does (helper is apps/web/src/lib/auth/roleGuard.ts). Release button at InstallmentsTable.tsx:70 appears for every viewer. Backend enforcement not verifiable: only hrms-service exists in the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/grants/layout.tsx`, `apps/web/src/app/(app)/grants/installments/page.tsx`, `apps/web/src/app/(app)/grants/installments/InstallmentsTable.tsx`, `apps/web/src/lib/auth/grantsRoles.ts`

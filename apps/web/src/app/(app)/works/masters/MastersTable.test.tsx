@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { renderWithIntl as render } from "@/lib/testUtils/intl";
 
 vi.mock("@/app/_components/ds", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/app/_components/ds")>();
@@ -173,10 +174,85 @@ describe("MastersTable: SF-15 accepted notice after an edit", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /^Edit$/i }));
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    await waitFor(() => expect(document.querySelector('[data-accepted-phase="accepted"]')).not.toBeNull());
+    // GAP-WORKS-MASTERS-05: the table now confirms the edit against the type's own GET (bounded poll), so the
+    // honest in-between state is "pending" (received, being applied); the notice still outlives the closed form.
+    await waitFor(() => expect(document.querySelector('[data-accepted-phase="pending"]')).not.toBeNull());
     expect(screen.queryByRole("button", { name: "Save" })).not.toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: /Refresh now/i }));
     expect(refresh).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("MastersTable: GAP-WORKS-MASTERS-04 deactivate + Unit column", () => {
+  it("Deactivate asks for confirmation and PATCHes active=false with the row version", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 202 }));
+    render(
+      <MastersTable
+        masterType="authorities"
+        items={[{ id: "a1", version: 7, name: "DAO", code: "DAO", active: true }]}
+        failed={false}
+        canManage
+        parentOptions={[]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Deactivate$/i }));
+    // Nothing is sent until the dialog is confirmed.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    await screen.findByRole("button", { name: /^Cancel$/i });
+    const confirmButtons = screen.getAllByRole("button", { name: /^Deactivate$/i });
+    fireEvent.click(confirmButtons[confirmButtons.length - 1]!);
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/proxy/v1/works/masters/authorities/a1");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(String(init.body))).toEqual({ active: false, version: 7 });
+  });
+
+  it("scopes show a Unit column", () => {
+    render(
+      <MastersTable
+        masterType="scopes"
+        items={[{ id: "s1", version: 1, name: "Earthwork", unit: "cum", workTypeId: "wt1", active: true }]}
+        failed={false}
+        canManage={false}
+        parentOptions={[{ id: "wt1", label: "Roads" }]}
+      />,
+    );
+    expect(screen.getByRole("columnheader", { name: /^Unit/i })).toBeInTheDocument();
+    expect(screen.getByText("cum")).toBeInTheDocument();
+  });
+});
+
+describe("MastersTable: GAP-WORKS-MASTERS-05 pending row + duplicate-submit block", () => {
+  it("after a create 202 shows a Pending row, locks the Add control, then confirms when the list total grows", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    // 1st call: the POST (202). Then the confirmation poll: first still old total, then grown.
+    fetchSpy
+      .mockResolvedValueOnce(new Response("", { status: 202 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [], meta: { total: 1 } }), { status: 200 }))
+      .mockResolvedValue(new Response(JSON.stringify({ data: [], meta: { total: 2 } }), { status: 200 }));
+    render(
+      <MastersTable
+        masterType="work-types"
+        items={[{ id: "wt-9", version: 1, name: "Roads", code: "RD", active: true }]}
+        total={1}
+        failed={false}
+        canManage
+        parentOptions={[]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "+ Add Work Types" }));
+    fireEvent.change(screen.getByLabelText(/^Name/i), { target: { value: "Bridges" } });
+    fireEvent.change(screen.getByLabelText(/^Code/i), { target: { value: "BR" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
+    const pendingRow = await screen.findByText("Bridges");
+    expect(pendingRow.closest("tr")).toHaveTextContent(/Pending/);
+    const add = screen.getByRole("button", { name: "+ Add Work Types" });
+    expect(add).toBeDisabled();
+    // The poll sees total 2 -> confirmed -> pending row dropped and the page refreshed.
+    await waitFor(() => expect(document.querySelector('[data-accepted-phase="confirmed"]')).not.toBeNull(), { timeout: 5000 });
+    expect(screen.queryByText("Bridges")).not.toBeInTheDocument();
+    expect(refresh).toHaveBeenCalled();
   });
 });

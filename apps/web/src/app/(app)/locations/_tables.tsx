@@ -10,7 +10,7 @@
  * raw-UUID column:
  *   • InfrastructureTable: Name / Type / Condition / Status
  *   • GeofencesTable:      Name / Type / Shape / Radius / Status
- *   • JurisdictionsTable:  Level / Office / Unit
+ *   • JurisdictionsTable:  Level / Office / Unit / Primary
  *
  * Client components (hence `render:`/cellType is allowed per
  * datatable-render-guard) so the Server pages fetch typed rows and pass them in.
@@ -61,6 +61,7 @@ export function GeofencesTable({ rows }: { rows: GeofenceRow[] }) {
             { key: "type", label: t("colType") },
             { key: "shape", label: t("colShape") },
             { key: "radius", label: t("colRadius"), align: "right" },
+            { key: "center", label: t("colCenter"), align: "right" },
             { key: "status", label: t("colStatus"), cellType: "status" },
           ]}
           rows={rows as GeoRow[]}
@@ -84,8 +85,9 @@ export function JurisdictionsTable({ rows }: { rows: JurisdictionRow[] }) {
         <DataTable<JurisRow>
           columns={[
             { key: "level", label: t("colLevel") },
-            { key: "office", label: t("colOffice") },
-            { key: "unit", label: t("colUnit") },
+            { key: "office", label: t("colOffice"), render: (row: JurisRow) => row.office || t("unresolved") },
+            { key: "unit", label: t("colUnit"), render: (row: JurisRow) => row.unit || t("unresolved") },
+            { key: "primary", label: t("colPrimary"), render: (row: JurisRow) => (row.primary ? t("yes") : t("no")) },
           ]}
           rows={rows as JurisRow[]}
           sortable

@@ -86,7 +86,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2047; work number + officer name resolved web-side (loaders.ts getWorkNumberMap/getOfficerNameMap; approvals.loader.test.ts); columns relabelled Work Number / Authority)
 - **W0 note:** partly fixed by #1867 — No backend join for workNumber/authorityName (works-service approval list returns only ids); mapAaRow/mapTsRow prefer str(r.workNumber)/authorityName, fall back to shortId, columns relabelled "Work (ID)"/"Authority (ID)"; Work Number is not linked to the work.
 - **First-pass claim:** Work Number and Authority columns show 8-char UUID prefixes ("3f9a1c20…") not the work number or officer name (_data/loaders.ts:168,171; ApprovalsTable.tsx:10,12) — register is unreadable for officers.
 - **Verified evidence:** works/_data/loaders.ts:146-168 (mapAaRow) and mapTsRow set workNumber: shortId(workId) and authority: shortId(approvingAuthorityId|tsAuthorityId) -> '3f9a1c20…' (format.ts shortId). ApprovalsTable.tsx:7-8 columns 'Work Number'/'Authority' display those directly. The tenders loader shows the list API can supply r.workNumber (loaders.ts mapTenderRow uses str(r.workNumber)), but AA/TS mappers never read workNumber or any authority name, so whether the approvals API returns them is unverifiable (works-service absent).
@@ -120,7 +120,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-03  ·  MEDIUM  ·  partly  ·  theme CONSISTENCY (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: ApprovalsTable.test.tsx error-source with seeded rows and em-dash cases; closed by #1867)
 - **First-pass claim:** StatCards use raw server arrays while the table uses useSeededResource cache (page.tsx:13-16 vs ApprovalsTable.tsx:31-49): counts and rows can disagree on cache fallback (UX-012 only fixed the badge).
 - **Verified evidence:** approvals/page.tsx:13-16 compute counts from server arrays; ApprovalsTable.tsx:31-49 (actually :76-87) use useSeededResource which may substitute cached rows if source is error or empty. So counts can disagree with rows on cache fallback: real. Theme FABRICATED is wrong: nothing is hard-coded, the issue is dual sources. Also note: with source==='error' the stat cards show 0 while the table may show cached rows. Note page.tsx:12 collapses to 'api'/'error' from two loaders.
 - **Files to change:** `apps/web/src/app/(app)/works/approvals/page.tsx`, `apps/web/src/app/(app)/works/approvals/ApprovalsTable.tsx`
@@ -151,7 +151,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-05  ·  LOW  ·  partly  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2047; approvals/new/layout.tsx + approvals/ts-new/layout.tsx requireAnyRole(AA/TS_CREATE_ROLES) redirect direct-URL openers; approvals/layouts.test.tsx)
 - **W0 note:** partly fixed by #1867 — New AA/TS links role-gated via AA_CREATE_ROLES/TS_CREATE_ROLES + hasAnyRole and use btn sm classes; no role guard/layout on approvals/new or ts-new so direct URL still opens the form (fix step 4 not done).
 - **First-pass claim:** "+ New AA" / "+ New TS" use inline styles and mixed btn classes (page.tsx:31-32) and are not role-gated.
 - **Verified evidence:** approvals/page.tsx:30-31 links with inline style (minHeight 36, padding) plus classes 'btn' / 'btn primary' rather than ds Button; not role-gated (no getSessionRoles/requireAnyRole anywhere under works/). Inline styles confirmed; but the link creation is only a navigation, and the server (unverified) enforces creation. Which roles may create AA/TS is unknown.
@@ -176,7 +176,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-AA-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: aa/[id]/page.test.tsx by-id fetch; GET /v1/works/approvals/aa/:id (approval/routes.ts); closed by #1867)
 - **First-pass claim:** No GET-by-id: page fetches the first 100 records and filters by id (page.tsx:93-107); any record beyond row 100 is a permanent 404 even though it exists.
 - **Verified evidence:** aa/[id]/page.tsx:93-107 fetches /api/v1/works/approvals/aa?pageSize=100 and .find(); comment at 93 admits there is no GET-by-id. Records past first 100 (or beyond server max page size) -> notFound(). Cannot verify server has GET /aa/:id (works-service absent).
 - **Files to change:** `apps/web/src/app/(app)/works/approvals/aa/[id]/page.tsx`
@@ -192,7 +192,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-AA-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: aa/[id]/page.test.tsx 404 vs load-error tests; closed by #1867)
 - **First-pass claim:** Fetch failure is indistinguishable from a missing record — result.source is ignored and notFound() fires (page.tsx:107).
 - **Verified evidence:** page.tsx:94-107: result.source is never checked; on error data is [] so find() fails and notFound() fires. Finalize actions unavailable and the user thinks the record is gone.
 - **Files to change:** `apps/web/src/app/(app)/works/approvals/aa/[id]/page.tsx`
@@ -208,7 +208,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-AA-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2047; aa/[id]/page.tsx shows the work number linked to the proposal and the officer name; aa/[id]/page.test.tsx)
 - **W0 note:** partly fixed by #1867 — Work is now a link to /works/billing/<workId> with full id in title, but still shows the truncated UUID as text; approving authority still shortId (no name lookup); workNumber/officer name not fetched.
 - **First-pass claim:** Work ID and Approving Authority are shown as truncated UUIDs (page.tsx:112-113) with no link to the work or officer.
 - **Verified evidence:** page.tsx:112-113 shows workId/approvingAuthorityId as slice(0,8)+'…' without links. Work names/officer names are not fetched. The apps/works _data/format.ts has shortId helper but that doesn't solve the readability issue.
@@ -241,7 +241,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-AA-DETAIL-05  ·  LOW  ·  confirmed  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: approvals.loader.test.ts register date equals formatIndianDate (format.ts fmtDate); closed by #1867)
 - **First-pass claim:** Dates use formatIndianDate (dd/mm/yyyy, page.tsx:114) while the register uses "12 Jul 2026" (_data/format.ts:5-9).
 - **Verified evidence:** page.tsx:114-115 uses formatIndianDate (lib/formatters.ts:2-7: dd/mm/yyyy) while works/_data/format.ts fmtDate gives '12 Jul 2026' (day 2-digit, month short). Register format differs from detail. Neither forces IST timezone.
 - **Files to change:** `apps/web/src/app/(app)/works/approvals/aa/[id]/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -330,7 +330,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-TS-NEW-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2047; ts-new picker lists only dao_finalized works (workProposal.ts DAO_FINALIZED) and prefills ?workId= (ts-new/page.tsx + NewTsForm.tsx); NewTsForm.test.tsx)
 - **W0 note:** partly fixed by #1867 — EntityPicker (work + TS authority) added, but picker does not disable non-DAO-finalized works (only shows Status sublabel), info banner is static, no ?workId= prefill on ts-new.
 - **First-pass claim:** The DAO-finalized precondition is only prose (page.tsx:82-84); the work is a pasted UUID (page.tsx:104-114), so users learn about a non-finalized proposal only from a server error.
 - **Verified evidence:** ts-new/page.tsx:82-84 infoBanner prose only; Work ID is a plain text input (:110-121) with UUID placeholder, TS authority likewise (:149-160). No lookup or precondition check; failure only surfaces via formError after POST (:60-63). Whether the server returns a specific error for non-finalized proposals is not verifiable (works-service absent). No EntityPicker component exists anywhere in apps/ or packages/, so it must be created.
@@ -350,7 +350,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-TS-NEW-02  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: NewTsForm.test.tsx 'submitted' (202 != done) test; closed by #1867)
 - **First-pass claim:** Reports "created" (page.tsx:64) whereas AA create and TS finalize are 202/queued and say "submitted" — inconsistent truthfulness about async writes (NewAaForm.tsx:66).
 - **Verified evidence:** ts-new/page.tsx:64-65 say 'Technical sanction created.'. NewAaForm.tsx:62-66 says 'submitted ... will appear once processed' with a comment that AA create returns 202. Finalize button also 202-aware. Whether POST /works/approvals/ts also returns 202 cannot be verified (works-service absent); if it is queued the copy is untruthful, if it is 201 then it is correct. Line refs: NewAaForm message is at :62-65 not :66.
 - **Files to change:** `apps/web/src/app/(app)/works/approvals/ts-new/page.tsx`
@@ -365,7 +365,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-TS-NEW-03  ·  MEDIUM  ·  partly  ·  theme COPY (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: NewTsForm.test.tsx SR-year dropdown test; no Pune/Nashik/Maharashtra in works sources; closed by #1867)
 - **First-pass claim:** Zone placeholder "Pune Zone" (page.tsx:183) is a Maharashtra example in an Odisha deployment; SR Year/Zone free text with no master lookup.
 - **Verified evidence:** ts-new/page.tsx:183 placeholder 'e.g. Pune Zone' and SR Year placeholder '2024-25' (:170); both are free text (:163-186, maxLength 16/64). Placeholder is a hint, not fabricated data, but is a Maharashtra name in an Odisha deployment and there is no master lookup (no SR/zone master endpoint visible). Same issue in account-compile ('Nashik').
 - **Files to change:** `apps/web/src/app/(app)/works/approvals/ts-new/page.tsx`
@@ -405,7 +405,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-TS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme API-GAP (was DEADROUTE)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: ts/[id]/page.test.tsx by-id fetch + ApprovalsTable.test.tsx row link to /works/approvals/aa/<id>; closed by #1867)
 - **First-pass claim:** No GET-by-id: page fetches the first 100 records and filters by id (page.tsx:91-105); any record beyond row 100 is a permanent 404 even though it exists.
 - **Verified evidence:** apps/web/src/app/(app)/works/approvals/ts/[id]/page.tsx:91-105 fetches /api/v1/works/approvals/ts?pageSize=100, maps, then result.data.find(r=>r.id===params.id) and notFound() if absent. Code comment at :91 admits no GET-by-id. Any TS beyond the first 100 rows (or beyond whatever the server caps pageSize at) is unreachable; the list-row link from ApprovalsTable.tsx:97-100 would 404. Same pattern in approvals/aa/[id]/page.tsx:93. works-service is not in the snapshot so endpoint existence/pageSize cap cannot be verified. Not a dead link per se; it is a missing API.
 - **Files to change:** `services/works-service/src/modules/approvals (GET /api/v1/works/approvals/ts/:id, cannot see file)`, `apps/web/src/app/(app)/works/approvals/ts/[id]/page.tsx`, `apps/web/src/app/(app)/works/approvals/aa/[id]/page.tsx`
@@ -424,7 +424,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-TS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: ts/[id]/page.test.tsx 404 vs load-error tests; closed by #1867)
 - **First-pass claim:** Fetch failure is indistinguishable from a missing record — result.source is ignored and notFound() fires (page.tsx:105).
 - **Verified evidence:** ts/[id]/page.tsx:92-105: fetchJson returns {data: [], source:'error', status?, errorMessage?} on failure (apps/web/src/app/_data/apiClient.ts:119-172), but the page only reads result.data; empty array => find returns undefined => notFound() at :105. result.source/status are never checked, so 401/500/timeout looks like 'not found'.
 - **Files to change:** `apps/web/src/app/(app)/works/approvals/ts/[id]/page.tsx`, `apps/web/src/app/(app)/works/approvals/aa/[id]/page.tsx`
@@ -440,7 +440,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-TS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2047; ts/[id]/page.tsx shows the work number linked to the proposal and the officer name; ts/[id]/page.test.tsx)
 - **W0 note:** partly fixed by #1867 — Work linked to /works/billing/<workId> but label is still truncated UUID; TS authority still shortId with "(ID)" label; no workNumber/officer name resolution.
 - **First-pass claim:** Work ID and TS Authority are shown as truncated UUIDs (page.tsx:112-113) with no link to the work or officer.
 - **Verified evidence:** ts/[id]/page.tsx:110-111 render Work ID and TS Authority as `id.slice(0,8)+'…'` in plain text (rows at :110 and :111, not 112-113; :112-113 are Date/Created). No link to /works/billing/[workId] or proposal, no officer name. Title fallback at :120 also shows a UUID prefix. Response has only workId and tsAuthorityId (TsRaw :13-24); no name fields are read, so names need a lookup endpoint that is not visible here (works-service/master absent).
@@ -477,7 +477,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-APPROVALS-TS-DETAIL-05  ·  LOW  ·  partly  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: approvals.loader.test.ts date test; closed by #1867)
 - **First-pass claim:** Dates use formatIndianDate (dd/mm/yyyy, page.tsx:114) while the register uses "12 Jul 2026" (_data/format.ts:5-9).
 - **Verified evidence:** ts/[id]/page.tsx:112-113 use formatIndianDate (lib/formatters.ts:2-7, dd/mm/yyyy). The register uses fmtDate in works/_data/format.ts:5-10 ('12 Jul 2026'). So the mismatch is real, but the reverse of the fix text: formatIndianDate IS the shared formatter; the works-local fmtDate is the outlier. Neither pins timeZone to Asia/Kolkata.
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/works/_data/format.ts`, `apps/web/src/app/(app)/works/approvals/ts/[id]/page.tsx`
@@ -499,7 +499,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-01  ·  MEDIUM  ·  confirmed  ·  theme COPY (was VALIDATION)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: format.test.ts modeLabel('e_mb') = 'e-MB'; BillingRegister.test.tsx dedicated Draft card; closed by #1867)
 - **First-pass claim:** Mode renders humanize("e_mb") = "E mb" (_data/loaders.ts:75, format.ts:13-18). "Pending" adds draft to mid-workflow bills (page.tsx:10) while the table Status uses the same buckets — a draft bill is labelled "Draft" in the row but counted as Pending; stage and status columns are redundant duplicates of one field (_data/loaders.ts:75-78).
 - **Verified evidence:** _data/format.ts:13-17 humanize('e_mb') = 'E mb' (mapBillRow uses it at loaders.ts:75). page.tsx:10 pending = status pending||draft while the row Status shows billBucket (draft stays 'draft', loaders.ts:79): a draft is counted Pending but labelled Draft. Stage = humanize(status) (loaders.ts:78) and status = billBucket(status) (:79) derive from the same field, so the columns duplicate (Stage is the finer version). Theme tag VALIDATION is wrong; this is copy/labeling. Actual billMode values not visible (works-service absent).
 - **Files to change:** `apps/web/src/app/(app)/works/_data/format.ts`, `apps/web/src/app/(app)/works/_data/loaders.ts`, `apps/web/src/app/(app)/works/billing/page.tsx`, `apps/web/src/app/(app)/works/billing/BillingTable.tsx`
@@ -515,7 +515,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2047; billing register rows open /works/billing/<workId>?bill=<id> (BillingTable.tsx) and [workId]/page.tsx lists that bill first with a callout; BillingTable.test.tsx + [workId]/page.test.tsx)
 - **W0 note:** partly fixed by #1867 — Backend billing repo joins workNumber and mapBillRow uses it; rowHref still goes to /works/billing/<workId> with no ?highlight= or bill detail route (fix step 3 not done).
 - **First-pass claim:** Work column shows an 8-char UUID prefix (_data/loaders.ts:74); rowHref opens the work-level page for any bill so two bills of one work are indistinguishable targets (BillingTable.tsx:40).
 - **Verified evidence:** loaders.ts:74 work: shortId(workId) gives 8 chars + ellipsis; the Bill type has no workNumber (types.ts:27-42) so no readable work reference is available. BillingTable.tsx:40 (file line 576-536) rowHref = /works/billing/{workId}, so clicking a bill opens the work-level page listing all bills, not the bill. True but by design of the current route; no bill-detail route exists (billing/ has only [workId]).
@@ -532,7 +532,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-03  ·  MEDIUM  ·  confirmed  ·  theme STALE-DATA (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: BillingRegister.test.tsx stat total equals row count with an empty live seed; closed by #1867)
 - **First-pass claim:** StatCards read raw fetch data while the table can render a cached copy (page.tsx:6-12 vs BillingTable.tsx:14): counts show 0 next to cached rows.
 - **Verified evidence:** billing/page.tsx:6-12 computes counts from the server result while BillingTable.tsx:14 (useSeededResource, lib/sync/resource.ts:215-257) swaps in the cache copy whenever the server result is error OR empty. So on error/offline, cards read 0 next to cached rows; also if the live result is genuinely empty and a cache exists, stale rows show. Theme I18N is wrong; this is a data-consistency issue.
 - **Files to change:** `apps/web/src/app/(app)/works/billing/page.tsx`, `apps/web/src/app/(app)/works/billing/BillingTable.tsx`
@@ -547,7 +547,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-04  ·  LOW  ·  partly  ·  theme NAVUX (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2047; ALREADY-FIXED on main: register header links Record measurement, Generate bill, Account compile, Issue MB (billing/page.tsx:31-52) and each form opens a work picker, not a UUID box (WorkField at measurements/new/page.tsx:305, bills/new/page.tsx:239, new-mb/page.tsx:171))
 - **W0 note:** partly fixed by #1867 — Register header now links Record measurement, Generate bill, Account compile, Issue MB; but measurement/bill/MB forms opened without ?workId= have no work picker (raw UUID text inputs), so the links from the register land on UUID entry.
 - **First-pass claim:** Only "+ Issue MB" appears on the register; Generate bill and Account Compile are reachable only via other pages (page.tsx:29-35).
 - **Verified evidence:** billing/page.tsx:15-21 shows only '+ Issue MB'. Generate bill (bills/new) and Record measurement (measurements/new) are on [workId]/page.tsx:103-123; Account Compile is linked from works/page.tsx:74 (works home), not the billing register. So reachability exists but is scattered; bills/new needs a workId via query. Low severity holds.
@@ -681,7 +681,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-ACCOUNT-COMPILE-01  ·  HIGH  ·  partly  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: account-compile/page.test.tsx confirm dialog (Cancel = no request), single POST, reference shown; closed by #1867)
 - **First-pass claim:** Irreversible-looking submit to treasury has no ConfirmDialog and no audit/receipt reference on success — just a banner and redirect after 1.2 s (page.tsx:77-79,100-112).
 - **Verified evidence:** account-compile/page.tsx:49-85 submits directly on form submit; no ConfirmDialog (ds/ConfirmDialog.tsx exists and is used by ApprovalFinalizeButton). Success: toast 'Account compile initiated.' (:77), banner 'Account compile submitted' (:109), redirect after 1200ms (:79); no reference id, and the response body is ignored. 'Irreversible' and 'audit event' cannot be verified (works-service absent); audit emission is a backend duty (CLAUDE.md), not web. Maker!=checker is not applicable to a single submit. Mandatory reason is not clearly required.
 - **Files to change:** `apps/web/src/app/(app)/works/billing/account-compile/page.tsx`
@@ -698,7 +698,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-ACCOUNT-COMPILE-02  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: account-compile/layout.test.tsx redirect without DAO/DO/admin role; closed by #1867)
 - **First-pass claim:** Role restriction is prose only (page.tsx:133); every user who opens the URL sees a live form and learns of a 403 after submitting.
 - **Verified evidence:** account-compile/page.tsx:132-135 note 'restricted to DAO / DO roles'; the page is a client component with no role check, and there is no requireAnyRole in works layout. Server 403 handled through formError after submit (:71-75). lib/auth/roleGuard.ts requireAnyRole is server-only and can be used from a layout.tsx.
 - **Files to change:** `apps/web/src/app/(app)/works/billing/account-compile/layout.tsx (new)`, `apps/web/src/lib/auth/roleGuard.ts`
@@ -713,7 +713,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-ACCOUNT-COMPILE-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2047; account-compile/page.tsx follows the 202 job through GET account-compile until the compilation is recorded (useAcceptedWrite poll); page.test.tsx job follow-up test)
 - **W0 note:** partly fixed by #1867 — Already-compiled warning via GET /billing/account-compile?month&year and job reference shown; no post-submit job status view/polling (fix step 3 status part not done).
 - **First-pass claim:** Nothing shows whether the month was already compiled or the job status; the async job has no follow-up view (page.tsx:60-79).
 - **Verified evidence:** account-compile/page.tsx:60-79: POSTs, ignores the response, toasts and redirects to /works/billing. No GET to check whether the month was compiled and no job status view anywhere in works/billing (only BillingTable, [workId], forms). Backend job/status endpoint existence cannot be verified (works-service absent).
@@ -730,7 +730,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-ACCOUNT-COMPILE-04  ·  LOW  ·  confirmed  ·  theme COPY (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: account-compile/page.test.tsx FY-first month order + calendar-month payload; closed by #1867)
 - **First-pass claim:** Example office "District Treasury Officer, Nashik" (page.tsx:192) is not an Odisha treasury; months listed calendar-order rather than FY (Apr–Mar) order (page.tsx:33-36).
 - **Verified evidence:** account-compile/page.tsx:192 example "District Treasury Officer, Nashik"; MONTHS array (:29-32) is January-December and default month is the current calendar month (:41); YEARS is last 6 calendar years (:35). Government FY runs Apr-Mar. Offered 'year' is calendar year, so consistent with month, only ordering differs. Submitted-to is free text.
 - **Files to change:** `apps/web/src/app/(app)/works/billing/account-compile/page.tsx`
@@ -770,7 +770,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-BILLS-NEW-02  ·  MEDIUM  ·  partly  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2047; GET /v1/works/billing/mb/:mbId/measured-value (billing/routes.ts) + bills/new shows measured/billed/still-billable, prefills the gross and blocks a gross above it; billing-finalize-authority.test.ts + bills/new/page.test.tsx. Not built: an e-MB lock/override-reason (product rule))
 - **W2 works note (#2039):** gross cannot be derived from the MB total (no MB-total endpoint); float math already replaced by BigInt.
 - **W0 note:** partly fixed by #1867 — Float math replaced by rupeesToMinorString/BigInt net preview; gross still free-typed (not derived from or validated against MB total; e_mb lock/override-reason and backend check not done).
 - **First-pass claim:** Gross and deductions are free-typed rupees converted with float Math.round(x*100) (page.tsx:17-20,48-50), not derived from the finalized MB measurements — bill value can silently diverge from measured work.
@@ -790,6 +790,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 ### GAP-WORKS-BILLING-BILLS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 works part 2 note (#2047):** statutory recovery heads (security deposit, TDS, labour cess) need a product decision and a schema change. INTERIM, owner decision.
 - **W2 works note (#2039):** statutory recovery heads need a product decision and a schema change.
 - **First-pass claim:** Single "Deductions" number: no breakdown of statutory recoveries (security deposit, TDS, labour cess), so the net payable cannot be audited from the form.
 - **Verified evidence:** bills/new/page.tsx:188-191 single Deductions input, body.deductionsMinor (:80). Bill type (works/_data/types.ts:26-40) has only deductionsMinor, no breakdown, so backend contract also has none. Statutory recovery structure (SD, TDS, labour cess) is unverifiable and a business/product decision.
@@ -846,7 +847,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BILLING-MEASUREMENTS-NEW-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2047; Record measurement row actions on the BoQ lines (boq/[workId]/BoqItemsTable.tsx) and MB rows (billing/[workId]/BillingActions.tsx) open the form with work and item/MB pre-chosen; boq/[workId]/page.test.tsx + BillingActions.test.tsx)
 - **W2 works note (#2039):** MB and BoQ pickers done (BoQ select shows unit); the 'Record measurement' row action on BoQ/MB lists is not built (part 2).
 - **W0 note:** partly fixed by #1867 — MB is a select when ?workId= given; BoQ Item remains a raw UUID text input (no picker, no unit/description); no BoQ/MB row action linking here.
 - **First-pass claim:** Two raw UUIDs (MB and BoQ item) with no lookup (page.tsx:176-200); BoQ list rows are not linked here.
@@ -976,7 +977,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: BoqTable.test.tsx Work column shows the work number; loaders.test.ts; closed by #1867)
 - **First-pass claim:** The index mixes line items of every work with no Work column (BoqTable.tsx:9-17); rows are only distinguishable by an 8-char scope UUID prefix (_data/loaders.ts:341), and the row link goes to the work page which is not shown — users cannot tell which work an item belongs to.
 - **Verified evidence:** BoqTable.tsx:9-17 columns have no Work column; Scope = shortId(scopeId) (loaders.ts:341) - an opaque 8-char prefix; mapBoqRow (loaders.ts:330-345) keeps workId but not a work number; rowHref (:102 in file) goes to /works/boq/{workId}. Whether the list API returns workNumber is not visible (works-service absent; other loaders read r.workNumber).
 - **Files to change:** `apps/web/src/app/(app)/works/_data/loaders.ts`, `apps/web/src/app/(app)/works/boq/BoqTable.tsx`, `apps/web/src/app/(app)/works/boq/page.tsx`
@@ -991,7 +992,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: loaders.test.ts boq summary uses meta total / exact bigint sum and reports fetched count; closed by #1867)
 - **First-pass claim:** Total Amount and Scopes are computed over the 100 rows fetched (pageSize=100, _data/loaders.ts:347) — for a tenant with more items the totals are silently partial.
 - **Verified evidence:** loaders.ts:347 fetches /api/v1/works/boq?pageSize=100; page.tsx:10-22 computes total items, amount and scopes over that slice, with no indication of truncation. Response pagination meta (total) not visible.
 - **Files to change:** `apps/web/src/app/(app)/works/_data/loaders.ts`, `apps/web/src/app/(app)/works/boq/page.tsx`
@@ -1019,7 +1020,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-04  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: loaders.test.ts mapBoqRow keeps srItemId; boq/page.tsx counts SR-linked lines; closed by #1867)
 - **First-pass claim:** "SR Items" counts rows with any itemCode, not rows linked to a Schedule of Rates item (page.tsx:53-54); srItemId is available on the detail type (boq/[workId]/page.tsx:20) but not used here.
 - **Verified evidence:** boq/page.tsx:53-54 counts rows where itemCode is set and != '—'; mapBoqRow (loaders.ts:330-345) does not map srItemId at all, so the stat cannot reflect SR linkage. srItemId exists on the detail type (boq/[workId]/page.tsx:19). Whether the list endpoint returns srItemId is not visible.
 - **Files to change:** `apps/web/src/app/(app)/works/_data/loaders.ts`, `apps/web/src/app/(app)/works/boq/page.tsx`
@@ -1039,7 +1040,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-WORKID-01  ·  HIGH  ·  partly  ·  theme TRANSPARENCY (was MONEY)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: boq/[workId]/page.test.tsx recap breakdown test; closed by #1867)
 - **First-pass claim:** Recapitulation percentages are printed with no basis or order of application (page.tsx:196-229): a reviewer cannot see how Grand Total is derived from Work Amount + contingency + centage etc., and turnover tax / other charges mix % and ₹ in one column.
 - **Verified evidence:** Recapitulation card (boq/[workId]/page.tsx:183-224) prints only percentages (contingency, turnover tax, work charge, QC, centage) and formatMoney for Work Amount, Other Charges and Grand Total; Recapitulation type (:22-31) has no per-line rupee amounts or basis. So reviewers cannot see the derivation, and % rows sit in the same numeric column as Rs rows: confirmed. Cannot verify the backend formula (recapitulation endpoint absent), so the actual application order is unknown.
 - **Files to change:** `apps/web/src/app/(app)/works/boq/[workId]/page.tsx`, `services/works-service (backend)`
@@ -1055,7 +1056,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-WORKID-02  ·  MEDIUM  ·  confirmed  ·  theme ERRORSTATE (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: boq/[workId]/page.test.tsx items-error and 404 tests; closed by #1867)
 - **First-pass claim:** Failure of only one of the two fetches shows nothing to the user; notFound() fires only if both fail (page.tsx:113-117).
 - **Verified evidence:** page.tsx:93-117: two fetches in Promise.all; notFound() only when both fail (:115). If items fail, DataTable shows 'No BoQ items' (:177-179); if recap fails, the card is silently omitted (:183) and the stats show '—'. No RefreshErrorState/DataSourceBadge here. Also an error on both (401/500/network) is shown as 404.
 - **Files to change:** `apps/web/src/app/(app)/works/boq/[workId]/page.tsx`
@@ -1072,7 +1073,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-WORKID-03  ·  MEDIUM  ·  partly  ·  theme MONEY
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: boq/[workId]/page.test.tsx BigInt fallback total test; closed by #1867)
 - **First-pass claim:** Fallback Total Amount sums with Number() (page.tsx:126) and rows convert paise with Number() (page.tsx:136-138) — float on money; boq/page.tsx:16 uses BigInt.
 - **Verified evidence:** page.tsx:126 sums Number(i.amountMinor) into formatMoney (only used when recap.grandTotal missing); :136,:138 convert rate/amountMinor with Number() for the table. Float on paise strings but exact below 2^53, so risk is theoretical; still violates the bigint rule. DataTable amount cells accept strings (billing register passes strings). Rows' quantity is passed as string OK.
 - **Files to change:** `apps/web/src/app/(app)/works/boq/[workId]/page.tsx`, `apps/web/src/lib/money.ts`
@@ -1088,7 +1089,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-WORKID-04  ·  LOW  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2047; BoQ detail subtitle shows the work number and description via getWorkHeader (boq/[workId]/page.tsx); page.test.tsx)
 - **W0 note:** partly fixed by #1867 — empty-state Add first item action present; subtitle still shows Work ref + 8-char UUID prefix (getWorkHeader exists but not used on BoQ detail)
 - **First-pass claim:** Subtitle shows "Work {8-char UUID}…" (page.tsx:151) not the work number; empty state has no action to add the first item (page.tsx:184).
 - **Verified evidence:** Subtitle at page.tsx:145 is `Work ${workId.slice(0, 8)}…` (line differs from the observation): true. Empty state (:177-179) has no emptyAction, but DataTable supports emptyAction (DataTable.tsx:84,186,320) and the header does have '+ Add item' (:149-155). BoqItem has no work number field.
@@ -1110,7 +1111,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-NEW-01  ·  HIGH  ·  partly  ·  theme VALIDATION
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: boq/new/page.test.tsx SR pick fills unit/rate and posts srItemId; sub-paise rate rejected; closed by #1867)
 - **First-pass claim:** Items are typed free-hand although the API row carries srItemId (boq/[workId]/page.tsx:20) — no Schedule of Rates lookup, so codes, units and rates can drift from the approved SR and there is no rate validation.
 - **Verified evidence:** boq/new/page.tsx:47-55 posts free-typed workId, itemDescription, itemCode, unit, rate (no srItemId in the body); the API row carries srItemId (boq/[workId]/page.tsx:19,67). No SR lookup component or endpoint use exists in the page. Whether the backend validates rate against SR cannot be verified (works-service absent). Validation is only HTML required/min. Any SR-lookup endpoint is not visible - do not invent.
 - **Files to change:** `apps/web/src/app/(app)/works/boq/new/page.tsx`, `apps/web/src/app/(app)/works/_data/loaders.ts`
@@ -1127,7 +1128,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-NEW-02  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: boq/new/page.test.tsx grouped-rupee estimate; closed by #1867)
 - **First-pass claim:** "Estimated: ₹{(rate*qty).toFixed(2)}" (page.tsx:38,238) is unformatted float: ₹125000.00, not lakh grouped, and can mis-round; formatMoney with BigInt is available.
 - **Verified evidence:** Line 36-38 estimates via Number(rate)*Number(qty) .toFixed(2); rendered '₹{estimated}' at :195 without lakh grouping (e.g. ₹125000.00). Float rounding possible (e.g. 1.005-type products). Submit also does String(Math.round(Number(form.rate)*100)) at :51, the same float pattern; lib/money.ts already has rupeesToMinorString (exact, rejects >2 decimals).
 - **Files to change:** `apps/web/src/app/(app)/works/boq/new/page.tsx`, `apps/web/src/lib/money.ts`
@@ -1144,7 +1145,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: boq/new/page.test.tsx work chosen by number without ?workId=; closed by #1867)
 - **First-pass claim:** Work ID is a pasted UUID unless the user arrives from a work page (page.tsx:99-118).
 - **Verified evidence:** boq/new/page.tsx:18 initial workId from ?workId=; otherwise the input at :103-113 is a plain text field labelled 'Work ID (UUID) *' with a UUID placeholder. No picker exists in the repo (no EntityPicker in app/_components/ds). A works list loader may exist elsewhere; not confirmed.
 - **Files to change:** `apps/web/src/app/(app)/works/boq/new/page.tsx`, `apps/web/src/app/_components/ds/EntityPicker.tsx (new)`
@@ -1161,7 +1162,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-NEW-04  ·  LOW  ·  confirmed  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2047; quantity sent as a decimal string (boq/new/page.tsx) and accepted by works-service boqQuantitySchema (boq/validators.ts); boq-quantity-string.test.ts + boq/new/page.test.tsx)
 - **W0 note:** partly fixed by #1867 — 409 mapped to inline message and Suspense SkeletonCard done; quantity still sent as Number(), not a decimal string
 - **First-pass claim:** No duplicate-item check within a work; quantity sent as JS number (page.tsx:52). Suspense has no fallback.
 - **Verified evidence:** No duplicate check anywhere in submit (:40-74). Quantity sent as JS number (:52) while rate is a string (:51). Suspense at :236 has no fallback. Backend duplicate handling not visible (works-service absent).
@@ -1185,7 +1186,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-CLOSURE-01  ·  HIGH  ·  confirmed  ·  theme DEADEND (was DEADROUTE)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: ClosureTable.test.tsx rows link to the work; closure/page.tsx:26 links to closure/new; closed by #1867)
 - **First-pass claim:** The register has no action or link at all (closure/page.tsx, ClosureTable.tsx:67-79): a closure/drop/completion cannot be initiated from the UI and rows do not open the work — dead-end list.
 - **Verified evidence:** closure/page.tsx:8-14 header has only `back`; ClosureTable.tsx:67-79 DataTable has no rowHref or actions; mapClosureRow (loaders.ts:290-304) does not even keep workId. There is no closure/new route (dir has only page, table, loading). The closure POST endpoint is not visible (works-service absent).
 - **Files to change:** `apps/web/src/app/(app)/works/closure/page.tsx`, `apps/web/src/app/(app)/works/closure/ClosureTable.tsx`, `apps/web/src/app/(app)/works/_data/loaders.ts`, `apps/web/src/app/(app)/works/closure/new/page.tsx (new)`
@@ -1202,7 +1203,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-CLOSURE-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: ClosureTable.test.tsx Agreement column; closure-list-agreement.test.ts (service); closed by #1867)
 - **First-pass claim:** Agreement number was dropped because closures do not join awards (ClosureTable.tsx:9-21): the register cannot answer "which contract was this?".
 - **Verified evidence:** ClosureTable.tsx:9-21 documents the removal: work_closures has no agreement number; only awards.agreementNumber (tender schema) exists and listClosures does not join. Cannot verify backend. Choice among multiple awards is a product decision.
 - **Files to change:** `apps/web/src/app/(app)/works/closure/ClosureTable.tsx`, `apps/web/src/app/(app)/works/_data/loaders.ts`, `services/works-service (backend)`
@@ -1231,7 +1232,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-CLOSURE-04  ·  LOW  ·  partly  ·  theme COPY (was DATEFMT)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: ClosureTable.test.tsx per-tab date column and empty copy; closed by #1867)
 - **First-pass claim:** "No completion works to display." (ClosureTable.tsx:78) uses the raw key; Status Date is the single column for three different meanings (closed date for all types, _data/loaders.ts:302).
 - **Verified evidence:** ClosureTable.tsx:78 (file line 219) emptyMessage `No ${tab} works to display.` prints the key 'completion' ('No completion works...') vs tab label 'Completion List': true. statusDate = fmtDate(closedDate) for every type (loaders.ts:302) so the column name 'Status Date' hides that it is the closed date: true. fmtDate (format.ts:5-10) uses toLocaleDateString en-IN without timeZone, unlike formatIndianDate in lib/formatters.ts. Theme DATEFMT is secondary; primarily copy.
 - **Files to change:** `apps/web/src/app/(app)/works/closure/ClosureTable.tsx`, `apps/web/src/app/(app)/works/_data/format.ts`, `apps/web/src/app/(app)/works/_data/loaders.ts`
@@ -1497,7 +1498,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: loaders.test.ts progress rows show work number + scope description; closed by #1867)
 - **First-pass claim:** Work and Scope columns print 8-character UUID prefixes (loaders.ts:250-251 shortId) — a clerk cannot tell which work or scope a row belongs to without opening it.
 - **Verified evidence:** apps/web/src/app/(app)/works/_data/loaders.ts:230-241 mapProgressRow sets work: shortId(workId) and scope: shortId(scopeId) (8 chars + ellipsis, apps/web/src/app/(app)/works/_data/format.ts:20-23); the issues mapper does the same for work (:243-252). Columns are declared at apps/web/src/app/(app)/works/execution/ExecutionTable.tsx:37-43. Line numbers in the observation (250-251) are off; the real ones are ~235-236. Whether the progress endpoint returns workNumber/description cannot be verified (works-service absent); closure list does return workNumber via a proposals join, so an equivalent join is plausible backend work.
 - **Files to change:** `apps/web/src/app/(app)/works/_data/loaders.ts`, `apps/web/src/app/(app)/works/execution/ExecutionTable.tsx`, `services/works-service (not in snapshot)`
@@ -1532,7 +1533,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: execution/page.test.tsx mutually exclusive buckets sum to total; closed by #1867)
 - **First-pass claim:** Status buckets leave a gap: On Track is >= 80 and Delayed is 0 < p < 50, so entries at 50-79% are counted nowhere, and 0% entries are neither delayed nor on track (page.tsx:14-19). The "Completed" 100% rows are also counted in On Track.
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/page.tsx:12-16: onTrack = pct>=80, delayed = 0<pct<50, completed = pct===100. Rows at 50-79% and at exactly 0% appear in no bucket; 100% rows are counted in both On Track and Completed. 'Delayed' is defined purely by low percentage with no reference to planned dates, so a scope just started reads 'delayed'.
 - **Files to change:** `apps/web/src/app/(app)/works/execution/page.tsx`, `apps/web/src/app/(app)/works/_data/loaders.ts`
@@ -1587,7 +1588,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-WORKID-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: execution/[workId]/page.test.tsx WORKID-01 header test; closed by #1867)
 - **First-pass claim:** Header reads "Work 3f9a1c20…" — the work is identified only by a UUID prefix (page.tsx:141); no work number, name or agreement is fetched.
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/[workId]/page.tsx:155 sets subtitle to `Work ${params.workId.slice(0, 8)}…`; the only data fetched are scopes (:104-111) and issues (:112-119), neither carries a work number. The billing sibling repeats it (apps/web/src/app/(app)/works/billing/[workId]/page.tsx:95). The proposals detail page reads /api/v1/works/proposals/:id (apps/web/src/app/(app)/works/proposals/[id]/page.tsx:103-106) and the closure loader joins work_proposals by workId for workNumber (apps/web/src/app/(app)/works/_data/loaders.ts), which suggests workId is the proposal/work id - not verifiable without works-service.
 - **Files to change:** `apps/web/src/app/(app)/works/execution/[workId]/page.tsx`, `apps/web/src/app/(app)/works/billing/[workId]/page.tsx`, `apps/web/src/app/(app)/works/_data/loaders.ts`
@@ -1638,7 +1639,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-WORKID-04  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: execution/[workId]/page.test.tsx WORKID-04 achieved % test; closed by #1867)
 - **First-pass claim:** Scope progress is not shown at all here — the scopes table has no achievement/percentage (page.tsx:104-108 comment), so the primary "Execution Progress" page has no progress figures.
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/[workId]/page.tsx:127-130 comment states scopes carry no completion field and 'real progress lives in scope_progress'; StatGrid (:188-192) shows only scope and issue counts and the scopes table (:194-207) has Scope/Target/Start/End only. The page titled 'Execution Progress' therefore shows no progress. A progress list exists at /api/v1/works/execution/progress?pageSize=100 with currentAchievement, targetValue and percentage per scope (apps/web/src/app/(app)/works/_data/loaders.ts:230-241, :254-260) but is tenant-wide and capped at 100; per-work filtering support cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/works/execution/[workId]/page.tsx`, `apps/web/src/app/(app)/works/_data/loaders.ts`
@@ -1783,7 +1784,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-ISSUES-NEW-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: issues/new/page.test.tsx NEW-01 picks a work by name and posts its id; closed by #1867)
 - **First-pass claim:** Work ID and Issue Type ID are raw UUID text inputs (page.tsx:93-118); reaching the form without ?workId= means the user must know a UUID, and a wrong id yields only a generic server error.
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/issues/new/page.tsx:91-118 workId and issueTypeId are free-text inputs ('UUID of the work', 'Issue type UUID (optional)'); workId is only prefilled when ?workId= is present (line 31; the work detail page links with it at execution/[workId]/page.tsx:171). No component named EntityPicker exists; the closest is SmartCombobox (string-only options, no id/label pairs). Issue types exist as a master (works/masters/page.tsx:22 uses GET /api/v1/works/masters/issue-types?pageSize=100, line 109). A works list endpoint for the picker: cannot-verify path (execution/page.tsx uses a loader; confirm route). Error path shows the generic formError message (apps/web/src/app/(app)/works/execution/issues/new/page.tsx:57-61 region).
 - **Files to change:** `apps/web/src/app/(app)/works/execution/issues/new/page.tsx`, `apps/web/src/app/_components/ds/EntityPicker.tsx (new)`, `apps/web/src/app/(app)/works/execution/issues/new/page.tsx`
@@ -1800,7 +1801,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-ISSUES-NEW-02  ·  MEDIUM  ·  confirmed  ·  theme NAVUX
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: issues/new/page.test.tsx discard confirm + beforeunload only while dirty; closed by #1867)
 - **First-pass claim:** No Cancel/back action inside the form and no unsaved-draft guard; only the header back link (page.tsx:159-165).
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/issues/new/page.tsx:75-165: the form has only a submit button (lines ~140-152) - no Cancel/Reset; the only exit is the PageHeader back link (lines 161-166 -> /works/execution). No beforeunload/dirty-state guard anywhere in the file. (contractors/new and photos/new do have a Cancel link/button.) Note the back link goes to /works/execution, not to the work when ?workId= is set.
 - **Files to change:** `apps/web/src/app/(app)/works/execution/issues/new/page.tsx`
@@ -1815,7 +1816,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-ISSUES-NEW-03  ·  MEDIUM  ·  partly  ·  theme VALIDATION
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: issues/new/page.test.tsx NEW-03 blocked without a work; closed by #1867)
 - **First-pass claim:** On success it redirects to /works/execution/{workId} using the typed value without checking it is a valid work (page.tsx:57).
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/issues/new/page.tsx:63 does router.push(`/works/execution/${workId}`) with the raw typed string, unencoded, and there is no client-side format/zod check on workId or issueTypeId (lines 47-48). Overstated: the redirect happens only after a 2xx from POST /issues (line 56-63), so an unknown work is rejected earlier if the service validates the FK/existence - which is cannot-verify (works-service is not in the snapshot (only services/hrms-service), so server behaviour is cannot-verify;). Real risks: non-UUID strings reach the server, and a value like '../x' would be pushed into the URL.
 - **Files to change:** `apps/web/src/app/(app)/works/execution/issues/new/page.tsx`
@@ -1831,7 +1832,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-ISSUES-NEW-04  ·  LOW  ·  partly  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: issues/new/page.test.tsx NEW-04 role=alert; Suspense SkeletonCard fallback in page.tsx; closed by #1867)
 - **First-pass claim:** Uses inline styles and a hand-rolled error banner rather than the DS form kit; Suspense fallback is bare "Loading..." (page.tsx:167).
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/issues/new/page.tsx:75-89 renders a hand-built role=alert div with inline rgba styles, and the Suspense fallback is <div>Loading...</div> (line 168; finding said 167). True. But there is no 'DS form kit' in apps/web/src/app/_components/ds (no Field/Input/FormError components); every sibling form (contractors/new, photos/new, IssueCloseForm) uses the same local inputStyle/labelStyle, and useFormError IS used here (line 37).
 - **Files to change:** `apps/web/src/app/(app)/works/execution/issues/new/page.tsx`, `apps/web/src/app/_components/ds/FormBanner.tsx (new, optional)`
@@ -1852,7 +1853,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-PHOTOS-NEW-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: photos/new/page.test.tsx NEW-01 label and posted workId; closed by #1867)
 - **First-pass claim:** Work ID is a raw UUID text input labelled "UUID of the execution record" (page.tsx:127-136) — the label says execution record but the API and back link treat it as a work id; users pasting the wrong id get a generic failure.
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/photos/new/page.tsx:109-121 Work ID is a free-text input with placeholder 'UUID of the execution record' (line 119; the finding's 127-136 was off) while the body sends it as workId (line 51) and cancel/redirect go to /works/execution/{workId} (lines 75-79, 87-89); PageHeader subtitle (line 220) also says 'execution record'. Errors are the raw server message or 'Failed to register photo.' (lines 66-69). The work detail page links here with ?workId= (execution/[workId]/page.tsx:178).
 - **Files to change:** `apps/web/src/app/(app)/works/execution/photos/new/page.tsx`, `apps/web/src/app/_components/ds/EntityPicker.tsx (new, shared)`
@@ -1868,7 +1869,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-PHOTOS-NEW-02  ·  HIGH  ·  confirmed  ·  theme VALIDATION (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2035) (W2 works: closed by #2048; source is web-gps (geolocation) / web-manual (typed) / web (no coordinates) in photos/new/page.tsx and accepted by uploadPhotoSchema; photos/new/page.test.tsx + all-routes.test.ts)
 - **W0 note:** partly fixed by #1867 — Done: zod lat/long range + both-or-neither, min/max attrs, Use my location button. Remains: source still hard-coded "web" (no web-gps/web-manual), backend range validation unverifiable (works-service not in snapshot)
 - **First-pass claim:** Photo evidence with GPS has no range validation: latitude/longitude accept any number and are not checked against -90..90 / -180..180 (page.tsx:186-205), and source is hard-coded "web" so the coordinates are typed, not device-captured — weak as verification evidence.
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/photos/new/page.tsx:157-182 latitude/longitude are type=number with step only (no min/max), the form is noValidate (line 92) so even native constraints don't run, and submit parses parseFloat (lines 56-57) with no range check; source is hard-coded "web" (line 53) and coordinates are typed in, not captured via navigator.geolocation. Server-side range validation/source enum is cannot-verify (works-service is not in the snapshot (only services/hrms-service), so server behaviour is cannot-verify;). Theme 'PII' is wrong - this is validation/evidence integrity.
@@ -1885,7 +1886,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-PHOTOS-NEW-03  ·  MEDIUM  ·  partly  ·  theme OTHER (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2048; image thumbnail of the chosen photo from the local File (FileUpload.tsx meta.file, photos/new/page.tsx); photos/new/page.test.tsx)
 - **W0 note:** partly fixed by #1867 — Done: filename+size shown from meta, Choose another clears. Remains: no image thumbnail preview (no previewUrl in FileUpload meta); the Remove action lacks a preview
 - **First-pass claim:** After upload only the storage key is shown ("✓ File key") with no thumbnail or filename, so the user cannot confirm the right photo was attached (page.tsx:151-156).
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/photos/new/page.tsx:136-140 the page itself prints only '✓ File key: <code>' but the FileUpload component already shows '✅ Uploaded: {file.name}' (ds/FileUpload.tsx:85,113) and passes meta {fileName,size,mimeType} as onUploaded's 2nd arg (line 86) which the page ignores (line 134 uses only key). No thumbnail/preview anywhere. Theme 'CONFIRM' is not accurate (this is feedback, not a confirm dialog).
@@ -1901,7 +1902,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-PHOTOS-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: photos/new/page.test.tsx 500, 400 fieldErrors and network-failure tests; closed by #1867)
 - **First-pass claim:** Errors are hand-written and inconsistent with sibling forms that use useFormError (issues/new, record-progress); server message is shown raw (page.tsx:59-62).
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/photos/new/page.tsx does not import useFormError (imports at lines 1-6; siblings issues/new line 37 and IssueCloseForm do). Lines 66-69 display the server JSON `message` raw (or 'Failed to register photo.'); catch (81-83) shows err.message raw; the local validations at 45-46 use ad-hoc strings. useFormError's own contract (lib/useFormError.ts header) says never echo raw server text/status. Also submit doesn't guard double-click beyond disabled state.
 - **Files to change:** `apps/web/src/app/(app)/works/execution/photos/new/page.tsx`
@@ -1961,7 +1962,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-RECORD-PROGRESS-03  ·  MEDIUM  ·  confirmed  ·  theme DUPLICATE (was CAP)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2048; record-progress/page.tsx warns (does not block) when the scope already has an entry for the chosen month/year; page.test.tsx RP-03 tests. Server-side uniqueness is a separate item (RECORD-PROGRESS-06))
 - **W0 note:** partly fixed by #1867 — Done: inFlight ref + saved state keep form disabled through redirect. Remains: no warning when an entry already exists for same scope/month/year; backend uniqueness/idempotency unverified
 - **First-pass claim:** Duplicate month/year submissions for the same scope are not prevented client-side — a double click before redirect (or a re-entry next day) adds the amount twice; the button disables only while busy (page.tsx:110-140).
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/record-progress/page.tsx:109-140: setBusy(true) at :111 and finally setBusy(false) at :138 run as soon as the POST resolves, but navigation is deferred by setTimeout 600 ms (:134). During that window the submit button is enabled again, so a second click re-POSTs and adds the amount twice. No idempotency key is sent (:123-127) and no month/year+scope duplicate check exists client-side. Whether the service upserts or rejects a repeat (scope, month, year) cannot be verified (works-service absent). The theme tag CAP and the fix text are unrelated boilerplate.
@@ -1980,7 +1981,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-RECORD-PROGRESS-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: record-progress/page.test.tsx RP-04 year options + back-dated confirmation; closed by #1867)
 - **First-pass claim:** Year is a free number input with min 2000 and no max, and month/year default to today, so back-dated or future-period entries are accepted without a warning (page.tsx:233-245).
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/record-progress/page.tsx:55-60 defaults month/year to today; year input :234-243 is type=number min=2000 with no max; month select lists all 12 months (:224-228) with no relation to the current date. Nothing warns on future or old periods. Server-side period validation cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/works/execution/record-progress/page.tsx`
@@ -1998,7 +1999,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-RECORD-PROGRESS-05  ·  LOW  ·  partly  ·  theme UNIT (was WIRING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: record-progress/page.test.tsx RP-05 unit beside the input and option; closed by #1867)
 - **First-pass claim:** Field labelled "Progress this period" is really "quantity done"; unit of the scope (m, sqm, nos) is never shown next to the input because scopes carry no unit column (page.tsx:23-30 comment).
 - **Verified evidence:** apps/web/src/app/(app)/works/execution/record-progress/page.tsx:18-24 comment and :247-258 confirm the input is 'Progress this period' with placeholder 'Amount done this month (e.g. 20)' and posts currentAchievement (:120); no unit is shown. True that work_scopes rows carry no unit. But the master Scopes catalog does define a required unit (m, sqm, nos) (apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx:80-86) and work_scopes.scopeId references that catalog, so a unit is obtainable by joining client-side. Whether GET /v1/works/masters/scopes returns unit cannot be verified (service absent; apps/web/src/app/(app)/works/masters/page.tsx:123-128 only reads id/name/code/active). Copy at :273-276 additionally mixes percent and quantity wording.
 - **Files to change:** `apps/web/src/app/(app)/works/execution/record-progress/page.tsx`, `apps/web/src/app/(app)/works/execution/[workId]/page.tsx`
@@ -2022,7 +2023,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-MASTERS-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: MastersTable.test.tsx failed fetch shows retry, not the empty state; closed by #1867)
 - **First-pass claim:** List fetch errors are swallowed: only `data` is read (page.tsx:108), so an outage shows "No authorities yet — Use the form above to add the first entry", inviting duplicate creation.
 - **Verified evidence:** apps/web/src/app/(app)/works/masters/page.tsx:108 destructures only `data` from fetchJson (default []), dropping `source`; on failure the empty DataTable shows emptyTitle 'No X yet' with emptyMessage 'Use the form above to add the first entry.' (:187-188) beside an enabled create form. Note isMasterType failure correctly uses notFound() (:105) - that part is fine.
 - **Files to change:** `apps/web/src/app/(app)/works/masters/page.tsx`
@@ -2056,7 +2057,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-MASTERS-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (W1 SF-15 re-check REOPENED the PROVISIONAL W0 tick: edit and deactivate exist but no test covers the deactivate ConfirmDialog sending active=false; no Unit column)
+- [x] **Status** (W2 works: closed by #2048; Unit column for scopes (masterTypes.ts) and MastersTable.test.tsx proves Deactivate confirms then PATCHes active=false with the row version; edit form unchanged)
 - **First-pass claim:** Registry is create-only: no edit, deactivate or delete, and no parent/child display for Work Sub-Types, Scopes or Repair Types (page.tsx:67-72).
 - **Verified evidence:** apps/web/src/app/(app)/works/masters/page.tsx:67-72 columns are ID/Name/Code/Active only; apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx only POSTs (:264) and the row cannot be clicked (no rowHref, page.tsx:179-190). No edit/deactivate/delete UI exists, and parent/child columns are absent for sub-types, scopes and repair types. Whether PATCH/PUT/DELETE endpoints exist in works-service cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/works/masters/page.tsx`, `apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx`, `services/works-service (not in snapshot)`
@@ -2074,7 +2075,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-MASTERS-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2048; MastersTable.tsx shows a Pending row, locks the Add control and polls the type's own GET until the list total grows (useAcceptedWrite poll); MastersTable.test.tsx pending/duplicate-submit test, MasterCreateForm re-entry guard)
 - **W1 SF-15 note:** the timer-driven 600/1500/3000ms refreshes were removed (#2011). After a 202 the form now shows the shared AcceptedNotice ("received, will appear shortly") with a manual Refresh; the row does NOT yet appear without a manual refresh and there is no pending row or duplicate-submit block, so this stays OPEN.
 - **W0 note:** partly fixed by #1867 — Replaced single refresh with fixed 600/1500/3000ms router.refresh polling. Remains: polling does not stop when row appears, no pending row/toast, no duplicate-submit block
 - **First-pass claim:** Create returns 202 and the row appears "shortly" — the list refreshes after a fixed 600 ms timeout, so a slow write leaves the new entry missing (MasterCreateForm.tsx:264-271).
@@ -2092,7 +2093,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-MASTERS-06  ·  MEDIUM  ·  confirmed  ·  theme RESPONSIVE (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: civitas-ds.css .masters-layout stacks under the 375px breakpoint (civitas-ds.css:568-586); masters/page.tsx uses the class; closed by #1867)
 - **First-pass claim:** Left nav is a fixed 220 px flex column with inline styles and no responsive rule (page.tsx:141-158); on a phone it consumes the row and squeezes the table.
 - **Verified evidence:** apps/web/src/app/(app)/works/masters/page.tsx:141-170: container is display:flex gap 24 with a nav of width 220, flexShrink 0, all inline styles, so no media query is possible; at phone width the nav takes ~60% of the row and squeezes the table (minWidth 0 on the right column). Nav has 17 links. The PII tag is wrong.
 - **Files to change:** `apps/web/src/app/(app)/works/masters/page.tsx`, `apps/web/src/app/civitas-ds.css`
@@ -2107,7 +2108,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-MASTERS-07  ·  LOW  ·  partly  ·  theme WIRING (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: MastersTable.test.tsx sr-items columns and 'Not set' tests; closed by #1867)
 - **First-pass claim:** SR Items and Assets have no Name-based empty/label logic; the "Active" column shows "—" when the API omits it, which reads as unknown rather than absent (page.tsx:127).
 - **Verified evidence:** apps/web/src/app/(app)/works/masters/page.tsx:123-128 maps every row through item.name and item.code only. Per the form spec (apps/web/src/app/(app)/works/masters/MasterCreateForm.tsx:113-120) sr-items have no name or code (fields are zone, srYear, itemCode, description, unit, rate), so if the API returns those names every SR Items row shows '—' in Name and Code - worse than the observation says. Assets have code and name so are fine (extra fields like type/district/cost not shown). Active shows '—' when item.active is null (:127) - accurate. Exact response shapes cannot be verified (works-service absent).
 - **Files to change:** `apps/web/src/app/(app)/works/masters/page.tsx`
@@ -2218,7 +2219,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-PROPOSALS-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: proposals/page.test.tsx Type column shows the work-type name; closed by #1867)
 - **First-pass claim:** Type and Office columns print 8-character id prefixes of workTypeId / executingDivisionId (loaders.ts:372,375) — unreadable as a register column and useless for search.
 - **Verified evidence:** loaders.ts:373 type: shortId(workTypeId) and :376 office: shortId(executingDivisionId); shortId (works/_data/format.ts) returns first 8 chars + '…'. ProposalsTable.tsx:11,14 renders these as 'Type' and 'Office' columns. Not searchable by name.
 - **Files to change:** `apps/web/src/app/(app)/works/_data/loaders.ts`, `apps/web/src/app/(app)/works/proposals/page.tsx`
@@ -2322,6 +2323,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 ### GAP-WORKS-PROPOSALS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme WIRING
 
 - [ ] **Status** (W2 works REOPENED the PROVISIONAL tick: acceptance criteria conflict (draft: 'Created current' vs 'no current step without an action'); code marks DAO Finalized current for a draft (actionable) and Created done. Owner to pick the intended state mapping.)
+- **W2 works part 2 note (#2047):** status-to-step mapping for a draft is still the owner's call (see the reopen note above). INTERIM, owner decision.
 - **First-pass claim:** Timeline promises "Submitted", "TS Eligible" and "AA Issued" steps that the backend never sets (list page comment, proposals/page.tsx:6-17), so a draft shows "Submitted" as the current step, and after DAO finalisation "TS Eligible" as current with no path to advance it (page.tsx:117-153).
 - **Verified evidence:** page.tsx:117 PROPOSAL_STATUSES=[draft,submitted,dao_finalized,ts_eligible,aa_issued]; buildTimelineSteps 119-153. For status 'draft' (idx 0) the 'Submitted' step is 'current' (:135); for 'dao_finalized' (idx 2) 'TS Eligible' is 'current' (:146) and AA Issued upcoming. proposals/page.tsx:6-17 comment states the backend only ever writes draft and dao_finalized (backend source absent, cannot re-verify). 'Create AA' link (page.tsx:314) exists but does not advance this status.
 - **Files to change:** `apps/web/src/app/(app)/works/proposals/[id]/page.tsx`
@@ -2355,6 +2357,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 ### GAP-WORKS-PROPOSALS-DETAIL-04  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 works part 2 note (#2047):** Sub-Division/Section have no master and the API has no reason field. INTERIM, owner decision.
 - **W2 works note (#2039):** Division is now an EntityPicker with its name in the confirm; Sub-Division/Section have no master (UUID inputs kept with guard) and the API has no reason field. INTERIM, owner decision.
 - **W0 note:** partly fixed by #1867 — Done: UUID regex validation, ConfirmDialog with review summary for office and COA mapping. Remains: Division/Sub-division/Section still raw UUID text inputs (no EntityPicker), COA format validation not added, no mandatory reason field
 - **First-pass claim:** Split / Map COA / Map Office take raw UUIDs and free-text account heads (Division ID, Sub-Division ID, Section ID; Major Head max 16 chars) with no lookup (ProposalExtActions.tsx:397-437,308-332); they are append-only so a typo becomes permanent (comments at :250,:366) — the confirm dialog is the only safeguard.
@@ -2496,6 +2499,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 ### GAP-WORKS-PROPOSALS-NEW-04  ·  MEDIUM  ·  partly  ·  theme VALIDATION
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 works part 2 note (#2047):** Taluka/Tehsil label and location masters need a product decision. INTERIM, owner decision.
 - **W2 works note (#2039):** needs a product decision (Taluka/Tehsil label, location masters).
 - **First-pass claim:** Location is three free-text fields (District, Taluka, Village) — "Taluka" is not an Odisha administrative term (tehsil/block) and values are not validated against a master; no latitude/longitude or executing division/office field although the list shows Office (ProposalsTable.tsx:14).
 - **Verified evidence:** Location is three free-text inputs, maxLength 128 (new/page.tsx:177-211), labelled 'Taluka'; no lat/long or executing-division field on the form. Whether 'Taluka' is wrong for the tenant is a domain judgement (Odisha uses tehsil/block) and cannot be verified from code. Executing office can be set after creation via Map Office (ProposalExtActions.tsx:352+) and the list shows Office (ProposalsTable.tsx:14), so missing office at create is a workflow gap, not absence of the capability.
@@ -2535,7 +2539,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-REPORTS-01  ·  HIGH  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2048; active-filter chip and picker label show the division name, never the uuid (ReportFilters.tsx); ReportFilters.test.tsx)
 - **W0 note:** partly fixed by #1934 — Division via EntityPicker with UUID guard (also touched in #1867). Remains: active-filter chip shows raw "Division <uuid>" instead of the name
 - **First-pass claim:** Division is a free-text "Division ID" with placeholder "e.g. DIV-001" (ReportFilters.tsx:70-78), yet every other works screen treats division ids as UUIDs (proposals/[id] Map Office); a typed code silently returns an empty register with the message "No works match the selected filters".
 - **Verified evidence:** ReportFilters.tsx:69-80 (printed 265-276) free-text input 'Division ID' placeholder 'e.g. DIV-001'; Map Office elsewhere uses UUIDs (ProposalExtActions.tsx:405). The value is sent unchanged as ?divisionId= (reports/page.tsx:49). What the API does with a non-UUID (400 vs empty result) cannot be verified: works-service is absent. If it 400s, page.tsx:97 shows the error badge and zeros, not the 'No works match' message.
@@ -2552,7 +2556,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-REPORTS-02  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: reports/page.test.tsx per-block retry tests; closed by #1867)
 - **First-pass claim:** One aggregate error badge for three independent fetches (page.tsx:97): a failed summary shows "Total Works 0" next to a populated register, and vice-versa, with no indication which block is stale.
 - **Verified evidence:** reports/page.tsx:66-95 three fetchJson calls each with own source; :97 hasError ORs them; :126 renders one DataSourceBadge; summary fallback is {0,0,0} (:73) and StatCards print those (:140-152). A failed summary next to a populated register is therefore shown as 'Total Works 0' with only a generic badge.
 - **Files to change:** `apps/web/src/app/(app)/works/reports/page.tsx`
@@ -2598,7 +2602,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-REPORTS-05  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: reports/page.test.tsx residual 'Other / In progress' test; closed by #1867)
 - **First-pass claim:** Summary/Status/Register use different fetches so their totals can disagree; there is no reconciliation and Active + Closed need not equal Total (page.tsx:135-154).
 - **Verified evidence:** Cards use /reports/summary, breakdown /reports/status, register /reports/works (page.tsx:71-94) with no cross-check; the page renders total/active/closed with no 'other' bucket (:135-154). Proposals statuses include draft and dao_finalized (proposals/page.tsx:18-22) which are neither active nor closed, so Active+Closed<Total is plausible, but the endpoints' semantics cannot be verified (works-service absent).
 - **Files to change:** `apps/web/src/app/(app)/works/reports/page.tsx`
@@ -2614,7 +2618,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-REPORTS-06  ·  LOW  ·  confirmed  ·  theme FORMAT (was VALIDATION)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: reports/page.test.tsx humanized Category test; closed by #1867)
 - **First-pass claim:** Category column prints raw tokens ("regular") while Status is humanized (page.tsx:113,178); status breakdown uses a local humanizeStatus duplicate of lib/formatters (page.tsx:54-56).
 - **Verified evidence:** reports/page.tsx:113 category: row.category raw (e.g. 'regular'), while status uses cellType 'status' (:178) which humanizes via StatusPill; humanizeStatus is redefined locally at :54-56 (regex-based) instead of importing humanizeStatus from lib/formatters (formatters.ts:44). The local one lacks the acronym map (N/A, and any DAO additions).
 - **Files to change:** `apps/web/src/app/(app)/works/reports/page.tsx`
@@ -2700,7 +2704,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-TENDERS-05  ·  LOW  ·  partly  ·  theme NAV (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2048; awarded tenders open at #quotations and an Awarded stat card (TendersTable.tsx); TendersTable.test.tsx)
 - **W0 note:** partly fixed by #1867 — Detail has id=quotations anchor and Awarded stat links to it; list still has no awarded/quotation count column (optional step 1).
 - **First-pass claim:** Header has only "+ New pre-tender"; there is no link to quotations/awards from the list other than the row (page.tsx:25).
 - **Verified evidence:** apps/web/src/app/(app)/works/tenders/page.tsx:23-27 header actions has only '+ New pre-tender'; rows link to detail (apps/web/src/app/(app)/works/tenders/TendersTable.tsx:78) which hosts quotations and award actions, so navigation exists. No standalone quotations/awards list route exists under works/tenders (directory has only [id], new). Severity low; 'dead route' is not accurate.
@@ -2874,6 +2878,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 ### GAP-WORKS-TENDERS-NEW-02  ·  HIGH  ·  partly  ·  theme WIRING (was MONEY)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 works part 2 note (#2047):** approving authority, contractor class and estimated amount are still not accepted by POST pre-tender (no backend fields). INTERIM, owner decision.
 - **W2 works note (#2039):** approving authority, contractor class and estimated amount are not accepted by POST pre-tender (no backend fields); missing amount already renders a dash. Needs backend fields (part 2 / owner decision).
 - **W0 note:** partly fixed by #1867 — openingDate field added end-to-end (validator, consumer) and list shows dash for missing amount; approving authority, contractor class and estimated amount still not captured.
 - **First-pass claim:** The form captures none of the fields the tender list and detail depend on — opening date, approving authority, contractor class, tender amount (types.ts:50-62 vs page.tsx:16-23) — so a newly created pre-tender shows ₹0.00, no opening date and an id-prefix authority, and its list Status (derived from opening date) is meaningless.
@@ -2892,6 +2897,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 ### GAP-WORKS-TENDERS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme MASTERDATA (was STATUS)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 works part 2 note (#2047):** pre-tender accepts tenderType (code) only; tenderTypeId needs a backend column. INTERIM, owner decision.
 - **W2 works note (#2039):** pre-tender accepts tenderType (code) only; tenderTypeId needs a backend column. Select is master-driven and the list resolves names. INTERIM, owner decision.
 - **W0 note:** partly fixed by #1867 — Type select loads tender-types master and list resolves names; form still sends tenderType code/name not tenderTypeId, and category remains free text.
 - **First-pass claim:** Tender type is a free enum of four strings sent as `tenderType` (page.tsx:45,111-116) while the register and masters use `tenderTypeId` (masters "Tender Types", loaders.ts:123); two vocabularies for the same concept, and the "Category" is free text.
@@ -3088,7 +3094,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: works-service boq routes: all-routes.test.ts role/validation cases + boq-quantity-string.test.ts; closed by #1867)
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['GET /api/v1/works/boq?pageSize=100']`
 - **Question:** Do GET /api/v1/works/boq?pageSize=100 enforce BoQ reader role checks, input validation, canonical status enums and the documented response shape?
@@ -3099,7 +3105,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-WORKID-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: works-service boq routes: all-routes.test.ts GET boq 401/403/200 + boq-workid-existence.test.ts; closed by #1867)
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['GET /api/v1/works/boq/:workId', 'GET /api/v1/works/boq/:workId/recapitulation']`
 - **Question:** Do GET /api/v1/works/boq/:workId, GET /api/v1/works/boq/:workId/recapitulation enforce BoQ reader role checks, input validation, canonical status enums and the documented response shape and is money returned in one consistent unit?
@@ -3110,7 +3116,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-BOQ-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by main, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: works-service boq create: all-routes.test.ts 202/400 + boq-quantity-string.test.ts; closed by main)
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/works/boq']`
 - **Question:** Do POST /v1/works/boq enforce BoQ author role checks, input validation, canonical status enums and the documented response shape?
@@ -3132,7 +3138,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-CONTRACTORS-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by main, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: contractor-routes.test.ts roles + validation + duplicate registration number; closed by main)
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['GET /api/v1/works/contractors']`
 - **Question:** Do GET /api/v1/works/contractors enforce contractor reader role checks, input validation, canonical status enums and the documented response shape?
@@ -3143,7 +3149,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-CONTRACTORS-DETAIL-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1944, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: contractor-routes.test.ts detail/patch/rate role gates; closed by #1944)
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['GET /api/v1/works/contractors/:id', 'GET /api/v1/works/contractors/:id/rating-history', 'PATCH /v1/works/contractors/:id', 'POST /v1/works/contractors/:id/rate']`
 - **Question:** Do GET /api/v1/works/contractors/:id, GET /api/v1/works/contractors/:id/rating-history, PATCH /v1/works/contractors/:id, POST /v1/works/contractors/:id/rate enforce contractor manager role checks, input validation, canonical status enums and the documented response shape and is PAN/GST validated on PATCH?
@@ -3154,7 +3160,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-CONTRACTORS-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2048; registration number unique per tenant: route 409 DUPLICATE_REGISTRATION_NO + consumer re-check in the writing transaction (contractor/routes.ts, consumer.ts, repo.ts); contractor-routes.test.ts + gap2-review2-consumers.db.test.ts (real DB))
 - **W0 note:** partly fixed by #1867 — PAN/GSTIN/mobile regex validated and WRITE_ROLES enforced; no duplicate registrationNo rejection found in route/consumer/migration 0015.
 - **First-pass claim:** Backend works-service is absent from this snapshot (only services/hrms-service exists) — role checks, validation, status enums and response shapes are undeterminable server-side.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/works/contractors']`
@@ -3166,7 +3172,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: progress percentage derived in execution/consumer.ts progressRecord and paginated with true meta.total (execution/routes.ts progress route); orphan-consumers.test.ts; closed by #1867)
 - **First-pass claim:** Backend works-service is absent from this snapshot; progress percentage derivation and pageSize cap are undeterminable (only the first 100 rows are ever fetched, page never says so).
 - **Service:** `works-service`  ·  **Endpoint(s):** `['GET /api/v1/works/execution/progress?pageSize=100']`
 - **Question:** How is progress percentage derived (cumulative/scope quantity) and what is the maximum pageSize the service honours; does the response include total?
@@ -3178,6 +3184,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 ### GAP-WORKS-EXECUTION-WORKID-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 works part 2 note (#2048):** done: close is now idempotent (route 409 ALREADY_CLOSED + consumer dead-letter) and the physical-complete certificate key is tenant-checked. Still open: refusing a close while issues are open or progress is below 100% is a product rule. INTERIM, owner decision.
 - **W0 note:** partly fixed by #1867 — close restricted to dao/do/admin and checks closureEligibility (agreement, physical completion, splits) sync with audit; does not check open issues or 100% progress; no explicit idempotency guard.
 - **First-pass claim:** works-service absent from snapshot — server checks for completion/closure preconditions and audit are undeterminable.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/works/execution/physical-complete', 'POST /v1/works/execution/close', 'GET /api/v1/works/execution/:workId/scopes', 'GET /api/v1/works/execution/:workId/issues']`
@@ -3189,7 +3196,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-ISSUES-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: issue close: roles in all-routes.test.ts, idempotent no-op + audit in works-ai-pack-gaps.test.ts; closed by #1867)
 - **First-pass claim:** works-service absent from snapshot — close idempotency, audit and role rules undeterminable.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/works/execution/issues/:id/close', 'GET /api/v1/works/execution/issues?pageSize=100']`
 - **Question:** Is issue close idempotent (second close returns 200/409 without a duplicate audit row) and restricted to a site-engineer/supervisor role?
@@ -3200,7 +3207,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-EXECUTION-ISSUES-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2048; POST issues 404s an unknown work and rejects another tenant's attachmentKey (execution/routes.ts); issues/new has an attachment upload; all-routes.test.ts + issues/new/page.test.tsx)
 - **W0-10 note:** review found the W0 tick partly — Backend accepts attachmentKey (execution/validators.ts:37) and audits (consumer.ts:44) but route (routes.ts:168-172) does not check workId exists (202 then blind insert consumer.ts:28; no 404/422), and issues/new/page.tsx has no attachment field.
 - **First-pass claim:** No attachment field even though work_issues has an attachmentKey (types.ts:125); server validation and audit undeterminable (works-service absent).
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/works/execution/issues']`
@@ -3213,6 +3220,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 ### GAP-WORKS-EXECUTION-PHOTOS-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 works part 2 note (#2048):** done: fileKey must be this tenant's upload (route 422 INVALID_FILE_KEY), unknown work is 404, presign already enforces extension allow-list and size cap (admin-service uploads/routes.ts). Still open: virus scan and EXIF stripping are platform features. INTERIM, owner decision.
 - **W0 note:** partly fixed by #1867 — GPS range-validated server-side and audit written; fileKey only length-checked, no tenant-prefix verification; presign content-type/size, virus scan and EXIF handling not evidenced.
 - **First-pass claim:** Presign endpoint behaviour, virus scan, EXIF handling and audit of the photo registration are undeterminable — works-service absent and FileUpload internals not traced.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/admin/uploads/presign', 'POST /v1/works/execution/photos']`
@@ -3225,6 +3233,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 ### GAP-WORKS-EXECUTION-RECORD-PROGRESS-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 works part 2 note (#2048):** the web form now warns on a second entry for the same scope/month; whether the server should refuse it (deltas are insert-only) is a product rule. INTERIM, owner decision.
 - **W0 note:** partly fixed by #1867 — Cumulative<=target enforced sync and in consumer, negative delta needs reason, audit written; no one-entry-per-scope-per-month uniqueness (insert-only deltas).
 - **First-pass claim:** Server rules (uniqueness per scope-month, cumulative cap, audit) undeterminable — works-service absent.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['GET|POST /v1/works/execution/:workId/scopes', 'POST /v1/works/execution/progress']`
@@ -3236,7 +3245,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-MASTERS-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: MastersTable.test.tsx canManage gating + works-service masters ADMIN_ROLES on POST/PATCH (masters/routes.ts); closed by #1867)
 - **First-pass claim:** Create form is shown to every viewer with no role gate (MasterCreateForm.tsx:280-289) although masters drive every works workflow (tender types, contractor classes, SR rates); server-side authorisation is undeterminable (works-service absent).
 - **Service:** `works-service`  ·  **Endpoint(s):** `['POST /v1/works/masters/:type']`
 - **Question:** Does POST masters/:type require a masters-admin role, and is it audited?
@@ -3247,7 +3256,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-MASTERS-08  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1867, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 works: PROVISIONAL cleared by re-check, evidence: masterTypes.ts is the single 17-type source; masters-registry.test.ts (service); closed by #1867)
 - **First-pass claim:** Which masters the backend actually exposes, their schemas and audit of writes are undeterminable — works-service absent; the 17-type list is duplicated in page.tsx and MasterCreateForm.tsx.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['GET /api/v1/works/masters/:type?pageSize=100', 'POST /v1/works/masters/:type']`
 - **Question:** Does the service expose exactly the 17 master types listed in page.tsx/MasterCreateForm.tsx, with those schemas, and audit writes?
@@ -3280,7 +3289,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-PROPOSALS-DETAIL-09  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2048; ProposalActions.tsx follows the queued DAO-finalize through GET proposal until status is dao_finalized, else ends at 'still processing' with a manual refresh; ProposalActions.test.tsx)
 - **W2 works note (#2039):** no failed/processing status is surfaced if the async DAO-finalize consumer fails.
 - **W0 note:** partly fixed by #1867 — dao-finalize sync-checks state and consumer sets dao_finalized with audit; web router.refresh after 202; no failed/processing status surfaced if consumer fails.
 - **First-pass claim:** Whether the 202 DAO finalize actually completes, status transitions, and audit trail are undeterminable — works-service absent (the comment cites proposal/consumer.ts).
@@ -3294,6 +3303,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 ### GAP-WORKS-PROPOSALS-NEW-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 works part 2 note (#2047):** estimated-cost cap and duplicate detection need a product rule. INTERIM, owner decision.
 - **W2 works note (#2039):** cost cap and duplicate detection need a product rule.
 - **W0 note:** partly fixed by #1867 — description max 2048, category enum, uuid fields and audit present; no estimated-cost cap and no duplicate detection.
 - **First-pass claim:** Server validation (description length, category enum, cost cap), duplicate detection and audit are undeterminable — works-service absent.
@@ -3306,7 +3316,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-REPORTS-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 works: closed by #2048; reports/StatusBars.tsx status chart with text alternative + definitions note (active = total - closed; exact-division filter, no sub-divisions); reports/page.test.tsx)
 - **W0 note:** partly fixed by #1867 — active = total minus closed is defined server-side; divisionId is exact match on executingDivisionId (no child hierarchy); reports page imports no chart component.
 - **First-pass claim:** No chart although this is the reporting screen (only tables); report semantics (what counts as active/closed) and whether divisionId filters by hierarchy are undeterminable — works-service absent.
 - **Service:** `works-service`  ·  **Endpoint(s):** `['GET /api/v1/works/reports/summary', 'GET /api/v1/works/reports/status']`
@@ -3330,6 +3340,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 ### GAP-WORKS-TENDERS-DETAIL-08  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 works part 2 note (#2047):** deviation percent and the award outcome (still queued, 202) need a product rule. INTERIM, owner decision.
 - **W2 works note (#2039):** role gates and maker-checker exist; deviation percent is not computed in works-service and the award outcome is still queued (202). Needs a product rule.
 - **W0 note:** partly fixed by #1944 — Award/finalize role-gated with maker-checker and ordered statuses (draft, dao_finalized); deviation percent is not computed anywhere in works-service, enums undocumented; award outcome still queued.
 - **First-pass claim:** Quotation/award status enums, deviation calculation and role enforcement are undeterminable — works-service absent; awards are queued ("recorded once processed", TenderActions.tsx:109) so success toast precedes the result.

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@/test-utils/intl-render";
 import type { ReactElement } from "react";
 import { ToastProvider } from "@/app/_components/ds/Toast";
 
@@ -139,5 +139,34 @@ describe("AccountCompilePage — UX-016 clerk-safe errors", () => {
       ).toBeGreaterThan(0),
     );
     expect(screen.queryByText(/\b409\b/)).not.toBeInTheDocument();
+  });
+});
+
+describe("AccountCompilePage - ACCOUNT-COMPILE-03 job follow-up", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    pushMock.mockReset();
+  });
+
+  it("after the 202 it follows the job: the notice stays 'received' until the compilation is recorded, then shows its status", async () => {
+    let compiled = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = (init?.method ?? "GET").toUpperCase();
+      if (method === "GET" && url.includes("/account-compile")) {
+        const data = compiled ? [{ id: "c1", status: "submitted", submittedTo: "Treasury Officer", submittedAt: "2026-10-15" }] : [];
+        compiled = true; // the consumer lands the row after the first poll
+        return Promise.resolve(new Response(JSON.stringify({ data }), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ id: "job-1" }), { status: 202 }));
+    }) as typeof fetch);
+    renderWithToast(<AccountCompilePage />);
+    // The initial prior-check GET consumes the first (empty) answer; the job's poll then sees the recorded row.
+    fireEvent.change(screen.getByLabelText(/Submitted To/i), { target: { value: "Treasury Officer" } });
+    fireEvent.click(screen.getByRole("button", { name: "Compile Account" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /Compile|Confirm|Submit/i }));
+    await waitFor(() => expect(screen.getByText(/Recorded status/i)).toBeInTheDocument(), { timeout: 5000 });
+    expect(screen.getByText("Submitted")).toBeInTheDocument();
   });
 });

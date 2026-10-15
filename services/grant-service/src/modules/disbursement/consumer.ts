@@ -196,7 +196,7 @@ export function registerDisbursementConsumers(queue: Queue): void {
               "PFMS_BANK_REF_MISSING: real PFMS disbursement requires beneficiaryBankRef",
             );
           }
-          const beneficiary = await repo.findBeneficiaryByRef(tx, p.beneficiaryBankRef, p.tenantId);
+          const beneficiary = await repo.findBeneficiaryByRef(tx, p.beneficiaryBankRef.replace(/^grant_bank_accounts:/, ""), p.tenantId);
           if (!beneficiary) {
             throw new NonRetryableError(
               `PFMS_BENEFICIARY_UNRESOLVED: no bank account found for ref ${p.beneficiaryBankRef}`,

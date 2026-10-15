@@ -17,10 +17,17 @@ vi.mock("../src/modules/tender/repo.js", async (importOriginal) => {
   return { ...orig, getAwardById };
 });
 const getBill = vi.fn();
+const listMeasurementsByMb = vi.fn();
+const listBillsByMb = vi.fn();
+const listBoqItemsByIds = vi.fn();
 
 vi.mock("../src/modules/billing/repo.js", async (importOriginal) => {
   const orig = await importOriginal<typeof import("../src/modules/billing/repo.js")>();
-  return { ...orig, getMb, getMbByNumber, getBill, listBills, countBills };
+  return { ...orig, getMb, getMbByNumber, getBill, listBills, countBills, listMeasurementsByMb, listBillsByMb };
+});
+vi.mock("../src/modules/boq/repo.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof import("../src/modules/boq/repo.js")>();
+  return { ...orig, listBoqItemsByIds };
 });
 
 vi.mock("@civitasone/db", () => ({
@@ -120,6 +127,18 @@ describe("billing finalize authority + maker-checker", () => {
     expect((await finalizeBill(roleAuth(["dao"]), "dao_finalized")).statusCode).toBe(202);
   });
 
+  it("owner decision 2026-10-14: works_operator holds no finalize step (403 even on the SO step)", async () => {
+    getBill.mockResolvedValue({ id: BILL_ID, status: "draft", createdBy: ACTOR_A });
+    expect((await finalizeBill(roleAuth(["works_operator"]), "so_finalized")).statusCode).toBe(403);
+    getMb.mockResolvedValue({ id: MB_ID, status: "draft", issuedBy: ACTOR_A, createdBy: ACTOR_A });
+    expect((await finalizeMb(roleAuth(["works_operator"]), "so_finalized")).statusCode).toBe(403);
+  });
+
+  it("owner decision 2026-10-14: works_admin overrides any step (202) when it is not the maker", async () => {
+    getBill.mockResolvedValue({ id: BILL_ID, status: "auditor_finalized", createdBy: ACTOR_A });
+    expect((await finalizeBill(roleAuth(["works_admin"]), "dao_finalized")).statusCode).toBe(202);
+  });
+
   it("the bill creator cannot finalize their own bill (422 SELF_APPROVAL_FORBIDDEN)", async () => {
     getBill.mockResolvedValue({ id: BILL_ID, status: "draft", createdBy: ACTOR_A });
     const res = await finalizeBill(roleAuth(["works_admin"], ACTOR_A), "so_finalized");
@@ -212,5 +231,50 @@ describe("billing finalize authority + maker-checker", () => {
       payload: { month: 5, year: 2026, submittedTo: "Treasury Officer" },
     });
     expect(res.statusCode).toBe(202);
+  });
+
+  // GAP-WORKS-BILLING-BILLS-NEW-02: the bill form reads the ceiling from the server instead of guessing it.
+  describe("GET /v1/works/billing/mb/:mbId/measured-value", () => {
+    const get = (auth: string | undefined, id = MB_ID) =>
+      app.inject({ method: "GET", url: `/v1/works/billing/mb/${id}/measured-value`, headers: auth ? { authorization: auth } : {} });
+
+    it("returns measured value, already-billed and still-billable as exact bigint minor strings", async () => {
+      getMb.mockResolvedValue({ id: MB_ID, status: "do_finalized", workId: WORK_ID });
+      // 2 units x rate 12_500 paise = 25_000 + 1 unit x 9_007_199_254_740_993 paise (beyond Number precision)
+      listMeasurementsByMb.mockResolvedValue([
+        { boqItemId: "b1", quantity: "2" },
+        { boqItemId: "b2", quantity: "1" },
+      ]);
+      listBoqItemsByIds.mockResolvedValue([
+        { id: "b1", rate: 12500n },
+        { id: "b2", rate: 9007199254740993n },
+      ]);
+      listBillsByMb.mockResolvedValue([{ grossAmountMinor: 5000n }, { grossAmountMinor: 1000n }]);
+      const res = await get(roleAuth(["works_viewer"]));
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data).toEqual({
+        mbId: MB_ID,
+        measuredValueMinor: "9007199254765993",
+        billedMinor: "6000",
+        availableMinor: "9007199254759993",
+      });
+    });
+
+    it("never reports a negative availability when earlier bills exceed the measured value", async () => {
+      getMb.mockResolvedValue({ id: MB_ID, status: "do_finalized", workId: WORK_ID });
+      listMeasurementsByMb.mockResolvedValue([]);
+      listBoqItemsByIds.mockResolvedValue([]);
+      listBillsByMb.mockResolvedValue([{ grossAmountMinor: 100n }]);
+      const res = await get(roleAuth(["works_viewer"]));
+      expect(res.json().data.availableMinor).toBe("0");
+    });
+
+    it("401 without a token, 403 for an unrelated role, 404 for an unknown MB, 400 for a non-UUID", async () => {
+      expect((await get(undefined)).statusCode).toBe(401);
+      expect((await get(roleAuth(["citizen"]))).statusCode).toBe(403);
+      getMb.mockResolvedValue(null);
+      expect((await get(roleAuth(["works_viewer"]))).statusCode).toBe(404);
+      expect((await get(roleAuth(["works_viewer"]), "not-a-uuid")).statusCode).toBe(400);
+    });
   });
 });

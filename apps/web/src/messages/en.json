@@ -5740,6 +5740,7 @@
     "errSelectDesignation": "Select the new designation.",
     "errEffectiveDateRequired": "Effective date is required.",
     "errSelectInitiator": "Select the initiating officer.",
+    "errInitiatorUnknown": "The initiating officer is your own employee record, which could not be found. Ask HR to link your account.",
     "errSelectApprover": "Select who should approve this promotion.",
     "errJustificationNote": "Add a justification note (at least 3 characters).",
     "errEffectiveDateTooFar": "Effective date is too far in the future — check the year.",
@@ -9672,6 +9673,8 @@
     "errSelectDest": "Select the destination department.",
     "errEffectiveDate": "Effective date is required.",
     "errSelectInitiator": "Select the initiating officer.",
+    "errInitiatorUnknown": "The initiating officer is your own employee record, which could not be found. Ask HR to link your account.",
+    "errInitiatorEqualsApprover": "The initiating officer and the approving officer must be different people.",
     "errSelectApprover": "Select who should approve this transfer.",
     "errNote": "Add a justification note (at least 3 characters).",
     "errMissingId": "Transfer request id missing in response",
@@ -9703,6 +9706,7 @@
     "initiator": "Initiating officer",
     "officersLoadFailed": "Couldn't load officers.",
     "loadingOfficers": "Loading officers…",
+    "errInitiatorEqualsApprover": "The initiating officer and the approving officer must be different people.",
     "selectInitiator": "Select initiating officer…",
     "approver": "Forward to (approving officer)",
     "selectApprover": "Select approving officer…",
@@ -15054,6 +15058,32 @@
     "statusOffline": "You are currently offline."
   },
   "works": {
+    "billingActions": {
+      "createdBillNote": "You created this bill, so another officer must finalize it.",
+      "issuedMbNote": "You issued this measurement book, so another officer must finalize it.",
+      "recordMeasurement": "Record measurement",
+      "recordMeasurementAria": "Record measurement in {mbNumber}"
+    },
+    "boqTable": {
+      "recordMeasurement": "Record measurement",
+      "recordMeasurementAria": "Record measurement for {item}"
+    },
+    "billingDetail": {
+      "openedFromRegister": "Opened from the register: bill {billNo} is listed first below."
+    },
+    "accountCompile": {
+      "recordedStatus": "Recorded status:",
+      "recordedFallback": "recorded",
+      "submittedTo": "(submitted to {to})"
+    },
+    "tsNew": {
+      "daoBanner": "Technical sanction requires the work proposal to be DAO-finalized. Only DAO-finalized works are listed in the Work picker."
+    },
+    "billsNew": {
+      "position": "Measured against this MB: {measured}. Already billed: {billed}. Still billable: {available}.",
+      "useAvailable": "Use the full amount",
+      "exceedsAvailable": "The gross amount is more than the value still billable against this measurement book ({available}). Reduce it or measure more work first."
+    },
     "hub": {
       "title": "Works & Billing",
       "subtitle": "Engineering works lifecycle — proposals to bills.",
@@ -15082,13 +15112,117 @@
         "masters": { "label": "Masters Registry", "desc": "Lookup values & categories" },
         "reports": { "label": "Reports", "desc": "Analytics and work register" }
       }
+    },
+    "masters": {
+      "pending": "Pending",
+      "createLocked": "The previous entry is still being processed. Wait for it to appear before adding another.",
+      "pendingNote": "Awaiting confirmation"
+    },
+    "execution": {
+      "attachmentHeading": "Attachment (optional)",
+      "attachmentLabel": "Attach a photo or document",
+      "attachmentRemove": "Remove",
+      "photoPreviewAlt": "Preview of {name}",
+      "duplicatePeriodWarning": "An entry for this scope in {month} {year} is already recorded. Submitting adds to it, so check you are not entering the same figure twice."
+    },
+    "reports": {
+      "chipFrom": "From {date}",
+      "chipTo": "To {date}",
+      "chipDivision": "Division {name}",
+      "chipDivisionSelected": "Division (selected)",
+      "divisionSelectedFallback": "Selected division",
+      "divisionFilterAria": "Filter by division",
+      "definitions": "Active works = total works minus closed works. The division filter matches works executed by that exact division; sub-divisions are not included.",
+      "chartLabel": "Works by status"
     }
+  },
+  "mapsCommon": {
+    "loadFailed": "The map could not be loaded. Check your connection, or ask an administrator to check the map tile server, then try again.",
+    "retry": "Retry"
+  },
+  "locationsHub": {
+    "title": "Locations",
+    "description": "Offices and branches, geofences, jurisdictions, infrastructure and map tools.",
+    "listLabel": "Offices & branches",
+    "listNote": "All offices, branches and facilities",
+    "geofencesLabel": "Geofences",
+    "geofencesNote": "Geofence definitions (read-only)",
+    "jurisdictionsLabel": "Jurisdictions",
+    "jurisdictionsNote": "Which offices cover which administrative units",
+    "infrastructureLabel": "Infrastructure",
+    "infrastructureNote": "Infrastructure assets and facilities",
+    "mapLabel": "Map viewer",
+    "mapNote": "Interactive map workspace",
+    "monitoringLabel": "Map monitoring",
+    "monitoringNote": "Markers for infrastructure, land parcels and geofences",
+    "notFoundTitle": "Page not found",
+    "notFoundMessage": "This page does not exist or has been moved.",
+    "notFoundAction": "Back to Locations"
+  },
+  "locationsList": {
+    "pageTitle": "Offices & branches",
+    "pageDescription": "Your head office and its branches. Add a location below, or switch on example offices from <link>Getting Started</link> to explore.",
+    "area": "offices and branches",
+    "cardTitle": "All locations",
+    "colName": "Name",
+    "colType": "Type",
+    "colParent": "Parent",
+    "colLgd": "LGD code",
+    "colStatus": "Status",
+    "statusActive": "Active",
+    "statusArchived": "Archived",
+    "filterPlaceholder": "Filter locations…",
+    "emptyTitle": "No locations yet",
+    "emptyMessage": "Locations you add will appear here.",
+    "types": {
+      "state": "State",
+      "district": "District",
+      "block": "Block",
+      "ward": "Ward",
+      "office": "Office",
+      "facility": "Facility",
+      "branch": "Branch"
+    },
+    "formTitle": "Add a location",
+    "nameLabel": "Location name",
+    "typeLabel": "Location type",
+    "parentLabel": "Parent location (optional)",
+    "parentNone": "— None (top-level) —",
+    "lgdLabel": "LGD code (optional)",
+    "submit": "Add location",
+    "saving": "Saving…",
+    "added": "Location added"
+  },
+  "locationsMaps": {
+    "deleteTitle": "Delete this map layer?",
+    "deleteDescription": "“{name}” will be removed from the map for all users. This cannot be undone.",
+    "deleteReasonLabel": "Reason for deleting",
+    "deleteConfirm": "Delete layer",
+    "httpsOnly": "The source URL must start with https://.",
+    "srcTile": "Tile (XYZ)",
+    "srcWms": "WMS",
+    "srcGeojson": "GeoJSON",
+    "monitoringSubtitle": "Geospatial view of infrastructure, land parcels and geofences. Filter, then select a marker to open its record.",
+    "updatedAt": "Updated {time}",
+    "statsNote": "Active and alert counts cover every status for the selected domain.",
+    "domainAll": "All domains",
+    "domainInfrastructure": "Infrastructure",
+    "domainParcel": "Land parcel",
+    "domainGeofence": "Geofence",
+    "statusAll": "All statuses",
+    "statusActive": "Active",
+    "statusInactive": "Inactive",
+    "statusAlert": "Alert",
+    "statusMaintenance": "Maintenance",
+    "asOfLabel": "As of date",
+    "asOfUnavailable": "A historical (as-of) view is not available yet.",
+    "truncated": "Showing the first {shown} markers. Narrow the filters to see the rest."
   },
   "locationsOps": {
     "backLabel": "Locations",
     "infra": {
-      "pageTitle": "Locations — Infrastructure",
-      "pageSubtitle": "Infrastructure assets from location-service.",
+      "pageTitle": "Infrastructure",
+      "pageSubtitle": "Roads, bridges, buildings and other infrastructure assets. This register is read-only: there is no in-app editor.",
       "area": "infrastructure assets",
       "cardTitle": "Infrastructure assets",
       "emptyTitle": "No assets",
@@ -15100,8 +15234,8 @@
       "colStatus": "Status"
     },
     "geofences": {
-      "pageTitle": "Locations — Geofences",
-      "pageSubtitle": "Geofence definitions from location-service.",
+      "pageTitle": "Geofences",
+      "pageSubtitle": "Circular and polygon boundaries used for site and attendance checks. This register is read-only: there is no in-app editor.",
       "area": "geofences",
       "cardTitle": "Geofences",
       "emptyTitle": "No geofences",
@@ -15111,11 +15245,12 @@
       "colType": "Type",
       "colShape": "Shape",
       "colRadius": "Radius",
-      "colStatus": "Status"
+      "colStatus": "Status",
+      "colCenter": "Centre"
     },
     "jurisdictions": {
-      "pageTitle": "Locations — Jurisdictions",
-      "pageSubtitle": "Jurisdiction records from location-service.",
+      "pageTitle": "Jurisdictions",
+      "pageSubtitle": "Which offices cover which administrative units. This register is read-only: there is no in-app editor.",
       "area": "jurisdictions",
       "cardTitle": "Jurisdictions",
       "emptyTitle": "No jurisdictions",
@@ -15123,7 +15258,11 @@
       "filterPlaceholder": "Filter jurisdictions…",
       "colLevel": "Level",
       "colOffice": "Office",
-      "colUnit": "Unit"
+      "colUnit": "Unit",
+      "colPrimary": "Primary",
+      "yes": "Yes",
+      "no": "No",
+      "unresolved": "Not available"
     }
   },
   "fieldSync": {
@@ -15297,5 +15436,13 @@
         "suspended": "Suspended"
       }
     }
+  },
+  "pqbMoney": {
+    "releaseReasonTooShort": "Enter the sanction or approval reference (at least {min} characters).",
+    "releaseReasonTooLong": "Keep the reference under {max} characters.",
+    "dscUntrusted": "The signature is mathematically valid, but the signer's certificate is not checked against a trusted certifying authority {storeState, select, configured {(it does not chain to the configured trust store)} other {(no trust store is configured on the server)}}. This is not proof of a legally valid DSC. Direct token or eSign signing is not yet available in this console.",
+    "eofficeRaiseIntro": "Raising sends this {refType} to eOffice for a formal, tamper-proof decision. The approval chain is selected automatically by amount. The file is always raised in your own name.",
+    "eofficeSelfFallback": "You (the signed-in officer)",
+    "rfqIndentStatus": "({status})"
   }
 }

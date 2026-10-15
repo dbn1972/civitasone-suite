@@ -21,7 +21,8 @@
 
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useCallback, useEffect, useState } from "react";
-import { Button, Field, Select, StatusPill, type EntityOption } from "./ds";
+import { useTranslations } from "next-intl";
+import { Button, Field, Input, Select, StatusPill, type EntityOption } from "./ds";
 import { EmployeePicker } from "./EmployeePicker";
 import { useSelfEmployee } from "./useSelfEmployee";
 import { errorMessageFromResponse } from "@/lib/api/browserClient";
@@ -96,6 +97,7 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
     notifyPath, notifyWithFileNo = false, onLinkedFileChange, allowRaiseAfterTerminal = false,
   } = props;
 
+  const tm = useTranslations("pqbMoney");
   const [file, setFile] = useState<LinkedFile | null>(null);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -113,14 +115,10 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
   // debounced, named search over the same employee directory used
   // elsewhere in the app (GAP-HR-SF-06); `value`/`onChange` still carry a
   // plain id string, so `submit` below is otherwise unchanged.
-  const [initiatedBy, setInitiatedBy] = useState<string | null>(null);
   const [currentWith, setCurrentWith] = useState<string | null>(null);
   // GAP-FINANCE-PAYMENTS-DETAIL-02: names of the chosen officers, so the success message can say WHO
   // initiated and who it went to (a person, not an id), and the signed-in user as the default initiator.
-  const [initiatedOption, setInitiatedOption] = useState<EntityOption | null>(null);
   const [currentWithOption, setCurrentWithOption] = useState<EntityOption | null>(null);
-  // Remounts the initiator picker once, when the signed-in user is applied as the default, so it shows that name.
-  const [selfDefaultId, setSelfDefaultId] = useState<string | null>(null);
   const [note, setNote] = useState("");
 
   const loadStatus = useCallback(async (signal?: AbortSignal) => {
@@ -152,16 +150,11 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- report only when the lookup result changes, not when the parent re-creates the callback.
   }, [loading, file]);
 
-  // Default "Initiating officer" to the signed-in user's own employee record the first time the form
-  // opens (GAP-FINANCE-PAYMENTS-DETAIL-02). Best-effort: a user with no employee record or a failed
-  // lookup simply gets an empty picker, exactly as before, and can still search for the officer.
+  // GAP-GRANTS-DISBURSEMENTS-DETAIL-03: the initiating officer is ALWAYS the signed-in user -- it is shown
+  // read-only, never chosen. estab-service derives it from the session and rejects any other id, so a file
+  // can never be raised in another officer's name. The profile lookup here is display-only (and lets the
+  // success message name the initiator); when it is unavailable the server still resolves the initiator.
   const self = useSelfEmployee(open);
-  useEffect(() => {
-    if (!self) return;
-    setSelfDefaultId(self.id);
-    setInitiatedBy((cur) => cur ?? self.id);
-    setInitiatedOption((cur) => cur ?? self);
-  }, [self]);
 
   const raisable = !file || (allowRaiseAfterTerminal && !isEofficeFileInFlight(file.status));
 
@@ -169,14 +162,15 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
     setError("");
     setMessage("");
     setWarning("");
-    if (!initiatedBy) { setError("Choose the initiating officer."); return; }
     if (!currentWith) { setError("Choose who to forward to."); return; }
     if (note.trim().length < 3) { setError("Add a note explaining the proposal."); return; }
     setSaving(true);
     try {
       const payload = {
         refType, refId, subject, dept, classification, priority,
-        initiatedBy, currentWith,
+        // Sent only as a hint that must equal the caller's own employee id; the server derives it regardless.
+        ...(self ? { initiatedBy: self.id } : {}),
+        currentWith,
         approvalChain: defaultApprovalChain,
         initialNote: note.trim(),
         context: amountMinor != null ? { amountMinor } : {},
@@ -209,7 +203,7 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
       if (notifyFailed) {
         setWarning("The eFile was raised, but the record could not be marked as awaiting approval. Refresh the page; if its status has not changed, contact the Finance helpdesk.");
       }
-      const who = initiatedOption && currentWithOption ? ` Initiated by ${initiatedOption.label}, forwarded to ${currentWithOption.label}.` : "";
+      const who = self && currentWithOption ? ` Initiated by ${self.label}, forwarded to ${currentWithOption.label}.` : "";
       setMessage(`Raised eFile ${body.fileNo ?? ""} for approval. Routing by amount via the approval matrix.${who}`);
       setOpen(false);
       setNote("");
@@ -225,7 +219,7 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
       setSaving(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- notifyPath is always a pure function of refId/the entity id (see call sites), which is already listed here; it cannot change independently.
-  }, [initiatedBy, currentWith, initiatedOption, currentWithOption, note, refType, refId, subject, dept, classification, priority, defaultApprovalChain, amountMinor, loadStatus]);
+  }, [self, currentWith, currentWithOption, note, refType, refId, subject, dept, classification, priority, defaultApprovalChain, amountMinor, loadStatus]);
 
   return (
     <div className="card" style={{ marginTop: 18 }}>
@@ -260,18 +254,11 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
       {raisable && open ? (
         <div className="pad" style={{ display: "grid", gap: 12 }}>
           <p style={{ fontSize: "0.8125rem", color: "#64748b", margin: 0 }}>
-            Raising sends this {refType.replace(/_/g, " ")} to eOffice for a formal, tamper-proof decision.
-            The approval chain is selected automatically by amount.
+            {tm("eofficeRaiseIntro", { refType: refType.replace(/_/g, " ") })}
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
             <Field label="Initiating officer">
-              <EmployeePicker
-                key={selfDefaultId ?? "none"}
-                value={initiatedBy}
-                onChange={(id, opt) => { setInitiatedBy(id); setInitiatedOption(opt); }}
-                {...(self ? { initialOption: self } : {})}
-                placeholder="Search by name or employee number…"
-              />
+              <Input readOnly value={self?.label ?? tm("eofficeSelfFallback")} />
             </Field>
             <Field label="Forward to officer">
               <EmployeePicker

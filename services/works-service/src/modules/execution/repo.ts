@@ -35,6 +35,16 @@ export async function listIssues(tenantId: string, workId: string) {
   });
 }
 
+/** GAP-WORKS-EXECUTION-WORKID-07: has this work already been closed? (close must be idempotent.) */
+export async function hasWorkClosure(tenantId: string, workId: string): Promise<boolean> {
+  return scopedRead(async (tx) => {
+    const rows = await tx.select().from(workClosures)
+      .where(and(eq(workClosures.tenantId, tenantId), eq(workClosures.workId, workId)))
+      .limit(1);
+    return rows.length > 0;
+  });
+}
+
 export async function hasPhysicalCompletion(tenantId: string, workId: string): Promise<boolean> {
   return scopedRead(async (tx) => {
     const rows = await tx.select().from(physicalCompletions)

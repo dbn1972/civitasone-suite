@@ -4,9 +4,12 @@
  * MonitoringMap — SVC-119 Map-based monitoring dashboard.
  *
  * Consumes `GET /api/proxy/v1/locations/map-markers?domain=&status=&bbox=` and
- * plots the returned markers on the CivitasMap with domain / status / date
- * filter controls. Selecting a marker reveals its label + status and a link to
- * the underlying record.
+ * plots the returned markers on the CivitasMap with domain / status filter
+ * controls. Selecting a marker reveals its label + status and a link to the
+ * underlying record. The data is a snapshot refreshed on filter change or when
+ * Refresh is pressed (there is no polling), and the page says when it was
+ * last updated. The service has no history, so the "as of date" control is
+ * disabled with an honest note rather than sending a parameter it ignores.
  *
  * Accessible (labelled filters, keyboard-selectable markers via the map), responsive
  * and theme-aware via civitas-ds classes.
@@ -14,12 +17,14 @@
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { PageHeader } from "@/app/_components/ds/PageHeader";
 import { StatGrid } from "@/app/_components/ds/StatGrid";
 import { StatCard } from "@/app/_components/ds/StatCard";
 import { EmptyState } from "@/app/_components/ds/EmptyState";
 import { CivitasMap, type MapMarker } from "@/app/_components/maps";
 import { useFormError } from "@/lib/useFormError";
+import { formatInIST } from "@/lib/formatters";
 
 const API = "/api/proxy/v1/locations/map-markers";
 
@@ -43,20 +48,38 @@ export interface MonitoringMarker {
   status: string;
 }
 
-const DOMAINS = ["", "infrastructure", "land_parcel", "geofence"] as const;
+// The feed names cadastral parcels "parcel" (location-service map-markers repo).
+const DOMAINS = ["", "infrastructure", "parcel", "geofence"] as const;
 const STATUSES = ["", "active", "inactive", "alert", "maintenance"] as const;
 
-/** Best-effort route to the record behind a marker. */
-function recordHref(domain: string, refId: string): string {
+const DOMAIN_LABEL_KEY = {
+  infrastructure: "domainInfrastructure",
+  parcel: "domainParcel",
+  land_parcel: "domainParcel",
+  geofence: "domainGeofence",
+} as const;
+const STATUS_LABEL_KEY = {
+  active: "statusActive",
+  inactive: "statusInactive",
+  alert: "statusAlert",
+  maintenance: "statusMaintenance",
+} as const;
+
+/**
+ * The page that shows the record behind a marker, or null when none exists.
+ * Infrastructure markers carry location-service's own asset id (not an
+ * asset-service id), so they open the infrastructure register rather than a
+ * /assets/:id page that would 404. Cadastral parcels have no page yet, so no
+ * link is offered instead of a misleading one.
+ */
+function recordHref(domain: string): string | null {
   switch (domain) {
     case "infrastructure":
-      return `/assets/${encodeURIComponent(refId)}`;
-    case "land_parcel":
-      return `/locations/list?ref=${encodeURIComponent(refId)}`;
+      return "/locations/infrastructure";
     case "geofence":
-      return `/locations?geofence=${encodeURIComponent(refId)}`;
+      return "/locations/geofences";
     default:
-      return `/locations/list?ref=${encodeURIComponent(refId)}`;
+      return null;
   }
 }
 
@@ -77,13 +100,18 @@ function normalizeMarkers(body: unknown): MonitoringMarker[] {
     .filter((m) => Number.isFinite(m.lat) && Number.isFinite(m.lng));
 }
 
-export function MonitoringMap() {
+export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
+  const t = useTranslations("locationsMaps");
   const [markers, setMarkers] = useState<MonitoringMarker[]>([]);
+  // Counts across every status for the selected domain, so the Active / Alerts
+  // tiles don't read 0 just because the status filter hid them.
+  const [summary, setSummary] = useState<MonitoringMarker[] | null>(null);
+  const [truncated, setTruncated] = useState(false);
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [domain, setDomain] = useState<string>("");
   const [status, setStatus] = useState<string>("");
-  const [date, setDate] = useState<string>("");
   const [selected, setSelected] = useState<MonitoringMarker | null>(null);
   const formError = useFormError("map marker");
 
@@ -94,7 +122,6 @@ export function MonitoringMap() {
       const qs = new URLSearchParams();
       if (domain) qs.set("domain", domain);
       if (status) qs.set("status", status);
-      if (date) qs.set("date", date);
       const res = await fetch(`${API}?${qs.toString()}`, { signal });
       if (!res.ok) {
         setError((await formError.fromResponse(res, "load")).message);
@@ -102,6 +129,18 @@ export function MonitoringMap() {
       }
       const body = await res.json();
       setMarkers(normalizeMarkers(body));
+      setTruncated((body as { meta?: { truncated?: unknown } })?.meta?.truncated === true);
+      setUpdatedAt(new Date());
+      if (status) {
+        // A status filter hides the other statuses; fetch the unfiltered-by-status
+        // set for the stat tiles. Best-effort: on failure the tiles fall back to the view.
+        const sq = new URLSearchParams();
+        if (domain) sq.set("domain", domain);
+        const sres = await fetch(`${API}?${sq.toString()}`, { signal }).catch(() => null);
+        setSummary(sres?.ok ? normalizeMarkers(await sres.json()) : null);
+      } else {
+        setSummary(null);
+      }
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
       setError(formError.fromException("load", err).message);
@@ -115,13 +154,22 @@ export function MonitoringMap() {
     // genuinely looping — "Maximum update depth exceeded" — before this
     // fix) every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [domain, status, date]);
+  }, [domain, status]);
 
   useEffect(() => {
     const controller = new AbortController();
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
+
+  const domainLabel = useCallback(
+    (d: string) => (d in DOMAIN_LABEL_KEY ? t(DOMAIN_LABEL_KEY[d as keyof typeof DOMAIN_LABEL_KEY]) : d),
+    [t],
+  );
+  const statusLabel = useCallback(
+    (s: string) => (s in STATUS_LABEL_KEY ? t(STATUS_LABEL_KEY[s as keyof typeof STATUS_LABEL_KEY]) : s),
+    [t],
+  );
 
   const mapMarkers: MapMarker[] = useMemo(
     () =>
@@ -130,9 +178,9 @@ export function MonitoringMap() {
         lat: m.lat,
         lng: m.lng,
         label: m.label,
-        description: `${m.domain} · ${m.status}`,
+        description: `${domainLabel(m.domain)} · ${statusLabel(m.status)}`,
       })),
-    [markers],
+    [markers, domainLabel, statusLabel],
   );
 
   const byId = useMemo(() => {
@@ -146,14 +194,15 @@ export function MonitoringMap() {
     [byId],
   );
 
-  const alerts = markers.filter((m) => m.status === "alert").length;
-  const active = markers.filter((m) => m.status === "active").length;
+  const counted = summary ?? markers;
+  const alerts = counted.filter((m) => m.status === "alert").length;
+  const active = counted.filter((m) => m.status === "active").length;
 
   return (
     <div className="page-main wrap">
       <PageHeader
         title="Map monitoring"
-        subtitle="Live geospatial monitoring across infrastructure, land parcels and geofences. Filter and select a marker to jump to its record."
+        subtitle={t("monitoringSubtitle")}
         back="/locations"
       />
 
@@ -167,6 +216,7 @@ export function MonitoringMap() {
           value={String(alerts)}
         />
       </StatGrid>
+      <p style={{ color: "var(--ink2)", fontSize: 12, marginTop: 6 }}>{t("statsNote")}</p>
 
       <div
         className="card"
@@ -188,7 +238,7 @@ export function MonitoringMap() {
             >
               {DOMAINS.map((d) => (
                 <option key={d || "all"} value={d}>
-                  {d || "All domains"}
+                  {d ? domainLabel(d) : t("domainAll")}
                 </option>
               ))}
             </select>
@@ -203,24 +253,32 @@ export function MonitoringMap() {
             >
               {STATUSES.map((s) => (
                 <option key={s || "all"} value={s}>
-                  {s || "All statuses"}
+                  {s ? statusLabel(s) : t("statusAll")}
                 </option>
               ))}
             </select>
           </label>
           <label style={{ display: "grid", gap: 4 }}>
-            <span style={{ fontSize: 13, color: "var(--ink2)" }}>As of date</span>
+            <span style={{ fontSize: 13, color: "var(--ink2)" }}>{t("asOfLabel")}</span>
             <input
               style={INPUT_STYLE}
               type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              aria-label="Filter by date"
+              value=""
+              disabled
+              readOnly
+              aria-label={t("asOfLabel")}
+              aria-describedby="as-of-note"
             />
+            <span id="as-of-note" style={{ fontSize: 11, color: "var(--ink2)" }}>{t("asOfUnavailable")}</span>
           </label>
           <button type="button" className="btn ghost" onClick={() => void load()}>
             Refresh
           </button>
+          {updatedAt ? (
+            <span role="status" style={{ fontSize: 12, color: "var(--ink2)" }}>
+              {t("updatedAt", { time: formatInIST(updatedAt, { hour: "2-digit", minute: "2-digit" }) })}
+            </span>
+          ) : null}
         </div>
       </div>
 
@@ -235,16 +293,14 @@ export function MonitoringMap() {
         </div>
       )}
 
-      <div
-        style={{
-          display: "grid",
-          gap: 16,
-          gridTemplateColumns: "minmax(0, 1fr) minmax(240px, 320px)",
-          alignItems: "start",
-        }}
-        className="map-layout"
-      >
-        <CivitasMap markers={mapMarkers} onMarkerClick={onMarkerClick} height="70vh" />
+      {truncated ? (
+        <p role="status" style={{ color: "#92400e", fontSize: 13, marginBottom: 8 }}>
+          {t("truncated", { shown: markers.length })}
+        </p>
+      ) : null}
+
+      <div className="map-layout">
+        <CivitasMap markers={mapMarkers} onMarkerClick={onMarkerClick} height="clamp(320px, 60vh, 800px)" {...(tileUrl ? { tileUrl } : {})} />
 
         <div className="card" role="region" aria-label="Selected marker">
           <div className="card-h">
@@ -263,21 +319,23 @@ export function MonitoringMap() {
               <div style={{ display: "grid", gap: 8 }}>
                 <div style={{ fontSize: 16, fontWeight: 600 }}>{selected.label}</div>
                 <div style={{ fontSize: 13, color: "var(--ink2)" }}>
-                  Domain: {selected.domain}
+                  Domain: {domainLabel(selected.domain)}
                 </div>
                 <div style={{ fontSize: 13, color: "var(--ink2)" }}>
-                  Status: {selected.status}
+                  Status: {statusLabel(selected.status)}
                 </div>
                 <div style={{ fontSize: 12, color: "var(--ink2)" }}>
-                  ({selected.lat.toFixed(5)}, {selected.lng.toFixed(5)})
+                  ({selected.lat.toFixed(4)}, {selected.lng.toFixed(4)})
                 </div>
-                <Link
-                  href={recordHref(selected.domain, selected.refId)}
-                  className="btn primary"
-                  style={{ marginTop: 4, textAlign: "center" }}
-                >
-                  Open record →
-                </Link>
+                {recordHref(selected.domain) ? (
+                  <Link
+                    href={recordHref(selected.domain) as string}
+                    className="btn primary"
+                    style={{ marginTop: 4, textAlign: "center" }}
+                  >
+                    Open record →
+                  </Link>
+                ) : null}
               </div>
             ) : (
               <p style={{ color: "var(--ink2)", fontSize: 13 }}>

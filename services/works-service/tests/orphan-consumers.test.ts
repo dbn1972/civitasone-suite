@@ -10,7 +10,7 @@ import { EVENTS, COMMANDS } from "../src/topics.js";
 import { workScopes, scopeProgress } from "../src/modules/execution/schema.js";
 import { awards, tenders, preTenders } from "../src/modules/tender/schema.js";
 import { workSplits, workProposals } from "../src/modules/proposal/schema.js";
-import { physicalCompletions } from "../src/modules/execution/schema.js";
+import { physicalCompletions, workClosures } from "../src/modules/execution/schema.js";
 import { boqItems } from "../src/modules/boq/schema.js";
 import { measurements, measurementBooks, bills, billItems } from "../src/modules/billing/schema.js";
 import { contractors } from "../src/modules/contractor/schema.js";
@@ -396,6 +396,19 @@ describe("workClose closure enforcement + asset handover", () => {
     await h[COMMANDS.workClose]({ ...base, payload: { id: "cl-3", workId: "w-1", closureType: "completion" } });
     expect(mockInserted).toHaveLength(0);
     expect(emitted(EVENTS.assetHandover)).toBe(false);
+  });
+
+  it("GAP-WORKS-EXECUTION-WORKID-07: a second close of an already-closed work is dead-lettered, no second closure row", async () => {
+    mockSelectMap.set(workClosures, [{ id: "cl-existing", workId: "w-1", closureType: "dropped" }]);
+    mockSelectMap.set(awards, []);
+    mockSelectMap.set(physicalCompletions, []);
+    mockSelectMap.set(workSplits, []);
+    const h = await load();
+    await expect(
+      h[COMMANDS.workClose]({ ...base, payload: { id: "cl-dup", workId: "w-1", closureType: "dropped" } }),
+    ).rejects.toThrow(/ALREADY_CLOSED/);
+    expect(mockInserted).toHaveLength(0);
+    expect(emitted(EVENTS.workClosed)).toBe(false);
   });
 
   it("workClose is idempotent on redelivery", async () => {

@@ -9,6 +9,8 @@ export type UploadedFileMeta = {
   fileName: string;
   size: number;
   mimeType: string;
+  /** The browser File itself, so a caller can show a local preview (e.g. an image thumbnail) without re-downloading. */
+  file?: File;
 };
 
 /**
@@ -89,7 +91,7 @@ export function FileUpload({
 
       setStatus("done");
       setMessage(`Uploaded: ${file.name}`);
-      onUploaded?.(key, { fileName: file.name, size: file.size, mimeType: file.type });
+      onUploaded?.(key, { fileName: file.name, size: file.size, mimeType: file.type, file });
     } catch (caught) {
       setStatus("error");
       setMessage(formError.fromException("save", caught).message);

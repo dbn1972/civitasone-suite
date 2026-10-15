@@ -7,6 +7,7 @@ import { formatMoney, formatIndianDate, formatShortId } from "@/lib/formatters";
 import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
 import { APPROVAL_FINALIZE_ROLES } from "@/lib/auth/workRoles";
 import { ApprovalFinalizeButton } from "../ApprovalFinalizeButton";
+import { getOfficerNameMap, getWorkHeader } from "../../../_data/loaders";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -18,6 +19,9 @@ type AaRaw = {
   aaNumber: string | null;
   aaDate: string | null;
   approvingAuthorityId: string | null;
+  /** Resolved server-side (works-service joins work_proposals / authorities). */
+  workNumber: string | null;
+  authorityName: string | null;
   approvedAmountMinor: string | null;
   approvalType: string | null;
   status: string;
@@ -40,6 +44,8 @@ function mapRawAa(r: unknown): AaRaw | null {
     workId: typeof r.workId === "string" ? r.workId : null,
     aaNumber: typeof r.aaNumber === "string" ? r.aaNumber : null,
     aaDate: typeof r.aaDate === "string" ? r.aaDate : null,
+    workNumber: typeof r.workNumber === "string" ? r.workNumber : null,
+    authorityName: typeof r.authorityName === "string" ? r.authorityName : null,
     approvingAuthorityId:
       typeof r.approvingAuthorityId === "string" ? r.approvingAuthorityId : null,
     approvedAmountMinor:
@@ -128,24 +134,32 @@ export default async function AaDetailPage({
 
   const canFinalize = hasAnyRole(getSessionRoles(), APPROVAL_FINALIZE_ROLES);
 
+  // The API returns opaque ids only; resolve the work number and officer name web-side (degrades to a short id).
+  const [workHeader, officerNames] = await Promise.all([
+    aa.workId ? getWorkHeader(aa.workId) : null,
+    getOfficerNameMap(),
+  ]);
+  const workNumber = aa.workNumber ?? workHeader?.data.workNumber ?? null;
+  const authorityName = aa.authorityName ?? (aa.approvingAuthorityId ? officerNames.data[aa.approvingAuthorityId] : undefined) ?? null;
+
   const detailRows: Array<[string, React.ReactNode]> = [
     ["AA Number", aa.aaNumber ?? "—"],
     ["Approval Type", humanize(aa.approvalType)],
     [
       "Work",
       aa.workId != null ? (
-        <Link href={`/works/billing/${aa.workId}`} title={aa.workId}>
-          {aa.workId.slice(0, 8) + "…"}
+        <Link href={`/works/proposals/${aa.workId}`} title={aa.workId}>
+          {workNumber ?? aa.workId.slice(0, 8) + "…"}
         </Link>
       ) : (
         "—"
       ),
     ],
     [
-      "Approving Authority (ID)",
+      "Approving Authority",
       aa.approvingAuthorityId != null ? (
-        <span title={aa.approvingAuthorityId} style={{ fontFamily: "var(--font-mono, monospace)" }}>
-          {aa.approvingAuthorityId.slice(0, 8) + "…"}
+        <span title={aa.approvingAuthorityId} style={{ fontFamily: authorityName ? undefined : "var(--font-mono, monospace)" }}>
+          {authorityName ?? aa.approvingAuthorityId.slice(0, 8) + "…"}
         </span>
       ) : (
         "—"

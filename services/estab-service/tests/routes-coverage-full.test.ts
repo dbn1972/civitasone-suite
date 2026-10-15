@@ -2,11 +2,19 @@
  * estab-service — Comprehensive route coverage tests.
  * Covers ALL routes with valid payloads, auth rejection, and validation tests.
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { randomUUID } from "node:crypto";
+
+// from-module derives the initiator from the session via HRMS; stub the two HRMS lookups so the test
+// does not depend on a reachable HRMS (the 503 fail-closed path is covered in linkage-initiator-identity.test.ts).
+const SELF_EMP = "aaaaaaaa-dddd-4000-8000-000000000001";
+vi.mock("../src/shared/hrms-client.js", async (orig) => {
+  const real = await orig<typeof import("../src/shared/hrms-client.js")>();
+  return { ...real, resolveActorEmployeeId: vi.fn(async () => "aaaaaaaa-dddd-4000-8000-000000000001"), verifyEmployeeExists: vi.fn(async () => true) };
+});
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
@@ -304,7 +312,7 @@ describe("POST /v1/estab/files/from-module — valid payload", () => {
         dept: "Finance",
         classification: "confidential",
         priority: "normal",
-        initiatedBy: randomUUID(),
+        initiatedBy: SELF_EMP,
         currentWith: randomUUID(),
         approvalChain: "file_noting",
         initialNote: "Requesting approval for sanction order",

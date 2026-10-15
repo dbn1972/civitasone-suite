@@ -1,22 +1,14 @@
 "use client";
 
-import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
-import { Card, ActionButton, EmptyState } from "../../../_components/ds";
+import { Card } from "../../../_components/ds";
 
 type Row = { id: string; label: string; status?: string };
 
-const LOCATION_TYPES = [
-  { value: "state", label: "State" },
-  { value: "district", label: "District" },
-  { value: "block", label: "Block" },
-  { value: "ward", label: "Ward" },
-  { value: "office", label: "Office" },
-  { value: "facility", label: "Facility" },
-  { value: "branch", label: "Branch" },
-] as const;
+const LOCATION_TYPES = ["state", "district", "block", "ward", "office", "facility", "branch"] as const;
 
 const inputStyle = {
   width: "100%",
@@ -38,15 +30,21 @@ const fieldErrorStyle = {
   color: "var(--danger, #b91c1c)",
 } as const;
 
+/**
+ * Create form for /locations/list (GAP-LOCATIONS-LIST-01/03/05). Archiving lives
+ * on each table row (LocationsListTable), so there is one place to do it.
+ */
 export function LocationActions({ rows }: { rows: Row[] }) {
+  const t = useTranslations("locationsList");
   const router = useRouter();
+  const nameRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [type, setType] = useState("office");
   const [lgdCode, setLgdCode] = useState("");
   const [parentId, setParentId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const formError = useFormError("branch office");
+  const formError = useFormError("location");
   const [success, setSuccess] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
@@ -83,7 +81,10 @@ export function LocationActions({ rows }: { rows: Row[] }) {
       setLgdCode("");
       setParentId("");
       setType("office");
-      setSuccess("Branch office added");
+      setSuccess(t("added"));
+      // Return focus to the first field so keyboard users can add another; the
+      // polite status region below announces the success.
+      nameRef.current?.focus();
       router.refresh();
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
@@ -92,31 +93,20 @@ export function LocationActions({ rows }: { rows: Row[] }) {
     }
   }
 
-  async function archive(id: string, reason?: string) {
-    const res = await fetch(`/api/proxy/v1/locations/${id}/archive`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ reason: reason || undefined }),
-    });
-    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
-    router.refresh();
-  }
-
-  const active = rows.filter((r) => r.status !== "archived").slice(0, 8);
-
   const nameErr = fieldErr("name");
   const typeErr = fieldErr("type");
   const lgdErr = fieldErr("lgdCode");
   const parentErr = fieldErr("parentId");
 
   return (
-    <div className="grid g-2" style={{ marginBottom: 18 }}>
-      <Card title="Create Branch Office">
+    <div style={{ marginBottom: 18 }}>
+      <Card title={t("formTitle")}>
         <form className="pad" onSubmit={create}>
           <div style={fieldCol}>
-            <label className="l" htmlFor="loc-name">Branch office name</label>
+            <label className="l" htmlFor="loc-name">{t("nameLabel")}</label>
             <input
               id="loc-name"
+              ref={nameRef}
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -130,7 +120,7 @@ export function LocationActions({ rows }: { rows: Row[] }) {
           </div>
 
           <div style={fieldCol}>
-            <label className="l" htmlFor="loc-type">Location type</label>
+            <label className="l" htmlFor="loc-type">{t("typeLabel")}</label>
             <select
               id="loc-type"
               value={type}
@@ -139,8 +129,8 @@ export function LocationActions({ rows }: { rows: Row[] }) {
               aria-invalid={typeErr ? true : undefined}
               aria-describedby={typeErr ? "loc-type-err" : undefined}
             >
-              {LOCATION_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>{t.label}</option>
+              {LOCATION_TYPES.map((value) => (
+                <option key={value} value={value}>{t(`types.${value}`)}</option>
               ))}
             </select>
             {typeErr ? (
@@ -149,7 +139,7 @@ export function LocationActions({ rows }: { rows: Row[] }) {
           </div>
 
           <div style={fieldCol}>
-            <label className="l" htmlFor="loc-parent">Parent office (optional)</label>
+            <label className="l" htmlFor="loc-parent">{t("parentLabel")}</label>
             <select
               id="loc-parent"
               value={parentId}
@@ -158,7 +148,7 @@ export function LocationActions({ rows }: { rows: Row[] }) {
               aria-invalid={parentErr ? true : undefined}
               aria-describedby={parentErr ? "loc-parent-err" : undefined}
             >
-              <option value="">— None (top-level office) —</option>
+              <option value="">{t("parentNone")}</option>
               {parentOptions.map((r) => (
                 <option key={r.id} value={r.id}>{r.label}</option>
               ))}
@@ -169,7 +159,7 @@ export function LocationActions({ rows }: { rows: Row[] }) {
           </div>
 
           <div style={fieldCol}>
-            <label className="l" htmlFor="loc-lgd">LGD code (optional)</label>
+            <label className="l" htmlFor="loc-lgd">{t("lgdLabel")}</label>
             <input
               id="loc-lgd"
               value={lgdCode}
@@ -185,7 +175,7 @@ export function LocationActions({ rows }: { rows: Row[] }) {
           </div>
 
           <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>
-            {busy ? "Saving…" : "Add branch office"}
+            {busy ? t("saving") : t("submit")}
           </button>
 
           {error ? (
@@ -206,35 +196,6 @@ export function LocationActions({ rows }: { rows: Row[] }) {
             </p>
           )}
         </form>
-      </Card>
-      <Card title="Operational Controls">
-        <div className="pad">
-          {active.length === 0 ? (
-            <EmptyState
-              icon="🏢"
-              title="No active locations"
-              message="Locations you create will appear here for operational control."
-            />
-          ) : (
-            active.map((row) => (
-              <div key={row.id} className="prefrow">
-                <span>{row.label}</span>
-                <ActionButton
-                  label="Archive"
-                  className="btn ghost"
-                  danger
-                  requireReason
-                  reasonLabel="Reason for archiving"
-                  confirmTitle="Archive this location?"
-                  confirmDescription={`This will archive “${row.label}”. Archived locations are hidden from active operations and cannot be selected for new records.`}
-                  confirmLabel="Archive location"
-                  onConfirm={(reason) => archive(row.id, reason)}
-                  onSuccess={() => router.refresh()}
-                />
-              </div>
-            ))
-          )}
-        </div>
       </Card>
     </div>
   );

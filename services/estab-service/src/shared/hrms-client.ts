@@ -129,3 +129,53 @@ async function fetchEmployeeSummaries(tenantId: string, filter?: { ids?: readonl
     clearTimeout(timer);
   }
 }
+
+export class HrmsUnavailableError extends Error {
+  readonly code = "HRMS_UNAVAILABLE";
+  constructor(message: string) {
+    super(message);
+    this.name = "HrmsUnavailableError";
+  }
+}
+
+/**
+ * Resolve the CALLER's own hrms employee id (actorId is the JWT subject, a different id space).
+ * Used to derive the initiating officer of an eFile from the session so a clerk can never raise
+ * a file in another officer's name (GAP-GRANTS-DISBURSEMENTS-DETAIL-03). `null` = the actor has
+ * no linked employee record. Fails CLOSED (throws HrmsUnavailableError) when HRMS cannot answer:
+ * this gates attribution, so "can't tell" is never treated as "allow".
+ */
+export async function resolveActorEmployeeId(tenantId: string, actorId: string): Promise<string | null> {
+  const serviceSecret = process.env.INTERNAL_SERVICE_SECRET;
+  if (!serviceSecret) throw new HrmsUnavailableError("internal service secret not configured");
+  const url = `${HRMS_URL}/v1/hrms/internal/employees/actor/${encodeURIComponent(actorId)}/resolve`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { "x-internal": "1", "x-service-secret": serviceSecret, "x-tenant-id": tenantId },
+      signal: AbortSignal.timeout(4000),
+    });
+  } catch (err) {
+    throw new HrmsUnavailableError(`hrms actor-employee resolve unreachable: ${(err as Error).message}`);
+  }
+  if (!res.ok) throw new HrmsUnavailableError(`hrms actor-employee resolve failed: ${res.status}`);
+  const body = (await res.json()) as { employeeId?: string | null };
+  return body.employeeId ?? null;
+}
+
+/** Point existence check for an hrms employee id (validates a "forward to" target). Fails closed. */
+export async function verifyEmployeeExists(tenantId: string, employeeId: string): Promise<boolean> {
+  const serviceSecret = process.env.INTERNAL_SERVICE_SECRET;
+  if (!serviceSecret) throw new HrmsUnavailableError("internal service secret not configured");
+  let res: Response;
+  try {
+    res = await fetch(`${HRMS_URL}/v1/hrms/internal/employees/${encodeURIComponent(employeeId)}/exists`, {
+      headers: { "x-internal": "1", "x-service-secret": serviceSecret, "x-tenant-id": tenantId },
+      signal: AbortSignal.timeout(4000),
+    });
+  } catch (err) {
+    throw new HrmsUnavailableError(`hrms employee existence check unreachable: ${(err as Error).message}`);
+  }
+  if (!res.ok) throw new HrmsUnavailableError(`hrms employee existence check failed: ${res.status}`);
+  return ((await res.json()) as { exists: boolean }).exists === true;
+}

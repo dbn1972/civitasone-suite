@@ -1,5 +1,6 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { PageHeader, Button, Field, Input, Select, EntityPicker, ConfirmDialog } from "@/app/_components/ds";
@@ -37,6 +38,7 @@ function RecordProgressForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const t = useTranslations("works.execution");
   const now = new Date();
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1;
@@ -52,6 +54,8 @@ function RecordProgressForm() {
   const [scopes, setScopes] = useState<Scope[]>([]);
   const [unitByScopeId, setUnitByScopeId] = useState<Map<string, string>>(new Map());
   const [cumulativeByScope, setCumulativeByScope] = useState<Map<string, number>>(new Map());
+  // GAP-WORKS-EXECUTION-RECORD-PROGRESS-03: periods ("year-month") already recorded per work-scope id.
+  const [periodsByScope, setPeriodsByScope] = useState<Map<string, Set<string>>>(new Map());
   const [scopesLoading, setScopesLoading] = useState(false);
   const [scopesError, setScopesError] = useState(false);
   // Bumped by Retry: setting workId to its own value is a no-op, so the scopes
@@ -120,15 +124,24 @@ function RecordProgressForm() {
 
         // Current cumulative per work_scope id, if the progress fetch worked.
         const cumMap = new Map<string, number>();
+        const periodMap = new Map<string, Set<string>>();
         if (progRes.ok) {
           const progJson = (await progRes.json()) as { data?: Array<Record<string, unknown>> };
           for (const row of progJson.data ?? []) {
             const wsId = String(row.workScopeId ?? "");
             const cur = Number(row.currentAchievement ?? 0);
             if (wsId) cumMap.set(wsId, (cumMap.get(wsId) ?? 0) + (Number.isFinite(cur) ? cur : 0));
+            if (wsId && row.year != null && row.month != null) {
+              const set = periodMap.get(wsId) ?? new Set<string>();
+              set.add(`${Number(row.year)}-${Number(row.month)}`);
+              periodMap.set(wsId, set);
+            }
           }
         }
-        if (active) setCumulativeByScope(cumMap);
+        if (active) {
+          setCumulativeByScope(cumMap);
+          setPeriodsByScope(periodMap);
+        }
       } catch {
         if (active) { setScopes([]); setScopesError(true); }
       } finally {
@@ -150,6 +163,11 @@ function RecordProgressForm() {
   const currentPeriod = currentYear * 100 + currentMonth;
   const futurePeriod = selectedPeriod > currentPeriod;
   const backDated = selectedPeriod < currentPeriod - 1; // more than one month old
+  // The server adds each entry to the running total, so a second entry for the same scope and month is the classic
+  // double-count; warn (do not block - a genuine second instalment in the month is allowed).
+  const duplicatePeriod =
+    !!form.workScopeId && (periodsByScope.get(form.workScopeId)?.has(`${Number(form.year)}-${Number(form.month)}`) ?? false);
+  const duplicateWarning = t("duplicatePeriodWarning", { month: MONTHS[Number(form.month) - 1] ?? form.month, year: form.year });
 
   function set(field: keyof typeof form) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -313,6 +331,11 @@ function RecordProgressForm() {
           {futurePeriod && (
             <p role="alert" style={{ fontSize: 12, color: "#b42318" }}>A future reporting period cannot be recorded.</p>
           )}
+          {duplicatePeriod && (
+            <p role="note" data-testid="duplicate-period-warning" style={{ fontSize: 12, color: "#92400e" }}>
+              {duplicateWarning}
+            </p>
+          )}
           {!futurePeriod && backDated && (
             <p style={{ fontSize: 12, color: "#92400e" }}>Back-dated entry — recording for an earlier period.</p>
           )}
@@ -344,7 +367,7 @@ function RecordProgressForm() {
         title="Record progress"
         description={
           selectedScope
-            ? `Add ${form.currentAchievement}${unit ? ` ${unit}` : ""} to "${selectedScope.label}"? Total becomes ${newTotal}${targetNum != null ? ` of ${targetNum}` : ""}.${overTarget ? " This exceeds the target." : ""}${backDated ? " This is a back-dated entry." : ""}`
+            ? `Add ${form.currentAchievement}${unit ? ` ${unit}` : ""} to "${selectedScope.label}"? Total becomes ${newTotal}${targetNum != null ? ` of ${targetNum}` : ""}.${overTarget ? " This exceeds the target." : ""}${backDated ? " This is a back-dated entry." : ""}${duplicatePeriod ? ` ${duplicateWarning}` : ""}`
             : ""
         }
         confirmLabel="Record"

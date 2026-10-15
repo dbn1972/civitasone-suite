@@ -132,6 +132,8 @@ vi.mock("../src/modules/execution/repo.js", async (importOriginal) => {
   return {
     ...orig,
     getWorkScope: vi.fn(async (_t: string, id: string) => ({ id, targetValue: null })),
+    // Sentinel: a work id starting 00000000-9999- is already closed (GAP-WORKS-EXECUTION-WORKID-07).
+    hasWorkClosure: vi.fn(async (_t: string, id: string) => id.startsWith("00000000-9999-")),
   };
 });
 
@@ -821,9 +823,98 @@ describe("Execution routes", () => {
   it("POST /v1/works/execution/photos → 202 valid", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/works/execution/photos", headers: authHeader(),
-      payload: { workId: "00000000-1111-4000-8000-000000000001", fileKey: "photos/2024/img001.jpg" },
+      payload: { workId: "00000000-1111-4000-8000-000000000001", fileKey: `uploads/${TENANT}/photo/${ACTOR}/img001.jpg` },
     });
     expect(res.statusCode).toBe(202);
+  });
+
+  // GAP-WORKS-EXECUTION-PHOTOS-NEW-05: the file must be one this tenant uploaded.
+  it("POST /v1/works/execution/photos -> 422 for another tenant's file key", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/works/execution/photos", headers: authHeader(),
+      payload: { workId: "00000000-1111-4000-8000-000000000001", fileKey: `uploads/22222222-bbbb-4000-8000-000000000002/photo/x/img.jpg` },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.code).toBe("INVALID_FILE_KEY");
+  });
+
+  it("POST /v1/works/execution/photos -> 422 for a path-traversal key even under the tenant prefix", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/works/execution/photos", headers: authHeader(),
+      payload: { workId: "00000000-1111-4000-8000-000000000001", fileKey: `uploads/${TENANT}/../22222222-bbbb-4000-8000-000000000002/x.jpg` },
+    });
+    expect(res.statusCode).toBe(422);
+  });
+
+  it("POST /v1/works/execution/photos -> 404 when the work does not exist", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/works/execution/photos", headers: authHeader(),
+      payload: { workId: "00000000-0000-4000-8000-000000000404", fileKey: `uploads/${TENANT}/photo/${ACTOR}/img001.jpg` },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("POST /v1/works/execution/photos -> accepts the web-gps / web-manual sources", async () => {
+    for (const source of ["web-gps", "web-manual"]) {
+      const res = await app.inject({
+        method: "POST", url: "/v1/works/execution/photos", headers: authHeader(),
+        payload: { workId: "00000000-1111-4000-8000-000000000001", fileKey: `uploads/${TENANT}/photo/${ACTOR}/img001.jpg`, latitude: 20.29, longitude: 85.82, source },
+      });
+      expect(res.statusCode, source).toBe(202);
+    }
+  });
+
+  // certificateFileKey must be a file this tenant uploaded (assertTenantKey on physical-complete).
+  it("POST /v1/works/execution/physical-complete -> 422 for another tenant's or traversal certificate key; 202 for our own", async () => {
+    const workId = "00000000-1111-4000-8000-000000000001";
+    for (const certificateFileKey of [
+      "uploads/22222222-bbbb-4000-8000-000000000002/certificate/x/c.pdf",
+      `uploads/${TENANT}/../22222222-bbbb-4000-8000-000000000002/c.pdf`,
+    ]) {
+      const bad = await app.inject({
+        method: "POST", url: "/v1/works/execution/physical-complete", headers: authHeader(["dao"]),
+        payload: { workId, completionDate: "2026-01-10", certificateFileKey },
+      });
+      expect(bad.statusCode, certificateFileKey).toBe(422);
+      expect(bad.json().error.code).toBe("INVALID_FILE_KEY");
+    }
+    const good = await app.inject({
+      method: "POST", url: "/v1/works/execution/physical-complete", headers: authHeader(["dao"]),
+      payload: { workId, completionDate: "2026-01-10", certificateFileKey: `uploads/${TENANT}/certificate/${ACTOR}/c.pdf` },
+    });
+    expect(good.statusCode).toBe(202);
+  });
+
+  // GAP-WORKS-EXECUTION-ISSUES-NEW-05: an issue for a missing work is a 404, not a blind 202 + dropped insert.
+  it("POST /v1/works/execution/issues -> 404 when the work does not exist", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/works/execution/issues", headers: authHeader(),
+      payload: { workId: "00000000-0000-4000-8000-000000000404", description: "Cracks in slab" },
+    });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it("POST /v1/works/execution/issues -> 422 for an attachment key from another tenant; 202 for our own", async () => {
+    const bad = await app.inject({
+      method: "POST", url: "/v1/works/execution/issues", headers: authHeader(),
+      payload: { workId: "00000000-1111-4000-8000-000000000001", description: "Cracks", attachmentKey: "uploads/22222222-bbbb-4000-8000-000000000002/issue/x/a.jpg" },
+    });
+    expect(bad.statusCode).toBe(422);
+    const good = await app.inject({
+      method: "POST", url: "/v1/works/execution/issues", headers: authHeader(),
+      payload: { workId: "00000000-1111-4000-8000-000000000001", description: "Cracks", attachmentKey: `uploads/${TENANT}/issue/${ACTOR}/a.jpg` },
+    });
+    expect(good.statusCode).toBe(202);
+  });
+
+  // GAP-WORKS-EXECUTION-WORKID-07: closing twice must not insert a second closure.
+  it("POST /v1/works/execution/close -> 409 when the work is already closed", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/works/execution/close", headers: authHeader(["dao"]),
+      payload: { workId: "00000000-9999-4000-8000-000000000001", closureType: "dropped" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.code).toBe("ALREADY_CLOSED");
   });
 
   it("POST /v1/works/execution/issues → 202 valid", async () => {

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { renderWithIntl as render } from "@/lib/testUtils/intl";
+import { screen } from "@testing-library/react";
 
 /**
  * GAP-WORKS-REPORTS-02 (FAILMASK): three independent fetches must not share
@@ -79,5 +80,16 @@ describe("WorksReportsPage", () => {
     expect(screen.getByText("Other / In progress")).toBeInTheDocument();
     // The residual value 10 - 5 - 2 = 3 is rendered.
     expect(screen.getByText("3")).toBeInTheDocument();
+  });
+
+  it("REPORTS-07: shows a status chart (text alternative + bars) and the definitions note", async () => {
+    results.summary = { data: envelope({ totalWorks: 10, activeWorks: 6, closedWorks: 4 }), source: "api" };
+    results.status = { data: envelope([{ status: "draft", count: 6 }, { status: "closed", count: 4 }]), source: "api" };
+    results.works = { data: envelope(WORKS), source: "api" };
+    render(await WorksReportsPage({}));
+    const chart = screen.getByRole("img", { name: /Works by status: Draft 6, Closed 4/ });
+    expect(chart).toBeInTheDocument();
+    expect(screen.getAllByTestId("status-bar")).toHaveLength(2);
+    expect(screen.getByRole("note")).toHaveTextContent(/Active works = total works minus closed works/);
   });
 });

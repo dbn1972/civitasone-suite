@@ -27,7 +27,13 @@ export const uploadPhotoSchema = z.object({
   // earth coordinate.
   latitude: z.number().min(-90).max(90).optional(),
   longitude: z.number().min(-180).max(180).optional(),
-  source: z.enum(["mobile", "web"]).optional(),
+  // GAP-WORKS-EXECUTION-PHOTOS-NEW-02: web-gps = coordinates filled by the browser's geolocation, web-manual =
+  // typed by the user; plain "web" means no coordinates. Evidence integrity needs the distinction.
+  source: z.enum(["mobile", "web", "web-gps", "web-manual"]).optional(),
+}).refine((d) => (d.latitude === undefined) === (d.longitude === undefined), {
+  // A lone coordinate is not a location: both or neither (mirrors the web form).
+  message: "latitude and longitude must be supplied together",
+  path: ["latitude"],
 });
 
 export const createIssueSchema = z.object({

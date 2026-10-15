@@ -1,3 +1,4 @@
+import { configuredTileUrl } from "@/lib/mapTiles";
 import { MonitoringMap } from "../_components/MonitoringMap";
 
 export const metadata = {
@@ -5,6 +6,8 @@ export const metadata = {
   description: "Map-based monitoring dashboard across geospatial domains.",
 };
 
+export const dynamic = "force-dynamic";
+
 export default function Page() {
-  return <MonitoringMap />;
+  return <MonitoringMap tileUrl={configuredTileUrl()} />;
 }

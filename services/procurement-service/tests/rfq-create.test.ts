@@ -90,7 +90,7 @@ describe("POST /v1/procurement/rfqs — route contract", () => {
       headers: { authorization: `Bearer ${tok(["procurement_officer"])}`, "content-type": "application/json" },
       payload: {
         rfqNo: "CLIENT-SUPPLIED-IGNORED",
-        title: "Supply of laptops", indentRef: "procurement_indent:abc", closingDate: "2026-12-01",
+        title: "Supply of laptops", closingDate: "2026-12-01",
         vendorIds: [VENDOR_1, VENDOR_2],
         items: [{ itemName: "Laptop 14-inch", quantity: 20, unit: "nos" }],
       },

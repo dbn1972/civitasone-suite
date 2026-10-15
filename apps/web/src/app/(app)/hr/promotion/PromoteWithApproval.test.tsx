@@ -11,14 +11,19 @@ vi.mock("@/app/_components/ds/Toast", () => ({
 import { PromoteWithApproval } from "./PromoteWithApproval";
 
 const EMPLOYEE_DETAIL = { id: "emp-1", designation: "Section Officer" };
-const EMPLOYEES = [{ id: "emp-1", employeeNo: "E001", name: "Asha Verma", department: "Home" }];
+const EMPLOYEES = [
+  { id: "emp-1", employeeNo: "E001", name: "Asha Verma", department: "Home" },
+];
 const DESIGNATIONS = [
   { id: "desig-1", name: "Section Officer", grade: "7" },
   { id: "desig-2", name: "Under Secretary", grade: "8" },
 ];
+const ME = { id: "me-1", fullName: "Meera Self", employeeNo: "E-009" };
+// The forward-to officer is an HRMS employee (estab verifies currentWith as an employee id); these ids
+// are deliberately NOT identity-user ids.
 const OFFICERS = [
-  { id: "off-1", name: "S. Rao", designation: "Under Secretary" },
-  { id: "off-2", name: "P. Iyer", designation: "Deputy Secretary" },
+  { id: "emp-off-1", employeeNo: "E-010", name: "S. Rao", department: "Finance" },
+  { id: "emp-off-2", employeeNo: "E-020", name: "P. Iyer", department: "Works" },
 ];
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -49,10 +54,11 @@ function mockFetchRouting(opts: { submitApproval: () => Response; fromModule: ()
     // Employee/designation/officer search+resolve, and the current-
     // designation detail lookup -- see PromoteWithApproval.tsx's own file
     // header comment on why designationId itself is unavailable.
+    if (url.includes("/hrms/me/profile")) return Promise.resolve(jsonResponse(ME));
     if (url.endsWith(`/hrms/employees/emp-1`) && (!init?.method || init.method === "GET")) return Promise.resolve(jsonResponse(EMPLOYEE_DETAIL));
+    if (url.includes("q=Iyer") || url.includes("ids=emp-off")) return Promise.resolve(jsonResponse({ data: OFFICERS }));
     if (url.includes("/hrms/employees")) return Promise.resolve(jsonResponse({ data: EMPLOYEES }));
     if (url.includes("/hrms/designations")) return Promise.resolve(jsonResponse({ data: DESIGNATIONS }));
-    if (url.includes("/identity/users")) return Promise.resolve(jsonResponse({ data: OFFICERS }));
     return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
   }) as typeof fetch);
   return { submitApprovalCalls, fromModuleCalls };
@@ -88,8 +94,9 @@ async function openAndFillWizard() {
   fireEvent.change(screen.getByLabelText(/^Effective date/), { target: { value: "2026-09-01" } });
   fireEvent.click(screen.getByRole("button", { name: "Next: Approval routing →" }));
 
-  await pickEntity("Initiating officer", "Rao", "S. Rao");
-  await pickEntity("Forward to (approving officer)", "Iyer", "P. Iyer");
+  // The initiator is the signed-in employee, shown read-only (the estab route rejects any other initiator).
+  await waitFor(() => expect(screen.getByLabelText(/^Initiating officer/)).toHaveValue("Meera Self (E-009)"));
+  await pickEntity("Forward to (approving officer)", "Iyer", "P. Iyer (E-020)");
   fireEvent.change(screen.getByPlaceholderText(/Why is this promotion being recommended/), {
     target: { value: "Meets DPC criteria" },
   });
@@ -136,6 +143,19 @@ describe("PromoteWithApproval", () => {
     expect(submitApprovalCalls).toHaveLength(1);
     expect(fromModuleCalls[0]!.body).toMatchObject({ refId: "promo-abc" });
     expect(fromModuleCalls[1]!.body).toMatchObject({ refId: "promo-abc" });
+  });
+
+  it("always raises the eFile with the signed-in employee as initiator, and the field is read-only", async () => {
+    const { fromModuleCalls } = mockFetchRouting({
+      submitApproval: () => jsonResponse({ id: "promo-self", status: "accepted" }),
+      fromModule: () => jsonResponse({ fileNo: "HR/2026/004" }),
+    });
+    renderWidget();
+    await openAndFillWizard();
+    expect(screen.getByLabelText(/^Initiating officer/)).toHaveAttribute("readonly");
+    await submitAndConfirm();
+    await waitFor(() => expect(fromModuleCalls).toHaveLength(1));
+    expect(fromModuleCalls[0]!.body).toMatchObject({ initiatedBy: ME.id, currentWith: "emp-off-2" });
   });
 
   it("raises the eFile and shows a success toast on the happy path", async () => {

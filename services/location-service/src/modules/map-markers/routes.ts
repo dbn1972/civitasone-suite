@@ -26,8 +26,12 @@ export async function mapMarkerRoutes(app: FastifyInstance): Promise<void> {
       const parts = q.bbox.split(",").map(Number) as [number, number, number, number];
       bbox = parts;
     }
-    const markers = await repo.markers(ctx.tenantId, { domain: q.domain, status: q.status, bbox }, q.limit);
-    return reply.send({ markers, meta: { total: markers.length } });
+    // GAP-LOCATIONS-MAPS-MONITORING-02: ask for one extra row so a capped feed is
+    // reported honestly (meta.truncated) instead of looking like the full set.
+    const fetched = await repo.markers(ctx.tenantId, { domain: q.domain, status: q.status, bbox }, q.limit + 1);
+    const truncated = fetched.length > q.limit;
+    const markers = truncated ? fetched.slice(0, q.limit) : fetched;
+    return reply.send({ markers, meta: { total: markers.length, limit: q.limit, truncated } });
   });
 
   // CQRS: publish only — consumer upserts (no sync repo write).

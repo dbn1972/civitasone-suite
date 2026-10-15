@@ -7,10 +7,10 @@ import { useSeededResource } from "@/lib/sync/resource";
 import { PENDING_STATUSES } from "@/lib/auth/workRoles";
 
 const columns = [
-  { key: "workNumber", label: "Work (ID)", sortable: true },
+  { key: "workNumber", label: "Work Number", sortable: true },
   { key: "approvalNumber", label: "Approval Number", sortable: true },
   { key: "date", label: "Date", sortable: true },
-  { key: "authority", label: "Authority (ID)", sortable: true },
+  { key: "authority", label: "Authority", sortable: true },
   { key: "amount", label: "Amount", align: "right" as const, cellType: "amount" as const, sortable: true },
   { key: "type", label: "Type", sortable: true },
   { key: "status", label: "Status", cellType: "status" as const, sortable: true },

@@ -18,6 +18,7 @@
  */
 import { useCallback, useId, useRef, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog, EmptyState, Modal, StatusPill } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { CourtOrder, Hearing } from "../_data/types";
@@ -652,6 +653,7 @@ function ApproveIssueDialog({
   onClose: () => void;
   onDone: (msg: string) => Promise<void> | void;
 }) {
+  const tm = useTranslations("pqbMoney");
   const [dsc, setDsc] = useState("");
   const [issuedDate, setIssuedDate] = useState(todayIso());
   const [dscError, setDscError] = useState<string | undefined>();
@@ -819,6 +821,12 @@ function ApproveIssueDialog({
           </span>
         )}
       </div>
+      {/* GAP-COURT-ORDERS-02 interim: be honest that a pasted blob is only as strong as the trust store. */}
+      {verification?.ok && !verification.chainTrusted && (
+        <p role="alert" data-testid="dsc-untrusted-warning" style={errStyle}>
+          {tm("dscUntrusted", { storeState: verification.trustStoreConfigured ? "configured" : "none" })}
+        </p>
+      )}
       {verifyError && (
         <p role="alert" style={errStyle}>
           {verifyError}

@@ -610,3 +610,9 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 @media (prefers-reduced-motion:reduce){
   .skeleton{animation:none;background-image:none}
 }
+
+/* Map pages (GAP-LOCATIONS-MAPS-05): the map and its side panel stack on narrow
+   screens and sit side by side from 900px, instead of an inline two-column grid
+   that crushed the map to ~90px on a phone. */
+.map-layout{display:grid;gap:16px;grid-template-columns:minmax(0,1fr);align-items:start}
+@media(min-width:900px){.map-layout{grid-template-columns:minmax(0,1fr) minmax(240px,320px)}}

@@ -8,6 +8,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { createRfqBody, rfqRespondBody, awardRfqBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as indentRepo from "../indent/repo.js";
 import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
 
@@ -34,6 +35,24 @@ export async function rfqRoutes(app: FastifyInstance): Promise<void> {
         || vendor?.vendorType === "blacklisted";
       if (blacklisted) {
         throw new HttpError(422, "VENDOR_BLACKLISTED", `vendor ${vendorId} is blacklisted and cannot be invited to an RFQ`);
+      }
+    }
+    // GAP-PROCUREMENT-RFQ-NEW-01: an RFQ may only be raised against an APPROVED indent of this tenant.
+    // The web picker is filtered, but the server is the real control. A supplied indentRef MUST be the
+    // structured "procurement_indent:<uuid>" reference: a malformed non-empty ref is rejected (422) so it
+    // cannot be used to skip the approved-indent check. An omitted/blank ref is a legacy no-indent RFQ.
+    const indentRefRaw = (body.indentRef ?? "").trim();
+    if (indentRefRaw !== "") {
+      const indentMatch = /^procurement_indent:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(indentRefRaw);
+      if (!indentMatch) {
+        throw new HttpError(422, "INDENT_REF_INVALID", "indentRef must be of the form procurement_indent:<indent id>");
+      }
+      const indent = await indentRepo.findIndentById(indentMatch[1]!);
+      if (!indent || indent.tenantId !== ctx.tenantId) {
+        throw new HttpError(422, "INDENT_NOT_FOUND", "the source indent was not found");
+      }
+      if (indent.status !== "approved") {
+        throw new HttpError(422, "INDENT_NOT_APPROVED", `an RFQ requires an approved indent; this indent is '${indent.status}'`);
       }
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createRfq(ctx, body));

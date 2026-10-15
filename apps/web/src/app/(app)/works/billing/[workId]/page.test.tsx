@@ -1,8 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "@/test-utils/intl-render";
 
 vi.mock("@/lib/auth/roleGuard", () => ({
   getSessionRoles: () => ["works_admin"],
+  getSessionUserId: () => "actor-1",
   hasAnyRole: (roles: string[], allowed: string[]) => allowed.some((r) => roles.includes(r)),
 }));
 vi.mock("./BillingActions", () => ({ BillingActions: () => null }));
@@ -22,6 +23,7 @@ const row = (o: Record<string, unknown>) => ({
   stage: "",
   status: "pending",
   rawStatus: "so_finalized",
+  createdBy: null,
   ...o,
 });
 
@@ -50,5 +52,17 @@ describe("BillingDetailPage (WORKID-05/06)", () => {
     const statText = (label: string) => screen.getAllByText(label)[0].parentElement!.textContent ?? "";
     expect(statText("Finalized")).toMatch(/1/);
     expect(statText("Submitted")).toMatch(/2/);
+  });
+
+  it("GAP-WORKS-BILLING-02: ?bill= calls out that bill and lists it first", async () => {
+    getBillsForWork.mockResolvedValue({
+      source: "api",
+      data: [row({ id: "b1", billNo: "RA-01" }), row({ id: "b2", billNo: "RA-02" })],
+    });
+    const ui = await BillingDetailPage({ params: { workId: "11111111-1111-1111-1111-111111111111" }, searchParams: { bill: "b2" } });
+    render(ui);
+    expect(screen.getByRole("note")).toHaveTextContent(/bill RA-02 is listed first/);
+    const cells = screen.getAllByText(/RA-0[12]/).map((c) => c.textContent);
+    expect(cells.find((t) => t?.startsWith("▶ RA-02"))).toBeTruthy();
   });
 });

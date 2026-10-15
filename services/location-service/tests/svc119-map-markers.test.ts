@@ -90,4 +90,14 @@ describePostGIS("SVC-119 geo-points registry + markers feed", () => {
     expect(feedB.json().markers.filter((x: { refId: string }) => x.refId === refId)).toHaveLength(0);
     expect(feedB.json().markers.some((x: { label: string }) => x.label === infraName)).toBe(false);
   });
+
+  // GAP-LOCATIONS-MAPS-MONITORING-02
+  it("reports truncation honestly when the feed is capped by limit", async () => {
+    const capped = await get("/v1/locations/map-markers?limit=1", TENANT_A);
+    expect(capped.statusCode).toBe(200);
+    expect(capped.json().markers).toHaveLength(1);
+    expect(capped.json().meta).toMatchObject({ limit: 1, truncated: true });
+    const full = await get("/v1/locations/map-markers", TENANT_A);
+    expect(full.json().meta.truncated).toBe(false);
+  });
 });

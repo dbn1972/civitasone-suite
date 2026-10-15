@@ -46,12 +46,12 @@ export function registerMapLayerConsumers(queue: Queue): void {
     await cache.invalidateResource(msg.tenantId, RESOURCES.mapLayer);
   });
 
-  queue.subscribe<{ id: string }>(COMMANDS.mapLayerDelete, async (msg) => {
+  queue.subscribe<{ id: string; reason?: string }>(COMMANDS.mapLayerDelete, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const deleted = await repo.remove(tx, msg.payload.id, msg.tenantId);
       if (deleted === 0) return;
-      await emit(tx, msg, EVENTS.mapLayerDeleted, { mapLayerId: msg.payload.id }, "delete", msg.payload.id);
+      await emit(tx, msg, EVENTS.mapLayerDeleted, { mapLayerId: msg.payload.id }, "delete", msg.payload.id, msg.payload.reason ? { reason: msg.payload.reason } : undefined);
     });
     await cache.invalidate(keyFor(msg.tenantId, msg.payload.id));
     await cache.invalidateResource(msg.tenantId, RESOURCES.mapLayer);
@@ -65,6 +65,7 @@ async function emit(
   payload: Record<string, unknown>,
   action: string,
   resourceId: string,
+  metadata?: Record<string, unknown>,
 ): Promise<void> {
   const t = tx as Parameters<typeof enqueue>[0];
   await enqueue(t, {
@@ -81,6 +82,6 @@ async function emit(
     tenantId: msg.tenantId,
     actorId: msg.actorId,
     correlationId: msg.correlationId,
-    payload: { service: "location", action, resourceType: "map_layer", resourceId, outcome: "success" },
+    payload: { service: "location", action, resourceType: "map_layer", resourceId, outcome: "success", ...(metadata ? { metadata } : {}) },
   });
 }
