@@ -26,6 +26,7 @@ describe("AddRiskButton", () => {
     render(<AddRiskButton />);
     openAndFillDialog();
     fireEvent.click(screen.getByRole("button", { name: "Add risk" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm & add" }));
 
     await waitFor(() => expect(refreshMock).toHaveBeenCalled());
     const [url] = fetchSpy.mock.calls[0];
@@ -43,10 +44,24 @@ describe("AddRiskButton", () => {
     render(<AddRiskButton />);
     openAndFillDialog();
     fireEvent.click(screen.getByRole("button", { name: "Add risk" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm & add" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/This risk was changed by someone else\. Refresh to see the latest version, then try again\./);
     expect(screen.queryByText(/risk_code already exists/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-AUDIT-RISK-REGISTER-04: create shows a confirm summary (with the computed
+  // score) and sends nothing until confirmed.
+  it("does not POST until the confirm dialog is confirmed, and the summary shows the score", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 201 }));
+    render(<AddRiskButton />);
+    openAndFillDialog();
+    fireEvent.click(screen.getByRole("button", { name: "Add risk" }));
+    expect(await screen.findByRole("button", { name: "Confirm & add" })).toBeInTheDocument();
+    expect(screen.getByText("Add risk RISK-2026-007?")).toBeInTheDocument();
+    expect(screen.getByText(/Vendor concentration in payments · .* · Score 9 \(Medium\)/)).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   // GAP-AUDIT-RISK-REGISTER-01: the dialog must preview score = L x I live,

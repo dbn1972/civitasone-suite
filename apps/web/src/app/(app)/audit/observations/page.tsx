@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { formatMoney } from "@/lib/formatters";
@@ -7,6 +6,7 @@ import { toHumanError } from "@/lib/messages";
 import { getAuditObservations } from "../../../_data/loaders";
 import { ObservationsTable } from "./ObservationsTable";
 import { LogObservationButton } from "./LogObservationButton";
+import { AuditBreadcrumb } from "../_components/AuditBreadcrumb";
 
 // GAP-AUDIT-OBSERVATIONS-03: sum money as paise with integer (BigInt) math so a
 // string paise value never concatenates and large totals never lose precision.
@@ -29,11 +29,7 @@ export default async function AuditObservationsPage() {
   if (source === "error") {
     return (
       <div className="wrap">
-        <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
-          <Link href="/audit/dashboard" className="lnk">Audit</Link>
-          <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
-          <span aria-current="page">Observations</span>
-        </nav>
+        <AuditBreadcrumb current="Observations" />
         <PageHeader title="Audit Observations" subtitle="Internal audit findings with risk & money value." />
         <div className="grid g-4" style={{ marginBottom: 18 }}>
           <StatCard icon="📋" iconBg="var(--badbg)" label="Open" value="—" />
@@ -62,11 +58,7 @@ export default async function AuditObservationsPage() {
 
   return (
     <div className="wrap">
-      <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
-        <Link href="/audit/dashboard" className="lnk">Audit</Link>
-        <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
-        <span aria-current="page">Observations</span>
-      </nav>
+      <AuditBreadcrumb current="Observations" />
       <PageHeader
         title="Audit Observations"
         subtitle="Internal audit findings with risk & money value."

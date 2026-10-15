@@ -45,3 +45,41 @@ describe("CagPage", () => {
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 });
+
+function statValue(label: string): string {
+  const lab = screen.getAllByText(label).find((el) => el.classList.contains("lab"));
+  return lab?.parentElement?.querySelector(".val")?.textContent ?? "";
+}
+
+describe("CagPage KPIs (GAP-AUDIT-CAG-04 / CAG-03)", () => {
+  beforeEach(() => fetchJsonMock.mockReset());
+
+  it("GAP-AUDIT-CAG-04: Departments counts a shared department once and ignores a missing one", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        { id: "a", reportYear: "2024-25", paraNo: "1", department: "Finance", status: "settled" },
+        { id: "b", reportYear: "2024-25", paraNo: "2", department: "Finance", status: "under_review" },
+        { id: "c", reportYear: null, paraNo: "3", department: null, status: "under_review" },
+      ],
+      source: "api",
+    });
+    render(await CagPage());
+    expect(statValue("Departments")).toBe("1");
+    expect(statValue("Paragraphs")).toBe("3");
+  });
+
+  it("GAP-AUDIT-CAG-03: an unknown-status para is counted in Paragraphs but not guessed into Pending or Settled", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        { id: "a", reportYear: "2024-25", paraNo: "1", department: "Finance", status: "settled" },
+        { id: "b", reportYear: "2024-25", paraNo: "2", department: "Works", status: "under_review" },
+        { id: "c", reportYear: "2024-25", paraNo: "3", department: "Works", status: "unknown", rawStatus: "xyz" },
+      ],
+      source: "api",
+    });
+    render(await CagPage());
+    expect(statValue("Paragraphs")).toBe("3");
+    expect(statValue("Settled")).toBe("1");
+    expect(statValue("Pending")).toBe("1");
+  });
+});

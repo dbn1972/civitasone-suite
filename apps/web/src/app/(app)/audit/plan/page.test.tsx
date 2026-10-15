@@ -37,4 +37,10 @@ describe("AuditPlanPage (GAP-AUDIT-PLAN-02 / PLAN-06)", () => {
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     expect(screen.queryByText("No audits planned yet")).not.toBeInTheDocument();
   });
+
+  it("DASHBOARD-03: the Audit breadcrumb goes to the module home (/audit)", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    render(await AuditPlanPage());
+    expect(screen.getByRole("link", { name: "Audit" })).toHaveAttribute("href", "/audit");
+  });
 });

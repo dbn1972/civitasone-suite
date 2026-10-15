@@ -72,3 +72,42 @@ describe("getCagParas mapResponse (GAP-AUDIT-CAG-01/02/04)", () => {
     expect(result.data).toEqual([]);
   });
 });
+
+describe("getCagParas status mapping (GAP-AUDIT-CAG-03)", () => {
+  beforeEach(() => {
+    mockGet.mockReturnValue({ value: "fake-access-token" });
+    process.env.CIVITASONE_API_BASE_URL = "http://gateway.test";
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.CIVITASONE_API_BASE_URL;
+  });
+
+  it("an unmodelled status becomes 'unknown' with the raw value kept, never 'under_review'", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, [{ id: "p1", paraNo: "1", status: "xyz" }])));
+    const result = await getCagParas();
+    expect(result.source).toBe("api");
+    expect(result.data[0].status).toBe("unknown");
+    expect(result.data[0].rawStatus).toBe("xyz");
+  });
+
+  it("a missing status is 'unknown', not a guessed 'under_review'", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, [{ id: "p1", paraNo: "1" }])));
+    const result = await getCagParas();
+    expect(result.data[0].status).toBe("unknown");
+  });
+
+  it("the real audit-service draft/issued statuses stay 'under_review'", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse(200, [
+        { id: "p1", paraNo: "1", status: "draft" },
+        { id: "p2", paraNo: "2", status: "issued" },
+        { id: "p3", paraNo: "3", status: "closed" },
+      ])),
+    );
+    const result = await getCagParas();
+    expect(result.data.map((r) => r.status)).toEqual(["under_review", "under_review", "settled"]);
+  });
+});

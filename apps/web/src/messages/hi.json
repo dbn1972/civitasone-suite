@@ -15114,5 +15114,17 @@
     "dfaLinkFileLabel": "ईऑफ़िस फ़ाइल से जोड़ें (वैकल्पिक)",
     "dfaLinkFilePlaceholder": "फ़ाइल संख्या या विषय से खोजें…",
     "allotSelfApplicant": "आप अपने ही आवेदन वाला क्वार्टर आवंटित नहीं कर सकते (मेकर-चेकर नीति)। किसी अन्य अधिकारी को इसे आवंटित करना होगा।"
+  },
+  "auditW2": {
+    "cagStatusUnknown": "अज्ञात",
+    "vigilanceUnrecognised": "अपरिचित",
+    "vigilanceUnrecognisedStage": "अपरिचित चरण",
+    "cancel": "रद्द करें",
+    "planConfirmTitle": "ऑडिट योजना {planNo} बनाएँ?",
+    "planConfirmDescription": "{title} · {area} · {from} से {to} · जोखिम: {risk}। यह ऑडिट ट्रेल में दर्ज किया जाएगा।",
+    "planConfirmLabel": "पुष्टि करें और योजना बनाएँ",
+    "riskConfirmTitle": "जोखिम {riskCode} जोड़ें?",
+    "riskConfirmDescription": "{title} · {category} · स्कोर {score} ({band})। स्कोर सर्वर पर पुनर्गणित और संग्रहीत किया जाता है। यह ऑडिट ट्रेल में दर्ज किया जाएगा।",
+    "riskConfirmLabel": "पुष्टि करें और जोड़ें"
   }
 }

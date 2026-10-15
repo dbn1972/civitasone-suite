@@ -3,7 +3,9 @@
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
-import { Button, Modal } from "@/app/_components/ds";
+import { Button, ConfirmDialog, Modal } from "@/app/_components/ds";
+import { useAuditT } from "@/lib/audit/useAuditT";
+import { formatIndianDate } from "@/lib/formatters";
 
 export function PlanAuditButton() {
   const router = useRouter();
@@ -11,6 +13,9 @@ export function PlanAuditButton() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const formError = useFormError("audit plan");
+  const t = useAuditT();
+  // GAP-AUDIT-PLAN-05: confirm gate summarising the plan before the create mutation.
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const [planNo, setPlanNo] = useState("");
   const [title, setTitle] = useState("");
@@ -21,7 +26,8 @@ export function PlanAuditButton() {
 
   const close = useCallback(() => { if (!busy) { setOpen(false); setError(null); } }, [busy]);
 
-  const submit = useCallback(async () => {
+  // Validate BEFORE showing the confirm dialog (GAP-AUDIT-PLAN-05).
+  const handleProceed = useCallback(() => {
     setError(null);
     if (!planNo.trim() || !title.trim() || !area.trim() || !periodFrom || !periodTo) {
       setError("Plan no., title, area and both dates are required.");
@@ -33,6 +39,11 @@ export function PlanAuditButton() {
       setError("Planned-to must be on or after planned-from.");
       return;
     }
+    setConfirmOpen(true);
+  }, [planNo, title, area, periodFrom, periodTo]);
+
+  const submit = useCallback(async () => {
+    setError(null);
     setBusy(true);
     try {
       const res = await fetch("/api/proxy/v1/audit/plans", {
@@ -52,6 +63,7 @@ export function PlanAuditButton() {
         setError(resolved.message);
         return;
       }
+      setConfirmOpen(false);
       setOpen(false);
       router.refresh();
     } catch (caught) {
@@ -69,7 +81,7 @@ export function PlanAuditButton() {
     <>
       <Button onClick={() => setOpen(true)}>+ Plan Audit</Button>
       {/* SF-19: ds/Modal (focus trap, inert background, Escape). Overlay click never discards typed input. */}
-      <Modal open={open} onClose={close} title="Plan audit engagement" size="lg" closeOnOverlayClick={false}>
+      <Modal open={open} onClose={() => { if (!confirmOpen) close(); }} title="Plan audit engagement" size="lg" closeOnOverlayClick={false}>
           <div style={{ maxHeight: "70vh", overflowY: "auto" }}>
             <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <label className="lbl" htmlFor="ps-no">Plan no.</label>
@@ -106,11 +118,28 @@ export function PlanAuditButton() {
               {error && <div role="alert" style={{ color: "var(--bad)", fontSize: 13, marginTop: 4 }}>{error}</div>}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
                 <Button variant="ghost" onClick={close} disabled={busy}>Cancel</Button>
-                <Button onClick={() => void submit()} disabled={busy}>{busy ? "Planning…" : "Plan audit"}</Button>
+                <Button onClick={handleProceed} disabled={busy}>{busy ? "Planning…" : "Plan audit"}</Button>
               </div>
             </div>
           </div>
       </Modal>
+      <ConfirmDialog
+        open={confirmOpen}
+        title={t("planConfirmTitle", { planNo: planNo.trim() })}
+        description={t("planConfirmDescription", {
+          title: title.trim(),
+          area: area.trim(),
+          from: periodFrom ? formatIndianDate(periodFrom) : "",
+          to: periodTo ? formatIndianDate(periodTo) : "",
+          risk: riskLevel.charAt(0).toUpperCase() + riskLevel.slice(1),
+        })}
+        confirmLabel={t("planConfirmLabel")}
+        cancelLabel={t("cancel")}
+        busy={busy}
+        errorMessage={error ?? undefined}
+        onConfirm={() => void submit()}
+        onCancel={() => { if (!busy) setConfirmOpen(false); }}
+      />
     </>
   );
 }

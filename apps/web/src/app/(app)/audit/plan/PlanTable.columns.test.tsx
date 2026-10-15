@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within, fireEvent } from "@testing-library/react";
 import type { AuditPlanItem } from "@civitasone/types";
 
 vi.mock("next/navigation", () => ({
@@ -54,5 +54,27 @@ describe("PlanTable columns (GAP-AUDIT-PLAN-01 / PLAN-03)", () => {
     expect(within(table).queryByText("High")).not.toBeInTheDocument();
     expect(within(table).queryByText("Medium")).not.toBeInTheDocument();
     expect(within(table).queryByText("Low")).not.toBeInTheDocument();
+  });
+});
+
+describe("PlanTable same-unit engagements (GAP-AUDIT-PLAN-03)", () => {
+  const unit = { auditUnit: "Procurement Wing", department: "Finance", type: "routine", plannedFrom: "2026-10-01", plannedTo: "2026-10-12", status: "planned" } as const;
+
+  it("two plans in one unit show distinct plan no. and title, and the filter box matches plan no.", () => {
+    render(
+      <PlanTable
+        items={[
+          { ...unit, id: "a", planNo: "PLAN-FY26-01", title: "Tender audit" },
+          { ...unit, id: "b", planNo: "PLAN-FY26-02", title: "Stores audit" },
+        ]}
+      />,
+    );
+    expect(screen.getByText("PLAN-FY26-01")).toBeInTheDocument();
+    expect(screen.getByText("PLAN-FY26-02")).toBeInTheDocument();
+    expect(screen.getByText("Tender audit")).toBeInTheDocument();
+    expect(screen.getByText("Stores audit")).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/Filter by plan no/), { target: { value: "FY26-02" } });
+    expect(screen.queryByText("PLAN-FY26-01")).not.toBeInTheDocument();
+    expect(screen.getByText("PLAN-FY26-02")).toBeInTheDocument();
   });
 });

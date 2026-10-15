@@ -3,16 +3,26 @@
 import { DataTable, StatusPill } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
+import { useAuditT } from "@/lib/audit/useAuditT";
+import { humanizeStatus } from "@/lib/formatters";
 import type { CagParaSummary } from "@/app/_data/loaders";
 
-const STATUS_LABELS: Record<CagParaSummary["status"], string> = {
+const STATUS_LABELS: Record<Exclude<CagParaSummary["status"], "unknown">, string> = {
   under_review: "Under Review",
   partially_settled: "Partially Settled",
   nearly_settled: "Nearly Settled",
   settled: "Settled",
 };
 
+// GAP-AUDIT-CAG-03: an unmodelled backend status shows its humanized raw text
+// ("xyz" -> "Xyz"), never a guessed "Under Review".
+function statusLabel(row: CagParaSummary, unknownLabel: string): string {
+  if (row.status === "unknown") return row.rawStatus ? humanizeStatus(row.rawStatus) : unknownLabel;
+  return STATUS_LABELS[row.status] ?? humanizeStatus(String(row.status));
+}
+
 export function CagTable({ rows, source }: { rows: CagParaSummary[]; source: "api" | "error" }) {
+  const t = useAuditT();
   // GAP-AUDIT-CAG-06: surface provenance so cached rows are labelled honestly.
   const { data, provenance, cachedAt, offline } = useSeededResource(
     "audit.cag.paras",
@@ -43,7 +53,8 @@ export function CagTable({ rows, source }: { rows: CagParaSummary[]; source: "ap
             render: (row) => (
               <StatusPill
                 status={row.status as CagParaSummary["status"]}
-                label={STATUS_LABELS[row.status as CagParaSummary["status"]] ?? String(row.status)}
+                variant={row.status === "unknown" ? "mut" : undefined}
+                label={statusLabel(row as unknown as CagParaSummary, t("cagStatusUnknown"))}
               />
             ),
           },

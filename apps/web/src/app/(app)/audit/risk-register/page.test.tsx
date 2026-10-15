@@ -54,4 +54,10 @@ describe("RiskRegisterPage (GAP-AUDIT-RISK-REGISTER-02 / 06)", () => {
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
     expect(screen.queryByText("No risks recorded yet")).not.toBeInTheDocument();
   });
+
+  it("DASHBOARD-03: the Audit breadcrumb goes to the module home (/audit)", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    render(await RiskRegisterPage());
+    expect(screen.getByRole("link", { name: "Audit" })).toHaveAttribute("href", "/audit");
+  });
 });

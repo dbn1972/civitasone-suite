@@ -15614,5 +15614,17 @@
     "dfaLinkFileLabel": "Link to an eOffice file (optional)",
     "dfaLinkFilePlaceholder": "Search by file number or subject…",
     "allotSelfApplicant": "You cannot allot a quarter you applied for (maker-checker policy). Another officer must allot it."
+  },
+  "auditW2": {
+    "cagStatusUnknown": "Unknown",
+    "vigilanceUnrecognised": "Unrecognised",
+    "vigilanceUnrecognisedStage": "Unrecognised stage",
+    "cancel": "Cancel",
+    "planConfirmTitle": "Create audit plan {planNo}?",
+    "planConfirmDescription": "{title} · {area} · {from} to {to} · Risk: {risk}. This will be recorded in the audit trail.",
+    "planConfirmLabel": "Confirm & plan",
+    "riskConfirmTitle": "Add risk {riskCode}?",
+    "riskConfirmDescription": "{title} · {category} · Score {score} ({band}). The score is recomputed and stored server-side. This will be recorded in the audit trail.",
+    "riskConfirmLabel": "Confirm & add"
   }
 }
