@@ -187,7 +187,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CONSENT-EXCHANGE-03  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; apps/web ModuleListTable.showid.test.tsx (showId={false} hides the ID column; time-ordered UUIDs sharing an 8-char prefix are no longer rendered) + every tenant page passes showId={false})
+- [x] **Status** (W2 tenant: closed by #2060; apps/web ModuleListTable.showid.test.tsx (showId={false} hides the ID column; time-ordered UUIDs sharing an 8-char prefix are no longer rendered) + every tenant page passes showId={false})
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide (UUIDs share the leading 8 chars when time-ordered).
 - **Verified evidence:** ModuleListTable.tsx:50 truncates id to 8 chars. The 'collide' claim is plausible for time-ordered UUIDs but unproven.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -398,7 +398,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-ORG-HIERARCHY-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
+- [x] **Status** (W2 tenant: closed by #2060; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
 - **W0-10 note:** review found the W0 tick partly — banned term removed via LABELS.tenantTitle ("Office") but tenant/org-hierarchy/page.tsx:16-17 still hard-coded English, no getTranslations/next-intl keys (fix step 1, locale-switch acceptance) and no banned-term test (step 3)
 - **First-pass claim:** Title 'Tenant — Org Hierarchy' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Organisation units and hierarchy nodes.".
 - **Verified evidence:** page.tsx title="Tenant — Org Hierarchy" and description are hard-coded English; 'tenant' is banned (lib/labels.ts:30). Theme FABRICATED is wrong: no sample figures.
@@ -504,7 +504,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-OVERVIEW-07  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
+- [x] **Status** (W2 tenant: closed by #2060; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
 - **W0 note:** partly fixed by #1923 — Uses LABELS.tenantTitle (Office), banned term gone; title/subtitle still hard-coded English, not next-intl
 - **First-pass claim:** Title 'Tenant — Overview' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Current tenant profile from tenant-service.".
 - **Verified evidence:** page.tsx (title prop) hard-codes title="Tenant — Overview" and the description string; no useTranslations in these pages although 423 of 829 page files elsewhere use next-intl. lib/labels.ts:30 lists 'tenant' in BANNED_CLERK_TERMS (LABELS.tenant='office', lib/labels.ts:11), and the page title contains it. Subtitle 'Current tenant profile from tenant-service.' is accurate copy but also hard-coded. Subtitle also names 'tenant-service' (internal service name) which is clerk-facing jargon.
@@ -545,7 +545,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-PLANS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; apps/web ModuleListTable.showid.test.tsx (showId={false} hides the ID column; time-ordered UUIDs sharing an 8-char prefix are no longer rendered) + every tenant page passes showId={false})
+- [x] **Status** (W2 tenant: closed by #2060; apps/web ModuleListTable.showid.test.tsx (showId={false} hides the ID column; time-ordered UUIDs sharing an 8-char prefix are no longer rendered) + every tenant page passes showId={false})
 - **W0 note:** partly fixed by #1801 — Slug ids shown in full; UUID ids still sliced to 8 chars in ID column, column not dropped
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** ModuleListTable.tsx:40 header 'ID' and :50 renders <span className="mono">{row.id.slice(0, 8)}</span>. Shared by every ModuleListPage screen; mapTenantRows (_data.ts:36-43) falls back to key/code/resource/`row-N` as id so truncation is lossy.
@@ -599,7 +599,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-PLANS-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
+- [x] **Status** (W2 tenant: closed by #2060; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
 - **W0 note:** partly fixed by #1916 — Banned Tenant term replaced by LABELS.tenantTitle; page title still hard-coded English, no next-intl
 - **First-pass claim:** Title 'Tenant — Plans' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Available plans with pricing and module entitlements.".
 - **Verified evidence:** page.tsx (title prop) hard-codes title="Tenant — Plans" and the description string; no useTranslations in these pages although 423 of 829 page files elsewhere use next-intl. lib/labels.ts:30 lists 'tenant' in BANNED_CLERK_TERMS (LABELS.tenant='office', lib/labels.ts:11), and the page title contains it. Subtitle 'Available plans with pricing and module entitlements.' is accurate copy but also hard-coded. Subtitle promises pricing that is not mapped (see PLANS-01).
@@ -638,7 +638,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-POSITIONS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; apps/web ModuleListTable.showid.test.tsx (showId={false} hides the ID column; time-ordered UUIDs sharing an 8-char prefix are no longer rendered) + every tenant page passes showId={false})
+- [x] **Status** (W2 tenant: closed by #2060; apps/web ModuleListTable.showid.test.tsx (showId={false} hides the ID column; time-ordered UUIDs sharing an 8-char prefix are no longer rendered) + every tenant page passes showId={false})
 - **W0 note:** partly fixed by #1801 — Slug ids full; UUID ids still sliced to 8 chars, ID column retained
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** ModuleListTable.tsx:40 header 'ID' and :50 renders <span className="mono">{row.id.slice(0, 8)}</span>. Shared by every ModuleListPage screen; mapTenantRows (_data.ts:36-43) falls back to key/code/resource/`row-N` as id so truncation is lossy.
@@ -692,7 +692,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-POSITIONS-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
+- [x] **Status** (W2 tenant: closed by #2060; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
 - **W0 note:** partly fixed by #1916 — LABELS.tenantTitle used (no banned term); title still hard-coded English, not next-intl
 - **First-pass claim:** Title 'Tenant — Positions' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Position master records and role bindings.".
 - **Verified evidence:** page.tsx (title prop) hard-codes title="Tenant — Positions" and the description string; no useTranslations in these pages although 423 of 829 page files elsewhere use next-intl. lib/labels.ts:30 lists 'tenant' in BANNED_CLERK_TERMS (LABELS.tenant='office', lib/labels.ts:11), and the page title contains it. Subtitle 'Position master records and role bindings.' is accurate copy but also hard-coded. Subtitle promises role bindings that are not mapped (see POSITIONS-01).
@@ -733,7 +733,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-QUOTAS-02  ·  MEDIUM  ·  confirmed  ·  theme STATUS (was OTHER)
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; StatusPill maps near limit->warn, exceeded->bad, ok->good, asserted by apps/web/src/app/_components/ds/StatusPill.quota.test.tsx. Note: unknown snake_case values render via humanizeStatus Title Case ('Foo Bar'), not sentence case; per-row highlight at threshold NOT built — the text label is the non-colour cue)
+- [x] **Status** (W2 tenant: closed by #2060; StatusPill maps near limit->warn, exceeded->bad, ok->good, asserted by apps/web/src/app/_components/ds/StatusPill.quota.test.tsx. Note: unknown snake_case values render via humanizeStatus Title Case ('Foo Bar'), not sentence case; per-row highlight at threshold NOT built — the text label is the non-colour cue)
 - **W0-10 note:** review found the W0 tick partly — tenant/_data.ts:126-130 emits "Near limit"/"Exceeded"/"OK" and StatusPill humanizes, but ds/StatusPill.tsx STATUS_MAP has no near limit/exceeded/ok keys so pill falls to default "info" blue (:508), not amber; no icon cue and no row highlight in ModuleListTable.tsx:66.
 - **First-pass claim:** Status shows raw snake_case values such as near_limit (ModuleListTable.tsx:53) and there is no threshold colouring or warning.
 - **Verified evidence:** ModuleListTable.tsx:53 renders {row.status ?? "—"} raw; mapTenantRows passes row.status/state unchanged (_data.ts:58), so near_limit (if returned) is shown verbatim, with no colour or warning. Whether the API emits near_limit cannot be verified (service absent).
@@ -804,7 +804,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-QUOTAS-07  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
+- [x] **Status** (W2 tenant: closed by #2060; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
 - **W0 note:** partly fixed by #1916 — Banned term removed via LABELS.tenantTitle; title still hard-coded English, no next-intl
 - **First-pass claim:** Title 'Tenant — Quotas & Usage' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Resource consumption and plan limits for this tenant.".
 - **Verified evidence:** page.tsx (title prop) hard-codes title="Tenant — Quotas & Usage" and the description string; no useTranslations in these pages although 423 of 829 page files elsewhere use next-intl. lib/labels.ts:30 lists 'tenant' in BANNED_CLERK_TERMS (LABELS.tenant='office', lib/labels.ts:11), and the page title contains it. Subtitle 'Resource consumption and plan limits for this tenant.' is accurate copy but also hard-coded.
@@ -898,7 +898,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-SETTINGS-06  ·  LOW  ·  partly  ·  theme COPY (was FABRICATED)
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
+- [x] **Status** (W2 tenant: closed by #2060; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
 - **W0 note:** partly fixed by #1916 — LABELS.tenantTitle + reworded subtitle; no next-intl keys, breadcrumb/title still hard-coded
 - **First-pass claim:** Title 'Tenant — Settings' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Tenant-scoped configuration keys and values.".
 - **Verified evidence:** page.tsx:15 has literal title and :16 the literal subtitle; page.tsx:12 breadcrumb also says 'Tenant'. lib/labels.ts:11 maps tenant->'Office' and :30 lists 'tenant' in BANNED_CLERK_TERMS, so the copy conflicts with the rule. Subtitle text matches observation. The catalogue fix text (remove sample figures) does not apply: nothing here is fabricated; the real issue is untranslated/banned wording.
@@ -939,7 +939,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-STEWARDSHIP-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; apps/web ModuleListTable.showid.test.tsx (showId={false} hides the ID column; time-ordered UUIDs sharing an 8-char prefix are no longer rendered) + every tenant page passes showId={false})
+- [x] **Status** (W2 tenant: closed by #2060; apps/web ModuleListTable.showid.test.tsx (showId={false} hides the ID column; time-ordered UUIDs sharing an 8-char prefix are no longer rendered) + every tenant page passes showId={false})
 - **W0 note:** partly fixed by #1801 — Slug ids full; UUID ids still sliced to 8 chars, ID column retained
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** ModuleListTable.tsx:50 renders <span className="mono">{row.id.slice(0, 8)}</span> (file lines 37-55 hold the table). Ids come from mapper fallback chain (id/key/code/... then `row-N`), so long keys/UUIDs sharing a prefix display identically; <tr key={row.id}> at :47 would also duplicate if real ids collide.
@@ -993,7 +993,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-STEWARDSHIP-06  ·  LOW  ·  partly  ·  theme COPY (was FABRICATED)
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
+- [x] **Status** (W2 tenant: closed by #2060; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
 - **W0 note:** partly fixed by #1916 — LABELS.tenantTitle used, subtitle reworded; still hard-coded English, no next-intl
 - **First-pass claim:** Title 'Tenant — Stewardship' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Data governance domains and assigned stewards.".
 - **Verified evidence:** page.tsx:15 has literal title and :16 the literal subtitle; page.tsx:12 breadcrumb also says 'Tenant'. lib/labels.ts:11 maps tenant->'Office' and :30 lists 'tenant' in BANNED_CLERK_TERMS, so the copy conflicts with the rule. Subtitle matches observation. The catalogue fix text (remove sample figures) does not apply: nothing here is fabricated; the real issue is untranslated/banned wording.
@@ -1034,7 +1034,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-SUBSCRIPTIONS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; apps/web ModuleListTable.showid.test.tsx (showId={false} hides the ID column; time-ordered UUIDs sharing an 8-char prefix are no longer rendered) + every tenant page passes showId={false})
+- [x] **Status** (W2 tenant: closed by #2060; apps/web ModuleListTable.showid.test.tsx (showId={false} hides the ID column; time-ordered UUIDs sharing an 8-char prefix are no longer rendered) + every tenant page passes showId={false})
 - **W0 note:** partly fixed by #1801 — Slug ids full; UUID ids still sliced to 8 chars, ID column retained
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** ModuleListTable.tsx:50 renders <span className="mono">{row.id.slice(0, 8)}</span> (file lines 37-55 hold the table). Ids come from mapper fallback chain (id/key/code/... then `row-N`), so long keys/UUIDs sharing a prefix display identically; <tr key={row.id}> at :47 would also duplicate if real ids collide.
@@ -1125,7 +1125,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-HOME-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for usage/settings/consent/requests/org/migrations; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
+- [x] **Status** (W2 tenant: closed by #2060; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for usage/settings/consent/requests/org/migrations; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
 - **First-pass claim:** No role gate on a hub that fans out to quotas, configuration keys, DPDP consent requests and data migrations: layout.tsx:5 only checks module enablement and middleware.ts:48-59 only a session. Every tile is shown to every signed-in user; backend authorization undeterminable (tenant-service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/usage', 'GET /api/v1/tenant/settings', 'GET /api/v1/tenant/consent/requests', 'GET /api/v1/tenant/org/migrations']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate? Also check that consent and migration data are limited to admin/DPO roles.
@@ -1136,7 +1136,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CODE-LISTS-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/code-lists; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
+- [x] **Status** (W2 tenant: closed by #2060; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/code-lists; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/code-lists']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
@@ -1147,7 +1147,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-DATA-MIGRATION-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/org/migrations (super_admin only); plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
+- [x] **Status** (W2 tenant: closed by #2060; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/org/migrations (super_admin only); plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/org/migrations']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
@@ -1158,7 +1158,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-ORG-HIERARCHY-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/org/hierarchy; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
+- [x] **Status** (W2 tenant: closed by #2060; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/org/hierarchy; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/org/hierarchy']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
@@ -1191,7 +1191,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-POSITIONS-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/positions; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
+- [x] **Status** (W2 tenant: closed by #2060; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/positions; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/positions']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
@@ -1202,7 +1202,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-QUOTAS-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/usage; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
+- [x] **Status** (W2 tenant: closed by #2060; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/usage; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/usage']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
@@ -1213,7 +1213,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-SETTINGS-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; role gate pinned in services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted), and the list response now masks credential-named keys server-side (settings/routes.ts maskSecretSettings), asserted by services/tenant-service/tests/w2-settings-list-masking.test.ts: admin sees ******** for smtp_password, ordinary value intact)
+- [x] **Status** (W2 tenant: closed by #2060; role gate pinned in services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted), and the list response now masks credential-named keys server-side (settings/routes.ts maskSecretSettings), asserted by services/tenant-service/tests/w2-settings-list-masking.test.ts: admin sees ******** for smtp_password, ordinary value intact)
 - **First-pass claim:** Any signed-in user can read every tenant configuration key and value: no role gate (tenant/layout.tsx:5, middleware.ts:48-59), and the value is printed verbatim in the Detail column when the row has no description (tenant/_data.ts:53-58 maps sublabel = description ?? type ?? category ?? planName ?? value). No masking of secret-looking keys. Backend filtering undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/settings']`
 - **Question:** Is GET settings restricted to admin roles and does it redact secret-typed values (masked or omitted)?
@@ -1224,7 +1224,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-STEWARDSHIP-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/data-governance/domains; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
+- [x] **Status** (W2 tenant: closed by #2060; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/data-governance/domains; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/data-governance/domains']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
@@ -1235,7 +1235,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-SUBSCRIPTIONS-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 tenant: closed by #@@PR@@; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/subscription/current; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
+- [x] **Status** (W2 tenant: closed by #2060; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/subscription/current; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/subscription/current']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
