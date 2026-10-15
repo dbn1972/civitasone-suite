@@ -199,7 +199,7 @@ export function AllotmentDetailActions({
             {/* GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01: pre-check maker-checker */}
             {isApplicant && (
               <p style={{ margin: "0 0 8px", fontSize: 13, color: "var(--bad)" }}>
-                You cannot allot a quarter you applied for (maker-checker policy).
+                {tP2("allotSelfApplicant")}
               </p>
             )}
             <ActionButton
