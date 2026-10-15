@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccountNodes, mapSrnDetail, mapGoodsReturnDetail, mapCycleCountDetail, mapPurchaseOrderSummaries, mapEstabFileSummaries } from "./apiMappers";
+import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementVendorDetail, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccountNodes, mapSrnDetail, mapGoodsReturnDetail, mapCycleCountDetail, mapPurchaseOrderSummaries, mapEstabFileSummaries } from "./apiMappers";
 
 describe("mapCrmAccounts", () => {
   it("maps the accounts payload including hierarchy and contact count", () => {
@@ -286,6 +286,26 @@ describe("mapProcurementVendorDetails", () => {
     // pill or is counted as empanelled before KYC/empanelment completes.
     expect(result[2].empanelmentStatus).toBe("not_empanelled");
     expect(result[3].empanelmentStatus).toBe("not_empanelled");
+  });
+
+  // GAP-PROCUREMENT-VENDORS-03: the API list now carries vendorType + blacklisted.
+  it("maps the list's vendorType, and an explicit blacklisted flag wins", () => {
+    const result = mapProcurementVendorDetails([
+      { id: "1", name: "Emp", vendorType: "empanelled" },
+      { id: "2", name: "Reg", vendorType: "registered" },
+      { id: "3", name: "Black", vendorType: "blacklisted" },
+      { id: "4", name: "Flagged", vendorType: "empanelled", blacklisted: true },
+    ])!;
+    expect(result.map((v) => v.empanelmentStatus)).toEqual(["empanelled", "not_empanelled", "blacklisted", "blacklisted"]);
+  });
+
+  it("detail: carries the empanelment validity + lapsed flag, and omits them when absent", () => {
+    const withValidity = mapProcurementVendorDetail({ id: "v", name: "V", vendorType: "empanelled", empanelmentValidTill: "2027-03-31", empanelmentLapsed: false })!;
+    expect(withValidity.empanelmentValidTill).toBe("2027-03-31");
+    expect(withValidity.empanelmentLapsed).toBe(false);
+    const without = mapProcurementVendorDetail({ id: "v", name: "V", vendorType: "registered" })!;
+    expect("empanelmentValidTill" in without).toBe(false);
+    expect("empanelmentLapsed" in without).toBe(false);
   });
 
   it("skips rows without name", () => {

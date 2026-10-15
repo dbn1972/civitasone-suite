@@ -1,4 +1,4 @@
-import { and, asc, eq, ilike, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { likePattern } from "../../shared/search.js";
 import { procurementPos, procurementPoItems, type PoRow, type PoInsert } from "./schema.js";
@@ -75,7 +75,18 @@ export async function lockPoByIdTx(tx: Writer, id: string, tenantId: string): Pr
   } as unknown as PoRow;
 }
 
-export async function listPosByTenant(tenantId: string, limit = 100, offset = 0, q?: string): Promise<PoRow[]> {
+export async function listPosByTenant(tenantId: string, limit = 100, offset = 0, q?: string, vendorId?: string): Promise<PoRow[]> {
+  // GAP-PROCUREMENT-VENDORS-DETAIL-04: optional vendor filter so a vendor's
+  // profile can list its own orders (tenant-scoped like every other branch).
+  if (vendorId) {
+    return db.transaction((tx) => tx.select().from(procurementPos)
+      .where(and(
+        eq(procurementPos.tenantId, tenantId),
+        eq(procurementPos.vendorId, vendorId),
+        ...(q ? [ilike(procurementPos.poNo, likePattern(q))] : []),
+      ))
+      .orderBy(desc(procurementPos.createdAt)).limit(limit).offset(offset));
+  }
   // Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
   // before this read — a bare db.select() runs with no RLS GUC set.
   // GAP-PROCUREMENT-GRN-NEW-04: optional PO-number search so a picker can reach

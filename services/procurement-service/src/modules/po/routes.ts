@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { posListResponseSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
@@ -11,6 +11,9 @@ import * as queries from "./queries.js";
 import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
 import { assertEmpanelmentCurrent, DomainError } from "../vendor/domain.js";
+
+// GAP-PROCUREMENT-VENDORS-DETAIL-04: optional ?vendorId= on the PO list.
+const vendorFilterSchema = z.object({ vendorId: z.string().uuid().optional() });
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
@@ -49,7 +52,8 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
     const { q: search } = searchQuerySchema.parse(req.query);
-    sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit, q.offset, search));
+    const { vendorId } = vendorFilterSchema.parse(req.query);
+    sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit, q.offset, search, vendorId));
   });
 
   // Alias: /v1/procurement/purchase-orders → same as /pos (UAT compat)
@@ -58,7 +62,8 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
     const { q: search } = searchQuerySchema.parse(req.query);
-    sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit, q.offset, search));
+    const { vendorId } = vendorFilterSchema.parse(req.query);
+    sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit, q.offset, search, vendorId));
   });
 
   app.get("/v1/procurement/pos", async (req, reply) => {
@@ -66,7 +71,8 @@ export async function poRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
     const { q: search } = searchQuerySchema.parse(req.query);
-    sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit, q.offset, search));
+    const { vendorId } = vendorFilterSchema.parse(req.query);
+    sendValidated(reply, posListResponseSchema, await queries.listPos(ctx.tenantId, q.limit, q.offset, search, vendorId));
   });
 
   app.post("/v1/procurement/pos", async (req, reply) => {

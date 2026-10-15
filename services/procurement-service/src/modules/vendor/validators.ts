@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isGstinChecksumValid, isValidGstinStateCode, gstinToPan } from "./gstin.js";
 
 // PAN format: 5 uppercase letters + 4 digits + 1 uppercase letter (AAAAA9999A)
 const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
@@ -25,6 +26,24 @@ export const createVendorBody = z.object({
   address:     z.string().max(512).optional(),
   ifsc:        z.string().regex(IFSC_REGEX, "IFSC must be in format AAAA0XXXXXX").optional(),
 });
+
+/**
+ * createVendorBody + cross-field identifier integrity (kept separate so
+ * `createVendorBody.shape` stays a plain ZodObject for callers/tests).
+ * GAP-PROCUREMENT-VENDORS-NEW-02: state code, mod-36 check digit and
+ * GSTIN<->PAN agreement, enforced server-side.
+ */
+export const createVendorBodyChecked = createVendorBody.superRefine((v, ctx) => {
+  if (v.gstin) {
+    if (!isValidGstinStateCode(v.gstin)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["gstin"], message: "GSTIN state code is not valid (expected 01-38, 97 or 99)" });
+    } else if (!isGstinChecksumValid(v.gstin)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["gstin"], message: "GSTIN check digit is invalid" });
+    } else if (v.pan && gstinToPan(v.gstin) !== v.pan.toUpperCase()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["pan"], message: "PAN does not match the PAN embedded in the GSTIN" });
+    }
+  }
+});
 export type CreateVendorBody = z.infer<typeof createVendorBody>;
 
 export const empanelBody = z.object({
@@ -37,5 +56,11 @@ export const blacklistBody = z.object({
   reason: z.string().min(5).max(500),
 });
 export type BlacklistBody = z.infer<typeof blacklistBody>;
+
+/** GAP-PROCUREMENT-VENDORS-DETAIL-02: suspension needs a recorded reason. */
+export const suspendBody = z.object({
+  reason: z.string().trim().min(5).max(500),
+});
+export type SuspendBody = z.infer<typeof suspendBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });

@@ -6,9 +6,10 @@ import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { hasAnyRole } from "@civitasone/auth";
 import { searchQuerySchema } from "../../shared/search.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createVendorBody, empanelBody, blacklistBody, idParam } from "./validators.js";
+import { createVendorBodyChecked, suspendBody, empanelBody, blacklistBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 import type { RequestContext } from "@civitasone/types";
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
@@ -57,8 +58,30 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/procurement/vendors", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
-    const body = createVendorBody.parse(req.body);
+    const body = createVendorBodyChecked.parse(req.body);
+    // GAP-PROCUREMENT-VENDORS-NEW-02 / NEW-06: reject a duplicate GSTIN / PAN
+    // before queuing. 409 carries the existing vendor so the form can link to
+    // it. The create consumer re-checks under an advisory lock (race-safe).
+    const dup = await repo.findDuplicateVendor(ctx.tenantId, { gstin: body.gstin ?? null, pan: body.pan ?? null });
+    if (dup) {
+      return reply.code(409).send({
+        code: "VENDOR_DUPLICATE",
+        message: `a vendor with this ${dup.field === "gstin" ? "GSTIN" : "PAN"} is already registered`,
+        field: dup.field,
+        existingVendorId: dup.id,
+        existingVendorName: dup.name,
+        retryable: false,
+      });
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createVendor(ctx, body));
+  });
+
+  // GAP-PROCUREMENT-VENDORS-03: whole-directory status counts for the stat
+  // tiles. Registered before /vendors/:id so "summary" is not read as an id.
+  app.get("/v1/procurement/vendors/summary", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    return reply.send({ data: await queries.vendorSummaryCounts(ctx.tenantId) });
   });
 
   app.patch("/v1/procurement/vendors/:id/empanel", async (req, reply) => {
@@ -67,6 +90,23 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = empanelBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.empanelVendor(ctx, id, body));
+  });
+
+  // GAP-PROCUREMENT-VENDORS-DETAIL-02: suspend (reason mandatory). Sync
+  // pre-check so an un-empanelled / already-suspended vendor gets an immediate
+  // 404/409 instead of a command the consumer silently ignores.
+  app.patch("/v1/procurement/vendors/:id/suspend", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PROC_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = suspendBody.parse(req.body);
+    const vendor = await queries.getVendor(id, ctx.tenantId);
+    if (!vendor) throw new HttpError(404, "NOT_FOUND", "vendor not found");
+    const rows = await repo.findEmpanelmentsByVendor(id, ctx.tenantId);
+    if (!rows.some((r) => r.status === "active")) {
+      throw new HttpError(409, "VENDOR_NOT_EMPANELLED", "vendor has no active empanelment to suspend");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.suspendVendor(ctx, id, body));
   });
 
   // Legacy simple form, kept for backward compatibility with existing callers.
@@ -102,7 +142,15 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
       });
     }
 
-    return reply.send({ data: queries.presentVendor(vendor) });
+    // GAP-PROCUREMENT-VENDORS-DETAIL-04: empanelment validity for the profile.
+    const validity = await queries.empanelmentValidity(id, ctx.tenantId, new Date().toISOString().slice(0, 10));
+    return reply.send({
+      data: {
+        ...queries.presentVendor(vendor),
+        empanelmentValidTill: validity.validTill,
+        empanelmentLapsed: validity.lapsed,
+      },
+    });
   });
 
   app.setErrorHandler(errorHandler);

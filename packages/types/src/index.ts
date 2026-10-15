@@ -1167,6 +1167,10 @@ export type VendorDetail = {
   ifscCode?: string;
   kycStatus?: string;
   kycVerifiedAt?: string | null;
+  /** GAP-PROCUREMENT-VENDORS-DETAIL-04: latest active empanelment validity (YYYY-MM-DD); absent when open-ended / none. */
+  empanelmentValidTill?: string | null;
+  /** True when every empanelment on file is past its date or no longer active. */
+  empanelmentLapsed?: boolean;
 };
 
 export type RFQSummary = {

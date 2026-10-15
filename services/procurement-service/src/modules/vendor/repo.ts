@@ -49,6 +49,49 @@ export async function listVendorsByTenant(tenantId: string, limit = 100, offset 
   return db.transaction((tx) => tx.select().from(procurementVendors).where(eq(procurementVendors.tenantId, tenantId)).limit(limit).offset(offset));
 }
 
+/** GAP-PROCUREMENT-VENDORS-03: whole-tenant vendor count per vendor_type. */
+export async function countVendorsByType(tenantId: string): Promise<Array<{ vendorType: string; n: number }>> {
+  const rows = await db.transaction((tx) => tx
+    .select({ vendorType: procurementVendors.vendorType, n: sql<number>`COUNT(*)` })
+    .from(procurementVendors)
+    .where(eq(procurementVendors.tenantId, tenantId))
+    .groupBy(procurementVendors.vendorType));
+  return rows.map((r) => ({ vendorType: r.vendorType, n: Number(r.n) }));
+}
+
+export type DuplicateVendor = { id: string; name: string; field: "gstin" | "pan" };
+
+/**
+ * GAP-PROCUREMENT-VENDORS-NEW-02 / NEW-06: existing vendor in this tenant that
+ * already carries the same GSTIN or PAN. GSTIN is stored in clear, so it is an
+ * exact match. PAN is encrypted at rest (non-deterministic ciphertext, no blind
+ * index), so it cannot be matched in SQL directly; characters 3-12 of a GSTIN
+ * ARE the PAN, so a PAN is matched against the GSTINs on file. A vendor
+ * registered with a PAN only (no GSTIN) is therefore not caught - tracked as a
+ * remainder in the PR (needs a blind-index column).
+ */
+export async function findDuplicateVendorTx(
+  tx: Writer, tenantId: string, ids: { gstin?: string | null; pan?: string | null },
+): Promise<DuplicateVendor | null> {
+  const t = tx as typeof db;
+  if (ids.gstin) {
+    const hit = await t.select({ id: procurementVendors.id, name: procurementVendors.name }).from(procurementVendors)
+      .where(and(eq(procurementVendors.tenantId, tenantId), eq(procurementVendors.gstin, ids.gstin))).limit(1);
+    if (hit[0]) return { ...hit[0], field: "gstin" };
+  }
+  const pan = ids.pan ?? (ids.gstin ? ids.gstin.slice(2, 12) : null);
+  if (pan && /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)) {
+    const hit = await t.select({ id: procurementVendors.id, name: procurementVendors.name }).from(procurementVendors)
+      .where(and(eq(procurementVendors.tenantId, tenantId), sql`substr(${procurementVendors.gstin}, 3, 10) = ${pan}`)).limit(1);
+    if (hit[0]) return { ...hit[0], field: "pan" };
+  }
+  return null;
+}
+
+export async function findDuplicateVendor(tenantId: string, ids: { gstin?: string | null; pan?: string | null }): Promise<DuplicateVendor | null> {
+  return db.transaction((tx) => findDuplicateVendorTx(tx, tenantId, ids));
+}
+
 export async function insertVendor(tx: Writer, row: VendorInsert): Promise<void> {
   await tx.insert(procurementVendors).values(row);
 }
@@ -70,6 +113,19 @@ export async function updateVendorVersioned(tx: Writer, id: string, expectedVers
 
 export async function insertEmpanelment(tx: Writer, row: typeof procurementEmpanelment.$inferInsert): Promise<void> {
   await tx.insert(procurementEmpanelment).values(row);
+}
+
+/** Suspend every ACTIVE empanelment of a vendor; returns how many rows changed. */
+export async function suspendActiveEmpanelmentsTx(tx: Writer, vendorId: string, tenantId: string, actorId: string): Promise<number> {
+  const res = await (tx as typeof db).update(procurementEmpanelment)
+    .set({ status: "suspended", updatedBy: actorId, updatedAt: new Date() })
+    .where(and(
+      eq(procurementEmpanelment.vendorId, vendorId),
+      eq(procurementEmpanelment.tenantId, tenantId),
+      eq(procurementEmpanelment.status, "active"),
+    ))
+    .returning({ id: procurementEmpanelment.id });
+  return res.length;
 }
 
 export type EmpanelmentListRow = {

@@ -5629,6 +5629,99 @@
       "retry": "Try again",
       "clear": "Clear vendor"
     },
+    "w2": {
+      "indentPicker": {
+        "placeholder": "Search approved indents by number…",
+        "loading": "Searching…",
+        "empty": "No approved indents match your search.",
+        "error": "Couldn’t load indents.",
+        "retry": "Try again",
+        "clear": "Clear indent"
+      },
+      "po": {
+        "chooseBoth": "Choose a vendor and an approved indent, and add at least one complete line item.",
+        "copyFromIndent": "Copy lines from indent",
+        "copying": "Copying…",
+        "copyFailed": "Couldn’t load the indent lines. Add the lines yourself, or try again.",
+        "copyEmpty": "This indent has no lines to copy.",
+        "modeBand": "Procurement mode for this PO total",
+        "modeLoading": "Checking the procurement mode…",
+        "modeError": "Couldn’t check the procurement mode for this total. The tender-requirement check did not run."
+      },
+      "rfq": {
+        "blacklisted": "Blacklisted",
+        "empanelled": "Empanelled",
+        "notEmpanelled": "Not empanelled",
+        "searchPlaceholder": "Search vendors by name…",
+        "searchLabel": "Search vendors",
+        "selectedOutsideSearch": "{count, plural, one {# selected vendor is} other {# selected vendors are}} not in this search:",
+        "removeVendor": "Remove {name} from the invitation",
+        "searching": "Searching vendors…",
+        "searchFailed": "Couldn’t search vendors.",
+        "retry": "Try again",
+        "noMatch": "No vendors match “{query}”.",
+        "noVendors": "No vendors are registered yet.",
+        "refine": "Showing the first {count} matches. Type to narrow the list.",
+        "serverMinVendors": "At least 3 vendors must be invited for a limited tender. To invite fewer, record a justification.",
+        "serverBlacklisted": "One of the selected vendors is blacklisted and cannot be invited. Remove it and try again.",
+        "serverVendorMissing": "One of the selected vendors could not be found. Search again and re-select it."
+      },
+      "vendors": {
+        "showingOfTotal": "Showing {shown} of {total} vendors. Search the full directory to find the others.",
+        "searchAll": "Search all vendors by name…",
+        "searchAllLabel": "Search the full vendor directory",
+        "searching": "Searching…",
+        "searchFailed": "Couldn’t search the vendor directory.",
+        "retry": "Try again",
+        "buyerRating": "Buyer rating (/5)"
+      },
+      "vendorActions": {
+        "blacklistedNote": "This vendor is blacklisted. Reinstate it from the vendor blacklist register.",
+        "accepted": "Request accepted. The status updates shortly.",
+        "notEmpanelled": "This vendor has no active empanelment to suspend.",
+        "failed": "Couldn’t complete the request. Please try again.",
+        "reEmpanel": "Re-empanel",
+        "empanel": "Empanel",
+        "suspend": "Suspend",
+        "suspendTitle": "Suspend this vendor’s empanelment?",
+        "suspendBody": "A suspended vendor cannot be ordered from until it is empanelled again. The reason is recorded in the audit trail.",
+        "reason": "Reason (at least 5 characters)",
+        "blacklist": "Blacklist",
+        "blacklistTitle": "Blacklist this vendor?",
+        "blacklistBody": "A blacklisted vendor cannot be invited to an RFQ or used on a purchase order. The reason is recorded in the audit trail.",
+        "empanelTitle": "Empanel this vendor?",
+        "empanelBody": "Choose the category the vendor is empanelled for. Leave the date empty for an open-ended empanelment.",
+        "category": "Category",
+        "validUntil": "Valid until",
+        "categories": {
+          "goods": "Goods",
+          "services": "Services",
+          "works": "Works"
+        }
+      },
+      "vendorDetail": {
+        "validTill": "Empanelment valid till",
+        "expired": "Expired",
+        "expiresIn": "Expires in {days, plural, one {# day} other {# days}}",
+        "ordersTitle": "Purchase orders",
+        "noOrders": "No purchase orders",
+        "noOrdersHint": "Orders raised on this vendor will appear here.",
+        "colPo": "PO",
+        "colDate": "Order date",
+        "colStatus": "Status",
+        "colAmount": "Amount"
+      },
+      "vendorNew": {
+        "duplicatePan": "A vendor with this PAN is already registered.",
+        "duplicateGstin": "A vendor with this GSTIN is already registered.",
+        "duplicateSummary": "This vendor looks like one that is already registered. Open the existing vendor instead of registering it again.",
+        "serverGstin": "The GSTIN failed validation (state code, check digit or PAN match). Check the number and try again.",
+        "serverPan": "The PAN does not match the PAN inside the GSTIN. Check both and try again.",
+        "notVerified": "Format checked only. Not verified against the GST / income-tax portals.",
+        "viewExisting": "View {name}",
+        "existingVendor": "the existing vendor"
+      }
+    },
     "poPicker": {
       "placeholder": "Search purchase orders by number…",
       "loading": "Searching…",

@@ -758,7 +758,7 @@ describe("Vendor validation — specific field formats", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/procurement/vendors", headers: auth,
       payload: {
-        name: "Full Vendor", pan: "ABCDE1234F", gstin: "27ABCDE1234F1Z5",
+        name: "Full Vendor", pan: "ABCDE1234F", gstin: "27ABCDE1234F1Z0", // GSTIN check digit is validated server-side (VENDORS-NEW-02)
         ifsc: "SBIN0001234", email: "vendor@example.com", phone: "9876543210",
         mse: true, msme: true, udyamNo: "UDYAM-XX-00-0001234",
       },

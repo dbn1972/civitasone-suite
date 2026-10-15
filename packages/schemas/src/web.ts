@@ -90,6 +90,12 @@ export const vendorSummarySchema = z.object({
   gstin: z.string().optional(),
   kycStatus: z.string().optional(),
   kycVerifiedAt: z.string().nullable().optional(),
+  // GAP-PROCUREMENT-VENDORS-03/05 + RFQ-NEW-02: these two were emitted by the
+  // list query but stripped here (schema.parse drops unknown keys), so the web
+  // list could never tell an empanelled vendor from a merely registered one and
+  // the RFQ invite list never saw the blacklisted flag.
+  vendorType: z.enum(["registered", "empanelled", "blacklisted"]).optional(),
+  blacklisted: z.boolean().optional(),
   bankAccount: z.string().optional(),
   ifsc: z.string().optional(),
   email: z.string().optional(),
@@ -1247,6 +1253,8 @@ export const VendorDetailSchema = z.object({
   ifscCode: z.string().optional(),
   kycStatus: z.string().optional(),
   kycVerifiedAt: z.string().nullable().optional(),
+  empanelmentValidTill: z.string().nullable().optional(),
+  empanelmentLapsed: z.boolean().optional(),
 });
 export const VendorDetailListSchema = z.array(VendorDetailSchema);
 
