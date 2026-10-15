@@ -4,7 +4,6 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useTranslations } from "next-intl";
 import { toHumanError } from "@/lib/messages";
 import { useFormError } from "@/lib/useFormError";
 import { Button, useToast } from "@/app/_components/ds";
