@@ -58,8 +58,8 @@ export function ChannelRowActions({ id, name, enabled, isDefault }: { id: string
           {t("enable")}
         </Button>
       )}
-      {notice ? <span role="status" aria-live="polite" style={{ fontSize: 12, marginLeft: 8 }}>{notice}</span> : null}
-      {!notice && error && !open ? <span role="alert" style={{ fontSize: 12, marginLeft: 8, color: "var(--bad)" }}>{error}</span> : null}
+      {notice ? <span role="status" aria-live="polite" style={{ fontSize: 12, marginInlineStart: 8 }}>{notice}</span> : null}
+      {!notice && error && !open ? <span role="alert" style={{ fontSize: 12, marginInlineStart: 8, color: "var(--bad)" }}>{error}</span> : null}
       <ConfirmDialog
         open={open}
         title={t("disableTitle", { name })}
