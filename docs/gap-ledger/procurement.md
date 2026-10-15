@@ -31,7 +31,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-HOME-02  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2055 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Title comes from next-intl t("title") but subtitle is a hard-coded English string (page.tsx:29) — untranslatable in the Odia/Hindi locales.
 - **Verified evidence:** procurement/page.tsx:29 passes title={t('title')} but subtitle is the literal 'Requisitions, vendors, purchase orders, and tenders with approval controls.' Also all 16 tile titles/descriptions (:7-22) are hard-coded English. Correction: locale files are en, hi, kn, ta, te (apps/web/src/messages/*.json) - there is no Odia file. The 'procurement' namespace exists (en.json:3666) with title/tenders/... keys but no subtitle.
 - **Files to change:** `apps/web/src/app/(app)/procurement/page.tsx`, `apps/web/src/messages/en.json`, `apps/web/src/messages/hi.json`, `apps/web/src/messages/kn.json`, `apps/web/src/messages/ta.json`, `apps/web/src/messages/te.json`
@@ -887,7 +887,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme STATUS
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2055 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Misleading header before inspection: StatusPill uses grn.threeWayMatch ? "accepted" : "rejected" (page.tsx:91-92) so every uninspected GRN shows a red "Three-way mismatch" and the field says "Not matched" (page.tsx:121), while the list shows "—" for the same state (grn/page.tsx:42).
 - **Verified evidence:** grn/[id]/page.tsx:90-93 uses grn.threeWayMatch ? 'accepted' : 'rejected' with label 'Three-way mismatch', and :118-123 prints 'Not matched' in red. Root cause is mapProcurementGRNDetail (_data/apiMappers.ts:388) `threeWayMatch: typeof payload.threeWayMatch === 'boolean' ? ... : base.threeWayMatch ?? false`, coercing 'not computed' to false, whereas the list keeps undefined ('—', grn/page.tsx:42). So any uninspected GRN (draft/under_inspection) reads as mismatch.
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/procurement/grn/[id]/page.tsx`
@@ -1587,7 +1587,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-ORDERS-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme STATUS (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2055 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Item Name column can print the description placeholder "—" and unit defaults to "nos" when the API omits it (apiMappers.ts:309-316) — silent defaults hide bad data; STATUS_LABELS lacks gem_placed that the list page knows (page.tsx vs OrdersTable.tsx).
 - **Verified evidence:** apiMappers.ts:~309-316 defaults itemName toText(item.itemName)??description??'—', unit ?? 'nos', qty ?? 1, itemCode ?? '—'. page STATUS_LABELS (l.17-25) lacks gem_placed, which OrdersTable.tsx:28 and apiMappers.ts:108 know, so the pill shows the raw key.
 - **Files to change:** `apps/web/src/app/(app)/procurement/orders/[id]/page.tsx`, `apps/web/src/app/(app)/procurement/orders/OrdersTable.tsx`, `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/lib/procurement-status.ts (new)`
@@ -1721,7 +1721,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-ORDERS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2055)
 - **W0 note:** partly fixed by #1866 — CreatePOForm.tsx:15,149-162,226 per-list LoadState with Retry/empty message and submit disabled until ready; still limit=200 plain selects, no async search combobox
 - **First-pass claim:** Lists load silently and fail silently (catch blocks, Form): "Loading vendors…" is shown as the only option forever on error; limit=100 truncates larger vendor masters with no search.
 - **Verified evidence:** CreatePOForm.tsx:176 and l.190 `if (!res.ok) return;` and catch blocks (l.182-185,196-199) swallow errors; select shows 'Loading vendors…' when the list is empty (l.259,268) forever on failure or when there are none. limit=100 (l.175,189) without search.
@@ -1740,7 +1740,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-ORDERS-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme FABRICATED
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2055)
 - **W0 note:** partly fixed by #1866 — CreatePOForm.tsx:72-77,201-216 indent-vs-PO total reconciliation + submit block; :118 unit from LineItemsEditor; GFR mode band for PO total not shown, no prefill from indent
 - **First-pass claim:** PO total is not reconciled with the source indent value or GFR mode band; unit is hard-coded "nos" for every line (Form) although LineItemsEditor takes a unitLabel prop it renders only for screen readers (LineItemsEditor.tsx).
 - **Verified evidence:** Form posts no reconciliation: the selected indent option has only id/indentNo/department (l.158, no value), total comes only from the lines; unit:'nos' at l.224; LineItemsEditor unitLabel is rendered only in an sr-only span (LineItemsEditor.tsx:135) and the form does not pass it.
@@ -2344,7 +2344,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-RFQ-NEW-02  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2055)
 - **W0 note:** partly fixed by #1866 — CreateRFQForm.tsx min-3 vendors+justification :96,113, blacklisted disabled, no client rfqNo; server only rejects blacklisted (rfq/routes.ts:30), no min-3 or empanelled-only enforcement
 - **First-pass claim:** The vendor checklist is every vendor returned (Form), with no empanelment / blacklist status shown: a blacklisted or non-empanelled vendor can be invited, and there is no minimum-quotes rule (GFR requires three for limited tender) — one invited vendor is accepted (invited.size === 0 is the only check, Form).
 - **Verified evidence:** CreateRFQForm.tsx:172-176 loads all vendors (id,name only; VendorOption :140) and renders checkboxes (:262-267) with no status; submit guard :196 is invited.size===0 only. No GFR minimum-three rule. Vendor status/blacklist fields availability from /vendors cannot be verified. Extra finding: rfqNo is generated client-side with Math.random (:203) - collision risk and not server-sequenced.
@@ -2361,7 +2361,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-RFQ-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION (was CAP)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2055)
 - **W0 note:** partly fixed by #1866 — min=today + past-date check :106,170 and Templates removed done; vendor search is client-side over first 100 only (no server q/pagination)
 - **First-pass claim:** No closing-date sanity check (may be past); Templates link from the list (?template=1) is ignored here; vendors list is capped at limit=100 with no search.
 - **Verified evidence:** closingDate is <input type=date> (CreateRFQForm.tsx:248) with no min; only presence checked (:196). rfq/page.tsx:44 links to /procurement/rfq/new?template=1 but rfq/new/page.tsx takes no searchParams and the form ignores it. Vendors fetched with limit=100 and no search (:172). No template endpoint verified.
@@ -2379,7 +2379,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-RFQ-NEW-05  ·  LOW  ·  confirmed  ·  theme THEME (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2055 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Inline background:#fff on fields (Form) breaks dark mode; success text is set but the route pushes immediately, so it is never read.
 - **Verified evidence:** CreateRFQForm.tsx:239,246,250 set style background:'#fff' on field wrappers (breaks dark theme); message colours are hard-coded #b91c1c/#047857 (:274). setMessage('RFQ issued...') at :227 is followed immediately by router.push (:228), so it is never read. Also raw <select>/<input> without className inp on :241,:248.
 - **Files to change:** `apps/web/src/app/(app)/procurement/rfq/new/CreateRFQForm.tsx`
@@ -2762,7 +2762,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-02  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [ ] **Status** (W2 procurement #2055 re-check REOPENED: acceptance says an authorised role can reveal the masked value, but no reveal exists (PAN and phone stay masked, fail closed); it needs an audited reveal endpoint; was W0 PROVISIONAL: closed by #1866)
 - **First-pass claim:** DPDP: the Contact column falls back to the raw phone number (contact: v.contactPerson ?? v.phone ?? "—", Table) for every module user; contact persons of proprietorship vendors are natural persons, and no masking or role gate applies.
 - **Verified evidence:** apps/web/src/app/(app)/procurement/vendors/VendorsTable.tsx:228 sets contact: v.contactPerson ?? v.phone ?? '—' and l.268 shows the Contact column to every module user; the search filter also indexes it. No masking or role gate. Whether contact persons are natural persons is domain fact (plausible for proprietorships).
 - **Files to change:** `apps/web/src/app/(app)/procurement/vendors/VendorsTable.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`
@@ -2778,7 +2778,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-03  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2055)
 - **W0 note:** partly fixed by #1866 — vendors/page.tsx:14 + VendorsTable.tsx:121 truncation notice when cap 500 hit (interim step); no server total/counts or server pagination
 - **First-pass claim:** limit=500 with a client-side DataTable: vendor masters above 500 are silently truncated, and stat tiles are computed from the same truncated set (page.tsx).
 - **Verified evidence:** apps/web/src/app/(app)/procurement/vendors/page.tsx:142 getProcurementVendors({limit:500}); tiles (l.144-146,163) computed from that array; VendorsTable.tsx does client-side filter/paging (pageSize 10, l.251). q filtering in loaders.ts:2462-2469 is also client-side after the fetch. No truncation indicator. Total count from the API is cannot-verify (envelope unknown).
@@ -2796,7 +2796,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-04  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2055 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Silent zero tiles on failed fetch while the provenance badge sits in the card (Table): stat tiles read the server result and the table reads its own cache, so they can disagree (UX-012 comment).
 - **Verified evidence:** Confirmed: on fetch error getProcurementVendors returns [] so tiles (page.tsx:163-166) show 0 with no marker; the badge lives inside the card (VendorsTable.tsx:240). Nuance: table rows come from useSeededResource (VendorsTable.tsx:211-216), which can serve a cached copy on error, while tiles use the raw server array, so tile and table can indeed disagree; actual cache behaviour depends on lib/sync/resource (not deep-read). Page does pass source to the table but not to the tiles.
 - **Files to change:** `apps/web/src/app/(app)/procurement/vendors/page.tsx`, `apps/web/src/app/(app)/procurement/vendors/VendorsTable.tsx`, `apps/web/src/app/_components/ds/RefreshErrorState.tsx`
@@ -2813,6 +2813,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-VENDORS-05  ·  LOW  ·  partly  ·  theme CONSISTENCY (was VALIDATION)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** The list column is now labelled 'Buyer rating (/5)' and the tiles reconcile to the server total (#2055). A single rating scale across list, profile and scorecard is a decision (see VENDORS-DETAIL-05). Left open.**
 - **W0 note:** partly fixed by #1866 — Not Empanelled tile added so tiles reconcile (VendorsTable.tsx:71); table Rating column still n/5 vs scorecard /100 (only detail relabelled Buyer rating)
 - **First-pass claim:** Rating "n/5" here but the scorecard scores 0–100 (vendors/[id]/scorecard/page.tsx) — two scales for the same vendor; GSTIN prints unvalidated as returned; empanelment set uses "Not Empanelled" that the stat tiles do not count.
 - **Verified evidence:** True: rating '{n}/5' at VendorsTable.tsx:227 vs scorecard/page.tsx:116 '/100'. True: tiles count only empanelled, provisional, blacklisted (page.tsx:144-146) while Total (l.163) includes not_empanelled, so tiles do not add up. GSTIN printed as returned (l.224) is not really a defect (validation belongs at entry). Not a form-validation issue.
@@ -2856,7 +2857,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2055 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** KYC "Verified At" prints String(kycVerifiedAt).slice(0,10) (page.tsx) — an ISO date, not the Indian format used elsewhere; KYC Status is capitalised from the raw string (page.tsx).
 - **Verified evidence:** apps/web/src/app/(app)/procurement/vendors/[id]/page.tsx:103 prints String(vendor.kycVerifiedAt).slice(0,10) (raw ISO yyyy-mm-dd, and a non-ISO string would be truncated arbitrarily). l.97 builds the KYC label with charAt(0).toUpperCase()+slice(1), so a value like 'in_progress' shows 'In_progress'. lib/formatters.ts has formatIndianDate (dd/MM/yyyy en-IN, returns '—' for empty) already used by revenue screens; no dd-Mon-yyyy/IST helper exists there.
 - **Files to change:** `apps/web/src/app/(app)/procurement/vendors/[id]/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -2872,6 +2873,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-VENDORS-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme MISSING-FEATURE (was WIRING)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 procurement note (partly fixed in #2055):** the profile now shows the empanelment validity (Expired / expires-in-N-days pill) and the vendor's purchase orders (GET /orders?vendorId=, per-section error state). Still open: GRNs, contracts and EMD/BG tabs need a vendorId filter on their list endpoints.**
 - **First-pass claim:** Profile has no history: orders, GRN acceptances, contracts, EMD/BG or empanelment expiry for the vendor are not shown, so an officer cannot judge the record without opening five other screens.
 - **Verified evidence:** apps/web/src/app/(app)/procurement/vendors/[id]/page.tsx renders only two cards: Vendor details (l.50-113) and Bank details (115-132) plus a 'View scorecard' link (l.44). VendorDetail (apiMappers.ts:126-159, 270-283) has no orders, GRN, contract, EMD/BG or empanelment-expiry field. Sibling lists exist (orders, grn, contracts, emd-bg, empanelment pages) but whether their list APIs accept a vendorId filter cannot be verified (procurement-service absent).
 - **Files to change:** `apps/web/src/app/(app)/procurement/vendors/[id]/page.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/procurement/vendors/[id]/VendorHistoryTabs.tsx (new)`
@@ -2890,7 +2892,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-DETAIL-05  ·  LOW  ·  confirmed  ·  theme CONSISTENCY (was VALIDATION)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [ ] **Status** (W2 procurement #2055 re-check REOPENED: acceptance says list, detail and scorecard show the same rating scale, but the list and detail show the buyer rating (n/5) and the scorecard scores out of 100; only relabelled. Needs the single-scale decision (see VENDORS-05); was W0 PROVISIONAL: closed by #1866)
 - **First-pass claim:** Rating pill duplicates the scorecard on a /5 scale while the scorecard uses /100; empanelment status appears twice (header pill and details card).
 - **Verified evidence:** apps/web/src/app/(app)/procurement/vendors/[id]/page.tsx:41-43 shows a rating pill '{rating}/5'; scorecard/page.tsx:116 shows 'Overall score ... /100' from overallRating, so two scales. Empanelment status is rendered twice: header StatusPill (l.40) and details card (l.60-63). Nothing to do with form validation (theme wrong).
 - **Files to change:** `apps/web/src/app/(app)/procurement/vendors/[id]/page.tsx`, `apps/web/src/app/(app)/procurement/vendors/VendorsTable.tsx`, `apps/web/src/app/(app)/procurement/vendors/[id]/scorecard/page.tsx`
@@ -3015,7 +3017,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-NEW-02  ·  HIGH  ·  partly  ·  theme VALIDATION (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2055)
 - **W0 note:** partly fixed by #1866 — Client GSTIN checksum + state code + GSTIN-PAN match done (validators.ts). Remaining: server-side unique (tenant,gstin/pan) with 409 and duplicate lookup/link not implemented.
 - **First-pass claim:** Validation is format-only (validators.ts): GSTIN checksum, state code and GSTIN-to-PAN consistency (characters 3–12 of GSTIN are the PAN) are not checked, and there is no duplicate check — the same GSTIN or PAN can be registered twice with slightly different names.
 - **Verified evidence:** apps/web/src/app/(app)/procurement/_components/validators.ts:3-12 validates GSTIN by regex only (no checksum, state-code range or PAN match); PAN by regex (l.4). RegisterVendorForm.tsx:316-317 does no cross-check between gstin[2:12] and pan. No client duplicate check exists. Server-side uniqueness on GSTIN/PAN cannot be verified (procurement-service absent), so the 'same GSTIN twice' outcome is unproven.
@@ -3032,7 +3034,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-NEW-03  ·  MEDIUM  ·  partly  ·  theme COPY (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2055 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** DPDP: PAN, phone and email of individual proprietors are collected with no purpose or notice text; "Vendor registration accepted." then an immediate redirect (Form) means the confirmation is never seen and the new vendor's empanelment status ("not empanelled" or "provisional") is not stated.
 - **Verified evidence:** Confirmed: no purpose/notice text anywhere in RegisterVendorForm.tsx. l.355 sets 'Vendor registration accepted.' then l.356 router.push() immediately, so the message is never seen. New vendor empanelment status is not stated. Additional risk: mapProcurementVendorDetails (apiMappers.ts:136-141) maps a missing/'registered' status to 'empanelled', so a fresh vendor may display as Empanelled unless the API returns an explicit status. Actual API default is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/procurement/vendors/new/RegisterVendorForm.tsx`, `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/procurement/vendors/new/page.tsx`
@@ -3050,6 +3052,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 ### GAP-PROCUREMENT-VENDORS-NEW-04  ·  MEDIUM  ·  partly  ·  theme DARKMODE (was PII)
 
 - [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- **W2 procurement note (partly fixed in #2055):** GSTIN and PAN now say 'format checked only, not verified'. Still open: the optional KYC document upload (needs a backend attach endpoint and storage ACL) and a real GSTN/PAN verification integration.**
 - **W0 note:** partly fixed by #1866 — Inline white backgrounds and hard-coded colours removed. Remaining: no optional KYC document upload (FileUpload) and no GSTN/PAN verification or not-verified label.
 - **First-pass claim:** Inline backgrounds (#fff) on every field wrapper (Form) break dark mode; no GST-portal or PAN verification, no attachment of registration documents or KYC.
 - **Verified evidence:** Confirmed: every field wrapper has style background '#fff' (apps/web/src/app/(app)/procurement/vendors/new/RegisterVendorForm.tsx l.375,381,389,397,404,412) and hard-coded #b91c1c/#047857 (l.366,423). I did not render dark mode to prove breakage, but a white wrapper with themed text tokens is the likely failure. Also confirmed: no GST/PAN verification call and no document/KYC attachment (an existing FileUpload component is at app/_components/FileUpload.tsx). Backend verification integrations cannot be verified.
@@ -3065,7 +3068,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-NEW-05  ·  LOW  ·  confirmed  ·  theme VALIDATION (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1866, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 procurement #2055 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1866, verified on main 9c5e9e9e9)
 - **First-pass claim:** Phone validator accepts exactly 10 digits (validators.ts) — no +91, landline or STD formats; IFSC accepted without an account number.
 - **Verified evidence:** validators.ts:7 PHONE_RE = /^[0-9]{10}$/ so +91, 0-prefix, landline/STD are rejected (validatePhone l.29-32); form placeholder says '10-digit number'. IFSC (RegisterVendorForm.tsx l.412-419) has no account-number counterpart; validateIfsc is standalone. Not a PII masking matter.
 - **Files to change:** `apps/web/src/app/(app)/procurement/_components/validators.ts`, `apps/web/src/app/(app)/procurement/vendors/new/RegisterVendorForm.tsx`
@@ -3542,7 +3545,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-DETAIL-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2055)
 - **W0 note:** partly fixed by main — PATCH empanel and blacklist exist, role-gated, blacklist requires reason (min 5) and is audited. Remaining: no suspend endpoint and no role-gated empanel/suspend/blacklist actions on the web vendor detail page.
 - **First-pass claim:** Dead-end profile for a compliance record: no action to empanel, suspend or blacklist, refresh KYC or edit details, even though the list treats Blacklisted as a status (page.tsx) — how status changes at all is undeterminable from this route tree.
 - **Service:** `procurement-service`  ·  **Endpoint(s):** `['PATCH/POST /api/v1/procurement/vendors/:id/(empanel|suspend|blacklist)', 'GET /api/v1/procurement/empanelment']`
@@ -3576,7 +3579,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-NEW-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 procurement: closed by #2055)
 - **W0 note:** partly fixed by main — Initial status is forced to registered (client status stripped) and creation is audited. Remaining: no PAN/GSTIN duplicate rejection (no unique index or 409).
 - **First-pass claim:** POST /procurement/vendors, initial empanelment status and audit emission are undeterminable (services/procurement-service absent).
 - **Service:** `procurement-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/procurement/vendors']`
