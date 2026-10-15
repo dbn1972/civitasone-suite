@@ -99,3 +99,31 @@ describe("KnowledgeDashboardPage", () => {
     expect(screen.getByText(/Repository totals are temporarily unavailable/i)).toBeInTheDocument();
   });
 });
+
+describe("KnowledgeDashboardPage recent publications (GAP-KNOWLEDGE-DASHBOARD-04)", () => {
+  beforeEach(() => { mockDocs.mockReset(); mockSummary.mockReset(); });
+
+  it("Given a recent document, then the author column reads 'Author' (not 'Dept') and the title links to the document detail", async () => {
+    const id = "22222222-2222-4222-8222-222222222222";
+    setDocs([doc({ id, title: "Leave Circular 2026" })]);
+    render(await Page());
+    expect(screen.getByText("Author")).toBeInTheDocument();
+    expect(screen.queryByText("Dept")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open Leave Circular 2026" })).toHaveAttribute("href", `/knowledge/documents/${id}`);
+  });
+});
+
+describe("KnowledgeDashboardPage category chart (GAP-KNOWLEDGE-DASHBOARD-06)", () => {
+  beforeEach(() => { mockDocs.mockReset(); mockSummary.mockReset(); });
+
+  it("announces the top categories with counts, labels each bar, and uses no literal hex colour", async () => {
+    setDocs([doc({ category: "Circular" }), doc({ id: "b", category: "Circular" }), doc({ id: "c", category: "Policy" })]);
+    const { container } = render(await Page());
+    const svg = container.querySelector("svg[role=img]")!;
+    expect(svg.getAttribute("aria-label")).toBe("Documents by category: Circular: 2, Policy: 1");
+    expect(Array.from(svg.querySelectorAll("title")).map((t) => t.textContent)).toEqual(["Circular: 2", "Policy: 1"]);
+    for (const el of Array.from(svg.querySelectorAll("[fill]"))) {
+      expect(el.getAttribute("fill")).toMatch(/^var\(--[a-z0-9-]+\)$/);
+    }
+  });
+});

@@ -36,11 +36,11 @@ function CategoryBarChart({ categories }: { categories: { name: string; count: n
         return (
           <g key={cat.name}>
             <title>{`${cat.name}: ${cat.count}`}</title>
-            <rect x={x} y={y} width={barW} height={barH} rx={4} fill="var(--brand, #4f46e5)" opacity={opacity} />
-            <text x={x + barW / 2} y={y - 4} textAnchor="middle" fontSize={10} fill="var(--ink, #0f172a)" fontWeight={600}>
+            <rect x={x} y={y} width={barW} height={barH} rx={4} fill="var(--primary)" opacity={opacity} />
+            <text x={x + barW / 2} y={y - 4} textAnchor="middle" fontSize={10} fill="var(--ink)" fontWeight={600}>
               {cat.count}
             </text>
-            <text x={x + barW / 2} y={BAR_H - 2} textAnchor="middle" fontSize={9} fill="var(--mut, #667085)">
+            <text x={x + barW / 2} y={BAR_H - 2} textAnchor="middle" fontSize={9} fill="var(--mut)">
               {label}
             </text>
           </g>

@@ -1,4 +1,5 @@
 import { PageHeader } from "../../../../_components/ds";
+import { getSessionRoles, KNOWLEDGE_POLICY_APPROVER_ROLES } from "@/lib/auth/roleGuard";
 import { CreateDocumentForm } from "./CreateDocumentForm";
 
 /**
@@ -11,6 +12,9 @@ import { CreateDocumentForm } from "./CreateDocumentForm";
 export default function NewDocumentPage({ searchParams }: { searchParams: { category?: string } }) {
   const category = typeof searchParams.category === "string" ? searchParams.category : "";
   const isSchedule = category.toLowerCase().includes("retention") || category.toLowerCase().includes("schedule");
+
+  const roles = getSessionRoles();
+  const canSetRestricted = KNOWLEDGE_POLICY_APPROVER_ROLES.some((r) => roles.includes(r));
 
   return (
     <div className="wrap">
@@ -30,7 +34,11 @@ export default function NewDocumentPage({ searchParams }: { searchParams: { cate
           records-schedule command, so the schedule is created as a categorised document.
         </div>
       )}
-      <CreateDocumentForm defaultCategory={category} backHref={isSchedule ? "/knowledge/records" : "/knowledge/repository"} />
+      <CreateDocumentForm
+        defaultCategory={category}
+        backHref={isSchedule ? "/knowledge/records" : "/knowledge/repository"}
+        canSetRestricted={canSetRestricted}
+      />
     </div>
   );
 }

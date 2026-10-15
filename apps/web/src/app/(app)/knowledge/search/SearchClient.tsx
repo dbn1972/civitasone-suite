@@ -81,7 +81,7 @@ export function KnowledgeSearchClient({
       fullId: doc.id,
       titleNode: (
         <div>
-          <Link href={`/knowledge/policies/${doc.id}`} style={{ fontWeight: 600, textDecoration: "underline" }}>
+          <Link href={`/knowledge/documents/${encodeURIComponent(doc.id)}`} style={{ fontWeight: 600, textDecoration: "underline" }}>
             {doc.title}
           </Link>
           <div style={{ fontSize: "12px", color: "var(--mut)" }}>{doc.author ?? ""}</div>

@@ -36,7 +36,10 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = req.params as { id: string };
     const faq = await queries.getFaq(ctx.tenantId, id);
-    if (!faq) throw new HttpError(404, "NOT_FOUND", "faq not found");
+    // Same visibility rule as the list: non-editors never see draft/retired FAQs, even by id.
+    if (!faq || (!ADMIN_ROLES.some((r) => ctx.roles.includes(r)) && faq["status"] !== "published")) {
+      throw new HttpError(404, "NOT_FOUND", "faq not found");
+    }
     return reply.send(faq);
   });
 
@@ -77,7 +80,9 @@ export async function assistantRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = req.params as { id: string };
     const flow = await queries.getFlow(ctx.tenantId, id);
-    if (!flow) throw new HttpError(404, "NOT_FOUND", "guided flow not found");
+    if (!flow || (!ADMIN_ROLES.some((r) => ctx.roles.includes(r)) && flow["status"] !== "published")) {
+      throw new HttpError(404, "NOT_FOUND", "guided flow not found");
+    }
     return reply.send(flow);
   });
 

@@ -1,4 +1,4 @@
-import { eq, desc, ilike, and } from "drizzle-orm";
+import { eq, desc, ilike, and, inArray, type SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { tenantTransaction } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
@@ -22,10 +22,27 @@ export function toView(r: DocumentRow): DocumentView {
   };
 }
 
-export async function listByTenant(tenantId: string, limit: number, offset: number): Promise<DocumentView[]> {
+/**
+ * Access-level clearance. `levels === null` (or undefined) means "cleared for
+ * everything"; otherwise only documents whose access_level is in `levels` are
+ * returned. Applied inside the query so uncleared rows never leave the DB.
+ */
+export type Clearance = readonly string[] | null | undefined;
+
+function clearanceCond(levels: Clearance): SQL[] {
+  return levels ? [inArray(documents.accessLevel, [...levels])] : [];
+}
+
+function clearanceSql(levels: Clearance): SQL {
+  return levels
+    ? sql`AND d.access_level IN (${sql.join(levels.map((l) => sql`${l}`), sql`, `)})`
+    : sql``;
+}
+
+export async function listByTenant(tenantId: string, limit: number, offset: number, levels?: Clearance): Promise<DocumentView[]> {
   const rows = await scopedRead((tx) =>
     tx.select().from(documents)
-      .where(eq(documents.tenantId, tenantId))
+      .where(and(eq(documents.tenantId, tenantId), ...clearanceCond(levels)))
       .orderBy(desc(documents.updatedAt))
       .limit(limit)
       .offset(offset)
@@ -59,7 +76,7 @@ export type RecordProjection = {
   disposalDueDate: string | null;
 };
 
-export async function listRecords(tenantId: string, limit: number, offset: number): Promise<RecordProjection[]> {
+export async function listRecords(tenantId: string, limit: number, offset: number, levels?: Clearance): Promise<RecordProjection[]> {
   const rows = await scopedRead(async (tx) => {
     // RLS on knowledge.documents/categories/retention_policies is keyed on the
     // app.tenant_id GUC. scopedRead already runs inside db.transaction (so the
@@ -102,6 +119,7 @@ export async function listRecords(tenantId: string, limit: number, offset: numbe
          LIMIT 1
       ) rp ON TRUE
       WHERE d.tenant_id = ${tenantId}
+      ${clearanceSql(levels)}
       ORDER BY d.updated_at DESC
       LIMIT ${limit} OFFSET ${offset}
     `);
@@ -151,16 +169,16 @@ export type DocumentsSummary = {
   archived: number;
 };
 
-export async function summarize(tenantId: string): Promise<DocumentsSummary> {
+export async function summarize(tenantId: string, levels?: Clearance): Promise<DocumentsSummary> {
   return scopedRead(async (tx) => {
     await tx.execute(sql`SELECT set_config('app.tenant_id', ${tenantId}, true)`);
     const statusRows = (await tx.execute(sql`
       SELECT status, count(*)::int AS n
-      FROM knowledge.documents WHERE tenant_id = ${tenantId}
+      FROM knowledge.documents d WHERE d.tenant_id = ${tenantId} ${clearanceSql(levels)}
       GROUP BY status`)) as unknown as Array<{ status: string; n: number }>;
     const categoryRows = (await tx.execute(sql`
       SELECT coalesce(category, 'general') AS category, count(*)::int AS n
-      FROM knowledge.documents WHERE tenant_id = ${tenantId}
+      FROM knowledge.documents d WHERE d.tenant_id = ${tenantId} ${clearanceSql(levels)}
       GROUP BY coalesce(category, 'general')
       ORDER BY count(*) DESC`)) as unknown as Array<{ category: string; n: number }>;
 
@@ -186,9 +204,11 @@ export async function searchByTenant(
   query: string,
   category: string | undefined,
   limit: number,
+  levels?: Clearance,
 ): Promise<DocumentView[]> {
   const conditions = [
     eq(documents.tenantId, tenantId),
+    ...clearanceCond(levels),
     ilike(documents.title, `%${query}%`),
     ...(category ? [eq(documents.category, category)] : []),
   ];
@@ -207,19 +227,19 @@ export async function insert(tx: Writer, row: DocumentInsert): Promise<void> {
   await tx.insert(documents).values(row);
 }
 
-export async function getById(tenantId: string, id: string): Promise<DocumentView | null> {
+export async function getById(tenantId: string, id: string, levels?: Clearance): Promise<DocumentView | null> {
   const rows = await scopedRead((tx) =>
     tx.select().from(documents)
-      .where(and(eq(documents.tenantId, tenantId), eq(documents.id, id)))
+      .where(and(eq(documents.tenantId, tenantId), eq(documents.id, id), ...clearanceCond(levels)))
       .limit(1)
   );
   return rows[0] ? toView(rows[0]) : null;
 }
 
-export async function listByCategory(tenantId: string, categoryId: string, limit: number, offset: number): Promise<DocumentView[]> {
+export async function listByCategory(tenantId: string, categoryId: string, limit: number, offset: number, levels?: Clearance): Promise<DocumentView[]> {
   const rows = await scopedRead((tx) =>
     tx.select().from(documents)
-      .where(and(eq(documents.tenantId, tenantId), eq(documents.category, categoryId)))
+      .where(and(eq(documents.tenantId, tenantId), eq(documents.category, categoryId), ...clearanceCond(levels)))
       .orderBy(desc(documents.updatedAt))
       .limit(limit)
       .offset(offset)
