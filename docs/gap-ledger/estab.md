@@ -582,7 +582,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 ### GAP-ESTAB-DFA-04  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
 - [x] **Status** (W2 estab: closed by #2052)
-- **W2 note:** Drafted-by name, file link and the full body in the approve dialog are in; a dedicated dfa/[id] page and a create-form file picker are not built (remainder).
+- **W2 note:** Drafted-by name, the full body in the approve dialog, a file picker on the create form (existing estab file search; the service checks the file exists in the tenant and is within the drafter's clearance) and a file-number link are in. A dedicated dfa/[id] page is not built (remainder).
 - **W0 note:** partly fixed by #1949 — Body preview in Approve/Sign dialog and Updated column; no Drafted by or detail page.
 - **First-pass claim:** Drafts are not linked to an eOffice file and the list never shows the body, date or drafter (Dfa type, DfaPanel.tsx:8-17,230-238); approvers approve a subject line.
 - **Verified evidence:** Dfa type (DfaPanel.tsx:22-31) and columns (:245-252) show dfaNo, type, subject, recipient, status, action only. updatedAt is fetched but not shown; body, drafter and linked file are not in the type; there is no detail route (dfa/ contains only page.tsx and DfaPanel.tsx) and create payload (:101-107) has no fileId. Whether the API returns body/fileId/createdBy is cannot-verify (estab-service absent). Approve/Sign are therefore done on a subject line only.
@@ -2321,8 +2321,8 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W2 estab: closed by #2052)
-- **W2 note:** Reports Not applied yet / Done; the service does not expose a rejection reason, so the message is generic (remainder).
+- [~] **Status** (W2 estab #2052: partly done, the rejection reason is not surfaced)
+- **W2 note:** Client-side maker-checker pre-check disables Allot for the applicant with an explanation (en and hi), and the page reports Done / Not applied yet after a command. The consumer swallows the rejection (no stored last-command error), so the reason is not shown; exposing it needs a schema column and migration (db/schema.sql, models, Alembic kept in sync) and is left as the remainder.
 - **W0 note:** partly fixed by #1916 — Maker-checker pre-check + 3x refresh poll added; no 'not applied yet' message or rejection reason surfaced
 - **First-pass claim:** Commands are fire-and-forget: the UI says "accepted for processing" then router.refresh() (AllotmentDetailActions.tsx); if the server later rejects it (maker-checker: allotting officer = applicant) the status simply does not change and nothing tells the officer why.
 - **Verified evidence:** apps/web/src/app/(app)/estab/quarters/allotments/[id]/AllotmentDetailActions.tsx:139-143 copy states commands are 'accepted' asynchronously and the maker-checker check runs later in the background; onSuccess (:159-162, :181-184) sets 'accepted for processing' and router.refresh(). Nothing polls or shows a rejected outcome: if the server drops the command, status just stays. Sync errors do surface because browserJson throws (browserClient.ts). Actions already use ActionButton confirm dialogs; a mandatory reason is not used. Whether estab-service really returns 202 and exposes rejection status is cannot-verify.

@@ -235,3 +235,43 @@ describe("GAP-ESTAB-FILES-DETAIL-04: batched officer-name resolve", () => {
     expect((await get(url([EMP_NAMED]), TENANT, ACTOR, ["finance_officer"])).statusCode).toBe(403);
   });
 });
+
+describe("GAP-ESTAB-DFA-04: a DFA can be linked to a file, and shows the file number", () => {
+  const post = async (fileId: string | null, actor = ACTOR) => {
+    const app = await buildApp();
+    try {
+      return await app.inject({
+        method: "POST", url: "/v1/estab/dfa",
+        headers: { ...bearer(TENANT, actor), "content-type": "application/json" },
+        payload: { subject: "Linked draft", body: "body", fileId },
+      });
+    } finally { await app.close(); }
+  };
+
+  it("Given a DFA linked to a file, When listed and fetched, Then fileNo is that file number", async () => {
+    await tx(TENANT, (t) => t.insert(estabDfa).values({ tenantId: TENANT, dfaNo: "DFA-W2P2-LINK", subject: "Linked", body: "b", fileId: FILE_PUBLIC, createdBy: ACTOR, updatedBy: ACTOR }));
+    const list = await get("/v1/estab/dfa");
+    const row = (list.json() as { data: Array<{ id: string; dfaNo: string; fileNo: string | null }> }).data.find((d) => d.dfaNo === "DFA-W2P2-LINK")!;
+    expect(row.fileNo).toBe(NO_FILE("PUB"));
+    const one = await get(`/v1/estab/dfa/${row.id}`);
+    expect((one.json() as { data: { fileNo: string | null } }).data.fileNo).toBe(NO_FILE("PUB"));
+    const unlinked = (list.json() as { data: Array<{ dfaNo: string; fileNo: string | null }> }).data.find((d) => d.dfaNo === "DFA-W2P2-2")!;
+    expect(unlinked.fileNo).toBeNull();
+  });
+
+  it("accepts a link to a file the drafter may see (202), unlinked too", async () => {
+    expect((await post(FILE_PUBLIC)).statusCode).toBe(202);
+    expect((await post(null)).statusCode).toBe(202);
+  });
+
+  it("rejects a link to a file that does not exist or belongs to another tenant (422)", async () => {
+    expect((await post(randomUUID())).statusCode).toBe(422);
+    expect((await post(FILE_OTHER_TENANT)).statusCode).toBe(422);
+  });
+
+  it("rejects a link to a file above the drafter's clearance (403)", async () => {
+    // ACTOR was enrolled at confidential (2) by the LIST-01 cases above; the secret file is out of reach.
+    expect((await post(FILE_SECRET)).statusCode).toBe(403);
+    expect((await post(FILE_CONF)).statusCode).toBe(202);
+  });
+});

@@ -8,6 +8,8 @@ export type DfaDto = {
   id: string;
   dfaNo: string;
   fileId: string | null;
+  /** Number of the linked eOffice file (GAP-ESTAB-DFA-04); null when unlinked or not found. */
+  fileNo: string | null;
   communicationType: string;
   templateCode: string | null;
   subject: string;
@@ -34,11 +36,12 @@ export type DfaDto = {
   createdByName: string | null;
 };
 
-function toDto(r: DfaRow, employees: Map<string, EmployeeDisplay> = new Map()): DfaDto {
+function toDto(r: DfaRow, employees: Map<string, EmployeeDisplay> = new Map(), fileNos: Map<string, string> = new Map()): DfaDto {
   return {
     id: r.id,
     dfaNo: r.dfaNo,
     fileId: r.fileId,
+    fileNo: r.fileId ? (fileNos.get(r.fileId) ?? null) : null,
     communicationType: r.communicationType,
     templateCode: r.templateCode,
     subject: r.subject,
@@ -71,7 +74,11 @@ export async function getDfa(tenantId: string, id: string, opts: { withNames?: b
     () => repo.findDfaById(id, tenantId),
   );
   if (!row) return null;
-  return toDto(row, opts.withNames ? await getEmployeeDisplayMap(tenantId, [row.createdBy]) : undefined);
+  return toDto(
+    row,
+    opts.withNames ? await getEmployeeDisplayMap(tenantId, [row.createdBy]) : undefined,
+    opts.withNames && row.fileId ? await repo.fileNosByIds(tenantId, [row.fileId]) : undefined,
+  );
 }
 
 export async function listDfa(
@@ -82,7 +89,8 @@ export async function listDfa(
   const rows = await repo.listDfa(tenantId, filter, limit);
   // GAP-ESTAB-DFA-04: "Drafted by" shows a name; one batched, tenant-scoped lookup per page.
   const employees = await getEmployeeDisplayMap(tenantId, rows.map((r) => r.createdBy));
-  return rows.map((r) => toDto(r, employees));
+  const fileNos = await repo.fileNosByIds(tenantId, rows.flatMap((r) => (r.fileId ? [r.fileId] : [])));
+  return rows.map((r) => toDto(r, employees, fileNos));
 }
 
 export type DfaVersionDto = {

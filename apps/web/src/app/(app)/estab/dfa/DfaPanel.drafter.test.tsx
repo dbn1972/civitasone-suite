@@ -6,6 +6,16 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
+vi.mock("@/app/_components/ds", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/app/_components/ds")>();
+  return {
+    ...actual,
+    EntityPicker: ({ onChange }: { onChange: (v: string | null) => void }) => (
+      <button type="button" onClick={() => onChange("5a5a5a5a-0000-4000-8000-00000000f11e")}>pick file</button>
+    ),
+  };
+});
+
 import { DfaPanel } from "./DfaPanel";
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
@@ -22,11 +32,11 @@ describe("DfaPanel — GAP-ESTAB-DFA-04", () => {
   beforeEach(() => { vi.restoreAllMocks(); });
 
   it("shows who drafted it by name and links the eOffice file, never an id", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(json({ data: [dfa({ fileId: FILE_ID }), dfa({ id: "d2", dfaNo: "DFA-002", createdByName: null })] }));
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(json({ data: [dfa({ fileId: FILE_ID, fileNo: "EST/2026/114" }), dfa({ id: "d2", dfaNo: "DFA-002", createdByName: null })] }));
     render(<DfaPanel canApprove canDraft viewerId="someone-else" />);
     expect(await screen.findByText("Meera Nair")).toBeInTheDocument();
     expect(screen.getByText("Unknown employee")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open file" })).toHaveAttribute("href", `/estab/files/${FILE_ID}`);
+    expect(screen.getByRole("link", { name: "EST/2026/114" })).toHaveAttribute("href", `/estab/files/${FILE_ID}`);
     expect(document.body.textContent).not.toContain("7b7b7b7b");
     expect(document.body.textContent).not.toContain("5a5a5a5a");
   });
@@ -38,5 +48,21 @@ describe("DfaPanel — GAP-ESTAB-DFA-04", () => {
     const dialog = await screen.findByRole("alertdialog");
     expect(dialog.textContent).toContain("END-OF-BODY");
     expect(dialog.textContent).not.toContain("…");
+  });
+
+  it("GAP-ESTAB-DFA-04: Given a file is picked on the create form, Then the POST carries its fileId", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (_i, init) =>
+      (init as RequestInit | undefined)?.method === "POST" ? json({ status: "accepted" }) : json({ data: [] }));
+    render(<DfaPanel canApprove canDraft viewerId="someone-else" />);
+    fireEvent.click(await screen.findByRole("button", { name: "+ New draft" }));
+    fireEvent.change(screen.getByLabelText(/Subject/i), { target: { value: "Linked letter" } });
+    fireEvent.change(screen.getByLabelText(/Draft body/i), { target: { value: "Body" } });
+    fireEvent.click(screen.getByText("pick file"));
+    fireEvent.click(screen.getByRole("button", { name: "Create draft" }));
+    await vi.waitFor(() => {
+      const post = spy.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "POST");
+      expect(post).toBeTruthy();
+      expect(JSON.parse(String((post![1] as RequestInit).body)).fileId).toBe(FILE_ID);
+    });
   });
 });
