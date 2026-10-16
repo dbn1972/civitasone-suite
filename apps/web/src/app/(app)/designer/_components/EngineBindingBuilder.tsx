@@ -5,7 +5,9 @@ import { Button, Card, EmptyState } from "@/app/_components/ds";
 import {
   bpsToPercentInput,
   humanizeEngineKey,
-  percentInputToBps,
+  parseDays,
+  parsePercentToBps,
+  validateEngineConfig,
   type EngineBindingUi,
   type EngineBlockUi,
   type EngineDescriptorUi,
@@ -48,6 +50,17 @@ export function EngineBindingBuilder({
   const [applyPenalty, setApplyPenalty] = useState(false);
   const [preview, setPreview] = useState<EnginePreviewResultUi | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  /** GAP-DESIGNER-DETAIL-ENGINES-02: per-field validation errors for percent/days inputs. */
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const setFE = (key: string, msg: string) =>
+    setFieldErrors((prev) => ({ ...prev, [key]: msg }));
+  const clearFE = (key: string) =>
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -91,7 +104,15 @@ export function EngineBindingBuilder({
     [registry, blockFilter],
   );
 
-  const schedulePersist = useCallback((next: EngineBindingUi[]) => {
+  const schedulePersist = useCallback((next: EngineBindingUi[], skipIfErrors = true) => {
+    if (skipIfErrors) {
+      // GAP-DESIGNER-DETAIL-ENGINES-02: do not persist a config with validation errors.
+      const selected = next.find((b) => b.id === selectedId);
+      if (selected) {
+        const errs = validateEngineConfig(selected.config);
+        if (errs.length > 0) { onSaveState?.("offline"); return; }
+      }
+    }
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
       onSaveState?.("saving");
@@ -103,7 +124,7 @@ export function EngineBindingBuilder({
         onSaveState?.("offline");
       }
     }, 2000);
-  }, [definitionId, onBindingsPersisted, onSaveState]);
+  }, [definitionId, onBindingsPersisted, onSaveState, selectedId]);
 
   const updateBindings = (next: EngineBindingUi[]) => {
     setBindings(next);
@@ -383,10 +404,17 @@ export function EngineBindingBuilder({
                                 step="0.01"
                                 value={bpsToPercentInput(cat.percentBps)}
                                 onChange={(e) => {
-                                  const exemptionCategories = selected.config.exemptionCategories.map((c, i) =>
-                                    i === idx ? { ...c, percentBps: percentInputToBps(e.target.value) } : c,
-                                  );
-                                  patchConfig({ exemptionCategories });
+                                  const key = `${selected.id}.exemption.${idx}`;
+                                  const r = parsePercentToBps(e.target.value);
+                                  if (r.ok) {
+                                    clearFE(key);
+                                    const exemptionCategories = selected.config.exemptionCategories.map((c, i) =>
+                                      i === idx ? { ...c, percentBps: r.bps } : c,
+                                    );
+                                    patchConfig({ exemptionCategories });
+                                  } else {
+                                    setFE(key, r.error);
+                                  }
                                 }}
                               />
                               <Button
@@ -422,6 +450,12 @@ export function EngineBindingBuilder({
                         </Button>
                       </div>
 
+                      {/* GAP-DESIGNER-DETAIL-ENGINES-02: cross-field errors from validateEngineConfig */}
+                      {selected && validateEngineConfig(selected.config).length > 0 ? (
+                        <ul style={{ margin: "0 0 8px", padding: "8px 10px 8px 24px", fontSize: 12, color: "var(--bad)", border: "1px solid var(--bad)", borderRadius: 6 }} role="alert">
+                          {validateEngineConfig(selected.config).map((e) => <li key={e}>{e}</li>)}
+                        </ul>
+                      ) : null}
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                         <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
                           <span style={{ fontWeight: 600 }}>Rebate (%)</span>
@@ -432,8 +466,20 @@ export function EngineBindingBuilder({
                             max={100}
                             step="0.01"
                             value={bpsToPercentInput(selected.config.rebatePercentBps)}
-                            onChange={(e) => patchConfig({ rebatePercentBps: percentInputToBps(e.target.value) })}
+                            onChange={(e) => {
+                              const key = `${selected.id}.rebatePercentBps`;
+                              const r = parsePercentToBps(e.target.value);
+                              if (r.ok) { clearFE(key); patchConfig({ rebatePercentBps: r.bps }); }
+                              else setFE(key, r.error);
+                            }}
+                            aria-invalid={!!fieldErrors[`${selected.id}.rebatePercentBps`] || undefined}
+                            aria-describedby={fieldErrors[`${selected.id}.rebatePercentBps`] ? `rebate-err-${selected.id}` : undefined}
                           />
+                          {fieldErrors[`${selected.id}.rebatePercentBps`] ? (
+                            <span id={`rebate-err-${selected.id}`} style={{ fontSize: 11, color: "var(--bad)" }} role="alert">
+                              {fieldErrors[`${selected.id}.rebatePercentBps`]}
+                            </span>
+                          ) : null}
                         </label>
                         <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
                           <span style={{ fontWeight: 600 }}>Rebate window (days)</span>
@@ -442,8 +488,19 @@ export function EngineBindingBuilder({
                             type="number"
                             min={0}
                             value={selected.config.rebateWindowDays}
-                            onChange={(e) => patchConfig({ rebateWindowDays: Number(e.target.value) || 0 })}
+                            onChange={(e) => {
+                              const key = `${selected.id}.rebateWindowDays`;
+                              const r = parseDays(e.target.value);
+                              if (r.ok) { clearFE(key); patchConfig({ rebateWindowDays: r.days }); }
+                              else setFE(key, r.error);
+                            }}
+                            aria-invalid={!!fieldErrors[`${selected.id}.rebateWindowDays`] || undefined}
                           />
+                          {fieldErrors[`${selected.id}.rebateWindowDays`] ? (
+                            <span style={{ fontSize: 11, color: "var(--bad)" }} role="alert">
+                              {fieldErrors[`${selected.id}.rebateWindowDays`]}
+                            </span>
+                          ) : null}
                         </label>
                         <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
                           <span style={{ fontWeight: 600 }}>Penalty (%)</span>
@@ -454,8 +511,20 @@ export function EngineBindingBuilder({
                             max={100}
                             step="0.01"
                             value={bpsToPercentInput(selected.config.penaltyPercentBps)}
-                            onChange={(e) => patchConfig({ penaltyPercentBps: percentInputToBps(e.target.value) })}
+                            onChange={(e) => {
+                              const key = `${selected.id}.penaltyPercentBps`;
+                              const r = parsePercentToBps(e.target.value);
+                              if (r.ok) { clearFE(key); patchConfig({ penaltyPercentBps: r.bps }); }
+                              else setFE(key, r.error);
+                            }}
+                            aria-invalid={!!fieldErrors[`${selected.id}.penaltyPercentBps`] || undefined}
+                            aria-describedby={fieldErrors[`${selected.id}.penaltyPercentBps`] ? `penalty-err-${selected.id}` : undefined}
                           />
+                          {fieldErrors[`${selected.id}.penaltyPercentBps`] ? (
+                            <span id={`penalty-err-${selected.id}`} style={{ fontSize: 11, color: "var(--bad)" }} role="alert">
+                              {fieldErrors[`${selected.id}.penaltyPercentBps`]}
+                            </span>
+                          ) : null}
                         </label>
                         <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
                           <span style={{ fontWeight: 600 }}>Penalty grace (days)</span>
@@ -464,8 +533,19 @@ export function EngineBindingBuilder({
                             type="number"
                             min={0}
                             value={selected.config.penaltyGraceDays}
-                            onChange={(e) => patchConfig({ penaltyGraceDays: Number(e.target.value) || 0 })}
+                            onChange={(e) => {
+                              const key = `${selected.id}.penaltyGraceDays`;
+                              const r = parseDays(e.target.value);
+                              if (r.ok) { clearFE(key); patchConfig({ penaltyGraceDays: r.days }); }
+                              else setFE(key, r.error);
+                            }}
+                            aria-invalid={!!fieldErrors[`${selected.id}.penaltyGraceDays`] || undefined}
                           />
+                          {fieldErrors[`${selected.id}.penaltyGraceDays`] ? (
+                            <span style={{ fontSize: 11, color: "var(--bad)" }} role="alert">
+                              {fieldErrors[`${selected.id}.penaltyGraceDays`]}
+                            </span>
+                          ) : null}
                         </label>
                       </div>
                     </>
