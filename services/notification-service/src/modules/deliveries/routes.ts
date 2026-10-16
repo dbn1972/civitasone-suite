@@ -2,7 +2,7 @@ import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { NotificationDeliveryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
-import { ZodError, z } from "zod";
+import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { maskRecipient } from "../../adapters/mask.js";
 import { sendNotificationBody, deliveryIdParam } from "./validators.js";
@@ -13,7 +13,9 @@ const NOTIFY_SEND_ROLES = ["notification_admin", "super_admin", "platform_admin"
 const NOTIFY_READ_ROLES = [...NOTIFY_SEND_ROLES, "audit_officer"];
 
 export async function deliveryRoutes(app: FastifyInstance): Promise<void> {
-  app.post("/notifications/send", async (req, reply) => {
+  // GAP-NOTIFICATIONS-COMPOSE-01: rate-limit individual notification sends — a
+  // single caller is capped at 30 per minute to prevent internal spam/phishing.
+  app.post("/notifications/send", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, NOTIFY_SEND_ROLES);
     const body = sendNotificationBody.parse(req.body);
@@ -54,6 +56,7 @@ export async function deliveryRoutes(app: FastifyInstance): Promise<void> {
     const { id } = deliveryIdParam.parse(req.params);
     const delivery = await queries.getDelivery(ctx.tenantId, id);
     if (!delivery) throw new HttpError(404, "NOT_FOUND", "delivery not found");
-    return reply.send(delivery);
+    // GAP-NOTIFICATIONS-DELIVERIES-03: normalise attempt counter to match the list.
+    return reply.send({ ...delivery, attemptCount: delivery.retryCount ?? 1 });
   });
 }
