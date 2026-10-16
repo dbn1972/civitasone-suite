@@ -947,7 +947,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-GUESTHOUSE-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (closed by #2104, verified implementation present in codebase)
 - **W2 PQ-A note (#2037):** no approval step or endpoint exists for room bookings (estab-service facilities has only book/checkin/checkout); check-in/out are now shown only to estab officer roles and the subtitle no longer claims approvals. Needs owner decision: is a booking approval step wanted (new endpoint plus maker-checker)?
 - **W0-10 note:** review found the W0 tick partly — Check-in/check-out with ConfirmDialog added (BookingsTable.tsx:44-113) but no approve/reject, no role/approver gating, subtitle still says 'Room booking and approvals.' (guesthouse/page.tsx:32; fix step 5 unmet), checkout hard-codes chargesMinor:0 (BookingsTable.tsx:~50)
 - **First-pass claim:** Page advertises "approvals" and counts "Pending Approval" (page.tsx:33,43) but offers no way to approve, reject, check in or check out — nothing in guesthouse/ mutates a booking; a pending request is a dead end.
