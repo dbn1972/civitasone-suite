@@ -324,6 +324,9 @@ describe("GAP-AUDIT-RISK-REGISTER-07 — POST /v1/audit/risks writes exactly one
       },
     });
     await new Promise<void>((r) => setTimeout(r, 700));
+    // Flush outbox so registerAuditConsumers picks up the enqueued audit events.
+    await relayOnce(dbInstR as never, q, 100, "audit-service");
+    await new Promise<void>((r) => setTimeout(r, 300));
     await q.stop();
 
     const { eq: eqFn } = await import("drizzle-orm");

@@ -14,6 +14,7 @@ import path from "node:path";
 import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { eq } from "drizzle-orm";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
+import { relayOnce } from "@civitasone/outbox";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
@@ -87,6 +88,9 @@ beforeAll(async () => {
     },
   });
   await new Promise((r) => setTimeout(r, 1200));
+  // Flush outbox so registerAuditConsumers picks up the enqueued audit events.
+  await relayOnce(db as never, q, 100, "audit-service");
+  await new Promise((r) => setTimeout(r, 500));
   await q.stop();
 
   const rows = await runWithTenant(TENANT, () =>

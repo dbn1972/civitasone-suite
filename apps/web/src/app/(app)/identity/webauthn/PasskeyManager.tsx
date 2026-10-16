@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button, ConfirmDialog, DataTable, EmptyState } from "../../../_components/ds";
 import { formatIndianDateTime } from "@/lib/formatters";
@@ -39,6 +39,10 @@ export function PasskeyManager({ credentials }: { credentials: WebauthnCredentia
   const [renameValue, setRenameValue] = useState("");
   const [renameBusy, setRenameBusy] = useState(false);
   const [renameError, setRenameError] = useState<string | undefined>(undefined);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (renaming !== null) renameInputRef.current?.focus();
+  }, [renaming]);
   const renameFormError = useFormError("passkey-rename");
 
   async function remove() {
@@ -142,7 +146,7 @@ export function PasskeyManager({ credentials }: { credentials: WebauthnCredentia
                           if (e.key === "Enter") { void rename(); }
                           if (e.key === "Escape") { setRenaming(null); setRenameError(undefined); }
                         }}
-                        autoFocus
+                        ref={renameInputRef}
                       />
                       <Button size="sm" disabled={renameBusy} onClick={() => void rename()}>Save</Button>
                       <Button size="sm" variant="ghost" disabled={renameBusy} onClick={() => { setRenaming(null); setRenameError(undefined); }}>Cancel</Button>

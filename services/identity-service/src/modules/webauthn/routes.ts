@@ -239,9 +239,13 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
     async (req, reply) => {
       const ctx = resolveContext(req);
       const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
-      const { deviceName } = z.object({
+      const bodyParse = z.object({
         deviceName: z.string().min(1, "deviceName must not be blank").max(200, "deviceName too long"),
-      }).parse(req.body);
+      }).safeParse(req.body);
+      if (!bodyParse.success) {
+        throw new HttpError(400, "VALIDATION_ERROR", bodyParse.error.errors.map((e) => e.message).join("; "));
+      }
+      const { deviceName } = bodyParse.data;
 
       const existing = await repo.findById(ctx.tenantId, id);
       // Not found, or found but not owned by the caller: 404 either way.

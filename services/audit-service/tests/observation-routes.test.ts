@@ -347,6 +347,9 @@ describe("GAP-AUDIT-OBSERVATIONS-07 — POST writes exactly one audit event per 
       },
     });
     await new Promise<void>((r) => setTimeout(r, 700));
+    // Flush outbox so registerAuditConsumers picks up the enqueued audit events.
+    await relayOnce(dbInst as never, q, 100, "audit-service");
+    await new Promise<void>((r) => setTimeout(r, 300));
     await q.stop();
 
     const { eq: eqFn } = await import("drizzle-orm");
