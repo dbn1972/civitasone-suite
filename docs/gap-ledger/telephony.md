@@ -466,9 +466,9 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 - **Impact if wrong:** Call data exposed to unauthorised staff.
 - **Web change if wrong:** none unless gate missing; then add ModuleGate/role check on the hub.
 
-### GAP-TELEPHONY-AGENTS-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-TELEPHONY-AGENTS-07  ·  LOW  ·  verified  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by gap-backend-verify.test.ts — agentViewSchema (validators.ts) includes all AgentRow fields incl. queueName; sendValidated enforces schema on every response; RLS tenant isolation tested in gap-backend-verify.test.ts GAP-TELEPHONY-AGENTS-07 suite)
 - **First-pass claim:** telephony-service is absent from the services/ snapshot; the /v1/telephony/agents contract cannot be verified — undeterminable.
 - **Service:** `telephony-service`  ·  **Endpoint(s):** `['GET /v1/telephony/agents']`
 - **Question:** Does the agents endpoint return {data:[{...}]} with the fields AgentRow expects, tenant-scoped and role-guarded?
