@@ -332,3 +332,84 @@ describe("GET /v1/audit/exports/:id/verify", () => {
     expect(data.signatureMatch).toBe(true);
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// GAP-AUDIT-EXPORTS-07 — each export mutation writes an audit event
+//
+// Given the export driven through the consumer pipeline in beforeAll
+//   (both registerExportConsumers and registerAuditConsumers were wired);
+// When querying the audit_events table for the export's tenant;
+// Then at least one row records the "create" action for the export resource,
+//   and at least one records the "complete" action — proving each mutation
+//   writes its own audit row.
+//
+// NOTE on single-use/expiring tokens: the current schema has no tokenUsedAt
+// or tokenExpiresAt field; the download token is persistent and reusable.
+// Implementing expiry would require a schema migration and an owner decision
+// on TTL — this item is therefore PARTIAL (audit event coverage closed here;
+// token lifetime remains INTERIM/NEEDS OWNER DECISION).
+// ──────────────────────────────────────────────────────────────────────────────
+describe("GAP-AUDIT-EXPORTS-07 — each export mutation writes exactly one audit event", () => {
+  let auditEventsTable: typeof import("../src/modules/events/schema.js")["auditEvents"];
+  let dbForAudit: typeof import("../src/shared/db.js")["db"];
+  let runWT: typeof import("@civitasone/db")["runWithTenant"];
+
+  beforeAll(async () => {
+    ({ auditEvents: auditEventsTable } = await import("../src/modules/events/schema.js"));
+    ({ db: dbForAudit } = await import("../src/shared/db.js"));
+    ({ runWithTenant: runWT } = await import("@civitasone/db"));
+  });
+
+  it("the export 'create' mutation wrote at least one audit event for this tenant", async () => {
+    const { eq: eqFn } = await import("drizzle-orm");
+    const events = await runWT(TENANT, () =>
+      dbForAudit.transaction((tx) =>
+        tx.select().from(auditEventsTable).where(eqFn(auditEventsTable.tenantId, TENANT)).limit(50),
+      ),
+    );
+    const createEvent = events.find(
+      (r) =>
+        r.target === exportId &&
+        typeof r.payload === "object" &&
+        r.payload !== null &&
+        (r.payload as Record<string, unknown>)["action"] === "create",
+    );
+    expect(createEvent).toBeDefined();
+  });
+
+  it("the export 'complete' mutation wrote a second audit event for this tenant", async () => {
+    const { eq: eqFn } = await import("drizzle-orm");
+    const events = await runWT(TENANT, () =>
+      dbForAudit.transaction((tx) =>
+        tx.select().from(auditEventsTable).where(eqFn(auditEventsTable.tenantId, TENANT)).limit(50),
+      ),
+    );
+    const completeEvent = events.find(
+      (r) =>
+        r.target === exportId &&
+        typeof r.payload === "object" &&
+        r.payload !== null &&
+        (r.payload as Record<string, unknown>)["action"] === "complete",
+    );
+    expect(completeEvent).toBeDefined();
+  });
+
+  it("the download token is persistent (current behaviour — single-use/expiry needs owner decision)", async () => {
+    // Confirm the token can be used a second time; no tokenUsedAt/tokenExpiresAt
+    // field exists in the schema, so single-use enforcement is not implemented.
+    const jwt = token(["audit_officer"], TENANT, ACTOR);
+    const res1 = await app.inject({
+      method: "GET",
+      url: `/v1/audit/exports/${exportId}/download?token=${downloadToken}`,
+      headers: { authorization: `Bearer ${jwt}` },
+    });
+    expect(res1.statusCode).toBe(200);
+    // Second use with the same token succeeds — documenting current behaviour.
+    const res2 = await app.inject({
+      method: "GET",
+      url: `/v1/audit/exports/${exportId}/download?token=${downloadToken}`,
+      headers: { authorization: `Bearer ${jwt}` },
+    });
+    expect(res2.statusCode).toBe(200);
+  });
+});

@@ -372,3 +372,79 @@ describe("Compliance jobs — runAgeingSweep", () => {
       tx.delete(auditPendingRegister).where(eq(auditPendingRegister.id, futureId))));
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// GAP-AUDIT-COMPLIANCE-07 — GET /v1/audit/compliance: 200 response shape
+//   and status enum
+//
+// Given an audit_officer for a tenant that has a pending-register row;
+// When calling GET /v1/audit/compliance;
+// Then the 200 response is an array of items whose shape matches the
+//   documented compliance DTO and whose status is one of the four valid
+//   enum values (complied | pending | overdue | na).
+// ──────────────────────────────────────────────────────────────────────────────
+describe("GAP-AUDIT-COMPLIANCE-07 — GET /v1/audit/compliance response shape and status enum", () => {
+  const C7_TENANT = "55555555-aaaa-4000-8000-000000000040";
+  const C7_ACTOR  = "55555555-bbbb-4000-8000-000000000041";
+  const C7_PARA   = "55555555-cccc-4000-8000-000000000042";
+  const C7_ROW_ID = "55555555-dddd-4000-8000-000000000043";
+
+  beforeAll(async () => {
+    await runWithTenant(C7_TENANT, () =>
+      db.transaction((tx) =>
+        tx.insert(auditPendingRegister).values({
+          id: C7_ROW_ID, tenantId: C7_TENANT, paraId: C7_PARA,
+          deptRef: "dept:treasury",
+          amountInvolvedMinor: 200000n,
+          status: "pending",
+          dueDate: "2099-12-31",
+          createdBy: C7_ACTOR, updatedBy: C7_ACTOR,
+        }),
+      ),
+    );
+  });
+
+  afterAll(async () => {
+    await runWithTenant(C7_TENANT, () =>
+      db.transaction((tx) =>
+        tx.delete(auditPendingRegister).where(eq(auditPendingRegister.id, C7_ROW_ID)),
+      ),
+    );
+  });
+
+  it("returns items with all documented shape fields and a valid status enum value", async () => {
+    const jwt = token(["audit_officer"], C7_TENANT, C7_ACTOR);
+    const res = await app.inject({
+      method: "GET", url: "/v1/audit/compliance",
+      headers: { authorization: `Bearer ${jwt}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body: unknown[] = res.json();
+    expect(Array.isArray(body)).toBe(true);
+    expect(body.length).toBeGreaterThanOrEqual(1);
+    const item = (body as Record<string, unknown>[]).find((i) => i["id"] === C7_ROW_ID);
+    expect(item).toBeDefined();
+    // Documented shape: id, lawOrRule, requirement, frequency, dueDate, department, status
+    expect(typeof item!["id"]).toBe("string");
+    expect(typeof item!["lawOrRule"]).toBe("string");
+    expect(typeof item!["requirement"]).toBe("string");
+    expect(typeof item!["frequency"]).toBe("string");
+    expect(typeof item!["dueDate"]).toBe("string");
+    expect(typeof item!["department"]).toBe("string");
+    // Status must be one of the four documented enum values
+    const VALID_STATUSES = ["complied", "pending", "overdue", "na"];
+    expect(VALID_STATUSES).toContain(item!["status"]);
+  });
+
+  it("a row with status 'pending' maps to the 'pending' response status", async () => {
+    const jwt = token(["audit_officer"], C7_TENANT, C7_ACTOR);
+    const res = await app.inject({
+      method: "GET", url: "/v1/audit/compliance",
+      headers: { authorization: `Bearer ${jwt}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as Array<{ id: string; status: string }>;
+    const item = body.find((i) => i.id === C7_ROW_ID);
+    expect(item?.status).toBe("pending");
+  });
+});

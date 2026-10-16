@@ -256,3 +256,292 @@ describe("GET /v1/audit/observations/:id", () => {
     expect(data.id).toBe(SEEDED_ID);
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// GAP-AUDIT-OBSERVATIONS-07 — POST enum validation + exactly-one audit event
+//
+// Given: POST /v1/audit/observations with an invalid category or riskLevel;
+// When: the route processes the body;
+// Then: 400 VALIDATION_FAILED.
+//
+// Given: a POST /v1/audit/observations command driven through the full
+//   consumer pipeline (observation consumer + audit consumer);
+// When: the queue is drained;
+// Then: exactly one audit_events row is created with target = the new id.
+// ──────────────────────────────────────────────────────────────────────────────
+describe("GAP-AUDIT-OBSERVATIONS-07 — POST enum validation (400 on invalid enum)", () => {
+  it("400 for an invalid category value", async () => {
+    const jwt = token(["audit_officer"], TENANT, ACTOR);
+    const res = await app.inject({
+      method: "POST", url: "/v1/audit/observations",
+      headers: { authorization: `Bearer ${jwt}`, "content-type": "application/json" },
+      payload: {
+        obsNo: `OBS-CATENUM-${Date.now()}`, auditeeRef: "dept:finance",
+        finding: "category enum test", category: "invalid_category",
+        riskLevel: "medium", amountInvolvedMinor: "0",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("400 for an invalid riskLevel value", async () => {
+    const jwt = token(["audit_officer"], TENANT, ACTOR);
+    const res = await app.inject({
+      method: "POST", url: "/v1/audit/observations",
+      headers: { authorization: `Bearer ${jwt}`, "content-type": "application/json" },
+      payload: {
+        obsNo: `OBS-RLENUM-${Date.now()}`, auditeeRef: "dept:finance",
+        finding: "riskLevel enum test", category: "compliance",
+        riskLevel: "extreme", amountInvolvedMinor: "0",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("GAP-AUDIT-OBSERVATIONS-07 — POST writes exactly one audit event per mutation", () => {
+  const OBS07_TENANT = randomUUID();
+  const OBS07_ACTOR  = randomUUID();
+
+  let MemQ: typeof import("@civitasone/queue")["MemoryQueue"];
+  let withTenantCons: typeof import("@civitasone/db")["withTenantConsumer"];
+  let auditEvts: typeof import("../src/modules/events/schema.js")["auditEvents"];
+  let dbInst: typeof import("../src/shared/db.js")["db"];
+  let regObs: typeof import("../src/modules/observation/consumer.js")["registerObservationConsumers"];
+  let regAudit: typeof import("../src/modules/events/consumer.js")["registerAuditConsumers"];
+  let runWT: typeof import("@civitasone/db")["runWithTenant"];
+
+  function wireTenantQ(q: import("@civitasone/queue").Queue): import("@civitasone/queue").Queue {
+    const raw = q.subscribe.bind(q);
+    q.subscribe = ((topic: string, handler: import("@civitasone/queue").Handler) =>
+      raw(topic, withTenantCons(handler) as import("@civitasone/queue").Handler)) as typeof q.subscribe;
+    return q;
+  }
+
+  beforeAll(async () => {
+    ({ MemoryQueue: MemQ } = await import("@civitasone/queue"));
+    ({ withTenantConsumer: withTenantCons } = await import("@civitasone/db"));
+    ({ auditEvents: auditEvts } = await import("../src/modules/events/schema.js"));
+    ({ db: dbInst } = await import("../src/shared/db.js"));
+    ({ registerObservationConsumers: regObs } = await import("../src/modules/observation/consumer.js"));
+    ({ registerAuditConsumers: regAudit } = await import("../src/modules/events/consumer.js"));
+    ({ runWithTenant: runWT } = await import("@civitasone/db"));
+  });
+
+  it("exactly one audit event is written when an observation is created", async () => {
+    const obsId = randomUUID();
+    const q = wireTenantQ(new MemQ());
+    regObs(q);
+    regAudit(q);
+    await q.start();
+
+    await q.publish("audit.observation.create", {
+      messageId: obsId, type: "audit.observation.create",
+      tenantId: OBS07_TENANT, actorId: OBS07_ACTOR,
+      correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: {
+        id: obsId, tenantId: OBS07_TENANT,
+        obsNo: `OBS-AUDEVT-${Date.now()}`, auditeeRef: "dept:finance",
+        finding: "Audit event write test", category: "compliance",
+        riskLevel: "medium", amountInvolvedMinor: "5000",
+      },
+    });
+    await new Promise<void>((r) => setTimeout(r, 700));
+    await q.stop();
+
+    const { eq: eqFn } = await import("drizzle-orm");
+    const events = await runWT(OBS07_TENANT, () =>
+      dbInst.transaction((tx) =>
+        tx.select().from(auditEvts).where(eqFn(auditEvts.tenantId, OBS07_TENANT)).limit(20),
+      ),
+    );
+    const createEvents = events.filter(
+      (r) =>
+        r.target === obsId &&
+        typeof r.payload === "object" &&
+        r.payload !== null &&
+        (r.payload as Record<string, unknown>)["action"] === "create",
+    );
+    expect(createEvents).toHaveLength(1);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// GAP-AUDIT-OBSERVATIONS-DETAIL-07
+//   — draft-para role gate
+//   — exactly-one audit event per reply mutation
+//   — status-transition enforcement (reply on non-open obs stays unchanged)
+// ──────────────────────────────────────────────────────────────────────────────
+describe("GAP-AUDIT-OBSERVATIONS-DETAIL-07 — POST /:id/draft-para role gate", () => {
+  const dpBody = { paraNo: "PARA-GATE-01", deptRef: "dept:finance", body: "Para body for role gate test" };
+
+  it("401 without a bearer token", async () => {
+    const res = await app.inject({
+      method: "POST", url: `/v1/audit/observations/${SEEDED_ID}/draft-para`,
+      payload: dpBody,
+    });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it("403 for employee (outside AUDIT_ROLES)", async () => {
+    const jwt = token(["employee"], TENANT, ACTOR);
+    const res = await app.inject({
+      method: "POST", url: `/v1/audit/observations/${SEEDED_ID}/draft-para`,
+      headers: { authorization: `Bearer ${jwt}`, "content-type": "application/json" },
+      payload: dpBody,
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("403 for dept_head (AUDITEE_ROLES but not AUDIT_ROLES)", async () => {
+    const jwt = token(["dept_head"], TENANT, ACTOR);
+    const res = await app.inject({
+      method: "POST", url: `/v1/audit/observations/${SEEDED_ID}/draft-para`,
+      headers: { authorization: `Bearer ${jwt}`, "content-type": "application/json" },
+      payload: dpBody,
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("202 accepted for audit_officer", async () => {
+    const jwt = token(["audit_officer"], TENANT, ACTOR);
+    const res = await app.inject({
+      method: "POST", url: `/v1/audit/observations/${SEEDED_ID}/draft-para`,
+      headers: { authorization: `Bearer ${jwt}`, "content-type": "application/json" },
+      payload: dpBody,
+    });
+    expect(res.statusCode).toBe(202);
+    expect(res.json().status).toBe("accepted");
+  });
+});
+
+describe("GAP-AUDIT-OBSERVATIONS-DETAIL-07 — reply audit event + status-transition enforcement", () => {
+  const OD07_TENANT = randomUUID();
+  const OD07_ACTOR  = randomUUID();
+
+  let MemQ2: typeof import("@civitasone/queue")["MemoryQueue"];
+  let withTenantCons2: typeof import("@civitasone/db")["withTenantConsumer"];
+  let auditEvts2: typeof import("../src/modules/events/schema.js")["auditEvents"];
+  let dbInst2: typeof import("../src/shared/db.js")["db"];
+  let obsSchema: typeof import("../src/modules/observation/schema.js")["auditObservations"];
+  let regObs2: typeof import("../src/modules/observation/consumer.js")["registerObservationConsumers"];
+  let regAudit2: typeof import("../src/modules/events/consumer.js")["registerAuditConsumers"];
+  let runWT2: typeof import("@civitasone/db")["runWithTenant"];
+
+  function wireTenantQ2(q: import("@civitasone/queue").Queue): import("@civitasone/queue").Queue {
+    const raw = q.subscribe.bind(q);
+    q.subscribe = ((topic: string, handler: import("@civitasone/queue").Handler) =>
+      raw(topic, withTenantCons2(handler) as import("@civitasone/queue").Handler)) as typeof q.subscribe;
+    return q;
+  }
+
+  beforeAll(async () => {
+    ({ MemoryQueue: MemQ2 } = await import("@civitasone/queue"));
+    ({ withTenantConsumer: withTenantCons2 } = await import("@civitasone/db"));
+    ({ auditEvents: auditEvts2 } = await import("../src/modules/events/schema.js"));
+    ({ db: dbInst2 } = await import("../src/shared/db.js"));
+    ({ auditObservations: obsSchema } = await import("../src/modules/observation/schema.js"));
+    ({ registerObservationConsumers: regObs2 } = await import("../src/modules/observation/consumer.js"));
+    ({ registerAuditConsumers: regAudit2 } = await import("../src/modules/events/consumer.js"));
+    ({ runWithTenant: runWT2 } = await import("@civitasone/db"));
+  });
+
+  it("a reply command writes exactly one audit event with action='reply'", async () => {
+    const obsId = randomUUID();
+    const q = wireTenantQ2(new MemQ2());
+    regObs2(q);
+    regAudit2(q);
+    await q.start();
+
+    // Create the observation first (status → "open")
+    await q.publish("audit.observation.create", {
+      messageId: randomUUID(), type: "audit.observation.create",
+      tenantId: OD07_TENANT, actorId: OD07_ACTOR,
+      correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: {
+        id: obsId, tenantId: OD07_TENANT,
+        obsNo: `OBS-RPLYAUDEVT-${Date.now()}`, auditeeRef: "dept:it",
+        finding: "Reply audit event test", amountInvolvedMinor: "0",
+      },
+    });
+    await new Promise<void>((r) => setTimeout(r, 600));
+
+    // Submit a valid reply (status "open" → "replied")
+    await q.publish("audit.observation.reply", {
+      messageId: randomUUID(), type: "audit.observation.reply",
+      tenantId: OD07_TENANT, actorId: OD07_ACTOR,
+      correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: {
+        id: randomUUID(), observationId: obsId, tenantId: OD07_TENANT,
+        replyText: "Corrective action taken", respondedByRef: "dept:it:head",
+      },
+    });
+    await new Promise<void>((r) => setTimeout(r, 600));
+    await q.stop();
+
+    const { eq: eqFn } = await import("drizzle-orm");
+    const events = await runWT2(OD07_TENANT, () =>
+      dbInst2.transaction((tx) =>
+        tx.select().from(auditEvts2).where(eqFn(auditEvts2.tenantId, OD07_TENANT)).limit(20),
+      ),
+    );
+    const replyEvents = events.filter(
+      (r) =>
+        r.target === obsId &&
+        typeof r.payload === "object" &&
+        r.payload !== null &&
+        (r.payload as Record<string, unknown>)["action"] === "reply",
+    );
+    expect(replyEvents).toHaveLength(1);
+  });
+
+  it("status-transition enforcement: replying on a compliance_pending obs leaves status unchanged", async () => {
+    const obsId2 = randomUUID();
+    const q = wireTenantQ2(new MemQ2());
+    regObs2(q);
+    regAudit2(q);
+    await q.start();
+
+    // Create observation (status → "open")
+    await q.publish("audit.observation.create", {
+      messageId: randomUUID(), type: "audit.observation.create",
+      tenantId: OD07_TENANT, actorId: OD07_ACTOR,
+      correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: {
+        id: obsId2, tenantId: OD07_TENANT,
+        obsNo: `OBS-TRANS-${Date.now()}`, auditeeRef: "dept:hr",
+        finding: "Transition enforcement test", amountInvolvedMinor: "0",
+      },
+    });
+    await new Promise<void>((r) => setTimeout(r, 500));
+
+    // Force status to compliance_pending (cannot receive a reply)
+    const { eq: eqFn } = await import("drizzle-orm");
+    await runWT2(OD07_TENANT, () =>
+      dbInst2.transaction((tx) =>
+        tx.update(obsSchema).set({ status: "compliance_pending" }).where(eqFn(obsSchema.id, obsId2)),
+      ),
+    );
+
+    // Attempt invalid reply — consumer throws, status must stay "compliance_pending"
+    await q.publish("audit.observation.reply", {
+      messageId: randomUUID(), type: "audit.observation.reply",
+      tenantId: OD07_TENANT, actorId: OD07_ACTOR,
+      correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: {
+        id: randomUUID(), observationId: obsId2, tenantId: OD07_TENANT,
+        replyText: "Should not succeed", respondedByRef: "dept:hr:head",
+      },
+    });
+    await new Promise<void>((r) => setTimeout(r, 500));
+    await q.stop();
+
+    const rows = await runWT2(OD07_TENANT, () =>
+      dbInst2.transaction((tx) =>
+        tx.select().from(obsSchema).where(eqFn(obsSchema.id, obsId2)).limit(1),
+      ),
+    );
+    // Status transition was enforced — still "compliance_pending"
+    expect(rows[0]?.status).toBe("compliance_pending");
+  });
+});

@@ -337,3 +337,119 @@ describe("GET /v1/audit/plan — item list carries parent plan no./title/riskLev
     expect(item.department).toBe("dept:finance");
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// GAP-AUDIT-PLAN-07 — POST date-range validation + records who created
+//
+// Given: POST /v1/audit/plans with periodFrom > periodTo;
+// When: the route parses the body;
+// Then: 400 VALIDATION_FAILED (refine added to createPlanBody in this PR).
+//
+// Given: POST /v1/audit/plans with a valid body and actor actorId;
+// When: the consumer drains and inserts the plan row;
+// Then: the row's createdBy equals the JWT's sub (actorId).
+// ──────────────────────────────────────────────────────────────────────────────
+describe("GAP-AUDIT-PLAN-07 — POST date-range validation", () => {
+  it("400 when periodFrom is after periodTo", async () => {
+    const jwt = token(["audit_officer"], TENANT, ACTOR);
+    const res = await app.inject({
+      method: "POST", url: "/v1/audit/plans",
+      headers: { authorization: `Bearer ${jwt}`, "content-type": "application/json" },
+      payload: {
+        planNo: "PLAN-DATERANGE-01", title: "Date Range Fail", area: "Finance",
+        // periodFrom is AFTER periodTo
+        periodFrom: "2027-03-31", periodTo: "2026-04-01",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("400 when periodFrom equals periodTo is allowed (same day is valid)", async () => {
+    // Boundary case: periodFrom === periodTo should pass the refine
+    const jwt = token(["audit_officer"], TENANT, ACTOR);
+    const res = await app.inject({
+      method: "POST", url: "/v1/audit/plans",
+      headers: { authorization: `Bearer ${jwt}`, "content-type": "application/json" },
+      payload: {
+        planNo: `PLAN-SAMEDAY-${Date.now()}`, title: "Same Day Plan", area: "Finance",
+        periodFrom: "2026-06-15", periodTo: "2026-06-15",
+      },
+    });
+    expect(res.statusCode).toBe(202);
+  });
+
+  it("400 when periodFrom is a non-date string", async () => {
+    const jwt = token(["audit_officer"], TENANT, ACTOR);
+    const res = await app.inject({
+      method: "POST", url: "/v1/audit/plans",
+      headers: { authorization: `Bearer ${jwt}`, "content-type": "application/json" },
+      payload: {
+        planNo: "PLAN-BADDATE-01", title: "Bad Date Plan", area: "Finance",
+        periodFrom: "not-a-date", periodTo: "2027-03-31",
+      },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe("GAP-AUDIT-PLAN-07 — POST records who created the plan (createdBy = actor)", () => {
+  const P07_TENANT = randomUUID();
+  const P07_ACTOR  = randomUUID();
+
+  let MemQP: typeof import("@civitasone/queue")["MemoryQueue"];
+  let withTenantConsP: typeof import("@civitasone/db")["withTenantConsumer"];
+  let planSchema: typeof import("../src/modules/plan/schema.js")["auditPlans"];
+  let dbInstP: typeof import("../src/shared/db.js")["db"];
+  let regPlan: typeof import("../src/modules/plan/consumer.js")["registerPlanConsumers"];
+  let regAuditP: typeof import("../src/modules/events/consumer.js")["registerAuditConsumers"];
+  let runWTP: typeof import("@civitasone/db")["runWithTenant"];
+
+  function wireTenantQP(q: import("@civitasone/queue").Queue): import("@civitasone/queue").Queue {
+    const raw = q.subscribe.bind(q);
+    q.subscribe = ((topic: string, handler: import("@civitasone/queue").Handler) =>
+      raw(topic, withTenantConsP(handler) as import("@civitasone/queue").Handler)) as typeof q.subscribe;
+    return q;
+  }
+
+  beforeAll(async () => {
+    ({ MemoryQueue: MemQP } = await import("@civitasone/queue"));
+    ({ withTenantConsumer: withTenantConsP } = await import("@civitasone/db"));
+    ({ auditPlans: planSchema } = await import("../src/modules/plan/schema.js"));
+    ({ db: dbInstP } = await import("../src/shared/db.js"));
+    ({ registerPlanConsumers: regPlan } = await import("../src/modules/plan/consumer.js"));
+    ({ registerAuditConsumers: regAuditP } = await import("../src/modules/events/consumer.js"));
+    ({ runWithTenant: runWTP } = await import("@civitasone/db"));
+  });
+
+  it("the created plan row's createdBy equals the actor who posted it", async () => {
+    const planId = randomUUID();
+    const q = wireTenantQP(new MemQP());
+    regPlan(q);
+    regAuditP(q);
+    await q.start();
+
+    await q.publish("audit.plan.create", {
+      messageId: planId, type: "audit.plan.create",
+      tenantId: P07_TENANT, actorId: P07_ACTOR,
+      correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: {
+        id: planId, tenantId: P07_TENANT,
+        planNo: `PLAN-CRBY-${Date.now()}`, title: "Creator Test Plan",
+        area: "Finance", periodFrom: "2026-04-01", periodTo: "2027-03-31",
+        riskLevel: "medium",
+      },
+    });
+    await new Promise<void>((r) => setTimeout(r, 600));
+    await q.stop();
+
+    const { eq: eqFn } = await import("drizzle-orm");
+    const rows = await runWTP(P07_TENANT, () =>
+      dbInstP.transaction((tx) =>
+        tx.select().from(planSchema).where(eqFn(planSchema.id, planId)).limit(1),
+      ),
+    );
+    expect(rows).toHaveLength(1);
+    // createdBy must equal the actor who published the command
+    expect(rows[0]?.createdBy).toBe(P07_ACTOR);
+  });
+});
