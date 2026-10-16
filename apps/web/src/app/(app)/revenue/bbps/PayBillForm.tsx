@@ -5,17 +5,28 @@ import Link from "next/link";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { StatusPill } from "@/app/_components/ds/StatusPill";
 import { browserJson } from "@/lib/api/browserClient";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, humanizeStatus } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
 import { BBPS_CHANNELS, channelLabel } from "@/lib/revenue/channels";
 import { useBbpsRequestStatus } from "./useBbpsRequestStatus";
+import type { AssesseeOption } from "./FetchBillForm";
 
 type AcceptedResponse = { data?: { messageId?: string } };
 
 const CHANNELS = BBPS_CHANNELS;
 
-export function PayBillForm() {
+interface PayBillFormProps {
+  /**
+   * GAP-REVENUE-BBPS-03: assessees loaded by the server component. When empty
+   * the form falls back to a free-text identifier input (backward-compat with
+   * tests that render without props).
+   */
+  assessees?: ReadonlyArray<AssesseeOption>;
+}
+
+export function PayBillForm({ assessees = [] }: PayBillFormProps) {
   const [assesseeIdentifier, setAssesseeIdentifier] = useState("");
+  const [assesseeOwnerName, setAssesseeOwnerName] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
   const [bbpsTxnId, setBbpsTxnId] = useState("");
   const [channel, setChannel] = useState<(typeof CHANNELS)[number]>("online");
@@ -28,6 +39,12 @@ export function PayBillForm() {
   const [lastAssesseeId, setLastAssesseeId] = useState<string>("");
   const [messageId, setMessageId] = useState<string | null>(null);
   const { status, pollFailed, reset: resetStatus } = useBbpsRequestStatus(messageId);
+
+  function handleAssesseeChange(identifierNo: string) {
+    setAssesseeIdentifier(identifierNo);
+    const found = assessees.find((a) => a.identifierNo === identifierNo);
+    setAssesseeOwnerName(found?.ownerName ?? null);
+  }
 
   const identifierId = useId();
   const amountId = useId();
@@ -101,6 +118,7 @@ export function PayBillForm() {
           : "Payment request submitted.",
       );
       setAssesseeIdentifier("");
+      setAssesseeOwnerName(null);
       setAmount("");
       setBbpsTxnId("");
       setFieldErrors({});
@@ -123,17 +141,36 @@ export function PayBillForm() {
                   *
                 </span>
               </label>
-              <input
-                id={identifierId}
-                ref={identifierRef}
-                value={assesseeIdentifier}
-                onChange={(e) => setAssesseeIdentifier(e.target.value)}
-                maxLength={100}
-                aria-required="true"
-                aria-invalid={!!fieldErrors.assesseeIdentifier || undefined}
-                aria-describedby={fieldErrors.assesseeIdentifier ? identifierErrorId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
+              {assessees.length > 0 ? (
+                <select
+                  id={identifierId}
+                  value={assesseeIdentifier}
+                  onChange={(e) => handleAssesseeChange(e.target.value)}
+                  aria-required="true"
+                  aria-invalid={!!fieldErrors.assesseeIdentifier || undefined}
+                  aria-describedby={fieldErrors.assesseeIdentifier ? identifierErrorId : undefined}
+                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, minWidth: 280 }}
+                >
+                  <option value="">Select an assessee…</option>
+                  {assessees.map((a) => (
+                    <option key={a.id} value={a.identifierNo}>
+                      {a.ownerName} — {a.identifierNo} ({humanizeStatus(a.assesseeType)})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id={identifierId}
+                  ref={identifierRef}
+                  value={assesseeIdentifier}
+                  onChange={(e) => setAssesseeIdentifier(e.target.value)}
+                  maxLength={100}
+                  aria-required="true"
+                  aria-invalid={!!fieldErrors.assesseeIdentifier || undefined}
+                  aria-describedby={fieldErrors.assesseeIdentifier ? identifierErrorId : undefined}
+                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                />
+              )}
               {fieldErrors.assesseeIdentifier && (
                 <p id={identifierErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
                   {fieldErrors.assesseeIdentifier}
@@ -273,7 +310,11 @@ export function PayBillForm() {
             <>
               Record a BBPS payment of <strong>{formatMoney(minorAmount)}</strong> via{" "}
               <strong>{channelLabel(channel)}</strong> for assessee{" "}
-              <strong>{assesseeIdentifier.trim()}</strong>, using BBPS transaction ID{" "}
+              {assesseeOwnerName ? (
+                <><strong>{assesseeOwnerName}</strong>{" "}({assesseeIdentifier.trim()})</>
+              ) : (
+                <strong>{assesseeIdentifier.trim()}</strong>
+              )}, using BBPS transaction ID{" "}
               <strong>{bbpsTxnId.trim()}</strong>. This records a payment already made at the biller and
               credits the assessee — it cannot be undone from this screen.
             </>
