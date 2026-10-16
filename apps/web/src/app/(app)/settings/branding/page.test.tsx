@@ -379,4 +379,32 @@ describe("BrandingPage", () => {
       expect(input.style.borderColor).toBe("var(--line)");
     }
   });
+
+  it("GAP-SETTINGS-BRANDING-07: disables Save and shows Retry when brand config cannot be loaded", async () => {
+    // Given: brand config endpoint returns 500 (service unavailable)
+    vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/auth/session")) {
+        return Promise.resolve(new Response(JSON.stringify(ADMIN_SESSION), { status: 200 }));
+      }
+      if (url.endsWith("/themes/brand/presets")) {
+        return Promise.resolve(new Response(JSON.stringify([]), { status: 200 }));
+      }
+      if (url.endsWith("/themes/brand")) {
+        return Promise.resolve(new Response(JSON.stringify({ error: "service unavailable" }), { status: 500 }));
+      }
+      return Promise.reject(new Error(`unexpected fetch: ${url}`));
+    });
+
+    // When: page loads
+    render(<BrandingPage />);
+
+    // Then: a Retry button is shown and Save is disabled
+    const retryBtn = await screen.findByRole("button", { name: /retry loading branding/i });
+    expect(retryBtn).toBeInTheDocument();
+    // Save is rendered as "No Changes" (not dirty) and must be disabled while
+    // brand config load has failed (brandFetchFailed guard).
+    const saveBtn = screen.getByRole("button", { name: /no changes/i });
+    expect(saveBtn).toBeDisabled();
+  });
 });
