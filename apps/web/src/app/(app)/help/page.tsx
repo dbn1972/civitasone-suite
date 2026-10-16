@@ -5,6 +5,7 @@ import { GlossaryList } from "./GlossaryList";
 import { HELP_MODULES } from "@/lib/helpContent";
 import { collapseGlossary } from "@/lib/glossary";
 import { getEnabledModules, isModuleEnabled } from "@/lib/moduleVisibility";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 export const metadata = {
   title: "Help Centre",
@@ -21,7 +22,8 @@ export const metadata = {
  */
 export default async function HelpPage() {
   const enabled = await getEnabledModules();
-  const visibleModules = HELP_MODULES.filter((m) => isModuleEnabled(enabled, m.moduleKey));
+  const roles = getSessionRoles();
+  const visibleModules = HELP_MODULES.filter((m) => isModuleEnabled(enabled, m.moduleKey, roles));
 
   const glossaryRows = collapseGlossary();
 
