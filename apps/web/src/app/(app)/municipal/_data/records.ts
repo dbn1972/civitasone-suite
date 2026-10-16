@@ -1,5 +1,6 @@
 import type { MunicipalServiceConfig } from "./services";
 import { maskIdentifiers } from "@/lib/pii";
+import { maskName } from "@/app/_components/ds/Masked";
 import { formatIndianDate, formatIndianDateTime, formatMoney, humanizeStatus } from "@/lib/formatters";
 
 export type MunicipalRecordRow = {
@@ -60,10 +61,15 @@ export function toMunicipalRecordRow(
   const id = asString(raw.id);
   if (!id) return null;
 
+  const rawTitle = pickField(raw, config.titleFields);
   return {
     id,
     reference: pickField(raw, config.numberFields),
-    title: pickField(raw, config.titleFields),
+    // GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-04: when the service's titleFields
+    // may include a personal name (titleIsPerson: true), mask the title in the
+    // list view so the officer is not shown unmasked names while scrolling many
+    // rows. The full name is accessible in the detail panel with Masked + reveal.
+    title: config.titleIsPerson && rawTitle !== "—" ? maskName(rawTitle) : rawTitle,
     status: pickField(raw, ["status"]),
     updatedAt: pickField(raw, ["updatedAt", "submittedAt", "createdAt"]),
   };

@@ -36,7 +36,7 @@ describe("loyalty loaders (GAP-LOYALTY-ACCRUALS-01, MEMBERS-01, TIERS-01)", () =
     await getLoyaltyAccruals();
     const c = lastCall();
     expect(c.path).toContain("/api/v1/loyalty/enrolments");
-    const mapped = c.options.mapResponse({
+    const result = c.options.mapResponse({
       data: [
         {
           id: "e1",
@@ -51,7 +51,10 @@ describe("loyalty loaders (GAP-LOYALTY-ACCRUALS-01, MEMBERS-01, TIERS-01)", () =
         },
       ],
       meta: { total: 1 },
-    }) as Array<Record<string, unknown>>;
+    }) as { rows: Array<Record<string, unknown>>; total: number | null };
+    // GAP-LOYALTY-MEMBERS-04: mapResponse now returns {rows, total}
+    expect(result.total).toBe(1);
+    const mapped = result.rows;
     expect(mapped[0].pointsBalance).toBe("4500");
     expect(mapped[0].lifetimePoints).toBe("120");
     expect(mapped[0].tier).toBe("Gold");
@@ -60,7 +63,10 @@ describe("loyalty loaders (GAP-LOYALTY-ACCRUALS-01, MEMBERS-01, TIERS-01)", () =
   it("MEMBERS-01: member mapper surfaces tier as its own field, defaulting to 'base'", async () => {
     await getLoyaltyMembers();
     const c = lastCall();
-    const mapped = c.options.mapResponse({ data: [{ id: "e1", status: "active" }] }) as Array<Record<string, unknown>>;
+    const result = c.options.mapResponse({ data: [{ id: "e1", status: "active" }] }) as { rows: Array<Record<string, unknown>>; total: number | null };
+    // GAP-LOYALTY-MEMBERS-04: mapResponse now returns {rows, total}; total is null when meta absent
+    expect(result.total).toBeNull();
+    const mapped = result.rows;
     expect(mapped[0].tier).toBe("base");
     expect(mapped[0].status).toBe("active");
   });

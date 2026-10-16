@@ -11,6 +11,7 @@ type RawRow = {
   fuelType?: string;
   status?: string;
   assignedDriverId?: string | null;
+  driverName?: string | null;
   odometerKm?: number | null;
 } & Record<string, unknown>;
 
@@ -76,9 +77,15 @@ export function mapVehicles(payload: unknown): VehicleRow[] | null {
       typeof row.odometerKm === "number" && Number.isFinite(row.odometerKm)
         ? `${row.odometerKm.toLocaleString("en-IN")} km`
         : "—";
-    const driver = row.assignedDriverId
-      ? `Assigned (${String(row.assignedDriverId).slice(0, 8)})`
-      : "Unassigned";
+    // GAP-FLEET-VEHICLES-03: use a backend-provided driverName when available
+    // (newer assets-service versions return it); fall back to a short id tag
+    // so the log stays honest about what is actually resolvable.
+    const driver =
+      typeof row.driverName === "string" && row.driverName.trim()
+        ? row.driverName.trim()
+        : row.assignedDriverId
+          ? "Assigned (" + String(row.assignedDriverId).slice(0, 8) + ")"
+          : "Unassigned";
     return [{
       id: row.id,
       registrationNo: row.registrationNo,

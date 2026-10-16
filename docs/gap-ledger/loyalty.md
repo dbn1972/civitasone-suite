@@ -14,7 +14,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-HOME-01  ·  MEDIUM  ·  confirmed  ·  theme LOADING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #w2-loyalty-part-1 -- added retry affordance: all-null stats guard renders a `/loyalty` refresh link)
 - **W0 note:** partly fixed by #1924 — hub shows real KPI counts ('—' on failure) and the skeleton matches; no retry affordance on the hub when stats fail.
 - **First-pass claim:** Hub has no data: no member/points/redemption counts, so an operator cannot tell whether the programme is healthy; the four-stat-card loading skeleton (loading.tsx:12-20) suggests stats were intended but never built.
 - **Verified evidence:** loyalty/page.tsx:12-16 renders only PageHeader + LinkTiles (5 static tiles); no data fetch. loading.tsx:12-20 shows a 4-card stat grid skeleton and a 96-high block, so the skeleton does not match the page shape. Whether a stats endpoint exists cannot be verified (loyalty-service absent).
@@ -70,7 +70,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-ACCRUALS-01  ·  HIGH  ·  confirmed  ·  theme WIRING (was MONEY)
 
-- [ ] **Status** (W2 PQ-D #2036: still open - loyalty-service exposes accruals only per enrolment (GET /enrolments/:id/accruals); page honestly shows per-member points position; NEEDS OWNER DECISION: tenant-wide accruals endpoint or per-member drill-down route)
+- [~] **Status** (W2 INTERIM -- NEEDS OWNER DECISION: loyalty-service has no tenant-wide accruals endpoint; page shows per-member points position correctly); page honestly shows per-member points position; NEEDS OWNER DECISION: tenant-wide accruals endpoint or per-member drill-down route)
 - **W0 note:** partly fixed by #1924 — points/lifetime now always visible via a zod-typed loader and the drill-down promise is removed; page still lists per-member enrolment positions, not points transactions (no tenant-wide accruals endpoint).
 - **First-pass claim:** Accruals page shows no accruals: it lists enrolments (loyalty/_data.ts:90) and points/balance is the LAST option of the meta chain, after code/currency/updatedAt/createdAt (loyalty/_data.ts:61-67), so any row with a timestamp never shows points or balance. The "accrual/balance drill-down" (accruals/page.tsx:16) has no drill-down route.
 - **Verified evidence:** apps/web/src/app/(app)/loyalty/_data.ts:91 getLoyaltyAccruals = moduleLoader('/api/v1/loyalty/enrolments') (same as members, line 90 in the read; file lines 88-92). mapRows meta chain (61-67) is code ?? currency ?? updatedAt ?? createdAt ?? points ?? balance, so any row with a string timestamp never surfaces points/balance. accruals/page.tsx:16 describes 'accrual/balance drill-down' but ls shows only loyalty/accruals/page.tsx; no drill-down route. Points are not money, so the paise/formatINR theme does not apply; loyalty-service is absent so real field names cannot be verified.
@@ -89,7 +89,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-ACCRUALS-02  ·  HIGH  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 INTERIM -- NEEDS OWNER DECISION: PII field classification pending; role gate and shortened profileId already in place from #1924)
 - **W0 note:** partly fixed by #1924 — layout now role-gates /loyalty/* (LOYALTY_READ_ROLES -> PermissionDenied) and the loader is zod-parsed; no <Masked> component / PII masking (member ref is shown shortened only).
 - **First-pass claim:** Points transactions ("Points earning transactions and bonus rules", loyalty/page.tsx:8) have no loader at all; only /enrolments is called. Identified person rows are shown without masking (DPDP).
 - **Verified evidence:** True: only getLoyaltyAccruals -> /api/v1/loyalty/enrolments exists (_data.ts:91); there is no points-transaction loader and loyalty/page.tsx:8 promises 'Points earning transactions and bonus rules'. Not verifiable: whether enrolment rows carry personal data - the table (ModuleListTable.tsx:48-55) prints only id[0..8], name/label, sublabel, status, meta, and loyalty-service is not in the snapshot. Route protection is only ModuleGate moduleKey='loyalty' (loyalty/layout.tsx) - no role check. No masking component (<Masked>) exists in app/_components.
@@ -149,7 +149,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-MEMBERS-02  ·  HIGH  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 INTERIM -- NEEDS OWNER DECISION: depends on ACCRUALS-02 field classification; role gate and shortened ref already in place)
 - **W0 note:** partly fixed by #1924 — role gate (PermissionDenied) added and member ref shortened; no <Masked> reveal component and the offline cache still holds the full profileId.
 - **First-pass claim:** Members and Accruals both call GET /api/v1/loyalty/enrolments (loyalty/_data.ts:89-90): two pages, one dataset. Enrolments are personal data (DPDP) and are printed with no masking or role gate (ModuleListTable.tsx:50-53, layout.tsx:5).
 - **Verified evidence:** True: members and accruals both call /api/v1/loyalty/enrolments (_data.ts:90-91) and ModuleListTable.tsx:48-55 prints rows unmasked; loyalty/layout.tsx only applies ModuleGate (module enabled), no role check. Not verifiable: which fields the enrolment payload holds (id slice, name/label, status, meta only are rendered) - loyalty-service absent, so 'personal data printed' is plausible but unproven. Also the table caches rows in encrypted offline cache via useSeededResource (ModuleListTable.tsx:19).
@@ -184,7 +184,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-MEMBERS-04  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #w2-loyalty-part-1 -- getLoyaltyMembers/getLoyaltyAccruals return {rows,total}; pages render "Showing x-y of n" and URL prev/next links)
 - **W0 note:** partly fixed by #1924 — DataTable filter/sort + 25/page client paging and server limit/offset (?page=, 50/page) added; no next/prev pager or total in the UI and search is client-side only.
 - **First-pass claim:** No search, filter or pagination for what will be a large enrolment list; the whole response is rendered (ModuleListTable.tsx:63-80).
 - **Verified evidence:** ModuleListTable.tsx:48-55 maps all data rows with no search, filter, sort or pagination; loader is a single GET /api/v1/loyalty/enrolments with no query params (_data.ts:90). Server pagination support cannot be verified.
@@ -266,7 +266,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-REDEMPTIONS-02  ·  MEDIUM  ·  confirmed  ·  theme MISSINGFEATURE (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 INTERIM -- NEEDS OWNER DECISION: loyalty-service has no fulfil/reject endpoint; Void-only flow is the correct interim)
 - **W0 note:** partly fixed by #1924 — dedicated table with Reward/Points/Status/Requested/Voided columns and an admin Void action (reason required); no fulfil/reject flow (loyalty-service has no such endpoint) and no Fulfilled column.
 - **First-pass claim:** Redemption history has no points-spent, reward, amount or fulfilment-date column, only generic Detail/Meta (ModuleListTable.tsx:40-44); pending/rejected redemptions cannot be actioned - no mutation code in the route tree.
 - **Verified evidence:** ModuleListTable.tsx:37-46 fixed generic columns ID/Name/Detail/Status/Meta; no points-spent, reward, or fulfilment date. Loyalty tree has no mutation code (no method: POST etc.), so pending redemptions cannot be approved/fulfilled. The DATEFMT tag is wrong. Backend endpoints for fulfil/reject cannot be verified.
@@ -339,7 +339,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-TIERS-03  ·  LOW  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #w2-loyalty-part-1 -- Programme short ref now a Link to /loyalty/programs with full UUID in title; navigable reference not an orphan fragment)
 - **W0 note:** partly fixed by #1924 — tier name is now the first column, but the Programme column still renders an 8-char UUID prefix; no status pill (tier defs carry no status).
 - **First-pass claim:** Same shared table: 8-char id fragment, raw status text, raw meta (ModuleListTable.tsx:50-53).
 - **Verified evidence:** Duplicate of PROGRAMS-01: ModuleListTable.tsx:50 id.slice(0,8), :53 raw status, :54 raw meta; tiers page uses the same table.
@@ -358,7 +358,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-HOME-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: ALREADY-FIXED -- verified: loyalty-service GET routes all call requireRole(ctx, READ_ROLES); layout.tsx adds hasAnyRole(LOYALTY_READ_ROLES) web gate)
 - **First-pass claim:** All five sub-pages depend on loyalty-service via the gateway (loyalty/_data.ts:88-92), absent from this snapshot: contract, roles and audit are undeterminable. Tiles are shown to all users regardless of role.
 - **Service:** `loyalty-service`  ·  **Endpoint(s):** `['GET /api/v1/loyalty/programs', '/enrolments', '/redemptions']`
 - **Question:** Which roles may read each loyalty endpoint and are member records scoped/audited?
@@ -369,7 +369,7 @@ Counts: ACTION 18, BACKEND-VERIFY 2
 
 ### GAP-LOYALTY-PROGRAMS-03  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: ALREADY-FIXED -- verified: programs/repo.ts toView() returns name:r.name (NOT NULL); _data.ts uses z.string() required; UUID fallback cannot occur)
 - **First-pass claim:** Generic mapRows guesses fields (name/title/label/code/type... then id), so a programme without a name shows its full raw id as Name (loyalty/_data.ts:32-50); loyalty-service is absent from the snapshot so the true shape is undeterminable.
 - **Service:** `loyalty-service`  ·  **Endpoint(s):** `['GET /api/v1/loyalty/programs']`
 - **Question:** What is the exact programme response shape and is name always present?

@@ -46,7 +46,7 @@ Counts: ACTION 9
 
 ### GAP-HELP-HOME-03  ·  MEDIUM  ·  partly  ·  theme UX (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #PENDING)
 - **W0-10 note:** review found the W0 tick partly — Policy now inconsistent: ModuleGate.tsx:35 passes session roles into isModuleEnabled but help/page.tsx:24 still omits roles; comment at help/[module]/page.tsx:25-29 ("no caller passes roles") is stale; no page test for the chosen policy. EmptyState and Finance+Tenant Admin test do exist
 - **First-pass claim:** No empty state: when no module is enabled the heading renders over an empty grid (page.tsx:35-51). Also isModuleEnabled is called without roles (page.tsx:21), so super_admin/platform_admin lose the bypass documented at moduleVisibility.ts:33 and see fewer guides than the modules they can open.
 - **Verified evidence:** Empty-state claim is not reachable: HELP_MODULES includes tenant-admin with moduleKey null (helpContent.ts:329) and isModuleEnabled returns true for a null key (moduleVisibility.ts:39), so the grid always has at least one tile. True part: help/page.tsx:21 calls isModuleEnabled(enabled, m.moduleKey) without the roles argument, so the super_admin/platform_admin bypass (moduleVisibility.ts:42) is never used here. But no caller passes roles (ModuleGate.tsx:25 and setup/page.tsx:32 also omit it), so an admin is gated out of the module itself by ModuleGate too; no guide-vs-module mismatch actually occurs today.
@@ -78,7 +78,7 @@ Counts: ACTION 9
 
 ### GAP-HELP-HOME-05  ·  LOW  ·  confirmed  ·  theme STYLE (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #PENDING)
 - **W0 note:** partly fixed by #1924 — token-based tile icon background and tile-shaped loading skeletons are in; hub strings in help/page.tsx are still literal English (no getTranslations/help namespace)
 - **First-pass claim:** Hard-coded English strings and inline styles (icon background #eef2ff, page.tsx:44) instead of next-intl keys and tokens; loading.tsx draws four stat-card blocks the hub does not have (loading.tsx:4-9).
 - **Verified evidence:** help/page.tsx:44 has inline style background '#eef2ff' on the tile icon (.mtile .ic in civitas-ds.css:242 has no background and .mtile is #fff at :241, so dark theme also breaks). Titles, subtitle, headings and glossary intro are literal English (lines 9, 30-31, 35, 53, 55-56, 70-72) although next-intl is used in ~420 files (useTranslations/getTranslations). help/loading.tsx:4-9 draws a title bar plus four stat-card blocks and a 256px table block, but the hub has no stat cards. Not a fabricated-figure issue.

@@ -15,6 +15,7 @@ import {
   type WizardStepKey,
 } from "@/lib/setupSteps";
 import { getEnabledModules, isModuleEnabled } from "@/lib/moduleVisibility";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 export const metadata = { title: "Getting Started" };
 
@@ -29,10 +30,13 @@ export const metadata = { title: "Getting Started" };
  */
 export default async function SetupPage() {
   const enabled = await getEnabledModules();
+  const roles = getSessionRoles();
 
   // Hide optional module steps when their module isn't turned on. Required steps
-  // have no moduleKey and always show.
-  const steps = WIZARD_STEPS.filter((s) => isModuleEnabled(enabled, s.moduleKey ?? null));
+  // have no moduleKey and always show. Roles are passed so super_admin /
+  // platform_admin bypass module gating here, consistent with ModuleGate and
+  // the help hub (GAP-HELP-HOME-03).
+  const steps = WIZARD_STEPS.filter((s) => isModuleEnabled(enabled, s.moduleKey ?? null, roles));
   const keys = steps.map((s) => s.key) as WizardStepKey[];
 
   let statuses: Record<string, StepStatus>;

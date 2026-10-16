@@ -64,7 +64,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 ### GAP-SETTINGS-BRANDING-05  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: acceptance criteria met — footer text editing works, stale font-selector comment removed; dark logo/favicon/loginBg/fonts/sidebar-headerStyle controls NEEDS OWNER DECISION, closed by #N)
 - **W0 note:** partly fixed by #1925 — Added tagline, footer, poweredBy controls; dark logo, favicon, login bg, fonts, sidebar/header style still no controls
 - **First-pass claim:** Only colours, app name, logo URL and roundness are editable; tagline, dark logo, favicon, login background, footer text, poweredBy, fonts, sidebar/header style exist in BrandConfig and defaults but have no controls, and the file header still promises a "font selector" (page.tsx:1-10,322-345).
 - **Verified evidence:** apps/web/src/app/(app)/settings/branding/page.tsx:10 header comment still mentions 'font selector'. BrandConfig (:51-~80) and the defaults (:321-348) include tagline, logoDarkUrl, faviconUrl, loginBgUrl, footerText, poweredBy, fontFamily, fontFamilyMono, sidebarStyle, headerStyle, customCss; the editor renders controls only for appName, logoUrl, presets, nine colours (Primary/Secondary/Accent/Background/Surface/Text/Success/Warning/Error, no Border/Muted/PrimaryFg) and roundness. The full config is PUT, so unedited fields are round-tripped as loaded.
@@ -97,7 +97,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 ### GAP-SETTINGS-BRANDING-07  ·  LOW  ·  confirmed  ·  theme LOADING (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2098)
 - **W0-10 note:** review found the W0 tick partly — loading skeleton added (page.tsx:560) but on brand-fetch failure Save stays enabled and message says Showing defaults — review before saving (page.tsx:411-415), no Retry button; canEdit (page.tsx:366) ignores loadError so defaults can overwrite stored branding
 - **W1 note (2026-10-13):** Not fixed by #2001: on brand-fetch failure Save is still enabled and there is no Retry (checked on main d341ad6f1).
 - **First-pass claim:** On first load the editor shows hard-coded defaults with no skeleton or "loading" state until the brand fetch resolves, so a returning admin may edit and save over their real branding before it loads (page.tsx:383-409).

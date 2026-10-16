@@ -15,7 +15,6 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { PageHeader, ConfirmDialog } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { useUnsavedChangesGuard } from "@/lib/useUnsavedChangesGuard";
@@ -63,11 +62,11 @@ function validateForm(form: typeof INITIAL): Record<string, string> {
   if (!form.uomId) errors.uomId = "Pick a unit of measure.";
   const rl = Number(form.reorderLevel);
   if (form.reorderLevel !== "" && (!Number.isFinite(rl) || rl < 0)) {
-    errors.reorderLevel = "Must be zero or a positive whole number.";
+    errors.reorderLevel = "Must be zero or a positive number.";
   }
   const rq = Number(form.reorderQty);
   if (form.reorderQty !== "" && (!Number.isFinite(rq) || rq < 0)) {
-    errors.reorderQty = "Must be zero or a positive whole number.";
+    errors.reorderQty = "Must be zero or a positive number.";
   }
   return errors;
 }
@@ -177,8 +176,8 @@ export default function NewStockItemPage() {
           categoryId: form.categoryId,
           uomId: form.uomId,
           itemType: form.itemType,
-          reorderLevel: Math.round(rl),
-          reorderQty: Math.round(rq),
+          reorderLevel: rl,
+          reorderQty: rq,
           valuationMethod: form.valuationMethod,
         }),
       });
@@ -342,7 +341,7 @@ export default function NewStockItemPage() {
                 Reorder level{selectedUom ? ` (${selectedUom.symbol})` : ""}
               </label>
               <input
-                id="item-reorder-level" type="number" min="0" step="1"
+                id="item-reorder-level" type="number" min="0" step="any"
                 value={form.reorderLevel}
                 onChange={(e) => setForm({ ...form, reorderLevel: e.target.value })}
                 style={inputStyle} {...ariaFor("reorderLevel", "item-reorder-level-err")}
@@ -356,7 +355,7 @@ export default function NewStockItemPage() {
                 Reorder quantity{selectedUom ? ` (${selectedUom.symbol})` : ""}
               </label>
               <input
-                id="item-reorder-qty" type="number" min="0" step="1"
+                id="item-reorder-qty" type="number" min="0" step="any"
                 value={form.reorderQty}
                 onChange={(e) => setForm({ ...form, reorderQty: e.target.value })}
                 style={inputStyle} {...ariaFor("reorderQty", "item-reorder-qty-err")}

@@ -390,6 +390,11 @@ export default function BrandingPage() {
   const [logoError, setLogoError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  // GAP-SETTINGS-BRANDING-07: track brand-config fetch failure separately
+  // (presets failure is non-fatal; brand failure means Save would overwrite
+  // stored branding with hard-coded defaults, which is destructive).
+  const [brandFetchFailed, setBrandFetchFailed] = useState(false);
+  const [retryTrigger, setRetryTrigger] = useState(0);
 
   const identity = useSessionIdentity();
   const canEdit =
@@ -414,6 +419,7 @@ export default function BrandingPage() {
   useEffect(() => {
     const controller = new AbortController();
     setLoadError(null);
+    setBrandFetchFailed(false);
     setLoading(true);
     // Independent requests, independent failure handling: presets are a
     // secondary, non-essential convenience (quick-pick color themes), so a
@@ -439,8 +445,9 @@ export default function BrandingPage() {
       })
       .catch((e) => {
         if (e.name === "AbortError") return;
+        setBrandFetchFailed(true);
         setLoadError(
-          "Couldn't load your current branding. Showing defaults — review before saving.",
+          "Couldn't load your current branding — Save is disabled to protect stored settings. Use Retry to try again.",
         );
       });
     const presetLoad = fetch("/api/proxy/v1/themes/brand/presets", { signal: controller.signal })
@@ -461,7 +468,9 @@ export default function BrandingPage() {
       if (!controller.signal.aborted) setLoading(false);
     });
     return () => controller.abort();
-  }, []);
+    // retryTrigger is an incrementing counter; adding it to deps re-runs the
+    // effect when the user clicks Retry after a brand-config load failure.
+  }, [retryTrigger]);
 
   const updateColor = useCallback((key: keyof BrandConfig, value: string | null) => {
     setConfig((prev) => {
@@ -650,6 +659,15 @@ export default function BrandingPage() {
           >
             {loadError}
           </div>
+        )}
+        {brandFetchFailed && (
+          <button
+            type="button"
+            onClick={() => setRetryTrigger((n) => n + 1)}
+            className="w-full py-2 rounded-lg border border-amber-300 bg-amber-50 text-sm font-medium text-amber-800 hover:bg-amber-100 transition-colors"
+          >
+            Retry loading branding
+          </button>
         )}
 
         {/* App Name */}
@@ -923,7 +941,7 @@ export default function BrandingPage() {
           )}
           <button
             onClick={requestSave}
-            disabled={!canEdit || !dirty || saving || hasCriticalContrastIssue}
+            disabled={!canEdit || !dirty || saving || hasCriticalContrastIssue || brandFetchFailed}
             title={
               !canEdit
                 ? "You don't have permission to change branding"

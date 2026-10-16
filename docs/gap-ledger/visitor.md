@@ -236,7 +236,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-GUARD-07  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed — tbl--stack class applied to both GuardConsole tables; data-label attributes added to all tds for mobile card stacking below 768px (GAP-VISITOR-GUARD-07))
 - **W0 note:** partly fixed by #1923 — tables now use the DS tbl-wrap class; no data-label/stacked-card variant below 640px, and the session-only Verified card is unchanged
 - **First-pass claim:** Tables use bare className="tbl" with overflow-x scroll (GuardConsole.tsx:271,324) — no mobile row transform; "Verified (session)" is component state and resets on reload (GuardConsole.tsx:64).
 - **Verified evidence:** Tables use className="tbl" wrapped in `<div style={{overflowX:'auto'}}>` (GuardConsole.tsx:270-271, 323-324): horizontal scroll, no responsive row transform (the DS .tbl-wrap class exists at civitas-ds.css:132 but is not used). 'Verified (session)' is useState (line 64) and resets on reload, but the label already says '(session)', so it is not misleading, just low value; there is no count endpoint verified.
@@ -319,7 +319,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-HOST-06  ·  LOW  ·  partly  ·  theme FEEDBACK (was NAVUX)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed — tbl--stack class applied to HostPortal table; data-label attributes added to all tds for mobile card stacking; tbl-wrap overflow wrapper retained (GAP-VISITOR-HOST-06))
 - **W0-10 note:** review found the W0 tick partly — toast auto-dismiss + stale-list notice done, but table only wrapped in .tbl-wrap (overflow-x:auto, civitas-ds.css:138); no stacked mobile layout so acceptance (no sideways scroll at 375px) unmet (HostPortal.tsx:220)
 - **First-pass claim:** Toast persists until reload (no timeout, HostPortal.tsx:96-100); background refresh failure after an action is swallowed (HostPortal.tsx:54-60); request cards and tables are inline-styled with bare "tbl" and no mobile transform (HostPortal.tsx:169).
 - **Verified evidence:** Confirmed: toast (HostPortal.tsx:132-136 in file, setToast at :107/:110) is never cleared; refresh() catch (:94-97) swallows background failure by design (comment :83-88); the table is `className='tbl'` inside overflowX:auto (:204-205), cards fully inline styled - no mobile card transform. Not true: PageHeader already gets back='/visitor' (page.tsx:21-26), so the suggested back link is present. A ds/Toast.tsx exists.

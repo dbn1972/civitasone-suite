@@ -29,16 +29,14 @@ type PensionerDetail = {
 
 // GET /v1/payroll/pensioners/:id is READER_ROLES; status changes and the
 // audited reveal are PAYROLL_ROLES (payroll-service fin03-routes.ts).
-const VIEW_ROLES = [...PAYROLL_READER_ROLES];
-const MANAGE_ROLES = [...PAYROLL_ADMIN_ROLES];
 
 export default async function PensionerDetailPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("pensionerDetail");
   const roles = getSessionRoles();
-  if (!roles.some((r) => VIEW_ROLES.includes(r))) {
-    return <PermissionDenied module="pensioners" requiredRoles={VIEW_ROLES} backHref="/hr/payroll/pensioners" backLabel={t("backLabel")} />;
+  if (!roles.some((r) => PAYROLL_READER_ROLES.includes(r))) {
+    return <PermissionDenied module="pensioners" requiredRoles={PAYROLL_READER_ROLES} backHref="/hr/payroll/pensioners" backLabel={t("backLabel")} />;
   }
-  const canManage = roles.some((r) => MANAGE_ROLES.includes(r));
+  const canManage = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
 
   const result = await fetchJson<PensionerDetail, PensionerDetail | null>(
     `/api/v1/payroll/pensioners/${encodeURIComponent(params.id)}`,

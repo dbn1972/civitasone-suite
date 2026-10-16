@@ -86,6 +86,10 @@ describe("FieldVisitsPage", () => {
     // "Completed" appears both as the status pill and (humanized) in the
     // outcome column — assert at least one is present.
     expect(screen.getAllByText("Completed").length).toBeGreaterThan(0);
+    // open-visit elapsed time: 20 h open → "open 20h" in duration column (never a dash)
+    expect(screen.getByText("open 20h")).toBeInTheDocument();
+    // completed visit with durationMinutes shows "60 min" (not "open Xh")
+    expect(screen.getByText("60 min")).toBeInTheDocument();
   });
 
   it("GAP-FIELD-VISITS-04: KPI says 'latest N' and uses the server total when capped", async () => {

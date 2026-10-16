@@ -9,6 +9,7 @@ export const refundService: MunicipalServiceConfig = {
   description: "Citizen fee refund requests and disbursement tracking.",
   listPath: "/api/v1/refund/requests",
   resourceLabel: "Refund requests",
+  titleIsPerson: true,
   titleFields: ["applicantName", "originalServiceType"],
   numberFields: ["requestNumber"],
   // GAP2-MUNICIPAL-APPLICATIONS-STATUS-01: refund/requests/domain.ts REQUEST_STATUSES.
@@ -20,5 +21,8 @@ export const refundService: MunicipalServiceConfig = {
   // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
   // refund-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
   displayFields: ["requestNumber", "applicantName", "originalServiceType", "originalTransactionRef", "refundReason"],
+  // GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-03: status leads, then
+  // the service's natural reference + subject fields, rest alphabetical.
+  fieldOrder: ["status", "requestNumber", "applicantName", "originalServiceType"],
   sec5: true,
 };

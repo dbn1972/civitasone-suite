@@ -18,6 +18,7 @@ export default async function Page() {
         back="/install/console"
         backLabel="Install console"
         errorArea="install stages"
+        showId={false}
       />
       {/* GAP-INSTALL-STAGES-04: this list is read-only. Run / retry / skip of
           steps lives in the wizard; Stage 3 activation on the Domain Packs page.

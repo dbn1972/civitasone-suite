@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { NavTile } from "@civitasone/types";
 import { LinkTiles } from "../../_components/LinkTiles";
 import { PageHeader, StatCard, StatGrid } from "../../_components/ds";
@@ -20,7 +21,13 @@ const sections: NavTile[] = [
 export default async function Page() {
 	// GAP-LOYALTY-HOME-01: real KPIs from the list endpoints. A failed load
 	// renders "—" (StatCard's own null handling), never a fabricated 0.
+	// When every stat is null (all three source calls errored), a retry link
+	// is shown so operators can recover without a full page reload.
 	const stats = await getLoyaltyStats();
+	const allStatsFailed =
+		stats.activeMembers === null &&
+		stats.pointsIssued === null &&
+		stats.redemptionsPending === null;
 
 	return (
 		<div className="page-main">
@@ -30,6 +37,17 @@ export default async function Page() {
 				<StatCard icon="✨" tone="good" label="Points issued (lifetime)" value={formatPointsOrDash(stats.pointsIssued)} />
 				<StatCard icon="🎁" tone="warn" label="Redemptions pending" value={stats.redemptionsPending} />
 			</StatGrid>
+			{allStatsFailed && (
+				<p
+					role="status"
+					style={{ fontSize: 13, color: "var(--mut, #64748b)", margin: "4px 0 12px" }}
+				>
+					Stats unavailable.{" "}
+					<Link href="/loyalty" aria-label="Retry loading loyalty stats">
+						Retry
+					</Link>
+				</p>
+			)}
 			<LinkTiles tiles={sections} columns="four" />
 		</div>
 	);

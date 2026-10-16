@@ -7,8 +7,13 @@ import { toHumanError } from "@/lib/messages";
 import Link from "next/link";
 import { StockListClient } from "./StockListClient";
 
-export default async function StockListPage() {
-  const { data: items, source } = await getStockItems();
+export default async function StockListPage({ searchParams }: { searchParams?: { status?: string; page?: string } } = {}) {
+  // GAP-STOCK-LIST-05: pass status filter from searchParams so the server
+  // can pre-filter; the KPIs are labelled "on this page" to avoid presenting
+  // a page-count as a global total.
+  const pageStatus = searchParams?.status ?? "";
+  const { data: items, source } = await getStockItems(pageStatus ? { status: pageStatus } : {});
+  const isTruncated = items.length >= 200; // service max; if we get 200 there may be more
   const errored = source === "error";
   const lowStockCount = errored ? null : items.filter((i) => i.isLowStock === true).length;
   const totalValue = errored ? null : items.reduce((sum, i) => sum + (i.totalValue ?? 0), 0);
@@ -28,10 +33,10 @@ export default async function StockListPage() {
         }
       />
       <StatGrid>
-        <StatCard icon="🏬" iconBg="#e6f7f5" label="SKUs" value={errored ? "—" : items.length.toLocaleString("en-IN")} />
-        <StatCard icon="💰" iconBg="#eff6ff" label="Stock Value" value={totalValue === null ? "—" : formatMoney(totalValue)} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label="Low Stock" value={lowStockCount === null ? "—" : lowStockCount.toLocaleString("en-IN")} />
-        <StatCard icon="📦" iconBg="#ecfdf3" label="Categories" value={categories === null ? "—" : categories.toLocaleString("en-IN")} />
+        <StatCard icon="🏬" iconBg="#e6f7f5" label={isTruncated ? "SKUs (this page)" : "SKUs"} value={errored ? "—" : items.length.toLocaleString("en-IN")} />
+        <StatCard icon="💰" iconBg="#eff6ff" label={isTruncated ? "Stock Value (this page)" : "Stock Value"} value={totalValue === null ? "—" : formatMoney(totalValue)} />
+        <StatCard icon="⚠️" iconBg="#fffaeb" label={isTruncated ? "Low Stock (this page)" : "Low Stock"} value={lowStockCount === null ? "—" : lowStockCount.toLocaleString("en-IN")} />
+        <StatCard icon="📦" iconBg="#ecfdf3" label={isTruncated ? "Categories (this page)" : "Categories"} value={categories === null ? "—" : categories.toLocaleString("en-IN")} />
       </StatGrid>
       {errored ? (
         <div className="card" style={{ marginTop: 18 }}>

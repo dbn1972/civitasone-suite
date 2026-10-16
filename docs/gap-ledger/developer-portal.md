@@ -14,7 +14,7 @@ Counts: ACTION 6
 
 ### GAP-DEVELOPER-PORTAL-HOME-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1925, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W2 re-confirmed: closed by #1925; page.tsx renders RefreshErrorState when source==='error', StatCards are skipped on error, recent-keys card is also skipped)
 - **First-pass claim:** On fetch failure the badge appears but 'API keys issued 0 / Active keys 0' still render as facts; the same happens for a real zero (page.tsx source==='error' block + StatCard values).
 - **Verified evidence:** apps/web/src/app/(app)/developer-portal/page.tsx:79-104 getAPIKeys() returns [] on failure; error only renders <DataSourceBadge> (:93-97) and StatCards still show totalKeys/activeKeys = 0 (:100-101). Recent-keys card is hidden on 0 (:151), so page reads as a real empty tenant. RefreshErrorState exists (_components/ds/RefreshErrorState.tsx).
 - **Files to change:** `apps/web/src/app/(app)/developer-portal/page.tsx`
@@ -30,7 +30,7 @@ Counts: ACTION 6
 
 ### GAP-DEVELOPER-PORTAL-HOME-02  ·  HIGH  ·  partly  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1925, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W2 re-confirmed: closed by #1925; API Reference is status='preview' with href='/docs/api' and linkLabel='Open API reference'; Sandbox stays planned with link to /sandbox)
 - **First-pass claim:** Roadmap contradicts shipped surfaces: 'API Reference' and 'Sandbox & Test Tenant' are tagged Planned while /docs/api and /sandbox exist in the marketing group (page.tsx CAPABILITIES vs (marketing)/docs/api/page.tsx).
 - **Verified evidence:** apps/web/src/app/(app)/developer-portal/page.tsx:30-37 API Reference status 'planned', and :54-61 Sandbox 'planned'. Marketing routes exist: apps/web/src/app/(marketing)/docs/api/page.tsx (API Reference, links openapi.yaml) and apps/web/src/app/(marketing)/sandbox/page.tsx (demo data, no sign-up). But the sandbox page is a public demo, not the 'isolated test tenant with disposable credentials' described in the card, so Sandbox may legitimately be planned; API Reference is only a curated static page, not the 'auto-published per-release' reference described. Also /docs/api/openapi.yaml was not found in the repo snapshot.
 - **Files to change:** `apps/web/src/app/(app)/developer-portal/page.tsx`
@@ -60,7 +60,7 @@ Counts: ACTION 6
 
 ### GAP-DEVELOPER-PORTAL-HOME-04  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1925, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W2 re-confirmed: closed by #1925; developer-portal/layout.tsx calls requireAnyRole(['tenant_admin','platform_admin','super_admin']); getAPIKeys() skipped for non-admins)
 - **First-pass claim:** Key list exposes keyPrefix for every user who can open the page; there is no role gate (no layout) although the management page is under tenant-admin (page.tsx recent-keys card).
 - **Verified evidence:** apps/web/src/app/(app)/developer-portal has no layout.tsx (only error/loading/not-found/page); tenant-admin/layout.tsx uses requireAnyRole(['tenant_admin','platform_admin','super_admin']). The developer page shows keyName + keyPrefix (:175-177) to any authenticated user with the module. keyPrefix is a non-secret prefix (secret not shown) but still credential metadata. Whether /api/v1/admin/api-keys rejects non-admins is not verifiable (admin service absent).
 - **Files to change:** `apps/web/src/app/(app)/developer-portal/layout.tsx`, `apps/web/src/app/(app)/developer-portal/page.tsx`
@@ -90,7 +90,7 @@ Counts: ACTION 6
 
 ### GAP-DEVELOPER-PORTAL-HOME-06  ·  LOW  ·  partly  ·  theme THEME (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD, GAP-DEVELOPER-PORTAL-HOME-06: emoji mapped to lucide via StatIcon.tsx; StatCards use tone= tokens not hex iconBg; capability li uses var(--panel) not #fff)
 - **W0-10 note:** review found the W0 tick partly — Hex/#fff removed, but emoji icons remain (developer-portal/page.tsx:142-143 StatCard icon=emoji); step 2 lucide swap not done, no dark-mode snapshot
 - **First-pass claim:** Emoji icons and hard-coded #hex icon backgrounds (#f1f5f9, #ecfdf3, #eef2ff, #fffaeb) ignore dark mode (page.tsx StatCard iconBg).
 - **Verified evidence:** apps/web/src/app/(app)/developer-portal/page.tsx:100-103 iconBg hex values and :126 li background '#fff' are hard-coded; emoji icons in CAPABILITIES. Dark-mode effect not run here. StatCard prop iconBg accepts a string; token alternative not checked.

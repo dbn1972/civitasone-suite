@@ -213,7 +213,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CASES-04  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0 note:** partly fixed by #1923 — Actions column header now has sr-only text; remaining: table uses class 'court-stack' which has no CSS rule anywhere (ds stack class is 'tbl--stack'), so rows do not stack at 375px and horizontal scroll remains; not moved to ds DataTable
 - **First-pass claim:** Table uses className tbl with inline overflowX scroll, no mobile card transform; final column header is empty (cases/page.tsx:52-59).
 - **Verified evidence:** cases/page.tsx:51-52 wraps a className='tbl' table in overflowX:auto; :60 has an empty <th style={labelStyle} /> for the Open case action; no mobile card transform (DataTable in ds has one).
@@ -422,7 +422,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CAUSE-LIST-05  ·  LOW  ·  confirmed  ·  theme RESPONSIVE (was NAVUX)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
 - **First-pass claim:** Table is an inline-styled table without mobile transform.
 - **Verified evidence:** CauseListConsole.tsx:176-207 renders className='tbl' with overflowX:auto and inline th label styles; no mobile card transform. Theme 'NAVUX' is off; it is responsive table styling.
 - **Files to change:** `apps/web/src/app/(app)/court/cause-list/CauseListConsole.tsx`
@@ -496,7 +496,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-HEARINGS-04  ·  LOW  ·  confirmed  ·  theme TABLE (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0 note:** partly fixed by #1923 — fmtDate/fmtDateTime now force Asia/Kolkata; remaining: hearings still render as bordered div cards (HearingRow), no ds table, no sort
 - **First-pass claim:** Hearing rows are div cards, not a table, so date/status cannot be sorted or scanned (HearingsConsole.tsx:95-125).
 - **Verified evidence:** HearingsConsole.tsx:110-122 renders hearings as bordered div cards via HearingRow (:250-295); no table, no sort. Dates already use fmtDate/fmtDateTime (format.ts:4-24, en-IN dd Mon yyyy, browser TZ not forced to IST). Suggested fix 'use formatIndianDate' is partly moot; real gap is layout and no timeZone:'Asia/Kolkata'.

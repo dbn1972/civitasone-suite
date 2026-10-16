@@ -227,7 +227,7 @@ Counts: ACTION 20
 
 ### GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-04  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by this PR; toMunicipalRecordRow in records.ts applies maskName when config.titleIsPerson; titleIsPerson added to trade/crematorium/refund/roadcut; GWT test in records.test.ts line: toMunicipalRecordRow: masks title when titleIsPerson is true)
 - **W0 note:** partly fixed by ##1924 — Done: subtitle uses config.description, 'Live' dropped. Remains: person-name subject (e.g. trade ownerName) in list still unmasked (no Masked in RecordsTable)
 - **First-pass claim:** Subtitle "Live list from /api/v1/trade/applications" (page.tsx) exposes the gateway path; "Live" contradicts the DataSourceBadge policy. Subject falls back to ownerName (trade.ts titleFields) which is a natural person's name shown without masking.
 - **Verified evidence:** apps/web/src/app/(app)/municipal/[serviceKey]/applications/page.tsx:49 subtitle `Live list from ${config.listPath}` prints e.g. /api/v1/trade/applications; RecordsTable.tsx:271 empty message also says 'Live'. trade.ts titleFields ['businessName','ownerName'] so ownerName appears in Subject column unmasked when businessName absent. DataSourceBadge policy itself not verified.
@@ -244,7 +244,7 @@ Counts: ACTION 20
 
 ### GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-05  ·  LOW  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by this PR; RecordsTable.tsx Status column statusVariants { issued: good, under_scrutiny: warn, inspecting: warn } — municipal-context overrides for the shared StatusPill map; filter tabs were already wired via statusVocabulary)
 - **W0 note:** partly fixed by ##1950 — Done: status filter tabs from per-service statusVocabulary (#1950) bound to ?status=. Remains: 'issued' StatusPill still maps to neutral info, not green
 - **First-pass claim:** No status filter/segmented control although the API accepts ?status (municipalApi.ts); statuses are free text so StatusPill shows unmapped values (e.g. "issued") in the neutral info colour (StatusPill.tsx map).
 - **Verified evidence:** apps/web/src/app/(app)/municipal/_data/municipalApi.ts:14-17 supports status query but page.tsx passes none and has no Segmented/filter UI. StatusPill.tsx STATUS_MAP has no 'issued', so falls back to 'info' (StatusPill.tsx:53); humanizeStatus label fine. Municipal status vocabulary unverifiable (backend absent).
@@ -288,7 +288,7 @@ Counts: ACTION 20
 
 ### GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme WORKFLOW (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 PQ: INTERIM — step 1 (remove roadmap copy) done: RecordDetailPanel.tsx no longer has 'actions will wire to workflow tasks in a follow-up pass' text. Officer workflow actions and history timeline require per-service backend workflow contract. Listed under NEEDS OWNER DECISION in PR body)
 - **W2 PQ-A note (#2037):** re-verified, no change: RecordActions is officer-role gated and wired for trade only; other services have no workflow endpoints. Needs owner decision plus per-service backend contracts.
 - **W0 note:** partly fixed by ##1934 — Done: roadmap copy removed; RecordActions (officer-role gated) + RecordHistory added. Remains: only trade has a workflow config; other services stay read-only with no actions
 - **First-pass claim:** An officer console with no officer actions: the card literally tells staff "Actions (approve, inspect, issue) will wire to workflow tasks in a follow-up pass" (RecordDetailPanel.tsx). Nothing on this route approves, rejects, inspects or issues, so scrutiny must happen outside the app; no audit trail or history is shown either.
@@ -307,7 +307,7 @@ Counts: ACTION 20
 
 ### GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-03  ·  MEDIUM  ·  partly  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by this PR; fieldOrder added to all 15 remaining sec5 service configs, all with status first; GWT test: detailEntries: all sec5 services have a fieldOrder with status first (DETAIL-03))
 - **W0 note:** partly fixed by ##1924 — Done: ISO dates formatted, nested objects as key/value lines, id skipped, fieldOrder support. Remains: fieldOrder populated only for trade; other services sort alphabetically (status not first)
 - **First-pass claim:** Fields are sorted alphabetically by label (records.ts), burying Status/Owner/Reference; nested objects are shown as raw JSON in a pre block (records.ts), timestamps as raw ISO strings, booleans as Yes/No, and the internal record Id is shown as a normal field.
 - **Verified evidence:** apps/web/src/app/(app)/municipal/_data/records.ts:160 sorts by label (localeCompare) - confirmed; :170 nested values JSON.stringify'd into <pre> - confirmed; :166 strings incl. ISO timestamps unformatted - confirmed; 'id' not in skip set (:153) - confirmed. Booleans as Yes/No (:165) is fine, not a defect.
@@ -339,7 +339,7 @@ Counts: ACTION 20
 
 ### GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-05  ·  LOW  ·  partly  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by ##1924, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, confirmed by this PR W2 PQ: closed by ##1924; loading.tsx, notFound() on 404, and citizenServiceHref confirmed in [id]/page.tsx)
 - **First-pass claim:** "Citizen track" links to the service landing page, not to the citizen's own application status (citizenServiceHref, index.ts); there is no not-found for a valid key with a bad id beyond the EmptyState, and no loading.tsx.
 - **Verified evidence:** [id]/page.tsx:141 links to `/citizen/services/${config.citizenServiceKey}` (service landing), bypassing citizenServiceHref helper; CitizenServiceLinks.tsx:283 itself says 'track via service page', so intended. No loading.tsx under municipal/ confirmed. 'no not-found' is partly wrong: the page shows EmptyState 'Record not found' (:119) but fetchMunicipalDetail returns only source api|error, so it cannot distinguish 404, and no HTTP 404 is set. Whether a per-application citizen track route exists cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/municipal/[serviceKey]/applications/[id]/loading.tsx`, `apps/web/src/app/(app)/municipal/_data/municipalApi.ts`, `apps/web/src/app/(app)/municipal/[serviceKey]/applications/[id]/page.tsx`

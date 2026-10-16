@@ -6,8 +6,9 @@ import { render, screen } from "@testing-library/react";
 const getEnabledModulesMock = vi.fn();
 vi.mock("@/lib/moduleVisibility", () => ({
   getEnabledModules: () => getEnabledModulesMock(),
-  isModuleEnabled: (enabled: string[] | null, key: string | null) => {
+  isModuleEnabled: (enabled: string[] | null, key: string | null, roles?: string[]) => {
     if (key === null) return true;
+    if (roles?.includes("super_admin") || roles?.includes("platform_admin")) return true;
     if (!enabled) return true;
     const k = key.toLowerCase();
     return enabled.some((n) => n === k || n.includes(k) || k.includes(n));
@@ -17,10 +18,20 @@ vi.mock("@/lib/moduleVisibility", () => ({
 // ReplayTourButton is a client component using useToast/useRouter; stub it.
 vi.mock("./ReplayTourButton", () => ({ ReplayTourButton: () => <button>tour</button> }));
 
+// GAP-HELP-HOME-03: mock getSessionRoles so tests can exercise the roles bypass.
+const getSessionRolesMock = vi.fn((): string[] => []);
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => getSessionRolesMock(),
+}));
+
 import HelpPage from "./page";
 
 describe("Help Centre hub", () => {
-  beforeEach(() => getEnabledModulesMock.mockReset());
+  beforeEach(() => {
+    getEnabledModulesMock.mockReset();
+    getSessionRolesMock.mockReset();
+    getSessionRolesMock.mockReturnValue([]);
+  });
 
   // GAP-HELP-HOME-01
   it("subtitle no longer promises guides for every part of the system", async () => {
@@ -54,5 +65,22 @@ describe("Help Centre hub", () => {
     getEnabledModulesMock.mockResolvedValue(null);
     render(await HelpPage());
     expect(screen.getByRole("searchbox", { name: /search words/i })).toBeInTheDocument();
+  });
+
+  // GAP-HELP-HOME-03: super_admin bypasses module gating (roles now threaded consistently).
+  it("super_admin sees all modules even with a restricted enabled list", async () => {
+    getEnabledModulesMock.mockResolvedValue(["finance"]);
+    getSessionRolesMock.mockReturnValue(["super_admin"]);
+    render(await HelpPage());
+    // Procurement is not in the enabled list, but super_admin bypasses gating
+    expect(screen.getByRole("heading", { name: "Procurement" })).toBeInTheDocument();
+  });
+
+  // GAP-HELP-HOME-03: a regular user does not bypass module gating.
+  it("a regular user does not bypass module gating", async () => {
+    getEnabledModulesMock.mockResolvedValue(["finance"]);
+    getSessionRolesMock.mockReturnValue(["user"]);
+    render(await HelpPage());
+    expect(screen.queryByRole("heading", { name: "Procurement" })).not.toBeInTheDocument();
   });
 });

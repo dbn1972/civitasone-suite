@@ -6,6 +6,7 @@ import { getMyProfile } from "@/app/_data/loaders";
 import { resolveEmployeeNames, employeeDisplayLabel } from "@/app/_data/employeeNames";
 import { formatMoney, formatIndianDate, formatPeriod } from "@/lib/formatters";
 import { getSessionRoles, PAYROLL_ADMIN_ROLES } from "@/lib/auth/roleGuard";
+import { PAYROLL_HR_READER_ROLES } from "@/lib/auth/workRoles";
 import { reimbursementCategoryKey } from "@/lib/payroll/reimbursementCategories";
 import { CreateReimbursementForm, type ClaimSubject } from "./CreateReimbursementForm";
 import { ReimbursementsTable, type ClaimRow } from "./ReimbursementsTable";
@@ -36,7 +37,6 @@ type Row = {
 // Must equal world-class-routes.ts ROLES exactly: the server pins anyone
 // WITHOUT one of these roles (e.g. finance_officer+employee) to their own
 // claims, so the page treats exactly the same set as staff.
-const REIMBURSEMENT_STAFF_ROLES = [...PAYROLL_ADMIN_ROLES, "hr_admin"];
 
 async function getData(): Promise<LoaderResult<Row[]>> {
   return fetchJson<unknown, Row[]>("/api/v1/payroll/reimbursements", [], {
@@ -52,7 +52,7 @@ export default async function ReimbursementsPage() {
   const t = await getTranslations("payrollReimbursements");
   const tCat = await getTranslations("createReimbursementForm");
   const roles = getSessionRoles();
-  const isStaff = roles.some((r) => REIMBURSEMENT_STAFF_ROLES.includes(r));
+  const isStaff = roles.some((r) => PAYROLL_HR_READER_ROLES.includes(r));
   const isSelfService = !isStaff && roles.includes("employee");
 
   const header = (
@@ -67,7 +67,7 @@ export default async function ReimbursementsPage() {
     return (
       <div className="page-main wrap">
         {header}
-        <PermissionDenied module="reimbursements" requiredRoles={[...REIMBURSEMENT_STAFF_ROLES, "employee"]} backHref="/hr/payroll" backLabel={t("backLabel")} />
+        <PermissionDenied module="reimbursements" requiredRoles={[...PAYROLL_HR_READER_ROLES, "employee"]} backHref="/hr/payroll" backLabel={t("backLabel")} />
       </div>
     );
   }

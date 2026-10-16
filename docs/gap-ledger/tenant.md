@@ -527,7 +527,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-PLANS-01  ·  HIGH  ·  partly  ·  theme WIRING (was MONEY)
 
-- [ ] **Status** (W2 tenant REOPENED from the W0 PROVISIONAL tick: price renders paise-correct (_data.test.ts mapPlanRows) but the 'plans with modules show each module name' criterion is NOT met — only a module count ('3 modules') is shown and no test asserts names)
+- [x] **Status** (W2 PQ: closed — mapPlanRows now shows up to 5 module names joined by comma (e.g. 'hrms, finance, procurement'), with '+N more' overflow; test updated in _data.test.ts to assert names not count (GAP-TENANT-PLANS-01))
 - **First-pass claim:** Subtitle promises 'pricing and module entitlements' (plans/page.tsx:16) but neither is mapped: only description, planName-as-type and currency survive (tenant/_data.ts:53-65). A plans page with no prices and no feature comparison (hub note: 'feature comparison').
 - **Verified evidence:** plans/page.tsx description promises 'pricing and module entitlements'. mapTenantRows maps only description/type/category/planName -> sublabel (planName is a fallback after description/type/category, not 'type'), and meta = code ?? unit ?? usagePercent ?? limit ?? currency (_data.ts:60-65) - price, modules, features are not read; meta may show only a currency code. True no price/feature comparison. Field names in /api/v1/tenant/plans (_data.ts:100) cannot be verified: tenant-service absent. If price is returned in paise it must be formatted with formatINR per CLAUDE.md.
 - **Files to change:** `apps/web/src/app/(app)/tenant/plans/page.tsx`, `apps/web/src/app/(app)/tenant/_data.ts`

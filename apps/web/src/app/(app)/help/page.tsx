@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { PageHeader, Card, EmptyState } from "../../_components/ds";
 import { ReplayTourButton } from "./ReplayTourButton";
@@ -5,6 +6,7 @@ import { GlossaryList } from "./GlossaryList";
 import { HELP_MODULES } from "@/lib/helpContent";
 import { collapseGlossary } from "@/lib/glossary";
 import { getEnabledModules, isModuleEnabled } from "@/lib/moduleVisibility";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 export const metadata = {
   title: "Help Centre",
@@ -20,31 +22,33 @@ export const metadata = {
  * unknown, all are shown.
  */
 export default async function HelpPage() {
+  const t = await getTranslations("help");
   const enabled = await getEnabledModules();
-  const visibleModules = HELP_MODULES.filter((m) => isModuleEnabled(enabled, m.moduleKey));
+  const roles = getSessionRoles();
+  const visibleModules = HELP_MODULES.filter((m) => isModuleEnabled(enabled, m.moduleKey, roles));
 
   const glossaryRows = collapseGlossary();
 
   return (
     <section className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Help Centre"
-        subtitle="Short guides for the main modules, plus a plain-English glossary. Pick a topic, or look up a word you're unsure about."
+        title={t("pageTitle")}
+        subtitle={t("pageSubtitle")}
         actions={<ReplayTourButton />}
       />
 
-      <h2 style={{ fontSize: 16, margin: "8px 0 12px" }}>Guides by module</h2>
+      <h2 style={{ fontSize: 16, margin: "8px 0 12px" }}>{t("guidesHeading")}</h2>
       <p style={{ margin: "0 0 12px", color: "var(--mut)", fontSize: 13 }}>
-        Guides for other modules are being added. For anything not listed, raise a ticket from{" "}
+        {t("guidesNote")}{" "}
         <Link href="/helpdesk">Helpdesk</Link>.
       </p>
       {visibleModules.length === 0 ? ( // ux-001-ok: visibleModules is derived from static module config, not a fetch
         <EmptyState
-          title="No guides for your enabled modules"
-          message="Your office has not turned on any modules with a guide yet. Raise a ticket from Helpdesk if you need help."
+          title={t("emptyTitle")}
+          message={t("emptyMessage")}
           action={
             <Link href="/helpdesk" className="btn primary">
-              Open Helpdesk
+              {t("openHelpdesk")}
             </Link>
           }
         />
@@ -67,10 +71,10 @@ export default async function HelpPage() {
         </div>
       )}
 
-      <h2 style={{ fontSize: 16, margin: "28px 0 12px" }}>Words explained</h2>
+      <h2 style={{ fontSize: 16, margin: "28px 0 12px" }}>{t("wordsHeading")}</h2>
       <Card padding>
         <p style={{ marginTop: 0, color: "var(--mut)", fontSize: 13.5 }}>
-          Government and accounting words you'll see around the system, in plain English.
+          {t("wordsIntro")}
         </p>
         <GlossaryList rows={glossaryRows} />
       </Card>

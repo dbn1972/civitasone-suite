@@ -97,7 +97,7 @@ Counts: ACTION 8, BACKEND-VERIFY 1
 
 ### GAP-FLEET-VEHICLES-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #PENDING)
 - **W0 note:** partly fixed by #1924 — Odometer column added (en-IN km); driver still Assigned (id prefix) not a resolved name, no roster lookup
 - **First-pass claim:** Driver is "Assigned"/"Unassigned" only — no driver name, so the log cannot answer who has the vehicle; odometerKm is fetched but never shown (vehicles/page.tsx:15,57).
 - **Verified evidence:** mapVehicles (vehicles/page.tsx:46-58 in file) sets driver to 'Assigned'/'Unassigned' from assignedDriverId (57); odometerKm is in RawRow (15) but never mapped or displayed. Driver names would need a lookup that this page does not do; no endpoint visible.

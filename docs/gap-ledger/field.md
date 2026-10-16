@@ -66,7 +66,7 @@ Counts: ACTION 23, BACKEND-VERIFY 3
 
 ### GAP-FIELD-AGENTS-01  ·  HIGH  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: ALREADY-FIXED — getFieldAgentsDetailed added in #1923; agent names resolved via separate endpoint (GAP-FIELD-AGENTS-01))
 - **W0 note:** partly fixed by #1923 — One row per agent with task count from /field/agents endpoint; Agent column still shows raw agentId not a resolved name
 - **First-pass claim:** "Agents" is the Tasks endpoint: getFieldAgents fetches /api/v1/field/tasks (_data.ts:91) and mapRows does no grouping, so the page titled "Agent roster" lists tasks, one row per task, with the agent visible only if agentId is a row's fallback id (_data.ts:37,58). No territories or performance figures exist although the hub promises "Field agent roster, territories, and performance" (field/page.tsx:9).
 - **Verified evidence:** field/_data.ts:91 getFieldAgents = moduleLoader('/api/v1/field/tasks',...) same endpoint as getFieldTasks (:88); mapRows (:28-77) maps one row per payload item with no grouping. id prefers row.id (:33), agentId only as later fallback (:37); agentId also appears at the tail of the sublabel chain (:58) after description/status/etc., so the agent is effectively never shown for tasks that have a status. Page description honestly says 'derived from assigned field tasks' (agents/page.tsx:16) but hub tile field/page.tsx:9 promises 'roster, territories, and performance'. No territory/performance data path exists. Field-service is absent, so the task payload shape cannot be verified.
@@ -204,7 +204,7 @@ Counts: ACTION 23, BACKEND-VERIFY 3
 
 ### GAP-FIELD-SYNC-01  ·  HIGH  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: ALREADY-FIXED — 7-day rolling window (since = now - 7d) and limit=100 added in #1961; description updated (GAP-FIELD-SYNC-01))
 - **W0 note:** partly fixed by #1923 — Pull uses 7-day since plus limit 100 with window note (refined in #1961); sync still generic ModuleListPage rows with no device/entity/updatedAt typed columns
 - **First-pass claim:** The pull always uses since=1970-01-01 (_data.ts:92) so every visit returns all changes ever recorded, unbounded; the description admits "since epoch (pull window)" (page.tsx:16). It also pulls, not shows device sync status or conflicts as the hub promises: "Device sync status and conflict resolution" (field/page.tsx:10) — no device column and no resolve action exist.
 - **Verified evidence:** Client side true: _data.ts:92 hard-codes since=1970-01-01T00:00:00.000Z with no limit param; sync/page.tsx:16 states 'since epoch (pull window)'. Whether the server returns an unbounded set or caps/paginates cannot be verified (field-service not in snapshot), so 'unbounded' is unproven. Also true: field/page.tsx:10 promises device sync status and conflict resolution but the page is the generic list (no device column, no resolve action; mapRows has no device field).
@@ -241,7 +241,7 @@ Counts: ACTION 23, BACKEND-VERIFY 3
 
 ### GAP-FIELD-SYNC-04  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed — showId={false} added to field/sync/page.tsx to hide UUID column; metaKind "datetime" added to _data.ts + ModuleListTable for IST date+time display (GAP-FIELD-SYNC-04))
 - **W0 note:** partly fixed by #1923 — Status pill and formatted date meta done; ModuleListTable still shows UUID ids truncated to 8 chars and date-only (no IST time)
 - **First-pass claim:** Raw values printed: ID is the first 8 characters of the id (ModuleListTable.tsx:50) and Meta prints ISO timestamps or codes verbatim (_data.ts:61-67), e.g. "2026-09-27T09:14:00.000Z"; Status is raw lower-case text without a pill (ModuleListTable.tsx:53).
 - **Verified evidence:** ModuleListTable.tsx:50 renders <span className='mono'>{row.id.slice(0, 8)}</span> (a truncated UUID/key); :53 renders {row.status ?? '-'} as plain text with no StatusPill (StatusPill.tsx maps status to variant); :54 prints row.meta verbatim, and _data.ts:61-67 builds meta from code, currency, updatedAt, createdAt in that order, so ISO strings like 2026-09-27T09:14:00.000Z appear whenever no code/currency exists. Confirmed.
@@ -378,7 +378,7 @@ Counts: ACTION 23, BACKEND-VERIFY 3
 
 ### GAP-FIELD-VISITS-02  ·  HIGH  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed — open-visit elapsed time shown as "open Xh" / "open <1h" in the Duration column; openVisitHours helper used; test added in visits/page.test.tsx (GAP-FIELD-VISITS-02))
 - **W0-10 note:** review found the W0 tick partly — Pill now 'in progress'/'overdue' >12h (visits.ts:63-72, page.tsx:65) with unit tests, but the Open-for-duration column (fix step 2) is absent: columns at field/visits/page.tsx:78-86 only show Duration for completed (durationMinutes), open visits show a dash
 - **First-pass claim:** Open and Completed render identically: StatusPill maps both "open" and "completed" to the green variant (StatusPill.tsx:6-12), so the one distinction this page ranks by (visits.ts:36-43) is invisible; "open" should read as in-progress, and long-open visits (no check-out) have no age or warning.
 - **Verified evidence:** visits.ts:26-28 returns 'open' or 'completed'; DataTable renders cellType 'status' with StatusPill (DataTable.tsx:127), and StatusPill.tsx:9,12 maps both 'completed' and 'open' to 'good'. Open visits rank first (visits.ts:36-43) but look identical to completed. No age/warning for long-open visits.

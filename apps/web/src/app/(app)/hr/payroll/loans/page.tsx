@@ -6,6 +6,7 @@ import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { getSessionRoles, getSessionUserId, PAYROLL_ADMIN_ROLES } from "@/lib/auth/roleGuard";
+import { PAYROLL_HR_READER_ROLES } from "@/lib/auth/workRoles";
 import { LoanSearchForm } from "./LoanSearchForm";
 import { CreateLoanForm } from "./CreateLoanForm";
 import { LoansTable, type LoanRow } from "./LoansTable";
@@ -20,7 +21,6 @@ import { mapLoanSchedule, pickScheduleLoan, type ScheduleInstallment } from "./l
  * only ever read their own loans there. hr/layout.tsx otherwise admits
  * manager/employee to every /hr/payroll* route.
  */
-const LOANS_VIEW_ROLES = [...PAYROLL_ADMIN_ROLES, "hr_admin"];
 
 type EmployeeRow = { id: string; name?: string; employeeNo?: string; department?: string };
 
@@ -73,11 +73,11 @@ export default async function LoansPage({
 }) {
   const t = await getTranslations("payrollLoans");
   const roles = getSessionRoles();
-  if (!roles.some((r) => LOANS_VIEW_ROLES.includes(r))) {
+  if (!roles.some((r) => PAYROLL_HR_READER_ROLES.includes(r))) {
     return (
       <div className="page-main wrap">
         <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel="Back to Payroll" />
-        <PermissionDenied module="employee loans" requiredRoles={LOANS_VIEW_ROLES} />
+        <PermissionDenied module="employee loans" requiredRoles={PAYROLL_HR_READER_ROLES} />
       </div>
     );
   }

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { DataTable, EmptyState } from "../../../_components/ds";
 import { RefreshErrorState } from "../../../_components/ds/RefreshErrorState";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
@@ -22,6 +23,8 @@ type TierTableRow = {
   threshold: string;
   benefits: string;
   programme: string;
+  /** Full programId for the title/tooltip on the programme link. */
+  programIdFull: string;
 };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -72,6 +75,7 @@ export function TiersTable({ rows, source }: { rows: LoyaltyTierRow[]; source: "
     threshold: formatPoints(tdef.minPointsThreshold),
     benefits: summariseBenefits(tdef.benefits),
     programme: tdef.programId && UUID_RE.test(tdef.programId) ? tdef.programId.slice(0, 8) : tdef.programId ?? "—",
+    programIdFull: tdef.programId ?? "",
   }));
 
   return (
@@ -93,7 +97,29 @@ export function TiersTable({ rows, source }: { rows: LoyaltyTierRow[]; source: "
             { key: "level", label: "Level", align: "right" },
             { key: "threshold", label: "Min points", align: "right" },
             { key: "benefits", label: "Benefits" },
-            { key: "programme", label: "Programme" },
+            {
+              key: "programme",
+              label: "Programme",
+              /**
+               * GAP-LOYALTY-TIERS-03: render the programme reference as a link
+               * to the programmes listing (no /[id] detail route exists yet).
+               * The full programId is available via title for copy-on-hover;
+               * the short ref retains visual density without being an opaque
+               * orphan fragment — it is now a navigable reference.
+               */
+              render: (r) =>
+                r.programme === "—" ? (
+                  <span>—</span>
+                ) : (
+                  <Link
+                    href="/loyalty/programs"
+                    title={r.programIdFull}
+                    style={{ fontFamily: "var(--font-mono, monospace)", fontSize: "0.85em" }}
+                  >
+                    {r.programme}
+                  </Link>
+                ),
+            },
           ]}
           rows={tableRows}
           sortable

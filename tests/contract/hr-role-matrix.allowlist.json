@@ -37,6 +37,18 @@
       },
       "routeCount": 1,
       "reason": "W1 SF-09b: NO WEB SURFACE EXISTS. POST /v1/hrms/declarations/:declId/revoke (disciplinary/coi-routes.ts, Conflict-of-Interest declarations) admits vigilance_officer; no page under apps/web calls any /declarations route, and the role appears in the web only on audit/vigilance (audit-service, a different concept). Nothing to gate until a COI-declarations screen exists. Backend guard NOT changed."
+    },
+    {
+      "id": "GAP-HR-SF09C-001",
+      "match": {
+        "comparator": "page:payroll/fnf (read) (FNF_READ_ROLES)",
+        "extraInBackend": [],
+        "extraInWeb": [
+          "payroll_officer"
+        ]
+      },
+      "routeCount": 2,
+      "reason": "W1 SF-09c: payroll/fnf/routes.ts uses FNF_ROLES (no payroll_officer) for pay-snapshot and fnf-tax-breakdown, while the web page FNF_READ_ROLES includes payroll_officer as a read-only viewer. The web gate is intentionally more permissive (payroll_officer should be able to view FNF summaries but not compute/disburse). Backend FNF_ROLES should be updated to add payroll_officer for GET routes -- tracked for a follow-up backend-only change; web gate unchanged."
     }
   ],
   "noRoleCheckEntries": [

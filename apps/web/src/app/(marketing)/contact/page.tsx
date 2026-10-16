@@ -133,9 +133,10 @@ export default async function ContactPage({
               </div>
             )}
 
-            {/* Security disclosure (GAP-CONTACT-HOME-03): private reporting, SLA, security.txt. */}
+            {/* Security disclosure (GAP-CONTACT-HOME-03): private reporting, SLA, security.txt,
+                 and the missing disclosure-policy section (scope, safe harbour, CERT-In). */}
             <div className="rounded-2xl border border-gray-200 p-6 shadow-sm">
-              <h3 className="text-lg font-semibold text-gray-900">Security Reports</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Security Reports &amp; Disclosure Policy</h3>
               <p className="mt-2 text-sm text-gray-600">
                 Found a vulnerability? Please report it privately to{" "}
                 <a
@@ -148,6 +149,36 @@ export default async function ContactPage({
                 {SECURITY_ACK_BUSINESS_DAYS} business days and will keep you updated as we investigate.
                 Please give us reasonable time to remediate before any public disclosure.
               </p>
+              {/* Disclosure policy: scope, safe harbour, CERT-In — GAP-CONTACT-HOME-03 */}
+              <div className="mt-4 rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm text-gray-700 space-y-2">
+                <p>
+                  <span className="font-semibold text-gray-900">Scope:</span>{" "}
+                  This policy covers security vulnerabilities in CivitasOne-operated services and
+                  software — including the web application, public APIs, and supporting infrastructure.
+                  Third-party services and open-source dependencies used by CivitasOne are out of
+                  scope; please report those directly to the affected vendor.
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">Safe harbour:</span>{" "}
+                  We will not pursue legal action against researchers who discover and report security
+                  issues in good faith and in accordance with this policy: with a genuine intent to
+                  help, without accessing or modifying data belonging to others, and without
+                  disrupting services. We consider good-faith research to be authorised conduct.
+                </p>
+                <p>
+                  <span className="font-semibold text-gray-900">CERT-In:</span>{" "}
+                  We coordinate with the Indian Computer Emergency Response Team (
+                  <a
+                    href="https://www.cert-in.org.in"
+                    className="font-medium text-gray-900 underline underline-offset-4 hover:text-gray-700"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    CERT-In
+                  </a>
+                  ) for critical vulnerabilities as required under the Information Technology Act, 2000.
+                </p>
+              </div>
               <p className="mt-3 text-sm text-gray-600">
                 See our{" "}
                 <a

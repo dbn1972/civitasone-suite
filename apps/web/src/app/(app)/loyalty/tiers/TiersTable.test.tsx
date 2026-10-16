@@ -42,10 +42,16 @@ describe("TiersTable (GAP-LOYALTY-TIERS-01/03)", () => {
     expect(screen.getByText(/loungeAccess/)).toBeInTheDocument();
   });
 
-  it("TIERS-03: no full-UUID programme id is shown (shortened)", () => {
+  it("TIERS-03: programme short ref links to the programmes listing (not a standalone UUID fragment)", () => {
     render(<TiersTable rows={sample} source="api" />);
+    // Short ref visible (not the full UUID as visible text)
     expect(screen.getByText("ab12cd34")).toBeInTheDocument();
     expect(screen.queryByText("ab12cd34-0000-4000-8000-000000000001")).not.toBeInTheDocument();
+    // The short ref is inside a link to /loyalty/programs (not a dead fragment)
+    const link = screen.getByRole("link", { name: "ab12cd34" });
+    expect(link).toHaveAttribute("href", "/loyalty/programs");
+    // Full UUID is available as the link's title for copy-on-hover
+    expect(link).toHaveAttribute("title", "ab12cd34-0000-4000-8000-000000000001");
   });
 
   it("empty state when no tiers defined", () => {

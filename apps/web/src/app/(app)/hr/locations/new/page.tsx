@@ -1,3 +1,4 @@
+import { HR_LOCATION_ADMIN_ROLES } from "@/lib/auth/workRoles";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { NewLocationPageClient } from "./NewLocationPageClient";
@@ -17,7 +18,6 @@ import type { MinimalLocation } from "./AddLocationForm";
  * work; the backend correctly rejected the submit with 403, but only after
  * the user filled it in.
  */
-const LOCATION_ADMIN_ROLES = ["location_user", "location_admin", "super_admin", "admin", "hr_admin"];
 
 /**
  * GAP-HR-LOCATIONS-NEW-01: the parent-location select needs the existing
@@ -36,10 +36,10 @@ async function getLocations(): Promise<MinimalLocation[]> {
 
 export default async function NewLocationPage() {
   const roles = getSessionRoles();
-  const canAdminister = roles.some((r) => LOCATION_ADMIN_ROLES.includes(r));
+  const canAdminister = roles.some((r) => HR_LOCATION_ADMIN_ROLES.includes(r));
 
   if (!canAdminister) {
-    return <PermissionDenied module="adding a location" requiredRoles={LOCATION_ADMIN_ROLES} />;
+    return <PermissionDenied module="adding a location" requiredRoles={HR_LOCATION_ADMIN_ROLES} />;
   }
 
   const locations = await getLocations();
