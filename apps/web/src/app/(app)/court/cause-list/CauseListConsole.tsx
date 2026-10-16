@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, EmptyState, StatusPill } from "@/app/_components/ds";
 import type { CauseListItem, Court, CourtCase } from "../_data/types";
 import { fmtDate, humanize, todayIso } from "../_data/format";
 import {
   addCauseListItem,
   createCauseList,
+  fetchCase,
   fetchCauseListByCourtDate,
   fetchCauseListItems,
 } from "../_data/client";
@@ -58,6 +59,10 @@ export function CauseListConsole({
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // GAP-COURT-CAUSE-LIST-04: cases beyond the 100-row limit are fetched
+  // individually on demand and cached here so their title/type/stage render.
+  const fetchedRef = useRef(new Set<string>());
+  const [extraCases, setExtraCases] = useState<Map<string, CourtCase>>(() => new Map());
 
   // Fallback only when the registry couldn't be reached: infer courts from the
   // case list, but still label by name (never a bare UUID).
@@ -81,6 +86,22 @@ export function CauseListConsole({
     () => (courtId ? cases.filter((c) => c.courtId === courtId) : cases),
     [cases, courtId],
   );
+
+  // GAP-COURT-CAUSE-LIST-04: when items include caseIds not in the 100-row
+  // cases prop, fetch those cases individually so title/type/stage display.
+  useEffect(() => {
+    const missing = items
+      .map((it) => it.caseId)
+      .filter((id) => !cases.some((c) => c.id === id) && !fetchedRef.current.has(id));
+    if (missing.length === 0) return;
+    for (const id of missing) fetchedRef.current.add(id);
+    void Promise.all(
+      missing.map(async (id) => {
+        const row = await fetchCase(id);
+        if (row) setExtraCases((prev) => new Map(prev).set(id, row));
+      }),
+    );
+  }, [items, cases]);
 
   // Read initial selection from the URL (deep link / reload).
   useEffect(() => {
@@ -284,16 +305,16 @@ export function CauseListConsole({
                     {[...items]
                       .sort((a, b) => (a.itemNumber ?? 0) - (b.itemNumber ?? 0))
                       .map((it) => {
-                        const c = cases.find((x) => x.id === it.caseId);
+                        const c = cases.find((x) => x.id === it.caseId) ?? extraCases.get(it.caseId);
                         return (
                           <tr key={it.id}>
                             <td data-label="Item" style={mono}>
                               {it.itemNumber ?? "—"}
                             </td>
                             <td data-label="Case">
-                              <div style={{ fontWeight: 600 }}>{c?.title ?? "Case"}</div>
+                              <div style={{ fontWeight: 600 }}>{c?.title ?? "—"}</div>
                               <div style={{ ...mono, fontSize: 12, color: "var(--ink2)" }}>
-                                {c?.cnrNumber ?? it.caseId.slice(0, 8)}
+                                {c?.cnrNumber ?? "—"}
                               </div>
                             </td>
                             <td data-label="Type">{c ? humanize(c.caseType) : "—"}</td>
