@@ -154,7 +154,7 @@ describe("New Stock Item page", () => {
     await fillValid();
     fireEvent.change(screen.getByLabelText(/Reorder level/i), { target: { value: "-5" } });
     fireEvent.click(screen.getByRole("button", { name: "Create item" }));
-    expect(await screen.findByText(/zero or a positive whole number/i)).toBeInTheDocument();
+    expect(await screen.findByText(/zero or a positive number/i)).toBeInTheDocument();
     expect(fetchMock.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === "POST")).toBe(false);
   });
 
@@ -165,4 +165,23 @@ describe("New Stock Item page", () => {
     await fillValid();
     expect(screen.getByLabelText(/Reorder level \(ea\)/i)).toBeInTheDocument();
   });
+
+  // GAP-STOCK-ITEMS-NEW-04 (part 2): fractional UOM value (2.5 kg) is accepted.
+  it("GAP-STOCK-ITEMS-NEW-04: fractional reorder level is accepted when UOM permits fractions", async () => {
+    const fetchMock = installLookupFetch();
+    render(<Page />);
+    await fillValid();
+    fireEvent.change(screen.getByLabelText(/Reorder level/i), { target: { value: "2.5" } });
+    fireEvent.change(screen.getByLabelText(/Reorder quantity/i), { target: { value: "5.5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create item" }));
+    // wait for the success or the POST to be attempted (no validation error for 2.5)
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some((c) => (c[1] as RequestInit | undefined)?.method === "POST")).toBe(true)
+    );
+    const post = fetchMock.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === "POST")!;
+    const body = JSON.parse((post[1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(body.reorderLevel).toBe(2.5);
+    expect(body.reorderQty).toBe(5.5);
+  });
+
 });
