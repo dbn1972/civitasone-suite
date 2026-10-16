@@ -588,7 +588,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-CONFIG-04  ·  MEDIUM  ·  partly  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 revenue: added existingSlabs prop to CreateRateSlabForm with band overlap check; RateConfigConsole passes slabs; test covers overlap error; closed by this PR)
 - **W0 note:** partly fixed by #1868 — CreateRateSlabForm now uses rupeesToMinorString/percentToBps (allowZero), validates bandTo>bandFrom, rejects unparsable bandTo, and the table header reads "Rate Value (₹ / %)"; remaining: no overlap/gap check against existing same-effective-date bands (no existing slabs are passed to the form).
 - **First-pass claim:** Slab rate unit changes with type (₹ for flat/band, % for ad_valorem) and is stored as paise or bps; the table prints "Rate Value" as ₹ or % in one column, and band gaps/overlaps are not validated client-side (CreateRateSlabForm.tsx:70-72; RateConfigConsole.tsx:133-137).
 - **Verified evidence:** Unit switching is handled: form labels 'Rate (%)' vs 'Rate (₹)' (CreateRateSlabForm.tsx:70-72) and the table picks formatBps vs formatMoney (RateConfigConsole.tsx:133-137), so the cell shows ₹ or % explicitly; types.ts documents paise/bps. Real defects: local converters use Number()*100 + Math.round (Slab form 23-38, float, not rupeesToMinorString/percentToBps from lib/money.ts); no validation that bandTo>bandFrom or that bands don't overlap/gap (only bandFrom required, 80-85; an unparsable bandTo is silently dropped at 128-129).
