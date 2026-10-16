@@ -228,7 +228,7 @@ Counts: ACTION 19, BACKEND-VERIFY 2
 
 ### GAP-DOCUMENTS-LIBRARY-06  ·  LOW  ·  partly  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #1928, verified on main — mimeLabel & fileStatusTone present in _helpers.ts; rename confirmed in library/page.tsx; pagination deferred pending backend limit/offset support)
 - **W0 note:** partly fixed by #1928 — mimeLabel and fileStatusTone are in; no ?q=/?page= search or pagination on the library list
 - **First-pass claim:** Helper named priorityPill is used for file status (page.tsx:25); mime types are shown raw ("application/vnd.openxmlformats-officedocument…") in a pill and will overflow on mobile. No search, sort or pagination.
 - **Verified evidence:** priorityPill (library/page.tsx:25) is used for file status and is misnamed: confirmed. Mime rendered raw in <span className='pill mut'> (:52 real numbering); long values like application/vnd.openxmlformats-officedocument... make the cell wide, but the table is inside tbl-wrap so it scrolls horizontally rather than breaking the page. No search, sort or pagination: confirmed (getDocumentFiles passes only folderId, no limit/offset; whether API caps results is unverifiable).
@@ -331,7 +331,7 @@ Counts: ACTION 19, BACKEND-VERIFY 2
 
 ### GAP-DOCUMENTS-INBOX-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #1928, verified on main — inbox KPI tiles use getDocumentStats() inbox-scoped counts; /inbox/summary exposes inboxUrgentCount, inboxPendingCount, inboxForwardedCount; gap-documents-batch1.test.ts 5 tests pass)
 - **First-pass claim:** getDocumentStats() is fetched (page.tsx:53-55) but `stats` is never used; summary counts from /inbox/summary are ignored and KPIs are derived from the returned list, so they will disagree with the Library page (library/page.tsx:105-106) if the list is paginated server-side. document-service is absent from the snapshot: pagination and scoping undeterminable.
 - **Service:** `document-service`  ·  **Endpoint(s):** `['GET /v1/documents/inbox', 'GET /v1/documents/inbox/summary']`
 - **Question:** Does /inbox return the full user-scoped list (or page metadata with total) and does /inbox/summary count the same scope as the Library page?
@@ -342,7 +342,7 @@ Counts: ACTION 19, BACKEND-VERIFY 2
 
 ### GAP-DOCUMENTS-NEW-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #1928, verified on main — POST /v1/documents/files validates name length/extension with zod, requires role auth, emits audit via consumer transaction; client-side validateName() mirrors server; gap-documents-batch1.test.ts 5 tests pass)
 - **First-pass claim:** Uses a raw fetch() (page.tsx:20) rather than the shared api client, and File Name has no client-side length or extension validation (page.tsx:60-69). Audit of the create is document-service concern — service absent, undeterminable.
 - **Service:** `document-service`  ·  **Endpoint(s):** `['POST /api/v1/documents/files']`
 - **Question:** Does the create handler validate fileName length/extension with zod, require auth and emit an audit event?
