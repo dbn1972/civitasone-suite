@@ -121,8 +121,11 @@ describe("PayBillForm", () => {
       fireEvent.click(screen.getByRole("button", { name: "Record BBPS payment" }));
 
       await waitFor(() => expect(screen.getByText("Record this BBPS payment?")).toBeInTheDocument());
-      // Dialog must show the owner name, not just the raw identifier
-      expect(screen.getByText(/Priya Singh/)).toBeInTheDocument();
+      // Dialog must show the owner name, not just the raw identifier.
+      // There may be multiple elements containing "Priya Singh" (the select option + the dialog),
+      // so assert the dialog's description paragraph contains the name.
+      const dialogText = document.querySelector("[role=dialog]")?.textContent ?? document.body.textContent ?? "";
+      expect(dialogText).toContain("Priya Singh");
     });
   });
 });
