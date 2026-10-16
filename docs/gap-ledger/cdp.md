@@ -493,7 +493,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-EVENTS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD — taxonomy-repo.ts toView() returns {eventName, category, schemaJson, status, version, createdAt, updatedAt}; _data.ts mapRows uses toText(row.description)?? toText(row.category) so both are handled; _data.test.ts "labels an event-taxonomy row from eventName" confirms shape)
 - **First-pass claim:** Taxonomy is fetched from cdp-service GET /v1/cdp/events/taxonomy — service is absent from this snapshot; row shape (eventName, description, status) is inferred from the mapper comment only (_data.ts:57-58): undeterminable.
 - **Service:** `cdp-service`  ·  **Endpoint(s):** `['GET /api/v1/cdp/events/taxonomy']`
 - **Question:** Does taxonomy return rows shaped {eventName, description, status} inside a {data} envelope with status limited to a fixed enum?
