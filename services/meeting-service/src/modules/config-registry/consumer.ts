@@ -135,13 +135,22 @@ export function registerConfigRegistryConsumers(register: RegisterConsumer): voi
         payload: { id: p.id, namespace: p.namespace, configKey: p.configKey },
       });
 
+      // GAP-MEETING-ADMIN-02: include before/after values for auditing
       await enqueue(tx, {
         topic: AUDIT_TOPIC,
         eventType: AUDIT_TOPIC,
         tenantId: msg.tenantId,
         actorId: msg.actorId,
         correlationId: msg.correlationId,
-        payload: { service: "meeting", action: "set_config", resourceType: "config_entry", resourceId: p.id, outcome: "success" },
+        payload: {
+          service: "meeting",
+          action: "set_config",
+          resourceType: "config_entry",
+          resourceId: p.id,
+          outcome: "success",
+          before: current ? { namespace: current.namespace, configKey: current.configKey, value: current.value } : null,
+          after: { namespace: p.namespace, configKey: p.configKey, value: p.value },
+        },
       });
 
       // Invalidate the (tenant, namespace) read cache on commit so subsequent

@@ -292,7 +292,7 @@ Counts: ACTION 28, BACKEND-VERIFY 5, REFUTED 1
 
 ### GAP-MEETING-MEETINGS-MEETINGID-07  ·  LOW  ·  partly  ·  theme A11Y (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (closed by w2/meeting-part-1) (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0-10 note:** review found the W0 tick partly — VC link now target=_blank rel=noopener aria-label (MeetingConsole.tsx:348-350) but no in-page anchor nav or tabs for narrow screens (fix step 2 / acceptance 2 missing)
 - **First-pass claim:** Dense single-column console with three tables/cards and inline-styled grids; no tabs or anchors, long on phones; VC link opens with rel="noreferrer" but no target/label for screen readers.
 - **Verified evidence:** Console is a long single page of cards/tables with inline styles (confirmed by structure). VC link (:313-317) uses rel="noreferrer" with no target="_blank", so it opens in the same tab and leaves the console during a live meeting; text 'Join VC ↗' hints external. No tabs/anchors. Not a PII item.
@@ -330,7 +330,7 @@ Counts: ACTION 28, BACKEND-VERIFY 5, REFUTED 1
 
 ### GAP-MEETING-MEETINGS-MEETINGID-MINUTES-02  ·  HIGH  ·  partly  ·  theme NAMES (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (closed by w2/meeting-part-1) (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0-10 note:** review found the W0 tick partly — MinutesPanel.tsx:263-285 renders createdByName/approvedByName and loaders.ts:238-239 map them, hash tooltip :308, self-approval warning :186, BUT no meeting-service code ever emits createdByName/approvedByName (grep services/meeting-service/src empty) so names never populate and raw UUIDs still display (fix step 1 backend/lookup undone)
 - **First-pass claim:** Drafter and Approver are printed as raw user-id strings (createdBy / approvedBy in mono, MinutesPanel.tsx dl block); a chairperson cannot see who drafted, and the maker-checker separation cannot be visually verified. Integrity hash and DSC signer are shown but not explained.
 - **Verified evidence:** MinutesPanel.tsx:197-200 prints minutes.createdBy and approvedBy as raw ids in mono; confirmed. dscSignerName (:205-210) is a name; integrity hash (:211-216) shown with no explanation. The maker-checker separation is stated in text (:219-223) and enforced server-side per comment; server enforcement cannot be verified (meeting-service absent). Approve/reject already use ConfirmDialog (:322-348), so 'add ConfirmDialog' fix is already done; the real gap is name resolution. No name field exists on Minutes type (types.ts:197+); a user directory lookup endpoint is not visible in this snapshot.
@@ -445,7 +445,7 @@ Counts: ACTION 28, BACKEND-VERIFY 5, REFUTED 1
 
 ### GAP-MEETING-MEETINGS-NEW-04  ·  MEDIUM  ·  partly  ·  theme IDEMPOTENCY (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (closed by w2/meeting-part-1) (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0-10 note:** review found the W0 tick partly — client sends x-idempotency-key once per mount (NewMeetingForm.tsx:175, client.ts:133) but meeting-service POST /v1/meetings (meeting-core/routes.ts:148) has no idempotency check on the header, so duplicate POST does not return same meeting
 - **First-pass claim:** Submit failures display err.message verbatim (NewMeetingForm.tsx:199); no toHumanError mapping. POST has no idempotency key (client.ts:115 comment), so a double submit on a slow network can create two meetings.
 - **Verified evidence:** Submit error uses err.message (NewMeetingForm.tsx ~:207) but client.send throws Error(readError('save')) built from toHumanError (client.ts:41-58,72), so the text is already plain-language; not raw. The idempotency point is true: createMeeting has no idempotency header (client.ts:115-120 comment; other POSTs use idempotencyKey()). Mitigation exists: both buttons disabled while busy (:480,486) and the busy flag stays true until after navigation delay, so single-page double click is blocked; retry after a timeout could still duplicate.
@@ -479,7 +479,7 @@ Counts: ACTION 28, BACKEND-VERIFY 5, REFUTED 1
 
 ### GAP-MEETING-HOME-02  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (closed by w2/meeting-part-1) (change to `[x]` when done, `[~]` if blocked + reason)
 - **First-pass claim:** Counts are computed client-side from one unpaginated GET /api/v1/meeting (page.tsx:24-33); list limits/paging of the service are undeterminable (meeting-service absent), so "Total Meetings" may be a page size, not a total. "In Progress" costs a second identical-shaped request.
 - **Service:** `meeting-service`  ·  **Endpoint(s):** `['GET /api/v1/meeting']`
 - **Question:** Does the list endpoint paginate with a default limit, and does it return total or support status filter/count?
@@ -490,7 +490,7 @@ Counts: ACTION 28, BACKEND-VERIFY 5, REFUTED 1
 
 ### GAP-MEETING-ADMIN-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (closed by w2/meeting-part-1) (change to `[x]` when done, `[~]` if blocked + reason)
 - **First-pass claim:** No role gate on the page: every signed-in user with the module sees editable controls (admin/page.tsx:9-31). Whether meeting-service rejects non-admin writes and audits each setting change (CLAUDE.md: every mutation audited) cannot be verified - service absent from the snapshot.
 - **Service:** `meeting-service`  ·  **Endpoint(s):** `['POST /api/v1/meeting/config', 'POST /api/v1/meeting/config/presets/:preset', 'GET /api/v1/meeting/config/:ns']`
 - **Question:** Does config write require an admin role and write an audit row with before/after per setting?
@@ -501,7 +501,7 @@ Counts: ACTION 28, BACKEND-VERIFY 5, REFUTED 1
 
 ### GAP-MEETING-MEETINGS-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (closed by w2/meeting-part-1) (change to `[x]` when done, `[~]` if blocked + reason)
 - **First-pass claim:** + New meeting is shown to every user (page.tsx:34-38); if the service restricts scheduling to secretariat roles the button will 403 for others. Role rules undeterminable.
 - **Service:** `meeting-service`  ·  **Endpoint(s):** `['POST /api/v1/meeting']`
 - **Question:** Which roles may create a meeting (secretariat only?) and what is the 403 body?
@@ -512,7 +512,7 @@ Counts: ACTION 28, BACKEND-VERIFY 5, REFUTED 1
 
 ### GAP-MEETING-MEETINGS-MEETINGID-03  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (closed by w2/meeting-part-1) (change to `[x]` when done, `[~]` if blocked + reason)
 - **First-pass claim:** Lifecycle, check-in/out, cast and conclude controls render for every viewer (MeetingConsole.tsx:315-341,571-590,730-777); the chair-only / secretary-only nature is not modelled in the UI, so non-authorised users get 403 errors printed as raw messages (MeetingConsole.tsx:228,262,275). Server-side checks and audit undeterminable (service absent).
 - **Service:** `meeting-service`  ·  **Endpoint(s):** `['POST /api/v1/meeting/:id/transition', '/attendance/check-in', '/votes/cast', '/votes/:rid/conclude']`
 - **Question:** Are lifecycle, cast and conclude restricted to the right roles (chair/secretary, eligible voter once) with audit?
@@ -523,7 +523,7 @@ Counts: ACTION 28, BACKEND-VERIFY 5, REFUTED 1
 
 ### GAP-MEETING-MEETINGS-MEETINGID-MINUTES-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (closed by w2/meeting-part-1) (change to `[x]` when done, `[~]` if blocked + reason)
 - **First-pass claim:** Approve minutes / Return to secretary render for every viewer of a submitted draft (MinutesPanel.tsx isSubmitted block) although the comment says approval is chairperson-only and drafter-excluded; other users get a raw error in the dialog (confirmErr = err.message). Server enforcement/audit undeterminable.
 - **Service:** `meeting-service`  ·  **Endpoint(s):** `['POST /api/v1/meeting/:id/minutes/:minutesId/approve', 'POST .../reject']`
 - **Question:** Does approve/reject enforce chairperson-only and drafter-excluded, return a coded 403, and audit?

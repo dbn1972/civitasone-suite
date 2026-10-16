@@ -7,6 +7,14 @@ import {
   getActiveVotes,
 } from "../../_data/loaders";
 import { MeetingConsole } from "./MeetingConsole";
+import {
+  getSessionRoles,
+  hasAnyRole,
+  MEETING_TRANSITION_ROLES,
+  MEETING_CHECKIN_ROLES,
+  MEETING_CAST_ROLES,
+  MEETING_CONCLUDE_ROLES,
+} from "@/lib/auth/roleGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -79,6 +87,18 @@ export default async function MeetingConsolePage({
     );
   }
 
+  // GAP-MEETING-MEETINGS-MEETINGID-03: compute viewer permissions from
+  // the session roles so MeetingConsole can hide controls the caller
+  // cannot use. The server is the authoritative gate; this avoids
+  // confusing 403 messages rendered inside the console.
+  const sessionRoles = getSessionRoles();
+  const viewerPermissions = {
+    canTransition: hasAnyRole(sessionRoles, MEETING_TRANSITION_ROLES),
+    canCheckIn: hasAnyRole(sessionRoles, MEETING_CHECKIN_ROLES),
+    canCast: hasAnyRole(sessionRoles, MEETING_CAST_ROLES),
+    canConclude: hasAnyRole(sessionRoles, MEETING_CONCLUDE_ROLES),
+  };
+
   const degraded =
     agenda.source === "error" ||
     attendance.source === "error" ||
@@ -106,6 +126,7 @@ export default async function MeetingConsolePage({
         attendanceSource={attendance.source}
         initialActiveVotes={activeVotes.data}
         activeVotesSource={activeVotes.source}
+        viewerPermissions={viewerPermissions}
       />
     </>
   );

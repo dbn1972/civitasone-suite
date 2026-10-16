@@ -141,6 +141,16 @@ async function assertMeetingOwnership(
   );
 }
 
+/**
+ * Enforce the mandatory X-Idempotency-Key on write commands (GAP-MEETING-MEETINGS-NEW-04).
+ * Steering: idempotency REQUIRED on all POST/PATCH that trigger a queued write.
+ */
+function requireIdempotencyKey(ctx: import("@civitasone/types").RequestContext): void {
+  if (!ctx.idempotencyKey || ctx.idempotencyKey.trim().length === 0) {
+    throw new HttpError(400, "VALIDATION_FAILED", "X-Idempotency-Key header is required for this operation");
+  }
+}
+
 export async function meetingCoreRoutes(app: FastifyInstance): Promise<void> {
   // ─── Meeting CRUD ──────────────────────────────────────────────────────────
 
@@ -148,6 +158,7 @@ export async function meetingCoreRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/meetings", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITE_ROLES);
+    requireIdempotencyKey(ctx); // GAP-MEETING-MEETINGS-NEW-04
     const body = createMeetingSchema.parse(req.body);
     const accepted = await commands.publishMeetingCreate(ctx, body);
     return reply.code(202).send({ data: accepted });

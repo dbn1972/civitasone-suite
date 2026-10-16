@@ -21,6 +21,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
+import { idempotentId } from "@civitasone/auth";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import type {
@@ -73,7 +74,10 @@ export async function publishMeetingCreate(
   ctx: RequestContext,
   body: CreateMeetingInput,
 ): Promise<MeetingCommandAccepted> {
-  const id = randomUUID();
+  // GAP-MEETING-MEETINGS-NEW-04: stable id when x-idempotency-key is present so
+  // a duplicate POST with the same key + tenantId resolves to the same meeting UUID;
+  // the consumer markProcessed then deduplicates the write end-to-end.
+  const id = ctx.idempotencyKey ? idempotentId(ctx) : randomUUID();
   await queue.publish(COMMANDS.meetingCreate, {
     ...envelopeBase(ctx, id, COMMANDS.meetingCreate),
     payload: { id, tenantId: ctx.tenantId, ...body },
