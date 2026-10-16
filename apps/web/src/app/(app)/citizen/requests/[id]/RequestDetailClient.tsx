@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { PageHeader, EmptyState, StatusPill, ActionButton, Button } from "@/app/_components/ds";
-import { formatIndianDate, humanizeStatus, formatShortId } from "@/lib/formatters";
+import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
 import type { Grievance } from "../../_data/loaders";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, marginBottom: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;

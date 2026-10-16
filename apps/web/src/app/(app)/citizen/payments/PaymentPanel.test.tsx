@@ -63,9 +63,10 @@ describe("PaymentPanel", () => {
 
   it("GAP-CITIZEN-PAYMENTS-01/06: confirming posts once and shows a ₹-formatted receipt line with a Print action", async () => {
     renderPanel();
-    // Step 1: resolve a tracking number (fetch mock consumed once for resolve).
+    // Step 1: resolve a tracking number.
     await resolveTracking();
-    // Step 2: mock the payment POST.
+    // Step 2: reset call count, then mock the payment POST.
+    vi.clearAllMocks();
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: true,
       status: 202,
