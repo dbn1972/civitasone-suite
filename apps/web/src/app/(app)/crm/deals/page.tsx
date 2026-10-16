@@ -1,15 +1,17 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader } from "../../../_components/ds";
 import { getDeals } from "../../../_data/loaders";
 import { DealsTable } from "./DealsTable";
 
 export default async function Page() {
+  const t = await getTranslations("crmDealsPage");
   const { data: deals, source } = await getDeals();
 
   return (
     <>
       <PageHeader
         title="Vendor / Stakeholder Engagements"
-        subtitle="Track high-value vendor engagements, procurement opportunities, and government stakeholder interactions • संलग्नताएँ"
+        subtitle={t("subtitle")}
         back="/crm"
         actions={
           <a className="btn primary" href="/crm/deals/new">+ New Engagement</a>

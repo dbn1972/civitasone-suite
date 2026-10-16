@@ -97,3 +97,15 @@ describe("Contacts account filter (GAP-CRM-ACCOUNTS-DETAIL-06)", () => {
     expect(screen.queryByText(/Filtered to one account/)).not.toBeInTheDocument();
   });
 });
+
+describe("GAP-CRM-ACCOUNTS-07: subtitle uses i18n key, no hard-coded Devanagari", () => {
+  it("renders a subtitle that contains no Devanagari characters in English locale", async () => {
+    mocked.mockResolvedValue({ data: [], source: "api" });
+    const { container } = render(await Page({ searchParams: {} }));
+    // Devanagari Unicode range: U+0900–U+097F
+    const devanagariRe = /[ऀ-ॿ]/;
+    const text = container.textContent ?? "";
+    expect(devanagariRe.test(text)).toBe(false);
+  });
+});
+
