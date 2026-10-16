@@ -213,6 +213,8 @@ describe("HearingsConsole", () => {
     expect(adjournHearingMock).toHaveBeenCalledTimes(1);
   });
 
+});
+
 describe("HearingsConsole — table layout (GAP-COURT-HEARINGS-04)", () => {
   it("renders column headers: Date, Purpose, Status, Next date, Actions", () => {
     render(
