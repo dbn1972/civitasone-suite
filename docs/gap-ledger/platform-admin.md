@@ -688,7 +688,7 @@ Counts: ACTION 40, BACKEND-VERIFY 5
 
 ### GAP-PLATFORM-ADMIN-HOME-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: already-fixed on main — platform-admin/layout.tsx has requireAnyRole([...PLATFORM_ADMIN_ROLES,...PLATFORM_AUDIT_VIEW_ROLES],"/dashboard"); verified 2026-10-16)
 - **First-pass claim:** No role gate on the segment: platform-admin/ has no layout.tsx and pages never call requireAnyRole; (app)/layout.tsx:53-66 only checks the access cookie. Any tenant user who types /platform-admin reaches links to System Settings, Roles and User Management; only the header button is hidden (page.tsx:12,26-30). Server-side enforcement undeterminable: admin-service/identity-service are not in the snapshot.
 - **Service:** `admin-service / identity-service`  ·  **Endpoint(s):** `['GET/PUT /api/v1/admin/* (roles, settings, users)']`
 - **Question:** Every /v1/admin/* endpoint must enforce platform_admin/tenant_admin server-side so that a user reaching /platform-admin sees only 403s.
@@ -699,7 +699,7 @@ Counts: ACTION 40, BACKEND-VERIFY 5
 
 ### GAP-PLATFORM-ADMIN-AUDIT-LOG-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: already-fixed on main — audit-log/page.tsx canExport gates Export CSV to AUDIT_EXPORT_ROLES; layout.tsx gates segment; verified 2026-10-16)
 - **First-pass claim:** No role gate: segment has no layout/requireAnyRole; any signed-in user can open the audit log and Export CSV, which writes actor, IP and role for every event (AuditLogTable.tsx:60-71). The export itself is not audited from the UI. Server-side scoping undeterminable (audit-service not in snapshot).
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/events?tenantScoped=true']`
 - **Question:** GET audit/events must require an audit/admin role (tenant_admin, platform_admin, auditor), scope to the caller's tenant, and audit the read/export.
@@ -710,7 +710,7 @@ Counts: ACTION 40, BACKEND-VERIFY 5
 
 ### GAP-PLATFORM-ADMIN-ORG-CONFIG-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: already-fixed on main — org-config/page.tsx requireAnyRole(PLATFORM_ADMIN_ROLES,"/dashboard"); segment layout also gates; verified 2026-10-16)
 - **First-pass claim:** No role gate: segment has no requireAnyRole; any signed-in user sees the editable table and Save order for a tenant-wide hierarchy taxonomy (page.tsx:13-36). Server RBAC undeterminable (admin-service not in snapshot).
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['GET/PUT /api/v1/admin/org-hierarchy-levels']`
 - **Question:** PUT org-hierarchy-levels must require tenant_admin/platform_admin, be tenant-scoped, validate order/uniqueness, and emit audit.
@@ -732,7 +732,7 @@ Counts: ACTION 40, BACKEND-VERIFY 5
 
 ### GAP-PLATFORM-ADMIN-TENANT-CONFIG-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: already-fixed on main — TenantConfigCard.tsx showInfra = isPlatformAdmin && ...; dbSchema/keycloakRealm hidden for non-platform-admin; verified 2026-10-16)
 - **First-pass claim:** Infrastructure identifiers exposed without a gate: DB schema name and Keycloak realm are shown, with Copy buttons, to every signed-in user; the non-admin path only adds a "Read-only" banner (page.tsx:24-28, TenantConfigCard.tsx:97-104). No requireAnyRole; server side undeterminable.
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['(none found: TenantConfigCard.tsx uses DEFAULT_CONFIG, no v1/ call)', 'tenant config endpoint TBD']`
 - **Question:** Whichever endpoint supplies dbSchema and keycloakRealm must return them only to platform_admin/super_admin.
