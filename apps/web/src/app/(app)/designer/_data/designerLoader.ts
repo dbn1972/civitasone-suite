@@ -113,3 +113,56 @@ export async function getDesignerServiceById(id: string): Promise<LoaderResult<D
     },
   );
 }
+
+// ---------------------------------------------------------------------------
+// GAP-DESIGNER-LIBRARY-05: Unify pack list load paths. Previously service
+// packs loaded client-side via fetch(/api/proxy/...) while domain packs used
+// the server-loader fetchJson path. Now both load through the server loader so
+// the initial render has both available and errors are handled in one place.
+// ---------------------------------------------------------------------------
+
+export interface ServicePackLoaderRow {
+  id: string;
+  packKey: string;
+  domainPackKey: string | null;
+  name: string;
+  servicePattern: string | null;
+  feeModel: string | null;
+  hoaCode: string | null;
+  statutoryReferences: { act: string; section?: string; url?: string }[];
+  manifest: Record<string, unknown>;
+  version: number;
+  status: string;
+}
+
+function mapServicePack(r: Record<string, unknown>): ServicePackLoaderRow {
+  const refs = Array.isArray(r.statutoryReferences) ? r.statutoryReferences : [];
+  return {
+    id: str(r.id),
+    packKey: str(r.packKey),
+    domainPackKey: r.domainPackKey == null ? null : str(r.domainPackKey),
+    name: str(r.name),
+    servicePattern: r.servicePattern == null ? null : str(r.servicePattern),
+    feeModel: r.feeModel == null ? null : str(r.feeModel),
+    hoaCode: r.hoaCode == null ? null : str(r.hoaCode),
+    statutoryReferences: (refs as Record<string, unknown>[]).map((ref) => ({
+      act: str(ref.act ?? ""),
+      section: ref.section == null ? undefined : str(ref.section),
+      url: ref.url == null ? undefined : str(ref.url),
+    })),
+    manifest:
+      typeof r.manifest === "object" && r.manifest !== null
+        ? (r.manifest as Record<string, unknown>)
+        : {},
+    version: typeof r.version === "number" ? r.version : 1,
+    status: str(r.status ?? "draft"),
+  };
+}
+
+export async function getServicePacks(): Promise<LoaderResult<ServicePackLoaderRow[]>> {
+  return fetchJson<unknown, ServicePackLoaderRow[]>("/api/v1/citizen/packs/services", [], {
+    revalidateSeconds: 30,
+    telemetryKey: "designer.packs.services",
+    mapResponse: (p) => arr(p).filter(isRecord).map(mapServicePack),
+  });
+}
