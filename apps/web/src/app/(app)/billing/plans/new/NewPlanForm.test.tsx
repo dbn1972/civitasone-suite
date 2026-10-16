@@ -91,4 +91,35 @@ describe("NewPlanForm (GAP-BILLING-PLANS-NEW-01..06)", () => {
     expect(screen.queryByText(/create this billing plan/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText("Amount (₹)")).toHaveFocus();
   });
+  // GAP-BILLING-PLANS-NEW-05: no Tailwind utility classes; colours use CSS design
+  // token vars so the component works in the CivitasOne DS without a Tailwind
+  // build step.
+  // Given: the NewPlanForm renders
+  // When: we inspect the rendered DOM
+  // Then: no element carries a Tailwind utility className; the status message
+  //        uses inline style with var(--bad) / var(--good) tokens.
+  describe("no Tailwind classes — CSS token colouring (GAP-BILLING-PLANS-NEW-05)", () => {
+    it("renders no element with a Tailwind utility className", () => {
+      const { container } = render(<NewPlanForm />);
+      const tailwindPattern = /\b(text-(?:sm|red-\d|emerald-\d)|grid|flex|items-start|gap-\d|grid-cols-\d|font-semibold|h-4|w-4|rounded)\b/;
+      const allClassNames = Array.from(container.querySelectorAll("[class]"))
+        .map((el) => (el as HTMLElement).className);
+      const violations = allClassNames.filter((cls) => tailwindPattern.test(cls));
+      expect(violations).toEqual([]);
+    });
+
+    it("applies var(--bad) colour to the status message on error", async () => {
+      browserFetchMock.mockRejectedValueOnce(new Error("server error"));
+      render(<NewPlanForm />);
+      fireEvent.change(screen.getByLabelText("Plan Name"), { target: { value: "Fail Plan" } });
+      fireEvent.change(screen.getByLabelText("Plan Code"), { target: { value: "fail" } });
+      fireEvent.change(screen.getByLabelText("Amount (₹)"), { target: { value: "100" } });
+      fireEvent.click(screen.getByRole("button", { name: /create plan/i }));
+      fireEvent.click(screen.getByRole("button", { name: /confirm & create/i }));
+      await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+      const msg = screen.getByRole("alert");
+      expect(msg).toHaveStyle("color: var(--bad, #b42318)");
+    });
+  });
+
 });
