@@ -273,4 +273,36 @@ describe("GstnConsole", () => {
       expect(visiblePanel(container, '[aria-label="Submit GST return"]')).toBeNull();
     });
   });
+
+  // GAP-BILLING-GSTN-07: submit result renders "filed" as a green (good) pill, not warn.
+  // Given: a successful GSTN submission returns status "filed"
+  // When: the console renders the result
+  // Then: the StatusPill for "filed" carries the class "pill good"
+  it("renders a filed GSTN return with a green (good) pill, not warn (GSTN-07)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: {
+            referenceId: "ref-filed",
+            status: "filed",
+            gstin: VALID_GSTIN,
+            returnPeriod: "04/2026",
+            submittedAt: "2026-08-01T00:00:00Z",
+          },
+        }),
+        { status: 201 },
+      ),
+    );
+    render(<GstnConsole />);
+    fillSubmitForm();
+    fireEvent.click(screen.getByRole("button", { name: "Submit Return" }));
+    await waitFor(() => expect(screen.getByText(/File GSTR1/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "File return" }));
+    await waitFor(() => expect(screen.getByText("ref-filed")).toBeInTheDocument());
+    // The status label "Filed" must carry the green "good" pill class.
+    const pill = screen.getByText("Filed");
+    expect(pill.className).toContain("good");
+    expect(pill.className).not.toContain("warn");
+  });
+
 });
