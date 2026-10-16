@@ -97,7 +97,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 ### GAP-SETTINGS-BRANDING-07  ·  LOW  ·  confirmed  ·  theme LOADING (was FABRICATED)
 
-- [x] **Status** (W2 PQ: closed by #N)
+- [x] **Status** (W2 PQ: closed by #2098)
 - **W0-10 note:** review found the W0 tick partly — loading skeleton added (page.tsx:560) but on brand-fetch failure Save stays enabled and message says Showing defaults — review before saving (page.tsx:411-415), no Retry button; canEdit (page.tsx:366) ignores loadError so defaults can overwrite stored branding
 - **W1 note (2026-10-13):** Not fixed by #2001: on brand-fetch failure Save is still enabled and there is no Retry (checked on main d341ad6f1).
 - **First-pass claim:** On first load the editor shows hard-coded defaults with no skeleton or "loading" state until the brand fetch resolves, so a returning admin may edit and save over their real branding before it loads (page.tsx:383-409).
