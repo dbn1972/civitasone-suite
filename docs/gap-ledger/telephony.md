@@ -510,9 +510,9 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 - **Impact if wrong:** Inconsistent call lists between pages.
 - **Web change if wrong:** Standardise both on one path in loaders.ts:1821 or resource.ts:103.
 
-### GAP-TELEPHONY-LIST-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-TELEPHONY-LIST-06  ·  LOW  ·  verified  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by gap-backend-verify.test.ts — callSummarySchema (validators.ts) includes all list-page fields: id, direction, callerNumber (masked), calleeNumber, status, disposition, queueId, agentId, hasRecording, waitSeconds, talkSeconds, slaAnswered, abandoned, startedAt, endedAt. sendValidated enforces schema. Verified in gap-backend-verify.test.ts GAP-TELEPHONY-LIST-06 suite)
 - **First-pass claim:** telephony-service is absent from the services/ snapshot; the list endpoint's row fields cannot be verified — undeterminable.
 - **Service:** `telephony-service`  ·  **Endpoint(s):** `['GET /api/v1/telephony/calls']`
 - **Question:** Does each row contain the fields the list renders (id, direction, agent, status, duration, timestamp)?

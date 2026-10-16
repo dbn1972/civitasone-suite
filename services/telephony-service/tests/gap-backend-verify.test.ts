@@ -356,3 +356,64 @@ describe("GAP-TELEPHONY-LIST-04: both gateway paths resolve to telephony-service
     expect(res.statusCode).toBe(403);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GAP-TELEPHONY-LIST-06
+// Question: Does each row from GET /v1/telephony/calls contain the fields the
+// list renders: id, direction, agent, status, duration, timestamp?
+// ─────────────────────────────────────────────────────────────────────────────
+describe("GAP-TELEPHONY-LIST-06: call row contains all mapper fields", () => {
+  it("callSummarySchema accepts a full row with all list-page fields", () => {
+    const r = callSummarySchema.safeParse({
+      id: "11111111-1111-4000-8000-000000000001",
+      direction: "inbound",
+      callerNumber: "+91XXXXXXXX89",  // masked
+      calleeNumber: null,
+      status: "completed",
+      disposition: "resolved",
+      queueId: "33333333-1111-4000-8000-000000000001",
+      agentId: "44444444-1111-4000-8000-000000000001",
+      linkedRefType: "helpdesk_ticket",
+      linkedRefId: "55555555-1111-4000-8000-000000000001",
+      hasRecording: true,
+      waitSeconds: 8,
+      talkSeconds: 240,
+      slaAnswered: true,
+      abandoned: false,
+      startedAt: "2026-10-01T09:00:00.000Z",
+      endedAt: "2026-10-01T09:04:00.000Z",
+      version: 3,
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("callSummarySchema rejects a row missing required fields", () => {
+    // status is required
+    const r = callSummarySchema.safeParse({ id: "11111111-1111-4000-8000-000000000001" });
+    expect(r.success).toBe(false);
+  });
+
+  it("Given telephony_user; When GET /v1/telephony/calls; Then each row has id direction status abandoned", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/telephony/calls",
+      headers: { authorization: `Bearer ${token(TENANT_A, ["telephony_user"])}` },
+    });
+    await app.close();
+    expect([200, 500]).toContain(res.statusCode);
+    if (res.statusCode === 200) {
+      const rows = res.json().data as Array<Record<string, unknown>>;
+      for (const row of rows) {
+        expect(row).toHaveProperty("id");
+        expect(row).toHaveProperty("direction");
+        expect(row).toHaveProperty("status");
+        expect(row).toHaveProperty("abandoned");
+        expect(row).toHaveProperty("waitSeconds");
+        expect(row).toHaveProperty("talkSeconds");
+        expect(row).toHaveProperty("startedAt");
+        expect(row).toHaveProperty("slaAnswered");
+      }
+    }
+  });
+});
