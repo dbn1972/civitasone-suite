@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { PageHeader } from "../../../../_components/ds";
+import { PageHeader, ConfirmDialog } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { useUnsavedChangesGuard } from "@/lib/useUnsavedChangesGuard";
 
@@ -88,6 +88,7 @@ export default function NewStockItemPage() {
     [form],
   );
   useUnsavedChangesGuard(dirty);
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   // Merge client-side and server-side field errors
   const allFieldErrors = useMemo(
@@ -380,7 +381,24 @@ export default function NewStockItemPage() {
             <button type="submit" className="btn primary" disabled={busy} aria-busy={busy}>
               {busy ? "Saving…" : "Create item"}
             </button>
-            <Link href="/stock/list" className="btn ghost">Cancel</Link>
+            {/* GAP-STOCK-ITEMS-NEW-05: in-app confirm when form is dirty. */}
+            <button
+              type="button"
+              className="btn ghost"
+              onClick={() => { if (dirty) setConfirmCancel(true); else router.push("/stock/list"); }}
+            >
+              Cancel
+            </button>
+            <ConfirmDialog
+              open={confirmCancel}
+              title="Discard unsaved changes?"
+              description="You have unsaved changes. Leave without saving?"
+              confirmLabel="Discard"
+              cancelLabel="Keep editing"
+              danger
+              onConfirm={() => { setConfirmCancel(false); router.push("/stock/list"); }}
+              onCancel={() => setConfirmCancel(false)}
+            />
           </div>
         </form>
       </div>
