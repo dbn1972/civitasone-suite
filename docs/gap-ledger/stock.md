@@ -370,7 +370,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W2 PQ: closed by #PRNUM)
+- [x] **Status** (W2 PQ: closed by #2063)
 - **W0 note:** partly fixed by #1789 — mapper now emits signedQuantity/direction from qtyIn/qtyOut, but StockLedgerClient.tsx:48 still derives the +/- sign from type==='issue'
 - **First-pass claim:** Qty sign logic: only type 'issue' gets '-' (StockLedgerClient.tsx:48); transfer-out and negative adjustments (qtyOut > 0) render as '+' — quantity direction is wrong for two of four entry types.
 - **Verified evidence:** StockLedgerClient.tsx:48 prefixes '-' only when type==='issue', else '+'. Mapper (apiMappers.ts:973) folds quantity = qtyIn>0 ? qtyIn : qtyOut and drops direction; type transfer/adjustment (lines 976-980) can be outbound, so those show '+'. Direction is lost at mapping.
@@ -402,7 +402,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-06  ·  LOW  ·  partly  ·  theme FILTER (was DATEFMT)
 
-- [x] **Status** (W2 PQ: closed by #PRNUM)
+- [x] **Status** (W2 PQ: closed by #2063)
 - **First-pass claim:** Segmented filter offers only All/Receipts/Issues; transfer and adjustment entries can't be isolated, and header totals never reflect the active filter.
 - **Verified evidence:** StockLedgerClient.tsx:22,36-41 offers All/Receipts/Issues only (transfer/adjustment unfilterable) - true. Header StatCards are computed in server page.tsx:10-12 from all entries and do not react to the filter - true. Date formatting already uses formatIndianDate (Client:45), so the DATEFMT theme/fix text does not apply.
 - **Files to change:** `apps/web/src/app/(app)/stock/ledger/StockLedgerClient.tsx`, `apps/web/src/app/(app)/stock/ledger/page.tsx`
@@ -416,7 +416,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-07  ·  LOW  ·  confirmed  ·  theme OTHER (was WIRING)
 
-- [x] **Status** (W2 PQ: closed by #PRNUM)
+- [x] **Status** (W2 PQ: closed by #2063)
 - **First-pass claim:** referenceNo (entryId prefix) is mapped (apiMappers.ts:990) but not shown, so an entry cannot be quoted in an audit query; rows are not links.
 - **Verified evidence:** mapper apiMappers.ts:990 sets referenceNo = entryId.slice(0,8); StockLedgerClient rows (43-51) and COLUMNS (24-31) omit it, and DataTable is not given rowLinkPrefix. No stock/ledger/[id] page exists (only ledger/new).
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/stock/ledger/StockLedgerClient.tsx`
@@ -515,7 +515,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-NEW-06  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [x] **Status** (W2 PQ: closed by #PRNUM)
+- [x] **Status** (W2 PQ: closed by #2063)
 - **First-pass claim:** Default date is new Date().toISOString().slice(0,10) (page.tsx:36) — the UTC date, so between 00:00 and 05:30 IST the form pre-fills yesterday; no backdating limit or period-lock hint.
 - **Verified evidence:** page.tsx:36 useState(new Date().toISOString().slice(0,10)) is the UTC date; 00:00-05:30 IST yields yesterday. No min/max or period-lock hint (backend rule cannot be verified). Also SSR/CSR hydration is n/a (client page).
 - **Files to change:** `apps/web/src/app/(app)/stock/ledger/new/page.tsx`, `apps/web/src/lib/formatters.ts`
@@ -607,7 +607,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LIST-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W2 PQ: closed by #PRNUM)
+- [x] **Status** (W2 PQ: closed by #2063)
 - **First-pass claim:** isLowStock = currentStock <= minStockLevel (apiMappers.ts:1019); an item with reorderLevel 0 and stock 0 is 'Low Stock' but a brand-new item with no receipts also shows 'Low Stock' — indistinguishable from a real shortfall. Stock-outs are not separated.
 - **Verified evidence:** apiMappers.ts:1010-1019 currentStock defaults to 0 and minStockLevel to 0; isLowStock = currentStock <= minStockLevel, so 0<=0 is 'Low Stock' for any new/no-reorder item; no separate out-of-stock state.
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/stock/list/StockListClient.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -639,7 +639,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LIST-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W2 PQ: closed by #PRNUM)
+- [x] **Status** (W2 PQ: closed by #2063)
 - **First-pass claim:** Status cell is coerced with 'as unknown as boolean' to satisfy cellType 'status' (StockListClient.tsx:41-46) — type-unsafe, and 'Low Stock' vs 'OK' relies on text mapping in DataTable.
 - **Verified evidence:** StockListClient.tsx:39-42 overwrites boolean isLowStock with the string 'Low Stock'/'OK' via `as unknown as boolean`, and :57 casts rows `as unknown as Record<string,unknown>[]`. DataTable cellType status -> StatusPill (DataTable.tsx:127); 'low stock' is in STATUS_MAP (bad) but 'OK' is not, so it renders neutral info rather than good.
 - **Files to change:** `apps/web/src/app/(app)/stock/list/StockListClient.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -655,7 +655,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LIST-07  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W2 PQ: closed by #PRNUM)
+- [x] **Status** (W2 PQ: closed by #2063)
 - **First-pass claim:** Table has no Category column even though Categories is a headline KPI and category is in the row data.
 - **Verified evidence:** StockListClient COLUMNS (22-29) have no category column although StockItem.category exists (line 15) and page.tsx:15,34 shows a Categories KPI.
 - **Files to change:** `apps/web/src/app/(app)/stock/list/StockListClient.tsx`
