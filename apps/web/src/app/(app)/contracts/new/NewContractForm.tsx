@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
 import { useFormError } from "@/lib/useFormError";
@@ -70,6 +70,24 @@ export function NewContractForm({ vendors = [] }: { vendors?: VendorChoice[] }) 
     async (ids: string[]): Promise<EntityOption[]> => options.filter((o) => ids.includes(o.id)),
     [options],
   );
+
+  // GAP-CONTRACTS-NEW-05: unsaved-change guard — prompt the browser's
+  // native "Leave site?" dialog when the form has been touched and the
+  // user navigates away before submitting.  Only active when the form is
+  // dirty and not yet submitted successfully so a router.push after a
+  // 201/202 never triggers it.
+  const isDirty =
+    contractNo !== "" || title !== "" || vendorId !== null ||
+    startDate !== "" || expiry !== "" || value !== "";
+  useEffect(() => {
+    if (!isDirty || status === "success") return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = ""; // legacy browser compat
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [isDirty, status]);
 
   // Live money preview (GAP-CONTRACTS-NEW-03).
   const valuePreview = useMemo(() => {
