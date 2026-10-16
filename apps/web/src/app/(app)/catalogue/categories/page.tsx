@@ -14,6 +14,7 @@ export default async function Page() {
       <ModuleListPage
         title="Catalogue — Categories"
         description="Hierarchical product category tree."
+        errorArea="categories"
         rows={data}
         source={source}
       />

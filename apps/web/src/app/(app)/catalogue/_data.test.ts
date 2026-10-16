@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mapRows, flattenCategoryTree, mapRateRows, isRateInForce, mapBundleRows } from "./_data";
+import { mapRows, flattenCategoryTree, mapRateRows, isRateInForce, mapBundleRows, mapCatalogueProductRows } from "./_data";
 
 describe("mapRows — catalogue generic mapper", () => {
   // GAP-CATALOGUE-{CATEGORIES,PRODUCTS,RATES,BUNDLES}-02/03 (WIRING): an
@@ -165,5 +165,63 @@ describe("mapBundleRows — GAP-CATALOGUE-BUNDLES-01 (members)", () => {
 
   it("returns null for a non-list bundle payload (WIRING)", () => {
     expect(mapBundleRows({ message: "x" })).toBeNull();
+  });
+});
+
+describe("mapCatalogueProductRows — GAP-CATALOGUE-PRODUCTS-01 (typed mapper)", () => {
+  // Given: a well-formed catalogue-service product list response.
+  // When: mapCatalogueProductRows is called.
+  // Then: each row is mapped with id, label (name), sublabel (category),
+  //       status (lifecycleStatus), meta (productCode or tax).
+  it("maps a product list response to ModuleRowSummary rows", () => {
+    const payload = {
+      data: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          name: "Term Deposit",
+          category: "Deposits",
+          lifecycleStatus: "active",
+          productCode: "TD-001",
+          taxRateBps: 0,
+        },
+      ],
+      meta: { page: 1, pageSize: 50, total: 1 },
+    };
+    const rows = mapCatalogueProductRows(payload)!;
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: "11111111-1111-4111-8111-111111111111",
+      label: "Term Deposit",
+      sublabel: "Deposits",
+      status: "active",
+      meta: "TD-001",
+      code: "TD-001",
+    });
+  });
+
+  it("uses taxRateBps as meta when no productCode", () => {
+    const payload = {
+      data: [
+        {
+          id: "22222222-2222-4222-8222-222222222222",
+          name: "GST Service",
+          lifecycleStatus: "draft",
+          taxRateBps: 1800,
+        },
+      ],
+    };
+    const rows = mapCatalogueProductRows(payload)!;
+    expect(rows[0]!.meta).toBe("Tax 18.00%");
+  });
+
+  it("returns null for a non-conforming payload (zod guard)", () => {
+    // An unexpected 200 body (e.g. {message:'x'}) must become source:'error'
+    expect(mapCatalogueProductRows({ message: "unexpected" })).toBeNull();
+    expect(mapCatalogueProductRows(null)).toBeNull();
+    expect(mapCatalogueProductRows("boom")).toBeNull();
+  });
+
+  it("returns empty array for an empty data list (not null)", () => {
+    expect(mapCatalogueProductRows({ data: [] })).toEqual([]);
   });
 });

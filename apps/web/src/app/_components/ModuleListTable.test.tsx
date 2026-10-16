@@ -274,4 +274,35 @@ describe("ModuleListTable", () => {
     const names = Array.from(document.querySelectorAll("tbody td:nth-child(2)")).map((el) => el.textContent);
     expect(names).toEqual(["Alpha", "Zebra"]);
   });
+
+  // GAP-CATALOGUE-{BUNDLES,CATEGORIES,PRODUCTS,RATES}-06 (TABLE-FEATURES):
+  // emptyAction CTA wired through to the empty-state (zero-rows case).
+  // Given: a successful fetch returning zero rows with an emptyAction node.
+  // When: the ModuleListTable renders.
+  // Then: the CTA is visible; no retry button is shown (it loaded ok).
+  it("shows the emptyAction CTA in the zero-row empty state", () => {
+    mockedHook.mockReturnValue({ data: [], fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
+    render(
+      <ModuleListTable
+        cacheKey="catalogue.bundles"
+        rows={[]}
+        source="api"
+        errorArea="bundles"
+        emptyAction={<a href="/catalogue/bundles/create">Add first bundle</a>}
+      />,
+    );
+    expect(screen.getByRole("link", { name: /add first bundle/i })).toBeInTheDocument();
+    // Genuine empty state — no retry button
+    expect(screen.queryByRole("button", { name: /retry|try again/i })).not.toBeInTheDocument();
+    // The message says the list loaded ok
+    expect(screen.getByText(/loaded successfully/i)).toBeInTheDocument();
+  });
+
+  it("does not render any action when emptyAction is omitted (read-only modules)", () => {
+    mockedHook.mockReturnValue({ data: [], fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
+    render(<ModuleListTable cacheKey="catalogue.products" rows={[]} source="api" errorArea="products" />);
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
 });
