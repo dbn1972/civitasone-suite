@@ -6,6 +6,7 @@ import { Button, PageHeader, Card, EmptyState } from "../../../../_components/ds
 import { formatIndianDateTime, maskRecipient } from "@/lib/formatters";
 import { StatusBadge } from "../../_components/StatusBadge";
 import { ResendAction } from "./ResendAction";
+import { channelLabel } from "../../_components/channelLabel";
 import { useFormError } from "@/lib/useFormError";
 
 /**
@@ -198,7 +199,7 @@ export function DeliveryDetail({
           <Row label="Recipient">
             <span className="mono" aria-label="Recipient (masked)">{maskRecipient(delivery.recipient)}</span>
           </Row>
-          <Row label="Channel">{delivery.channel.replace(/_/g, " ")}</Row>
+          <Row label="Channel">{channelLabel(delivery.channel)}</Row>
           <Row label="Attempts">{attempts ?? "—"}</Row>
           <Row label="Sent at">{delivery.sentAt ? formatIndianDateTime(delivery.sentAt) : "—"}</Row>
           <Row label="Next retry at">{delivery.nextRetryAt ? formatIndianDateTime(delivery.nextRetryAt) : "—"}</Row>

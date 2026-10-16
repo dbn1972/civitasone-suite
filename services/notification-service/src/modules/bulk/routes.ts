@@ -27,6 +27,14 @@ export async function bulkRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     const { id } = campaignIdParam.parse(req.params);
+    // GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-01: maker-checker — the actor who created
+    // this campaign must not be the one who triggers the send (segregation of duties).
+    const existing = await queries.getCampaign(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "campaign not found");
+    if (existing.createdBy === ctx.actorId) {
+      throw new HttpError(403, "MAKER_CHECKER_SAME_ACTOR",
+        "campaign must be sent by a different user than the one who created it");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.sendCampaign(ctx, id));
   });
 

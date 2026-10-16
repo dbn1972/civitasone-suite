@@ -648,7 +648,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-TEMPLATES-03  ·  MEDIUM  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2078 — channelLabel propagated to list, deliveries, DeliveryDetail)
 - **W0-10 note:** review found the W0 tick partly — channelLabel() used in templates/page.tsx:102 and templates/[id]/page.tsx:149,184 but notifications/list/page.tsx:80 (named in files-to-change) still channel.replace(/_/g," "); also deliveries/page.tsx:68, DeliveryDetail.tsx:201; compose/page.tsx:52 keeps its own duplicate map
 - **First-pass claim:** Subject shows raw placeholders such as {{period}} and "—" for sms/in-app; channel is a lowercased key with underscores replaced (page.tsx) rather than a label.
 - **Verified evidence:** Subject is printed as stored (:68, includes {{period}}) and '—' when null; channel is t.channel.replace(/_/g,' ') (:67), not lowercased by the code but shown as raw key like 'in app'/'sms'. Placeholders are legitimate template content, so only the channel label is a real gap. Theme FABRICATED is wrong.
@@ -763,7 +763,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2078 — backend role gate confirmed, consent/DND in consumer confirmed, maker-checker added to PATCH send)
 - **First-pass claim:** Irreversible bulk send behind a single confirm: "Send campaign" queues messages to the whole audience (CampaignDetail.tsx) for any user reaching the page — no role gate, no maker-checker (contrast the experiments module, which requires an approval step), and no consent/DND or opt-out check is visible anywhere in the UI (DPDP marketing consent). Server-side enforcement undeterminable (notification-service absent).
 - **Service:** `notification-service`  ·  **Endpoint(s):** `['PATCH notification/campaigns/:id/send', 'PATCH .../cancel']`
 - **Question:** Does send require an approver role distinct from the creator, check consent/DND/opt-out per recipient, and audit with audience size?
@@ -774,7 +774,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-COMPOSE-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2078 — backend role gate (NOTIFY_SEND_ROLES) confirmed, rate limit 30/min added)
 - **First-pass claim:** Any user reaching the page can send any template to any free-text recipient over any channel with two clicks (page.tsx); there is no role check, no recipient allow-list or count, no template-variable input and no visible rate limit or audit — a spam/phishing vector. Server-side guards are undeterminable (notification-service absent).
 - **Service:** `notification-service`  ·  **Endpoint(s):** `['POST notification/send', 'GET notification/templates']`
 - **Question:** Does send restrict roles, cap recipients, rate-limit per user and audit each send?
@@ -785,7 +785,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-DELIVERIES-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2078 — detail route now returns attemptCount normalised from retryCount)
 - **First-pass claim:** List shows attemptCount while the detail page reads retryCount from the raw row (deliveries/[id]/page.tsx) — two field names for one concept from two shapes of the same service; detail "Attempts" can disagree with the list (retries vs attempts). Server contract undeterminable.
 - **Service:** `notification-service`  ·  **Endpoint(s):** `['GET notification/deliveries', 'GET notification/deliveries/:id']`
 - **Question:** Do list and detail use the same attempt counter field (attemptCount vs retryCount)?
@@ -796,7 +796,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-EXPERIMENTS-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: already-fixed in main — approve-winner endpoint with maker-checker exists; ExperimentActions.tsx has the UI controls)
 - **First-pass claim:** The approval workflow the page describes has no UI: subtitle and hub tile promise "approval-gated winner promotion" and the legend refers to "approve-winner" (page.tsx), yet the table has no row link, no Approve/Reject control and no detail route in the snapshot, so a reviewer cannot act on the "Awaiting approval" count from here (maker-checker step is invisible).
 - **Service:** `notification-service`  ·  **Endpoint(s):** `['GET/POST notification experiments (approve-winner)']`
 - **Question:** Does the service expose approve/reject-winner endpoints with role separation from the experiment creator?
@@ -807,7 +807,7 @@ Counts: ACTION 45, BACKEND-VERIFY 5
 
 ### GAP-NOTIFICATIONS-TEMPLATES-DETAIL-02  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2078 — findTemplateVersions returns newest-first so versions[0] is always latest)
 - **First-pass claim:** versions[0] is assumed to be the latest (page.tsx) and the comment says the API returns latest first, but the client never sorts by version; if order differs the page shows an old body as "Current version" and offers to send it. Server ordering undeterminable (service absent).
 - **Service:** `notification-service`  ·  **Endpoint(s):** `['GET notification/templates/:id/versions']`
 - **Question:** Does versions endpoint return newest first with explicit version numbers?

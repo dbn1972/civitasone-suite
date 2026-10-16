@@ -81,3 +81,36 @@ describe("GAP-NOTIFICATIONS-DELIVERIES-01 — list recipient is masked", () => {
     expect(row.recipient).toBe(CLEAR_EMAIL);
   });
 });
+
+
+describe("GAP-NOTIFICATIONS-DELIVERIES-03 — attemptCount consistent between list and detail", () => {
+  it("list and detail both report the same attempt count for a delivery", async () => {
+    await seed();
+    const app = await buildApp();
+
+    const listRes = await app.inject({
+      method: "GET",
+      url: "/notifications/deliveries",
+      headers: { authorization:  },
+    });
+    const detailRes = await app.inject({
+      method: "GET",
+      url: ,
+      headers: { authorization:  },
+    });
+    await app.close();
+
+    expect(listRes.statusCode).toBe(200);
+    expect(detailRes.statusCode).toBe(200);
+
+    const listRow = (listRes.json() as Array<{ id: string; attemptCount?: number }>)
+      .find((r) => r.id === DELIVERY_ID);
+    const detail = detailRes.json() as { retryCount?: number; attemptCount?: number };
+
+    // Both surfaces must expose attemptCount (the canonical field the web uses).
+    expect(listRow?.attemptCount).toBeDefined();
+    expect(detail.attemptCount).toBeDefined();
+    // And the values must match (seed inserts retry_count = 1).
+    expect(listRow?.attemptCount).toBe(detail.attemptCount);
+  });
+});

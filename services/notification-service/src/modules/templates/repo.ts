@@ -53,7 +53,9 @@ export async function findTemplateVersions(id: string): Promise<TemplateView[]> 
     versions.unshift(pred);
     current = pred;
   }
-  return versions;
+  // GAP-NOTIFICATIONS-TEMPLATES-DETAIL-02: return newest-first so versions[0] is always
+  // the latest (highest-version) template. The web client assumes this ordering.
+  return versions.slice().reverse();
 }
 
 export async function findPrefsByUser(userId: string, limit = 200): Promise<PrefView[]> {

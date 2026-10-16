@@ -6,6 +6,7 @@ import { db, sqlClient } from "./shared/db.js";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
 import { HttpError } from "./shared/context.js";
 import cors from "@fastify/cors";
+import { registerRateLimit } from "@civitasone/rate-limit";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { templateRoutes } from "./modules/templates/routes.js";
@@ -47,6 +48,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   });
 
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
+  // GAP-NOTIFICATIONS-COMPOSE-01: per-route rate-limit config is read by the plugin.
+  await registerRateLimit(app, { max: 200, timeWindow: "1 minute" });
 
   await app.register(authPlugin);
 

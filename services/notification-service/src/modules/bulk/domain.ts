@@ -12,6 +12,7 @@ export type CampaignView = {
   currency: string;
   actualCostMinor: string;
   version: number;
+  createdBy: string;
   recipientCount?: number;
   deliveredCount?: number;
 };
