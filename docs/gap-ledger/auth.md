@@ -73,7 +73,7 @@ Counts: ACTION 15, BACKEND-VERIFY 3
 
 ### GAP-AUTH-DEV-05  ·  LOW  ·  partly  ·  theme DEADCODE (was I18N)
 
-- [x] **Status** (W2 PQ: closed by w2/auth-part-1 — auth/layout.tsx fixed by #1924; dev/page.tsx inline hex CSSProperties replaced with Tailwind classes; civitasone_demo_auth dead-code gone)
+- [x] **Status** (W2 PQ: closed by #2093 — auth/layout.tsx fixed by #1924; dev/page.tsx inline hex CSSProperties replaced with Tailwind classes; civitasone_demo_auth dead-code gone)
 - **W0 note:** partly fixed by #1924 — layout now checks civitasone_at with exp; dev page still uses inline hex colours
 - **First-pass claim:** All colours are inline hex (#0f172a, #6366f1, …) outside the DS tokens, no dark-mode variant and a ◈ glyph badge; the layout redirect uses a cookie civitasone_demo_auth that no code in apps/web sets — dev-login sets civitasone_at (route.ts:162) — so the layout redirect never fires (auth/layout.tsx:6).
 - **Verified evidence:** Inline hex colours throughout page.tsx:7-36, no dark mode, and '◈' badge (line 65, aria-hidden). The second claim is true: auth/layout.tsx:6 checks cookie civitasone_demo_auth, and grep finds it set nowhere in apps/web; dev-login sets civitasone_at (route.ts:162). So the layout redirect is dead code and already signed-in users are not redirected from /auth/*. Middleware auth may handle it separately (not checked).
@@ -152,7 +152,7 @@ Counts: ACTION 15, BACKEND-VERIFY 3
 
 ### GAP-AUTH-FORGOT-05  ·  LOW  ·  partly  ·  theme STYLE (was FABRICATED)
 
-- [x] **Status** (W2 PQ: closed by w2/auth-part-1 — AuthShell created at app/_components/AuthShell.tsx; forgot/page.tsx now uses AuthShell centred dark card)
+- [x] **Status** (W2 PQ: closed by #2093 — AuthShell created at app/_components/AuthShell.tsx; forgot/page.tsx now uses AuthShell centred dark card)
 - **First-pass claim:** Route uses PageShell (min-h-screen bg-slate-50, left-aligned h1) while login/dev use a centred dark card — three auth screens, three visual languages; Tailwind literals instead of DS tokens.
 - **Verified evidence:** forgot/page.tsx:8 uses PageShell (min-h-screen bg-slate-50, left h1 text-3xl, PageShell.tsx:16-24); login/dev use dark gradient cards; all use Tailwind slate/indigo literals. It is a style inconsistency, not fabricated data.
 - **Files to change:** `apps/web/src/app/auth/forgot/page.tsx`, `apps/web/src/app/auth/layout.tsx`
@@ -226,7 +226,7 @@ Counts: ACTION 15, BACKEND-VERIFY 3
 
 ### GAP-AUTH-LOGIN-05  ·  LOW  ·  partly  ·  theme STYLE (was FABRICATED)
 
-- [x] **Status** (W2 PQ: closed by w2/auth-part-1 — LoginClient.tsx updated to use shared AuthShell; three auth screens now share one visual language)
+- [x] **Status** (W2 PQ: closed by #2093 — LoginClient.tsx updated to use shared AuthShell; three auth screens now share one visual language)
 - **First-pass claim:** Page uses Tailwind slate/indigo literals and a dark gradient unrelated to the CivitasOne tokens used everywhere else (LoginClient.tsx:14-21); “Try again” is an anchor styled as a button on a page with no <h1> landmark hierarchy beyond one heading.
 - **Verified evidence:** LoginClient.tsx:14-21 (actual 161-165) uses slate/indigo literals and gradient; 'Try again' is an <a> styled as a button (semantically fine for navigation). It has an h1 and main landmark, so hierarchy claim is weak. Theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/auth/login/LoginClient.tsx`
@@ -243,7 +243,7 @@ Counts: ACTION 15, BACKEND-VERIFY 3
 
 ### GAP-AUTH-DEV-06  ·  LOW  ·  partly  ·  theme BACKEND
 
-- [x] **Status** (W2 PQ: closed by w2/auth-part-1 — auditor description fixed on main: page.tsx now says "Audit (read-only)"; no legal role claimed)
+- [x] **Status** (W2 PQ: closed by #2093 — auditor description fixed on main: page.tsx now says "Audit (read-only)"; no legal role claimed)
 - **First-pass claim:** Account roles behind the demo usernames are seeded outside this snapshot — the descriptions (e.g. “Audit · Legal”) cannot be verified.
 - **Service:** `identity-service`  ·  **Endpoint(s):** `['POST /api/auth/dev-login (web-local)', 'seed: scripts/demo/seed-demo.mjs']`
 - **Question:** Do the seeded demo personas' roles match the descriptions on the dev page (e.g. auditor = Audit + Legal)?
@@ -255,7 +255,7 @@ Counts: ACTION 15, BACKEND-VERIFY 3
 
 ### GAP-AUTH-FORGOT-06  ·  LOW  ·  partly  ·  theme BACKEND
 
-- [x] **Status** (W2 PQ: closed by w2/auth-part-1 — web-side fix applied on main: ForgotForm.tsx rewritten to direct user to SSO/IT; no invented 30-min expiry; identity-service reset route remains BACKEND-VERIFY)
+- [x] **Status** (W2 PQ: closed by #2093 — web-side fix applied on main: ForgotForm.tsx rewritten to direct user to SSO/IT; no invented 30-min expiry; identity-service reset route remains BACKEND-VERIFY)
 - **First-pass claim:** identity-service is not in the snapshot — reset token issuance, expiry and email delivery are undeterminable.
 - **Service:** `identity-service`  ·  **Endpoint(s):** `['POST /api/auth/forgot (no route in web app)']`
 - **Question:** Does identity-service expose a password-reset route that issues an expiring single-use token and sends email?
@@ -267,7 +267,7 @@ Counts: ACTION 15, BACKEND-VERIFY 3
 
 ### GAP-AUTH-LOGIN-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 PQ: closed by w2/auth-part-1 — FRIENDLY_ERRORS map added to LoginClient.tsx covering all known codes; unknown codes fall back to generic message)
+- [x] **Status** (W2 PQ: closed by #2093 — FRIENDLY_ERRORS map added to LoginClient.tsx covering all known codes; unknown codes fall back to generic message)
 - **First-pass claim:** Identity-service / Keycloak realm are not in the snapshot — error codes emitted by /api/auth/callback are undeterminable.
 - **Service:** `identity-service`  ·  **Endpoint(s):** `['GET /api/auth/callback (web) -> Keycloak token endpoint', 'POST /api/identity/sessions']`
 - **Question:** Which error codes can /api/auth/callback redirect with, and does login/page.tsx map all of them?
