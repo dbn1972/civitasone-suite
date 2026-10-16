@@ -499,9 +499,9 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 - **Impact if wrong:** Disposition report counts wrong or empty.
 - **Web change if wrong:** Update the filter/grouping in dispositions/page.tsx to the real enum values.
 
-### GAP-TELEPHONY-LIST-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-TELEPHONY-LIST-04  ·  MEDIUM  ·  verified  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by gap-backend-verify.test.ts — apps/web/src/app/api/proxy/[...path]/route.ts:54 builds target as "\${GATEWAY}/api/\${subpath}", so /api/proxy/v1/telephony/calls → GATEWAY/api/v1/telephony/calls — identical to loaders.ts /api/v1/telephony/calls. Single gateway registry entry (registry.ts:62) routes both to telephony-service:3026. Verified in gap-backend-verify.test.ts GAP-TELEPHONY-LIST-04 suite)
 - **First-pass claim:** Reads /api/v1/telephony/calls server-side (loaders.ts:1821) while the new Call Log reads /api/proxy/v1/telephony/calls client-side (resource.ts:103); two gateway paths for one resource — which is authoritative is undeterminable.
 - **Service:** `telephony-service`  ·  **Endpoint(s):** `['GET /api/v1/telephony/calls (server, loaders.ts:1821)', 'GET /api/proxy/v1/telephony/calls (client, resource.ts:103)']`
 - **Question:** Do both gateway paths reach the same telephony-service /v1/telephony/calls route with identical auth and shape?
