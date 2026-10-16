@@ -77,6 +77,8 @@ describe("Legal case detail order type display (GAP-LEGAL-CASES-DETAIL-01)", () 
     });
     render(await LegalCaseDetailPage({ params: { id: "c1" } }));
     expect(screen.queryByText("Affidavit filings")).not.toBeInTheDocument();
-    expect(screen.getByText("Judgment")).toBeInTheDocument();
+    // "Judgment in favour" uniquely identifies the court-order row (distinct from
+    // the lifecycle timeline "Judgment" stage label).
+    expect(screen.getByText("Judgment in favour")).toBeInTheDocument();
   });
 });
