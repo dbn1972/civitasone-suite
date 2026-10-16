@@ -4,6 +4,7 @@ import { PageHeader, Card, StatusPill, EmptyState, ErrorState, Masked } from "..
 import { getProcurementVendorById, getProcurementPOs } from "../../../../_data/loaders";
 import { getTranslations } from "next-intl/server";
 import { VendorActions } from "./VendorActions";
+import { VendorOrdersTable, type VendorPoRow } from "./VendorOrdersTable";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate, formatMoney, todayIST } from "@/lib/formatters";
 import { getSessionRoles, hasAnyRole, PROCUREMENT_APPROVER_ROLES, PROCUREMENT_WRITE_ROLES } from "@/lib/auth/roleGuard";
@@ -209,28 +210,15 @@ export default async function VendorDetailPage({ params, searchParams }: { param
         ) : orders.data.length === 0 ? (
           <EmptyState icon="🧾" title={t("noOrders")} message={t("noOrdersHint")} />
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table className="tbl">
-              <thead>
-                <tr>
-                  <th scope="col">{t("colPo")}</th>
-                  <th scope="col">{t("colDate")}</th>
-                  <th scope="col">{t("colStatus")}</th>
-                  <th scope="col" style={{ textAlign: "end" }}>{t("colAmount")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.data.map((po) => (
-                  <tr key={po.id}>
-                    <td><Link href={`/procurement/orders/${po.id}`} className="mono">{po.poNo}</Link></td>
-                    <td>{po.orderDate ? formatIndianDate(po.orderDate) : "—"}</td>
-                    <td><StatusPill status={po.status} label={po.status.replace(/_/g, " ")} /></td>
-                    <td className="mono" style={{ textAlign: "end" }}>{formatMoney(po.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <VendorOrdersTable
+            rows={orders.data.map((po): VendorPoRow => ({
+              id: po.id,
+              poNo: po.poNo,
+              orderDateDisplay: po.orderDate ? formatIndianDate(po.orderDate) : "—",
+              status: po.status,
+              amountDisplay: formatMoney(po.amount),
+            }))}
+          />
         )}
       </Card>
 
