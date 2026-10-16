@@ -384,7 +384,7 @@ Counts: ACTION 21, BACKEND-VERIFY 2
 
 ### GAP-METADATA-HOME-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD — already fixed on main: metadata/layout.tsx adds requireAnyRole(METADATA_ADMIN_ROLES)+ModuleGate; metadata-service requireRole(ADMIN) on all routes verified; tests: layout.test.tsx + gap-metadata-home-01-authz.test.ts)
 - **First-pass claim:** A configuration hub for custom entities/rules/forms - tenant-wide, schema-changing functionality - has no layout, no ModuleGate and no role gate (metadata/ has no layout.tsx; contrast loyalty/meeting layouts with ModuleGate). Any signed-in user can open it; nothing can be verified server-side (no metadata-service in snapshot).
 - **Service:** `metadata-service`  ·  **Endpoint(s):** `['all /api/v1/metadata/*']`
 - **Question:** Do metadata write routes require a schema-admin role, and are entity/field/rule changes audited and versioned?
@@ -395,7 +395,7 @@ Counts: ACTION 21, BACKEND-VERIFY 2
 
 ### GAP-METADATA-ENTITIES-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD — already fixed on main: _data.ts mapRows maps apiName/label/isActive from real DTO; GET /entities returns {data:[],meta:{total}} envelope; tests: gap-metadata-entities-03-envelope.test.ts)
 - **First-pass claim:** mapRows only reads arrays from payload / payload.data / payload.items (_data.ts:18-24) and maps sublabel from description|type|entityKey; the true entity shape is undeterminable (no metadata-service), and rows carry no link to fields/rules/forms.
 - **Service:** `metadata-service`  ·  **Endpoint(s):** `['GET /api/v1/metadata/entities']`
 - **Question:** What is the entity list response envelope and fields (key, label, description, type, fieldsCount)?
