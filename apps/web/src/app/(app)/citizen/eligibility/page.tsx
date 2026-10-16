@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { getEligibilityRuleSets } from "../../../_data/citizenGaps";
@@ -55,7 +56,11 @@ export default async function EligibilityPage() {
               <tbody>
                 {ruleSets.map((r) => (
                   <tr key={r.id} style={{ borderTop: "1px solid var(--line)" }}>
-                    <td style={{ padding: 8 }}>{r.name}</td>
+                    <td style={{ padding: 8 }}>
+                      {r.serviceKey
+                        ? <Link href={`/citizen/services/${encodeURIComponent(r.serviceKey)}`} style={{ fontWeight: 600 }}>{r.name}</Link>
+                        : r.name}
+                    </td>
                     <td style={{ padding: 8 }}>v{r.version}</td>
                     <td style={{ padding: 8 }}>{r.ruleCount}</td>
                     <td style={{ padding: 8 }}>{humanizeStatus(r.status)}</td>
