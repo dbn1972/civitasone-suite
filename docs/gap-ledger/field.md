@@ -337,9 +337,9 @@ Counts: ACTION 23, BACKEND-VERIFY 3
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Title change alters slugified offline cache key, dropping existing cached lists once.
 - **Depends on:** shared ModuleListPage
 
-### GAP-FIELD-TASKS-05  ·  LOW  ·  confirmed  ·  theme WIRING
+### GAP-FIELD-TASKS-05  ·  LOW  ·  interim  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — field-service mutation endpoints (create/assign/complete) absent from snapshot; role/audit design unconfirmed)
 - **W0 note:** partly fixed by #1923 — Assignee column added (raw assigneeId, not name); no Assign/Mark complete actions and hub copy still says completion tracking
 - **First-pass claim:** No create/assign/complete control exists on this page although the module description promises "Field task assignments and completion tracking" (field/page.tsx:6); tasks can only be listed here. Task assignee is not a column, so the list cannot be read by agent.
 - **Verified evidence:** No create/assign/complete controls in tasks/page.tsx (only ModuleListPage). The mapper (_data.ts:51-59) only surfaces agentId as a last-resort sublabel after description/status, so assignee is effectively never displayed. field-service mutation endpoints cannot be verified (service absent), so which actions exist is unknown.
@@ -392,9 +392,9 @@ Counts: ACTION 23, BACKEND-VERIFY 3
   - Visual: open and completed pills differ in colour.
 - **Needs:** web  ·  **Effort:** S ~half day  ·  **Risk:** Changing StatusPill map for 'open' globally would recolour other modules - avoid.
 
-### GAP-FIELD-VISITS-03  ·  HIGH  ·  partly  ·  theme PII
+### GAP-FIELD-VISITS-03  ·  HIGH  ·  interim  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — GPS role gate + CSV export gate + rounding done; audited full-precision reveal + name resolution need DPO/owner decision)
 - **W0 note:** partly fixed by ##1923 — Done: role gate (FIELD_VISIT_LOCATION_ROLES) on GPS column + CSV export, coords rounded to 3dp, agent/task cols (raw ids), purpose note. Remains: no audited full-precision reveal; agent/task shown as ids not resolved names
 - **First-pass claim:** Precise GPS positions of field staff are shown and CSV-exported (exportable, visits/page.tsx:59-60; formatCoord visits.ts:21-24) with no role gate, no masking/rounding and no purpose note — location of an identifiable employee is personal data (DPDP). The row has no agent or task column, so a coordinate cannot be traced to a person or job from the screen (agentId/taskId fetched, never shown).
 - **Verified evidence:** Confirmed: precise lat/lon (check-in only) rendered in the GPS column (visits/page.tsx:28, formatCoord visits.ts:21-24 = full-precision decimal strings) and the DataTable has exportable (59-60) with the CSV path exporting row values; the page has no role/permission check (field/layout.tsx only applies ModuleGate for tenant module enablement) and no purpose note. agentId/taskId are in FieldVisitRow (_data.ts:97-98) but not in Row/columns, so a coordinate cannot be traced to a person from the screen. Whether the gateway/backend enforces roles for /api/v1/field/visits cannot be verified (service absent). The DPDP framing is a policy judgement, not a code fact.
@@ -410,9 +410,9 @@ Counts: ACTION 23, BACKEND-VERIFY 3
   - Unit: formatCoord rounds to configured precision.
 - **Needs:** decision  ·  **Effort:** M ~1-2d  ·  **Risk:** PII/DPDP exposure of employee location; over-restriction could block supervisors' legitimate use.
 
-### GAP-FIELD-VISITS-04  ·  MEDIUM  ·  confirmed  ·  theme FABRICATED
+### GAP-FIELD-VISITS-04  ·  MEDIUM  ·  interim  ·  theme FABRICATED
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — total/date-range endpoint absent from field-service; backend support unverified)
 - **W0 note:** partly fixed by ##1923 — Done: KPI labels 'latest N' when total>shown, date+time via formatIndianDateTime. Remains: still hard-coded limit=100 (FIELD_VISITS_LIMIT), no date-range filter/pagination
 - **First-pass claim:** limit=100 hard-coded with no pagination or date filter (_data.ts:112), so the "Visits" KPI silently caps at 100 and Open counts only within that window; check-in shows date only (formatIndianDate) — no time, though duration is shown.
 - **Verified evidence:** _data.ts:112 (and :90) hard-code ?limit=100; the page has no pagination or date filter, and StatCard 'Visits' = data.length (visits/page.tsx:44), 'Open' counted within the same 100 (22), so both cap silently. Check-in uses formatIndianDate (27), which is date-only (formatters.ts:2-7), while duration is shown.

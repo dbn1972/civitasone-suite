@@ -91,9 +91,9 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
   - Mock 200 [] -> empty message shown.
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low; prevents duplicate approval-band rules (business control).
 
-### GAP-ESTAB-APPROVAL-MATRIX-03  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION (was PII)
+### GAP-ESTAB-APPROVAL-MATRIX-03  ·  MEDIUM  ·  interim  ·  theme VALIDATION (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — W2 INTERIM — band validation done; role picklist needs authoritative role list decision from owner)
 - **W2 estab note:** REOPENED in W2 (was an unverified W0 tick). The web part holds (validateBands blocks overlap, gap warns; bands.test.ts) but the acceptance 'an unknown role is not selectable or produces an error' is not met: approver roles are still free text checked only by a lowercase-token regex, and estab-service accepts any role string. NEEDS OWNER DECISION: which list of approver roles is authoritative, and whether overlapping bands should be rejected server-side (approval-rules/resolver.ts deliberately resolves overlaps by precedence).
 - **First-pass claim:** Approver roles are free-text CSV, turned into labels by string-casing (panel:105-109); a typo yields a chain that no one can satisfy, and there is no overlap/gap check between amount bands.
 - **Verified evidence:** apps/web/src/app/(app)/estab/approval-matrix/ApprovalMatrixPanel.tsx:105-109 (submit) splits rolesCsv by comma and builds label by string casing; role is sent as-typed with no check against a role list. Nothing in the panel compares min/max between existing rules of the same sourceType, so overlaps and gaps are undetected client-side. Server-side validation cannot be verified (estab service absent). Theme 'PII' is wrong.
@@ -733,9 +733,9 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
   - Component test for anchor href.
 - **Needs:** web+backend  ·  **Effort:** M ~1-2d  ·  **Risk:** Serving classified file content: enforce classification/access check server-side.
 
-### GAP-ESTAB-FILES-DETAIL-03  ·  MEDIUM  ·  partly  ·  theme CONFIRM (was OTHER)
+### GAP-ESTAB-FILES-DETAIL-03  ·  MEDIUM  ·  interim  ·  theme CONFIRM (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — decision needed: policy on who may sign vs submit direct; allowedActions endpoint absent from estab-service)
 - **W2 note:** W2 estab re-check: still decision-first (who may sign directly vs submit; server allowedActions). Draft selection is already latest-first. Left open. (#2052)
 - **W0 note:** partly fixed by #1916 — Helper text clarified, draft chosen explicitly; no server allowedActions.
 - **First-pass claim:** Submit for approval and Sign note both act on the first draft yellow note (page.tsx:51-53). "Sign at your level" (FileDetailActions.tsx:209-211) lets one officer create a green note without the workflow task, so it is unclear which path is the approved chain.
@@ -859,9 +859,9 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
   - Second file for an already-linked DAK returns 409 with humanised message.
 - **Needs:** web+backend  ·  **Effort:** M ~1-2d  ·  **Risk:** Duplicate files for one DAK is a records-integrity issue.
 
-### GAP-ESTAB-FILES-NEW-03  ·  MEDIUM  ·  partly  ·  theme MASTERDATA (was DEADROUTE)
+### GAP-ESTAB-FILES-NEW-03  ·  MEDIUM  ·  interim  ·  theme MASTERDATA (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — NEEDS OWNER DECISION: authoritative dept master (operator divisions vs HRMS) and backend validation policy)
 - **W2 estab note:** INTERIM, NEEDS OWNER DECISION. The department on new-file and on DAK open-file is now a pick-list of the enrolled operator divisions (useEstabDivisions) with no free-text fallback and no silent 'ADMIN'. Still open: (a) which master is authoritative (operator divisions vs hrms departments) and (b) whether estab-service must reject a dept outside it. Not built because rejecting would block greenfield tenants that have no operators yet.
 - **W0-10 note:** review found the W0 tick partly — department select built from operators' divisions (files/new/page.tsx:74) but free-text input fallback remains (:416) so typos possible; dak/page.tsx:316 open-file dept still free text 'e.g. ADMIN'; no master dept endpoint/backend validation; still falls back to 'ADMIN' (:154)
 - **First-pass claim:** Department is a free-text input defaulting to "ADMIN" (page.tsx:20,41); the register filters and dak/open-file also hard-code ADMIN, so typos create orphan departments.
@@ -1472,9 +1472,9 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 - **Depends on:** GAP-ESTAB-LIBRARY-ISSUES-05
 
-### GAP-ESTAB-LIBRARY-ISSUES-05  ·  LOW  ·  confirmed  ·  theme OTHER
+### GAP-ESTAB-LIBRARY-ISSUES-05  ·  LOW  ·  interim  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — renewal/fine/condition-on-return decision pending; fine capture involves paise rules, needs owner sign-off)
 - **W2 note:** W2 estab re-check: the stats-gating step is already on main (loan stats depend on the issues loader only). Renewal, fine and condition-on-return still need a product decision. Left open. (#2052)
 - **W0 note:** partly fixed by #1916 — Stats gated per loader fixed; no renewal/fine/condition-on-return capture
 - **First-pass claim:** Either loader failing blanks all three stats even if the other loaded (page.tsx:15-17,39-41); no renewal, fine or "condition on return" capture on Return (IssuesTable.tsx:34-46).
@@ -1732,9 +1732,9 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
   - Detail page shows formatted date; invalid date falls back to raw/—.
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Changing the shared formatter affects every screen.
 
-### GAP-ESTAB-MEETINGS-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme WIRING
+### GAP-ESTAB-MEETINGS-DETAIL-04  ·  MEDIUM  ·  interim  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — W2 INTERIM — MOM status labels fixed and Generate disabled; MOM capture/generate needs product decision + backend endpoint)
 - **W2 estab note:** INTERIM, NEEDS OWNER DECISION. 'Not yet held' / 'Pending' / 'Captured' and the minutes text already render; the misleading tooltip/comment is fixed (Generate MOM stays disabled and says minutes cannot be generated or edited on this screen). Capturing or generating MOM needs a product decision and a backend endpoint that do not exist.
 - **W0 note:** partly fixed by #1916 — MOM state improved (Not yet held); Generate MOM still disabled
 - **First-pass claim:** MOM reads "Draft" for any meeting without minutes, including future ones (page.tsx:124), and the only route to capture MOM is the disabled Generate MOM button whose comment points to a field that this page does not render.
@@ -2002,9 +2002,9 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 - **Needs:** web+backend  ·  **Effort:** XS <1h  ·  **Risk:** Wrong role list would lock out admins; verify claim names against the service guards.
 - **Depends on:** GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-04
 
-### GAP-ESTAB-OPERATORS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
+### GAP-ESTAB-OPERATORS-03  ·  MEDIUM  ·  interim  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — deactivate warns with held-file count and handover link; block vs warn vs auto-reassign policy pending owner decision)
 - **W2 note:** INTERIM, needs owner decision: the deactivate dialog warns with the held-file count and a Handover link; block vs warn vs auto-reassign, listing the files, and a server-side audit are not decided. (#2052)
 - **W0 note:** partly fixed by #1916 — Deactivate confirm warns about held files; no held-file count/block, server audit not visible
 - **First-pass claim:** Deactivate warns that held files "should be handed over first" (OperatorsPanel.tsx:223) but neither checks nor lists the files held; a desk can be deactivated with live files.
@@ -2104,9 +2104,9 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
   - Page test: DataSourceBadge count on the page is <= 1.
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 
-### GAP-ESTAB-QUARTERS-04  ·  MEDIUM  ·  partly  ·  theme PICKLIST (was OTHER)
+### GAP-ESTAB-QUARTERS-04  ·  MEDIUM  ·  interim  ·  theme PICKLIST (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — W2 INTERIM — Org Unit is now a real dept pick-list; category enum vs free-text is owner's call; pending decision)
 - **W2 estab note:** INTERIM, NEEDS OWNER DECISION. Org Unit is now a pick-list of the real departments (QuarterCreateForm.tsx), so two quarters of one unit carry the identical value. Category stays a datalist (suggestions plus free text, so legacy DB values are not locked out): enum-or-free-text is the owner's call.
 - **W0 note:** partly fixed by #1916 — Category now datalist suggestions (not select); Org Unit still free-text input
 - **First-pass claim:** Condition and Org Unit are free-text/raw values with no pick-list, so the filter and statuses depend on operators typing consistently (QuarterCreateForm.tsx; QuartersTable.tsx:26).
@@ -2161,9 +2161,9 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
   - Manual: network log of the server fetch shows a filtered request; history for a quarter with 60 applications shows all of them.
 - **Needs:** web+backend  ·  **Effort:** S ~half day  ·  **Risk:** Low; read-only. Risk is only that the backend filter param name differs from the assumed quarterId.
 
-### GAP-ESTAB-QUARTERS-DETAIL-02  ·  HIGH  ·  partly  ·  theme PICKER (was CONFIRM)
+### GAP-ESTAB-QUARTERS-DETAIL-02  ·  HIGH  ·  interim  ·  theme PICKER (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — W2 INTERIM — EntityPicker done; payLevel/designation locked to HRMS needs HRMS endpoint + backend decision)
 - **W2 note:** INTERIM, needs owner decision: the confirmation names the employee and the entered designation and pay level (labelled as per service record); locking them to HRMS needs an HRMS endpoint exposing designation and pay level, and the backend ignoring client values. (#2052)
 - **W0 note:** partly fixed by #1916 — EntityPicker replaces UUID input; designation/payLevel still editable, dialog says 'selected employee'
 - **First-pass claim:** Apply for allotment asks the clerk to type an employee UUID (ApplyAllotmentForm.tsx) with designation and pay level typed by hand, so an officer can apply on behalf of anyone with unverified pay level; the confirm dialog then shows only the id prefix.

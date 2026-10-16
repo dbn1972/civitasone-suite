@@ -299,9 +299,9 @@ Counts: ACTION 35, BACKEND-VERIFY 1
   - null fee renders '—'.
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 
-### GAP-COURT-CASES-CASEID-04  ·  MEDIUM  ·  partly  ·  theme PII
+### GAP-COURT-CASES-CASEID-04  ·  MEDIUM  ·  interim  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — policy decision pending: which roles see party name/Bar ID unmasked; DPDP DPO sign-off required)
 - **W0 note:** partly fixed by #1923 — advocateBarId rendered via ds Masked (last4) by default; remaining: no reveal control/audit event or role gate (no onReveal passed), party name still shown in the clear; policy decision pending
 - **First-pass claim:** Party names and advocate Bar IDs (DPDP personal data) are rendered in full to every court-module user; no masking or role check (CaseConsole.tsx:284-320, types.ts:CaseParty).
 - **Verified evidence:** PartiesPanel (CaseConsole.tsx:282-312) prints name, advocateName and advocateBarId in the clear; no Masked component or role check exists in web (grep). types.ts:45-46 notes PII is server-encrypted and the gateway returns decrypted values 'where permitted', so gating may be enforced server-side (not verifiable; court-service absent). The 'every court-module user' claim is unverified.
@@ -386,9 +386,9 @@ Counts: ACTION 35, BACKEND-VERIFY 1
   - Clicking Generate twice creates one list.
 - **Needs:** web+backend  ·  **Effort:** M ~1-2d  ·  **Risk:** Duplicate cause lists in court could misdirect listing; needs backend idempotency.
 
-### GAP-COURT-CAUSE-LIST-03  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION
+### GAP-COURT-CAUSE-LIST-03  ·  MEDIUM  ·  interim  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — slot/courtroom config namespace decision needed; backend config endpoint for valid slot values absent)
 - **W0 note:** partly fixed by #1923 — item number validated (integer >=1, duplicates blocked), slot/courtroom trimmed+uppercased and slot shown verbatim; remaining: slot/courtroom are still free-text inputs (no configured slot/courtroom namespaces or selects)
 - **First-pass claim:** Slot and courtroom are free text with no validation against config (hearing_purpose etc. have namespaces but slot/courtroom do not), so 'am 1' vs 'AM-1' will diverge (CauseListConsole.tsx AddItemForm).
 - **Verified evidence:** AddItemForm (CauseListConsole.tsx:287-300) slot and courtroom are free-text inputs; only non-empty is checked (:236). policy.ts ENUM_NAMESPACES has no slot or courtroom namespace. Table display humanize(it.slot) (:200) would turn 'AM-1' into 'AM 1'. Duplicate itemNumber not checked (:241).
@@ -459,9 +459,9 @@ Counts: ACTION 35, BACKEND-VERIFY 1
   - If schedule call rejects, error shown and adjourned row still visible
 - **Needs:** web+backend  ·  **Effort:** S ~half day  ·  **Risk:** Two non-atomic commands can leave case half-updated; prefer single backend command. Legal scheduling impact.
 
-### GAP-COURT-HEARINGS-02  ·  MEDIUM  ·  confirmed  ·  theme SCALE (was I18N)
+### GAP-COURT-HEARINGS-02  ·  MEDIUM  ·  interim  ·  theme SCALE (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — server-side case search absent from court-service snapshot; needs backend q= param on case list)
 - **W0 note:** partly fixed by #1923 — CaseSelector is now a searchable title/CNR/filing combobox with a 'first 100 cases' notice; remaining: still limited to the first 100 cases (no server-side search, case beyond the 100th unreachable from here) and options are mouse-only buttons (no arrow-key listbox navigation)
 - **First-pass claim:** Case selector option labels combine title, CNR and status in a single native select for the entire registry — no search on a long list (CaseSelector.tsx:62-78).
 - **Verified evidence:** CaseSelector.tsx:60-83 is a plain native <select> listing every case (title · CNR — humanised status). Loader getCases caps at limit=100 (loaders.ts:191), so beyond 100 cases some cannot be picked at all. No search/filter. Strings are hard-coded English (no next-intl). Status is text so not colour-only.
@@ -512,9 +512,9 @@ Counts: ACTION 35, BACKEND-VERIFY 1
   - Existing aria-labels on Adjourn/Record outcome preserved
 - **Needs:** web  ·  **Effort:** S ~half day  ·  **Risk:** Low; preserve accessible names used by tests.
 
-### GAP-COURT-HEARINGS-05  ·  LOW  ·  partly  ·  theme COPY (was CAP)
+### GAP-COURT-HEARINGS-05  ·  LOW  ·  interim  ·  theme COPY (was CAP)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — W2 INTERIM — hearingStatusLabel done; bench label display needs bench-name endpoint (absent from court-service snapshot))
 - **W0 note:** partly fixed by #1923 — status uses a fixed label dictionary (hearingStatusLabel); remaining: benchId/bench label is still not shown on the hearing row
 - **First-pass claim:** Status vocabulary (scheduled/held/adjourned/cancelled) is humanised client-side; bench id is never shown.
 - **Verified evidence:** Status is humanised via humanize() (HearingsConsole.tsx:291, format.ts:27) - true. benchId exists on Hearing (types.ts:160) but is not rendered in HearingRow (:250-295) - true. The 'capped fetch / client filtering' fix text does not apply: no client filtering in this page; the cap is on getCases (limit=100).

@@ -256,9 +256,9 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 - **Source:** `apps/web/src/app/(app)/knowledge/documents/new/page.tsx`
 - **Design reference:** `redesign/knowledge/documents-new.html`
 
-### GAP-KNOWLEDGE-DOCUMENTS-NEW-01  ·  HIGH  ·  confirmed  ·  theme OTHER
+### GAP-KNOWLEDGE-DOCUMENTS-NEW-01  ·  HIGH  ·  interim  ·  theme OTHER
 
-- [ ] **Status** (W2 knowledge INTERIM - needs owner decision: file upload. accessLevel is done (select, least-privilege default internal, server-side enum + clearance, restricted/confidential only for knowledge_admin). The create command has no fileKey and there is no object-storage upload flow; the form says so honestly instead of implying a file was stored.)
+- [~] **Status** (INTERIM — file upload endpoint absent from knowledge-service create command; needs owner decision)
 - **First-pass claim:** The form is titled "Publish Document" but posts only { title, category } (CreateDocumentForm.tsx:36-39): no file/content, access level, version or approval path, although list/search/detail views display accessLevel, version and fileType. The created record is an empty shell.
 - **Verified evidence:** CreateDocumentForm.tsx:36-39 builds body {title, category} only; form renders just Title and Category inputs (:62-69). Button reads 'Publish document' (:81). No file, access level, version or content field, though list/KnowledgeDocsTable.tsx:23-25 and search show version/accessLevel. Backend createDocumentBody is only quoted in the comment at :9-12; knowledge-service is absent from the snapshot so accepted fields (file, accessLevel, version) cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/documents/new/CreateDocumentForm.tsx`, `apps/web/src/app/(app)/knowledge/documents/new/page.tsx`
@@ -389,9 +389,9 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** None.
 - **Depends on:** GAP-KNOWLEDGE-FAQS-03
 
-### GAP-KNOWLEDGE-FAQS-06  ·  LOW  ·  partly  ·  theme OTHER (was DEADROUTE)
+### GAP-KNOWLEDGE-FAQS-06  ·  LOW  ·  interim  ·  theme OTHER (was DEADROUTE)
 
-- [ ] **Status** (W2 knowledge INTERIM - needs backend field: the FAQ API/table has no sourcePolicyId/sourceDocId, so there is nothing to link. Not invented.)
+- [~] **Status** (INTERIM — FAQ API has no sourcePolicyId/sourceDocId field; link target needs backend schema change)
 - **First-pass claim:** Answers render as pre-wrapped plain text (page.tsx:46): no links to the cited policy despite the assistant citing documents.
 - **Verified evidence:** Answer is rendered as <p style=whiteSpace:pre-wrap>{f.answer}</p> (faqs/page.tsx:46) - true. But the FAQ loader maps only id, question, answer, category, tags, status, updatedAt (loaders.ts:102-110); there is no policy/document reference field, so there is no dead link, just no data to link. Assistant citations exist separately (assistant/AssistantClient.tsx:97-101). Whether the API exposes a sourceDocId is not visible (service absent).
 - **Files to change:** `apps/web/src/app/(app)/knowledge/_data/loaders.ts`, `apps/web/src/app/(app)/knowledge/_data/types.ts`, `apps/web/src/app/(app)/knowledge/faqs/page.tsx`
@@ -411,9 +411,9 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 - **Source:** `apps/web/src/app/(app)/knowledge/list/page.tsx`
 - **Design reference:** `redesign/knowledge/list.html`
 
-### GAP-KNOWLEDGE-LIST-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
+### GAP-KNOWLEDGE-LIST-01  ·  HIGH  ·  interim  ·  theme DEADROUTE
 
-- [ ] **Status** (W2 knowledge partial in #2059 - needs owner decision for the rest: rows now open /knowledge/documents/[id] from repository, dashboard and search (list route redirects). Still open: download, archive-with-reason and version upload - knowledge-service has no archive/download command (only PATCH articles/:id/publish). Needs a product decision and a maker-checker/audit design before building. Was: W1 SF-02/03 re-check #2010 reopened.)
+- [~] **Status** (INTERIM — download/archive-with-reason/version-upload need owner decision + backend endpoints)
 - **W2 evidence:** Tests for the row link: apps/web/src/app/(app)/knowledge/repository/page.test.tsx 'GAP-LIST-01: a row title links to /knowledge/documents/<full id>'; apps/web/src/app/(app)/knowledge/documents/[id]/page.test.tsx.
 - **First-pass claim:** Dead-end table: rows have no link and no detail route exists (knowledge/ has documents/new only) — a document cannot be opened, downloaded, versioned or archived from any page.
 - **Verified evidence:** list/page.tsx:72 renders KnowledgeDocsTable; its DataTable (KnowledgeDocsTable.tsx:18-36) has no rowLinkKey/rowLinkPrefix (policies/page.tsx:75-76 shows the prop pair). rows.id is the truncated 8-char string (page.tsx:34), so the real id is not even in the row. knowledge/documents contains only new/ (no [id] route), no download/archive/version calls anywhere in apps/web/src knowledge. Backend endpoints for GET/archive/version are not visible (service absent).
@@ -578,9 +578,9 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 - **Source:** `apps/web/src/app/(app)/knowledge/policies/[id]/page.tsx`
 - **Design reference:** `redesign/knowledge/policies-detail.html`
 
-### GAP-KNOWLEDGE-POLICIES-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme PII
+### GAP-KNOWLEDGE-POLICIES-DETAIL-01  ·  HIGH  ·  interim  ·  theme PII
 
-- [ ] **Status** (W2 knowledge INTERIM - needs identity lookup: DPDP part done server-side (acknowledgement list returns everyone only to approver roles; others get the total and their own id) and the page prints no UUIDs. Resolving ids to names needs a directory lookup the knowledge-service must not join to; owner decision on the source (hr/identity API) needed.)
+- [~] **Status** (INTERIM — INTERIM — needs identity-service lookup for actor name resolution; DPDP masking done but reveal endpoint absent)
 - **W2 evidence:** Tests: services/knowledge-service/tests/w2-knowledge-clearance-visibility.test.ts 'the acknowledgement list shows an approver everyone, but a knowledge_user only the total and their own id'; apps/web/src/app/(app)/knowledge/policies/[id]/page.test.tsx 'GAP-DETAIL-01'.
 - **First-pass claim:** Acknowledgement list prints raw employee UUIDs to every viewer (page.tsx:60-64): unreadable for the HR owner and a DPDP concern (who has/hasn’t acknowledged is personal data); no role gate is visible in the web tree.
 - **Verified evidence:** policies/[id]/page.tsx:60-64 maps acks.employeeIds to <li> monospace raw ids. No role check exists in page.tsx; roleGuard.getSessionRoles()/PermissionDenied are used elsewhere (hr/rti/page.tsx:37-40) but not here. No shared Masked component exists. Server-side authorisation of the /acknowledgements endpoint is not visible (service absent). Employee names would need a lookup (getEmployees, app/_data/loaders.ts:1122) - the ack payload carries ids only.
@@ -629,9 +629,9 @@ Counts: ACTION 57, BACKEND-VERIFY 12
   - Dialog states the effective date that will be applied.
 - **Needs:** web+backend  ·  **Effort:** S ~half day  ·  **Risk:** Publishing notifies users and opens acknowledgements; wrong date has compliance consequences.
 
-### GAP-KNOWLEDGE-POLICIES-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
+### GAP-KNOWLEDGE-POLICIES-DETAIL-04  ·  MEDIUM  ·  interim  ·  theme CONFIRM
 
-- [ ] **Status** (W2 knowledge INTERIM - names + reason: Return/Reject with a mandatory reason exists and an Approval trail card now shows author/reviewer/approver relative to the viewer without raw ids. Still open: names (see DETAIL-01) and showing the reject reason in the trail - the service keeps the reason only in the event/audit payload, not on the record; needs a schema decision. Was: W1 SF-02/03 re-check #2010 reopened.)
+- [~] **Status** (INTERIM — Return/Reject with reason done; name resolution needs identity-service lookup (see DETAIL-01))
 - **W2 evidence:** Tests: apps/web/src/app/(app)/knowledge/policies/[id]/page.test.tsx 'GAP-DETAIL-04: the approval trail ...' (x2); apps/web/src/app/(app)/knowledge/policies/[id]/PolicyActions.test.tsx 'GAP-DETAIL-04'; services/knowledge-service/tests/reject-endpoint.test.ts.
 - **First-pass claim:** Under review has only Approve — no Reject / return-for-changes path (PolicyActions.tsx:46-53); reviewerId, approverId, authorId and supersedesId are loaded but never displayed (loaders.ts:42-43,71-72), so maker-checker evidence is invisible.
 - **Verified evidence:** PolicyActions.tsx:46-53 shows only Approve for under_review; there is no reject/return action and no reject endpoint call in the web tree. authorId/approverId are mapped in toPolicySummary (loaders.ts:42-43), reviewerId/supersedesId in the detail mapper (loaders.ts:77-78); page.tsx never renders them (only status/effective/review/ack count, :34-37). Line refs in the observation (71-72) are off by a few lines. Existence of a reject endpoint cannot be verified (service absent).
@@ -732,9 +732,9 @@ Counts: ACTION 57, BACKEND-VERIFY 12
   - No link on the page targets a query param the page ignores.
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 
-### GAP-KNOWLEDGE-RECORDS-04  ·  MEDIUM  ·  partly  ·  theme CONFIRM
+### GAP-KNOWLEDGE-RECORDS-04  ·  MEDIUM  ·  interim  ·  theme CONFIRM
 
-- [ ] **Status** (W2 knowledge INTERIM - needs owner decision: disposal is GFR-governed and irreversible; there is no dispose/weed command or approval workflow in knowledge-service and none was invented. The page stays a read-only schedule.)
+- [~] **Status** (INTERIM — disposal is GFR-governed and irreversible; no dispose/weed command or workflow in knowledge-service)
 - **First-pass claim:** Disposal is irreversible and GFR-governed, yet the page has no weed/dispose/transfer action, approval or certificate step — it is a read-only list; "+ Schedule" creates a categorised document, not a record (documents/new/page.tsx:22-24).
 - **Verified evidence:** apps/web/src/app/(app)/knowledge/records/page.tsx is a read-only list with no dispose/weed/transfer control (confirmed). '+ Schedule' (page.tsx:73) goes to documents/new?category=Retention Schedule, and documents/new/page.tsx:22-24 states openly that records are projected from documents and there is no records-schedule command. The knowledge service is not in the snapshot, so whether a dispose command exists is cannot-verify; the gap is a missing feature and not a defect of existing code.
 - **Files to change:** `apps/web/src/app/(app)/knowledge/records/page.tsx`, `apps/web/src/app/(app)/knowledge/records/RecordsClient.tsx`, `(new) apps/web/src/app/(app)/knowledge/records/DisposeDialog.tsx`

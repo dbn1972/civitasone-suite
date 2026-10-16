@@ -59,9 +59,9 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 - **Source:** `apps/web/src/app/(app)/legal/cases/[id]/page.tsx`
 - **Design reference:** `redesign/legal/cases-detail.html`
 
-### GAP-LEGAL-CASES-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme OTHER
+### GAP-LEGAL-CASES-DETAIL-01  ·  HIGH  ·  interim  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — decision needed: affidavit file-upload endpoint absent from legal-service; legal record integrity review required)
 - **W0 note:** partly fixed by #1916 — button/dialog renamed 'Record affidavit filing' and no longer says upload; but affidavits still render as generic 'Court order' rows in the case Court orders table (page.tsx orderType fallback, no affidavit filter/Filings card) and there is still no file attachment/documents endpoint
 - **First-pass claim:** 'Upload Affidavit' uploads nothing: it records the text as a court order with orderType 'affidavit' via POST /cases/:id/orders (CaseActions.tsx:8-19,96-113), so affidavits show up in the Court orders list and compliance data, with no document attached.
 - **Verified evidence:** apps/web/src/app/(app)/legal/cases/[id]/CaseActions.tsx:329-348 posts to /api/proxy/v1/legal/cases/{id}/orders with orderType:'affidavit', summary, orderDate; the form (453-473) has no file input and its own amber note says 'no file-upload endpoint in legal-service'; the file header (254-259) admits it is a workaround. The detail page maps every order into 'Court orders' (page.tsx:74-79) and labels it 'Court order' since orderType is not shown. Whether it also enters compliance stats on /legal/court-orders cannot be verified (legal-service absent from snapshot); the list there keys on complianceRequired/status.
@@ -145,9 +145,9 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 - **Source:** `apps/web/src/app/(app)/legal/cases/new/page.tsx`
 - **Design reference:** `redesign/legal/cases-new.html`
 
-### GAP-LEGAL-CASES-NEW-01  ·  HIGH  ·  partly  ·  theme DATA (was OTHER)
+### GAP-LEGAL-CASES-NEW-01  ·  HIGH  ·  interim  ·  theme DATA (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — needs legal-service case-type field + adverse-risk rule decision; backend contract unverified)
 - **W0 note:** partly fixed by #1934 — case-type select (caseTypeId) added to the form and mapLegalCaseSummaries prefers the server type with caseNo fallback; list column is now 'Case type'/Writ & Criminal; remaining: the typed subject text is still not mapped or shown in the list ('Subject column shows the typed subject text' unmet)
 - **First-pass claim:** The form never sends a case type: the 'Subject' textarea is posted as subject (CreateCaseForm.tsx:40-47) while the list's Subject column and 'Adverse Risk' logic read type (list/LegalCasesTable.tsx:49,73), so cases created here show a blank/default subject and can never count as adverse risk.
 - **Verified evidence:** apps/web/src/app/(app)/legal/cases/new/CreateCaseForm.tsx:45-52 posts caseNo,title,court,subject,petitioner,counselRef - no type, as stated. But the list does not read a server 'type': mapLegalCaseSummaries (apps/web/src/app/_data/apiMappers.ts:667-711) derives type from the caseNo prefix (WP/WRIT -> writ, ARB -> arbitration, else other) and never 'criminal'. So the Subject column (apps/web/src/app/(app)/legal/list/LegalCasesTable.tsx:69) shows 'writ/arbitration/other', not the entered subject, and Adverse risk (:49, list/page.tsx:12) counts only WP/WRIT-numbered cases. A case numbered WP/... created here does count; the claim it 'can never count' is overstated. Detail page reads caseData.type (page.tsx:116) unmapped; API shape cannot be verified (service absent).
@@ -163,9 +163,9 @@ Counts: ACTION 42, BACKEND-VERIFY 10
 - **Needs:** web+backend  ·  **Effort:** M ~1-2d  ·  **Risk:** Changes what counts as adverse risk on a management stat; agree the rule with Legal.
 - **Depends on:** GAP-LEGAL-CASES-NEW-02
 
-### GAP-LEGAL-CASES-NEW-02  ·  MEDIUM  ·  partly  ·  theme FORM (was DATEFMT)
+### GAP-LEGAL-CASES-NEW-02  ·  MEDIUM  ·  interim  ·  theme FORM (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — needs master court data and backend contract verification for respondent/filing-date fields)
 - **W0 note:** partly fixed by #1916 — Respondent field added (sent via parties); remaining: Court is still a free-text input (no court master/normalisation; Courts/Fora still counts raw strings), no filing-date or department fields on the form
 - **First-pass claim:** Court is free text (CreateCaseForm.tsx:82): the 'High Court' filter and the Courts / Fora count depend on identical spelling; no court picker, no case-type, filing date or respondent fields although the detail page shows Respondent, Raised date and Department (cases/[id]/page.tsx:105-124).
 - **Verified evidence:** True: court is a free-text input (apps/web/src/app/(app)/legal/cases/new/CreateCaseForm.tsx:79-82 area, id 'court'), and form has no case-type, filing date, respondent or department fields; detail page shows Respondent/Raised date/Department (cases/[id]/page.tsx:120-139). Courts / Fora = new Set of exact court strings (list/page.tsx:10), so spelling variants inflate it. Correction: the 'High Court' filter is a case-insensitive substring match on 'high court' (LegalCasesTable.tsx:47), not identical spelling. Not a date-format issue.
@@ -314,9 +314,9 @@ Counts: ACTION 42, BACKEND-VERIFY 10
   - Opening from a case with ?caseId= preselects it.
 - **Needs:** web  ·  **Effort:** S ~half day  ·  **Risk:** Low; reduces mis-filed orders.
 
-### GAP-LEGAL-COURT-ORDERS-NEW-04  ·  LOW  ·  confirmed  ·  theme ENTITYNAME (was OTHER)
+### GAP-LEGAL-COURT-ORDERS-NEW-04  ·  LOW  ·  interim  ·  theme ENTITYNAME (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — HRMS dept loader contract unverified; deptRef semantics (name vs id) unconfirmed)
 - **W0 note:** partly fixed by #1916 — inline #fff backgrounds removed from RecordOrderForm; remaining: Owning department (deptRef) is still a free-text input, no department picker/loader
 - **First-pass claim:** Owning department is free text (deptRef) with no picker, although the banner on the orders page says orders route to the owning department; inline #fff field backgrounds (RecordOrderForm.tsx:82-110).
 - **Verified evidence:** apps/web/src/app/(app)/legal/court-orders/new/RecordOrderForm.tsx:245-248 deptRef is a free-text input; every field wrapper uses inline background:'#fff' (lines 215-245). Banner claim about routing is on court-orders/page.tsx:23. No department picker loader located in the snapshot (verify hr department loader).

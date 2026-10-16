@@ -81,9 +81,9 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 - **Needs:** web+backend  ·  **Effort:** M ~1-2d  ·  **Risk:** Money movement between demands with no visibility is an audit gap; reversal needs approval rules (decision).
 - **Depends on:** RefreshErrorState
 
-### GAP-REVENUE-ADJUSTMENTS-03  ·  MEDIUM  ·  partly  ·  theme MONEY
+### GAP-REVENUE-ADJUSTMENTS-03  ·  MEDIUM  ·  interim  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — needs owner decision on whether penalty/interest may be moved; cap rule needs revenue-service confirmation)
 - **W0 note:** partly fixed by #1868 — source-demand breakdown (principal/rebate/penalty/interest/net) and net-demand cap wording shipped; remaining: decision on whether penalty/interest may be moved, and confirming the cap matches the backend rule (UI still caps at netMinor, not DCB outstanding).
 - **First-pass claim:** Amount cap is checked against the source demand netMinor, which includes penalty/interest, while the option label shows only "FY … — ₹… (status)" — the clerk cannot see which component is being moved (AdjustmentCreateForm.tsx:70-72,181).
 - **Verified evidence:** Option labels show 'FY {fy} — {formatMoney(netMinor)} ({status})' at AdjustmentCreateForm.tsx:322 and 353 (cited :70-72,181 are wrong); cap check compares BigInt(amount) to fromDemand.netMinor at l.238 and the error text calls it 'outstanding balance'. mapDemands (adjustments/page.tsx:51-67) drops principal/penalty/interest/rebate although the same endpoint returns them (DemandRow in assessees/[id]/AssesseeDetailTabs.tsx:9-19 has them). Whether netMinor includes penalty/interest, and whether it is net of payments (DCB balance = demand - collected), is cannot-verify without revenue-service; UI columns suggest Net Demand is principal-rebate+penalty+interest, i.e. NOT outstanding after receipts, so the 'outstanding balance' wording may be wrong.
@@ -217,9 +217,9 @@ Counts: ACTION 69, BACKEND-VERIFY 10
   - Tile counts sum to Registered Assessees.
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 
-### GAP-REVENUE-ASSESSEES-04  ·  LOW  ·  partly  ·  theme CAP
+### GAP-REVENUE-ASSESSEES-04  ·  LOW  ·  interim  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — server-side pagination and search absent from revenue-service; backend q=/page= params unverified)
 - **First-pass claim:** Only 15 rows per page client-side after loading the full unpaged list from /assessees (page.tsx:8-13); other pages request ?limit=200 — pagination is inconsistent and large registers will truncate silently there (adjustments/page.tsx:83).
 - **Verified evidence:** apps/web/src/app/(app)/revenue/assessees/page.tsx:8 requests /api/v1/revenue/assessees with no limit; AssesseesTable.tsx:89 pages 15 rows client-side (true). Pickers on bills/receipts/refunds/instalments/adjustments/recovery/write-offs use ?limit=200 (e.g. adjustments/page.tsx:70, cited :83 wrong), so registers >200 are silently truncated there. Whether the unpaged list call is truncated by a backend default is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/revenue/assessees/page.tsx`, `apps/web/src/app/(app)/revenue/assessees/AssesseesTable.tsx`, `apps/web/src/app/_components/SmartCombobox.tsx`, `apps/web/src/app/(app)/revenue/bills/page.tsx`, `apps/web/src/app/(app)/revenue/adjustments/page.tsx`, `revenue-service (search + total)`
@@ -801,9 +801,9 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 - **Needs:** web+backend  ·  **Effort:** M ~1-2d  ·  **Risk:** New list endpoint must be tenant-scoped and permission-guarded (checker role); refund amounts are sensitive financial data.
 - **Depends on:** GAP-REVENUE-WRITE-OFFS-02
 
-### GAP-REVENUE-REFUNDS-02  ·  MEDIUM  ·  partly  ·  theme VALIDATION
+### GAP-REVENUE-REFUNDS-02  ·  MEDIUM  ·  interim  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — refund uniqueness backend rule unverified; refundStatus on receipts GET absent from revenue-service)
 - **W0 note:** partly fixed by #1868 — receipts that already have a pending refund are disabled with "(refund pending)" in RefundCreateForm; remaining: already-approved/processed refunds are not flagged (only the pending list is loaded), partial-refund decision (POST still sends only receiptId+reason), server 409 on duplicates unverified.
 - **First-pass claim:** Refund is raised on a receipt with no amount field — full receipt amount only — and the select does not mark receipts already refunded or pending refund, so duplicate refunds can be raised (RefundCreateForm.tsx:74-80,122-125).
 - **Verified evidence:** RefundCreateForm.tsx posts only { receiptId, reason } (l.74-80), so full-receipt refund is the API contract as sent; there is no amount field. The receipt select (l.122-126) shows receiptNo, amount, channel and receipt status but nothing about existing/pending refunds, and refunds/page.tsx loads no refund list, so the UI cannot prevent duplicates. The submit button already has disabled/loading while busy (l.163). Whether the server rejects duplicate refunds is cannot-verify (revenue-service absent). Partial-amount refunds would need a backend contract change.
@@ -1143,9 +1143,9 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 - **Needs:** web+backend  ·  **Effort:** M ~1-2d  ·  **Risk:** New endpoint must be role-guarded and tenant-scoped.
 - **Depends on:** GAP-REVENUE-REFUNDS-01
 
-### GAP-REVENUE-WRITE-OFFS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
+### GAP-REVENUE-WRITE-OFFS-03  ·  MEDIUM  ·  interim  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — demand selector exists; requiring demandId + API contract change + migration needs revenue/audit owner decision)
 - **W0 note:** partly fixed by #1868 — WriteOffCreateForm has an optional demand selector that posts demandId+financialYear and the decide page shows the FY; remaining: demand is optional (decision to require it + backend contract pending) and the amount cap is against the assessee DCB balance, not the chosen demand.
 - **First-pass claim:** Write-off is against the assessee, not a specific demand/FY, so the audit trail cannot say which year's demand was reduced (WriteOffCreateForm.tsx:62-70).
 - **Verified evidence:** WriteOffCreateForm.tsx:116-120 posts { assesseeId, amountMinor, reason } with no demandId or financialYear, and the page has no demand selector; the decide page's WriteOffRecord (decide/page.tsx:7-14) carries none either. Whether the backend can accept/record a demandId is cannot-verify.

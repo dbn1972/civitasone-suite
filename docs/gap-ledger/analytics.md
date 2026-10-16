@@ -76,9 +76,9 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 - **Source:** `apps/web/src/app/(app)/analytics/ai-insights/page.tsx`
 - **Design reference:** `redesign/analytics/ai-insights.html`
 
-### GAP-ANALYTICS-AI-INSIGHTS-01  ·  HIGH  ·  partly  ·  theme PII
+### GAP-ANALYTICS-AI-INSIGHTS-01  ·  HIGH  ·  interim  ·  theme PII
 
-- [ ] **Status** (W2 analytics INTERIM — NEEDS OWNER DECISION: web parts are in place (CSV export is audited via exportAudit="analytics/ai-insights" and carries a data-use notice, AiInsightsTable.tsx). Per-module role filtering is a product decision: GET /v1/analytics/ai-insights currently ALWAYS returns [] (services/analytics-service/src/modules/kpi/routes.ts, no producer exists), so there are no rows to scope or leak yet. Decide the module-entitlement rule before the insight producer ships)
+- [~] **Status** (INTERIM — CSV export audited; per-module role filtering is a product decision pending DPO/owner)
 - **First-pass claim:** Insights are tenant-wide and role-agnostic (layout.tsx:5, page.tsx:8): rows named for HR, procurement or helpdesk (module column) are readable by every role and exportable to CSV (AiInsightsTable.tsx:39-40) with no DPDP purpose note or per-module role filter; server-side scoping cannot be verified.
 - **Verified evidence:** analytics/layout.tsx:5 wraps only ModuleGate (tenant module-enabled check, ModuleGate.tsx), no role check; page.tsx:8 calls getAnalyticsAiInsights (loaders.ts:5334) and AiInsightsTable.tsx:39-40 sets exportable, so DataTable.downloadCsv (DataTable.tsx:274) exports the client-side rows with no audit/purpose note. True that the module column exists and any user who can open /analytics sees all rows. Whether rows contain personal data, and whether /api/v1/analytics/ai-insights scopes by role, cannot be verified (analytics service absent; only hrms-service in snapshot). Theme PII is speculative; rows are titles/confidence/action strings.
 - **Files to change:** `apps/web/src/app/(app)/analytics/layout.tsx`, `apps/web/src/app/(app)/analytics/ai-insights/page.tsx`, `apps/web/src/app/(app)/analytics/ai-insights/AiInsightsTable.tsx`, `apps/web/src/app/_components/ds/DataTable.tsx`
@@ -333,9 +333,9 @@ Counts: ACTION 77, BACKEND-VERIFY 2
   - Empty KPI page shows no Create Metric button.
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 
-### GAP-ANALYTICS-KPI-03  ·  MEDIUM  ·  partly  ·  theme MONEY
+### GAP-ANALYTICS-KPI-03  ·  MEDIUM  ·  interim  ·  theme MONEY
 
-- [ ] **Status** (W2 analytics INTERIM — NEEDS OWNER DECISION: GET /v1/analytics/kpis returns placeholder em dashes for currentValue/target/trend/owner (services/analytics-service/src/modules/kpi/routes.ts) — there are no numeric values or units to format, so nothing fabricated is shown, but the numeric+unit contract (paise/percent/count/days, direction, target) is a KPI-definition feature that needs a product decision first)
+- [~] **Status** (INTERIM — KPI service returns placeholder em dashes; owner decision needed on data model)
 - **First-pass claim:** Numeric values arrive as display strings (loaders.ts:5291-5298) — '₹ 48,25,000' vs '48.25 lakh' cannot be sorted or compared, and Current/Target sorting in DataTable is lexical; money paise->rupee conversion cannot be verified (backend absent).
 - **Verified evidence:** loaders.ts:5291-5298 all KPI fields are strings; getAnalyticsKpis passes through getArrayPayload unmapped (5304). Mixed display formats cannot be compared. But DataTable.compareValues (DataTable.tsx:160-171) uses Number() then localeCompare numeric:true, so sorting is numeric-aware within one format, not purely lexical. Paise-to-rupee handling cannot be verified (analytics service absent); no money math occurs in web here.
 - **Files to change:** `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/analytics/kpi/KpiTable.tsx`
