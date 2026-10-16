@@ -63,8 +63,8 @@ export default async function GrantDisbursementDetailPage({ params }: { params: 
           fields NOT already in the stat row. */}
       <StatGrid>
         <StatCard icon="₹" tone="good" label="Amount" value={formatMoney(disbursement.amount)} />
-        <StatCard icon="📋" tone="info" label="Status" value={disbursement.status.replace(/_/g, " ")} />
-        <StatCard icon="👥" tone="neutral" label="Grantee" value={disbursement.granteeName ?? "—"} />
+        <StatCard icon="📋" tone="neutral" label="Status" value={disbursement.status.replace(/_/g, " ")} />
+        <StatCard icon="👥" tone="info" label="Grantee" value={disbursement.granteeName ?? "—"} />
         <StatCard icon="📅" tone="warn" label="Release Date" value={formatIndianDate(disbursement.releaseDate)} />
       </StatGrid>
 

@@ -313,7 +313,7 @@ function LivePreview({ config }: { config: BrandConfig }) {
               className="px-4 py-2 text-sm font-medium rounded-lg"
               style={{
                 backgroundColor: config.colorAccent,
-                // Was hardcoded "var(--panel)", which gave 2.14:1 on the default amber
+                // Was hardcoded "#fff", which gave 2.14:1 on the default amber
                 // accent (#f59e0b) and failed WCAG 2.2 AA SC 1.4.3. The
                 // foreground is now derived from the chosen accent's luminance,
                 // so the preview stays readable for ANY tenant accent colour and
@@ -359,18 +359,18 @@ export default function BrandingPage() {
     loginBgUrl: null,
     footerText: null,
     poweredBy: "Powered by CivitasOne",
-    colorPrimary: "var(--info)",
-    colorPrimaryFg: "var(--panel)",
-    colorSecondary: "var(--mut)",
-    colorAccent: "var(--amber)",
-    colorBackground: "var(--panel)",
-    colorSurface: "var(--line2)",
-    colorBorder: "var(--line)",
-    colorText: "var(--ink)",
-    colorMuted: "var(--mut)",
-    colorSuccess: "var(--good)",
-    colorWarning: "var(--warn)",
-    colorError: "var(--bad)",
+    colorPrimary: "#1e40af",
+    colorPrimaryFg: "#ffffff",
+    colorSecondary: "#64748b",
+    colorAccent: "#f59e0b",
+    colorBackground: "#ffffff",
+    colorSurface: "#f8fafc",
+    colorBorder: "#e2e8f0",
+    colorText: "#1e293b",
+    colorMuted: "#64748b",
+    colorSuccess: "#16a34a",
+    colorWarning: "#d97706",
+    colorError: "#dc2626",
     fontFamily: "Inter, system-ui, sans-serif",
     fontFamilyMono: "JetBrains Mono, monospace",
     sidebarStyle: "default",
@@ -390,11 +390,8 @@ export default function BrandingPage() {
   const [logoError, setLogoError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  // GAP-SETTINGS-BRANDING-07: track brand-config fetch failure separately
-  // (presets failure is non-fatal; brand failure means Save would overwrite
-  // stored branding with hard-coded defaults, which is destructive).
-  const [brandFetchFailed, setBrandFetchFailed] = useState(false);
-  const [retryTrigger, setRetryTrigger] = useState(0);
+  const [brandLoadFailed, setBrandLoadFailed] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   const identity = useSessionIdentity();
   const canEdit =
@@ -419,7 +416,7 @@ export default function BrandingPage() {
   useEffect(() => {
     const controller = new AbortController();
     setLoadError(null);
-    setBrandFetchFailed(false);
+    setBrandLoadFailed(false);
     setLoading(true);
     // Independent requests, independent failure handling: presets are a
     // secondary, non-essential convenience (quick-pick color themes), so a
@@ -434,6 +431,7 @@ export default function BrandingPage() {
         return r.json();
       })
       .then((loaded: BrandConfig) => {
+        setBrandLoadFailed(false);
         // The stored colorPrimaryFg can be stale (e.g. saved before this
         // editor derived it). Recompute it from the loaded primary so the
         // header / active nav / Primary Action never render an unreadable
@@ -445,9 +443,9 @@ export default function BrandingPage() {
       })
       .catch((e) => {
         if (e.name === "AbortError") return;
-        setBrandFetchFailed(true);
+        setBrandLoadFailed(true);
         setLoadError(
-          "Couldn't load your current branding — Save is disabled to protect stored settings. Use Retry to try again.",
+          "Couldn't load your current branding. Showing defaults — review before saving.",
         );
       });
     const presetLoad = fetch("/api/proxy/v1/themes/brand/presets", { signal: controller.signal })
@@ -468,9 +466,7 @@ export default function BrandingPage() {
       if (!controller.signal.aborted) setLoading(false);
     });
     return () => controller.abort();
-    // retryTrigger is an incrementing counter; adding it to deps re-runs the
-    // effect when the user clicks Retry after a brand-config load failure.
-  }, [retryTrigger]);
+  }, []);
 
   const updateColor = useCallback((key: keyof BrandConfig, value: string | null) => {
     setConfig((prev) => {
@@ -601,7 +597,7 @@ export default function BrandingPage() {
 
   const requestSave = useCallback(() => {
     setConfirmingSave(true);
-  }, []);
+  }, [retryCount]);
 
   if (loading) {
     return (
@@ -658,16 +654,16 @@ export default function BrandingPage() {
             className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800"
           >
             {loadError}
+            {brandLoadFailed && (
+              <button
+                type="button"
+                className="ml-2 underline"
+                onClick={() => setRetryCount((n) => n + 1)}
+              >
+                Retry
+              </button>
+            )}
           </div>
-        )}
-        {brandFetchFailed && (
-          <button
-            type="button"
-            onClick={() => setRetryTrigger((n) => n + 1)}
-            className="w-full py-2 rounded-lg border border-amber-300 bg-amber-50 text-sm font-medium text-amber-800 hover:bg-amber-100 transition-colors"
-          >
-            Retry loading branding
-          </button>
         )}
 
         {/* App Name */}
@@ -941,7 +937,7 @@ export default function BrandingPage() {
           )}
           <button
             onClick={requestSave}
-            disabled={!canEdit || !dirty || saving || hasCriticalContrastIssue || brandFetchFailed}
+            disabled={!canEdit || !dirty || saving || hasCriticalContrastIssue || brandLoadFailed}
             title={
               !canEdit
                 ? "You don't have permission to change branding"

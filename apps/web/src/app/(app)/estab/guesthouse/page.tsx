@@ -42,7 +42,7 @@ export default async function GuesthousePage() {
           rather than a fabricated 0 / 0%. */}
       <StatGrid>
         <StatCard icon="🏨" tone="good" label="Bookings" value={errored ? "—" : total.toLocaleString("en-IN")} />
-        <StatCard icon="🛏️" tone="info" label="Checked in" value={errored ? "—" : occupied.toLocaleString("en-IN")} />
+        <StatCard icon="🛏️" tone="neutral" label="Checked in" value={errored ? "—" : occupied.toLocaleString("en-IN")} />
         <StatCard icon="📋" tone="warn" label="Awaiting check-in" value={errored ? "—" : pendingApproval.toLocaleString("en-IN")} />
         <StatCard icon="🧹" tone="good" label="Upcoming" value={errored ? "—" : upcoming.toLocaleString("en-IN")} />
       </StatGrid>

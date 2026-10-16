@@ -219,7 +219,7 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
         </div>
       )}
       <StatGrid>
-        <StatCard icon="🚩" tone="info" label="Total Flags" value={flags.length} />
+        <StatCard icon="🚩" tone="neutral" label="Total Flags" value={flags.length} />
         <StatCard icon="✅" tone="good" label="Active (100%)" value={activeCount} />
         <StatCard icon="🔄" tone="warn" label="Rolling Out" value={partialCount} />
         <StatCard icon="⛔" tone="bad" label="Killed" value={killedCount} />

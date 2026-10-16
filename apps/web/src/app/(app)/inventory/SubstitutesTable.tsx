@@ -61,14 +61,14 @@ export function SubstitutesTable({
   return (
     <div aria-label="Inventory item substitutes">
       <StatGrid>
-          <StatCard icon="🔁" tone="neutral" label="Substitute Links" value={statValue(provenance, rows.length)} />
+          <StatCard icon="🔁" tone="info" label="Substitute Links" value={statValue(provenance, rows.length)} />
           <StatCard icon="📦" tone="neutral" label="Items Covered" value={statValue(provenance, uniqueItems)} />
           <StatCard icon="⭐" tone="warn" label="Avg Priority" value={avgPriority} />
       </StatGrid>
       <Card title="Substitutes">
         <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="item substitutes">
           {coverage && (coverage.truncated || coverage.failedCount > 0) ? (
-            <p role="status" style={{ fontSize: 12, color: "var(--warn)", margin: "0 0 8px" }}>
+            <p role="status" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
               {coverage.truncated
                 ? `Showing the first ${SUBSTITUTES_PAGE_LIMIT} substitute links. `
                 : ""}

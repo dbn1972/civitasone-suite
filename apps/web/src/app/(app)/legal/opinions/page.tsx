@@ -44,7 +44,7 @@ export default async function LegalOpinionsPage() {
         <StatCard icon="📚" tone="neutral" label="Opinions" value={total.toLocaleString("en-IN")} />
         <StatCard icon="✍️" tone="warn" label="Pending" value={pending} />
         {/* GAP-LEGAL-OPINIONS-01: Avg TAT computed from real issuedDate - requestDate. */}
-        <StatCard icon="⏱" tone="info" label="Avg TAT" value={avgTatLabel} />
+        <StatCard icon="⏱" tone="neutral" label="Avg TAT" value={avgTatLabel} />
         {/* GAP-LEGAL-OPINIONS-03: relabelled from "Precedents Tagged" (no tagging) to "Issued". */}
         <StatCard icon="🔖" tone="good" label="Issued" value={issued} />
       </div>

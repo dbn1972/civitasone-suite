@@ -34,7 +34,7 @@ export default async function CopilotPage() {
           a real retry state instead of the misleading empty state. The Ask
           form stays rendered so the user can still submit. */}
       <StatGrid>
-        <StatCard icon="💬" tone="info" label="Turns" value={errored ? null : totalLabel} />
+        <StatCard icon="💬" tone="neutral" label="Turns" value={errored ? null : totalLabel} />
         <StatCard icon="✅" tone="good" label="Answered (latest page)" value={errored ? null : summary.answered.toLocaleString("en-IN")} />
         <StatCard icon="⏳" tone="warn" label="Awaiting (latest page)" value={errored ? null : summary.awaiting.toLocaleString("en-IN")} />
         <StatCard
@@ -56,7 +56,7 @@ export default async function CopilotPage() {
         ) : (
           <>
             {atCap ? (
-              <p style={{ fontSize: 12, color: "var(--muted)", padding: "10px 16px 0", margin: 0 }}>
+              <p style={{ fontSize: 12, color: "var(--muted, #64748b)", padding: "10px 16px 0", margin: 0 }}>
                 {`Showing the latest ${COPILOT_TURNS_LIMIT.toLocaleString("en-IN")} turns${
                   total !== null && total > turns.length ? ` of ${total.toLocaleString("en-IN")}` : ""
                 }.`}

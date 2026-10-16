@@ -142,7 +142,7 @@ export default async function InsurancePoliciesPage() {
         <LoadErrorState result={policiesRes} area="insurance policies" backHref="/assets" />
       ) : (
         <StatGrid>
-          <StatCard icon="🛡️" tone="info" label="Total Policies" value={stats.total} />
+          <StatCard icon="🛡️" tone="neutral" label="Total Policies" value={stats.total} />
           <StatCard icon="✅" tone="good" label="Active" value={stats.active} />
           <StatCard icon="⏳" tone="warn" label="Expiring in 30 Days" value={stats.expiring} />
           <StatCard icon="⚠️" tone="bad" label="Lapsed" value={stats.lapsed} />

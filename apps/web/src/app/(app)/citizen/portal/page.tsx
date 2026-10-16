@@ -24,7 +24,7 @@ export default async function CitizenPortalPage() {
       <StatGrid>
         <StatCard
           icon="🗂️"
-          tone="info"
+          tone="neutral"
           label={t("statPublishedServices")}
           href="/citizen/catalogue"
           value={errored ? "—" : metrics.totalServices.toLocaleString("en-IN")}

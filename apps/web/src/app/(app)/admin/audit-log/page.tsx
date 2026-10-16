@@ -64,7 +64,7 @@ export default async function AuditLogPage({ searchParams }: { searchParams?: { 
         <StatCard icon="📋" tone="neutral" label="Events on this page" value={entries.length} />
         <StatCard icon="✅" tone="good" label="Success (this page)" value={successCount} />
         <StatCard icon="⚠️" tone="bad" label="Failure (this page)" value={failureCount} />
-        <StatCard icon="👤" tone="info" label="Actors on this page" value={distinctActors} />
+        <StatCard icon="👤" tone="neutral" label="Actors on this page" value={distinctActors} />
       </div>
       <div role="note" data-testid="audit-log-window" style={{ fontSize: 13, color: "var(--mut)", marginBottom: 12 }}>
         Showing events {first}–{last}, newest first. Search, filters and the counts above cover only these events.

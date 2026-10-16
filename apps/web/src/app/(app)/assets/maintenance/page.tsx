@@ -38,8 +38,8 @@ export default async function AssetMaintenancePage() {
       />
       <AccountingBanner areas={["maintenance"]} />
       <StatGrid>
-        <StatCard icon="🛠️" iconBg="#fdf0e3" label="Open Jobs" value={openJobs === null ? "—" : openJobs.toLocaleString("en-IN")} />
-        <StatCard icon="🔧" tone="info" label="Preventive" value={preventive === null ? "—" : preventive.toLocaleString("en-IN")} />
+        <StatCard icon="🛠️" tone="warn" label="Open Jobs" value={openJobs === null ? "—" : openJobs.toLocaleString("en-IN")} />
+        <StatCard icon="🔧" tone="neutral" label="Preventive" value={preventive === null ? "—" : preventive.toLocaleString("en-IN")} />
         <StatCard icon="⚠️" tone="bad" label="Breakdowns" value={breakdowns === null ? "—" : breakdowns.toLocaleString("en-IN")} />
         <StatCard icon="✅" tone="good" label="Completed" value={completed === null ? "—" : completed.toLocaleString("en-IN")} />
       </StatGrid>

@@ -20,7 +20,7 @@ export default async function WbsPage() {
     <div className="page-main wrap">
       <PageHeader title="Work Breakdown Structure" subtitle="Hierarchical view of project phases, stages and activities." back="/projects" />
       <StatGrid>
-        <StatCard icon="📋" tone="info" label="Total Activities" value={counts?.total ?? "—"} />
+        <StatCard icon="📋" tone="neutral" label="Total Activities" value={counts?.total ?? "—"} />
         <StatCard icon="✅" tone="good" label="Completed" value={counts?.completed ?? "—"} />
         <StatCard icon="🔄" tone="warn" label="In Progress" value={counts?.inProgress ?? "—"} />
         <StatCard icon="🚧" tone="bad" label="Blocked" value={counts?.blocked ?? "—"} />

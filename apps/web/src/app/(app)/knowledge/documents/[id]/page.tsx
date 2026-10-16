@@ -53,13 +53,13 @@ export default async function Page({ params }: { params: { id: string } }) {
       <StatGrid>
         <StatCard
           icon="🚦"
-          tone="info"
+          tone="neutral"
           label="Status"
           value={knowledgeDocStatusLabel(doc.status)}
         />
         <StatCard icon="📅" tone="good" label="Created" value={formatIndianDate(doc.createdAt)} />
         <StatCard icon="📎" tone="warn" label="File type" value={doc.fileType ?? "—"} />
-        <StatCard icon="📏" tone="info" label="File size" value={doc.fileSize ? `${(doc.fileSize / 1024).toFixed(1)} KB` : "—"} />
+        <StatCard icon="📏" tone="neutral" label="File size" value={doc.fileSize ? `${(doc.fileSize / 1024).toFixed(1)} KB` : "—"} />
       </StatGrid>
 
       <div className="card">

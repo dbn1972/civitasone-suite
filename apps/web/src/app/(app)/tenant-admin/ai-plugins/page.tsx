@@ -110,7 +110,7 @@ export default async function AiPluginsPage() {
       <DataSourceBadge source={errored ? "error" : "api"} />
 
       <StatGrid>
-        <StatCard icon="🤖" tone="info" label="Total Models" value={errored ? "—" : summary.totalPlugins} />
+        <StatCard icon="🤖" tone="neutral" label="Total Models" value={errored ? "—" : summary.totalPlugins} />
         <StatCard icon="✅" tone="good" label="Active" value={errored ? "—" : summary.activePlugins} />
         {/* GAP-TENANT-ADMIN-AI-PLUGINS-06: this is a rolling 24h window, not a
             calendar day — label it accurately. */}

@@ -69,7 +69,7 @@ export default async function VigilancePage() {
       />
 
       <StatGrid>
-        <StatCard icon="🔍" tone="info" label="Total Cases" value={totalCases ?? "—"} />
+        <StatCard icon="🔍" tone="neutral" label="Total Cases" value={totalCases ?? "—"} />
         <StatCard icon="⏳" iconBg="var(--goodbg)" label="Preliminary / Under Investigation" value={underInvestigation ?? "—"} />
         <StatCard icon="📑" tone="warn" label="Charge Sheet Issued" value={chargeSheeted ?? "—"} />
         <StatCard icon="📋" iconBg="var(--warnbg)" label="Inquiry Complete" value={inquiryComplete ?? "—"} />

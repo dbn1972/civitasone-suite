@@ -40,7 +40,7 @@ export default async function AdminUsersPage() {
         <StatCard icon="👥" tone="neutral" label="Total Users" value={tile(total)} />
         <StatCard icon="✅" tone="good" label="Active" value={tile(active)} />
         <StatCard icon="⛔" tone="bad" label="Suspended" value={tile(suspended)} />
-        <StatCard icon="🔐" tone="info" label="MFA Enabled" value={tile(mfaEnabled)} />
+        <StatCard icon="🔐" tone="neutral" label="MFA Enabled" value={tile(mfaEnabled)} />
       </div>
       {errored ? (
         // Mirror users/[id]/page.tsx's error treatment: a retry-able state, not

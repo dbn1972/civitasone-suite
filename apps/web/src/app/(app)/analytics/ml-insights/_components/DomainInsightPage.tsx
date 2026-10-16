@@ -118,7 +118,7 @@ export function DomainInsightPage({
       <StatGrid>
         <StatCard
           icon="📊"
-          tone="info"
+          tone="neutral"
           label={statLabels?.predictions ?? "Total Predictions"}
           value={evaluation.totalPredictions.toLocaleString("en-IN")}
         />
@@ -136,7 +136,7 @@ export function DomainInsightPage({
         />
         <StatCard
           icon="🔑"
-          tone="info"
+          tone="neutral"
           label={statLabels?.topFactor ?? "Top Factor"}
           value={evaluation.topFactor}
         />

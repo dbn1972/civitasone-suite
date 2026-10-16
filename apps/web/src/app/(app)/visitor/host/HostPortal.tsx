@@ -125,7 +125,7 @@ export function HostPortal({ pending, pendingSource, expectedToday, expectedToda
       <StatGrid>
         <StatCard icon="🕓" tone="warn" label="Awaiting Your Approval" value={queue.length.toLocaleString("en-IN")} />
         <StatCard icon="🔐" tone="bad" label="Restricted-zone" value={restricted.toLocaleString("en-IN")} />
-        <StatCard icon="📅" tone="info" label="Expected Today" value={expectedToday.length.toLocaleString("en-IN")} />
+        <StatCard icon="📅" tone="good" label="Expected Today" value={expectedToday.length.toLocaleString("en-IN")} />
       </StatGrid>
 
       {toast && (
@@ -134,7 +134,7 @@ export function HostPortal({ pending, pendingSource, expectedToday, expectedToda
         </div>
       )}
       {staleNotice && (
-        <div className="alert" role="status" style={{ borderColor: "var(--warnbd)" }}>
+        <div className="alert" role="status" style={{ borderColor: "#fcd34d" }}>
           This list may be out of date.{" "}
           <button type="button" className="btn ghost sm" onClick={() => void refresh(true)}>Refresh</button>
         </div>
@@ -181,7 +181,7 @@ export function HostPortal({ pending, pendingSource, expectedToday, expectedToda
                   {r.trackingRef && <span>Ref: <span style={monoStyle}>{r.trackingRef}</span></span>}
                 </div>
                 {r.permittedAreas.length > 0 && (
-                  <p style={{ fontSize: 12.5, color: "var(--warn)", marginBottom: 10 }}>
+                  <p style={{ fontSize: 12.5, color: "#b45309", marginBottom: 10 }}>
                     ⚠ Touches a restricted zone ({r.permittedAreas.join(", ")}) — after your approval this is routed to a second approver per policy.
                   </p>
                 )}
@@ -218,7 +218,7 @@ export function HostPortal({ pending, pendingSource, expectedToday, expectedToda
           <EmptyState icon="📅" title="No visitors expected today" message="Your approved visitors scheduled for today will appear here." />
         ) : (
           <div className="tbl-wrap">
-            <table className="tbl tbl--stack">
+            <table className="tbl" style={{ width: "100%" }}>
               <thead>
                 <tr>
                   <th style={labelStyle}>Visitor</th>
@@ -231,11 +231,11 @@ export function HostPortal({ pending, pendingSource, expectedToday, expectedToda
               <tbody>
                 {expectedToday.map((v) => (
                   <tr key={v.id}>
-                    <td data-label="Visitor" style={{ fontWeight: 600 }}>{v.visitorName}</td>
-                    <td data-label="Purpose" style={{ maxWidth: 280 }}>{v.purpose ?? "—"}</td>
-                    <td data-label="Premises">{premisesLabel(v) ?? "—"}</td>
-                    <td data-label="Scheduled" style={monoStyle}>{fmtTime(v.scheduledAt)}</td>
-                    <td data-label="Zone">
+                    <td style={{ fontWeight: 600 }}>{v.visitorName}</td>
+                    <td style={{ maxWidth: 280 }}>{v.purpose ?? "—"}</td>
+                    <td>{premisesLabel(v) ?? "—"}</td>
+                    <td style={monoStyle}>{fmtTime(v.scheduledAt)}</td>
+                    <td>
                       {v.permittedAreas.length > 0 ? (
                         <StatusPill
                           status="pending"

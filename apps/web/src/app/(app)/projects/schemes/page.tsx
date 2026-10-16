@@ -42,7 +42,7 @@ export default async function SchemesPage() {
             bigint MINOR units (paise) as strings, summed as BigInt and rendered
             with formatMoney — the same unit the detail endpoint uses, replacing
             the old whole-rupee + formatRupees workaround (COMP-017). */}
-        <StatCard icon="💰" tone="info" label="Total Allocation" value={totalAllocation === null ? "—" : formatMoney(totalAllocation)} />
+        <StatCard icon="💰" tone="neutral" label="Total Allocation" value={totalAllocation === null ? "—" : formatMoney(totalAllocation)} />
         <StatCard icon="📤" tone="warn" label="Released" value={totalReleased === null ? "—" : formatMoney(totalReleased)} />
       </StatGrid>
       <Card title="Schemes">

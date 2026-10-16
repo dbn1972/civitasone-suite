@@ -73,7 +73,7 @@ export default async function GranteesPage() {
       <div aria-label="Grantees">
         <StatGrid>
           <StatCard icon="👤" tone="neutral" label="Total" value={grantees.length} />
-          <StatCard icon="🏢" tone="neutral" label="Societies & missions" value={societiesAndMissions} />
+          <StatCard icon="🏢" tone="info" label="Societies & missions" value={societiesAndMissions} />
           <StatCard icon="🎁" tone="good" label="Active Grants" value={totalActiveGrants} />
           <StatCard icon="📋" tone="warn" label="Avg UC compliance" value={avgCompliance} />
         </StatGrid>

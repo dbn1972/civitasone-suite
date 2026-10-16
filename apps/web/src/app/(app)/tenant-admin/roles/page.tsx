@@ -36,7 +36,7 @@ export default async function AdminRolesPage() {
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="🔑" tone="neutral" label="Total Roles" value={errored ? "—" : total} />
-        <StatCard icon="⚙️" tone="info" label="System Roles" value={errored ? "—" : systemRoles} />
+        <StatCard icon="⚙️" tone="neutral" label="System Roles" value={errored ? "—" : systemRoles} />
         <StatCard icon="✏️" tone="good" label="Custom Roles" value={errored ? "—" : customRoles} />
         {/* GAP-TENANT-ADMIN-ROLES-03: this is a count of role assignments, not of
             distinct users — a user with 2 roles counts twice. Label + hint make

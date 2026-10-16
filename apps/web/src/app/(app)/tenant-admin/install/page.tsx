@@ -62,7 +62,7 @@ export default async function InstallStatusPage() {
       <StatGrid>
         {/* GAP-TENANT-ADMIN-INSTALL-01: with no steps, Progress shows "—" not a
             misleading 0%. */}
-        <StatCard icon="🚀" tone="info" label="Progress" value={errored || total === 0 ? "—" : `${progressPct}%`} />
+        <StatCard icon="🚀" tone="neutral" label="Progress" value={errored || total === 0 ? "—" : `${progressPct}%`} />
         <StatCard icon="✅" tone="good" label="Completed" value={errored ? "—" : completed} />
         <StatCard icon="🔄" tone="warn" label="In Progress" value={errored ? "—" : inProgress} />
         <StatCard icon="⬜" tone="neutral" label="Pending" value={errored ? "—" : pending} />
@@ -84,7 +84,7 @@ export default async function InstallStatusPage() {
                   <span>Installation completion</span>
                   <span>{completed}/{total} steps</span>
                 </div>
-                <ProgressBar value={progressPct} color="var(--info)" />
+                <ProgressBar value={progressPct} color="#2563eb" />
               </div>
             </Card>
           )}
@@ -97,9 +97,9 @@ export default async function InstallStatusPage() {
             <Card title="Installation Steps" padding>
               <ol aria-label="Installation steps" style={{ listStyle: "none", padding: 0, margin: 0 }}>
                 {installSteps.map((step, idx) => (
-                  <li key={step.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--border)" }}>
+                  <li key={step.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--border, #e2e8f0)" }}>
                     <span aria-hidden="true" style={{ fontSize: 16, flexShrink: 0 }}>{stepIcon(step.status)}</span>
-                    <span style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--bg2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, flexShrink: 0, border: "1px solid var(--border)" }}>
+                    <span style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--bg2, #f8fafc)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, flexShrink: 0, border: "1px solid var(--border, #e2e8f0)" }}>
                       {step.stepNo ?? idx + 1}
                     </span>
                     <div style={{ flex: 1 }}>

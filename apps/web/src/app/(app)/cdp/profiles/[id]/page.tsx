@@ -124,7 +124,7 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
       <StatGrid>
         <StatCard
           icon="🧾"
-          tone="info"
+          tone="neutral"
           label="Attributes"
           value={attributeSources.length.toLocaleString("en-IN")}
           hint="Number of attribute values currently held on this golden profile."

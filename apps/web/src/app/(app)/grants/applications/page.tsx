@@ -37,7 +37,7 @@ export default async function GrantApplicationsPage({
       <div aria-label="Grant applications">
         <StatGrid>
           <StatCard icon="📄" tone="neutral" label="Total" value={failed ? dash : applications.length} />
-          <StatCard icon="📝" tone="info" label="Submitted" value={failed ? dash : countBy("submitted")} />
+          <StatCard icon="📝" tone="neutral" label="Submitted" value={failed ? dash : countBy("submitted")} />
           <StatCard icon="🔎" tone="warn" label="Under review" value={failed ? dash : countBy("under_review")} />
           <StatCard icon="✅" tone="good" label="Approved" value={failed ? dash : countBy("approved")} />
         </StatGrid>

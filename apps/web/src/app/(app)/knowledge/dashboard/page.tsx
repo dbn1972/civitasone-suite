@@ -110,7 +110,7 @@ export default async function KnowledgeDashboardPage() {
 
       <StatGrid>
         <StatCard icon="📂" tone="warn" label="Documents" value={summaryErrored ? "—" : total.toLocaleString("en-IN")} />
-        <StatCard icon="📜" tone="info" label="Circulars/Policies" value={summaryErrored ? "—" : circulars.toLocaleString("en-IN")} />
+        <StatCard icon="📜" tone="neutral" label="Circulars/Policies" value={summaryErrored ? "—" : circulars.toLocaleString("en-IN")} />
         <StatCard icon="🗃️" tone="good" label="Active" value={summaryErrored ? "—" : active.toLocaleString("en-IN")} />
         <StatCard icon="📦" tone="warn" label="Archived" value={summaryErrored ? "—" : archived.toLocaleString("en-IN")} />
       </StatGrid>
@@ -118,7 +118,7 @@ export default async function KnowledgeDashboardPage() {
       {/* GAP2-KNOWLEDGE-DASHBOARD-CAP-01: StatCards reflect repository-wide totals
           from the server aggregate; show an honest note if that aggregate failed. */}
       {summaryErrored && (
-        <p role="note" style={{ margin: "8px 0 0", fontSize: 12, color: "var(--mut)" }}>
+        <p role="note" style={{ margin: "8px 0 0", fontSize: 12, color: "var(--mut, #667085)" }}>
           Repository totals are temporarily unavailable.
         </p>
       )}
@@ -155,10 +155,10 @@ export default async function KnowledgeDashboardPage() {
               <div className="card-h"><h3>Document totals</h3></div>
               <div className="pad" style={{ display: "grid", placeItems: "center", padding: "24px 16px" }}>
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: 36, fontWeight: 780, color: "var(--ink)" }}>
+                  <div style={{ fontSize: 36, fontWeight: 780, color: "var(--ink, #101828)" }}>
                     {total.toLocaleString("en-IN")}
                   </div>
-                  <div style={{ fontSize: 13, color: "var(--mut)", marginTop: 4 }}>
+                  <div style={{ fontSize: 13, color: "var(--mut, #667085)", marginTop: 4 }}>
                     documents in repository
                   </div>
                 </div>

@@ -52,7 +52,7 @@ export default async function EstabInboxPage() {
         <StatCard icon="📥" tone="good" label="Active on desk" value={stat(active)} />
         <StatCard icon="⏳" tone="warn" label="Due ≤ 3 days" value={stat(dueSoon)} />
         <StatCard icon="🔴" tone="bad" label={t("inboxOverdue")} hint={t("inboxOverdueHint")} value={stat(overdue)} />
-        <StatCard icon="📨" tone="info" label="Awaiting receipt" value={stat(awaitingReceipt)} />
+        <StatCard icon="📨" tone="neutral" label="Awaiting receipt" value={stat(awaitingReceipt)} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         {errored ? (

@@ -68,7 +68,7 @@ export default async function KnowledgeRepositoryPage() {
 
       <StatGrid>
         <StatCard icon="📂" tone="warn" label="Documents" value={errored ? "—" : visible.length.toLocaleString("en-IN")} />
-        <StatCard icon="📜" tone="info" label="Circulars" value={errored ? "—" : circularsCount.toLocaleString("en-IN")} />
+        <StatCard icon="📜" tone="neutral" label="Circulars" value={errored ? "—" : circularsCount.toLocaleString("en-IN")} />
         <StatCard icon="📘" tone="good" label="Published" value={errored ? "—" : published.toLocaleString("en-IN")} />
         <StatCard icon="📢" tone="warn" label="Notifications" value={errored ? "—" : notificationsCount.toLocaleString("en-IN")} />
       </StatGrid>

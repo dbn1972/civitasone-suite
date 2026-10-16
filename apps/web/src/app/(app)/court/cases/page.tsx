@@ -135,7 +135,7 @@ export default async function CasesListPage({
                   </span>
                   {query && <span>Filtered by “{query}”</span>}
                 </div>
-                <div style={{ overflowX: "auto" }}>
+                <div className="tbl-wrap">
                   <table className="tbl tbl--stack" style={{ width: "100%" }}>
                     <thead>
                       <tr>
@@ -170,7 +170,7 @@ export default async function CasesListPage({
                               {fmtDate(c.filingDate)}
                             </td>
                             <td data-label="SLA target" style={monoStyle}>
-                              <span style={overdue ? { fontWeight: 700, color: "var(--bad)" } : undefined}>
+                              <span style={overdue ? { fontWeight: 700, color: "var(--bad, #b91c1c)" } : undefined}>
                                 {fmtDate(c.targetDisposalDate)}
                               </span>
                               {overdue && (

@@ -53,7 +53,7 @@ export default async function LibraryBookDetailPage({ params }: { params: { id: 
       />
 
       <StatGrid>
-        <StatCard icon="📦" tone="info" label="Total Copies" value={book.copiesTotal.toLocaleString("en-IN")} />
+        <StatCard icon="📦" tone="neutral" label="Total Copies" value={book.copiesTotal.toLocaleString("en-IN")} />
         <StatCard icon="✅" tone="good" label="Copies Available" value={book.copiesAvailable.toLocaleString("en-IN")} />
         <StatCard icon="📖" tone="warn" label="Copies Out" value={(book.copiesTotal - book.copiesAvailable).toLocaleString("en-IN")} />
       </StatGrid>

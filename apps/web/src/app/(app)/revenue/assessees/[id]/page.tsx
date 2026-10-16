@@ -133,9 +133,9 @@ export default async function AssesseeDetailPage({ params }: { params: { id: str
               label="Status"
               value={assessee.isActive ? "Active" : "Inactive"}
             />
-            <StatCard icon="📄" tone="info" label="Demands" value={demandsErrored ? null : demandsResult.data.length} />
+            <StatCard icon="📄" tone="neutral" label="Demands" value={demandsErrored ? null : demandsResult.data.length} />
             <StatCard icon="🧾" tone="warn" label="Bills" value={billsErrored ? null : billsResult.data.length} />
-            <StatCard icon="🧮" tone="info" label="Receipts" value={receiptsErrored ? null : receiptsResult.data.length} />
+            <StatCard icon="🧮" tone="neutral" label="Receipts" value={receiptsErrored ? null : receiptsResult.data.length} />
           </StatGrid>
 
           {dcbResult.data && (

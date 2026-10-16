@@ -6,13 +6,13 @@ import { getMLDomainOverview, type MLDomainSummary } from "./_data";
 import { metricForDomain } from "./_metrics";
 
 const DOMAIN_META: Record<string, { label: string; icon: string; iconBg: string; href: string }> = {
-  leads: { label: "Lead Scoring", icon: "🎯", iconBg: "var(--infobg)", href: "/analytics/ml-insights/leads" },
-  tickets: { label: "SLA Breach Prediction", icon: "🎫", iconBg: "var(--warnbg)", href: "/analytics/ml-insights/tickets" },
-  inventory: { label: "Demand Forecasting", icon: "📦", iconBg: "var(--goodbg)", href: "/analytics/ml-insights/inventory" },
-  subscriptions: { label: "Churn Prediction", icon: "💳", iconBg: "var(--badbg)", href: "/analytics/ml-insights/subscriptions" },
+  leads: { label: "Lead Scoring", icon: "🎯", iconBg: "#eef2ff", href: "/analytics/ml-insights/leads" },
+  tickets: { label: "SLA Breach Prediction", icon: "🎫", iconBg: "#fef9c3", href: "/analytics/ml-insights/tickets" },
+  inventory: { label: "Demand Forecasting", icon: "📦", iconBg: "#dcfce7", href: "/analytics/ml-insights/inventory" },
+  subscriptions: { label: "Churn Prediction", icon: "💳", iconBg: "#fce7f3", href: "/analytics/ml-insights/subscriptions" },
   // Noun kept consistent with the task-level page (GAP-ANALYTICS-ML-INSIGHTS-PROJECTS-07).
-  tasks: { label: "Task Delay Prediction", icon: "📋", iconBg: "var(--infobg)", href: "/analytics/ml-insights/projects" },
-  transactions: { label: "Anomaly Detection", icon: "🔍", iconBg: "var(--warnbg)", href: "/analytics/ml-insights/anomalies" },
+  tasks: { label: "Task Delay Prediction", icon: "📋", iconBg: "#dbeafe", href: "/analytics/ml-insights/projects" },
+  transactions: { label: "Anomaly Detection", icon: "🔍", iconBg: "#fef3c7", href: "/analytics/ml-insights/anomalies" },
 };
 
 /** A model not retrained within this many days is treated as stale. */
@@ -63,12 +63,12 @@ export default async function MLInsightsHubPage() {
         back="/analytics"
       />
       <StatGrid>
-        <StatCard icon="🤖" tone="info" label="Total Predictions (30d)" value={totalPredictions.toLocaleString("en-IN")} />
+        <StatCard icon="🤖" tone="neutral" label="Total Predictions (30d)" value={totalPredictions.toLocaleString("en-IN")} />
         {/* No cross-metric "Avg. Accuracy": the domains report different, non-
             comparable metrics (AUC-ROC / Precision / MAPE↓), so averaging them
             is arithmetically meaningless. GAP-ANALYTICS-ML-INSIGHTS-02. */}
         <StatCard icon="📈" tone="good" label="Domains with model" value={`${domains.filter((d) => d.modelVersion !== null).length}/${Object.keys(DOMAIN_META).length}`} />
-        <StatCard icon="✅" tone="info" label="Active (not stale)" value={`${activeDomains}/${Object.keys(DOMAIN_META).length}`} />
+        <StatCard icon="✅" tone="neutral" label="Active (not stale)" value={`${activeDomains}/${Object.keys(DOMAIN_META).length}`} />
       </StatGrid>
       {domains.length === 0 && (
         <p style={{ color: "var(--mut)", marginTop: 12 }}>No ML models are active yet.</p>

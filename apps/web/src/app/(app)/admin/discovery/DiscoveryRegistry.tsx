@@ -43,7 +43,7 @@ export function DiscoveryRegistry({ initial, source, errorStatus }: { initial: R
         <div style={{ marginTop: 12 }}>
           <Button type="button" variant="ghost" size="sm" onClick={() => void scanNow()} loading={scan === "scanning"}>{t("scanNow")}</Button>
         </div>
-        {scan === "failed" && <p role="alert" style={{ color: "var(--bad)", fontSize: 13 }}>{t("scanFailed")}</p>}
+        {scan === "failed" && <p role="alert" style={{ color: "#b42318", fontSize: 13 }}>{t("scanFailed")}</p>}
       </div>
     );
   }
@@ -54,7 +54,7 @@ export function DiscoveryRegistry({ initial, source, errorStatus }: { initial: R
     <div className="page-main wrap">
       {header}
       <StatGrid>
-        <StatCard icon="🧭" tone="info" label={t("statTotal")} value={rows.length} />
+        <StatCard icon="🧭" tone="neutral" label={t("statTotal")} value={rows.length} />
         <StatCard icon="✅" tone="good" label={t("statUp")} value={c.up} />
         <StatCard icon="❌" tone="bad" label={t("statDown")} value={c.down} />
         <StatCard icon="⚠️" tone="warn" label={t("statDegraded")} value={c.degraded} />
@@ -65,7 +65,7 @@ export function DiscoveryRegistry({ initial, source, errorStatus }: { initial: R
           {scan === "scanning" ? t("scanning") : t("scanNow")}
         </Button>
         {scan === "throttled" && <span role="status">{t("throttled")}</span>}
-        {scan === "failed" && <span role="alert" style={{ color: "var(--bad)" }}>{t("scanFailed")}</span>}
+        {scan === "failed" && <span role="alert" style={{ color: "#b42318" }}>{t("scanFailed")}</span>}
       </div>
       <Card title={t("registryTitle")}>
         <DataTable<Row>

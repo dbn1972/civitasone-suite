@@ -6,14 +6,8 @@ import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { StockLedgerClient } from "./StockLedgerClient";
 
-export default async function StockLedgerPage({ searchParams }: { searchParams?: { from?: string; to?: string; type?: string; cursor?: string } } = {}) {
-  // GAP-STOCK-LEDGER-08: pass date-range, type, and cursor from searchParams
-  // so the server can filter/paginate rather than returning the full unbounded set.
-  const { from, to, type, cursor } = searchParams ?? {};
-  const loaderOpts = Object.fromEntries(
-    Object.entries({ from, to, type, cursor, limit: 200 }).filter(([, v]) => v != null) as [string, string | number][]
-  );
-  const { data: entries, source } = await getStockLedger(loaderOpts);
+export default async function StockLedgerPage() {
+  const { data: entries, source } = await getStockLedger();
   // GAP-STOCK-LEDGER-01: a failed load must not render as an empty ledger with
   // zero totals. Totals are unknown (null -> "—") when the load errored.
   const errored = source === "error";
@@ -38,7 +32,7 @@ export default async function StockLedgerPage({ searchParams }: { searchParams?:
         <StatCard icon="📋" tone="good" label="Total Entries" value={errored ? "—" : entries.length.toLocaleString("en-IN")} />
         <StatCard icon="📥" tone="good" label="Total Receipts" value={totalReceipts === null ? "—" : formatMoney(totalReceipts)} />
         <StatCard icon="📤" tone="bad" label="Total Issues" value={totalIssues === null ? "—" : formatMoney(totalIssues)} />
-        <StatCard icon="⚖️" tone="info" label="Net Receipts − Issues" value={netBalance === null ? "—" : formatMoney(netBalance)} />
+        <StatCard icon="⚖️" tone="neutral" label="Net Receipts − Issues" value={netBalance === null ? "—" : formatMoney(netBalance)} />
       </StatGrid>
       {errored ? (
         <div className="card" style={{ marginTop: 18 }}>

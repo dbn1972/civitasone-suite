@@ -51,7 +51,7 @@ export default async function Page({ searchParams }: { searchParams?: { page?: s
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="📣" tone="info" label="Release notes recorded" value={errored ? "—" : total.toLocaleString("en-IN")} />
+        <StatCard icon="📣" tone="neutral" label="Release notes recorded" value={errored ? "—" : total.toLocaleString("en-IN")} />
       </StatGrid>
 
       <div className="card">
@@ -77,7 +77,7 @@ export default async function Page({ searchParams }: { searchParams?: { page?: s
             <div className="card" key={c.id}>
               <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <h3><a href={`/change/${c.id}`}>{c.title}</a></h3>
-                <span style={{ color: "var(--mut)", fontSize: 13 }}>Reviewed {formatIndianDateTime(c.pirAt ?? c.updatedAt)}</span>
+                <span style={{ color: "#667085", fontSize: 13 }}>Reviewed {formatIndianDateTime(c.pirAt ?? c.updatedAt)}</span>
               </div>
               <div className="pad">
                 {/* GAP-CHANGE-COMMS-04: clamp long notes to ~6 lines behind a native
@@ -87,7 +87,7 @@ export default async function Page({ searchParams }: { searchParams?: { page?: s
                   <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere", margin: "8px 0 0" }}>{c.releaseNotes}</p>
                 </details>
                 {c.affectedServices.length > 0 && (
-                  <p style={{ color: "var(--mut)", fontSize: 13, marginTop: 8 }}>
+                  <p style={{ color: "#667085", fontSize: 13, marginTop: 8 }}>
                     Affected services: {c.affectedServices.join(", ")}
                   </p>
                 )}
@@ -96,7 +96,7 @@ export default async function Page({ searchParams }: { searchParams?: { page?: s
           ))}
           <div className="card">
             <div className="pad" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ color: "var(--mut)", fontSize: 13 }}>
+              <span style={{ color: "#667085", fontSize: 13 }}>
                 Showing {start + 1}–{start + pageItems.length} of {total.toLocaleString("en-IN")}
               </span>
               <div style={{ display: "flex", gap: 8 }}>

@@ -38,7 +38,7 @@ export default async function Page({ searchParams }: { searchParams?: { segment?
         />}
       />
       <StatGrid>
-        <StatCard icon="▣" tone="info" label={t("statTotal")} value={stat(activities.length)} />
+        <StatCard icon="▣" tone="neutral" label={t("statTotal")} value={stat(activities.length)} />
         <StatCard icon="△" tone="warn" label="Due Today" value={stat(dueToday)} />
         <StatCard icon="◈" tone="bad" label="Overdue" value={stat(overdue)} />
         <StatCard icon="○" tone="good" label="Completed" value={stat(completed)} />

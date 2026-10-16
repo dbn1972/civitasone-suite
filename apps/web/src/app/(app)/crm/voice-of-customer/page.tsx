@@ -137,7 +137,7 @@ export default async function VoiceOfCitizenPage({
         />
         <StatCard
           icon="▣"
-          tone="info"
+          tone="neutral"
           label="Interactions Scored"
           value={isError ? "—" : summary.total.toLocaleString("en-IN")}
         />
@@ -185,7 +185,7 @@ export default async function VoiceOfCitizenPage({
           />
           <StatCard
             icon="▣"
-            iconBg="#e0e7ff"
+            tone="info"
             label={t("averageScore", { min: SCORE_MIN, max: SCORE_MAX })}
             value={isError || summary.total === 0 ? "—" : formatAverageScore(summary.averageScore)}
           />
@@ -202,7 +202,7 @@ export default async function VoiceOfCitizenPage({
           />
           <StatCard
             icon="▣"
-            tone="info"
+            tone="neutral"
             label={t("ratingsReceived")}
             value={ratingsSource === "error" ? "—" : ratings.count.toLocaleString("en-IN")}
           />

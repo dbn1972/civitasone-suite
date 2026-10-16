@@ -31,7 +31,7 @@ export default async function DprTrackingPage() {
     <div className="page-main wrap">
       <PageHeader title="DPR Tracking" subtitle="Detailed Project Report submission, review and approval status." back="/projects" />
       <StatGrid>
-        <StatCard icon="📄" tone="info" label="Total DPRs" value={total ?? "—"} />
+        <StatCard icon="📄" tone="neutral" label="Total DPRs" value={total ?? "—"} />
         <StatCard icon="✅" tone="good" label="Approved" value={approved ?? "—"} />
         <StatCard icon="🔍" tone="warn" label="Under Review" value={underReview ?? "—"} />
         <StatCard icon="↩️" tone="bad" label="Returned for revision" value={returned ?? "—"} />

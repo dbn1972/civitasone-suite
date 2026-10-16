@@ -68,7 +68,7 @@ export function ApiMonitoringTable({
     <>
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <StatGrid>
-        <StatCard icon="🔌" tone="info" label="Endpoints" value={stat(c.endpoints)} />
+        <StatCard icon="🔌" tone="neutral" label="Endpoints" value={stat(c.endpoints)} />
         <StatCard icon="✅" tone="good" label="Healthy" value={stat(c.healthy)} />
         <StatCard icon="⚠️" tone="warn" label="Degraded" value={stat(c.degraded)} />
         <StatCard icon="❌" tone="bad" label="Down" value={stat(c.down)} />

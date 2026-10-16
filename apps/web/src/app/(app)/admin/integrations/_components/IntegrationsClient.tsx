@@ -92,10 +92,10 @@ export function IntegrationsClient() {
       />
 
       <StatGrid>
-        <StatCard icon="🔗" tone="info" label="Providers" value={String(PROVIDER_META.length)} />
+        <StatCard icon="🔗" tone="neutral" label="Providers" value={String(PROVIDER_META.length)} />
         <StatCard icon="✅" tone="good" label="Connected" value={countsKnown ? String(connected) : null} />
         <StatCard icon="⚙️" tone="warn" label="Configured" value={countsKnown ? String(configured) : null} />
-        <StatCard icon="⚠️" iconBg={countsKnown && failed > 0 ? "var(--badbg)" : "var(--line2)"} label="Failing" value={countsKnown ? String(failed) : null} />
+        <StatCard icon="⚠️" iconBg={countsKnown && failed > 0 ? "#fef2f2" : "#f2f4f7"} label="Failing" value={countsKnown ? String(failed) : null} />
       </StatGrid>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "20px 0 8px", flexWrap: "wrap", gap: 12 }}>

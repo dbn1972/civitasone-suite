@@ -33,7 +33,7 @@ export default async function ExperimentsPage() {
       <StatGrid>
         <StatCard
           icon="🧪"
-          tone="info"
+          tone="neutral"
           label="Experiments"
           value={errored ? "—" : data.length.toLocaleString("en-IN")}
         />

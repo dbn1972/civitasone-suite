@@ -155,7 +155,7 @@ export default async function WorksReportsPage({ searchParams }: PageProps) {
         </Card>
       ) : (
         <StatGrid>
-          <StatCard icon="🏗" tone="info" label="Total Works"  value={stat(summary.totalWorks)} />
+          <StatCard icon="🏗" tone="neutral" label="Total Works"  value={stat(summary.totalWorks)} />
           <StatCard icon="🟢" tone="good" label="Active Works" value={stat(summary.activeWorks)} />
           <StatCard icon="🔒" tone="neutral" label="Closed Works" value={stat(summary.closedWorks)} />
           {/* GAP-WORKS-REPORTS-05: a residual bucket so Active + Closed + Other
@@ -217,7 +217,7 @@ export default async function WorksReportsPage({ searchParams }: PageProps) {
                   padding: "8px 12px",
                   borderRadius: 8,
                   fontSize: 13,
-                  background: "var(--warnbg)",
+                  background: "var(--warnbg, #fef3c7)",
                   color: "var(--ink)",
                 }}
               >

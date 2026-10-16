@@ -235,7 +235,7 @@ export default async function ReceiptsPage({
           <StatGrid>
             <StatCard
               icon="🧾"
-              tone="info"
+              tone="neutral"
               label="Receipts"
               value={receiptsResult.source === "error" ? null : receipts.length}
             />

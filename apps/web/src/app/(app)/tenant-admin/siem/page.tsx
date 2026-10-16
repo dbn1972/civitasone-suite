@@ -29,7 +29,7 @@ export default async function SiemPage() {
       <StatGrid>
         <StatCard icon="🚨" tone="bad" label="Critical Alerts" value={errored ? "—" : criticalAlerts} />
         <StatCard icon="⚠️" tone="warn" label="High Severity" value={errored ? "—" : highAlerts} />
-        <StatCard icon="👁️" tone="info" label="Active Alerts" value={errored ? "—" : activeAlerts} />
+        <StatCard icon="👁️" tone="neutral" label="Active Alerts" value={errored ? "—" : activeAlerts} />
         <StatCard icon="📊" tone="neutral" label="Total Alerts" value={errored ? "—" : alerts.length} />
       </StatGrid>
 

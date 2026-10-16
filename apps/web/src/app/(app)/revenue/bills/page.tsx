@@ -268,7 +268,7 @@ export default async function BillsPage({
           <StatGrid>
             <StatCard
               icon="📋"
-              tone="info"
+              tone="neutral"
               label="Demands"
               value={demandsResult.source === "error" ? null : demands.length}
             />

@@ -41,7 +41,7 @@ export default async function LibraryIssuesPage({
       {/* GAP-ESTAB-LIBRARY-ISSUES-05: loan stats depend only on the issues
           loader; a catalogue failure affects the form card, not these counts. */}
       <StatGrid>
-        <StatCard icon="📖" tone="info" label="On Loan" value={issuesErrored ? "—" : activeCount.toLocaleString("en-IN")} />
+        <StatCard icon="📖" tone="neutral" label="On Loan" value={issuesErrored ? "—" : activeCount.toLocaleString("en-IN")} />
         <StatCard icon="⏰" tone="bad" label="Overdue" value={issuesErrored ? "—" : overdueCount.toLocaleString("en-IN")} />
         <StatCard icon="✅" tone="good" label="Returned" value={issuesErrored ? "—" : returnedCount.toLocaleString("en-IN")} />
       </StatGrid>

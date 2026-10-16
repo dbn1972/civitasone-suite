@@ -79,7 +79,7 @@ export function TendersTable({
     <>
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <StatGrid>
-        <StatCard icon="📢" tone="info" label="Total Tenders" value={dash(total)} />
+        <StatCard icon="📢" tone="neutral" label="Total Tenders" value={dash(total)} />
         <StatCard icon="📝" tone="warn" label="Upcoming" value={dash(upcoming)} />
         <StatCard icon="⏰" tone="good" label="Opening date passed" value={dash(passed)} />
         <StatCard icon="🏆" tone="good" label="Awarded" value={dash(awarded)} />

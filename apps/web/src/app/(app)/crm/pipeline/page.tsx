@@ -62,14 +62,14 @@ export default async function PipelinePage({
       />
       {source === "error" && <DataSourceBadge source={source} />}
       {possiblyTruncated && (
-        <p role="status" style={{ fontSize: 13, color: "var(--warn)", background: "var(--warnbg)", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 12px", margin: "8px 0" }}>
+        <p role="status" style={{ fontSize: 13, color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "8px 12px", margin: "8px 0" }}>
           {total !== null
             ? t("truncatedOf", { shown: totalDeals.toLocaleString("en-IN"), total: total.toLocaleString("en-IN") })
             : t("truncatedFirst", { limit: PIPELINE_DEAL_LIMIT.toLocaleString("en-IN") })}
         </p>
       )}
       <StatGrid>
-        <StatCard icon="▣" tone="info" label={possiblyTruncated && total === null ? t("loadedEngagements") : t("totalEngagements")} value={errored ? "—" : (total !== null ? total.toLocaleString("en-IN") : dealsValue)} />
+        <StatCard icon="▣" tone="neutral" label={possiblyTruncated && total === null ? t("loadedEngagements") : t("totalEngagements")} value={errored ? "—" : (total !== null ? total.toLocaleString("en-IN") : dealsValue)} />
         <StatCard icon="◈" tone="good" label={t("engagementValue")} value={totalValueDisplay} />
         <StatCard icon="◉" tone="warn" label={t("avgLikelihood")} value={likelihoodValue} />
         <StatCard

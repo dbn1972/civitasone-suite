@@ -112,7 +112,7 @@ export function EmdBgTable({ emdEntries, pbgEntries, emdSource = "api", pbgSourc
   return (
     <>
       <StatGrid>
-        <StatCard icon="🏦" tone="info" label="Active Bank Guarantees" value={activePbg} />
+        <StatCard icon="🏦" tone="neutral" label="Active Bank Guarantees" value={activePbg} />
         <StatCard icon="💵" tone="good" label="Active EMD" value={activeEmd} />
         <StatCard icon="🔐" tone="info" label="Total Active Security (EMD + BG)" value={combinedTotal} />
         <StatCard icon="⚠️" tone="warn" label="Expired" value={expired} />

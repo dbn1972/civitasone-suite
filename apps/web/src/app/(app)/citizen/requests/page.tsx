@@ -30,7 +30,7 @@ export default async function Page() {
       ) : (
         <>
           <StatGrid>
-            <StatCard icon="📨" tone="info" label={t("statOpen")} value={open.toLocaleString("en-IN")} />
+            <StatCard icon="📨" tone="neutral" label={t("statOpen")} value={open.toLocaleString("en-IN")} />
             <StatCard icon="🔴" tone="bad" label={t("statRejected")} value={rejected.toLocaleString("en-IN")} />
             <StatCard icon="✅" tone="good" label={t("statResolved")} value={resolved.toLocaleString("en-IN")} />
             <StatCard icon="📊" tone="warn" label={t("statTotal")} value={requests.length.toLocaleString("en-IN")} />

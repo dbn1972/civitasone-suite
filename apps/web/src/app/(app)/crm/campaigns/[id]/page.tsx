@@ -80,7 +80,7 @@ export default async function CampaignRoiPage({ params }: { params: { id: string
         {/* GAP-CRM-CAMPAIGNS-DETAIL-03: format in the campaign's own currency, not always ₹. */}
         <StatCard icon="💸" tone="bad" label="Spend" value={formatMoneyIn(campaign.costMinor, currency)} />
         <StatCard icon="💰" tone="good" label="Revenue" value={formatMoneyIn(campaign.revenueMinor, currency)} />
-        <StatCard icon="🧮" tone="info" label="Net" value={formatMoneyIn(campaign.netMinor, currency)} />
+        <StatCard icon="🧮" tone="neutral" label="Net" value={formatMoneyIn(campaign.netMinor, currency)} />
         <StatCard icon="📈" tone="warn" label="ROI" value={formatRoiPercent(campaign.roiPercent)} />
       </StatGrid>
 

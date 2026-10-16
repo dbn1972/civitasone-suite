@@ -195,7 +195,7 @@ export default async function AaDetailPage({
         />
         <StatCard
           icon="📋"
-          tone="info"
+          tone="neutral"
           label="Status"
           value={humanize(aa.status)}
         />

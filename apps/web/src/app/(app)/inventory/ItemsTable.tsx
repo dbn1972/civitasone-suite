@@ -66,7 +66,7 @@ export function ItemsTable({
       <StatGrid>
           <StatCard icon="📦" tone="neutral" label="Total Items" value={statValue(provenance, rows.length)} />
           <StatCard icon="✅" tone="good" label="Active" value={statValue(provenance, active)} />
-          <StatCard icon="🧴" tone="neutral" label="Consumables" value={statValue(provenance, consumables)} />
+          <StatCard icon="🧴" tone="info" label="Consumables" value={statValue(provenance, consumables)} />
           <StatCard icon="🔔" tone="warn" label="Reorder Tracked" value={statValue(provenance, tracked)} />
       </StatGrid>
       <Card title="Items">

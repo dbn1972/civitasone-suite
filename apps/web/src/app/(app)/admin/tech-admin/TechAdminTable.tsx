@@ -23,7 +23,7 @@ export function TechAdminTable({ services, source = "api", fetchedAt }: { servic
       {/* UX-012: this badge is the ONLY place that reports data provenance for the rows below. */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <StatGrid>
-        <StatCard icon="⚙️" tone="info" label="Services" value={summary.total} />
+        <StatCard icon="⚙️" tone="neutral" label="Services" value={summary.total} />
         <StatCard icon="✅" tone="good" label="Running" value={summary.running} />
         <StatCard icon="❌" tone="bad" label="Stopped or errored" value={summary.down} />
         <StatCard icon="⚠️" tone="warn" label="Degraded" value={summary.degraded} />

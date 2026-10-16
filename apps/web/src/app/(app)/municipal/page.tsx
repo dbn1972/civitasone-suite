@@ -36,7 +36,7 @@ export default async function MunicipalHubPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🏛️" tone="info" label="Municipal services" value={sec5Count} />
+        <StatCard icon="🏛️" tone="neutral" label="Municipal services" value={sec5Count} />
         <StatCard icon="📋" tone="good" label="Officer consoles" value={officerConsoleCount} />
         <StatCard icon="🪪" tone="warn" label="Citizen apply links" value={citizenLinkCount} />
       </StatGrid>

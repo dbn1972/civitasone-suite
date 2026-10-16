@@ -207,11 +207,11 @@ export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
       />
 
       <StatGrid>
-        <StatCard icon="📍" tone="info" label="Markers" value={String(markers.length)} />
+        <StatCard icon="📍" tone="neutral" label="Markers" value={String(markers.length)} />
         <StatCard icon="✅" tone="good" label="Active" value={String(active)} />
         <StatCard
           icon="⚠️"
-          iconBg={alerts > 0 ? "var(--badbg)" : "var(--line2)"}
+          iconBg={alerts > 0 ? "#fef2f2" : "#f2f4f7"}
           label="Alerts"
           value={String(alerts)}
         />
@@ -283,8 +283,8 @@ export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
       </div>
 
       {error && (
-        <div className="card" role="alert" style={{ borderColor: "var(--badbg)", marginBottom: 12 }}>
-          <div className="pad" style={{ color: "var(--bad)" }}>
+        <div className="card" role="alert" style={{ borderColor: "#fecaca", marginBottom: 12 }}>
+          <div className="pad" style={{ color: "#b42318" }}>
             {error}{" "}
             <button type="button" className="btn ghost" onClick={() => void load()}>
               Retry
@@ -294,7 +294,7 @@ export function MonitoringMap({ tileUrl }: { tileUrl?: string } = {}) {
       )}
 
       {truncated ? (
-        <p role="status" style={{ color: "var(--warn)", fontSize: 13, marginBottom: 8 }}>
+        <p role="status" style={{ color: "#92400e", fontSize: 13, marginBottom: 8 }}>
           {t("truncated", { shown: markers.length })}
         </p>
       ) : null}

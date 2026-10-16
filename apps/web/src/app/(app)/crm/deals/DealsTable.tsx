@@ -147,7 +147,7 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
         <a
           href={`/crm/contacts/${row.contactId}`}
           onClick={(e) => e.stopPropagation()}
-          style={{ color: "var(--primary)", textDecoration: "underline" }}
+          style={{ color: "var(--primary, #2563eb)", textDecoration: "underline" }}
         >
           {row.account}
         </a>
@@ -163,9 +163,9 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
           grid, so it can never disagree with the figures below it. */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <StatGrid>
-        <StatCard icon="▣" tone="info" label={t("statTotal")} value={totalDisplay} />
+        <StatCard icon="▣" tone="neutral" label={t("statTotal")} value={totalDisplay} />
         <StatCard icon="◉" tone="good" label={t("statActive")} value={openDisplay} />
-        <StatCard icon="◈" tone="neutral" label={t("statActiveValue")} value={pipelineDisplay} />
+        <StatCard icon="◈" tone="info" label={t("statActiveValue")} value={pipelineDisplay} />
         <StatCard icon="△" tone="good" label={t("statConcludedValue")} value={wonDisplay} />
         <StatCard icon="▽" tone="bad" label={t("statLapsed")} value={lapsedDisplay} />
       </StatGrid>

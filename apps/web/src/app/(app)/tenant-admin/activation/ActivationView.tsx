@@ -74,7 +74,7 @@ export function ActivationView({
         <StatCard icon="⏱" tone="info" label="Time to first transaction (median)" value={ttfrtDisplay} />
         {platform ? (
           <>
-            <StatCard icon="🏢" tone="info" label="Offices signed in" value={officesSignedIn} />
+            <StatCard icon="🏢" tone="neutral" label="Offices signed in" value={officesSignedIn} />
             <StatCard icon="✅" tone="good" label="Offices activated" value={agg.activatedOffices} />
             <StatCard icon="📈" tone="warn" label="Activation rate" value={`${Math.round(agg.activationRate * 100)}%`} />
           </>
@@ -85,7 +85,7 @@ export function ActivationView({
                 setup progress (steps completed of the golden path) instead. */}
             <StatCard
               icon="🪜"
-              tone="info"
+              tone="neutral"
               label="Setup progress"
               value={`${FUNNEL_STEPS.filter((s) => (stageByStep.get(s)?.reached ?? 0) > 0).length}/${FUNNEL_STEPS.length} steps`}
             />

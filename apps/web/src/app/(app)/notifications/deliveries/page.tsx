@@ -8,7 +8,6 @@ import { toHumanError } from "@/lib/messages";
 import { formatIndianDate, maskRecipient } from "@/lib/formatters";
 import { StatusBadge } from "../_components/StatusBadge";
 import { isInDeliveryGroup } from "../_components/deliveryStatus";
-import { channelLabel } from "../_components/channelLabel";
 
 type DeliveryRow = {
   id: string;
@@ -66,7 +65,7 @@ export default function NotificationDeliveriesPage() {
     // default in the log. No reveal control: notification-service exposes no
     // audited PII-reveal endpoint (see lib/formatters.maskRecipient / ds Masked).
     recipient: maskRecipient(d.recipient),
-    channel: channelLabel(d.channel),
+    channel: d.channel.replace(/_/g, " "),
     attemptCount: d.attemptCount,
     deliveredAt: d.deliveredAt ? formatIndianDate(d.deliveredAt) : "—",
     status: d.status,
@@ -95,12 +94,12 @@ export default function NotificationDeliveriesPage() {
         }
       />
       {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--warn)", margin: "0 0 8px" }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
           {cacheNote}
         </p>
       ) : null}
       <StatGrid>
-        <StatCard icon="📤" tone="info" label="Total" value={tileValue(deliveries.length, loading, !!error)} />
+        <StatCard icon="📤" tone="neutral" label="Total" value={tileValue(deliveries.length, loading, !!error)} />
         <StatCard icon="✅" tone="good" label="Delivered" value={tileValue(delivered, loading, !!error)} />
         <StatCard icon="❌" tone="bad" label="Failed" value={tileValue(failed, loading, !!error)} />
         <StatCard icon="⏳" tone="warn" label="Pending" value={tileValue(pending, loading, !!error)} />

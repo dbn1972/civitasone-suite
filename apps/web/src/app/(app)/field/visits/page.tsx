@@ -2,7 +2,7 @@ import { Card, DataTable, PageHeader, StatCard, StatGrid, RefreshErrorState } fr
 import { formatIndianDateTime } from "@/lib/formatters";
 import { getSessionRoles, hasAnyRole, FIELD_VISIT_LOCATION_ROLES } from "@/lib/auth/roleGuard";
 import { getFieldVisitsDetailed } from "../_data";
-import { formatCoord, outcomeLabel, openVisitHours, rankVisits, visitStatus, visitDisplayStatus } from "./visits";
+import { formatCoord, outcomeLabel, rankVisits, visitStatus, visitDisplayStatus } from "./visits";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +67,7 @@ export default async function FieldVisitsPage() {
     task: v.taskId,
     checkIn: v.checkInAt ? formatIndianDateTime(v.checkInAt) : "—",
     gps: formatCoord(v.checkInLatitude, v.checkInLongitude),
-    duration: v.durationMinutes != null ? `${v.durationMinutes} min` : (() => { const h = openVisitHours(v); return h != null && h > 0 ? `open ${h}h` : h === 0 ? "open <1h" : "—"; })(),
+    duration: v.durationMinutes === null || v.durationMinutes === undefined ? "—" : `${v.durationMinutes} min`,
     outcome: outcomeLabel(v.outcome),
     notes: v.notes?.trim() ? v.notes : "—",
   }));
@@ -99,7 +99,7 @@ export default async function FieldVisitsPage() {
       <StatGrid>
         <StatCard
           icon="📍"
-          tone="info"
+          tone="neutral"
           label={capped ? `Visits (latest ${limit})` : "Visits"}
           value={(capped ? total : visits.length).toLocaleString("en-IN")}
         />

@@ -169,12 +169,12 @@ export function CauseListConsole({
         </div>
       )}
       {error && (
-        <div className="alert" role="alert" style={{ borderColor: "var(--badbd)", color: "var(--bad)" }}>
+        <div className="alert" role="alert" style={{ borderColor: "#fca5a5", color: "#b91c1c" }}>
           ⚠ {error}
         </div>
       )}
       {casesSource === "error" && (
-        <div className="alert" role="status" style={{ borderColor: "var(--badbd)" }}>
+        <div className="alert" role="status" style={{ borderColor: "#fca5a5" }}>
           The case registry couldn’t be reached, so the case picker below may be incomplete. Court selection still works.
         </div>
       )}
@@ -268,7 +268,7 @@ export function CauseListConsole({
                 message="Add the first case to this cause list above."
               />
             ) : (
-              <div style={{ overflowX: "auto" }}>
+              <div className="tbl-wrap">
                 <table className="tbl tbl--stack" style={{ width: "100%" }}>
                   <thead>
                     <tr>
@@ -435,7 +435,7 @@ function AddItemForm({
             </Button>
           </div>
           {localError && (
-            <p role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: "6px 0 0" }}>
+            <p role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: "6px 0 0" }}>
               {localError}
             </p>
           )}

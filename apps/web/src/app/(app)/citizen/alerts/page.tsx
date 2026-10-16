@@ -39,7 +39,7 @@ export default async function AlertsPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🔔" tone="info" label={t("statActive")} value={active} />
+        <StatCard icon="🔔" tone="neutral" label={t("statActive")} value={active} />
         <StatCard icon="📤" tone="good" label={t("statTotal")} value={published} />
         <StatCard icon="⏰" tone="warn" label={t("statExpired")} value={expired} />
         <StatCard icon="📝" tone="bad" label={t("statDrafts")} value={drafts} />

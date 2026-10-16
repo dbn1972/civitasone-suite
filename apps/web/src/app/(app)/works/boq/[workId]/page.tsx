@@ -217,7 +217,7 @@ export default async function BoqDetailPage({
       ) : (
         <>
           <StatGrid>
-            <StatCard icon="📐" tone="info" label="Total Items"   value={totalItems} />
+            <StatCard icon="📐" tone="neutral" label="Total Items"   value={totalItems} />
             <StatCard icon="💰" tone="good" label={recap?.grandTotal ? "Grand Total" : "Sum of items"}  value={totalAmount} hint={recap?.grandTotal ? "Recapitulation grand total." : "Sum of BoQ line amounts (recapitulation not yet computed)."} />
             <StatCard icon="📊" tone="warn" label="Contingency %" value={contingencyPct} />
             <StatCard icon="🏗️" tone="good" label="Work Charge %" value={workChargePct} />
@@ -263,7 +263,7 @@ export default async function BoqDetailPage({
                         <td className="num">{formatMoney(line.amountMinor)}</td>
                       </tr>
                     ))}
-                    <tr style={{ borderTop: "2px solid var(--border)" }}>
+                    <tr style={{ borderTop: "2px solid var(--border, #e2e8f0)" }}>
                       <th scope="row" style={{ textAlign: "start", fontWeight: 700 }}>Grand Total</th>
                       <td></td>
                       <td></td>

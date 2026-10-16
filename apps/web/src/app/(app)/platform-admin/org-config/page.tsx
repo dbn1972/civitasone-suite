@@ -4,8 +4,7 @@ import { PageHeader, StatCard } from "@/app/_components/ds";
 import { Breadcrumb } from "../Breadcrumb";
 import { OrgConfigPage } from "./OrgConfigPage";
 
-// COMP-014: real per-tenant org-hierarchy-levels store (admin-service
-// GET/PUT /v1/admin/org-hierarchy-levels). Full history: see git log.
+// COMP-014: real GET/PUT /v1/admin/org-hierarchy-levels via admin-service. See git log.
 export default async function OrgConfigRoute() {
   requireAnyRole(PLATFORM_ADMIN_ROLES, "/dashboard");
   const { data: levels, source } = await getOrgHierarchyLevels();

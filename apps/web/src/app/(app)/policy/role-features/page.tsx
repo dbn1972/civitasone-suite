@@ -22,10 +22,10 @@ export default async function PolicyRoleFeaturesPage() {
       />
       {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
-        <StatCard icon="🎛️" tone="info" label="Grants" value={errored ? "—" : grants.length} />
+        <StatCard icon="🎛️" tone="neutral" label="Grants" value={errored ? "—" : grants.length} />
         <StatCard icon="✅" tone="good" label="Granted" value={errored ? "—" : granted} />
         {/* GAP-POLICY-ROLE-FEATURES-05: label matches what is counted. */}
-        <StatCard icon="👤" tone="neutral" label="Roles with grants" value={errored ? "—" : roles} />
+        <StatCard icon="👤" tone="info" label="Roles with grants" value={errored ? "—" : roles} />
       </StatGrid>
 
       <Card title="Grant a feature" padding>

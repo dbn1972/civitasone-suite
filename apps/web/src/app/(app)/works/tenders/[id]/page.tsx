@@ -183,7 +183,7 @@ export default async function TenderDetailPage({
       <StatGrid>
         <StatCard
           icon="📝"
-          tone="info"
+          tone="neutral"
           label="Total Quotations"
           value={quotations.length}
         />
@@ -202,7 +202,7 @@ export default async function TenderDetailPage({
         />
         <StatCard
           icon="📋"
-          tone="info"
+          tone="neutral"
           label="Tender Status"
           value={statusView.label}
         />

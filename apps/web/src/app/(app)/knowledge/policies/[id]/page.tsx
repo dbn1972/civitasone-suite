@@ -62,18 +62,18 @@ export default async function Page({ params }: { params: { id: string } }) {
       <StatGrid>
         <StatCard
           icon="🚦"
-          tone="info"
+          tone="neutral"
           label="Status"
           value={policyStatusLabel(policy.status)}
         />
         <StatCard icon="📅" tone="good" label="Effective" value={policy.effectiveDate ? formatIndianDate(policy.effectiveDate) : "—"} />
         <StatCard icon="🔁" tone="warn" label="Review due" value={policy.reviewDueDate ? formatIndianDate(policy.reviewDueDate) : "—"} />
-        <StatCard icon="👥" tone="info" label="Acknowledged" value={acksErrored ? "—" : acks.acknowledgedCount.toLocaleString("en-IN")} />
+        <StatCard icon="👥" tone="neutral" label="Acknowledged" value={acksErrored ? "—" : acks.acknowledgedCount.toLocaleString("en-IN")} />
       </StatGrid>
 
       <div className="card">
         <div className="card-h"><h3>Document body</h3></div>
-        <div className="pad" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, color: "var(--ink2)" }}>
+        <div className="pad" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, color: "var(--ink2, #475569)" }}>
           {policy.body || "No content."}
         </div>
       </div>

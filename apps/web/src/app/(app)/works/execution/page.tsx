@@ -51,7 +51,7 @@ export default async function ExecutionPage() {
         }
       />
       <StatGrid>
-        <StatCard icon="🏗️" tone="info" label="Progress Entries" value={statOrNull(progressFailed, total)} />
+        <StatCard icon="🏗️" tone="neutral" label="Progress Entries" value={statOrNull(progressFailed, total)} />
         <StatCard icon="✅" tone="good" label="On Track" value={statOrNull(progressFailed, counts.onTrack)} />
         <StatCard icon="⚠️" tone="warn" label="At Risk" value={statOrNull(progressFailed, counts.atRisk)} />
         <StatCard icon="🎉" tone="good" label="Completed" value={statOrNull(progressFailed, counts.completed)} />

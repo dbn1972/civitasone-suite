@@ -76,7 +76,7 @@ export default async function ApprovalsPage() {
             date"), so no two cards report the same number. */}
         <StatCard icon="⏳" tone="info" label="Pending Approvals" value={errored ? "—" : approvals.length} />
         <StatCard icon="⚠️" tone="bad" label="Due today or overdue" value={errored ? "—" : dueSoon} />
-        <StatCard icon="👥" tone="info" label="Unique Owners" value={errored ? "—" : new Set(approvals.map((a) => a.owner)).size} />
+        <StatCard icon="👥" tone="neutral" label="Unique Owners" value={errored ? "—" : new Set(approvals.map((a) => a.owner)).size} />
         <StatCard icon="📋" tone="good" label="With a due date" value={errored ? "—" : approvals.filter((a) => a.dueAt).length} />
       </StatGrid>
 

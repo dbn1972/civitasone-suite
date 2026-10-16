@@ -91,7 +91,7 @@ export function GemTable({
   return (
     <>
       <StatGrid>
-        <StatCard icon="🛒" tone="info" label="Total Orders" value={totalOrders} />
+        <StatCard icon="🛒" tone="neutral" label="Total Orders" value={totalOrders} />
         <StatCard icon="📦" tone="good" label="Delivered" value={delivered} />
         <StatCard icon="🚚" tone="warn" label="In Transit" value={inTransit} />
         <StatCard icon="🗂️" tone="neutral" label="Other / Cancelled" value={otherCount} />

@@ -46,8 +46,8 @@ export default async function MISDashboardPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🗄️" tone="info" label="Data Sources" value={errored ? null : modules.length} delta={errored ? undefined : "modules"} />
-        <StatCard icon="📦" tone="info" label="Total Metrics" value={errored ? null : totalMetrics} />
+        <StatCard icon="🗄️" tone="neutral" label="Data Sources" value={errored ? null : modules.length} delta={errored ? undefined : "modules"} />
+        <StatCard icon="📦" tone="neutral" label="Total Metrics" value={errored ? null : totalMetrics} />
         <StatCard icon="⚡" tone="good" label="Positive Trends" value={errored ? null : positiveTrends} delta={errored ? undefined : "live"} up={positiveTrends > 0} />
         <StatCard icon="📊" tone="warn" label="Negative Trends" value={errored ? null : negativeTrends} />
       </StatGrid>

@@ -85,7 +85,7 @@ export function PlatformIntegrationsClient() {
             </div>
           )}
           <StatGrid>
-            <StatCard icon="🧩" tone="info" label={t("platform.stats.providers")} value={String(counts.providers)} />
+            <StatCard icon="🧩" tone="neutral" label={t("platform.stats.providers")} value={String(counts.providers)} />
             <StatCard icon="✅" tone="good" label={t("platform.stats.available")} value={String(counts.available)} />
             <StatCard icon="🧪" tone="warn" label={t("platform.stats.beta")} value={String(counts.beta)} />
             <StatCard icon="⛔" tone="neutral" label={t("platform.stats.disabled")} value={String(counts.disabled)} />

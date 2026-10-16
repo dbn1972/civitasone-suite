@@ -39,7 +39,7 @@ export default async function IdpListPage() {
           relationship is stated honestly instead of looping the user. */}
 
       <StatGrid>
-        <StatCard icon="🔗" tone="info" label="Total Providers" value={errored ? "—" : providers.length} />
+        <StatCard icon="🔗" tone="neutral" label="Total Providers" value={errored ? "—" : providers.length} />
         <StatCard icon="✅" tone="good" label="Active" value={errored ? "—" : activeProviders} />
         <StatCard icon="👥" tone="neutral" label="Users Synced" value={errored ? "—" : totalSynced} />
         <StatCard

@@ -77,7 +77,7 @@ export function NoticesTable({ notices, source = "api" }: { notices: CitizenNoti
     return (
       <>
         <StatGrid>
-          <StatCard icon="📰" tone="info" label={t("statTotal")} value="—" />
+          <StatCard icon="📰" tone="neutral" label={t("statTotal")} value="—" />
           <StatCard icon="⚖️" tone="good" label={t("statStatutory")} value="—" />
           <StatCard icon="🏛️" tone="warn" label={t("statHearings")} value="—" />
           <StatCard icon="📋" tone="bad" label={t("statTenders")} value="—" />
@@ -90,7 +90,7 @@ export function NoticesTable({ notices, source = "api" }: { notices: CitizenNoti
   return (
     <>
       <StatGrid>
-        <StatCard icon="📰" tone="info" label={t("statTotal")} value={active.length} />
+        <StatCard icon="📰" tone="neutral" label={t("statTotal")} value={active.length} />
         <StatCard icon="⚖️" tone="good" label={t("statStatutory")} value={statutory} />
         <StatCard icon="🏛️" tone="warn" label={t("statHearings")} value={publicHearings} />
         <StatCard icon="📋" tone="bad" label={t("statTenders")} value={tenders} />

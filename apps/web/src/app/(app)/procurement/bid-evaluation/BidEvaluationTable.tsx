@@ -89,7 +89,7 @@ export function BidEvaluationTable({ evaluations, source = "api" }: { evaluation
   return (
     <>
       <StatGrid>
-        <StatCard icon="📋" tone="info" label="Tenders under evaluation" value={errored ? "—" : stats.tendersUnderEvaluation} />
+        <StatCard icon="📋" tone="neutral" label="Tenders under evaluation" value={errored ? "—" : stats.tendersUnderEvaluation} />
         <StatCard icon="🏢" tone="good" label="Bidders" value={errored ? "—" : stats.uniqueBidders} />
         <StatCard icon="✅" tone="warn" label="Recommended / Awarded" value={errored ? "—" : stats.recommended} />
         <StatCard icon="⏳" tone="bad" label="Under Review" value={errored ? "—" : stats.underReview} />
@@ -124,7 +124,7 @@ export function BidEvaluationTable({ evaluations, source = "api" }: { evaluation
                 label: "Tender Ref",
                 render: (row) =>
                   row.tenderId ? (
-                    <Link href={`/procurement/tenders/${row.tenderId}`} style={{ color: "var(--indigo)" }}>
+                    <Link href={`/procurement/tenders/${row.tenderId}`} style={{ color: "#4f46e5" }}>
                       {row.tender}
                     </Link>
                   ) : (
@@ -142,8 +142,8 @@ export function BidEvaluationTable({ evaluations, source = "api" }: { evaluation
                 render: (row) => (
                   <span>
                     {row.rank}
-                    {row.isL1 ? <span title="Lowest / best rank" style={{ marginInlineStart: 4, color: "var(--good)", fontWeight: 600 }}>L1</span> : null}
-                    {row.isTie ? <span title="Tied rank" style={{ marginInlineStart: 4, color: "var(--warn)" }}>(tie)</span> : null}
+                    {row.isL1 ? <span title="Lowest / best rank" style={{ marginInlineStart: 4, color: "#047857", fontWeight: 600 }}>L1</span> : null}
+                    {row.isTie ? <span title="Tied rank" style={{ marginInlineStart: 4, color: "#92400e" }}>(tie)</span> : null}
                   </span>
                 ),
               },

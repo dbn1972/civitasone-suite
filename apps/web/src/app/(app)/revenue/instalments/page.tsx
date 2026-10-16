@@ -236,7 +236,7 @@ export default async function InstalmentsPage({
       ) : (
         <>
           <StatGrid>
-            <StatCard icon="📆" tone="info" label="Plans" value={plans.length} />
+            <StatCard icon="📆" tone="neutral" label="Plans" value={plans.length} />
             <StatCard icon="✅" tone="good" label="Active Plans" value={activePlans} />
           </StatGrid>
 

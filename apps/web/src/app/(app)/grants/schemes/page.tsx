@@ -52,7 +52,7 @@ export default async function GrantSchemesPage() {
         {/* GAP-GRANTS-SCHEMES-05: surface rows the mapper had to hide so the
             list is honest about being incomplete. */}
         {droppedCount > 0 && (
-          <p role="status" style={{ color: "var(--warn)", fontSize: 13, margin: "0 0 8px" }}>
+          <p role="status" style={{ color: "var(--warn, #b45309)", fontSize: 13, margin: "0 0 8px" }}>
             {droppedCount} scheme{droppedCount === 1 ? "" : "s"} could not be displayed because the
             record was incomplete.
           </p>
@@ -62,7 +62,7 @@ export default async function GrantSchemesPage() {
           <StatCard icon="✅" tone="good" label="Open" value={failed ? dash : open} />
           <StatCard
             icon="💰"
-            tone="info"
+            tone="neutral"
             label="Total Budget (sanctioned)"
             value={failed ? dash : formatMoney(totalBudget)}
           />
@@ -74,7 +74,7 @@ export default async function GrantSchemesPage() {
           />
           <StatCard
             icon="📝"
-            tone="neutral"
+            tone="info"
             label="Applications"
             value={failed || totalApplications == null ? dash : totalApplications}
           />

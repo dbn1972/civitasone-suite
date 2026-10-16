@@ -82,10 +82,10 @@ export default async function Page({ searchParams }: { searchParams?: { status?:
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="📋" tone="info" label="Total Changes" value={errored ? "—" : changes.length.toLocaleString("en-IN")} />
+        <StatCard icon="📋" tone="neutral" label="Total Changes" value={errored ? "—" : changes.length.toLocaleString("en-IN")} />
         <StatCard icon="🧑‍⚖️" tone="warn" label="Awaiting CAB" href="/change?status=submitted" value={awaitingCab === null ? "—" : awaitingCab.toLocaleString("en-IN")} />
         <StatCard icon="🗓️" tone="good" label="Scheduled" href="/change?status=scheduled" value={scheduled === null ? "—" : scheduled.toLocaleString("en-IN")} />
-        <StatCard icon="🔓" tone="info" label="Open" href="/change?status=open" value={open === null ? "—" : open.toLocaleString("en-IN")} />
+        <StatCard icon="🔓" tone="neutral" label="Open" href="/change?status=open" value={open === null ? "—" : open.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card">
         <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
