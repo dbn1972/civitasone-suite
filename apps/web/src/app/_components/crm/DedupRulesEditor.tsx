@@ -95,6 +95,9 @@ export function DedupRulesEditor() {
   // loaded snapshot used to tell whether there are unsaved edits.
   const [version, setVersion] = useState<string | undefined>(undefined);
   const [loadedSnapshot, setLoadedSnapshot] = useState<string>("[]");
+  // GAP-CRM-DEDUP-RULES-03: track how many rules have been removed since last load.
+  // Shown as a summary banner so the admin sees "N rule(s) removed" before saving.
+  const removedCount = Math.max(0, (JSON.parse(loadedSnapshot) as unknown[]).length - rules.length);
   // GAP-CRM-DEDUP-RULES-02: "Last changed by/at" from the GET metadata.
   const [lastChangedBy, setLastChangedBy] = useState<string | undefined>(undefined);
   const [lastChangedAt, setLastChangedAt] = useState<string | undefined>(undefined);
@@ -280,6 +283,11 @@ export function DedupRulesEditor() {
       {dirty ? (
         <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--warn, #92400e)", padding: "0 12px" }}>
           {t("unsavedChanges")}
+        </p>
+      ) : null}
+      {removedCount > 0 ? (
+        <p role="status" aria-live="polite" data-testid="removed-count-summary" style={{ fontSize: 13, color: "var(--warn, #92400e)", padding: "0 12px" }}>
+          {t("rulesRemoved", { count: removedCount })}
         </p>
       ) : null}
 

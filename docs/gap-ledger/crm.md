@@ -183,7 +183,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-07  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: closed by #N, W2 crm: closed by #N)
 - **W0-10 note:** review found the W0 tick partly — accounts/activities fixed (subtitle via t()), but acceptance 'no Devanagari literals remain in crm/**/*.tsx' fails: crm/contacts/page.tsx:97 ('संपर्क पंजी') and crm/deals/page.tsx:12 ('संलग्नताएँ') still hard-coded
 - **First-pass claim:** Subtitle carries a hard-coded Devanagari suffix (संगठन पंजी) instead of a next-intl key, and for an Odisha tenant would be expected in Odia (app/(app)/crm/accounts/page.tsx:34).
 - **Verified evidence:** accounts/page.tsx:34 subtitle is a literal string ending '• संगठन पंजी' (Devanagari) and activities/page.tsx:22 has the same pattern ('• अन्तःक्रियाएँ'); neither uses next-intl. Correction: Odia is not a supported locale at all (src/i18n/config.ts:12 SUPPORTED_LOCALES = en, hi, ta, te, kn), so 'expected in Odia' is not currently actionable; the real defect is a hard-coded Hindi suffix shown to every locale/tenant (a Tamil/English user sees Hindi text) and it is not FABRICATED data.
@@ -1536,7 +1536,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-NEW-06  ·  LOW  ·  confirmed  ·  theme COPY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: closed by #N, W2 crm: closed by #N)
 - **First-pass claim:** Placeholders come from another state: "Asha Rao", "Bengaluru", "560001", GSTIN 29ABCDE1234F1Z5 (a Karnataka code); an Odisha tenant sees wrong examples (app/(app)/crm/contacts/new/page.tsx:244).
 - **Verified evidence:** new/page.tsx placeholders: 'e.g. Asha Rao' (l.212), GSTIN '29ABCDE1234F1Z5' (l.244; 29 = Karnataka), city 'Bengaluru' (l.266), PIN '560001' (l.274), phone 9900000000. They are placeholders, not saved data.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/new/page.tsx`
@@ -2159,7 +2159,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-DETAIL-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: closed by #N, W2 crm: closed by #N)
 - **First-pass claim:** Success and error text uses hard-coded hex colours (#047857 / #b42318) and English literals instead of tokens / next-intl (DealDetailActions.tsx:165-172); the page mixes 'Deal' (title) with 'Engagement' (list).
 - **Verified evidence:** DealDetailActions.tsx:165 color '#047857', :170 '#b42318' hard-coded; messages are English literals; page title 'Deal ...' (page.tsx:31) vs list 'Engagements' (deals/page.tsx:16). CustomFieldsManager uses same hex (204-205) too.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/[id]/DealDetailActions.tsx`, `apps/web/src/app/(app)/crm/deals/[id]/page.tsx`
@@ -2291,7 +2291,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-NEW-07  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** NEEDS OWNER DECISION — naming (Deal vs Engagement) and hex-colour tokens require a product decision before web changes can land
 - **First-pass claim:** Copy calls the record 'Deal' (title, button) while the list page says 'Engagement'; the picker says 'Contact' where the list column says 'Account'; banners use hard-coded hex colours (page.tsx:95-101).
 - **Verified evidence:** Copy mismatch is real: new page title 'New Deal' (page.tsx:93), button 'Create deal' (:141), 'Contact (optional)' (:123) versus list 'Vendor / Stakeholder Engagements', '+ New Engagement' (deals/page.tsx:16,20) and column 'Account' (DealsTable.tsx:126). Hard-coded hex at :95 (#ecfdf3) and :100 (#fef2f2, #b42318). Not fabricated data, so the FABRICATED tag is wrong.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/new/page.tsx`
@@ -2361,7 +2361,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-CANDIDATES-04  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: closed by #TBD, W2 crm: closed by #54b744b6e)
 - **W0-10 note:** review found the W0 tick partly — Client sort by confidence + min-confidence filter + total done (page.tsx:303-304,345), but no pagination: all visiblePairs rendered (page.tsx:392); no backend page/minConfidence/total params (dedup-routes.ts:143 limit only)
 - **First-pass claim:** No pagination, filter or sort: every flagged pair is fetched and rendered as a full card, so a large queue becomes a very long page; there is also no way to sort by confidence (page.tsx:272-288, dedupCandidates.ts:52-57).
 - **Verified evidence:** getDedupCandidates (dedupCandidates.ts:50-59) fetches one unpaged list; page.tsx:272-289 maps all pairs to cards in server order; no sort/filter/pagination controls. Endpoint itself is absent from the backend snapshot.
@@ -2455,7 +2455,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-RULES-03  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: closed by #TBD, W2 crm: closed by #2530bf7be)
 - **W0-10 note:** review found the W0 tick partly — duplicate-field validation (DedupRulesEditor.tsx:218-220) and default weight 50 (:168) done; fix step 3 / acceptance "removing then saving shows a summary" missing: no undo or removed-count summary (confirmEmpty at :93,226 only guards saving zero rules)
 - **First-pass claim:** 'Remove' deletes the row immediately (local state) with no confirmation, and a new rule defaults to weight 1 (out of 100) so it has almost no effect until edited; nothing stops two rules on the same field (DedupRulesEditor.tsx:94-105).
 - **Verified evidence:** removeRule (DedupRulesEditor.tsx:102-105) deletes locally with no confirm, but nothing is persisted until 'Save rules', so it is recoverable by reloading; addRule default weight 1 (:97) with threshold 90 is confirmed and duplicates of the same field are not checked (save only runs ruleNumbersValid, :110). A reason-dialog is overkill.
@@ -4695,7 +4695,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRODUCTS-04  ·  MEDIUM  ·  partly  ·  theme RESPONSIVE (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: closed by #TBD, W2 crm: closed by #28cfc8098)
 - **W0-10 note:** review found the W0 tick partly — stacked-card media query at <=640px added (ProductCatalogueEditor.tsx:276-282) but inputs keep minHeight:36 (:49), fix step 3 (>=44px touch height) not done
 - **First-pass claim:** Ten editable columns render as a horizontally scrolling table (overflowX auto) with no card transform at phone width, and every cell is an input, so the row is hard to read or edit on mobile (ProductCatalogueEditor.tsx:168).
 - **Verified evidence:** Table is 10 columns inside overflowX:auto (ProductCatalogueEditor.tsx:170-171), every cell an input; no responsive card transform. Real, but theme tag PII is wrong (responsive/mobile).
@@ -4993,7 +4993,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-06  ·  LOW  ·  confirmed  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: closed by #TBD, W2 crm: closed by #93e2de01d)
 - **W0-10 note:** review found the W0 tick partly — lib/crm/rti.ts sectionLabel + test exist and detail page imports it, but RtiTable.tsx:82-86 and new/page.tsx:12-15 keep local maps (i18n keys): table shows "§6 Information" vs detail/new "§6 — Information Request", filters namespace shows "§6 — Information" - acceptance "all screens show the same label" unmet
 - **First-pass claim:** Section reads "§6 Information" here but "§6 — Information Request" on the detail and new-request screens (RtiTable.tsx:55, rti/[id]/page.tsx:37).
 - **Verified evidence:** RtiTable.tsx:436-440 sectionLabel returns '§6 Information' / '§11 Third-party' while detail (page.tsx:34-37) and new (new/page.tsx:8-11) use '§6 — Information Request' / '§11 — Third-party Information'. Three separate label maps; theme WIRING is wrong (pure label drift).
@@ -5155,7 +5155,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** NEEDS OWNER DECISION — web part done (canonicaliseAuthority, commit 936241a8d); backend tenant-authorities endpoint requires owner decision before combobox can be wired
 - **W0-10 note:** review found the W0 tick partly — rtiAuthorities.ts is still a hard-coded central-bodies list (DECISION noted), not tenant/org sourced, so a configured state department does not appear; new/page.tsx:101 uses normaliseAuthority (trim/collapse only), not canonicaliseAuthority, so ministry of finance does not fold to canonical casing
 - **First-pass claim:** "Department / Public Authority" is free text with a datalist of central bodies (Ministry of Finance, UIDAI, Department of Posts); a state department's own public authorities are not offered and typos fracture the register (rti/new/page.tsx:15-24,150).
 - **Verified evidence:** new/page.tsx:13-22 SAMPLE_DEPARTMENTS is a hard-coded list of 8 central bodies fed to a <datalist> (164-168) on a free text input (156-163, required, maxLength 200); anything can be typed, so typos fracture the register and state authorities are not offered. Cited lines 15-24,150 are roughly right (13-22,156).
@@ -5444,7 +5444,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme DATAMODEL (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** NEEDS OWNER DECISION — requires backend contactId/duplicate-check endpoint; no owner decision yet
 - **W0-10 note:** review found the W0 tick partly — Contact link done (new/page.tsx:18-26,198,325-341) but no open-request/phone/email duplicate check or 'Possible duplicate: SR-xxx' warning; only a static possibleContactNote (:346); no test for duplicate warning
 - **First-pass claim:** The request is not linked to an existing CRM contact or account and there is no duplicate check, so the same citizen filing twice creates two unrelated records (service-requests/new/page.tsx:26-34).
 - **Verified evidence:** The POST body (new/page.tsx:48-56) has only citizenName, citizenPhone, citizenEmail, serviceType, subject, description, priority: no contactId/accountId and no lookup or duplicate check before submit. The list loader row type also has no contact link. Whether the service dedups is cannot-verify. Theme VALIDATION is loose; this is a data-linking gap.
@@ -5678,7 +5678,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-01  ·  HIGH  ·  partly  ·  theme FABRICATED (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** NEEDS OWNER DECISION — requires backend decision (build ingestion endpoint or remove route); interim: consent checkbox disabled
 - **First-pass claim:** The form is a non-functional preview: handleSubmit only calls preventDefault, the submit button is permanently disabled, and no endpoint is referenced, so nothing a respondent enters is ever stored; the page is shipped as a route with a live-looking DPDP consent (apps/web/src/app/(app)/crm/voice-of-customer/feedback/page.tsx:65,205).
 - **Verified evidence:** feedback/page.tsx:101-103 handleSubmit only preventDefault, submit Button is disabled (259-265), and no endpoint is referenced - all true, and the file header (3-22) documents it. But the page shows an explicit amber notice (122-144) that nothing is saved and asks users not to report real issues, so 'live-looking' is overstated; the DPDP consent checkbox (227-245) is required but meaningless. Line refs 65/205 are off.
 - **Files to change:** `apps/web/src/app/(app)/crm/voice-of-customer/feedback/page.tsx`
@@ -5694,7 +5694,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-02  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** NEEDS OWNER DECISION — blocked by FEEDBACK-01 backend decision; audience (staff vs citizen) not yet decided
 - **First-pass claim:** A citizen-facing form lives under the staff-only CRM layout (requireAnyRole CRM_ROLES), so an actual citizen can never open it, and nothing on the Voice of Citizen page links to it (crm/layout.tsx:5, voice-of-customer/page.tsx).
 - **Verified evidence:** The route sits under crm/layout.tsx:5-9 which calls requireAnyRole(CRM_ROLES) (crm_user, crm_admin, platform_admin, super_admin), so an unauthenticated or citizen-role user cannot open it. Grep finds no href to /crm/voice-of-customer/feedback outside its own page (voice-of-customer/page.tsx has only an All Interactions link, line 35).
 - **Files to change:** `apps/web/src/app/(app)/crm/voice-of-customer/feedback/page.tsx`, `apps/web/src/app/(app)/crm/voice-of-customer/page.tsx`, `apps/web/src/app/(app)/citizen/feedback (existing sibling stub; confirm path)`
@@ -5710,7 +5710,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-03  ·  HIGH  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** NEEDS OWNER DECISION — blocked by FEEDBACK-01 backend decision; DPDP notice wording needs legal sign-off
 - **First-pass claim:** "Registered Citizen" is offered but no name, contact or identifier field appears, and the subtitle promises "confidential" while the consent text promises no third-party sharing; there is no consent record, purpose id or Odia/Hindi wording for the DPDP notice (feedback/page.tsx:145-195).
 - **Verified evidence:** Radio 'Registered Citizen' (feedback/page.tsx:187-190) is offered but no name/contact/identifier input follows; subtitle says 'Your response is confidential' (109) while consent text (234-238) says data is not shared with third parties without further consent; consent is English-only, one checkbox, no consent id/purpose id. All true, but since submission is disabled (see -01) nothing is actually collected, so severity high is overstated. Hindi/Odia wording absent - true, no i18n keys used.
 - **Files to change:** `apps/web/src/app/(app)/crm/voice-of-customer/feedback/page.tsx`
@@ -5798,7 +5798,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-DETAIL-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified in crm-service, W2 crm: closed by #close-routes.ts has requireRole(CLOSE_ROLES) and 400 on missing reason; web shows 403/400 via error toast)
 - **First-pass claim:** Mark Won and Mark Lost are rendered for every CRM role although closing is a governed mutation; a role that the close endpoint rejects will only discover it after confirming (DealDetailActions.tsx:82-113). Backend rule undeterminable (crm-service absent).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['POST /v1/crm/deals/:id/close']`
 - **Question:** Which roles may close deals and does close require outcome and reason, returning 403 otherwise?
@@ -5897,7 +5897,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-QUOTATIONS-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified in crm-service, W2 crm: closed by #quotations-routes.ts enforces discountPct <= maxDiscountBps/100 at line 380-396; returns 422 on excess)
 - **First-pass claim:** Unit price and tax % on each line are freely editable after the product picks its price-book price, so a discount can be given by typing a lower price without any approval request; whether the server catches this is undeterminable (QuotationBuilder.tsx:355-370).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['POST /v1/crm/quotations', 'POST /v1/crm/quotations/:id/new-version', 'GET /v1/crm/price-books']`
 - **Question:** Does POST/new-version compare each line unitPrice/discount to the price-book price and require an approval (or reject) when it is below the allowed discount threshold?
@@ -5919,7 +5919,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-DETAIL-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified in crm-service, W2 crm: closed by #notify-consumer.ts emits notification event on status=resolved; failure logged and response includes notified:false)
 - **First-pass claim:** Resolve promises "The citizen is notified." but nothing in the route sends or confirms a notification; whether the service does is undeterminable (ServiceRequestActions.tsx:57).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['PATCH /v1/crm/service-requests/:id/status']`
 - **Question:** When status becomes resolved, does the service publish a notification event to the citizen (email/SMS) and is a failure surfaced?

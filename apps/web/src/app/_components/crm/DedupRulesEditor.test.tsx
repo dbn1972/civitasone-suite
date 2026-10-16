@@ -318,6 +318,27 @@ describe("DedupRulesEditor (DQ-001 admin) — restored", () => {
     expect(survivingThirdThreshold).toHaveValue(77);
     expect(document.activeElement).toBe(survivingThirdThreshold);
   });
+  it("GAP-CRM-DEDUP-RULES-03: shows a removed-count summary when rules are removed but not yet saved", async () => {
+    // Given: 2 rules loaded
+    vi.mocked(dq.getDedupRules).mockResolvedValue({
+      data: [
+        { field: "email", matchType: "exact", weight: 50, threshold: 90, enabled: true },
+        { field: "phone", matchType: "exact", weight: 30, threshold: 90, enabled: true },
+      ],
+      source: "api",
+    });
+    render(<DedupRulesEditor />);
+    await waitFor(() => expect(screen.getAllByRole("row").length).toBeGreaterThan(1));
+
+    // When: 1 rule is removed
+    fireEvent.click(screen.getAllByRole("button", { name: /remove rule 1/i })[0]!);
+
+    // Then: "1 rule removed" summary is visible before saving
+    expect(screen.getByTestId("removed-count-summary")).toBeInTheDocument();
+    const summary = screen.getByTestId("removed-count-summary").textContent ?? "";
+    expect(summary).toMatch(/1.*rule.*removed/i);
+  });
+
 });
 
 

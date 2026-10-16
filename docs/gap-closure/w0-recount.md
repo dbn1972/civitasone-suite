@@ -1,19 +1,15 @@
 # W0-08: recount after Wave 0 reconciliation
 
-Total: **410 open**, 4216 closed, 25 blocked or obsolete.
+Total: **338 open**, 4267 closed, 46 blocked or obsolete.
 
-Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed module items).
+Priority queue: 10 open, 208 closed (0 entries ticked by W0-07 to match closed module items).
 
 | Module | Open | Closed | Blocked/obsolete |
 |---|---|---|---|
-| revenue | 23 | 56 | 0 |
 | procurement | 22 | 194 | 0 |
-| designer | 20 | 50 | 0 |
-| legal | 18 | 34 | 0 |
-| stock | 17 | 28 | 1 |
-| crm | 16 | 343 | 0 |
-| helpdesk | 15 | 52 | 0 |
+| revenue | 15 | 64 | 0 |
 | tenant-admin | 15 | 180 | 0 |
+| legal | 14 | 38 | 0 |
 | audit | 13 | 62 | 0 |
 | projects | 13 | 72 | 0 |
 | billing | 12 | 42 | 4 |
@@ -31,6 +27,7 @@ Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | workflow | 8 | 34 | 2 |
 | catalogue | 7 | 24 | 0 |
 | install | 7 | 30 | 0 |
+| stock | 7 | 33 | 6 |
 | telephony | 7 | 26 | 0 |
 | tenant | 7 | 66 | 0 |
 | visitor | 7 | 17 | 0 |
@@ -56,6 +53,7 @@ Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | reports | 2 | 36 | 0 |
 | settings | 2 | 5 | 0 |
 | dashboard | 1 | 10 | 0 |
+| designer | 1 | 59 | 10 |
 | developer-portal | 1 | 5 | 0 |
 | fleet | 1 | 8 | 0 |
 | library | 1 | 4 | 0 |
@@ -65,9 +63,11 @@ Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | approvals | 0 | 8 | 0 |
 | assets | 0 | 151 | 0 |
 | citizen | 0 | 125 | 9 |
+| crm | 0 | 353 | 6 |
 | docs | 0 | 14 | 0 |
 | establishment | 0 | 4 | 0 |
 | finance | 0 | 311 | 0 |
+| helpdesk | 0 | 67 | 0 |
 | hr | 0 | 527 | 0 |
 | inventory | 0 | 62 | 0 |
 | locations | 0 | 28 | 8 |
