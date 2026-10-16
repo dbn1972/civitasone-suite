@@ -16,6 +16,12 @@ export const dynamic = "force-dynamic";
  * instead of silently rendering "—" for every row. `state` being required is
  * safe precisely because the column is non-null; the other human fields stay
  * optional/passthrough so a not-yet-rolled-out column keeps the list readable.
+ *
+ * GAP-INSPECTION-INSPECTIONS-01: `assignedInspectors` is the jsonb uuid[]
+ * column from execution.inspections. We surface it as an Inspectors column
+ * (count + first short UUID) without a cross-module user-lookup call, because
+ * resolving UUIDs to names needs the identity service and belongs in a BFF
+ * layer, not in a client component.
  */
 const InspectionRowSchema = z
   .object({
@@ -24,6 +30,8 @@ const InspectionRowSchema = z
     entityId: z.string().optional(),
     scheduledDate: z.string().nullish(),
     createdAt: z.string().optional(),
+    // GAP-INSPECTION-INSPECTIONS-01: inspector uuids from the jsonb column.
+    assignedInspectors: z.array(z.string()).optional(),
   })
   .passthrough();
 type InspectionRow = z.infer<typeof InspectionRowSchema>;
@@ -33,31 +41,35 @@ function shortId(id: unknown): string {
   return s ? `${s.slice(0, 8)}…` : "—";
 }
 
+/**
+ * GAP-INSPECTION-INSPECTIONS-01: show the first assigned inspector UUID (short
+ * form) plus a count when there are more than one. Falls back to "—" if the
+ * field is absent or empty. Resolving UUIDs to names requires a BFF join;
+ * that is deferred until the detail route is built.
+ */
+function inspectorCell(inspectors: string[] | undefined): string {
+  if (!inspectors || inspectors.length === 0) return "—";
+  const first = shortId(inspectors[0]);
+  return inspectors.length > 1 ? `${first} +${inspectors.length - 1}` : first;
+}
+
 export default async function Page({
   searchParams,
 }: {
   searchParams?: { page?: string };
 }) {
-  // GAP-INSPECTION-INSPECTIONS-05: request one server-side page at a time
-  // (page/pageSize forwarded to the list endpoint) instead of fetching a
-  // capped 50 rows with no way to see the rest. A bad ?page value falls back
-  // to page 1.
   const pageParam = Number(searchParams?.page ?? "1");
   const page = Number.isFinite(pageParam) && pageParam >= 1 ? Math.floor(pageParam) : 1;
 
   const result = await getInspectionsPage(page);
   const resource = toResourceState(result);
 
-  // GAP-INSPECTION-INSPECTIONS-03: a schema mismatch is treated as an error,
-  // not an empty/garbled table.
   const parsed = z.array(InspectionRowSchema).safeParse(result.data.rows);
   const errored = resource.status === "error" || !parsed.success;
   const rows: InspectionRow[] = parsed.success ? parsed.data : [];
 
   const total = result.data.total;
   const hasPrev = page > 1;
-  // Prefer the server's reported total; otherwise infer "there may be more"
-  // from a full page of rows.
   const hasNext =
     total !== null ? page * INSPECTIONS_PAGE_SIZE < total : rows.length === INSPECTIONS_PAGE_SIZE;
 
@@ -72,9 +84,6 @@ export default async function Page({
       {errored ? (
         <RefreshErrorState error={toHumanError("load", { area: "inspections" })} backHref="/inspection" />
       ) : rows.length === 0 ? (
-        // GAP-INSPECTION-INSPECTIONS-06: friendly, honest empty copy + a CTA to
-        // where inspections originate, instead of "No inspections returned from
-        // the API."
         <EmptyState
           icon="📭"
           title="No inspections yet"
@@ -89,6 +98,10 @@ export default async function Page({
                 <tr>
                   <th scope="col">Inspection</th>
                   <th scope="col">Entity</th>
+                  {/* GAP-INSPECTION-INSPECTIONS-01: inspector column from
+                      the jsonb assignedInspectors field. Short UUID shown
+                      until a BFF name-lookup is wired up. */}
+                  <th scope="col">Inspector(s)</th>
                   <th scope="col">Scheduled</th>
                   <th scope="col">Status</th>
                   <th scope="col">Action</th>
@@ -97,8 +110,17 @@ export default async function Page({
               <tbody>
                 {rows.map((row) => (
                   <tr key={row.id}>
-                    <td>{shortId(row.id)}</td>
+                    {/* GAP-INSPECTION-INSPECTIONS-01: link the row ID to the
+                        inspection detail route so users can navigate to it.
+                        The detail page (/inspection/inspections/[id]) is a
+                        planned route; the link is safe to include now. */}
+                    <td>
+                      <Link href={`/inspection/inspections/${row.id}`} className="lnk">
+                        {shortId(row.id)}
+                      </Link>
+                    </td>
                     <td>{shortId(row.entityId)}</td>
+                    <td>{inspectorCell(row.assignedInspectors)}</td>
                     <td>{formatIndianDate(row.scheduledDate ?? row.createdAt)}</td>
                     <td><StatusPill status={row.state} /></td>
                     <td>
@@ -109,8 +131,6 @@ export default async function Page({
               </tbody>
             </table>
           </div>
-          {/* GAP-INSPECTION-INSPECTIONS-05: prev/next pager over server-side
-              pages. Rendered as plain links so it works without client JS. */}
           {(hasPrev || hasNext) && (
             <nav aria-label="Pagination" style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center" }}>
               {hasPrev ? (
