@@ -1152,8 +1152,14 @@ export function mapStockLedgerEntries(payload: unknown): StockLedgerEntry[] | nu
     mapped.push({
       id,
       ...(itemId ? { itemId } : {}),
-      itemCode: itemId?.slice(0, 8).toUpperCase() ?? id.slice(0, 8),
-      itemName: toText(row.itemName) ?? itemId?.slice(0, 8) ?? "Item",
+      // GAP-STOCK-LEDGER-03: never show id fragments. The stock_ledger table
+      // stores only itemId, not itemCode/itemName. Show "—" until the backend
+      // joins these fields onto the response. (NEEDS OWNER DECISION)
+      itemCode: toText(row.itemCode) ?? toText(row.code) ?? "—",
+      itemName: toText(row.itemName) ?? "—",
+      // GAP-STOCK-LEDGER-02: warehouseName absent from ledger rows (warehouseId
+      // only in DB). "—" is the safe fallback; party carries what the API gives.
+      party: toText(row.warehouseName) ?? toText(row.party) ?? undefined,
       date: toText(row.postingDate)?.slice(0, 10) ?? toText(row.createdAt)?.slice(0, 10) ?? "—",
       type,
       quantity,

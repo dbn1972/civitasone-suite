@@ -32,7 +32,7 @@ export default async function StockLedgerPage() {
         <StatCard icon="📋" iconBg="#e6f7f5" label="Total Entries" value={errored ? "—" : entries.length.toLocaleString("en-IN")} />
         <StatCard icon="📥" iconBg="#ecfdf3" label="Total Receipts" value={totalReceipts === null ? "—" : formatMoney(totalReceipts)} />
         <StatCard icon="📤" iconBg="#fef3f2" label="Total Issues" value={totalIssues === null ? "—" : formatMoney(totalIssues)} />
-        <StatCard icon="⚖️" iconBg="#eff6ff" label="Net Balance" value={netBalance === null ? "—" : formatMoney(netBalance)} />
+        <StatCard icon="⚖️" iconBg="#eff6ff" label="Net Receipts − Issues" value={netBalance === null ? "—" : formatMoney(netBalance)} />
       </StatGrid>
       {errored ? (
         <div className="card" style={{ marginTop: 18 }}>

@@ -40,7 +40,7 @@ const COLUMNS = [
   { key: "warehouse" as const, label: "Warehouse" },
   { key: "quantityDisplay" as const, label: "Qty", align: "right" as const },
   { key: "type" as const, label: "Type", cellType: "status" as const },
-  { key: "balance" as const, label: "Balance", align: "right" as const },
+  { key: "balance" as const, label: "Balance qty", align: "right" as const },
 ];
 
 export function StockLedgerClient({ entries }: Props) {
