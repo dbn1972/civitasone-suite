@@ -46,12 +46,12 @@ export default async function BoqPage() {
         }
       />
       <StatGrid>
-        <StatCard icon="📐" iconBg="#eff6ff" label="Total Items" value={total} />
-        <StatCard icon="💰" iconBg="#ecfdf3" label="Total Amount" value={totalAmount} />
-        <StatCard icon="📊" iconBg="#fffaeb" label="Scopes (shown)" value={scopes} />
+        <StatCard icon="📐" tone="info" label="Total Items" value={total} />
+        <StatCard icon="💰" tone="good" label="Total Amount" value={totalAmount} />
+        <StatCard icon="📊" tone="warn" label="Scopes (shown)" value={scopes} />
         <StatCard
           icon="📋"
-          iconBg="#f0fdf4"
+          tone="good"
           label="SR Items (shown)"
           hint="Lines linked to a Schedule of Rates item, among the rows shown below."
           value={srLinked}

@@ -127,7 +127,7 @@ export default function NewTemplatePage() {
             </div>
 
             {placeholderWarning ? (
-              <p role="alert" style={{ fontSize: 12, color: "#b42318", margin: "0 0 12px" }}>
+              <p role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: "0 0 12px" }}>
                 A placeholder looks unclosed — every <code>{"{{"}</code> needs a matching <code>{"}}"}</code> before you can save.
               </p>
             ) : null}

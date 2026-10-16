@@ -179,9 +179,9 @@ export default function NewGuesthouseBookingPage() {
           role={toast.type === "error" ? "alert" : "status"}
           aria-live={toast.type === "error" ? "assertive" : "polite"}
           style={{
-            background: toast.type === "success" ? "#ecfdf3" : "#fef2f2",
-            border: `1px solid ${toast.type === "success" ? "#6ee7b7" : "#fca5a5"}`,
-            color: toast.type === "success" ? "#065f46" : "#991b1b",
+            background: toast.type === "success" ? "var(--goodbg)" : "var(--badbg)",
+            border: `1px solid ${toast.type === "success" ? "#6ee7b7" : "var(--badbd)"}`,
+            color: toast.type === "success" ? "var(--good)" : "var(--bad)",
             borderRadius: 12,
             padding: "13px 16px",
             marginBottom: 18,
@@ -207,7 +207,7 @@ export default function NewGuesthouseBookingPage() {
               }}
             >
               <label htmlFor="roomId" className="l">
-                Room <span style={{ color: "#ef4444" }}>*</span>
+                Room <span style={{ color: "var(--bad)" }}>*</span>
               </label>
               {rooms.length > 0 ? (
                 <select
@@ -253,7 +253,7 @@ export default function NewGuesthouseBookingPage() {
               }}
             >
               <label htmlFor="guestName" className="l">
-                Guest name <span style={{ color: "#ef4444" }}>*</span>
+                Guest name <span style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id="guestName"
@@ -339,7 +339,7 @@ export default function NewGuesthouseBookingPage() {
               }}
             >
               <label htmlFor="checkIn" className="l">
-                Check-in (IST) <span style={{ color: "#ef4444" }}>*</span>
+                Check-in (IST) <span style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id="checkIn"
@@ -365,7 +365,7 @@ export default function NewGuesthouseBookingPage() {
               }}
             >
               <label htmlFor="checkOut" className="l">
-                Check-out (IST) <span style={{ color: "#ef4444" }}>*</span>
+                Check-out (IST) <span style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id="checkOut"

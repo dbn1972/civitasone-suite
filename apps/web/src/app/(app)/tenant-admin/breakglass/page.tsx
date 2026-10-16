@@ -28,13 +28,13 @@ export default async function BreakglassPage() {
   return (
     <div className="page-main wrap">
       {errored ? (
-        <div className="banner" role="alert" style={{ background: "#fef3f2", border: "1px solid #fca5a5", color: "#991b1b", borderRadius: 12, padding: "13px 16px", marginBottom: 18, fontSize: 13 }}>
+        <div className="banner" role="alert" style={{ background: "var(--badbg)", border: "1px solid var(--badbd)", color: "var(--bad)", borderRadius: 12, padding: "13px 16px", marginBottom: 18, fontSize: 13 }}>
           🚨 <b>Cannot determine active break-glass sessions.</b> The access log could not be loaded, so a live emergency session may be in progress but hidden. Refresh to try again.
         </div>
       ) : activeNow > 0 ? (
         // GAP-TENANT-ADMIN-BREAKGLASS-01 (FABRICATED): state only facts; the
         // page cannot verify any alert was sent, so no "SRE has been alerted".
-        <div className="banner" role="status" style={{ background: "#fef3f2", border: "1px solid #fca5a5", color: "#991b1b", borderRadius: 12, padding: "13px 16px", marginBottom: 18, fontSize: 13 }}>
+        <div className="banner" role="status" style={{ background: "var(--badbg)", border: "1px solid var(--badbd)", color: "var(--bad)", borderRadius: 12, padding: "13px 16px", marginBottom: 18, fontSize: 13 }}>
           🚨 <b>{activeNow} active break-glass session{activeNow > 1 ? "s" : ""} in progress.</b> Review and close each one when it is no longer needed.
         </div>
       ) : null}
@@ -49,10 +49,10 @@ export default async function BreakglassPage() {
         }
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="🚨" iconBg="#fef3f2" label="Active Now" value={errored ? "—" : activeNow} />
-        <StatCard icon="📅" iconBg="#fffaeb" label="This Month" value={errored ? "—" : thisMonth} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Ended" value={errored ? "—" : ended} />
-        <StatCard icon="🔑" iconBg="#f1f5f9" label="Total Events" value={errored ? "—" : total} />
+        <StatCard icon="🚨" tone="bad" label="Active Now" value={errored ? "—" : activeNow} />
+        <StatCard icon="📅" tone="warn" label="This Month" value={errored ? "—" : thisMonth} />
+        <StatCard icon="✅" tone="good" label="Ended" value={errored ? "—" : ended} />
+        <StatCard icon="🔑" tone="neutral" label="Total Events" value={errored ? "—" : total} />
       </div>
       {errored ? (
         <div className="card">

@@ -160,7 +160,7 @@ export default function RegisterGrievancePage() {
       <form onSubmit={(e) => void handleSubmit(e)} className="card pad" style={{ maxWidth: 820 }} noValidate>
         <div className="fields">
           {/* GAP-CITIZEN-GRIEVANCES-NEW-02: filing-on-behalf mode selector. */}
-          <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ gridColumn: "1 / -1", background: "var(--panel)", padding: "13px 16px" }}>
             <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", fontSize: "0.875rem" }}>
               <input
                 id="file-on-behalf"
@@ -174,7 +174,7 @@ export default function RegisterGrievancePage() {
             {onBehalf ? <p style={{ margin: "6px 0 0 28px", fontSize: 12, color: "var(--muted)" }}>{t("onBehalfHint")}</p> : null}
           </div>
 
-          <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ gridColumn: "1 / -1", background: "var(--panel)", padding: "13px 16px" }}>
             <label className="label" htmlFor="applicantName">
               {t("applicantNameLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               <span className="sr-only"> {t("requiredIndicator")}</span>
@@ -186,16 +186,16 @@ export default function RegisterGrievancePage() {
           </div>
 
           {/* GAP-CITIZEN-GRIEVANCES-NEW-02/04: optional contact fields. */}
-          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
             <label className="label" htmlFor="contactMobile">{t("contactMobileLabel")}</label>
             <input id="contactMobile" className="inp" inputMode="numeric" value={contactMobile} onChange={(e) => setContactMobile(e.target.value)} style={{ minHeight: 44 }} placeholder={t("contactMobilePlaceholder")} />
           </div>
-          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
             <label className="label" htmlFor="contactEmail">{t("contactEmailLabel")}</label>
             <input id="contactEmail" className="inp" type="email" value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} style={{ minHeight: 44 }} placeholder={t("contactEmailPlaceholder")} />
           </div>
 
-          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
             <label className="label" htmlFor="category">{t("categoryLabel")}</label>
             <select id="category" className="inp" value={category} onChange={(e) => setCategory(e.target.value)} required style={{ minHeight: 44 }}>
               {CATEGORIES.map((c) => (
@@ -203,7 +203,7 @@ export default function RegisterGrievancePage() {
               ))}
             </select>
           </div>
-          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
             <label className="label" htmlFor="subject">
               {t("subjectLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
@@ -212,7 +212,7 @@ export default function RegisterGrievancePage() {
               <span style={{ fontSize: 12, color: "var(--bad)" }}>{formError.fieldError("subject")}</span>
             )}
           </div>
-          <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ gridColumn: "1 / -1", background: "var(--panel)", padding: "13px 16px" }}>
             <label className="label" htmlFor="description">
               {t("descriptionLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>

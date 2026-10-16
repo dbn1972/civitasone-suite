@@ -102,15 +102,15 @@ export default async function WorkforcePage({
       />
       <DataSourceBadge source={badgeSource} />
       <StatGrid>
-        <StatCard icon="👥" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalHeadcount")} value={hcErrored ? null : totalHeadcount} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statTotalHeadcount")} value={hcErrored ? null : totalHeadcount} />
         <StatCard
           icon="🏢"
-          iconBg="var(--bg, #f5f5f5)"
+          iconBg="var(--bg)"
           label={groupBy === "department" ? t("statDepartments") : t("statGroups")}
           value={hcErrored ? null : headcount.length}
         />
-        <StatCard icon="⏳" iconBg="var(--badbg, #fff1f0)" label={t("statRetiringSoon")} value={rtErrored ? null : retiringSoon} />
-        <StatCard icon="📅" iconBg="var(--warnbg, #fffbe6)" label={t("statRetiring12")} value={rtErrored ? null : retiring12} />
+        <StatCard icon="⏳" iconBg="var(--badbg)" label={t("statRetiringSoon")} value={rtErrored ? null : retiringSoon} />
+        <StatCard icon="📅" iconBg="var(--warnbg)" label={t("statRetiring12")} value={rtErrored ? null : retiring12} />
       </StatGrid>
 
       {/*
@@ -198,7 +198,7 @@ export default async function WorkforcePage({
       </div>
 
       {retirementAge !== null && (
-        <p style={{ fontSize: 12, color: "var(--muted, #64748b)", marginTop: 12 }}>
+        <p style={{ fontSize: 12, color: "var(--muted)", marginTop: 12 }}>
           {t("footnoteRetirementAge", { age: retirementAge })}
         </p>
       )}

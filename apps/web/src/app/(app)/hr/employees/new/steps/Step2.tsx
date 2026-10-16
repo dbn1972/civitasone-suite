@@ -101,12 +101,12 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
 
   return (
     <>
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink, #0f172a)", marginTop: 0, marginBottom: 20 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginTop: 0, marginBottom: 20 }}>
         {t("step2Heading")}
       </h2>
       <div style={grid2}>
         {/* Employee ID */}
-        <Field id="w-empNo" label={<>{t("employeeIdFieldLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.employeeNo} announce style={fieldWrap}>
+        <Field id="w-empNo" label={<>{t("employeeIdFieldLabel")} <span style={{ color: "var(--bad)" }} aria-hidden="true">*</span></>} required error={errors.employeeNo} announce style={fieldWrap}>
           <Input
             type="text"
             value={data.employeeNo}
@@ -117,7 +117,7 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
         </Field>
 
         {/* Date of Joining */}
-        <Field id="w-doj" label={<>{t("dateOfJoiningLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.dateOfJoining} announce style={fieldWrap}>
+        <Field id="w-doj" label={<>{t("dateOfJoiningLabel")} <span style={{ color: "var(--bad)" }} aria-hidden="true">*</span></>} required error={errors.dateOfJoining} announce style={fieldWrap}>
           <Input
             type="date"
             value={data.dateOfJoining}
@@ -127,7 +127,7 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
         </Field>
 
         {/* Department */}
-        <Field id="w-dept" label={<>{t("departmentLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.departmentId} announce style={fieldWrap}>
+        <Field id="w-dept" label={<>{t("departmentLabel")} <span style={{ color: "var(--bad)" }} aria-hidden="true">*</span></>} required error={errors.departmentId} announce style={fieldWrap}>
           <Select
             value={data.departmentId}
             onChange={(e) => onChange("departmentId", e.target.value)}
@@ -140,7 +140,7 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
         </Field>
 
         {/* Designation */}
-        <Field id="w-desig" label={<>{t("designationLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.designationId} announce style={fieldWrap}>
+        <Field id="w-desig" label={<>{t("designationLabel")} <span style={{ color: "var(--bad)" }} aria-hidden="true">*</span></>} required error={errors.designationId} announce style={fieldWrap}>
           <Select
             value={data.designationId}
             onChange={(e) => onChange("designationId", e.target.value)}
@@ -160,11 +160,11 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
               <div
                 id="w-grade"
                 aria-labelledby="w-grade-label"
-                style={{ ...inputStyle, display: "flex", alignItems: "center", background: "var(--bg, #f8fafc)" }}
+                style={{ ...inputStyle, display: "flex", alignItems: "center", background: "var(--bg)" }}
               >
                 {t(GROUP_LABEL_KEY[computedGroup])}
               </div>
-              <span style={{ fontSize: 11, color: "var(--mut, #94a3b8)" }}>{t("gradeComputedNote")}</span>
+              <span style={{ fontSize: 11, color: "var(--mut)" }}>{t("gradeComputedNote")}</span>
             </>
           ) : (
             <Select
@@ -204,7 +204,7 @@ export function Step2({ data, errors, departments, designations, employeeTypes, 
             EditEmployeeForm.tsx's EntityPicker) -- but if entered, must be
             a valid decimal-safe rupee amount (validateStep). */}
         <Field id="w-basicPay" label={<>{t("basicPayLabel")}
-            <span style={{ fontWeight: 400, color: "var(--mut, #64748b)", marginInlineStart: 6, fontSize: 11 }}>
+            <span style={{ fontWeight: 400, color: "var(--mut)", marginInlineStart: 6, fontSize: 11 }}>
               {t("basicPayHint")}
             </span></>} error={errors.basicPay} announce style={fieldWrap}>
           <Input

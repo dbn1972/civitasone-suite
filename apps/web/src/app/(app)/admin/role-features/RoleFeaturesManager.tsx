@@ -229,20 +229,20 @@ export function RoleFeaturesManager({
         </div>
       )}
       {error && (
-        <div role="alert" style={{ background: "var(--badbg, #fef2f2)", color: "var(--bad, #b42318)", border: "1px solid var(--badbd, #fecaca)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
+        <div role="alert" style={{ background: "var(--badbg)", color: "var(--bad)", border: "1px solid var(--badbd)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
           {error}
         </div>
       )}
       {notice && (
-        <div role="status" style={{ background: "var(--infobg, #eff6ff)", color: "var(--info, #1d4ed8)", border: "1px solid var(--infobd, #bfdbfe)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
+        <div role="status" style={{ background: "var(--infobg)", color: "var(--info)", border: "1px solid var(--infobd)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
           {notice}
         </div>
       )}
       <StatGrid>
-        <StatCard icon="👥" iconBg="#eef2ff" label={t("statRoles")} value={roles.length} />
-        <StatCard icon="🔑" iconBg="#ecfdf3" label={t("statFeatureKeys")} value={featureRows.length} />
-        <StatCard icon="✅" iconBg="#dbeafe" label={t("statActiveGrants")} value={grantsUnknown ? null : totalGrants} />
-        <StatCard icon="📋" iconBg="#fef3c7" label={t("statRoleGrants")} value={grantsUnknown ? null : roleGrants.length} />
+        <StatCard icon="👥" tone="info" label={t("statRoles")} value={roles.length} />
+        <StatCard icon="🔑" tone="good" label={t("statFeatureKeys")} value={featureRows.length} />
+        <StatCard icon="✅" tone="info" label={t("statActiveGrants")} value={grantsUnknown ? null : totalGrants} />
+        <StatCard icon="📋" tone="warn" label={t("statRoleGrants")} value={grantsUnknown ? null : roleGrants.length} />
       </StatGrid>
 
       {!grantsUnknown && grantsForUnlistedRoles > 0 && (
@@ -360,8 +360,8 @@ export function RoleFeaturesManager({
             <p style={{ color: "var(--mut)" }}>{t("previewEmpty")}</p>
           ) : (
             roleGrants.map((g) => (
-              <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", borderRadius: 4, background: "var(--goodbg, #f0fdf4)" }}>
-                <span style={{ color: "var(--good, #16a34a)" }} aria-hidden="true">✅</span>
+              <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", borderRadius: 4, background: "var(--goodbg)" }}>
+                <span style={{ color: "var(--good)" }} aria-hidden="true">✅</span>
                 <span style={{ fontFamily: "monospace", fontSize: 13 }}>{g.featureKey}</span>
               </div>
             ))

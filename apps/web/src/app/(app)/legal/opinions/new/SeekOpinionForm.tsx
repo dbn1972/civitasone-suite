@@ -74,15 +74,15 @@ export function SeekOpinionForm() {
   return (
     <form onSubmit={handleSubmit} className="card pad" style={{ maxWidth: 820 }} noValidate>
       <div className="fields">
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="reference">Reference no</label>
           <input id="reference" className="inp" value={reference} onChange={(e) => setReference(e.target.value)} style={{ minHeight: 44 }} placeholder="Assigned on submit" />
         </div>
-        <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ gridColumn: "1 / -1", background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="subject">Subject *</label>
           <input id="subject" className="inp" value={subject} onChange={(e) => setSubject(e.target.value)} required maxLength={256} style={{ minHeight: 44 }} placeholder="Short subject of the opinion sought" />
         </div>
-        <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ gridColumn: "1 / -1", background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="question">Question *</label>
           <textarea id="question" className="inp" rows={4} value={question} onChange={(e) => setQuestion(e.target.value)} required maxLength={4000} placeholder="Describe the question on which an opinion is sought" />
         </div>

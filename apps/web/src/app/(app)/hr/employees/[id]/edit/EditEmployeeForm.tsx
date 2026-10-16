@@ -38,17 +38,17 @@ const inputStyle: React.CSSProperties = {
   boxSizing: "border-box",
   padding: "10px 12px",
   fontSize: 14,
-  border: "1px solid var(--line, #cbd5e1)",
+  border: "1px solid var(--line)",
   borderRadius: 10,
-  background: "var(--panel, #fff)",
-  color: "var(--ink, #0f172a)",
+  background: "var(--panel)",
+  color: "var(--ink)",
   minHeight: 44,
 };
 
 const labelStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
-  color: "var(--ink, #0f172a)",
+  color: "var(--ink)",
 };
 
 export function EditEmployeeForm({ employee }: Props) {
@@ -268,7 +268,7 @@ export function EditEmployeeForm({ employee }: Props) {
     >
       <div className="card-h">
         <h3>{t("formHeading")}</h3>
-        <p style={{ margin: 0, fontSize: 13, color: "var(--mut, #64748b)" }}>
+        <p style={{ margin: 0, fontSize: 13, color: "var(--mut)" }}>
           {t("formIntro")}
         </p>
       </div>
@@ -284,9 +284,9 @@ export function EditEmployeeForm({ employee }: Props) {
                 padding: "10px 14px",
                 borderRadius: 8,
                 fontSize: 14,
-                background: tone === "success" ? "var(--goodbg, #dcfce7)" : "var(--badbg, #fee2e2)",
-                border: `1px solid ${tone === "success" ? "var(--goodbd, #86efac)" : "var(--badbd, #fca5a5)"}`,
-                color: tone === "success" ? "var(--good, #166534)" : "var(--bad, #b91c1c)",
+                background: tone === "success" ? "var(--goodbg)" : "var(--badbg)",
+                border: `1px solid ${tone === "success" ? "var(--goodbd)" : "var(--badbd)"}`,
+                color: tone === "success" ? "var(--good)" : "var(--bad)",
               }}
             >
               {tone === "success" ? "✅" : "⚠️"} {message}
@@ -307,8 +307,8 @@ export function EditEmployeeForm({ employee }: Props) {
             gap: 12,
             padding: "12px 14px",
             borderRadius: 10,
-            background: "var(--bg, #f8fafc)",
-            border: "1px solid var(--line, #cbd5e1)",
+            background: "var(--bg)",
+            border: "1px solid var(--line)",
           }}
         >
           {[
@@ -318,10 +318,10 @@ export function EditEmployeeForm({ employee }: Props) {
             { label: t("roLabelStatus"), value: employee.status },
           ].map(({ label, value }) => (
             <div key={label}>
-              <div style={{ fontSize: 11, color: "var(--mut, #64748b)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
+              <div style={{ fontSize: 11, color: "var(--mut)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>
                 {label}
               </div>
-              <div style={{ fontSize: 14, color: "var(--ink, #0f172a)", fontWeight: 500 }}>
+              <div style={{ fontSize: 14, color: "var(--ink)", fontWeight: 500 }}>
                 {value}
               </div>
             </div>
@@ -403,7 +403,7 @@ export function EditEmployeeForm({ employee }: Props) {
               label={t("workStateLabel")} placeholder={t("selectWorkState")} hint={t("workStateHint")}
               style={inputStyle} labelStyle={labelStyle}
             />
-            {invalidFields.has("workStateCode") && <span role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{t("workStateInvalid")}</span>}
+            {invalidFields.has("workStateCode") && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{t("workStateInvalid")}</span>}
           </div>
         </div>
 

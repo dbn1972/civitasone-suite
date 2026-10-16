@@ -112,11 +112,11 @@ export function EmdBgTable({ emdEntries, pbgEntries, emdSource = "api", pbgSourc
   return (
     <>
       <StatGrid>
-        <StatCard icon="🏦" iconBg="#eef2ff" label="Active Bank Guarantees" value={activePbg} />
-        <StatCard icon="💵" iconBg="#ecfdf3" label="Active EMD" value={activeEmd} />
-        <StatCard icon="🔐" iconBg="#e7edfd" label="Total Active Security (EMD + BG)" value={combinedTotal} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label="Expired" value={expired} />
-        <StatCard icon="🚫" iconBg="#fce7ee" label="Forfeited" value={forfeited} />
+        <StatCard icon="🏦" tone="info" label="Active Bank Guarantees" value={activePbg} />
+        <StatCard icon="💵" tone="good" label="Active EMD" value={activeEmd} />
+        <StatCard icon="🔐" tone="info" label="Total Active Security (EMD + BG)" value={combinedTotal} />
+        <StatCard icon="⚠️" tone="warn" label="Expired" value={expired} />
+        <StatCard icon="🚫" tone="bad" label="Forfeited" value={forfeited} />
       </StatGrid>
 
       {/* GAP-PROCUREMENT-EMD-BG-01: name the register that failed, with a real

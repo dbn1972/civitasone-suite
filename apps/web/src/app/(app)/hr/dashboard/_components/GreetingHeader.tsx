@@ -104,7 +104,7 @@ export function GreetingHeader({ userName, greeting, pendingCount, payrollDaysLe
              (not a reuse of an existing design-system token) since this
              gradient's exact stops are bespoke to this one banner and its
              own hand-verified WCAG contrast math below, not shared elsewhere. */
-          background: linear-gradient(108deg, var(--dash-greeting-grad-1, #0f2240) 0%, var(--dash-greeting-grad-2, #1a3a6b) 60%, var(--dash-greeting-grad-3, #2554a0) 100%);
+          background: linear-gradient(108deg, var(--dash-greeting-grad-1) 0%, var(--dash-greeting-grad-2) 60%, var(--dash-greeting-grad-3) 100%);
           padding: 20px 28px 0;
           position: relative;
           overflow: hidden;
@@ -113,7 +113,7 @@ export function GreetingHeader({ userName, greeting, pendingCount, payrollDaysLe
           content: '';
           display: block;
           height: 18px;
-          background: var(--page-bg, #eef2f7);
+          background: var(--page-bg);
           clip-path: ellipse(54% 100% at 50% 100%);
           margin: 0 -28px;
         }
@@ -148,13 +148,13 @@ export function GreetingHeader({ userName, greeting, pendingCount, payrollDaysLe
              worst-case background is computable directly from the gradient's
              own stops, and it fails. #bfdbfe clears 4.5:1 at that same
              worst-case stop (5.18:1), so it holds across the whole gradient. */
-          color: var(--dash-greeting-eyebrow, #bfdbfe);
+          color: var(--dash-greeting-eyebrow);
           margin: 0 0 4px;
         }
         .greeting-title {
           font-size: 20px;
           font-weight: 700;
-          color: var(--dash-greeting-title, #f0f6ff);
+          color: var(--dash-greeting-title);
           letter-spacing: -.02em;
           margin: 0 0 3px;
         }
@@ -163,7 +163,7 @@ export function GreetingHeader({ userName, greeting, pendingCount, payrollDaysLe
           /* UX-005 tranche 10: #7ea8d8 measured 2.97:1 at the gradient's
              lightest stop -- same bgGradient/incomplete case as
              .greeting-eyebrow above. #dbeafe clears 4.5:1 there (6.03:1). */
-          color: var(--dash-greeting-sub, #dbeafe);
+          color: var(--dash-greeting-sub);
           margin: 0;
         }
         .greeting-actions {
@@ -179,7 +179,7 @@ export function GreetingHeader({ userName, greeting, pendingCount, payrollDaysLe
              composited on the gradient's lightest stop, measured 3.88:1
              (bgGradient/incomplete). #fff clears 4.5:1 there (5.50:1),
              matching .btn-primary-nav's own use of solid white text. */
-          color: var(--dash-greeting-btn-fg, #ffffff);
+          color: var(--dash-greeting-btn-fg);
           border: 1px solid rgba(255,255,255,.15);
           border-radius: 6px;
           font-size: 12px;
@@ -190,11 +190,11 @@ export function GreetingHeader({ userName, greeting, pendingCount, payrollDaysLe
         }
         .btn-primary-nav {
           /* This exact hex already matches the established --info token's
-             own fallback value used fleet-wide (e.g. var(--info, #2563eb) in
+             own fallback value used fleet-wide (e.g. var(--info) in
              every dashboard SVG icon in this file family) -- reused directly
              rather than inventing a new page-local name for it. */
-          background: var(--info, #2563eb);
-          color: var(--dash-greeting-btn-fg, #fff);
+          background: var(--info);
+          color: var(--dash-greeting-btn-fg);
           border: none;
           border-radius: 6px;
           font-size: 12px;

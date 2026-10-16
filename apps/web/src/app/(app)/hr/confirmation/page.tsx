@@ -75,11 +75,11 @@ export default async function ConfirmationPage() {
       )}
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statOnProbation")} value={errored ? null : items.length} />
-        <StatCard icon="⏰" iconBg="var(--badbg, #fff1f0)" label={t("statOverdue")}       value={errored ? null : overdue} />
-        <StatCard icon="📅" iconBg="var(--warnbg, #fffbe6)" label={t("statDueSoon")}      value={errored ? null : dueSoon} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statTimely")}       value={errored ? null : timely} />
-        <StatCard icon="❔" iconBg="var(--bg, #f5f5f5)"      label={t("statDateNotSet")}   value={errored ? null : dateNotSet} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statOnProbation")} value={errored ? null : items.length} />
+        <StatCard icon="⏰" iconBg="var(--badbg)" label={t("statOverdue")}       value={errored ? null : overdue} />
+        <StatCard icon="📅" iconBg="var(--warnbg)" label={t("statDueSoon")}      value={errored ? null : dueSoon} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statTimely")}       value={errored ? null : timely} />
+        <StatCard icon="❔" iconBg="var(--bg)"      label={t("statDateNotSet")}   value={errored ? null : dateNotSet} />
       </StatGrid>
 
       <Card title={t("cardTitle")}>

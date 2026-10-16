@@ -313,7 +313,7 @@ function LivePreview({ config }: { config: BrandConfig }) {
               className="px-4 py-2 text-sm font-medium rounded-lg"
               style={{
                 backgroundColor: config.colorAccent,
-                // Was hardcoded "#fff", which gave 2.14:1 on the default amber
+                // Was hardcoded "var(--panel)", which gave 2.14:1 on the default amber
                 // accent (#f59e0b) and failed WCAG 2.2 AA SC 1.4.3. The
                 // foreground is now derived from the chosen accent's luminance,
                 // so the preview stays readable for ANY tenant accent colour and
@@ -359,18 +359,18 @@ export default function BrandingPage() {
     loginBgUrl: null,
     footerText: null,
     poweredBy: "Powered by CivitasOne",
-    colorPrimary: "#1e40af",
-    colorPrimaryFg: "#ffffff",
-    colorSecondary: "#64748b",
-    colorAccent: "#f59e0b",
-    colorBackground: "#ffffff",
-    colorSurface: "#f8fafc",
-    colorBorder: "#e2e8f0",
-    colorText: "#1e293b",
-    colorMuted: "#64748b",
-    colorSuccess: "#16a34a",
-    colorWarning: "#d97706",
-    colorError: "#dc2626",
+    colorPrimary: "var(--info)",
+    colorPrimaryFg: "var(--panel)",
+    colorSecondary: "var(--mut)",
+    colorAccent: "var(--amber)",
+    colorBackground: "var(--panel)",
+    colorSurface: "var(--line2)",
+    colorBorder: "var(--line)",
+    colorText: "var(--ink)",
+    colorMuted: "var(--mut)",
+    colorSuccess: "var(--good)",
+    colorWarning: "var(--warn)",
+    colorError: "var(--bad)",
     fontFamily: "Inter, system-ui, sans-serif",
     fontFamilyMono: "JetBrains Mono, monospace",
     sidebarStyle: "default",

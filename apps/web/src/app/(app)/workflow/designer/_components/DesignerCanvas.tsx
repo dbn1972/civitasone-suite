@@ -575,7 +575,7 @@ export function DesignerCanvas({ definitions, seedGraph, embedded = false, initi
               <button
                 type="button"
                 className="rounded-lg px-3 py-1.5 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
-                style={{ background: "var(--primary, #00439C)", color: "#fff", border: "1px solid var(--line)" }}
+                style={{ background: "var(--primary)", color: "var(--panel)", border: "1px solid var(--line)" }}
                 onClick={() => void onSave()}
                 disabled={saveState.kind === "saving" || hasBlockingViolations}
                 title={hasBlockingViolations ? "Fix the validation problems before saving." : undefined}
@@ -588,7 +588,7 @@ export function DesignerCanvas({ definitions, seedGraph, embedded = false, initi
                 role={saveState.kind === "err" ? "alert" : "status"}
                 aria-live="polite"
                 className="text-xs"
-                style={{ color: saveState.kind === "err" ? "var(--bad, #b42318)" : "var(--good, #067647)" }}
+                style={{ color: saveState.kind === "err" ? "var(--bad)" : "var(--good)" }}
               >
                 {saveState.text}
               </span>
@@ -618,7 +618,7 @@ export function DesignerCanvas({ definitions, seedGraph, embedded = false, initi
       {/* Right: Property Panel + Validation */}
       <div className="flex flex-col gap-3" style={{ flex: "1 1 260px", minWidth: 240, maxWidth: 340 }}>
         {limitMessage ? (
-          <p role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #b42318)" }}>{limitMessage}</p>
+          <p role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>{limitMessage}</p>
         ) : null}
         <PropertyPanel
           selectedNode={selectedNode}

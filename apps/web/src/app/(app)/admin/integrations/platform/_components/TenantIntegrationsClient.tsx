@@ -164,10 +164,10 @@ export function TenantIntegrationsClient({ actorId, canEditPolicy }: { actorId: 
 
           {stats && (
             <StatGrid>
-              <StatCard icon="🧩" iconBg="#eef2ff" label={t("tenant.stats.available")} value={String(stats.available)} />
-              <StatCard icon="⚙️" iconBg="#fffaeb" label={t("tenant.stats.configured")} value={String(stats.configured)} />
-              <StatCard icon="🚀" iconBg="#ecfdf3" label={t("tenant.stats.production")} value={String(stats.production)} />
-              <StatCard icon="⏳" iconBg="#f2f4f7" label={t("tenant.stats.pending")} value={String(stats.pending)} />
+              <StatCard icon="🧩" tone="info" label={t("tenant.stats.available")} value={String(stats.available)} />
+              <StatCard icon="⚙️" tone="warn" label={t("tenant.stats.configured")} value={String(stats.configured)} />
+              <StatCard icon="🚀" tone="good" label={t("tenant.stats.production")} value={String(stats.production)} />
+              <StatCard icon="⏳" tone="neutral" label={t("tenant.stats.pending")} value={String(stats.pending)} />
             </StatGrid>
           )}
 

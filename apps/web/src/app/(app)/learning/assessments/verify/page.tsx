@@ -38,7 +38,7 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
             defaultValue={token}
             placeholder="Verification token"
             aria-label="Verification token"
-            style={{ flex: 1, minWidth: 240, padding: "8px 12px", border: "1px solid var(--line, #d1d5db)", borderRadius: 8 }}
+            style={{ flex: 1, minWidth: 240, padding: "8px 12px", border: "1px solid var(--line)", borderRadius: 8 }}
           />
           <button className="btn" type="submit">Verify</button>
         </form>
@@ -67,7 +67,7 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
             <StatCard icon="🏅" iconBg="var(--panel)" label="Certificate No." value={cert.certificateNo} />
             <StatCard
               icon={cert.status === "active" ? "✅" : cert.status === "expired" ? "⌛" : "🚫"}
-              iconBg={cert.status === "active" ? "var(--goodbg, #ecfdf5)" : "var(--badbg, #fef2f2)"}
+              iconBg={cert.status === "active" ? "var(--goodbg)" : "var(--badbg)"}
               label="Status"
               value={humanizeStatus(cert.status)}
             />

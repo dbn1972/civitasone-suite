@@ -185,10 +185,10 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
           both fetches, so either failing blanks them; Active is derived only
           from the employees page; OnLeave only from the dashboard. */}
       <StatGrid>
-        <StatCard icon="👥" iconBg="var(--goodbg, #e6f7f0)" label={t("statTotal")} value={source === "error" || dashboardSource === "error" ? "—" : total} />
-        <StatCard icon="✅" iconBg="var(--infobg, #e6f0ff)" label={t("statActive")} value={dashboardSource === "error" || active === null ? "—" : active} />
-        <StatCard icon="🌴" iconBg="var(--warnbg, #fffbe6)" label={t("statOnLeave")} value={dashboardSource === "error" ? "—" : onLeave} />
-        <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)" label={t("statOthers")} value={source === "error" || dashboardSource === "error" || others === null ? "—" : others} />
+        <StatCard icon="👥" iconBg="var(--goodbg)" label={t("statTotal")} value={source === "error" || dashboardSource === "error" ? "—" : total} />
+        <StatCard icon="✅" iconBg="var(--infobg)" label={t("statActive")} value={dashboardSource === "error" || active === null ? "—" : active} />
+        <StatCard icon="🌴" iconBg="var(--warnbg)" label={t("statOnLeave")} value={dashboardSource === "error" ? "—" : onLeave} />
+        <StatCard icon="📋" iconBg="var(--bg)" label={t("statOthers")} value={source === "error" || dashboardSource === "error" || others === null ? "—" : others} />
       </StatGrid>
       {/* GAP-HR-EMPLOYEES-06: "Others" had no legend -- say what it contains. */}
       <p style={{ margin: "-4px 0 12px", fontSize: 12, color: "var(--mut)" }}>{t("othersLegend")}</p>

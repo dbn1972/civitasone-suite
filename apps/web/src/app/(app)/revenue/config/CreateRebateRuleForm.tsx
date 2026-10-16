@@ -116,13 +116,13 @@ export function CreateRebateRuleForm({ rateHeadId, rateHeadLabel }: CreateRebate
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
       <Card title="Create Rebate Rule" padding>
         <div style={{ display: "grid", gap: 14 }}>
-          <p style={{ fontSize: 13, color: "var(--muted, #64748b)", margin: 0 }}>
+          <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
             For rate head <strong>{rateHeadLabel}</strong>.
           </p>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={typeId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Rebate Type <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Rebate Type <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <select
                 id={typeId}
@@ -139,7 +139,7 @@ export function CreateRebateRuleForm({ rateHeadId, rateHeadLabel }: CreateRebate
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={discountId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Discount (%) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Discount (%) <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={discountId}
@@ -161,7 +161,7 @@ export function CreateRebateRuleForm({ rateHeadId, rateHeadLabel }: CreateRebate
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={validUntilId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Valid Until (Days Before Due) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Valid Until (Days Before Due) <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={validUntilId}

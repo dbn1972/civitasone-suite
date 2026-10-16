@@ -173,7 +173,7 @@ export function ClaimForm({
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={policySelectId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Policy <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              Policy <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <select
               id={policySelectId}
@@ -194,7 +194,7 @@ export function ClaimForm({
               ))}
             </select>
             {fieldErrors.policyId && (
-              <p id={`${policySelectId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={`${policySelectId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.policyId}
               </p>
             )}
@@ -202,7 +202,7 @@ export function ClaimForm({
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={claimDateId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Claim Date <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              Claim Date <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={claimDateId}
@@ -216,7 +216,7 @@ export function ClaimForm({
               style={inputStyle}
             />
             {fieldErrors.claimDate && (
-              <p id={`${claimDateId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={`${claimDateId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.claimDate}
               </p>
             )}
@@ -224,7 +224,7 @@ export function ClaimForm({
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={claimAmountId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Claim Amount (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              Claim Amount (₹) <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={claimAmountId}
@@ -238,7 +238,7 @@ export function ClaimForm({
               style={inputStyle}
             />
             {fieldErrors.claimAmount && (
-              <p id={`${claimAmountId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={`${claimAmountId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.claimAmount}
               </p>
             )}
@@ -300,7 +300,7 @@ export function ClaimForm({
             File Claim
           </Button>
           {noEligiblePolicies && policiesError ? (
-            <p id={noPoliciesHelpId} role="alert" style={{ margin: "6px 0 0", fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+            <p id={noPoliciesHelpId} role="alert" style={{ margin: "6px 0 0", fontSize: 12.5, color: "var(--bad)" }}>
               Couldn&apos;t load policies, so a claim can&apos;t be filed right now.{" "}
               <button type="button" className="lnk" onClick={() => router.refresh()} style={{ background: "none", border: 0, padding: 0, textDecoration: "underline", cursor: "pointer", color: "inherit", font: "inherit" }}>
                 Retry

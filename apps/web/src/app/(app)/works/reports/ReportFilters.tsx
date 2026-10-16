@@ -148,7 +148,7 @@ export function ReportFilters({ fromDate, toDate, divisionId }: ReportFiltersPro
       </form>
 
       {error ? (
-        <p role="alert" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--bad, #b42318)" }}>
+        <p role="alert" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--bad)" }}>
           {error}
         </p>
       ) : null}
@@ -163,7 +163,7 @@ export function ReportFilters({ fromDate, toDate, divisionId }: ReportFiltersPro
                 fontSize: 12,
                 padding: "3px 10px",
                 borderRadius: 999,
-                background: "var(--surface, #f1f5f9)",
+                background: "var(--surface)",
                 border: "1px solid var(--line)",
               }}
             >

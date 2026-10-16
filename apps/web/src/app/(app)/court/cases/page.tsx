@@ -170,7 +170,7 @@ export default async function CasesListPage({
                               {fmtDate(c.filingDate)}
                             </td>
                             <td data-label="SLA target" style={monoStyle}>
-                              <span style={overdue ? { fontWeight: 700, color: "var(--bad, #b91c1c)" } : undefined}>
+                              <span style={overdue ? { fontWeight: 700, color: "var(--bad)" } : undefined}>
                                 {fmtDate(c.targetDisposalDate)}
                               </span>
                               {overdue && (

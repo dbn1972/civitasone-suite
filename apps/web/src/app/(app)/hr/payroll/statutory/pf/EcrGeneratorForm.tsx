@@ -83,7 +83,7 @@ export function EcrGeneratorForm() {
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 6, maxWidth: 220 }}>
             <label htmlFor={monthId} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("periodLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("periodLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={monthId}

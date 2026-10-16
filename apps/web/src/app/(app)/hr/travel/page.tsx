@@ -75,10 +75,10 @@ export default async function TravelRequestsPage() {
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="✈️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : items.length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPending")} value={errored ? null : pending} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statApproved")} value={errored ? null : approved} />
-        <StatCard icon="❌" iconBg="var(--badbg, #fef2f2)" label={t("statRejected")} value={errored ? null : rejected} />
+        <StatCard icon="✈️" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={errored ? null : pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApproved")} value={errored ? null : approved} />
+        <StatCard icon="❌" iconBg="var(--badbg)" label={t("statRejected")} value={errored ? null : rejected} />
       </StatGrid>
       <TravelRequestForm />
 

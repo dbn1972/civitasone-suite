@@ -36,14 +36,14 @@ export default async function SchemesPage() {
         backLabel="Back to Projects"
       />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#eef0fe" label="Total" value={errored ? "—" : schemes.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active ?? "—"} />
+        <StatCard icon="📋" tone="info" label="Total" value={errored ? "—" : schemes.length} />
+        <StatCard icon="✅" tone="good" label="Active" value={active ?? "—"} />
         {/* GAP2-PROJECTS-SCHEMES-MONEY-04: totalAllocation/releasedAmount are
             bigint MINOR units (paise) as strings, summed as BigInt and rendered
             with formatMoney — the same unit the detail endpoint uses, replacing
             the old whole-rupee + formatRupees workaround (COMP-017). */}
-        <StatCard icon="💰" iconBg="#eff6ff" label="Total Allocation" value={totalAllocation === null ? "—" : formatMoney(totalAllocation)} />
-        <StatCard icon="📤" iconBg="#fffaeb" label="Released" value={totalReleased === null ? "—" : formatMoney(totalReleased)} />
+        <StatCard icon="💰" tone="info" label="Total Allocation" value={totalAllocation === null ? "—" : formatMoney(totalAllocation)} />
+        <StatCard icon="📤" tone="warn" label="Released" value={totalReleased === null ? "—" : formatMoney(totalReleased)} />
       </StatGrid>
       <Card title="Schemes">
         {errored ? (

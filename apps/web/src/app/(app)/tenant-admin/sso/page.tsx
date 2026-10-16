@@ -46,10 +46,10 @@ export default async function SSOPage() {
         subtitle="SAML/OIDC identity providers configured for single sign-on. Read-only — providers are provisioned by platform operations."
       />
       <StatGrid>
-        <StatCard icon="🔗" iconBg="#eff6ff" label="Active Providers" value={activeProviders ?? "—"} />
-        <StatCard icon="🔗" iconBg="#ecfdf3" label="Total Providers" value={errored ? "—" : providers.length} />
-        <StatCard icon="🛡️" iconBg="#f1f5f9" label="Protocols" value={errored ? "—" : configuredProtocols(providers)} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Last Sync" value={errored ? "—" : formatIndianDateTime(latest)} />
+        <StatCard icon="🔗" tone="info" label="Active Providers" value={activeProviders ?? "—"} />
+        <StatCard icon="🔗" tone="good" label="Total Providers" value={errored ? "—" : providers.length} />
+        <StatCard icon="🛡️" tone="neutral" label="Protocols" value={errored ? "—" : configuredProtocols(providers)} />
+        <StatCard icon="✅" tone="good" label="Last Sync" value={errored ? "—" : formatIndianDateTime(latest)} />
       </StatGrid>
 
       {errored ? (

@@ -359,7 +359,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
           <Button type="button" variant="ghost" disabled={busy} onClick={() => void tagAsset()}>Tag</Button>
           <Button type="button" variant="ghost" disabled={busy} onClick={printTag}>Print tag</Button>
         </div>
-        {tagError ? <p id="asset-tag-code-err" role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{tagError}</p> : null}
+        {tagError ? <p id="asset-tag-code-err" role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{tagError}</p> : null}
         {scope === "tag-only" ? (
           <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>
             This asset is condemned and awaiting auction, so transfer and disposal are handled in the condemnation workflow.
@@ -369,7 +369,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Button type="button" disabled={busy} onClick={openAmcDialog}>Schedule AMC</Button>
         </div>
-        {amcError ? <p role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{amcError}</p> : null}
+        {amcError ? <p role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{amcError}</p> : null}
         <div style={{ borderTop: "1px solid var(--line)", paddingTop: 12 }}>
           <label htmlFor="asset-transfer-loc" className="sr-only">Transfer to location</label>
           <input id="asset-transfer-loc" value={toLocation} onChange={(e) => setToLocation(e.target.value)} placeholder="Transfer to location" style={inputStyle} />
@@ -392,7 +392,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
             aria-describedby={requestErrors.proceeds ? "asset-proceeds-err" : undefined}
             style={inputStyle}
           />
-          {requestErrors.proceeds && <p id="asset-proceeds-err" role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: "0 0 4px" }}>{requestErrors.proceeds}</p>}
+          {requestErrors.proceeds && <p id="asset-proceeds-err" role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: "0 0 4px" }}>{requestErrors.proceeds}</p>}
           <Button type="button" variant="danger" disabled={busy} onClick={() => { if (validateRequestDisposal()) disposeAction.trigger(); }}>Request disposal</Button>
         </div>
 
@@ -429,7 +429,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
             aria-describedby={directErrors.proceeds ? directProceedsErrId : undefined}
             style={inputStyle}
           />
-          {directErrors.proceeds && <p id={directProceedsErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: "0 0 4px" }}>{directErrors.proceeds}</p>}
+          {directErrors.proceeds && <p id={directProceedsErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: "0 0 4px" }}>{directErrors.proceeds}</p>}
           <label htmlFor="asset-direct-dispose-notes" className="sr-only">Disposal notes (optional)</label>
           <textarea
             id="asset-direct-dispose-notes"
@@ -466,7 +466,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
             aria-describedby={interOrgErrors.fromOrg ? fromOrgErrId : undefined}
             style={inputStyle}
           />
-          {interOrgErrors.fromOrg && <p id={fromOrgErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: "0 0 4px" }}>{interOrgErrors.fromOrg}</p>}
+          {interOrgErrors.fromOrg && <p id={fromOrgErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: "0 0 4px" }}>{interOrgErrors.fromOrg}</p>}
           <label htmlFor={toOrgField} className="sr-only">To org unit</label>
           <input
             id={toOrgField}
@@ -479,7 +479,7 @@ export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
             aria-describedby={interOrgErrors.toOrg ? toOrgErrId : undefined}
             style={inputStyle}
           />
-          {interOrgErrors.toOrg && <p id={toOrgErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: "0 0 4px" }}>{interOrgErrors.toOrg}</p>}
+          {interOrgErrors.toOrg && <p id={toOrgErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: "0 0 4px" }}>{interOrgErrors.toOrg}</p>}
           <label htmlFor="asset-inter-org-date" className="sr-only">Transfer date</label>
           <input
             id="asset-inter-org-date"

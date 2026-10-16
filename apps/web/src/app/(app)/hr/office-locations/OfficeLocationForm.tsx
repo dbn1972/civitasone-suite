@@ -121,7 +121,7 @@ export function OfficeLocationForm() {
             {message && (
               <p
                 role={message.tone === "error" ? "alert" : "status"}
-                style={{ margin: 0, padding: "10px 14px", borderRadius: 8, fontSize: 14, color: message.tone === "error" ? "var(--bad, #b91c1c)" : "var(--good, #166534)" }}
+                style={{ margin: 0, padding: "10px 14px", borderRadius: 8, fontSize: 14, color: message.tone === "error" ? "var(--bad)" : "var(--good)" }}
               >
                 {message.text}
               </p>

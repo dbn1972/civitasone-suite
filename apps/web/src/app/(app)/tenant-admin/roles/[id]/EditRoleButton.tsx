@@ -79,4 +79,4 @@ export function EditRoleButton({ roleId, name, description }: { roleId: string; 
 
 const lbl: React.CSSProperties = { display: "block", fontSize: 12.5, fontWeight: 650, color: "var(--ink2)", marginBottom: 5 };
 const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13.5, fontFamily: "inherit", color: "var(--ink)" };
-const errSty: React.CSSProperties = { color: "#b42318", fontSize: 12, margin: "4px 0 0" };
+const errSty: React.CSSProperties = { color: "var(--bad)", fontSize: 12, margin: "4px 0 0" };

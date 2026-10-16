@@ -77,7 +77,7 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
         ) : (
           <>
             {truncated && (
-              <p style={{ padding: "0 24px", fontSize: 13, color: "var(--amber, #d97706)" }}>
+              <p style={{ padding: "0 24px", fontSize: 13, color: "var(--amber)" }}>
                 Showing the first 100 results. Refine your search to narrow them down.
               </p>
             )}

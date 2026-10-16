@@ -170,12 +170,12 @@ export function CreateIndentForm({
           <input id="indentNo" className="inp mono" value="Assigned on submit" readOnly style={{ minHeight: 44, cursor: "default", background: "var(--panel)", color: "var(--mut)" }} />
         </div>
 
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="indentDate">Indent date *</label>
           <input id="indentDate" type="date" className="inp" value={indentDate} onChange={(e) => setIndentDate(e.target.value)} required style={{ minHeight: 44 }} />
         </div>
 
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="department">Department *</label>
           <input
             id="department"
@@ -193,7 +193,7 @@ export function CreateIndentForm({
           )}
         </div>
 
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="requiredBy">Required by date</label>
           <input
             id="requiredBy"
@@ -214,7 +214,7 @@ export function CreateIndentForm({
         {/* GAP-PROCUREMENT-INDENTS-NEW-02: estimated value is DERIVED (read-only)
             from the line items and drives the GFR mode band — no second,
             independently-typed figure that could select the wrong band. */}
-        <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ gridColumn: "1 / -1", background: "var(--panel)", padding: "13px 16px" }}>
           <span className="label">
             Estimated total value (from line items)
             <span style={{ fontSize: 11, color: "var(--ink2)", marginInlineStart: 4 }}>— determines procurement mode</span>
@@ -223,7 +223,7 @@ export function CreateIndentForm({
             <span className="mono" aria-live="polite" style={{ fontWeight: 600 }}>{formatMoney(estimatedValueMinor)}</span>
             {modeState === "ready" && modeBand ? (
               <>
-                <span style={{ background: modeBand.requiresTender ? "var(--warn)" : "var(--good)", color: "#fff", borderRadius: 3, padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>
+                <span style={{ background: modeBand.requiresTender ? "var(--warn)" : "var(--good)", color: "var(--panel)", borderRadius: 3, padding: "2px 8px", fontSize: 12, fontWeight: 600 }}>
                   {modeBand.id}
                 </span>
                 <span style={{ fontSize: 12, color: "var(--ink2)" }}>{tRoot(modeBand.nameKey)} — {tRoot(modeBand.notesKey)}</span>
@@ -242,7 +242,7 @@ export function CreateIndentForm({
           </div>
         </div>
 
-        <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ gridColumn: "1 / -1", background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="purpose">Purpose / justification *</label>
           <textarea
             id="purpose"
@@ -264,7 +264,7 @@ export function CreateIndentForm({
       </div>
 
       {prefillTruncated ? (
-        <p role="note" style={{ fontSize: 13, color: "#92400e", margin: "0 0 8px" }}>
+        <p role="note" style={{ fontSize: 13, color: "var(--warn)", margin: "0 0 8px" }}>
           The item description was too long and has been shortened. Check it before submitting.
         </p>
       ) : null}

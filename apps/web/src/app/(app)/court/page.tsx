@@ -84,10 +84,10 @@ export default async function CourtHomePage() {
         <DataSourceBadge source="error" message="Some figures couldn't be loaded — those show “—”." />
       )}
       <StatGrid>
-        <StatCard icon="📚" iconBg="#eef2ff" label="Total Cases" value={totalCases} />
-        <StatCard icon="⏳" iconBg="#fff7ed" label="Pending" value={pending} />
-        <StatCard icon="✅" iconBg="#ecfdf5" label="Disposed" value={disposed} />
-        <StatCard icon="📈" iconBg="#ecfeff" label="Clearance Rate" value={clearance} />
+        <StatCard icon="📚" tone="info" label="Total Cases" value={totalCases} />
+        <StatCard icon="⏳" tone="warn" label="Pending" value={pending} />
+        <StatCard icon="✅" tone="good" label="Disposed" value={disposed} />
+        <StatCard icon="📈" tone="info" label="Clearance Rate" value={clearance} />
       </StatGrid>
 
       {pendency.source !== "error" && pendencyRows.length > 0 && (

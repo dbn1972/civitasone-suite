@@ -109,7 +109,7 @@ export default async function VendorScorecardPage({ params }: { params: { id: st
         subtitle={`${vendorName} · As of ${asOf}`}
         back={"/procurement/vendors/" + params.id}
         actions={
-          <span style={{ background: bandColor, color: "#fff", borderRadius: 4, padding: "2px 10px", fontSize: 12, fontWeight: 600, textTransform: "capitalize" }}>
+          <span style={{ background: bandColor, color: "var(--panel)", borderRadius: 4, padding: "2px 10px", fontSize: 12, fontWeight: 600, textTransform: "capitalize" }}>
             {scorecard.ratingBand}
           </span>
         }

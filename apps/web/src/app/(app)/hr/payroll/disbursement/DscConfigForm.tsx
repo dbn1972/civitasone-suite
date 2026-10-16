@@ -151,7 +151,7 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={fileId} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("fileLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("fileLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={fileId}
@@ -167,7 +167,7 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={passId} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("passphraseLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("passphraseLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={passId}

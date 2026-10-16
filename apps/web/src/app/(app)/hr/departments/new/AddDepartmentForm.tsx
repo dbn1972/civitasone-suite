@@ -189,11 +189,11 @@ export function AddDepartmentForm({ onCancel, onSuccess, departments = [] }: Pro
                 padding: "10px 14px",
                 borderRadius: 8,
                 fontSize: 14,
-                background: tone === "success" ? "var(--goodbg, #dcfce7)" : "#fee2e2",
+                background: tone === "success" ? "var(--goodbg)" : "var(--badbg)",
                 border: `1px solid ${
-                  tone === "success" ? "var(--goodbd, #86efac)" : "var(--badbd, #fca5a5)"
+                  tone === "success" ? "var(--goodbd)" : "var(--badbd)"
                 }`,
-                color: tone === "success" ? "var(--good, #166534)" : "var(--bad, #b91c1c)",
+                color: tone === "success" ? "var(--good)" : "var(--bad)",
               }}
             >
               {tone === "success" ? "✅" : "⚠️"} {message}
@@ -266,7 +266,7 @@ export function AddDepartmentForm({ onCancel, onSuccess, departments = [] }: Pro
               deliberately NOT here: no location-service picker exists in
               this form yet (see the gap's own fix steps). */}
           <div style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink, #0f172a)" }}>{t("headLabel")}</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{t("headLabel")}</span>
             <EntityPicker
               aria-label={t("headLabel")}
               value={headEmployeeId}

@@ -14,7 +14,7 @@ import { KNOWLEDGE_CATEGORIES } from "../../_data/categories";
  * GAP-KNOWLEDGE-DOCUMENTS-NEW-04: renamed "Publish document" to "Add document"
  *   because the create endpoint sets status="draft", not "published". The governed
  *   publish lifecycle is for policies (policies/[id]/PolicyActions).
- * GAP-KNOWLEDGE-DOCUMENTS-NEW-06: removed inline background:'#fff' that broke
+ * GAP-KNOWLEDGE-DOCUMENTS-NEW-06: removed inline background:'var(--panel)' that broke
  *   dark mode. The .field class already sets background: var(--panel).
  */
 export function CreateDocumentForm({
@@ -79,7 +79,7 @@ export function CreateDocumentForm({
   return (
     <form onSubmit={(e) => void handleSubmit(e)} className="card pad" style={{ maxWidth: 820 }} noValidate>
       <div className="fields">
-        {/* GAP-KNOWLEDGE-DOCUMENTS-NEW-06: removed background:'#fff' — .field already uses var(--panel) */}
+        {/* GAP-KNOWLEDGE-DOCUMENTS-NEW-06: removed background:'var(--panel)' — .field already uses var(--panel) */}
         <div className="field" style={{ gridColumn: "1 / -1", padding: "13px 16px" }}>
           <label className="label" htmlFor="title">Title *</label>
           <input id="title" className="inp" value={title} onChange={(e) => setTitle(e.target.value)} required style={{ minHeight: 44 }} placeholder="e.g. Travel Policy 2024" maxLength={200} />
@@ -123,7 +123,7 @@ export function CreateDocumentForm({
           fileKey field on the create command, which is a larger backend change.
           Until then, documents are created as metadata-only draft records and
           this is stated honestly rather than implying a file was stored. */}
-      <p style={{ margin: "12px 0 0", fontSize: 12, color: "var(--mut, #667085)" }}>
+      <p style={{ margin: "12px 0 0", fontSize: 12, color: "var(--mut)" }}>
         File attachments are not yet available here — this creates a draft document record. Access level is enforced on the server.
       </p>
 

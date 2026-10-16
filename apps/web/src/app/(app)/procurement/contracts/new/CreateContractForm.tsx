@@ -120,7 +120,7 @@ export function CreateContractForm() {
   return (
     <form className="card pad" onSubmit={(e) => void handleSubmit(e)} style={{ maxWidth: 720 }} noValidate>
       <div className="fields">
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="c-vendor">Vendor / counter-party *</label>
           <RemoteSearchSelect
             inputId="c-vendor"
@@ -136,9 +136,9 @@ export function CreateContractForm() {
               error: t("error"), retry: t("retry"), clear: t("clear"),
             }}
           />
-          {fieldErrors.vendor ? <span id="c-vendor-err" style={{ color: "#b91c1c", fontSize: 12 }}>{fieldErrors.vendor}</span> : null}
+          {fieldErrors.vendor ? <span id="c-vendor-err" style={{ color: "var(--bad)", fontSize: 12 }}>{fieldErrors.vendor}</span> : null}
         </div>
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="c-no">Contract no *</label>
           <input
             id="c-no"
@@ -150,13 +150,13 @@ export function CreateContractForm() {
             aria-describedby={fieldErrors.contractNo ? "c-no-err" : undefined}
             style={{ minHeight: 44 }}
           />
-          {fieldErrors.contractNo ? <span id="c-no-err" style={{ color: "#b91c1c", fontSize: 12 }}>{fieldErrors.contractNo}</span> : null}
+          {fieldErrors.contractNo ? <span id="c-no-err" style={{ color: "var(--bad)", fontSize: 12 }}>{fieldErrors.contractNo}</span> : null}
         </div>
-        <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ gridColumn: "1 / -1", background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="c-title">Title *</label>
           <input id="c-title" className="inp" value={title} onChange={(e) => setTitle(e.target.value)} required style={{ minHeight: 44 }} />
         </div>
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="c-val">Contract value (₹) *</label>
           <input
             id="c-val"
@@ -175,17 +175,17 @@ export function CreateContractForm() {
           {parsedMinor !== null ? (
             <span style={{ fontSize: 12, color: "var(--mut)", marginTop: 4 }} aria-live="polite">{formatMoney(parsedMinor)}</span>
           ) : null}
-          {fieldErrors.value ? <span id="c-val-err" style={{ color: "#b91c1c", fontSize: 12 }}>{fieldErrors.value}</span> : null}
+          {fieldErrors.value ? <span id="c-val-err" style={{ color: "var(--bad)", fontSize: 12 }}>{fieldErrors.value}</span> : null}
         </div>
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="c-po">PO reference</label>
           <input id="c-po" className="inp" value={poRef} onChange={(e) => setPoRef(e.target.value)} style={{ minHeight: 44 }} />
         </div>
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="c-start">Start date *</label>
           <input id="c-start" type="date" className="inp" value={startDate} onChange={(e) => setStartDate(e.target.value)} required style={{ minHeight: 44 }} />
         </div>
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="c-exp">Expiry date *</label>
           <input
             id="c-exp"
@@ -199,13 +199,13 @@ export function CreateContractForm() {
             aria-describedby={fieldErrors.expiry ? "c-exp-err" : undefined}
             style={{ minHeight: 44 }}
           />
-          {fieldErrors.expiry ? <span id="c-exp-err" style={{ color: "#b91c1c", fontSize: 12 }}>{fieldErrors.expiry}</span> : null}
+          {fieldErrors.expiry ? <span id="c-exp-err" style={{ color: "var(--bad)", fontSize: 12 }}>{fieldErrors.expiry}</span> : null}
         </div>
       </div>
 
       <div role="status" aria-live="polite">
         {message ? (
-          <p role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, fontSize: "0.875rem", color: status === "error" ? "#b91c1c" : "#047857" }}>{message}</p>
+          <p role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, fontSize: "0.875rem", color: status === "error" ? "var(--bad)" : "var(--good)" }}>{message}</p>
         ) : null}
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>

@@ -179,7 +179,7 @@ function EditRolesSheet({
           <p style={{ margin: 0, fontSize: 12.5, color: "var(--mut)" }}>{user.name} · {user.email}</p>
           <button type="button" onClick={onClose} aria-label="Close" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--mut)", lineHeight: 1 }}>×</button>
         </div>
-        {error && <p role="alert" style={{ margin: 0, fontSize: 12.5, color: "#b42318" }}>{error}</p>}
+        {error && <p role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>{error}</p>}
         {loading ? (
           <p style={{ color: "var(--mut)", fontSize: 13 }}>Loading current roles…</p>
         ) : roles.length === 0 ? (
@@ -193,7 +193,7 @@ function EditRolesSheet({
               // by the full-set save).
               const locked = !canAssignPlatformRoles && PLATFORM_AUTHORITY_ROLE_KEYS.includes(r.key);
               return (
-                <label key={r.id} title={locked ? "Platform roles can only be assigned by platform staff" : undefined} style={{ display: "flex", alignItems: "center", gap: 12, cursor: locked ? "not-allowed" : "pointer", opacity: locked ? 0.6 : 1, padding: "8px 10px", borderRadius: 8, border: `1.5px solid ${active ? "#4f46e5" : "var(--line)"}`, background: active ? "#eef2ff" : "transparent" }}>
+                <label key={r.id} title={locked ? "Platform roles can only be assigned by platform staff" : undefined} style={{ display: "flex", alignItems: "center", gap: 12, cursor: locked ? "not-allowed" : "pointer", opacity: locked ? 0.6 : 1, padding: "8px 10px", borderRadius: 8, border: `1.5px solid ${active ? "var(--indigo)" : "var(--line)"}`, background: active ? "var(--infobg)" : "transparent" }}>
                   <input type="checkbox" checked={active} disabled={locked} onChange={() => toggleRole(r.key)} style={{ width: 15, height: 15, cursor: locked ? "not-allowed" : "pointer" }} />
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 600 }}>{r.name}</div>
@@ -333,15 +333,15 @@ export function AdminUsersManager({
   return (
     <>
       {error && (
-        <div role="alert" style={{ background: "#fef2f2", color: "#b42318", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
+        <div role="alert" style={{ background: "var(--badbg)", color: "var(--bad)", border: "1px solid var(--badbg)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
           {error}
         </div>
       )}
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="👥" iconBg="#f1f5f9" label="Total users" value={summary.total} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={summary.active} />
-        <StatCard icon="⛔" iconBg="#fef3f2" label="Suspended" value={summary.suspended} />
-        <StatCard icon="🔒" iconBg="#fffbeb" label="Locked / deactivated" value={summary.other} />
+        <StatCard icon="👥" tone="neutral" label="Total users" value={summary.total} />
+        <StatCard icon="✅" tone="good" label="Active" value={summary.active} />
+        <StatCard icon="⛔" tone="bad" label="Suspended" value={summary.suspended} />
+        <StatCard icon="🔒" tone="warn" label="Locked / deactivated" value={summary.other} />
       </div>
       <div className="card">
         <div className="card-h">
@@ -372,7 +372,7 @@ export function AdminUsersManager({
               label: "User",
               render: (u) => (
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#e0e7ff", color: "#4f46e5", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} aria-hidden="true">
+                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#e0e7ff", color: "var(--indigo)", fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }} aria-hidden="true">
                     {String(u.name || u.email).slice(0, 2).toUpperCase()}
                   </div>
                   <div>
@@ -405,7 +405,7 @@ export function AdminUsersManager({
                     disabled={busyId === u.id || u.status === "locked" || u.status === "deactivated" || (u.status === "active" && u.id === currentUserId)}
                     title={u.id === currentUserId ? "You cannot suspend your own account" : undefined}
                     onClick={() => askToggleStatus(u as AdminUserSummary)}
-                    style={{ fontSize: 11.5, color: u.status === "active" ? "#b42318" : "#027a48" }}
+                    style={{ fontSize: 11.5, color: u.status === "active" ? "var(--bad)" : "var(--good)" }}
                   >
                     {busyId === u.id ? "…" : u.status === "active" ? "Suspend" : "Activate"}
                   </Button>

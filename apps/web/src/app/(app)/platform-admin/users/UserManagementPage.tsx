@@ -38,14 +38,14 @@ const SUPER_ADMIN_ROLE = "super_admin";
 const EXPORT_MAX_ROWS = 200;
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
-  super_admin:    { bg: "#fef3f2", color: "#b42318" },
-  platform_admin: { bg: "#eff6ff", color: "#1e40af" },
-  tenant_admin:   { bg: "#ecfdf3", color: "#027a48" },
-  hr_admin:       { bg: "#f5f3ff", color: "#5b21b6" },
-  payroll_admin:  { bg: "#fffaeb", color: "#b54708" },
-  finance_admin:  { bg: "#f0fdf4", color: "#166534" },
-  audit_admin:    { bg: "#fff7ed", color: "#9a3412" },
-  dept_head:      { bg: "#f0f9ff", color: "#075985" },
+  super_admin:    { bg: "var(--badbg)", color: "var(--bad)" },
+  platform_admin: { bg: "var(--infobg)", color: "var(--info)" },
+  tenant_admin:   { bg: "var(--goodbg)", color: "var(--good)" },
+  hr_admin:       { bg: "var(--infobg)", color: "#5b21b6" },
+  payroll_admin:  { bg: "var(--warnbg)", color: "var(--warn)" },
+  finance_admin:  { bg: "var(--goodbg)", color: "var(--good)" },
+  audit_admin:    { bg: "var(--warnbg)", color: "#9a3412" },
+  dept_head:      { bg: "var(--infobg)", color: "#075985" },
   hr_staff:       { bg: "#fdf2f8", color: "#86198f" },
 };
 
@@ -321,7 +321,7 @@ export function UserManagementPage({
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }} aria-labelledby="user-mgmt-heading">
           <thead>
-            <tr style={{ background: "var(--line2, #f8fafc)", borderBottom: "1px solid var(--line)" }}>
+            <tr style={{ background: "var(--line2)", borderBottom: "1px solid var(--line)" }}>
               <th style={{ padding: "10px 14px", width: 36 }}>
                 <input
                   type="checkbox"
@@ -345,13 +345,13 @@ export function UserManagementPage({
             ) : pageRows.map((user) => {
               const blocked = suspendBlockedReason(user);
               return (
-              <tr key={user.id} style={{ borderBottom: "1px solid var(--line)", background: selected.has(user.id) ? "var(--primary-light, #eff6ff)" : "transparent" }}>
+              <tr key={user.id} style={{ borderBottom: "1px solid var(--line)", background: selected.has(user.id) ? "var(--primary-light)" : "transparent" }}>
                 <td style={{ padding: "10px 14px" }}>
                   <input type="checkbox" checked={selected.has(user.id)} onChange={() => toggleSelect(user.id)} aria-label={`Select ${user.name ?? user.email}`} />
                 </td>
                 <td style={{ padding: "10px 14px" }}>
                   <div className="who">
-                    <div className="av" aria-hidden="true" style={{ fontSize: 10, width: 30, height: 30, borderRadius: "50%", background: "var(--primary-light, #eff6ff)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary-d)", fontWeight: 700, flexShrink: 0 }}>
+                    <div className="av" aria-hidden="true" style={{ fontSize: 10, width: 30, height: 30, borderRadius: "50%", background: "var(--primary-light)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary-d)", fontWeight: 700, flexShrink: 0 }}>
                       {(user.name ?? user.email).slice(0, 2).toUpperCase()}
                     </div>
                     <div>
@@ -396,7 +396,7 @@ export function UserManagementPage({
                       <Button
                         variant="ghost"
                         size="sm"
-                        style={{ fontSize: 11, color: "var(--bad, #b42318)" }}
+                        style={{ fontSize: 11, color: "var(--bad)" }}
                         disabled={blocked !== null}
                         title={blocked ?? undefined}
                         onClick={() => openSuspend(user)}

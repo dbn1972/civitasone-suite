@@ -219,17 +219,17 @@ export default async function RevenueAnalyticsPage({
       />
 
       <StatGrid>
-        <StatCard icon="📊" iconBg="#eff6ff" label="Total Demand" value={totalDemand === null ? "—" : formatMoney(totalDemand)} />
-        <StatCard icon="💰" iconBg="#ecfdf3" label="Total Collection" value={totalCollection === null ? "—" : formatMoney(totalCollection)} />
+        <StatCard icon="📊" tone="info" label="Total Demand" value={totalDemand === null ? "—" : formatMoney(totalDemand)} />
+        <StatCard icon="💰" tone="good" label="Total Collection" value={totalCollection === null ? "—" : formatMoney(totalCollection)} />
         <StatCard
           icon="⚡"
-          iconBg="#fffbe6"
+          tone="warn"
           label="Collection Efficiency"
           value={overallEfficiencyBps === null ? "—" : formatBps(overallEfficiencyBps)}
         />
         <StatCard
           icon="⚠️"
-          iconBg="#fef3f2"
+          tone="bad"
           label="Top Defaulter Outstanding"
           value={
             defaultersSource === "error"

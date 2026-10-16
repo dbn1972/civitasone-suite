@@ -233,10 +233,10 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
   if (loadError) {
     return (
       <div style={{ maxWidth: 640 }}>
-        <p role="alert" style={{ margin: 0, padding: "10px 14px", borderRadius: 8, background: "var(--badbg, #fef2f2)", color: "var(--bad, #b91c1c)", fontSize: 13, border: "1px solid var(--badbd, #fecaca)" }}>
+        <p role="alert" style={{ margin: 0, padding: "10px 14px", borderRadius: 8, background: "var(--badbg)", color: "var(--bad)", fontSize: 13, border: "1px solid var(--badbd)" }}>
           {loadError === "not_found" ? t("loadNotFound") : t("loadOtherError")}
         </p>
-        <Link href="/hr/jd-templates" style={{ display: "inline-block", marginTop: 14, padding: "10px 20px", fontSize: 14, fontWeight: 600, color: "var(--ink2, #475569)", background: "var(--bg, #f1f5f9)", borderRadius: 8, textDecoration: "none" }}>
+        <Link href="/hr/jd-templates" style={{ display: "inline-block", marginTop: 14, padding: "10px 20px", fontSize: 14, fontWeight: 600, color: "var(--ink2)", background: "var(--bg)", borderRadius: 8, textDecoration: "none" }}>
           {t("backToTemplates")}
         </Link>
       </div>
@@ -324,12 +324,12 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
         </Field>
 
         {status === "error" && (
-          <p role="alert" style={{ margin: 0, padding: "10px 14px", borderRadius: 8, background: "var(--badbg, #fef2f2)", color: "var(--bad, #b91c1c)", fontSize: 13, border: "1px solid var(--badbd, #fecaca)" }}>
+          <p role="alert" style={{ margin: 0, padding: "10px 14px", borderRadius: 8, background: "var(--badbg)", color: "var(--bad)", fontSize: 13, border: "1px solid var(--badbd)" }}>
             {message}
           </p>
         )}
         {status === "success" && (
-          <p style={{ margin: 0, padding: "10px 14px", borderRadius: 8, background: "var(--goodbg, #f0fdf4)", color: "var(--good, #15803d)", fontSize: 13, border: "1px solid var(--goodbd, #bbf7d0)" }}>
+          <p style={{ margin: 0, padding: "10px 14px", borderRadius: 8, background: "var(--goodbg)", color: "var(--good)", fontSize: 13, border: "1px solid var(--goodbd)" }}>
             {message}
           </p>
         )}
@@ -346,7 +346,7 @@ export function NewTemplateForm({ templateId }: { templateId?: string }) {
           <Link
             href="/hr/jd-templates"
             onClick={handleCancelClick}
-            style={{ padding: "10px 20px", fontSize: 14, fontWeight: 600, color: "var(--ink2, #475569)", background: "var(--bg, #f1f5f9)", borderRadius: 8, textDecoration: "none" }}
+            style={{ padding: "10px 20px", fontSize: 14, fontWeight: 600, color: "var(--ink2)", background: "var(--bg)", borderRadius: 8, textDecoration: "none" }}
           >
             {tAction("cancel")}
           </Link>

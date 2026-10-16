@@ -314,10 +314,10 @@ export function ImportForm() {
           accept=".csv,text/csv"
           aria-describedby="import-csv-hint"
         />
-        <p id="import-csv-hint" style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: 0 }}>
+        <p id="import-csv-hint" style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>
           {t("requiredColumnsHint", { columns: REQUIRED_COLUMNS.join(", ") })}
         </p>
-        <p style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: 0 }}>
+        <p style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>
           {t("optionalColumnsHint", { columns: OPTIONAL_COLUMNS.join(", ") })}
         </p>
       </Field>
@@ -326,7 +326,7 @@ export function ImportForm() {
           {status === "uploading" ? t("importingProgress", { success: progress.success, total: progress.total }) : t("uploadBtn")}
         </Button>
         {status === "done" && (
-          <span style={{ fontSize: 13, color: progress.failed === 0 ? "var(--good, #166534)" : "var(--bad, #b91c1c)" }}>
+          <span style={{ fontSize: 13, color: progress.failed === 0 ? "var(--good)" : "var(--bad)" }}>
             {t("resultImported", { success: progress.success })}
             {progress.failed > 0 ? t("resultFailedSuffix", { failed: progress.failed }) : ""}
           </span>
@@ -334,7 +334,7 @@ export function ImportForm() {
       </div>
       {errors.length > 0 && (
         <div style={{ marginTop: 12 }}>
-          <div style={{ padding: "10px 14px", borderRadius: 8, background: "var(--badbg, #fef2f2)", border: "1px solid var(--badbd, #fecaca)", fontSize: 12.5, color: "var(--bad, #b91c1c)", maxHeight: 200, overflow: "auto" }}>
+          <div style={{ padding: "10px 14px", borderRadius: 8, background: "var(--badbg)", border: "1px solid var(--badbd)", fontSize: 12.5, color: "var(--bad)", maxHeight: 200, overflow: "auto" }}>
             {errors.map((e, i) => <div key={i}>{e}</div>)}
           </div>
           {/* GAP-HR-EMPLOYEES-IMPORT-06: errors only ever lived in local

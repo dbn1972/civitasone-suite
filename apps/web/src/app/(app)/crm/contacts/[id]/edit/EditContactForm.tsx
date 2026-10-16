@@ -409,10 +409,10 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
       <a className="back" href={`/crm/contacts/${params.id}`}><ArrowLeft aria-hidden="true" size={14} /> Contact</a>
       <div className="ph" style={{ marginTop: 6 }}><h1>Edit Contact</h1></div>
       {message ? (
-        <div role="status" aria-live="polite" className="banner" style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
+        <div role="status" aria-live="polite" className="banner" style={{ background: "var(--goodbg)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
       ) : null}
       {error ? (
-        <div role="alert" aria-live="assertive" className="banner" style={{ background: "#fef2f2", color: "#b42318", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{error}</div>
+        <div role="alert" aria-live="assertive" className="banner" style={{ background: "var(--badbg)", color: "var(--bad)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{error}</div>
       ) : null}
       <div className="card">
         <form onSubmit={submit} className="pad" style={{ display: "grid", gap: 14, maxWidth: 720 }}>
@@ -436,7 +436,7 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
               aria-invalid={fieldErrors.phone ? true : undefined}
               aria-describedby={[fieldErrors.phone ? phoneErrId : null, maskedPii ? "edit-pii-hint" : null].filter(Boolean).join(" ") || undefined}
             />
-            {fieldErrors.phone ? <p id={phoneErrId} role="alert" style={{ fontSize: 12, color: "#b42318", marginTop: 4 }}>{fieldErrors.phone}</p> : null}
+            {fieldErrors.phone ? <p id={phoneErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{fieldErrors.phone}</p> : null}
             {maskedPii ? <p id="edit-pii-hint" style={{ margin: "4px 0 0", fontSize: 12, color: "var(--muted)" }}>{maskedPii.hint}</p> : null}
           </div>
           <div>
@@ -492,7 +492,7 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
               aria-invalid={fieldErrors.gstin ? true : undefined}
               aria-describedby={fieldErrors.gstin ? gstinErrId : undefined}
             />
-            {fieldErrors.gstin ? <p id={gstinErrId} role="alert" style={{ fontSize: 12, color: "#b42318", marginTop: 4 }}>{fieldErrors.gstin}</p> : null}
+            {fieldErrors.gstin ? <p id={gstinErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{fieldErrors.gstin}</p> : null}
           </div>
           <div>
             <label htmlFor="edit-pan" style={labelStyle}>PAN</label>
@@ -505,7 +505,7 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
               aria-invalid={fieldErrors.pan ? true : undefined}
               aria-describedby={fieldErrors.pan ? panErrId : undefined}
             />
-            {fieldErrors.pan ? <p id={panErrId} role="alert" style={{ fontSize: 12, color: "#b42318", marginTop: 4 }}>{fieldErrors.pan}</p> : null}
+            {fieldErrors.pan ? <p id={panErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{fieldErrors.pan}</p> : null}
           </div>
           <div>
             <label htmlFor="edit-pincode" style={labelStyle}>PIN code</label>
@@ -519,7 +519,7 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
               aria-invalid={fieldErrors.pincode ? true : undefined}
               aria-describedby={fieldErrors.pincode ? pincodeErrId : undefined}
             />
-            {fieldErrors.pincode ? <p id={pincodeErrId} role="alert" style={{ fontSize: 12, color: "#b42318", marginTop: 4 }}>{fieldErrors.pincode}</p> : null}
+            {fieldErrors.pincode ? <p id={pincodeErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{fieldErrors.pincode}</p> : null}
           </div>
           <div>
             <label htmlFor="edit-leadSource" style={labelStyle}>Lead source</label>

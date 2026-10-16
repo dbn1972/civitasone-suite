@@ -200,7 +200,7 @@ export default async function PayrollRegisterPage({
               defaultValue={runId ?? ""}
               aria-invalid={runIdInvalid || undefined}
               aria-describedby={runIdInvalid ? "reg-run-err" : undefined}
-              style={{ ...inputStyle, background: "var(--panel, #fff)" }}
+              style={{ ...inputStyle, background: "var(--panel)" }}
             >
               <option value="">{t("allRunsOption")}</option>
               {runs.map((r) => (

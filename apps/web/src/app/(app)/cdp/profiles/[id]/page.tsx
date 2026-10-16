@@ -124,14 +124,14 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
       <StatGrid>
         <StatCard
           icon="🧾"
-          iconBg="#e0f2fe"
+          tone="info"
           label="Attributes"
           value={attributeSources.length.toLocaleString("en-IN")}
           hint="Number of attribute values currently held on this golden profile."
         />
         <StatCard
           icon="🔎"
-          iconBg="#dcfce7"
+          tone="good"
           label="Attribution Coverage"
           // GAP-CDP-PROFILES-DETAIL-04: a profile with no attributes has no
           // coverage to report — show "—", not a misleading "0%".
@@ -140,7 +140,7 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
         />
         <StatCard
           icon="🔗"
-          iconBg="#fef3c7"
+          tone="warn"
           label="Linked Identifiers"
           // GAP-CDP-PROFILES-DETAIL-03: if the identity load failed, show "—"
           // rather than a fabricated 0.
@@ -149,7 +149,7 @@ export default async function CustomerProfilePage({ params }: { params: { id: st
         />
         <StatCard
           icon="🛰️"
-          iconBg="#fce7f3"
+          tone="bad"
           label="Contributing Systems"
           value={systems.length.toLocaleString("en-IN")}
           hint="Distinct source systems that have appended a lineage entry to this profile."

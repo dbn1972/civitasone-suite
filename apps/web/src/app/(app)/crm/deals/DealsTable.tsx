@@ -147,7 +147,7 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
         <a
           href={`/crm/contacts/${row.contactId}`}
           onClick={(e) => e.stopPropagation()}
-          style={{ color: "var(--primary, #2563eb)", textDecoration: "underline" }}
+          style={{ color: "var(--primary)", textDecoration: "underline" }}
         >
           {row.account}
         </a>
@@ -163,11 +163,11 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
           grid, so it can never disagree with the figures below it. */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <StatGrid>
-        <StatCard icon="▣" iconBg="#eef2ff" label={t("statTotal")} value={totalDisplay} />
-        <StatCard icon="◉" iconBg="#ecfdf3" label={t("statActive")} value={openDisplay} />
-        <StatCard icon="◈" iconBg="#f3e8ff" label={t("statActiveValue")} value={pipelineDisplay} />
-        <StatCard icon="△" iconBg="#ecfdf3" label={t("statConcludedValue")} value={wonDisplay} />
-        <StatCard icon="▽" iconBg="#fef2f2" label={t("statLapsed")} value={lapsedDisplay} />
+        <StatCard icon="▣" tone="info" label={t("statTotal")} value={totalDisplay} />
+        <StatCard icon="◉" tone="good" label={t("statActive")} value={openDisplay} />
+        <StatCard icon="◈" tone="neutral" label={t("statActiveValue")} value={pipelineDisplay} />
+        <StatCard icon="△" tone="good" label={t("statConcludedValue")} value={wonDisplay} />
+        <StatCard icon="▽" tone="bad" label={t("statLapsed")} value={lapsedDisplay} />
       </StatGrid>
       <div className="card">
         <div className="card-h" style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>

@@ -155,16 +155,16 @@ export default async function WorksReportsPage({ searchParams }: PageProps) {
         </Card>
       ) : (
         <StatGrid>
-          <StatCard icon="🏗" iconBg="#eef2ff" label="Total Works"  value={stat(summary.totalWorks)} />
-          <StatCard icon="🟢" iconBg="#ecfdf3" label="Active Works" value={stat(summary.activeWorks)} />
-          <StatCard icon="🔒" iconBg="#f1f5f9" label="Closed Works" value={stat(summary.closedWorks)} />
+          <StatCard icon="🏗" tone="info" label="Total Works"  value={stat(summary.totalWorks)} />
+          <StatCard icon="🟢" tone="good" label="Active Works" value={stat(summary.activeWorks)} />
+          <StatCard icon="🔒" tone="neutral" label="Closed Works" value={stat(summary.closedWorks)} />
           {/* GAP-WORKS-REPORTS-05: a residual bucket so Active + Closed + Other
               always reconciles to Total — a proposal in draft/dao_finalized is
               neither active nor closed, so Active + Closed could silently be
               less than Total with no visible explanation. */}
           <StatCard
             icon="🗂"
-            iconBg="#fff7ed"
+            tone="warn"
             label="Other / In progress"
             value={stat(Math.max(summary.totalWorks - summary.activeWorks - summary.closedWorks, 0))}
           />
@@ -217,7 +217,7 @@ export default async function WorksReportsPage({ searchParams }: PageProps) {
                   padding: "8px 12px",
                   borderRadius: 8,
                   fontSize: 13,
-                  background: "var(--warnbg, #fef3c7)",
+                  background: "var(--warnbg)",
                   color: "var(--ink)",
                 }}
               >

@@ -325,13 +325,13 @@ export default function ComposeNotificationPage() {
                 onBlur={() => setRecipientTouched(true)}
                 style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 8, minHeight: 44 }}
               />
-              <p id={`${recipientFieldId}-help`} style={{ fontSize: 11, color: "#667085", margin: "4px 0 0" }}>
+              <p id={`${recipientFieldId}-help`} style={{ fontSize: 11, color: "var(--mut)", margin: "4px 0 0" }}>
                 {effectiveChannel
                   ? `Who should receive this ${channelLabel(effectiveChannel)} notification.`
                   : "Who should receive this notification, matching the selected channel."}
               </p>
               {recipientTouched && recipientErr ? (
-                <p id={`${recipientFieldId}-error`} role="alert" style={{ fontSize: 11, color: "#b42318", margin: "4px 0 0" }}>
+                <p id={`${recipientFieldId}-error`} role="alert" style={{ fontSize: 11, color: "var(--bad)", margin: "4px 0 0" }}>
                   {recipientErr}
                 </p>
               ) : null}
@@ -356,7 +356,7 @@ export default function ComposeNotificationPage() {
             {requiredVariables.length > 0 ? (
               <fieldset style={{ border: "1px solid var(--line)", borderRadius: 8, padding: 12, marginBottom: 18 }}>
                 <legend style={{ fontSize: 12, fontWeight: 600, padding: "0 6px" }}>Template details</legend>
-                <p style={{ fontSize: 11, color: "#667085", margin: "0 0 10px" }}>
+                <p style={{ fontSize: 11, color: "var(--mut)", margin: "0 0 10px" }}>
                   This template has placeholders. Fill them in so the recipient doesn&apos;t receive a blank value.
                 </p>
                 {requiredVariables.map((name) => {
@@ -387,23 +387,23 @@ export default function ComposeNotificationPage() {
             </Button>
           </form>
 
-          <div role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", marginTop: 12 }}>{result}</div>
+          <div role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--good)", marginTop: 12 }}>{result}</div>
         </Card>
 
         <Card title="About sending" padding>
-          <p style={{ fontSize: 13, color: "#475467", lineHeight: 1.5 }}>
+          <p style={{ fontSize: 13, color: "var(--ink2)", lineHeight: 1.5 }}>
             Notifications are queued and sent shortly; track them in{" "}
             <a href="/notifications/deliveries">Deliveries</a>.
           </p>
           {selectedTemplate ? (
-            <div style={{ marginTop: 12, fontSize: 12, color: "#667085" }}>
+            <div style={{ marginTop: 12, fontSize: 12, color: "var(--mut)" }}>
               <div><strong>Selected:</strong> {selectedTemplate.name}</div>
               <div>Channel default: {channelLabel(selectedTemplate.channel)}</div>
               {selectedTemplate.subject ? <div>Subject: {selectedTemplate.subject}</div> : null}
               {selectedTemplate.body ? (
                 <div style={{ marginTop: 10 }}>
                   <strong>Preview</strong>
-                  <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", background: "var(--bg-soft, #f8fafc)", padding: 8, borderRadius: 6, marginTop: 4 }}>
+                  <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", background: "var(--bg-soft)", padding: 8, borderRadius: 6, marginTop: 4 }}>
                     {previewBody}
                   </pre>
                 </div>

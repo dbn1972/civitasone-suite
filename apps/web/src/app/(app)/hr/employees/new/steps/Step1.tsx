@@ -19,12 +19,12 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
   const t = useTranslations("employeeWizard");
   return (
     <>
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink, #0f172a)", marginTop: 0, marginBottom: 20 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginTop: 0, marginBottom: 20 }}>
         {t("step1Heading")}
       </h2>
       <div style={grid2}>
         {/* Full Name */}
-        <Field id="w-fullName" label={<>{t("fullNameLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span></>} required error={errors.fullName} announce style={{ ...fieldWrap, gridColumn: "span 2" }}>
+        <Field id="w-fullName" label={<>{t("fullNameLabel")} <span style={{ color: "var(--bad)" }} aria-hidden="true">*</span></>} required error={errors.fullName} announce style={{ ...fieldWrap, gridColumn: "span 2" }}>
           <Input
             type="text"
             autoComplete="name"

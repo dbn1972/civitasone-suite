@@ -89,7 +89,7 @@ export default function LibraryPage() {
   const inputStyle: React.CSSProperties = {
     padding: "8px 12px",
     borderRadius: 6,
-    border: "1px solid var(--line, #d1d5db)",
+    border: "1px solid var(--line)",
     fontSize: 14,
     background: "var(--bg)",
     color: "var(--ink)",

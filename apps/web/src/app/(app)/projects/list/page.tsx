@@ -63,17 +63,17 @@ export default async function ProjectsListPage() {
           second, independent read of `source` here that could disagree with
           the table's own cache state (UX-002's pattern). */}
       <StatGrid>
-        <StatCard icon="📁" iconBg="#eef0fe" label="Active" value={active ?? "—"} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="On Track" value={onTrack ?? "—"} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label="At Risk" value={atRisk ?? "—"} />
-        <StatCard icon="🔴" iconBg="#fef3f2" label="Delayed" value={delayed ?? "—"} />
+        <StatCard icon="📁" tone="info" label="Active" value={active ?? "—"} />
+        <StatCard icon="✅" tone="good" label="On Track" value={onTrack ?? "—"} />
+        <StatCard icon="⚠️" tone="warn" label="At Risk" value={atRisk ?? "—"} />
+        <StatCard icon="🔴" tone="bad" label="Delayed" value={delayed ?? "—"} />
       </StatGrid>
       {/* GAP-PROJECTS-LIST-04: the tiles summarise ACTIVE + DELAYED projects
           (the RAG breakdown only makes sense for in-flight work), while the
           table lists every status — say so, so a reviewer doesn't expect the
           tiles to sum to the row count. */}
       {!errored && (
-        <p role="note" style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
+        <p role="note" style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 8px" }}>
           Tiles cover active &amp; delayed projects ({activeProjects.length} of {projects.length}); the
           table below lists all statuses.
         </p>

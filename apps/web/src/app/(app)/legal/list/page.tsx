@@ -32,13 +32,13 @@ export default async function LegalCasesListPage() {
         }
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="📁" iconBg="#f1f5f9" label="Active Cases" value={active} />
-        <StatCard icon="🏛️" iconBg="#eff6ff" label="Courts / Fora" value={courts} />
+        <StatCard icon="📁" tone="neutral" label="Active Cases" value={active} />
+        <StatCard icon="🏛️" tone="info" label="Courts / Fora" value={courts} />
         {/* GAP-LEGAL-LIST-02: all-time disposed; no FY disposal date on the
             summary payload to filter on, so the card is labelled honestly. */}
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Disposed" value={disposed} />
+        <StatCard icon="✅" tone="good" label="Disposed" value={disposed} />
         {/* GAP-LEGAL-LIST-01: category count, not a risk score. */}
-        <StatCard icon="⚠️" iconBg="#fef3f2" label="Writ / Criminal" value={writOrCriminal} />
+        <StatCard icon="⚠️" tone="bad" label="Writ / Criminal" value={writOrCriminal} />
       </div>
       {/* UX-012: the data-source badge now lives inside LegalCasesTable,
           driven by the same useSeededResource call that produces its rows —

@@ -21,10 +21,10 @@ export default async function Page() {
       {errored && <DataSourceBadge source={source} />}
       {errored && <RefreshErrorState error={toHumanError("load", { area: "assistant metrics" })} />}
       <StatGrid>
-        <StatCard icon="💬" iconBg="#eef2ff" label="Questions asked" value={errored ? "—" : metrics.total.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf5" label="Deflected" value={errored ? "—" : metrics.deflected.toLocaleString("en-IN")} />
-        <StatCard icon="🎯" iconBg="#f0f9ff" label="Deflection rate" value={errored ? "—" : `${metrics.deflectionRate}%`} />
-        <StatCard icon="🆘" iconBg="#fef2f2" label="Escalated" value={errored ? "—" : metrics.escalated.toLocaleString("en-IN")} />
+        <StatCard icon="💬" tone="info" label="Questions asked" value={errored ? "—" : metrics.total.toLocaleString("en-IN")} />
+        <StatCard icon="✅" tone="good" label="Deflected" value={errored ? "—" : metrics.deflected.toLocaleString("en-IN")} />
+        <StatCard icon="🎯" tone="info" label="Deflection rate" value={errored ? "—" : `${metrics.deflectionRate}%`} />
+        <StatCard icon="🆘" tone="bad" label="Escalated" value={errored ? "—" : metrics.escalated.toLocaleString("en-IN")} />
       </StatGrid>
       <AssistantClient />
     </>

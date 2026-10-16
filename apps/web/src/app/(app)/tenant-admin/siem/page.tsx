@@ -27,10 +27,10 @@ export default async function SiemPage() {
           with the table's own cache state (UX-002's pattern). */}
 
       <StatGrid>
-        <StatCard icon="🚨" iconBg="#fef3f2" label="Critical Alerts" value={errored ? "—" : criticalAlerts} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label="High Severity" value={errored ? "—" : highAlerts} />
-        <StatCard icon="👁️" iconBg="#eff6ff" label="Active Alerts" value={errored ? "—" : activeAlerts} />
-        <StatCard icon="📊" iconBg="#f1f5f9" label="Total Alerts" value={errored ? "—" : alerts.length} />
+        <StatCard icon="🚨" tone="bad" label="Critical Alerts" value={errored ? "—" : criticalAlerts} />
+        <StatCard icon="⚠️" tone="warn" label="High Severity" value={errored ? "—" : highAlerts} />
+        <StatCard icon="👁️" tone="info" label="Active Alerts" value={errored ? "—" : activeAlerts} />
+        <StatCard icon="📊" tone="neutral" label="Total Alerts" value={errored ? "—" : alerts.length} />
       </StatGrid>
 
       {errored ? (

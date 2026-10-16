@@ -152,7 +152,7 @@ export function ScheduleMaintenanceForm({ options, vehiclesError = false }: Prop
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={scheduledDateId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Scheduled Date <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Scheduled Date <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={scheduledDateId}
@@ -165,7 +165,7 @@ export function ScheduleMaintenanceForm({ options, vehiclesError = false }: Prop
                 aria-describedby={errors.scheduledDate ? scheduledDateErrId : undefined}
                 style={inputStyle}
               />
-              {errors.scheduledDate && <p id={scheduledDateErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.scheduledDate}</p>}
+              {errors.scheduledDate && <p id={scheduledDateErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.scheduledDate}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -184,7 +184,7 @@ export function ScheduleMaintenanceForm({ options, vehiclesError = false }: Prop
               <p id={odometerHelpId} style={{ fontSize: 12, margin: 0, color: "var(--ink2)" }}>
                 Optional reference reading. It is saved with the job, but the job is scheduled and flagged overdue by its date only; reaching this reading does not trigger it.
               </p>
-              {errors.odometerThresholdKm && <p id={odometerErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.odometerThresholdKm}</p>}
+              {errors.odometerThresholdKm && <p id={odometerErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.odometerThresholdKm}</p>}
             </div>
           </div>
 

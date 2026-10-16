@@ -189,19 +189,19 @@ export default async function AaDetailPage({
       >
         <StatCard
           icon="₹"
-          iconBg="#ecfdf3"
+          tone="good"
           label="Approved Amount"
           value={formatMoney(aa.approvedAmountMinor ?? "0")}
         />
         <StatCard
           icon="📋"
-          iconBg="#eff6ff"
+          tone="info"
           label="Status"
           value={humanize(aa.status)}
         />
         <StatCard
           icon="🗂"
-          iconBg="#fef3c7"
+          tone="warn"
           label="Approval Type"
           value={humanize(aa.approvalType)}
         />

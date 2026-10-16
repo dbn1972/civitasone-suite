@@ -159,7 +159,7 @@ export default function OvertimeNewPage() {
             )}
           </Field>
           {mode === "loading" && <p style={{ fontSize: 13, color: "var(--mut)", margin: 0 }}>{tMsg("loading")}</p>}
-          {mode === "unavailable" && <p role="alert" style={{ color: "var(--red, #c00)", fontSize: 12, margin: 0 }}>{t("employeeListUnavailable")}</p>}
+          {mode === "unavailable" && <p role="alert" style={{ color: "var(--red)", fontSize: 12, margin: 0 }}>{t("employeeListUnavailable")}</p>}
           <Field id={dateId} label={t("labelDate")} required error={dateFieldError}>
             <Input type="date" value={requestDate} max={today}
               onChange={(e) => { setRequestDate(e.target.value); clearErr("requestDate"); }} />
@@ -186,7 +186,7 @@ export default function OvertimeNewPage() {
               decides. */}
           <p style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>{t("approverInfo")}</p>
           {msg && (
-            <p role={status === "error" ? "alert" : "status"} aria-live={status === "error" ? "assertive" : "polite"} style={{ color: status === "error" ? "var(--red, #c00)" : "var(--green, #0a0)", fontSize: 13 }}>
+            <p role={status === "error" ? "alert" : "status"} aria-live={status === "error" ? "assertive" : "polite"} style={{ color: status === "error" ? "var(--red)" : "var(--green)", fontSize: 13 }}>
               {msg}
             </p>
           )}

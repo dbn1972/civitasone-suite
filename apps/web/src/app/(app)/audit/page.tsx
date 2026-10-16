@@ -55,14 +55,14 @@ export default async function AuditPage() {
       <div className="grid g-3" style={{ marginBottom: 18 }}>
         <StatCard
           icon="📜"
-          iconBg="#eef2ff"
+          tone="info"
           label="Recent events"
           value={total}
           hint="Events in the last 7 days, up to the most recent 50 shown below — not an all-time total."
         />
         <StatCard
           icon="✅"
-          iconBg="#e6f7f0"
+          tone="good"
           label="Success (recent)"
           value={successes}
           hint="Successful outcomes among the recent events shown below."

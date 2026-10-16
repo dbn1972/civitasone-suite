@@ -269,7 +269,7 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
 
       {createdKey ? (
         <div className="pad" style={{ paddingTop: 0 }}>
-          <code style={{ display: "block", overflowWrap: "anywhere", background: "var(--surface-2, #f8fafc)", padding: 10, borderRadius: 8, border: "1px solid var(--line)" }}>{createdKey}</code>
+          <code style={{ display: "block", overflowWrap: "anywhere", background: "var(--surface-2)", padding: 10, borderRadius: 8, border: "1px solid var(--line)" }}>{createdKey}</code>
           <Button variant="ghost" size="sm" style={{ marginTop: 8 }} onClick={() => void copyKey()}>
             {copied ? "Copied ✓" : "Copy secret"}
           </Button>

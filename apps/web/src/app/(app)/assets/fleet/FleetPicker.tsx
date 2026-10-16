@@ -32,7 +32,7 @@ export function FleetPicker({ id, label, options, value, onChange, error, errorI
   return (
     <div style={{ display: "grid", gap: 6 }}>
       <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
-        {label} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+        {label} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
       </label>
       <select
         id={id}
@@ -50,9 +50,9 @@ export function FleetPicker({ id, label, options, value, onChange, error, errorI
           <option key={o.id} value={o.id}>{o.label}</option>
         ))}
       </select>
-      {error && <p id={errorId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{error}</p>}
+      {error && <p id={errorId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{error}</p>}
       {empty && (
-        <p id={helpId} style={{ fontSize: 12, margin: 0, color: loadFailed ? "var(--bad, #c0392b)" : "var(--ink2)" }}>
+        <p id={helpId} style={{ fontSize: 12, margin: 0, color: loadFailed ? "var(--bad)" : "var(--ink2)" }}>
           {loadFailed ? `Couldn't load the ${label.toLowerCase()} list. Reload the page to try again.` : <>{emptyHint} <a className="lnk" href={emptyHref}>Go there</a></>}
         </p>
       )}

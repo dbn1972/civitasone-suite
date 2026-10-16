@@ -43,7 +43,7 @@ function WbsTreeNode({ node, depth }: { node: TreeNode; depth: number }) {
           alignItems: "center",
           gap: 8,
           padding: `8px 12px 8px ${depth * 24 + 12}px`,
-          borderBottom: "1px solid var(--border, #e2e8f0)",
+          borderBottom: "1px solid var(--border)",
         }}
       >
         <span aria-hidden="true" style={{ fontSize: 14, width: 20, textAlign: "center" }}>
@@ -86,7 +86,7 @@ export function WbsTree({ nodes, source = "api" }: { nodes: ProjectWbsNode[]; so
 
   return (
     <div style={{ padding: "0 0 8px" }}>
-      {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "8px 12px" }}>{cacheNote}</p>}
+      {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--warn)", margin: "8px 12px" }}>{cacheNote}</p>}
       <ul aria-label="Work breakdown structure" style={{ listStyle: "none", padding: 0, margin: 0 }}>
         {tree.map((node) => (
           <WbsTreeNode key={node.id} node={node} depth={0} />

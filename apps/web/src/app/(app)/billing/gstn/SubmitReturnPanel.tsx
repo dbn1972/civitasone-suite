@@ -143,7 +143,7 @@ export function SubmitReturnPanel({
     <form onSubmit={handleReview} aria-label="Submit GST return" style={{ display: "grid", gap: 14, maxWidth: 560 }}>
       <div style={{ display: "grid", gap: 6 }}>
         <label htmlFor={gstinId} style={{ fontSize: 13, fontWeight: 600 }}>
-          GSTIN <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+          GSTIN <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
         </label>
         <input
           id={gstinId}
@@ -156,7 +156,7 @@ export function SubmitReturnPanel({
           style={inputStyle}
         />
         {fieldErrors.gstin && (
-          <p id={`${gstinId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+          <p id={`${gstinId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
             {fieldErrors.gstin}
           </p>
         )}
@@ -164,7 +164,7 @@ export function SubmitReturnPanel({
 
       <div style={{ display: "grid", gap: 6 }}>
         <label htmlFor={periodId} style={{ fontSize: 13, fontWeight: 600 }}>
-          Return Period (MM/YYYY) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+          Return Period (MM/YYYY) <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
         </label>
         <input
           id={periodId}
@@ -177,7 +177,7 @@ export function SubmitReturnPanel({
           style={inputStyle}
         />
         {fieldErrors.returnPeriod && (
-          <p id={`${periodId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+          <p id={`${periodId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
             {fieldErrors.returnPeriod}
           </p>
         )}
@@ -185,7 +185,7 @@ export function SubmitReturnPanel({
 
       <div style={{ display: "grid", gap: 6 }}>
         <label htmlFor={typeId} style={{ fontSize: 13, fontWeight: 600 }}>
-          Return Type <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+          Return Type <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
         </label>
         <select
           id={typeId}
@@ -207,7 +207,7 @@ export function SubmitReturnPanel({
         return (
           <div key={f.key} style={{ display: "grid", gap: 6 }}>
             <label htmlFor={`${baseId}-${i}`} style={{ fontSize: 13, fontWeight: 600 }}>
-              {f.label} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {f.label} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={`${baseId}-${i}`}
@@ -223,7 +223,7 @@ export function SubmitReturnPanel({
               <span style={{ fontSize: 12, color: "var(--ink2)" }}>{formatMoney(minor)}</span>
             )}
             {fieldErrors[f.key] && (
-              <p id={errId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={errId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors[f.key]}
               </p>
             )}

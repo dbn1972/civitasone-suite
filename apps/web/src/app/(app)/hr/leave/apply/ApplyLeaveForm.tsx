@@ -360,7 +360,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
         <div
           role="alert"
           className="rounded-xl border p-6 text-sm"
-          style={{ background: "var(--warnbg, #fffbeb)", borderColor: "var(--warnbd, #fde68a)", color: "var(--warn, #92400e)" }}
+          style={{ background: "var(--warnbg)", borderColor: "var(--warnbd)", color: "var(--warn)" }}
         >
           {t("noLinkedProfileMessage")}
         </div>
@@ -380,7 +380,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
       <form
         onSubmit={handleSubmit}
         className="space-y-4 rounded-xl border p-6 shadow-sm"
-        style={{ background: "var(--panel, #fff)", borderColor: "var(--line, #e2e8f0)" }}
+        style={{ background: "var(--panel)", borderColor: "var(--line)" }}
         noValidate
       >
         {/* Employee selector (not validated — always has a default) */}
@@ -403,7 +403,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
               could possibly mean — employees.length===1 is always the
               self-service case (page.tsx's own single-row fallback). */}
           {employees.length > 1 && employeeId && employeeId !== myEmployeeId && (
-            <p className="mt-1 text-xs" style={{ color: "var(--mut, #94a3b8)", margin: 0 }}>
+            <p className="mt-1 text-xs" style={{ color: "var(--mut)", margin: 0 }}>
               {t("onBehalfOfNote", { name: employees.find((e) => e.id === employeeId)?.name ?? "" })}
             </p>
           )}
@@ -489,7 +489,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
                     {t("daysCount", { count: days })}
                   </span>
                 </p>
-                <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut, #94a3b8)" }}>
+                <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut)" }}>
                   {previewChecking ? t("checkingBalance") : t("calendarDaysDisclaimer")}
                 </p>
               </>

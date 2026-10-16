@@ -23,8 +23,8 @@ function StepBar({ step, steps, ariaLabel }: { step: number; steps: string[]; ar
               <div
                 style={{
                   width: 28, height: 28, borderRadius: "50%",
-                  background: done ? "var(--good, #27ae60)" : active ? "var(--accent, #2563eb)" : "var(--line2)",
-                  color: done || active ? "#fff" : "var(--ink2)",
+                  background: done ? "var(--good)" : active ? "var(--accent)" : "var(--line2)",
+                  color: done || active ? "var(--panel)" : "var(--ink2)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 12, fontWeight: 700,
                 }}
@@ -32,12 +32,12 @@ function StepBar({ step, steps, ariaLabel }: { step: number; steps: string[]; ar
               >
                 {done ? "✓" : i + 1}
               </div>
-              <span style={{ fontSize: 11, marginTop: 4, color: active ? "var(--accent, #2563eb)" : "var(--ink2)", whiteSpace: "nowrap" }}>
+              <span style={{ fontSize: 11, marginTop: 4, color: active ? "var(--accent)" : "var(--ink2)", whiteSpace: "nowrap" }}>
                 {label}
               </span>
             </div>
             {i < steps.length - 1 && (
-              <div style={{ flex: 1, height: 2, background: done ? "var(--good, #27ae60)" : "var(--line2)", margin: "0 6px", marginBottom: 20 }} />
+              <div style={{ flex: 1, height: 2, background: done ? "var(--good)" : "var(--line2)", margin: "0 6px", marginBottom: 20 }} />
             )}
           </div>
         );
@@ -291,7 +291,7 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
             <TdsReconciliationTable t={t} />
           </div>
 
-          {error && <p role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 13 }}>{error}</p>}
+          {error && <p role="alert" style={{ color: "var(--bad)", fontSize: 13 }}>{error}</p>}
           <div style={{ display: "flex", gap: 10 }}>
             <Button variant="ghost" onClick={() => setStep(0)}>{t("backBtn")}</Button>
             <Button onClick={() => setConfirmOpen(true)} disabled={busy}>
@@ -304,7 +304,7 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
       {/* Step 2 — Download */}
       {step === 2 && (
         <div ref={panelRef} tabIndex={-1} role="group" aria-label={STEP_NAMES[2] ?? ""} style={{ display: "grid", gap: 16 }}>
-          <div style={{ background: canDownload ? "var(--goodbg, #e6f7f0)" : "var(--panel)", borderRadius: 12, padding: "28px", textAlign: "center" }}>
+          <div style={{ background: canDownload ? "var(--goodbg)" : "var(--panel)", borderRadius: 12, padding: "28px", textAlign: "center" }}>
             <p style={{ fontSize: 36, margin: "0 0 10px" }}>{canDownload ? "✅" : generationFailed ? "⚠️" : "⏳"}</p>
             <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
               {canDownload ? t("generationCompleteTitle") : generationFailed ? t("generationFailedTitle") : t("generationStartedTitle")}

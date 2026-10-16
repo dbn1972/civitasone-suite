@@ -43,7 +43,7 @@ export function DiscoveryRegistry({ initial, source, errorStatus }: { initial: R
         <div style={{ marginTop: 12 }}>
           <Button type="button" variant="ghost" size="sm" onClick={() => void scanNow()} loading={scan === "scanning"}>{t("scanNow")}</Button>
         </div>
-        {scan === "failed" && <p role="alert" style={{ color: "#b42318", fontSize: 13 }}>{t("scanFailed")}</p>}
+        {scan === "failed" && <p role="alert" style={{ color: "var(--bad)", fontSize: 13 }}>{t("scanFailed")}</p>}
       </div>
     );
   }
@@ -54,10 +54,10 @@ export function DiscoveryRegistry({ initial, source, errorStatus }: { initial: R
     <div className="page-main wrap">
       {header}
       <StatGrid>
-        <StatCard icon="🧭" iconBg="#eef2ff" label={t("statTotal")} value={rows.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label={t("statUp")} value={c.up} />
-        <StatCard icon="❌" iconBg="#fce7ee" label={t("statDown")} value={c.down} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label={t("statDegraded")} value={c.degraded} />
+        <StatCard icon="🧭" tone="info" label={t("statTotal")} value={rows.length} />
+        <StatCard icon="✅" tone="good" label={t("statUp")} value={c.up} />
+        <StatCard icon="❌" tone="bad" label={t("statDown")} value={c.down} />
+        <StatCard icon="⚠️" tone="warn" label={t("statDegraded")} value={c.degraded} />
       </StatGrid>
       <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "0 0 12px", fontSize: 12.5, color: "var(--mut)" }}>
         {registry.checkedAt && <span>{t("checkedAt", { time: formatIndianDateTime(registry.checkedAt) })}</span>}
@@ -65,7 +65,7 @@ export function DiscoveryRegistry({ initial, source, errorStatus }: { initial: R
           {scan === "scanning" ? t("scanning") : t("scanNow")}
         </Button>
         {scan === "throttled" && <span role="status">{t("throttled")}</span>}
-        {scan === "failed" && <span role="alert" style={{ color: "#b42318" }}>{t("scanFailed")}</span>}
+        {scan === "failed" && <span role="alert" style={{ color: "var(--bad)" }}>{t("scanFailed")}</span>}
       </div>
       <Card title={t("registryTitle")}>
         <DataTable<Row>

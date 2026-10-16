@@ -74,8 +74,8 @@ export default async function LegalOpinionDetailPage({ params }: { params: { id:
       {/* GAP-LEGAL-OPINIONS-DETAIL-04: Status is shown ONCE (the header pill).
           The redundant Status stat card and Status detail row were removed. */}
       <StatGrid>
-        <StatCard icon="👤" iconBg="#faf5ff" label="Counsel" value={counsel} />
-        <StatCard icon="🙋" iconBg="#fff7ed" label="Sought By" value={soughtBy} />
+        <StatCard icon="👤" tone="neutral" label="Counsel" value={counsel} />
+        <StatCard icon="🙋" tone="warn" label="Sought By" value={soughtBy} />
       </StatGrid>
 
       <Card title="Opinion details" padding>

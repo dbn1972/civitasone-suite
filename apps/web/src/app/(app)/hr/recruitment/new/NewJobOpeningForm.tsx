@@ -374,7 +374,7 @@ export function NewJobOpeningForm() {
       )}
 
       {templateName && (
-        <div style={{ padding: "10px 14px", background: "var(--infobg, #dbeafe)", border: "1px solid #93c5fd", borderRadius: 8, fontSize: 13, color: "var(--info, #1e40af)" }}>
+        <div style={{ padding: "10px 14px", background: "var(--infobg)", border: "1px solid var(--infobd)", borderRadius: 8, fontSize: 13, color: "var(--info)" }}>
           {t("prefilledFromTemplatePrefix")} <strong>{templateName}</strong>{t("prefilledFromTemplateSuffix")}
         </div>
       )}

@@ -434,8 +434,8 @@ function HistoryTable({
                   onClick={() => onCancelClick(app)}
                   disabled={cancelling === app.id}
                   style={{
-                    padding: "4px 12px", borderRadius: 6, border: "1px solid var(--badbd, #fca5a5)",
-                    background: cancelling === app.id ? "var(--bg2)" : "var(--badbg, #fef2f2)",
+                    padding: "4px 12px", borderRadius: 6, border: "1px solid var(--badbd)",
+                    background: cancelling === app.id ? "var(--bg2)" : "var(--badbg)",
                     color: "var(--bad)", fontSize: 12, fontWeight: 500,
                     cursor: cancelling === app.id ? "not-allowed" : "pointer", minHeight: 32,
                   }}

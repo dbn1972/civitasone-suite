@@ -57,7 +57,7 @@ function AssignAction({ id }: { id: string }) {
       <Button variant="ghost" onClick={() => setOpen(true)}>Assign PIO</Button>
       <Modal open={open} onClose={() => !busy && setOpen(false)} title="Assign a PIO">
         <form onSubmit={(e) => { e.preventDefault(); void post({ pioId }); }} style={{ display: "grid", gap: 14 }}>
-          {err.message && <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--danger, #b91c1c)" }}>{err.message}</p>}
+          {err.message && <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--danger)" }}>{err.message}</p>}
           <Field id="assign-pio" label="Public Information Officer" error={err.fieldError("pioId")} required>
             <DirectoryPicker source="user" value={pioId || null} onChange={(v) => setPioId(v ?? "")} />
           </Field>
@@ -80,7 +80,7 @@ function RespondAction({ id }: { id: string }) {
       <Button onClick={() => setOpen(true)}>Respond</Button>
       <Modal open={open} onClose={() => !busy && setOpen(false)} title="Respond to this request">
         <form onSubmit={(e) => { e.preventDefault(); void post({ responseText, respondedDate }); }} style={{ display: "grid", gap: 14 }}>
-          {err.message && <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--danger, #b91c1c)" }}>{err.message}</p>}
+          {err.message && <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--danger)" }}>{err.message}</p>}
           <Field id="respond-text" label="Response text" error={err.fieldError("responseText")} required>
             <Textarea required rows={5} value={responseText} onChange={(e) => setResponseText(e.target.value)} />
           </Field>
@@ -106,7 +106,7 @@ function AppealAction({ id }: { id: string }) {
       <Button variant="ghost" onClick={() => setOpen(true)}>Record appeal</Button>
       <Modal open={open} onClose={() => !busy && setOpen(false)} title="Record a first appeal">
         <form onSubmit={(e) => { e.preventDefault(); void post({ appealText, appealDate }); }} style={{ display: "grid", gap: 14 }}>
-          {err.message && <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--danger, #b91c1c)" }}>{err.message}</p>}
+          {err.message && <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--danger)" }}>{err.message}</p>}
           <Field id="appeal-text" label="Appeal text" error={err.fieldError("appealText")} required>
             <Textarea required rows={4} value={appealText} onChange={(e) => setAppealText(e.target.value)} />
           </Field>
@@ -134,7 +134,7 @@ function CloseAction({ id }: { id: string }) {
           {/* SEGREGATION_OF_DUTIES (403) surfaces here via the shared
               useFormError -> toHumanError "forbidden" mapping, same as
               every other 403 in this app -- see routes.ts's close handler. */}
-          {err.message && <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--danger, #b91c1c)" }}>{err.message}</p>}
+          {err.message && <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--danger)" }}>{err.message}</p>}
           <Field id="close-date" label="Closed date" error={err.fieldError("closedDate")} required>
             <Input type="date" required value={closedDate} onChange={(e) => setClosedDate(e.target.value)} />
           </Field>

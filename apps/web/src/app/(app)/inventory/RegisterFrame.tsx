@@ -55,7 +55,7 @@ export function RegisterFrame({
     <>
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {capNote ? (
-        <p role="note" style={{ fontSize: 13, color: "#92400e", margin: "0 0 8px" }}>
+        <p role="note" style={{ fontSize: 13, color: "var(--warn)", margin: "0 0 8px" }}>
           {capNote}
         </p>
       ) : null}

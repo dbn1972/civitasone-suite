@@ -136,7 +136,7 @@ export function CaseConsole({
         </div>
       )}
       {error && (
-        <div className="alert" role="alert" style={{ borderColor: "#fca5a5", color: "#b91c1c" }}>
+        <div className="alert" role="alert" style={{ borderColor: "var(--badbd)", color: "var(--bad)" }}>
           ⚠ {error}
         </div>
       )}

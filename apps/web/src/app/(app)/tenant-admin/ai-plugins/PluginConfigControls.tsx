@@ -198,7 +198,7 @@ export function PluginConfigControls({
         </Button>
       )}
 
-      {okMessage ? <p role="status" aria-live="polite" className="text-xs" style={{ color: "#067647" }}>{okMessage}</p> : null}
+      {okMessage ? <p role="status" aria-live="polite" className="text-xs" style={{ color: "var(--good)" }}>{okMessage}</p> : null}
       {message ? <p role="alert" className="text-xs" style={{ color: "var(--bad)" }}>{message}</p> : null}
 
       <ConfirmDialog

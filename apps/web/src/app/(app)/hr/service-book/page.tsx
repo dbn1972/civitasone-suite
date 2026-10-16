@@ -119,12 +119,12 @@ export default async function ServiceBookPage({
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="📒" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalEntriesLabel")} value={errored ? null : total} />
+        <StatCard icon="📒" iconBg="var(--infobg)" label={t("statTotalEntriesLabel")} value={errored ? null : total} />
         {isHr && (
-          <StatCard icon="👥" iconBg="var(--bg, #f5f5f5)" label={t("statEmployeesLabel")} value={errored ? null : employeesCount} />
+          <StatCard icon="👥" iconBg="var(--bg)" label={t("statEmployeesLabel")} value={errored ? null : employeesCount} />
         )}
-        <StatCard icon="🔄" iconBg="var(--warnbg, #fffbe6)" label={t("statTransfersLabel")} value={errored ? null : transfersTotal} />
-        <StatCard icon="📈" iconBg="var(--goodbg, #e6f7f0)" label={t("statPromotionsLabel")} value={errored ? null : promotionsTotal} />
+        <StatCard icon="🔄" iconBg="var(--warnbg)" label={t("statTransfersLabel")} value={errored ? null : transfersTotal} />
+        <StatCard icon="📈" iconBg="var(--goodbg)" label={t("statPromotionsLabel")} value={errored ? null : promotionsTotal} />
       </StatGrid>
 
       <Card title={t("cardTitle")}>

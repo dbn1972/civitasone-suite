@@ -28,7 +28,7 @@ export function DataWarehouseTable({ rows, source = "api" }: { rows: AnalyticsDa
 
   return (
     <>
-      {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>{cacheNote}</p>}
+      {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--warn)", margin: "0 0 8px" }}>{cacheNote}</p>}
       <DataTable<AnalyticsDataWarehouseRow>
         columns={COLUMNS}
         rows={data}

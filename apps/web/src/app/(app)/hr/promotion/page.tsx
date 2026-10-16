@@ -83,12 +83,12 @@ export default async function PromotionPage() {
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
       <StatGrid>
-        <StatCard icon="⬆️" iconBg="var(--goodbg, #e6f7f0)"  label={t("statTotal")} value={items.length} />
-        <StatCard icon="✅" iconBg="var(--infobg, #e6f0ff)"  label={t("statApprovedSigned")} value={approved} />
-        <StatCard icon="🔄" iconBg="var(--primary-soft, #ede9fe)"  label={t("statInApproval")}       value={inApproval} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)"  label={t("statInitiated")}         value={pending} />
-        <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)"  label={t("statSignedIssued")}   value={completed} />
-        <StatCard icon="🚫" iconBg="var(--badbg, #fff1f0)"  label={t("statCancelled")}     value={cancelled} />
+        <StatCard icon="⬆️" iconBg="var(--goodbg)"  label={t("statTotal")} value={items.length} />
+        <StatCard icon="✅" iconBg="var(--infobg)"  label={t("statApprovedSigned")} value={approved} />
+        <StatCard icon="🔄" iconBg="var(--primary-soft)"  label={t("statInApproval")}       value={inApproval} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)"  label={t("statInitiated")}         value={pending} />
+        <StatCard icon="📋" iconBg="var(--bg)"  label={t("statSignedIssued")}   value={completed} />
+        <StatCard icon="🚫" iconBg="var(--badbg)"  label={t("statCancelled")}     value={cancelled} />
       </StatGrid>
 
       {/* Card grid view */}

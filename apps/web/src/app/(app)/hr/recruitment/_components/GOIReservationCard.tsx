@@ -42,11 +42,11 @@ interface GOIReservationCardProps {
 }
 
 const COLORS: Record<RosterCategory, string> = {
-  UR: "var(--ink2, #64748b)",
-  SC: "var(--info, #3b82f6)",
-  ST: "var(--violet, #8b5cf6)",
-  OBC: "var(--warn, #f59e0b)",
-  EWS: "var(--good, #10b981)",
+  UR: "var(--ink2)",
+  SC: "var(--info)",
+  ST: "var(--violet)",
+  OBC: "var(--warn)",
+  EWS: "var(--good)",
 };
 
 export function GOIReservationCard({ jobOpeningId, totalVacancies, hiredByCategory = {}, categoryDataAvailable = true, candidates }: GOIReservationCardProps) {

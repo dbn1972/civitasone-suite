@@ -30,10 +30,10 @@ function addDays(iso: string, days: number): string {
 }
 
 const STATUS_DOT: Partial<Record<CalendarTask["status"], { color: string; label: string }>> = {
-  completed:   { color: "var(--good, #067647)",    label: "Done" },
-  pending:     { color: "var(--mut, #94a3b8)",        label: "Pending" },
-  overdue:     { color: "var(--warn, #d97706)",       label: "Overdue" },
-  in_progress: { color: "var(--indigo, #4f46e5)",    label: "In progress" },
+  completed:   { color: "var(--good)",    label: "Done" },
+  pending:     { color: "var(--mut)",        label: "Pending" },
+  overdue:     { color: "var(--warn)",       label: "Overdue" },
+  in_progress: { color: "var(--indigo)",    label: "In progress" },
 };
 
 export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
@@ -47,11 +47,11 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
 
   return (
     <div data-testid="task-calendar">
-      <h3 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 700, color: "var(--heading, #1e293b)" }}>
+      <h3 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 700, color: "var(--heading)" }}>
         Onboarding Task Calendar
       </h3>
       {days.length === 0 ? (
-        <p style={{ fontSize: 12, color: "var(--muted, #94a3b8)", fontStyle: "italic" }}>No tasks</p>
+        <p style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic" }}>No tasks</p>
       ) : (
         <div
           style={{
@@ -73,10 +73,10 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
                 key={day}
                 role="listitem"
                 style={{
-                  border: `1px solid ${hasOverdue ? "var(--warnbd, #fde68a)" : "var(--border, #e2e8f0)"}`,
+                  border: `1px solid ${hasOverdue ? "var(--warnbd)" : "var(--border)"}`,
                   borderRadius: 10,
                   padding: 12,
-                  background: hasOverdue ? "var(--warnbg, #fffbeb)" : "var(--card-bg, #fff)",
+                  background: hasOverdue ? "var(--warnbg)" : "var(--card-bg)",
                 }}
               >
                 {/* Column header */}
@@ -85,7 +85,7 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
                     style={{
                       fontSize: 13,
                       fontWeight: 700,
-                      color: hasOverdue ? "var(--warn, #92400e)" : "var(--heading, #1e293b)",
+                      color: hasOverdue ? "var(--warn)" : "var(--heading)",
                     }}
                   >
                     {`Day ${day}`}
@@ -99,7 +99,7 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
                     )}
                   </div>
                   {actualDate && (
-                    <div style={{ fontSize: 10, color: "var(--muted, #64748b)", marginTop: 1 }}>
+                    <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 1 }}>
                       {actualDate}
                     </div>
                   )}
@@ -108,7 +108,7 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
                 {/* Task pills */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {colTasks.map((task) => {
-                    const dot = STATUS_DOT[task.status] ?? { color: "var(--mut, #94a3b8)", label: "Pending" };
+                    const dot = STATUS_DOT[task.status] ?? { color: "var(--mut)", label: "Pending" };
                     return (
                       <div
                         key={task.id}
@@ -119,8 +119,8 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
                           gap: 6,
                           padding: "6px 8px",
                           borderRadius: 6,
-                          background: task.status === "overdue" ? "var(--warnbg, #fef3c7)" : "var(--bg, #f8fafc)",
-                          border: `1px solid ${task.status === "overdue" ? "var(--warnbd, #fde68a)" : "var(--border, #e2e8f0)"}`,
+                          background: task.status === "overdue" ? "var(--warnbg)" : "var(--bg)",
+                          border: `1px solid ${task.status === "overdue" ? "var(--warnbd)" : "var(--border)"}`,
                         }}
                       >
                         <div
@@ -139,7 +139,7 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
                             style={{
                               fontSize: 11,
                               fontWeight: 600,
-                              color: task.status === "completed" ? "var(--muted, #64748b)" : "var(--body, #334155)",
+                              color: task.status === "completed" ? "var(--muted)" : "var(--body)",
                               textDecoration: task.status === "completed" ? "line-through" : "none",
                               lineHeight: 1.4,
                             }}
@@ -147,7 +147,7 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
                             {task.title}
                           </div>
                           {task.description && (
-                            <div style={{ fontSize: 10, color: "var(--muted, #94a3b8)", lineHeight: 1.4 }}>
+                            <div style={{ fontSize: 10, color: "var(--muted)", lineHeight: 1.4 }}>
                               {task.description}
                             </div>
                           )}

@@ -98,17 +98,17 @@ export default async function TransferPage({ searchParams }: { searchParams?: { 
       <DataSourceBadge source={source} message="Couldn't load transfer orders — showing nothing" />
 
       <StatGrid>
-<StatCard icon="🔄" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")}    value={errored ? null : items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statCompleted")} value={errored ? null : completed} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPending")}            value={errored ? null : pending} />
-        <StatCard icon="👍" iconBg="var(--infobg, #f0f5ff)" label={t("statApproved")}       value={errored ? null : approved} />
+<StatCard icon="🔄" iconBg="var(--infobg)" label={t("statTotal")}    value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statCompleted")} value={errored ? null : completed} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")}            value={errored ? null : pending} />
+        <StatCard icon="👍" iconBg="var(--infobg)" label={t("statApproved")}       value={errored ? null : approved} />
         {relieved > 0 && (
-          <StatCard icon="📍" iconBg="var(--warnbg, #fef9c3)" label={t("statRelieved")} value={errored ? null : relieved} />
+          <StatCard icon="📍" iconBg="var(--warnbg)" label={t("statRelieved")} value={errored ? null : relieved} />
         )}
       </StatGrid>
 
       {!canRaise && (
-        <p role="note" style={{ fontSize: 13, color: "var(--mut,#64748b)", margin: "0 0 16px" }}>
+        <p role="note" style={{ fontSize: 13, color: "var(--mut)", margin: "0 0 16px" }}>
           You have view-only access to transfer orders. Ask an HR admin to raise a new transfer.
         </p>
       )}

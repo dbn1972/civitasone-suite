@@ -108,7 +108,7 @@ export function ChannelForm() {
 
         {fieldError && <p role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: 0 }}>{fieldError}</p>}
         {error && <p role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: 0 }}>{error}</p>}
-        <div role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647" }}>{status}</div>
+        <div role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--good)" }}>{status}</div>
 
         <div>
           <Button type="submit" disabled={busy} aria-busy={busy}>{busy ? "Adding…" : "Add channel"}</Button>

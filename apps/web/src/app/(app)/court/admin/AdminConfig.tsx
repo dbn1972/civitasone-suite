@@ -124,7 +124,7 @@ export function AdminConfig({
         </div>
       )}
       {error && (
-        <div className="alert" role="alert" style={{ borderColor: "#fca5a5", color: "var(--bad)" }}>
+        <div className="alert" role="alert" style={{ borderColor: "var(--badbd)", color: "var(--bad)" }}>
           ⚠ {error}
         </div>
       )}
@@ -477,7 +477,7 @@ function EnumEditor({
       {!configured && ns.defaults.length > 0 && key.trim() !== "" && (
         <div
           role="status"
-          style={{ fontSize: 12.5, color: "var(--ink2)", marginBottom: 10, border: "1px solid var(--warn, #f59e0b)", borderRadius: 8, padding: 8 }}
+          style={{ fontSize: 12.5, color: "var(--ink2)", marginBottom: 10, border: "1px solid var(--warn)", borderRadius: 8, padding: 8 }}
         >
           <div>
             Adding this makes <strong>only your configured values</strong> valid — the defaults{" "}

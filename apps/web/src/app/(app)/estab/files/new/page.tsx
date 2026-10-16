@@ -238,9 +238,9 @@ export default function NewFilePage() {
           aria-live={toast.type === "error" ? "assertive" : "polite"}
           tabIndex={-1}
           style={{
-            background: toast.type === "success" ? "#ecfdf3" : "#fef2f2",
-            border: `1px solid ${toast.type === "success" ? "#6ee7b7" : "#fca5a5"}`,
-            color: toast.type === "success" ? "#065f46" : "#991b1b",
+            background: toast.type === "success" ? "var(--goodbg)" : "var(--badbg)",
+            border: `1px solid ${toast.type === "success" ? "#6ee7b7" : "var(--badbd)"}`,
+            color: toast.type === "success" ? "var(--good)" : "var(--bad)",
             borderRadius: 12,
             padding: "13px 16px",
             marginBottom: 18,
@@ -266,7 +266,7 @@ export default function NewFilePage() {
               }}
             >
               <label htmlFor="subject" className="l">
-                Subject <span style={{ color: "#ef4444" }}>*</span>
+                Subject <span style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id="subject"
@@ -345,7 +345,7 @@ export default function NewFilePage() {
                 }}
               />
               {parentResults.length > 0 && !parentFileId && (
-                <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none", maxHeight: 150, overflow: "auto", fontSize: 13, background: "var(--surface, #fff)", border: "1px solid var(--line)", borderRadius: 6 }}>
+                <ul style={{ margin: "4px 0 0", padding: 0, listStyle: "none", maxHeight: 150, overflow: "auto", fontSize: 13, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 6 }}>
                   {parentResults.map((r) => (
                     <li key={r.id}>
                       <button

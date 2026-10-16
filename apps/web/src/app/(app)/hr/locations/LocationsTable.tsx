@@ -68,7 +68,7 @@ export function LocationsTable({ locations, labels, canManage }: { locations: Lo
           label: labels.colName,
           render: (row) => (
             <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <MapPin size={13} color="var(--primary,#2563eb)" />
+              <MapPin size={13} color="var(--primary)" />
               {/* GAP-HR-LOCATIONS-03: name opens the per-location page (employees assigned here). */}
               <Link href={`/hr/locations/${row.id}`} style={{ fontWeight: 500 }}>{row.name}</Link>
             </span>
@@ -102,8 +102,8 @@ export function LocationsTable({ locations, labels, canManage }: { locations: Lo
                     gap: 4,
                     padding: "2px 8px",
                     borderRadius: 10,
-                    background: "var(--infobg, #eff6ff)",
-                    color: "var(--info, #1d4ed8)",
+                    background: "var(--infobg)",
+                    color: "var(--info)",
                     fontSize: 11,
                     fontWeight: 600,
                   }}
@@ -127,8 +127,8 @@ export function LocationsTable({ locations, labels, canManage }: { locations: Lo
                     gap: 4,
                     padding: "2px 8px",
                     borderRadius: 10,
-                    background: "var(--goodbg, #f0fdf4)",
-                    color: "var(--good, #15803d)",
+                    background: "var(--goodbg)",
+                    color: "var(--good)",
                     fontSize: 11,
                     fontWeight: 600,
                   }}
@@ -167,8 +167,8 @@ export function LocationsTable({ locations, labels, canManage }: { locations: Lo
                   gap: 4,
                   padding: "2px 8px",
                   borderRadius: 10,
-                  background: archived ? "var(--bg, #f1f5f9)" : "var(--goodbg, #f0fdf4)",
-                  color: archived ? "var(--slate, #64748b)" : "var(--good, #15803d)",
+                  background: archived ? "var(--bg)" : "var(--goodbg)",
+                  color: archived ? "var(--slate)" : "var(--good)",
                   fontSize: 11,
                   fontWeight: 600,
                 }}

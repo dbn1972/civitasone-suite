@@ -149,7 +149,7 @@ function CaseCombobox({
             margin: 0,
             padding: 4,
             listStyle: "none",
-            background: "var(--panel, #fff)",
+            background: "var(--panel)",
             border: "1px solid var(--line)",
             borderRadius: 8,
             boxShadow: "0 6px 20px rgba(0,0,0,.12)",

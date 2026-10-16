@@ -237,7 +237,7 @@ export function DomainClient({ domains: initialDomains, source }: { domains: Cus
         >
           <div style={{ color: "var(--ink)" }}>
             <p style={{ color: "var(--ink2)", margin: "8px 0 16px" }}>Add the following record to your DNS configuration:</p>
-            <div style={{ background: "var(--surface2, #f1f5f9)", color: "var(--ink)", padding: 16, borderRadius: 6, fontFamily: "monospace", fontSize: 13 }}>
+            <div style={{ background: "var(--surface2)", color: "var(--ink)", padding: 16, borderRadius: 6, fontFamily: "monospace", fontSize: 13 }}>
               {instructionDomain.verificationMethod === "dns_txt" ? (
                 <>
                   <div><strong>Type:</strong> TXT</div>

@@ -186,9 +186,9 @@ export default async function ExecutionDetailPage({
       />
 
       <StatGrid>
-        <StatCard icon="🏗️" iconBg="#eff6ff" label="Total Scopes" value={scopesFailed ? null : totalScopes} />
-        <StatCard icon="🚨" iconBg="#fef2f2" label="Open Issues" value={issuesFailed ? null : openIssues} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Closed Issues" value={issuesFailed ? null : closedIssues} />
+        <StatCard icon="🏗️" tone="info" label="Total Scopes" value={scopesFailed ? null : totalScopes} />
+        <StatCard icon="🚨" tone="bad" label="Open Issues" value={issuesFailed ? null : openIssues} />
+        <StatCard icon="✅" tone="good" label="Closed Issues" value={issuesFailed ? null : closedIssues} />
       </StatGrid>
 
       <Card title="Work Scopes">

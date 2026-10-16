@@ -185,7 +185,7 @@ export function TelemetryForm({ options, devicesError = false }: Props) {
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={latId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Latitude <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Latitude <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={latId}
@@ -198,12 +198,12 @@ export function TelemetryForm({ options, devicesError = false }: Props) {
                 aria-describedby={errors.lat ? latErrId : undefined}
                 style={inputStyle}
               />
-              {errors.lat && <p id={latErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.lat}</p>}
+              {errors.lat && <p id={latErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.lat}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={lngId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Longitude <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Longitude <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={lngId}
@@ -216,12 +216,12 @@ export function TelemetryForm({ options, devicesError = false }: Props) {
                 aria-describedby={errors.lng ? lngErrId : undefined}
                 style={inputStyle}
               />
-              {errors.lng && <p id={lngErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.lng}</p>}
+              {errors.lng && <p id={lngErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.lng}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={speedId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Speed (km/h) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Speed (km/h) <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={speedId}
@@ -234,12 +234,12 @@ export function TelemetryForm({ options, devicesError = false }: Props) {
                 aria-describedby={errors.speed ? speedErrId : undefined}
                 style={inputStyle}
               />
-              {errors.speed && <p id={speedErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.speed}</p>}
+              {errors.speed && <p id={speedErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.speed}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={headingId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Heading (°) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Heading (°) <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={headingId}
@@ -252,7 +252,7 @@ export function TelemetryForm({ options, devicesError = false }: Props) {
                 aria-describedby={errors.heading ? headingErrId : undefined}
                 style={inputStyle}
               />
-              {errors.heading && <p id={headingErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.heading}</p>}
+              {errors.heading && <p id={headingErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.heading}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -267,12 +267,12 @@ export function TelemetryForm({ options, devicesError = false }: Props) {
                 aria-describedby={errors.fuelLevel ? fuelLevelErrId : undefined}
                 style={inputStyle}
               />
-              {errors.fuelLevel && <p id={fuelLevelErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.fuelLevel}</p>}
+              {errors.fuelLevel && <p id={fuelLevelErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.fuelLevel}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={readingTimeId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Reading time (IST) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Reading time (IST) <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={readingTimeId}
@@ -285,7 +285,7 @@ export function TelemetryForm({ options, devicesError = false }: Props) {
                 aria-describedby={errors.readingTime ? readingTimeErrId : undefined}
                 style={inputStyle}
               />
-              {errors.readingTime && <p id={readingTimeErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.readingTime}</p>}
+              {errors.readingTime && <p id={readingTimeErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.readingTime}</p>}
             </div>
 
             <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 22 }}>

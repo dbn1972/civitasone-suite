@@ -3,7 +3,7 @@ import { Card, EmptyState, LoadErrorState, ProgressBar } from "@/app/_components
 import { limitCells, type LimitLevel } from "./usageLimits";
 import type { UsageResource } from "@/app/_data/loaders";
 
-const COLOUR: Record<LimitLevel, string | undefined> = { none: undefined, ok: undefined, warn: "#f59e0b", bad: "#dc2626" };
+const COLOUR: Record<LimitLevel, string | undefined> = { none: undefined, ok: undefined, warn: "var(--amber)", bad: "var(--bad)" };
 
 /**
  * GAP-ADMIN-METERING-05: current usage against the plan limit for the signed-in
@@ -33,7 +33,7 @@ export function UsageLimitsPanel({ resources, source, errorStatus }: { resources
                 </span>
               </div>
               {c.percent !== null && <ProgressBar value={c.percent} color={COLOUR[c.level]} />}
-              <div style={{ fontSize: 12, marginTop: 4, color: c.level === "bad" ? "#b42318" : c.level === "warn" ? "#92400e" : "var(--mut)" }}>
+              <div style={{ fontSize: 12, marginTop: 4, color: c.level === "bad" ? "var(--bad)" : c.level === "warn" ? "var(--warn)" : "var(--mut)" }}>
                 {c.level === "none" ? "No limit set" : c.text}
               </div>
             </div>

@@ -238,8 +238,8 @@ export function MapViewer({ canManage = false, tileUrl }: { canManage?: boolean;
       />
 
       {error && (
-        <div className="card" role="alert" style={{ borderColor: "#fecaca", marginBottom: 12 }}>
-          <div className="pad" style={{ color: "#b42318" }}>
+        <div className="card" role="alert" style={{ borderColor: "var(--badbg)", marginBottom: 12 }}>
+          <div className="pad" style={{ color: "var(--bad)" }}>
             {error}{" "}
             <button type="button" className="btn ghost" onClick={() => void load()}>
               Retry

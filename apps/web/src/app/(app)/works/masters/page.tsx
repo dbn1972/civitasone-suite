@@ -119,6 +119,6 @@ function navItemStyle(active: boolean): React.CSSProperties {
     borderBottom: "1px solid var(--line)",
     fontWeight: active ? 600 : undefined,
     background: active ? "var(--primary)" : undefined,
-    color: active ? "var(--primary-fg, #fff)" : "var(--text)",
+    color: active ? "var(--primary-fg)" : "var(--text)",
   };
 }

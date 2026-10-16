@@ -384,7 +384,7 @@ function CreateCampaignDialog({
               placeholder="Q3 renewal outreach"
             />
             {attempted && nameMissing ? (
-              <p id={nameErrId} role="alert" style={{ fontSize: 12, color: "#b42318", margin: "4px 0 0" }}>
+              <p id={nameErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: "4px 0 0" }}>
                 A campaign name is required.
               </p>
             ) : null}
@@ -412,12 +412,12 @@ function CreateCampaignDialog({
               ))}
             </select>
             {templateSource === "error" ? (
-              <p style={{ fontSize: 12, color: "#92400e", margin: "4px 0 0" }}>
+              <p style={{ fontSize: 12, color: "var(--warn)", margin: "4px 0 0" }}>
                 Templates could not be loaded. Try again.
               </p>
             ) : null}
             {attempted && templateMissing ? (
-              <p id={templateErrId} role="alert" style={{ fontSize: 12, color: "#b42318", margin: "4px 0 0" }}>
+              <p id={templateErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: "4px 0 0" }}>
                 Select a template to send.
               </p>
             ) : null}
@@ -440,12 +440,12 @@ function CreateCampaignDialog({
             />
             <p
               id={recipientsHintId}
-              style={{ fontSize: 12, color: attempted && (recipientsMissing || recipientsInvalid) ? "#b42318" : "var(--muted)", margin: "4px 0 0" }}
+              style={{ fontSize: 12, color: attempted && (recipientsMissing || recipientsInvalid) ? "var(--bad)" : "var(--muted)", margin: "4px 0 0" }}
             >
               {recipientHelp}
             </p>
             {attempted && recipientsInvalid ? (
-              <p id={recipientsErrId} role="alert" style={{ fontSize: 12, color: "#b42318", margin: "4px 0 0" }}>
+              <p id={recipientsErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: "4px 0 0" }}>
                 {recipientCheck.overLimit
                   ? "Reduce the number of recipients before sending."
                   : "Each recipient must be a valid email, Indian mobile number, or user handle."}
@@ -487,7 +487,7 @@ function CreateCampaignDialog({
               placeholder="50000.00"
             />
             {budgetInvalid ? (
-              <p id={budgetErrId} role="alert" style={{ fontSize: 12, color: "#b42318", margin: "4px 0 0" }}>
+              <p id={budgetErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: "4px 0 0" }}>
                 Enter a positive rupee amount with at most two decimal places.
               </p>
             ) : null}
@@ -506,7 +506,7 @@ function CreateCampaignDialog({
                   style={inputStyle}
                   placeholder="Segment id"
                 />
-                <p style={{ fontSize: 12, color: "#92400e", margin: "4px 0 0" }}>
+                <p style={{ fontSize: 12, color: "var(--warn)", margin: "4px 0 0" }}>
                   Segments could not be loaded — enter a segment id, or leave blank.
                 </p>
               </>

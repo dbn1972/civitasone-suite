@@ -117,10 +117,10 @@ export default async function StaffingPlanPage({ searchParams }: { searchParams?
         </div>
       )}
       <StatGrid>
-        <StatCard icon="📊" iconBg="var(--infobg, #e6f0ff)" label={t("statSanctionedPostsLabel")} value={errored ? null : totalSanctioned} />
-        <StatCard icon="👥" iconBg="var(--goodbg, #e6f7f0)" label={t("statFilledLabel")} value={errored ? null : totalFilled} />
-        <StatCard icon="⬜" iconBg="var(--badbg, #fff1f0)" label={t("statVacantLabel")} value={errored ? null : totalVacant} />
-        <StatCard icon="📈" iconBg="var(--warnbg, #fffbe6)" label={t("statFillRateLabel")} value={errored ? null : overallFillLabel} />
+        <StatCard icon="📊" iconBg="var(--infobg)" label={t("statSanctionedPostsLabel")} value={errored ? null : totalSanctioned} />
+        <StatCard icon="👥" iconBg="var(--goodbg)" label={t("statFilledLabel")} value={errored ? null : totalFilled} />
+        <StatCard icon="⬜" iconBg="var(--badbg)" label={t("statVacantLabel")} value={errored ? null : totalVacant} />
+        <StatCard icon="📈" iconBg="var(--warnbg)" label={t("statFillRateLabel")} value={errored ? null : overallFillLabel} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (

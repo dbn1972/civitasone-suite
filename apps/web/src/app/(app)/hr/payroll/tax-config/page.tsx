@@ -119,7 +119,7 @@ export default async function TaxConfigPage({ searchParams }: { searchParams?: {
               id="tax-config-fy"
               name="fy"
               defaultValue={fy}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "var(--panel, #fff)" }}
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "var(--panel)" }}
             >
               {fyOptions.map((opt) => (
                 <option key={opt} value={opt}>{t("fyOption", { fy: opt })}</option>

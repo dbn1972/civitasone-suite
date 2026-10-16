@@ -133,7 +133,7 @@ function CreateUnitForm({
   }
 
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "8px 10px", background: "var(--surface2, #f8fafc)", borderRadius: 8, marginTop: 4 }}>
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", padding: "8px 10px", background: "var(--surface2)", borderRadius: 8, marginTop: 4 }}>
       <input
         ref={nameInputRef}
         className="input"

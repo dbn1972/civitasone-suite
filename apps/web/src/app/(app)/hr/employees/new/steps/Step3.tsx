@@ -33,7 +33,7 @@ export function Step3({ data, errors: _errors, onChange, onBlur: _onBlur }: Prop
 
   return (
     <>
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink, #0f172a)", marginTop: 0, marginBottom: 20 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginTop: 0, marginBottom: 20 }}>
         {t("step3Heading")}
       </h2>
       <div style={grid2}>
@@ -129,7 +129,7 @@ export function Step3({ data, errors: _errors, onChange, onBlur: _onBlur }: Prop
         </Field>
       </div>
 
-      <p style={{ marginTop: 20, marginBottom: 0, fontSize: 12, color: "var(--mut, #64748b)" }}>
+      <p style={{ marginTop: 20, marginBottom: 0, fontSize: 12, color: "var(--mut)" }}>
         {t("assignmentOptionalNote")}
       </p>
     </>

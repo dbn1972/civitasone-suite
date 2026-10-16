@@ -51,7 +51,7 @@ export function MarkCompleteButton({ lessonId, employeeId, alreadyComplete }: Ma
   }, [lessonId, employeeId, router]);
 
   if (done) {
-    return <span style={{ color: "var(--green, #16a34a)", fontWeight: 600 }}>✓ Completed</span>;
+    return <span style={{ color: "var(--green)", fontWeight: 600 }}>✓ Completed</span>;
   }
 
   return (
@@ -60,7 +60,7 @@ export function MarkCompleteButton({ lessonId, employeeId, alreadyComplete }: Ma
         {busy ? "Saving…" : "Mark complete"}
       </button>
       {error && (
-        <p role="alert" style={{ fontSize: 12, color: "var(--red, #dc2626)", margin: "4px 0 0" }}>
+        <p role="alert" style={{ fontSize: 12, color: "var(--red)", margin: "4px 0 0" }}>
           {error}
         </p>
       )}

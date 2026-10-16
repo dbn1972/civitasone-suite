@@ -6,7 +6,7 @@ import { toHumanError } from "@/lib/messages";
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "10px 0", borderBottom: "1px solid var(--border, #e2e8f0)" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
       <dt style={{ fontSize: 12, color: "var(--ink2)", fontWeight: 500 }}>{label}</dt>
       <dd style={{ margin: 0, fontSize: 14, fontWeight: 400 }}>{value}</dd>
     </div>
@@ -68,7 +68,7 @@ export default async function BreakglassDetailPage({ params }: { params: { id: s
         <Card title="Resources Accessed" padding>
           <ul aria-label="Resources accessed during break-glass" style={{ listStyle: "none", padding: 0, margin: 0 }}>
             {event.resourcesAccessed.map((resource, i) => (
-              <li key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--border, #e2e8f0)" }}>
+              <li key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", borderBottom: "1px solid var(--border)" }}>
                 <span aria-hidden="true">🔓</span>
                 <span className="mono" style={{ fontSize: 13 }}>{resource}</span>
               </li>
@@ -81,8 +81,8 @@ export default async function BreakglassDetailPage({ params }: { params: { id: s
         <Card title="Approval Chain" padding>
           <ol aria-label="Approval chain" style={{ listStyle: "none", padding: 0, margin: 0 }}>
             {event.approvalChain.map((step, i) => (
-              <li key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--border, #e2e8f0)" }}>
-                <span style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--primary-l, #eff6ff)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+              <li key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
+                <span style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--primary-l)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
                   {i + 1}
                 </span>
                 <div style={{ flex: 1 }}>

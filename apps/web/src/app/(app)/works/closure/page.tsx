@@ -32,10 +32,10 @@ export default async function ClosurePage() {
         }
       />
       <StatGrid>
-        <StatCard icon="🔒" iconBg="#eff6ff" label="Total" value={total} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Closed" value={closed} />
-        <StatCard icon="❌" iconBg="#fef2f2" label="Dropped" value={dropped} />
-        <StatCard icon="📋" iconBg="#f0fdf4" label="Completion List" value={completion} />
+        <StatCard icon="🔒" tone="info" label="Total" value={total} />
+        <StatCard icon="✅" tone="good" label="Closed" value={closed} />
+        <StatCard icon="❌" tone="bad" label="Dropped" value={dropped} />
+        <StatCard icon="📋" tone="good" label="Completion List" value={completion} />
       </StatGrid>
       <Card title="Works Closure">
         <ClosureTable closures={closures} source={source === "error" ? "error" : "api"} />

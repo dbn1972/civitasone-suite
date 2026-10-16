@@ -58,7 +58,7 @@ export function HearingsActions() {
         <span
           role="status"
           aria-live="polite"
-          style={{ fontSize: "0.8125rem", color: failed ? "var(--bad)" : "var(--good, #047857)" }}
+          style={{ fontSize: "0.8125rem", color: failed ? "var(--bad)" : "var(--good)" }}
         >
           {message}
         </span>

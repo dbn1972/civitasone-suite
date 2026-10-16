@@ -21,10 +21,10 @@ const EVENT_GROUPS: Record<string, string[]> = {
 const BASE = "/api/proxy/v1/admin/webhooks";
 
 function statusCodeBadge(code: number | null) {
-  if (!code) return <span style={{ color: "#6b7280" }}>—</span>;
+  if (!code) return <span style={{ color: "var(--mut)" }}>—</span>;
   const isOk = code >= 200 && code < 300;
   return (
-    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 10, fontSize: 12, fontWeight: 600, background: isOk ? "#ecfdf5" : "#fef2f2", color: isOk ? "#059669" : "#dc2626" }}>
+    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 10, fontSize: 12, fontWeight: 600, background: isOk ? "var(--goodbg)" : "var(--badbg)", color: isOk ? "var(--good)" : "var(--bad)" }}>
       {code}
     </span>
   );
@@ -215,7 +215,7 @@ export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks
                 <tr key={wh.id}>
                   <td>
                     <code style={{ fontSize: 12 }}>{wh.url}</code>
-                    <br /><small style={{ color: "#6b7280" }}>{wh.description}</small>
+                    <br /><small style={{ color: "var(--mut)" }}>{wh.description}</small>
                   </td>
                   <td>
                     {wh.events.map((e) => (
@@ -285,7 +285,7 @@ export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks
                     {/* GAP-WEBHOOKS-06: use the API's max attempts when present,
                         else just the attempt number — never a hard-coded /3. */}
                     <td>{d.maxAttempts ? `${d.attempt}/${d.maxAttempts}` : d.attempt}</td>
-                    <td><code style={{ fontSize: 11, color: "#6b7280" }}>{d.responseBody.slice(0, 40)}</code></td>
+                    <td><code style={{ fontSize: 11, color: "var(--mut)" }}>{d.responseBody.slice(0, 40)}</code></td>
                   </tr>
                 ))}
               </tbody>
@@ -314,7 +314,7 @@ export function WebhooksClient({ webhooks: initialWebhooks, source }: { webhooks
               Copy the signing secret for <code>{newSecret.url}</code> now. For security it is <b>shown only once</b> and cannot be retrieved later — if you lose it, rotate the secret to generate a new one.
             </p>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <code style={{ flex: 1, padding: "8px 10px", background: "#f3f4f6", borderRadius: 6, fontSize: 12, wordBreak: "break-all" }}>{newSecret.secret}</code>
+              <code style={{ flex: 1, padding: "8px 10px", background: "var(--line2)", borderRadius: 6, fontSize: 12, wordBreak: "break-all" }}>{newSecret.secret}</code>
               <Button size="sm" onClick={() => void navigator.clipboard?.writeText(newSecret.secret)}>Copy</Button>
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
@@ -401,7 +401,7 @@ function CreateWebhookDialog({
         <div>
           <label htmlFor="wh-url" style={{ display: "block", fontSize: 12.5, fontWeight: 650, marginBottom: 4 }}>Endpoint URL (https)</label>
           <input id="wh-url" value={url} onChange={(e) => setUrl(e.target.value)} type="url" className="ta-input" placeholder="https://your-server.com/webhook" aria-invalid={url.length > 0 && !isHttps ? true : undefined} />
-          {url.length > 0 && !isHttps ? <p role="alert" style={{ color: "#b42318", fontSize: 12, margin: "4px 0 0" }}>The endpoint must use https.</p> : null}
+          {url.length > 0 && !isHttps ? <p role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: "4px 0 0" }}>The endpoint must use https.</p> : null}
         </div>
         <div>
           <label htmlFor="wh-desc" style={{ display: "block", fontSize: 12.5, fontWeight: 650, marginBottom: 4 }}>Description</label>
@@ -411,10 +411,10 @@ function CreateWebhookDialog({
           <legend style={{ fontWeight: 650, fontSize: 12.5, marginBottom: 8 }}>Events to subscribe (at least one)</legend>
           {Object.entries(EVENT_GROUPS).map(([group, evts]) => (
             <div key={group} style={{ marginBottom: 8 }}>
-              <strong style={{ fontSize: 12, color: "#374151" }}>{group}</strong>
+              <strong style={{ fontSize: 12, color: "var(--ink2)" }}>{group}</strong>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
                 {evts.map((evt) => (
-                  <label key={evt} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, padding: "2px 6px", background: "#f9fafb", borderRadius: 4, cursor: "pointer" }}>
+                  <label key={evt} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, padding: "2px 6px", background: "var(--line2)", borderRadius: 4, cursor: "pointer" }}>
                     <input type="checkbox" checked={events.includes(evt)} onChange={(e) => toggleEvent(evt, e.target.checked)} />
                     {evt.split(".").slice(1).join(".")}
                   </label>
@@ -422,12 +422,12 @@ function CreateWebhookDialog({
               </div>
             </div>
           ))}
-          {events.length === 0 ? <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 0" }}>Select at least one event to enable Create.</p> : null}
+          {events.length === 0 ? <p style={{ fontSize: 12, color: "var(--mut)", margin: "4px 0 0" }}>Select at least one event to enable Create.</p> : null}
         </fieldset>
-        <div style={{ background: "#f9fafb", padding: 12, borderRadius: 6 }}>
-          <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>A signing secret will be generated and shown once after creation.</p>
+        <div style={{ background: "var(--line2)", padding: 12, borderRadius: 6 }}>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>A signing secret will be generated and shown once after creation.</p>
         </div>
-        {error ? <p role="alert" style={{ color: "#b42318", fontSize: 13, margin: 0 }}>{error}</p> : null}
+        {error ? <p role="alert" style={{ color: "var(--bad)", fontSize: 13, margin: 0 }}>{error}</p> : null}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <Button variant="ghost" disabled={busy} onClick={() => { if (!busy) onClose(); }}>Cancel</Button>
           <Button disabled={!canSubmit} onClick={() => void submit()}>{busy ? "Creating…" : "Create Webhook"}</Button>

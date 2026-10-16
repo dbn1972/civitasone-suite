@@ -143,13 +143,13 @@ function TallyBar({
         }}
         aria-hidden
       >
-        <div style={{ width: `${pct(votesFor)}%`, background: "#16a34a" }} />
-        <div style={{ width: `${pct(votesAgainst)}%`, background: "#dc2626" }} />
-        <div style={{ width: `${pct(votesAbstain)}%`, background: "#9ca3af" }} />
+        <div style={{ width: `${pct(votesFor)}%`, background: "var(--good)" }} />
+        <div style={{ width: `${pct(votesAgainst)}%`, background: "var(--bad)" }} />
+        <div style={{ width: `${pct(votesAbstain)}%`, background: "var(--mut)" }} />
       </div>
       <div style={{ display: "flex", gap: 14, marginTop: 6, fontSize: 12.5, ...monoStyle }}>
-        <span style={{ color: "#16a34a" }}>For {votesFor}</span>
-        <span style={{ color: "#dc2626" }}>Against {votesAgainst}</span>
+        <span style={{ color: "var(--good)" }}>For {votesFor}</span>
+        <span style={{ color: "var(--bad)" }}>Against {votesAgainst}</span>
         <span style={{ color: "var(--ink2)" }}>Abstain {votesAbstain}</span>
         <span style={{ color: "var(--ink2)", marginLeft: "auto" }}>Total {total}</span>
       </div>
@@ -318,7 +318,7 @@ export function MeetingConsole({
         </div>
       )}
       {error && (
-        <div className="alert" role="alert" style={{ borderColor: "#fca5a5", color: "#b91c1c" }}>
+        <div className="alert" role="alert" style={{ borderColor: "var(--badbd)", color: "var(--bad)" }}>
           ⚠ {error}
         </div>
       )}
@@ -382,25 +382,25 @@ export function MeetingConsole({
       <StatGrid>
         <StatCard
           icon={meeting.quorumEstablished ? "✅" : "⚠️"}
-          iconBg={meeting.quorumEstablished ? "#ecfdf5" : "#fff7ed"}
+          iconBg={meeting.quorumEstablished ? "var(--goodbg)" : "var(--warnbg)"}
           label="Quorum"
           value={meeting.quorumEstablished ? "Established" : "Not met"}
         />
         <StatCard
           icon="🟢"
-          iconBg="#ecfeff"
+          tone="info"
           label="Present (for quorum)"
           value={attState === "api" ? present.toLocaleString("en-IN") : "—"}
         />
         <StatCard
           icon="📋"
-          iconBg="#eef2ff"
+          tone="info"
           label="Agenda items"
           value={agendaSource === "api" ? agenda.length.toLocaleString("en-IN") : "—"}
         />
         <StatCard
           icon="🗳️"
-          iconBg="#f5f3ff"
+          tone="neutral"
           label="Open votes"
           value={votesState === "api" ? votes.length.toLocaleString("en-IN") : "—"}
         />
@@ -609,7 +609,7 @@ export function MeetingConsole({
                             </div>
                           )}
                           {p.isMandatory && (
-                            <span style={{ fontSize: 11, color: "#b45309" }}>Mandatory</span>
+                            <span style={{ fontSize: 11, color: "var(--warn)" }}>Mandatory</span>
                           )}
                         </td>
                         <td>{humanize(p.role)}</td>
@@ -782,7 +782,7 @@ function VotePanel({
             style={{
               fontSize: 12.5,
               fontWeight: 700,
-              color: "#16a34a",
+              color: "var(--good)",
               display: "inline-flex",
               alignItems: "center",
               gap: 6,

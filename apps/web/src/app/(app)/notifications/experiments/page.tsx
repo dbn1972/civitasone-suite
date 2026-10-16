@@ -33,13 +33,13 @@ export default async function ExperimentsPage() {
       <StatGrid>
         <StatCard
           icon="🧪"
-          iconBg="#e0f2fe"
+          tone="info"
           label="Experiments"
           value={errored ? "—" : data.length.toLocaleString("en-IN")}
         />
         <StatCard
           icon="🛂"
-          iconBg="#fef3c7"
+          tone="warn"
           label="Awaiting approval"
           value={errored ? "—" : awaiting.toLocaleString("en-IN")}
         />

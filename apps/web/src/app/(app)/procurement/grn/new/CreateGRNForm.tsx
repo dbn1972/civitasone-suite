@@ -248,7 +248,7 @@ export function CreateGRNForm() {
   return (
     <form className="card pad" onSubmit={(e) => void handleSubmit(e)} style={{ maxWidth: 860 }} noValidate>
       <div className="fields">
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="grn-po">Purchase order *</label>
           <RemoteSearchSelect
             inputId="grn-po"
@@ -263,12 +263,12 @@ export function CreateGRNForm() {
             }}
           />
         </div>
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <span className="label">Vendor</span>
           {/* GAP-PROCUREMENT-GRN-NEW-04 — read-only, derived from the PO. */}
           <span>{vendorName || (vendorId ? t("vendorFromPo") : t("vendorPending"))}</span>
         </div>
-        <label className="field" htmlFor="grn-received-date" style={{ background: "#fff", padding: "13px 16px" }}>
+        <label className="field" htmlFor="grn-received-date" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <span className="label">Received date</span>
           <input id="grn-received-date" type="date" max={todayIST()} value={receivedDate} onChange={(e) => setReceivedDate(e.target.value)} style={{ minHeight: 44 }} />
         </label>
@@ -277,7 +277,7 @@ export function CreateGRNForm() {
       <fieldset style={{ border: "1px solid var(--line)", borderRadius: 12, padding: 14, margin: "8px 0 0" }}>
         <legend style={{ fontSize: 12, fontWeight: 700, padding: "0 6px" }}>Received line items</legend>
         {poItemsLoad === "error" ? (
-          <p role="alert" style={{ fontSize: "0.875rem", color: "#b45309", marginTop: 0 }}>
+          <p role="alert" style={{ fontSize: "0.875rem", color: "var(--warn)", marginTop: 0 }}>
             Couldn&apos;t load the PO&apos;s items — you can still enter them manually below.
           </p>
         ) : null}
@@ -311,7 +311,7 @@ export function CreateGRNForm() {
                   <td>
                     <label className="sr-only" htmlFor={`g-code-${idx}`}>Item code, row {idx + 1}</label>
                     <input id={`g-code-${idx}`} value={l.itemCode} onChange={(e) => updateLine(idx, { itemCode: e.target.value })} required aria-required="true" aria-describedby={rowErrors[idx] ? `g-row-err-${idx}` : (status === "error" ? "grn-form-message" : undefined)} style={{ minHeight: 40, width: "100%" }} />
-                    {rowErrors[idx] ? <span id={`g-row-err-${idx}`} role="alert" style={{ display: "block", fontSize: "0.75rem", color: "#b91c1c" }}>{rowErrors[idx]}</span> : null}
+                    {rowErrors[idx] ? <span id={`g-row-err-${idx}`} role="alert" style={{ display: "block", fontSize: "0.75rem", color: "var(--bad)" }}>{rowErrors[idx]}</span> : null}
                   </td>
                   <td>{l.unit}</td>
                   <td className="num">{l.orderedQty}</td>
@@ -330,7 +330,7 @@ export function CreateGRNForm() {
 
       <div role="status" aria-live="polite">
         {message ? (
-          <p id="grn-form-message" role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, fontSize: "0.875rem", color: status === "error" ? "#b91c1c" : "#047857" }}>{message}</p>
+          <p id="grn-form-message" role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, fontSize: "0.875rem", color: status === "error" ? "var(--bad)" : "var(--good)" }}>{message}</p>
         ) : null}
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>

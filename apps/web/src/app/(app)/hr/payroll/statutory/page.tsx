@@ -151,7 +151,7 @@ export default async function StatutoryHubPage() {
               inside all six cards above (StatutoryComplianceCard.tsx) --
               one real, working link here instead. */}
           <p style={{ marginTop: 12, fontSize: 12 }}>
-            <Link href="/hr/payroll/statutory/challans" style={{ color: "var(--accent, #2563eb)", fontWeight: 600 }}>
+            <Link href="/hr/payroll/statutory/challans" style={{ color: "var(--accent)", fontWeight: 600 }}>
               {t("seeChallansForFilingStatus")}
             </Link>
           </p>

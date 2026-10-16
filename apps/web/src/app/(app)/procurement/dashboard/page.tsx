@@ -57,17 +57,17 @@ export default async function ProcurementDashboardPage() {
           deep-link convention as other module dashboards). Links are dropped
           when the load errored — a "—" tile has nothing to act on. */}
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e7edfd" label="Pending Indents" value={errored ? "—" : dashboard.pendingIndents} href={errored ? undefined : "/procurement/indents?status=pending"} />
-        <StatCard icon="📦" iconBg="#eff6ff" label="Active POs" value={errored ? "—" : dashboard.activePOs} href={errored ? undefined : "/procurement/orders?status=active"} />
+        <StatCard icon="📋" tone="info" label="Pending Indents" value={errored ? "—" : dashboard.pendingIndents} href={errored ? undefined : "/procurement/indents?status=pending"} />
+        <StatCard icon="📦" tone="info" label="Active POs" value={errored ? "—" : dashboard.activePOs} href={errored ? undefined : "/procurement/orders?status=active"} />
         {/* GAP-PROCUREMENT-DASHBOARD-05: label the window so the KPI is not
             ambiguous - accepted GRNs received in the current IST calendar month. */}
-        <StatCard icon="✅" iconBg="#ecfdf3" label="GRNs (MTD)" hint={t("grnsMtdHint")} value={errored ? "—" : dashboard.grnsThisMonth} href={errored ? undefined : "/procurement/grn"} />
+        <StatCard icon="✅" tone="good" label="GRNs (MTD)" hint={t("grnsMtdHint")} value={errored ? "—" : dashboard.grnsThisMonth} href={errored ? undefined : "/procurement/grn"} />
         {/* GAP-PROCUREMENT-DASHBOARD-05: renewals live in contract-service and the
             API reports null when it cannot count them - show a dash and say why,
             never a false "0 due". The card drills into the expiring contracts. */}
         <StatCard
           icon="⚠️"
-          iconBg="#fffaeb"
+          tone="warn"
           label="Contract Renewals Due"
           hint={!errored && dashboard.contractRenewalsDue == null ? t("renewalsUnavailableHint") : undefined}
           value={errored || dashboard.contractRenewalsDue == null ? "—" : dashboard.contractRenewalsDue}

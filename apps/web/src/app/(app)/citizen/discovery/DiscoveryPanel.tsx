@@ -137,10 +137,10 @@ export function DiscoveryPanel({ serviceNames = {} }: { serviceNames?: Record<st
       <form onSubmit={(e) => e.preventDefault()} className="pad" style={{ maxWidth: 640 }}>
         <label htmlFor="disc-citizen" style={labelStyle}>{t("citizenIdLabel")}</label>
         <input id="disc-citizen" value={citizenId} onChange={(e) => setCitizenId(e.target.value)} style={inputStyle} placeholder="00000000-0000-4000-8000-000000000000" />
-        {citizenId !== "" && !validId ? <p style={{ color: "#b42318", fontSize: 12, marginTop: -4 }}>{t("citizenIdInvalid")}</p> : null}
+        {citizenId !== "" && !validId ? <p style={{ color: "var(--bad)", fontSize: 12, marginTop: -4 }}>{t("citizenIdInvalid")}</p> : null}
 
         {/* Consent block */}
-        <div className="pad" style={{ background: "var(--panel-2, #f8fafc)", borderRadius: 8, marginBottom: 12 }}>
+        <div className="pad" style={{ background: "var(--panel-2)", borderRadius: 8, marginBottom: 12 }}>
           <p style={{ fontSize: 13, marginTop: 0 }}>{t("consentPurpose")}</p>
           {consent?.active ? (
             <div style={{ fontSize: 13 }}>
@@ -183,8 +183,8 @@ export function DiscoveryPanel({ serviceNames = {} }: { serviceNames?: Record<st
           {busy ? t("running") : t("runDiscovery")}
         </Button>
 
-        {message ? <p role="status" style={{ color: "#067647", fontSize: 13 }}>{message}</p> : null}
-        {error ? <p role="alert" style={{ color: "#b42318", fontSize: 13 }}>{error}</p> : null}
+        {message ? <p role="status" style={{ color: "var(--good)", fontSize: 13 }}>{message}</p> : null}
+        {error ? <p role="alert" style={{ color: "var(--bad)", fontSize: 13 }}>{error}</p> : null}
       </form>
 
       {matches.length > 0 ? (

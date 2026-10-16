@@ -107,8 +107,8 @@ export function DeputationCard({ deputation, canManage = false }: Props) {
       <div className="pad" style={{ paddingTop: 4 }}>
         {/* Deputation-to highlighted block */}
         <div style={{
-          padding: "10px 14px", background: "var(--panel, #f8fafc)",
-          borderRadius: 8, marginBottom: 12, borderInlineStart: "3px solid var(--info, #2563eb)",
+          padding: "10px 14px", background: "var(--panel)",
+          borderRadius: 8, marginBottom: 12, borderInlineStart: "3px solid var(--info)",
         }}>
           <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--ink3)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
             {t("card.deputedTo")}
@@ -131,7 +131,7 @@ export function DeputationCard({ deputation, canManage = false }: Props) {
                 {daysLeft !== null && (
                   <span style={{
                     marginInlineStart: 8, fontSize: "0.75rem", fontWeight: 600,
-                    color: daysLeft < 30 ? "var(--bad, #dc2626)" : daysLeft < 90 ? "var(--warn, #d97706)" : "var(--good, #15803d)",
+                    color: daysLeft < 30 ? "var(--bad)" : daysLeft < 90 ? "var(--warn)" : "var(--good)",
                   }}>
                     ({daysLeft > 0 ? t("card.daysLeft", { days: daysLeft }) : t("card.overdue")})
                   </span>
@@ -148,7 +148,7 @@ export function DeputationCard({ deputation, canManage = false }: Props) {
           {allowance && (
             <div className="fld">
               <span className="l">{t("card.allowance")}</span>
-              <span className="v" style={{ fontWeight: 600, color: "var(--good, #0f766e)" }}>{allowance}</span>
+              <span className="v" style={{ fontWeight: 600, color: "var(--good)" }}>{allowance}</span>
             </div>
           )}
         </div>

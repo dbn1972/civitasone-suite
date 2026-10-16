@@ -36,9 +36,9 @@ export default async function MunicipalHubPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="#eef2ff" label="Municipal services" value={sec5Count} />
-        <StatCard icon="📋" iconBg="#ecfdf5" label="Officer consoles" value={officerConsoleCount} />
-        <StatCard icon="🪪" iconBg="#fff7ed" label="Citizen apply links" value={citizenLinkCount} />
+        <StatCard icon="🏛️" tone="info" label="Municipal services" value={sec5Count} />
+        <StatCard icon="📋" tone="good" label="Officer consoles" value={officerConsoleCount} />
+        <StatCard icon="🪪" tone="warn" label="Citizen apply links" value={citizenLinkCount} />
       </StatGrid>
 
       <div style={{ marginTop: 18, display: "grid", gap: 18 }}>

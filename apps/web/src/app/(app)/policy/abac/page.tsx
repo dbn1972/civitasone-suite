@@ -25,9 +25,9 @@ export default async function PolicyAbacPage() {
       />
       {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
-        <StatCard icon="🛡️" iconBg="#eff8ff" label="Rules" value={errored ? "—" : rules.length} />
-        <StatCard icon="✅" iconBg="#dcfce7" label="Enabled" value={errored ? "—" : enabled} />
-        <StatCard icon="🚫" iconBg="#fee2e2" label="Deny effect" value={errored ? "—" : deny} />
+        <StatCard icon="🛡️" tone="info" label="Rules" value={errored ? "—" : rules.length} />
+        <StatCard icon="✅" tone="good" label="Enabled" value={errored ? "—" : enabled} />
+        <StatCard icon="🚫" tone="bad" label="Deny effect" value={errored ? "—" : deny} />
       </StatGrid>
 
       <Card title="Rules">
@@ -77,7 +77,7 @@ export default async function PolicyAbacPage() {
                             ))}
                           </ul>
                         ) : (
-                          <span style={{ color: "var(--mut, #64748b)" }}>Applies to all</span>
+                          <span style={{ color: "var(--mut)" }}>Applies to all</span>
                         )}
                       </td>
                       <td>

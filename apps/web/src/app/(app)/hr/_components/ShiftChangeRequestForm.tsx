@@ -174,12 +174,12 @@ export function ShiftChangeRequestForm({
       <div
         role="note"
         style={{
-          background: "var(--info-bg, #eff6ff)",
-          border: "1px solid var(--info-border, #bfdbfe)",
+          background: "var(--info-bg)",
+          border: "1px solid var(--info-border)",
           borderRadius: 6,
           padding: "10px 14px",
           fontSize: 13,
-          color: "var(--info-text, #1d4ed8)",
+          color: "var(--info-text)",
         }}
       >
         {t("policyNote")}
@@ -252,7 +252,7 @@ export function ShiftChangeRequestForm({
           role={displayPhase === "error" ? "alert" : "status"}
           style={{
             fontSize: 13,
-            color: displayPhase === "error" ? "var(--red, #dc2626)" : "var(--green, #16a34a)",
+            color: displayPhase === "error" ? "var(--red)" : "var(--green)",
             margin: 0,
           }}
         >

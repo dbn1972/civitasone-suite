@@ -149,14 +149,14 @@ export function PolicyActions({
           />
         )}
         {canAcknowledge && alreadyAcknowledged && (
-          <span style={{ color: "var(--ok, #059669)", fontSize: 14, fontWeight: 600 }}>
+          <span style={{ color: "var(--ok)", fontSize: 14, fontWeight: 600 }}>
             ✓ You have acknowledged this document.
           </span>
         )}
         {!canSubmit && !canApprove && !canPublish && !canAcknowledge && (
           <span style={{ color: "var(--mut)", fontSize: 14 }}>No further actions for status &ldquo;{status.replace(/_/g, " ")}&rdquo;.</span>
         )}
-        {msg && <span style={{ color: "var(--ok, #059669)", fontSize: 14, fontWeight: 600 }}>{msg}</span>}
+        {msg && <span style={{ color: "var(--ok)", fontSize: 14, fontWeight: 600 }}>{msg}</span>}
       </div>
     </div>
   );

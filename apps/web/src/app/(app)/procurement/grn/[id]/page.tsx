@@ -145,13 +145,13 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
           <div className="field">
             <span className="label">Three-way match</span>
             {matchKnown ? (
-              <span style={{ color: grn.threeWayMatch ? "#16a34a" : "#b91c1c", fontWeight: 600 }}>
+              <span style={{ color: grn.threeWayMatch ? "var(--good)" : "var(--bad)", fontWeight: 600 }}>
                 {grn.threeWayMatch ? "Matched (PO · receipt · inspection)" : "Not matched"}
               </span>
             ) : (
               // GAP-PROCUREMENT-GRN-DETAIL-02 — neutral, not red: the match has not
               // been computed because the GRN has not been inspected yet.
-              <span style={{ color: "var(--muted, #6b7280)", fontWeight: 600 }}>Pending inspection</span>
+              <span style={{ color: "var(--muted)", fontWeight: 600 }}>Pending inspection</span>
             )}
           </div>
           <div className="field">
@@ -169,7 +169,7 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
                 // payment gate).
                 <>
                   <StatusPill status="pending" label="Unavailable" />
-                  <span style={{ fontSize: "0.8125rem", color: "var(--muted, #6b7280)" }}>Couldn&apos;t check SRN — refresh</span>
+                  <span style={{ fontSize: "0.8125rem", color: "var(--muted)" }}>Couldn&apos;t check SRN — refresh</span>
                 </>
               ) : (
                 <>
@@ -220,7 +220,7 @@ export default async function GRNDetailPage({ params }: { params: { id: string }
 
       {grn.items.length > 0 && canAmendGrn(grn.status) ? (
         <Card title="Amend received items" padding>
-          <p style={{ marginBottom: 12, fontSize: "0.875rem", color: "var(--muted, #6b7280)" }}>
+          <p style={{ marginBottom: 12, fontSize: "0.875rem", color: "var(--muted)" }}>
             This GRN is still {grnStatusLabel(grn.status)} — update received and accepted
             quantities to record a partial delivery. GRN number, vendor, and PO reference cannot be changed.
           </p>

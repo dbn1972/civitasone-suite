@@ -111,7 +111,7 @@ export function RoleFeatureGrantForm() {
             placeholder="finance.dashboard"
             aria-describedby="feature-key-hint"
           />
-          <p id="feature-key-hint" style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: "4px 0 0" }}>
+          <p id="feature-key-hint" style={{ fontSize: 12, color: "var(--mut)", margin: "4px 0 0" }}>
             Dotted key, e.g. finance.dashboard
           </p>
         </Field>
@@ -119,7 +119,7 @@ export function RoleFeatureGrantForm() {
           {status === "pending" ? "Granting…" : "Grant feature"}
         </Button>
         {message && (
-          <p role="status" aria-live="polite" style={{ color: status === "error" ? "#b91c1c" : "#166534" }}>
+          <p role="status" aria-live="polite" style={{ color: status === "error" ? "var(--bad)" : "var(--good)" }}>
             {message}
           </p>
         )}

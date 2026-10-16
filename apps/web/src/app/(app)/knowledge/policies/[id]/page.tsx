@@ -62,18 +62,18 @@ export default async function Page({ params }: { params: { id: string } }) {
       <StatGrid>
         <StatCard
           icon="🚦"
-          iconBg="#eef2ff"
+          tone="info"
           label="Status"
           value={policyStatusLabel(policy.status)}
         />
-        <StatCard icon="📅" iconBg="#ecfdf5" label="Effective" value={policy.effectiveDate ? formatIndianDate(policy.effectiveDate) : "—"} />
-        <StatCard icon="🔁" iconBg="#fffbeb" label="Review due" value={policy.reviewDueDate ? formatIndianDate(policy.reviewDueDate) : "—"} />
-        <StatCard icon="👥" iconBg="#f0f9ff" label="Acknowledged" value={acksErrored ? "—" : acks.acknowledgedCount.toLocaleString("en-IN")} />
+        <StatCard icon="📅" tone="good" label="Effective" value={policy.effectiveDate ? formatIndianDate(policy.effectiveDate) : "—"} />
+        <StatCard icon="🔁" tone="warn" label="Review due" value={policy.reviewDueDate ? formatIndianDate(policy.reviewDueDate) : "—"} />
+        <StatCard icon="👥" tone="info" label="Acknowledged" value={acksErrored ? "—" : acks.acknowledgedCount.toLocaleString("en-IN")} />
       </StatGrid>
 
       <div className="card">
         <div className="card-h"><h3>Document body</h3></div>
-        <div className="pad" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, color: "var(--ink2, #475569)" }}>
+        <div className="pad" style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, color: "var(--ink2)" }}>
           {policy.body || "No content."}
         </div>
       </div>

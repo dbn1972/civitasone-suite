@@ -171,14 +171,14 @@ export default async function OnboardingPage({
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="👋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={meta.counts.total} />
-        <StatCard icon="🔄" iconBg="var(--warnbg, #fffbe6)" label={t("statInProgress")} value={meta.counts.inProgress} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statCompleted")} value={meta.counts.completed} />
+        <StatCard icon="👋" iconBg="var(--infobg)" label={t("statTotal")} value={meta.counts.total} />
+        <StatCard icon="🔄" iconBg="var(--warnbg)" label={t("statInProgress")} value={meta.counts.inProgress} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statCompleted")} value={meta.counts.completed} />
         {/* GAP-HR-ONBOARDING-05: this counts JOINEES who have at least one
             overdue task, not the number of overdue tasks -- the label used
             to read "Overdue Tasks", which a two-joinee/five-overdue-tasks
             tenant would misread as "5". */}
-        <StatCard icon="⚠️" iconBg="var(--badbg, #fff1f0)" label={t("statOverdue")} value={meta.counts.overdue} />
+        <StatCard icon="⚠️" iconBg="var(--badbg)" label={t("statOverdue")} value={meta.counts.overdue} />
       </StatGrid>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 16, marginBottom: 4 }} role="tablist" aria-label={t("filterAriaLabel")}>
@@ -192,7 +192,7 @@ export default async function OnboardingPage({
             style={{
               fontSize: 13, padding: "5px 12px", borderRadius: 20,
               background: statusFilter === tab.key ? "var(--primary)" : "var(--bg2)",
-              color: statusFilter === tab.key ? "var(--panel, #fff)" : "var(--ink)",
+              color: statusFilter === tab.key ? "var(--panel)" : "var(--ink)",
               textDecoration: "none", fontWeight: statusFilter === tab.key ? 600 : 400,
               border: "1px solid var(--line)",
             }}
@@ -238,11 +238,11 @@ export default async function OnboardingPage({
                 alignItems: "center",
                 gap: 10,
                 padding: "10px 14px",
-                background: "var(--warnbg, #fffbeb)",
-                border: "1px solid var(--warnbd, #fde68a)",
+                background: "var(--warnbg)",
+                border: "1px solid var(--warnbd)",
                 borderRadius: 8,
                 fontSize: 13,
-                color: "var(--warn, #92400e)",
+                color: "var(--warn)",
                 fontWeight: 500,
                 marginTop: 12,
                 marginBottom: 4,

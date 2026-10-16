@@ -137,7 +137,7 @@ export function RecordGpsForm({ options, vehiclesError = false, initialVehicleId
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={latId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Latitude <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Latitude <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={latId}
@@ -150,12 +150,12 @@ export function RecordGpsForm({ options, vehiclesError = false, initialVehicleId
                 aria-describedby={errors.lat ? latErrId : undefined}
                 style={inputStyle}
               />
-              {errors.lat && <p id={latErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.lat}</p>}
+              {errors.lat && <p id={latErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.lat}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={lngId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Longitude <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Longitude <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={lngId}
@@ -168,7 +168,7 @@ export function RecordGpsForm({ options, vehiclesError = false, initialVehicleId
                 aria-describedby={errors.lng ? lngErrId : undefined}
                 style={inputStyle}
               />
-              {errors.lng && <p id={lngErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.lng}</p>}
+              {errors.lng && <p id={lngErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.lng}</p>}
             </div>
           </div>
 

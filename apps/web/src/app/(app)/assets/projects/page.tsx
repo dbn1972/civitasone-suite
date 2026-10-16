@@ -61,16 +61,16 @@ export default async function ProjectsAucPage() {
         {source === "error" ? (
           <>
             <StatCard icon="🏗️" iconBg="#fdf0e3" label="Under Construction" value="—" />
-            <StatCard icon="✅" iconBg="#ecfdf3" label="Capitalized" value="—" />
-            <StatCard icon="📦" iconBg="#eff6ff" label="Tracked Projects" value="—" />
-            <StatCard icon="💰" iconBg="#fef3f2" label="Accumulated WIP" value="—" />
+            <StatCard icon="✅" tone="good" label="Capitalized" value="—" />
+            <StatCard icon="📦" tone="info" label="Tracked Projects" value="—" />
+            <StatCard icon="💰" tone="bad" label="Accumulated WIP" value="—" />
           </>
         ) : (
           <>
             <StatCard icon="🏗️" iconBg="#fdf0e3" label="Under Construction" value={underConstruction.length} />
-            <StatCard icon="✅" iconBg="#ecfdf3" label="Capitalized" value={capitalized.length} />
-            <StatCard icon="📦" iconBg="#eff6ff" label="Tracked Projects" value={rows.length} />
-            <StatCard icon="💰" iconBg="#fef3f2" label="Accumulated WIP" value={formatMoney(accumulatedTotal)} />
+            <StatCard icon="✅" tone="good" label="Capitalized" value={capitalized.length} />
+            <StatCard icon="📦" tone="info" label="Tracked Projects" value={rows.length} />
+            <StatCard icon="💰" tone="bad" label="Accumulated WIP" value={formatMoney(accumulatedTotal)} />
           </>
         )}
       </StatGrid>

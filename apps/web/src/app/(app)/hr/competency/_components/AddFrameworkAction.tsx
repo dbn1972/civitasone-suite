@@ -88,7 +88,7 @@ export function AddFrameworkAction() {
         <Input value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} disabled={busy} />
       </Field>
       {status === "error" && (
-        <p role="alert" style={{ margin: 0, fontSize: 12, color: "var(--bad, #b91c1c)" }}>
+        <p role="alert" style={{ margin: 0, fontSize: 12, color: "var(--bad)" }}>
           {message}
         </p>
       )}

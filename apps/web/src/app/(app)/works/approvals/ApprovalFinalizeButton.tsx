@@ -63,8 +63,8 @@ export function ApprovalFinalizeButton({
           gap: 6,
           padding: "8px 16px",
           borderRadius: 8,
-          background: "#ecfdf3",
-          color: "#166534",
+          background: "var(--goodbg)",
+          color: "var(--good)",
           fontSize: 14,
           fontWeight: 600,
         }}
@@ -88,8 +88,8 @@ export function ApprovalFinalizeButton({
           gap: 6,
           padding: "8px 16px",
           borderRadius: 8,
-          background: "#fffaeb",
-          color: "#b45309",
+          background: "var(--warnbg)",
+          color: "var(--warn)",
           fontSize: 14,
           fontWeight: 600,
         }}

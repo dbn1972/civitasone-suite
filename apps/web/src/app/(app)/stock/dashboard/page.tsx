@@ -46,10 +46,10 @@ export default async function StockDashboardPage() {
         }
       />
       <StatGrid>
-        <StatCard icon="🏬" iconBg="#e6f7f5" label="SKUs" value={skuValue} />
-        <StatCard icon="💰" iconBg="#eff6ff" label="Stock Value" value={stockValue} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label="Low Stock" value={lowStockValue} href="/inventory/low-stock" />
-        <StatCard icon="🚫" iconBg="#fef3f2" label="Stock-outs" value={stockOutValue} />
+        <StatCard icon="🏬" tone="good" label="SKUs" value={skuValue} />
+        <StatCard icon="💰" tone="info" label="Stock Value" value={stockValue} />
+        <StatCard icon="⚠️" tone="warn" label="Low Stock" value={lowStockValue} href="/inventory/low-stock" />
+        <StatCard icon="🚫" tone="bad" label="Stock-outs" value={stockOutValue} />
       </StatGrid>
       <div className="grid g-main" style={{ marginTop: 18 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>

@@ -30,7 +30,7 @@ export function SiemTable({ alerts, source }: { alerts: SiemAlert[]; source: "ap
               return (
                 <span
                   className={`pill ${severityTone(sev)}${critical ? " pill-critical" : ""}`}
-                  style={critical ? { fontWeight: 800, boxShadow: "inset 0 0 0 1px var(--bad, #d92d20)" } : undefined}
+                  style={critical ? { fontWeight: 800, boxShadow: "inset 0 0 0 1px var(--bad)" } : undefined}
                 >
                   {critical ? "🔴 " : ""}{humanizeStatus(sev)}
                 </span>

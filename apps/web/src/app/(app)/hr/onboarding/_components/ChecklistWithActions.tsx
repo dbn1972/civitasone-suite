@@ -64,7 +64,7 @@ export function ChecklistWithActions({ steps: initialSteps }: ChecklistWithActio
       <AcceptedNotice {...accepted.noticeProps} />
       <OnboardingChecklist steps={steps} onComplete={(id) => void handleComplete(id)} />
       {error && (
-        <p role="alert" style={{ margin: "10px 0 0", fontSize: 12, color: "var(--bad, #dc2626)", fontWeight: 500 }}>
+        <p role="alert" style={{ margin: "10px 0 0", fontSize: 12, color: "var(--bad)", fontWeight: 500 }}>
           {error}
         </p>
       )}

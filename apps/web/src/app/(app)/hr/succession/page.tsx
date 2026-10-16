@@ -145,10 +145,10 @@ export default async function SuccessionPage() {
       <StatGrid>
         {/* GAP-HR-SUCCESSION-04: '—' on a failed fetch, not 0 -- a failed
             load previously looked identical to "zero critical roles". */}
-        <StatCard icon="🏆" iconBg="var(--infobg, #e6f0ff)" label={t("statCriticalRolesLabel")} value={pipelineErrored ? null : pipeline.length} />
-        <StatCard icon="👥" iconBg="var(--bg, #f5f5f5)" label={t("statTotalNomineesLabel")} value={pipelineErrored ? null : totalNominees} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statReadyNowLabel")} value={pipelineErrored ? null : readyNow} />
-        <StatCard icon="⚠️" iconBg="var(--badbg, #fff1f0)" label={t("statRolesAtRiskLabel")} value={riskErrored ? null : atRisk.length} />
+        <StatCard icon="🏆" iconBg="var(--infobg)" label={t("statCriticalRolesLabel")} value={pipelineErrored ? null : pipeline.length} />
+        <StatCard icon="👥" iconBg="var(--bg)" label={t("statTotalNomineesLabel")} value={pipelineErrored ? null : totalNominees} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statReadyNowLabel")} value={pipelineErrored ? null : readyNow} />
+        <StatCard icon="⚠️" iconBg="var(--badbg)" label={t("statRolesAtRiskLabel")} value={riskErrored ? null : atRisk.length} />
       </StatGrid>
 
       {/* Rich succession plan cards */}

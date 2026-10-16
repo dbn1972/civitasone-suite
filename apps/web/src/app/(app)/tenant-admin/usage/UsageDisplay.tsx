@@ -21,16 +21,16 @@ type EnrichedResource = {
 
 function getColor(percent: number): string {
   const band = usageBand(percent);
-  if (band === "critical") return "#ef4444";
-  if (band === "warning") return "#f59e0b";
+  if (band === "critical") return "var(--bad)";
+  if (band === "warning") return "var(--amber)";
   return "#10b981";
 }
 
 function getBarBg(percent: number): string {
   const band = usageBand(percent);
-  if (band === "critical") return "#fef2f2";
-  if (band === "warning") return "#fffbeb";
-  return "#ecfdf5";
+  if (band === "critical") return "var(--badbg)";
+  if (band === "warning") return "var(--warnbg)";
+  return "var(--goodbg)";
 }
 
 export function UsageDisplay({
@@ -71,15 +71,15 @@ export function UsageDisplay({
       {/* UX-012: single source of provenance (see UsersTable pattern). */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       {anyWarning && (
-        <div role="alert" style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: 16, marginBottom: 24 }}>
-          <p style={{ margin: 0, fontSize: 14, color: "#991b1b", fontWeight: 600 }}>🚨 Usage Warning</p>
+        <div role="alert" style={{ background: "var(--badbg)", border: "1px solid var(--badbg)", borderRadius: 8, padding: 16, marginBottom: 24 }}>
+          <p style={{ margin: 0, fontSize: 14, color: "var(--bad)", fontWeight: 600 }}>🚨 Usage Warning</p>
           {data.filter((r) => r.percent !== null && usageBand(r.percent) === "critical").map((r) => (
-            <p key={r.resource} style={{ margin: "4px 0 0", fontSize: 13, color: "#dc2626" }}>
+            <p key={r.resource} style={{ margin: "4px 0 0", fontSize: 13, color: "var(--bad)" }}>
               {/* GAP-TENANT-ADMIN-USAGE-04: the banner now carries a working
                   Upgrade link (was plain, unactionable text that also told the
                   tenant admin to "contact admin" — they ARE the admin). */}
               You&apos;ve used {r.percent}% of your {r.label} quota.{" "}
-              <a href={PLANS_HREF} style={{ color: "#991b1b", fontWeight: 700, textDecoration: "underline" }}>
+              <a href={PLANS_HREF} style={{ color: "var(--bad)", fontWeight: 700, textDecoration: "underline" }}>
                 Upgrade your plan
               </a>
               .
@@ -97,7 +97,7 @@ export function UsageDisplay({
                 <span style={{ fontWeight: 600, fontSize: 14 }}>
                   {r.icon} {r.label}
                 </span>
-                <span style={{ fontSize: 13, color: "#6b7280", display: "inline-flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 13, color: "var(--mut)", display: "inline-flex", alignItems: "center", gap: 8 }}>
                   {r.percent === null ? (
                     /* GAP-TENANT-ADMIN-USAGE-03: no limit set — show the usage
                        count against "Unlimited" rather than a bogus "n / 0". */
@@ -110,7 +110,7 @@ export function UsageDisplay({
                       {/* GAP-TENANT-ADMIN-USAGE-05: percent label moved OUT of
                           the coloured bar (was white 11px text, ~2:1 contrast,
                           clipped near 0%) to dark ink beside the counts. */}
-                      <span style={{ fontWeight: 700, color: "#111827", minWidth: 36, textAlign: "right" }} aria-hidden="true">
+                      <span style={{ fontWeight: 700, color: "var(--ink)", minWidth: 36, textAlign: "right" }} aria-hidden="true">
                         {r.percent}%
                       </span>
                       {showUpgrade(r.percent) && (
@@ -142,7 +142,7 @@ export function UsageDisplay({
                 </div>
               )}
               {r.projectedOverageDate && (
-                <p style={{ fontSize: 12, color: r.percent !== null ? getColor(r.percent) : "#6b7280", marginTop: 4 }}>
+                <p style={{ fontSize: 12, color: r.percent !== null ? getColor(r.percent) : "var(--mut)", marginTop: 4 }}>
                   ⏱️ At current rate, you&apos;ll hit the limit on {formatIndianDate(r.projectedOverageDate)}
                 </p>
               )}

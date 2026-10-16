@@ -38,10 +38,10 @@ export default async function Page({ searchParams }: { searchParams?: { segment?
         />}
       />
       <StatGrid>
-        <StatCard icon="▣" iconBg="#f0f9ff" label={t("statTotal")} value={stat(activities.length)} />
-        <StatCard icon="△" iconBg="#fffaeb" label="Due Today" value={stat(dueToday)} />
-        <StatCard icon="◈" iconBg="#fef2f2" label="Overdue" value={stat(overdue)} />
-        <StatCard icon="○" iconBg="#ecfdf5" label="Completed" value={stat(completed)} />
+        <StatCard icon="▣" tone="info" label={t("statTotal")} value={stat(activities.length)} />
+        <StatCard icon="△" tone="warn" label="Due Today" value={stat(dueToday)} />
+        <StatCard icon="◈" tone="bad" label="Overdue" value={stat(overdue)} />
+        <StatCard icon="○" tone="good" label="Completed" value={stat(completed)} />
       </StatGrid>
       {/* ?segment= lets a caller (e.g. the Control Tower's "Overdue follow-ups"
           exception drill-down) land straight on the matching toggle instead of

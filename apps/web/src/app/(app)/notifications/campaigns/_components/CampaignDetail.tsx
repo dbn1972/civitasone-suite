@@ -173,7 +173,7 @@ export function CampaignDetail({ campaignId, canManage = false }: { campaignId: 
           </p>
         ) : null}
         {actionError ? (
-          <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", padding: "0 12px" }}>
+          <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad)", padding: "0 12px" }}>
             {actionError}
           </p>
         ) : null}

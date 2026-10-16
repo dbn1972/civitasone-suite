@@ -42,10 +42,10 @@ export default async function ProjectTasksPage({ params }: { params: { id: strin
         back={`/projects/${params.id}`}
       />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#eef0fe" label="Pending"     value={errored ? "—" : pending} />
-        <StatCard icon="⚙️" iconBg="#fffaeb" label="In Progress" value={errored ? "—" : inProg} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Completed"   value={errored ? "—" : completed} />
-        <StatCard icon="🔴" iconBg="#fef3f2" label="Blocked"     value={errored ? "—" : blocked} />
+        <StatCard icon="📋" tone="info" label="Pending"     value={errored ? "—" : pending} />
+        <StatCard icon="⚙️" tone="warn" label="In Progress" value={errored ? "—" : inProg} />
+        <StatCard icon="✅" tone="good" label="Completed"   value={errored ? "—" : completed} />
+        <StatCard icon="🔴" tone="bad" label="Blocked"     value={errored ? "—" : blocked} />
       </StatGrid>
       {canManage && !errored && (
         <Card title="Add Task" padding>

@@ -264,7 +264,7 @@ export default function LocationsPage() {
                 aria-describedby={codeError ? "loc-code-err" : undefined}
                 style={inputStyle}
               />
-              {codeError ? <p id="loc-code-err" role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{codeError}</p> : null}
+              {codeError ? <p id="loc-code-err" role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{codeError}</p> : null}
             </div>
             <div style={fieldCol}>
               <label className="l" htmlFor="loc-name">Name</label>

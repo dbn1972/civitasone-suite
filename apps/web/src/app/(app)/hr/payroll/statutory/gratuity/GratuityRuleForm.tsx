@@ -71,7 +71,7 @@ export function GratuityRuleForm({ currentRuleSet }: { currentRuleSet: GratuityR
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={ids.rs} style={{ fontSize: 13, fontWeight: 600 }}>{t("ruleSetLabel")}</label>
-            <select id={ids.rs} value={ruleSet} onChange={(e) => pickRuleSet(e.target.value as GratuityRuleSet)} style={{ ...field, background: "#fff" }}>
+            <select id={ids.rs} value={ruleSet} onChange={(e) => pickRuleSet(e.target.value as GratuityRuleSet)} style={{ ...field, background: "var(--panel)" }}>
               <option value="pog_act">{t("ruleSetPogAct")}</option>
               <option value="ccs_dcrg">{t("ruleSetCcsDcrg")}</option>
             </select>

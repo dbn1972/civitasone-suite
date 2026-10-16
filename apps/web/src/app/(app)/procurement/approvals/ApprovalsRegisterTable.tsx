@@ -29,7 +29,7 @@ export function ApprovalsRegisterTable({ rows }: { rows: RegisterRow[] }) {
           key: "referenceId",
           label: "Reference",
           render: (row) => row.href
-            ? <Link href={row.href} className="mono" style={{ color: "#4f46e5" }}>{row.referenceId}</Link>
+            ? <Link href={row.href} className="mono" style={{ color: "var(--indigo)" }}>{row.referenceId}</Link>
             : <span className="mono">{row.referenceId}</span>,
         },
         { key: "owner", label: "Owner" },

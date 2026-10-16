@@ -138,7 +138,7 @@ export function NewItemForm({ categories, uoms }: { categories: Option[]; uoms: 
         <Input value={values.unitCost} onChange={set("unitCost")} inputMode="decimal" />
       </Field>
       <div role="status" aria-live="polite">
-        {message ? <p role="alert" style={{ color: "#b91c1c", fontSize: "0.875rem" }}>{message}</p> : null}
+        {message ? <p role="alert" style={{ color: "var(--bad)", fontSize: "0.875rem" }}>{message}</p> : null}
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
         <button type="submit" className="btn primary" style={{ minHeight: 44 }} disabled={busy}>

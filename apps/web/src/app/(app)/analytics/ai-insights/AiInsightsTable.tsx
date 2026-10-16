@@ -28,7 +28,7 @@ export function AiInsightsTable({ rows, source = "api" }: { rows: AnalyticsAiIns
 
   return (
     <>
-      {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>{cacheNote}</p>}
+      {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--warn)", margin: "0 0 8px" }}>{cacheNote}</p>}
       <DataTable<AnalyticsAiInsightRow>
         columns={COLUMNS}
         rows={data}

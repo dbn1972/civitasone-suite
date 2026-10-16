@@ -5,7 +5,7 @@ export type Crumb = { label: string; href?: string };
 
 const nav: CSSProperties = { marginBottom: 4 };
 const ol: CSSProperties = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6, listStyle: "none", margin: 0, padding: 0, fontSize: 12.5, color: "var(--ink2)" };
-const sep: CSSProperties = { color: "#cbd5e1", userSelect: "none" };
+const sep: CSSProperties = { color: "var(--line)", userSelect: "none" };
 const cur: CSSProperties = { color: "var(--ink2)", fontWeight: 600 };
 
 /** Accessible breadcrumb trail for platform-admin pages. */

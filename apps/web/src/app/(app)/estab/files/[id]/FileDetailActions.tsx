@@ -217,7 +217,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
       <div className="card" style={{ marginBottom: 18 }}>
         <div className="card-h"><h3>Noting &amp; approval (eOffice)</h3></div>
         <div className="pad">
-          <p role="status" style={{ fontSize: 13, color: "#64748b", margin: 0 }}>
+          <p role="status" style={{ fontSize: 13, color: "var(--mut)", margin: 0 }}>
             This file is {status}; no further noting, submission, signing or referral is possible.
           </p>
         </div>
@@ -229,9 +229,9 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
     <div className="card" style={{ marginBottom: 18 }}>
       <div className="card-h"><h3>Noting &amp; approval (eOffice)</h3></div>
       <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <p style={{ fontSize: 13, color: "#64748b", margin: 0 }}>
-          Write a <span style={{ background: "#fef9c3", padding: "2px 6px", borderRadius: 4 }}>yellow note</span> (draft).
-          Submit for approval — on sign-off it becomes a <span style={{ background: "#dcfce7", padding: "2px 6px", borderRadius: 4 }}>green note</span>.
+        <p style={{ fontSize: 13, color: "var(--mut)", margin: 0 }}>
+          Write a <span style={{ background: "var(--warnbg)", padding: "2px 6px", borderRadius: 4 }}>yellow note</span> (draft).
+          Submit for approval — on sign-off it becomes a <span style={{ background: "var(--goodbg)", padding: "2px 6px", borderRadius: 4 }}>green note</span>.
         </p>
         <label htmlFor="estab-yellow-note" className="l" style={{ fontSize: 12 }}>Yellow note (draft)</label>
         <textarea
@@ -255,11 +255,11 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
           </Button>
         </div>
         {!draftNotingId ? (
-          <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>
+          <p style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>
             Save a yellow note first — Submit and Sign act on your draft note.
           </p>
         ) : (
-          <p style={{ fontSize: 12, color: "#64748b", margin: 0 }}>
+          <p style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>
             <strong>Submit</strong> sends your draft to the next approver in the SO → US → DS chain.
             {" "}<strong>Sign</strong> adds a green note at your level (for the current approver only).
           </p>

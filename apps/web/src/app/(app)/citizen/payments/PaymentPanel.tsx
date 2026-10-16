@@ -150,7 +150,7 @@ export function PaymentPanel({
             {resolving ? t("resolving") : t("resolveTracking")}
           </Button>
         </div>
-        {resolveError ? <p role="alert" aria-live="assertive" style={{ color: "#b42318", fontSize: 13, marginBottom: 8 }}>{resolveError}</p> : null}
+        {resolveError ? <p role="alert" aria-live="assertive" style={{ color: "var(--bad)", fontSize: 13, marginBottom: 8 }}>{resolveError}</p> : null}
         {applicationId ? <p role="status" style={{ fontSize: 12, color: "var(--good)", marginBottom: 8 }}>{t("resolvedApplication", { applicationId })}</p> : null}
 
         <label htmlFor="pay-mode" style={labelStyle}>{t("paymentModeLabel")}</label>
@@ -184,7 +184,7 @@ export function PaymentPanel({
 
         {message ? (
           <div role="status" aria-live="polite" style={{ marginTop: 12 }}>
-            <p style={{ color: "#067647", fontSize: 13, margin: 0 }}>{message}</p>
+            <p style={{ color: "var(--good)", fontSize: 13, margin: 0 }}>{message}</p>
             {receiptNo ? (
               /* GAP-CITIZEN-PAYMENTS-06: let the clerk print the just-issued
                  receipt instead of only reading its number. */
@@ -194,7 +194,7 @@ export function PaymentPanel({
             ) : null}
           </div>
         ) : null}
-        {error ? <p role="alert" aria-live="assertive" style={{ color: "#b42318", fontSize: 13 }}>{error}</p> : null}
+        {error ? <p role="alert" aria-live="assertive" style={{ color: "var(--bad)", fontSize: 13 }}>{error}</p> : null}
       </div>
     </div>
   );

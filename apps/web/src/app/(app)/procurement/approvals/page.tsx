@@ -74,10 +74,10 @@ export default async function ApprovalsPage() {
             duplicate "Pending Approvals" verbatim. It is replaced below with
             two genuinely distinct metrics ("Unique Owners" and "With a due
             date"), so no two cards report the same number. */}
-        <StatCard icon="⏳" iconBg="#e7edfd" label="Pending Approvals" value={errored ? "—" : approvals.length} />
-        <StatCard icon="⚠️" iconBg="#fef3f2" label="Due today or overdue" value={errored ? "—" : dueSoon} />
-        <StatCard icon="👥" iconBg="#eff6ff" label="Unique Owners" value={errored ? "—" : new Set(approvals.map((a) => a.owner)).size} />
-        <StatCard icon="📋" iconBg="#ecfdf3" label="With a due date" value={errored ? "—" : approvals.filter((a) => a.dueAt).length} />
+        <StatCard icon="⏳" tone="info" label="Pending Approvals" value={errored ? "—" : approvals.length} />
+        <StatCard icon="⚠️" tone="bad" label="Due today or overdue" value={errored ? "—" : dueSoon} />
+        <StatCard icon="👥" tone="info" label="Unique Owners" value={errored ? "—" : new Set(approvals.map((a) => a.owner)).size} />
+        <StatCard icon="📋" tone="good" label="With a due date" value={errored ? "—" : approvals.filter((a) => a.dueAt).length} />
       </StatGrid>
 
       <Card title="Pending approvals (register)">

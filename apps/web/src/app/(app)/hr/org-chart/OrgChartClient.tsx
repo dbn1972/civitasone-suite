@@ -114,7 +114,7 @@ export function OrgChartClient({ data }: { data: OrgChartNode[] }) {
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Search org chart by name, designation or department"
             style={{
-              border: '1.5px solid var(--border, #e2e8f0)',
+              border: '1.5px solid var(--border)',
               borderRadius: 6,
               padding: '8px 12px',
               fontSize: 13,
@@ -183,7 +183,7 @@ export function OrgChartClient({ data }: { data: OrgChartNode[] }) {
           </div>
         </div>
       ) : (
-        <p style={{ color: 'var(--muted, #64748b)', fontSize: 14 }}>
+        <p style={{ color: 'var(--muted)', fontSize: 14 }}>
           No organisational hierarchy data available.
         </p>
       )}

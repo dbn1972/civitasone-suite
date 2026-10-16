@@ -37,13 +37,13 @@ function clockCell(row: GrievanceRow, labels: ClockLabels) {
   if (n === null) return <span style={{ color: "var(--muted)" }}>—</span>;
   if (n < 0) {
     return (
-      <span style={{ color: "#b42318", fontWeight: 600 }}>
+      <span style={{ color: "var(--bad)", fontWeight: 600 }}>
         {labels.overdueBy(Math.abs(n))}
       </span>
     );
   }
-  if (n === 0) return <span style={{ color: "#b42318", fontWeight: 600 }}>{labels.dueToday}</span>;
-  const color = n <= 7 ? "#b54708" : "#067647";
+  if (n === 0) return <span style={{ color: "var(--bad)", fontWeight: 600 }}>{labels.dueToday}</span>;
+  const color = n <= 7 ? "var(--warn)" : "var(--good)";
   return (
     <span style={{ color, fontWeight: n <= 7 ? 600 : 400 }}>
       {labels.daysLeft(n)}

@@ -147,12 +147,12 @@ export default async function VigilancePage({
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="⚖️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalCasesLabel")} value={errored ? null : data.stats.total} />
-        <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label={t("statChargeMemoStageLabel")} value={errored ? null : chargeMemoStage} />
-        <StatCard icon="🔍" iconBg="var(--warnbg, #fffbe6)" label={t("statUnderInquiryLabel")} value={errored ? null : underInquiry} />
-        <StatCard icon="⚖️" iconBg="var(--primary-soft, #faf5ff)" label={t("statPenaltyAppealLabel")} value={errored ? null : penaltyAndAppeal} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statClosedLabel")} value={errored ? null : closed} />
-        <StatCard icon="🚫" iconBg="var(--bg, #f5f5f5)" label={t("statDroppedLabel")} value={errored ? null : dropped} />
+        <StatCard icon="⚖️" iconBg="var(--infobg)" label={t("statTotalCasesLabel")} value={errored ? null : data.stats.total} />
+        <StatCard icon="🔴" iconBg="var(--badbg)" label={t("statChargeMemoStageLabel")} value={errored ? null : chargeMemoStage} />
+        <StatCard icon="🔍" iconBg="var(--warnbg)" label={t("statUnderInquiryLabel")} value={errored ? null : underInquiry} />
+        <StatCard icon="⚖️" iconBg="var(--primary-soft)" label={t("statPenaltyAppealLabel")} value={errored ? null : penaltyAndAppeal} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statClosedLabel")} value={errored ? null : closed} />
+        <StatCard icon="🚫" iconBg="var(--bg)" label={t("statDroppedLabel")} value={errored ? null : dropped} />
       </StatGrid>
       {/* GAP-HR-VIGILANCE-01 (PII/DPDP): purpose/confidentiality notice above
           the table -- mirrors the styling of the existing DPDP notice in

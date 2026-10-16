@@ -78,13 +78,13 @@ export function FaqBrowser({ faqs }: { faqs: FaqItem[] }) {
         <EmptyState icon="❓" title="No FAQs match" message="Try different keywords or clear the filters." />
       ) : (
         filtered.map((f) => (
-          <details key={f.id} style={{ border: "1px solid var(--line, #e2e8f0)", borderRadius: 10, padding: "12px 14px" }}>
-            <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--ink, #0f172a)" }}>
+          <details key={f.id} style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "12px 14px" }}>
+            <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--ink)" }}>
               {f.question}
               {/* GAP-KNOWLEDGE-FAQS-05: always show category label, including "General" */}
               <span style={{ marginInlineStart: 8, fontSize: 12, color: "var(--mut)" }}>· {f.category}</span>
             </summary>
-            <p style={{ marginTop: 8, marginBottom: 0, lineHeight: 1.6, color: "var(--ink2, #475569)", whiteSpace: "pre-wrap" }}>{f.answer}</p>
+            <p style={{ marginTop: 8, marginBottom: 0, lineHeight: 1.6, color: "var(--ink2)", whiteSpace: "pre-wrap" }}>{f.answer}</p>
           </details>
         ))
       )}

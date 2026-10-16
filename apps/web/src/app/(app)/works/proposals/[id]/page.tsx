@@ -244,37 +244,37 @@ export default async function WorkProposalDetailPage({
       >
         <StatCard
           icon="₹"
-          iconBg="#ecfdf3"
+          tone="good"
           label="Estimated Cost"
           value={formatMoney(proposal.estimatedCostMinor)}
         />
         <StatCard
           icon="🗂"
-          iconBg="#eff6ff"
+          tone="info"
           label="Category"
           value={humanize(proposal.category)}
         />
         <StatCard
           icon="📋"
-          iconBg="#fef3c7"
+          tone="warn"
           label="Status"
           value={humanize(proposal.status)}
         />
         <StatCard
           icon="🏛"
-          iconBg="#f5f3ff"
+          tone="neutral"
           label="District"
           value={proposal.district}
         />
         <StatCard
           icon="🏘"
-          iconBg="#fff7ed"
+          tone="warn"
           label="Taluka"
           value={proposal.taluka}
         />
         <StatCard
           icon="🏡"
-          iconBg="#f0fdf4"
+          tone="good"
           label="Village"
           value={proposal.village}
         />

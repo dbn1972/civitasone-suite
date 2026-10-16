@@ -69,11 +69,11 @@ export default async function GrantInstallmentsPage({
           the same useSeededResource call that produces its rows. */}
       <div aria-label="Grant installments">
         <StatGrid>
-          <StatCard icon="📋" iconBg="#f1f5f9" label="Total" value={installments.length} />
-          <StatCard icon="✅" iconBg="#dcfce7" label="Released" value={released} />
-          <StatCard icon="📈" iconBg="#e0f2fe" label="Utilised" value={utilised} />
-          <StatCard icon="⏳" iconBg="#fef3c7" label="Pending" value={pending} />
-          <StatCard icon="💰" iconBg="#dbeafe" label="Total Amount" value={formatMoney(totalAmount)} />
+          <StatCard icon="📋" tone="neutral" label="Total" value={installments.length} />
+          <StatCard icon="✅" tone="good" label="Released" value={released} />
+          <StatCard icon="📈" tone="info" label="Utilised" value={utilised} />
+          <StatCard icon="⏳" tone="warn" label="Pending" value={pending} />
+          <StatCard icon="💰" tone="info" label="Total Amount" value={formatMoney(totalAmount)} />
         </StatGrid>
         <Card title="Installments">
           <InstallmentsTable installments={installments} source={source} canRelease={canRelease} />

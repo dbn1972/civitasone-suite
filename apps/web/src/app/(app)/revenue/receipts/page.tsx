@@ -235,19 +235,19 @@ export default async function ReceiptsPage({
           <StatGrid>
             <StatCard
               icon="🧾"
-              iconBg="#e6f0ff"
+              tone="info"
               label="Receipts"
               value={receiptsResult.source === "error" ? null : receipts.length}
             />
             <StatCard
               icon="💰"
-              iconBg="#e6f7f0"
+              tone="good"
               label="Total Collected"
               value={receiptsResult.source === "error" ? null : formatMoney(totalCollectedMinor)}
             />
             <StatCard
               icon="🔗"
-              iconBg="#fff2e6"
+              tone="warn"
               label="Reconciled"
               value={receiptsResult.source === "error" ? null : reconciledCount}
             />

@@ -268,19 +268,19 @@ export default async function BillsPage({
           <StatGrid>
             <StatCard
               icon="📋"
-              iconBg="#e6f0ff"
+              tone="info"
               label="Demands"
               value={demandsResult.source === "error" ? null : demands.length}
             />
             <StatCard
               icon="⏳"
-              iconBg="#fff2e6"
+              tone="warn"
               label="Outstanding Demands"
               value={demandsResult.source === "error" ? null : outstandingDemands}
             />
             <StatCard
               icon="🧾"
-              iconBg="#e6f7f0"
+              tone="good"
               label="Bills Issued"
               value={billsResult.source === "error" ? null : bills.length}
             />

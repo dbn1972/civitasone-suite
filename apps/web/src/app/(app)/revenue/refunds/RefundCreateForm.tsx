@@ -114,7 +114,7 @@ export function RefundCreateForm({
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={receiptSelId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Receipt{" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -140,7 +140,7 @@ export function RefundCreateForm({
                 })}
               </select>
               {fieldErrors.receipt && (
-                <p id={receiptErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={receiptErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.receipt}
                 </p>
               )}
@@ -149,7 +149,7 @@ export function RefundCreateForm({
             <div style={{ display: "grid", gap: 6, gridColumn: "1 / -1" }}>
               <label htmlFor={reasonId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Reason{" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -166,7 +166,7 @@ export function RefundCreateForm({
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)" }}
               />
               {fieldErrors.reason && (
-                <p id={reasonErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={reasonErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.reason}
                 </p>
               )}

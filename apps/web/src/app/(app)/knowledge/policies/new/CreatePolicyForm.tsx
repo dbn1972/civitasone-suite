@@ -58,11 +58,11 @@ export function CreatePolicyForm() {
   return (
     <form onSubmit={(e) => void handleSubmit(e)} className="card pad" style={{ maxWidth: 820 }} noValidate>
       <div className="fields">
-        <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ gridColumn: "1 / -1", background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="title">Title *</label>
           <input id="title" className="inp" value={title} onChange={(e) => setTitle(e.target.value)} required style={{ minHeight: 44 }} placeholder="e.g. Travel &amp; Tour Policy 2026" />
         </div>
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="docType">Type</label>
           <select id="docType" className="inp" value={docType} onChange={(e) => setDocType(e.target.value as "sop" | "policy" | "circular")} style={{ minHeight: 44 }}>
             <option value="sop">SOP</option>
@@ -70,7 +70,7 @@ export function CreatePolicyForm() {
             <option value="circular">Circular</option>
           </select>
         </div>
-        <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
+        <div className="field" style={{ gridColumn: "1 / -1", background: "var(--panel)", padding: "13px 16px" }}>
           <label className="label" htmlFor="body">Body</label>
           <textarea id="body" className="inp" value={body} onChange={(e) => setBody(e.target.value)} rows={10} style={{ minHeight: 180, resize: "vertical" }} placeholder="Document contents…" />
         </div>

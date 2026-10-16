@@ -16,10 +16,10 @@ export function StatusBars({ items, ariaLabel }: { items: { status: string; coun
         {rows.map((r) => (
           <div key={r.status} style={{ display: "grid", gridTemplateColumns: "minmax(110px, 180px) 1fr 56px", alignItems: "center", gap: 10, fontSize: 13 }}>
             <span style={{ color: "var(--ink)" }}>{humanizeStatus(r.status)}</span>
-            <span style={{ background: "var(--surface, #f1f5f9)", borderRadius: 6, height: 14, overflow: "hidden" }}>
+            <span style={{ background: "var(--surface)", borderRadius: 6, height: 14, overflow: "hidden" }}>
               <span
                 data-testid="status-bar"
-                style={{ display: "block", height: "100%", width: `${Math.max(2, Math.round((r.count / max) * 100))}%`, background: "var(--primary, #2563eb)", borderRadius: 6 }}
+                style={{ display: "block", height: "100%", width: `${Math.max(2, Math.round((r.count / max) * 100))}%`, background: "var(--primary)", borderRadius: 6 }}
               />
             </span>
             <span style={{ textAlign: "end", color: "var(--muted)" }}>

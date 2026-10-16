@@ -31,28 +31,28 @@ type Translator = ReturnType<typeof useTranslations>;
 
 function eventConfig(t: Translator): Record<string, { icon: string; color: string; bg: string; label: string }> {
   return {
-    join:                 { icon: "🎉", color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)", label: t("eventJoining") },
-    transfer:             { icon: "🔄", color: "var(--info, #2563eb)", bg: "var(--infobg, #eff6ff)", label: t("eventTransfer") },
-    posting:              { icon: "📍", color: "var(--info, #2563eb)", bg: "var(--infobg, #eff6ff)", label: t("eventPosting") },
-    promotion:            { icon: "⬆️", color: "var(--violet, #7c3aed)", bg: "var(--primary-soft, #f5f3ff)", label: t("eventPromotion") },
-    increment:            { icon: "💹", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)", label: t("eventIncrement") },
-    leave:                { icon: "🌴", color: "var(--warn, #d97706)", bg: "#fffbeb", label: t("eventLeave") },
-    deputation:           { icon: "🏛️", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)", label: t("eventDeputation") },
+    join:                 { icon: "🎉", color: "var(--good)", bg: "var(--goodbg)", label: t("eventJoining") },
+    transfer:             { icon: "🔄", color: "var(--info)", bg: "var(--infobg)", label: t("eventTransfer") },
+    posting:              { icon: "📍", color: "var(--info)", bg: "var(--infobg)", label: t("eventPosting") },
+    promotion:            { icon: "⬆️", color: "var(--violet)", bg: "var(--primary-soft)", label: t("eventPromotion") },
+    increment:            { icon: "💹", color: "var(--info)", bg: "var(--infobg)", label: t("eventIncrement") },
+    leave:                { icon: "🌴", color: "var(--warn)", bg: "var(--warnbg)", label: t("eventLeave") },
+    deputation:           { icon: "🏛️", color: "var(--info)", bg: "var(--infobg)", label: t("eventDeputation") },
     // GAP-HR-SERVICE-BOOK-03: these six types are actually written by real
     // consumers (lifecycle, deputation, training, pay-matrix) but had no
     // badge config at all -- every one of them rendered as the generic
     // "Other" badge while the filter dropdown showed the raw code instead.
-    deputation_out:       { icon: "🏛️", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)", label: t("eventDeputationOut") },
-    deputation_in:        { icon: "🏛️", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)", label: t("eventDeputationIn") },
-    repatriation:         { icon: "🏠", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)", label: t("eventRepatriation") },
-    deputation_cancelled: { icon: "🚫", color: "var(--mut, #64748b)", bg: "var(--bg, #f8fafc)", label: t("eventDeputationCancelled") },
-    separation:           { icon: "📤", color: "var(--mut, #64748b)", bg: "var(--bg, #f8fafc)", label: t("eventSeparation") },
-    reinstatement:        { icon: "🔁", color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)", label: t("eventReinstatement") },
-    training:             { icon: "🎓", color: "var(--violet, #7c3aed)", bg: "var(--primary-soft, #f5f3ff)", label: t("eventTraining") },
-    confirmation:         { icon: "✅", color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)", label: t("eventConfirmation") },
-    suspension:           { icon: "⛔", color: "var(--bad, #dc2626)", bg: "var(--badbg, #fef2f2)", label: t("eventSuspension") },
-    retirement:           { icon: "📤", color: "var(--mut, #64748b)", bg: "var(--bg, #f8fafc)", label: t("eventRetirement") },
-    other:                { icon: "📌", color: "var(--mut, #64748b)", bg: "var(--bg, #f8fafc)", label: t("eventOther") },
+    deputation_out:       { icon: "🏛️", color: "var(--info)", bg: "var(--infobg)", label: t("eventDeputationOut") },
+    deputation_in:        { icon: "🏛️", color: "var(--info)", bg: "var(--infobg)", label: t("eventDeputationIn") },
+    repatriation:         { icon: "🏠", color: "var(--info)", bg: "var(--infobg)", label: t("eventRepatriation") },
+    deputation_cancelled: { icon: "🚫", color: "var(--mut)", bg: "var(--bg)", label: t("eventDeputationCancelled") },
+    separation:           { icon: "📤", color: "var(--mut)", bg: "var(--bg)", label: t("eventSeparation") },
+    reinstatement:        { icon: "🔁", color: "var(--good)", bg: "var(--goodbg)", label: t("eventReinstatement") },
+    training:             { icon: "🎓", color: "var(--violet)", bg: "var(--primary-soft)", label: t("eventTraining") },
+    confirmation:         { icon: "✅", color: "var(--good)", bg: "var(--goodbg)", label: t("eventConfirmation") },
+    suspension:           { icon: "⛔", color: "var(--bad)", bg: "var(--badbg)", label: t("eventSuspension") },
+    retirement:           { icon: "📤", color: "var(--mut)", bg: "var(--bg)", label: t("eventRetirement") },
+    other:                { icon: "📌", color: "var(--mut)", bg: "var(--bg)", label: t("eventOther") },
   };
 }
 
@@ -60,8 +60,8 @@ function EventBadge({ type, eventCfg }: { type: string; eventCfg: Record<string,
   const cfg = eventCfg[type];
   const label = cfg?.label ?? humanizeStatus(type);
   const icon = cfg?.icon ?? "📌";
-  const color = cfg?.color ?? "var(--mut, #64748b)";
-  const bg = cfg?.bg ?? "var(--bg, #f8fafc)";
+  const color = cfg?.color ?? "var(--mut)";
+  const bg = cfg?.bg ?? "var(--bg)";
   return (
     <span
       style={{
@@ -158,8 +158,8 @@ export function ServiceBookView({ entries, employeeId, hideEmployeeFilter }: Pro
             onChange={(e) => { setEmpFilter(e.target.value); setPage(0); }}
             style={{
               padding: "7px 12px", borderRadius: 6,
-              border: "1px solid var(--line, #e2e8f0)",
-              fontSize: "0.875rem", background: "var(--bg, #fff)",
+              border: "1px solid var(--line)",
+              fontSize: "0.875rem", background: "var(--bg)",
               color: "var(--ink)", flex: "1 1 180px", minWidth: 160,
             }}
             aria-label={t("filterByEmployeeAriaLabel")}
@@ -170,8 +170,8 @@ export function ServiceBookView({ entries, employeeId, hideEmployeeFilter }: Pro
           onChange={(e) => { setTypeFilter(e.target.value); setPage(0); }}
           style={{
             padding: "7px 12px", borderRadius: 6,
-            border: "1px solid var(--line, #e2e8f0)",
-            fontSize: "0.875rem", background: "var(--bg, #fff)",
+            border: "1px solid var(--line)",
+            fontSize: "0.875rem", background: "var(--bg)",
             color: "var(--ink)",
           }}
           aria-label={t("filterByEventTypeAriaLabel")}
@@ -202,7 +202,7 @@ export function ServiceBookView({ entries, employeeId, hideEmployeeFilter }: Pro
           aria-label={t("tableAriaLabel")}
         >
           <thead>
-            <tr style={{ background: "var(--bg2, #f8fafc)" }}>
+            <tr style={{ background: "var(--bg2)" }}>
               {COLUMNS.map(
                 (h) => (
                   <th
@@ -211,7 +211,7 @@ export function ServiceBookView({ entries, employeeId, hideEmployeeFilter }: Pro
                       padding: "9px 12px", textAlign: "start",
                       fontWeight: 600, fontSize: "0.75rem",
                       color: "var(--ink2)", whiteSpace: "nowrap",
-                      borderBottom: "1px solid var(--line, #e2e8f0)",
+                      borderBottom: "1px solid var(--line)",
                     }}
                   >
                     {h}
@@ -240,11 +240,11 @@ export function ServiceBookView({ entries, employeeId, hideEmployeeFilter }: Pro
                   <tr
                     key={entry.id}
                     style={{
-                      borderBottom: "1px solid var(--line, #f1f5f9)",
+                      borderBottom: "1px solid var(--line)",
                       background:
                         idx % 2 === 0
                           ? "transparent"
-                          : "var(--bg2, #f8fafc)",
+                          : "var(--bg2)",
                     }}
                   >
                     <td
@@ -330,8 +330,8 @@ export function ServiceBookView({ entries, employeeId, hideEmployeeFilter }: Pro
                 style={{
                   padding: "5px 11px", borderRadius: 5, border: "none",
                   background:
-                    pg === safePage ? "var(--primary, #2563eb)" : "var(--line2)",
-                  color: pg === safePage ? "var(--panel, #fff)" : "var(--ink)",
+                    pg === safePage ? "var(--primary)" : "var(--line2)",
+                  color: pg === safePage ? "var(--panel)" : "var(--ink)",
                   cursor: "pointer",
                 }}
               >

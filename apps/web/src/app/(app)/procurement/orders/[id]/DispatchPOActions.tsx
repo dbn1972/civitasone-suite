@@ -61,7 +61,7 @@ export function DispatchPOActions({
     }
     if (!hint) return null;
     return (
-      <p style={{ fontSize: "0.875rem", color: "#64748b", margin: 0 }} role="note">
+      <p style={{ fontSize: "0.875rem", color: "var(--mut)", margin: 0 }} role="note">
         {hint}
       </p>
     );
@@ -71,7 +71,7 @@ export function DispatchPOActions({
   // rather than offering a control the server will 403.
   if (!canDispatchRole) {
     return (
-      <p style={{ fontSize: "0.875rem", color: "#64748b", margin: 0 }} role="note">
+      <p style={{ fontSize: "0.875rem", color: "var(--mut)", margin: 0 }} role="note">
         Dispatch is restricted to procurement officers.
       </p>
     );
@@ -118,7 +118,7 @@ export function DispatchPOActions({
       >
         Dispatch to vendor
       </Button>
-      <span role="status" aria-live="polite" style={{ fontSize: "0.8rem", color: "#047857" }}>{message}</span>
+      <span role="status" aria-live="polite" style={{ fontSize: "0.8rem", color: "var(--good)" }}>{message}</span>
 
       <ConfirmDialog
         open={open}
