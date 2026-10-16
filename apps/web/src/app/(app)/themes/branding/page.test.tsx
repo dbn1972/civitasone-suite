@@ -40,3 +40,20 @@ describe("Themes branding page (GAP-THEMES-BRANDING-06)", () => {
     expect(within(body).queryByText("Pack 2")).not.toBeInTheDocument();
   });
 });
+
+// GAP-THEMES-BRANDING-03: showId={false} — ID column must not appear on the
+// branding list; truncated UUID prefixes (e.g. 'pack-01') are meaningless to
+// a clerk and sharing a prefix would collide visually.
+describe("Themes branding page — showId (GAP-THEMES-BRANDING-03)", () => {
+  it("does NOT render an ID column header", async () => {
+    render(await Page());
+    expect(screen.queryByRole("columnheader", { name: /^id$/i })).not.toBeInTheDocument();
+  });
+
+  it("rows are identified by Name, not truncated ID", async () => {
+    render(await Page());
+    const body = document.querySelector("tbody") as HTMLElement;
+    expect(within(body).getByText("Zenith pack")).toBeInTheDocument();
+    expect(within(body).queryByText("pack-01")).not.toBeInTheDocument();
+  });
+});
