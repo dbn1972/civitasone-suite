@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementVendorDetail, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccountNodes, mapSrnDetail, mapGoodsReturnDetail, mapCycleCountDetail, mapPurchaseOrderSummaries, mapEstabFileSummaries } from "./apiMappers";
+import { getArrayPayload, parseMinor, parsePaiseFromDisplay, mapProcurementPOListItems, mapProcurementVendorDetails, mapProcurementVendorDetail, mapProcurementIndentSummaries, mapCrmAccounts, mapCrmAccountNodes, mapSrnDetail, mapGoodsReturnDetail, mapCycleCountDetail, mapPurchaseOrderSummaries, mapEstabFileSummaries, mapStockItemSummaries, mapStockLedgerEntries } from "./apiMappers";
 
 describe("mapCrmAccounts", () => {
   it("maps the accounts payload including hierarchy and contact count", () => {
@@ -691,5 +691,55 @@ describe("mapEstabFileSummaries — creator name (SF-17b)", () => {
   it("maps an unresolved creator to an empty string (the list then renders 'Unknown employee'), not the id", () => {
     const [row] = mapEstabFileSummaries([{ ...base, createdByName: null }]) ?? [];
     expect(row?.createdBy).toBe("");
+  });
+});
+
+describe("mapStockItemSummaries — GAP-STOCK-LIST-03: stock status", () => {
+  const base = { id: "11111111-1111-4111-8111-111111111111", name: "Ink", itemCode: "INK-001", category: "Stationery", unit: "EA" };
+
+  it("stock=0 and min=0 -> stockStatus out, isLowStock false", () => {
+    const [row] = mapStockItemSummaries([{ ...base, currentStock: 0, minStockLevel: 0 }]) ?? [];
+    expect(row?.stockStatus).toBe("out");
+    expect(row?.isLowStock).toBe(false);
+  });
+
+  it("stock=0 and min=5 -> stockStatus out, isLowStock true", () => {
+    const [row] = mapStockItemSummaries([{ ...base, currentStock: 0, minStockLevel: 5 }]) ?? [];
+    expect(row?.stockStatus).toBe("out");
+    expect(row?.isLowStock).toBe(true);
+  });
+
+  it("stock=3 and min=5 -> stockStatus low, isLowStock true", () => {
+    const [row] = mapStockItemSummaries([{ ...base, currentStock: 3, minStockLevel: 5 }]) ?? [];
+    expect(row?.stockStatus).toBe("low");
+    expect(row?.isLowStock).toBe(true);
+  });
+
+  it("stock=10 and min=5 -> stockStatus ok, isLowStock false", () => {
+    const [row] = mapStockItemSummaries([{ ...base, currentStock: 10, minStockLevel: 5 }]) ?? [];
+    expect(row?.stockStatus).toBe("ok");
+    expect(row?.isLowStock).toBe(false);
+  });
+
+  it("null currentStock -> stockStatus unknown, isLowStock null", () => {
+    const [row] = mapStockItemSummaries([{ ...base }]) ?? [];
+    expect(row?.stockStatus).toBe("unknown");
+    expect(row?.isLowStock).toBeNull();
+  });
+});
+
+describe("mapStockLedgerEntries — GAP-STOCK-LEDGER-04: signedQuantity", () => {
+  const base = { id: "e1", itemId: "i1", itemName: "Ink", postingDate: "2026-09-01", rateMinor: 500 };
+
+  it("transfer with qtyOut=5 -> signedQuantity -5, direction out", () => {
+    const [row] = mapStockLedgerEntries([{ ...base, voucherType: "transfer", qtyIn: 0, qtyOut: 5 }]) ?? [];
+    expect(row?.signedQuantity).toBe(-5);
+    expect(row?.direction).toBe("out");
+  });
+
+  it("receipt with qtyIn=3 -> signedQuantity +3, direction in", () => {
+    const [row] = mapStockLedgerEntries([{ ...base, voucherType: "receipt", qtyIn: 3, qtyOut: 0 }]) ?? [];
+    expect(row?.signedQuantity).toBe(3);
+    expect(row?.direction).toBe("in");
   });
 });

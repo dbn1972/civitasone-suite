@@ -2066,6 +2066,14 @@ export type StockItemSummary = {
   warehouseLocation?: string;
   /** null = unknown because currentStock is unknown (not "low", not "OK"). */
   isLowStock: boolean | null;
+  /**
+   * Computed display status (GAP-STOCK-LIST-03):
+   *   'out'     — currentStock <= 0 (regardless of reorder level)
+   *   'low'     — currentStock > 0 && minStockLevel > 0 && currentStock <= minStockLevel
+   *   'ok'      — currentStock > minStockLevel (or minStockLevel = 0 with stock on hand)
+   *   'unknown' — currentStock is null
+   */
+  stockStatus: "out" | "low" | "ok" | "unknown";
   lastReceivedDate?: string;
   lastIssuedDate?: string;
 };

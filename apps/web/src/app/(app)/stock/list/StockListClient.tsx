@@ -8,37 +8,69 @@ interface StockItem {
   id: string;
   itemCode: string;
   name: string;
+  category: string;
   unit: string;
   currentStock: number | null;
   totalValue: number | null;
   isLowStock: boolean | null;
-  category: string;
+  /** GAP-STOCK-LIST-03: 'out' | 'low' | 'ok' | 'unknown' */
+  stockStatus: "out" | "low" | "ok" | "unknown";
 }
 
 interface Props {
   items: StockItem[];
 }
 
+// GAP-STOCK-LIST-06: use a typed statusLabel string field instead of casting boolean to string.
+// GAP-STOCK-LIST-07: category column added.
 const COLUMNS = [
   { key: "itemCode" as const, label: "Item code" },
   { key: "name" as const, label: "Name" },
+  { key: "category" as const, label: "Category" },
   { key: "unit" as const, label: "UOM" },
   { key: "currentStock" as const, label: "On-hand qty", align: "right" as const },
   { key: "totalValue" as const, label: "Value ₹", align: "right" as const, cellType: "amount" as const },
-  { key: "isLowStock" as const, label: "Status", cellType: "status" as const },
+  {
+    key: "statusLabel" as const, label: "Status", cellType: "status" as const,
+    // GAP-STOCK-LIST-06: explicit labels so StatusPill shows the intended display text.
+    statusLabels: {
+      "Out of stock": "Out of stock",
+      "Low stock": "Low stock",
+      "OK": "OK",
+      "Unknown": "Unknown",
+    },
+    statusVariants: {
+      "Out of stock": "bad" as const,
+      "Low stock": "warn" as const,
+      "OK": "good" as const,
+      "Unknown": "mut" as const,
+    },
+  },
 ];
 
-const SEG_OPTIONS = ["All", "Low stock"];
+const SEG_OPTIONS = ["All", "Low stock", "Out of stock"];
+
+function stockLabel(status: StockItem["stockStatus"]): string {
+  switch (status) {
+    case "out": return "Out of stock";
+    case "low": return "Low stock";
+    case "ok": return "OK";
+    default: return "Unknown";
+  }
+}
 
 export function StockListClient({ items }: Props) {
   const [active, setActive] = useState("All");
 
-  const filtered = active === "Low stock" ? items.filter((i) => i.isLowStock === true) : items;
+  const filtered =
+    active === "Low stock" ? items.filter((i) => i.stockStatus === "low")
+    : active === "Out of stock" ? items.filter((i) => i.stockStatus === "out")
+    : items;
 
-  // Normalise rows so cellType:"status" renders the label, cellType:"amount" gets paise value
+  // GAP-STOCK-LIST-06: statusLabel is a proper string; no `as unknown as boolean` cast.
   const rows = filtered.map((i) => ({
     ...i,
-    isLowStock: (i.isLowStock === null ? "Unknown" : i.isLowStock ? "Low Stock" : "OK") as unknown as boolean,
+    statusLabel: stockLabel(i.stockStatus),
   }));
 
   return (
