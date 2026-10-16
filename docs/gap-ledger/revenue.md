@@ -14,7 +14,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-HOME-02  ·  LOW  ·  confirmed  ·  theme NAVUX (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 revenue: already fixed on main — page.tsx no duplicate tile; comment at l.6-14 cites fix; Analytics tile folds in description; closed by this PR)
 - **First-pass claim:** "Analytics" and "Collection Report" tiles both link to /revenue/analytics (page.tsx:17,21); the second is a duplicate entry point with no separate report.
 - **Verified evidence:** revenue/page.tsx:18 (Analytics) and :21 (Collection Report) both point to /revenue/analytics; no separate report route exists in the revenue directory listing.
 - **Files to change:** `apps/web/src/app/(app)/revenue/revenue/page.tsx`
@@ -257,7 +257,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ASSESSEES-DETAIL-02  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 revenue: already fixed on main — layout.tsx exists with ModuleGate moduleKey='revenue' + REVENUE_ROLES guard; closed by this PR)
 - **W0 note:** partly fixed by #1868 — revenue/layout.tsx now gates /revenue/* behind REVENUE_ROLES (PermissionDenied for no revenue role; fails open on unknown roles); remaining: backend ledger-view audit event and role/masking policy decision.
 - **First-pass claim:** DPDP: address, ward, contact are never shown here, but ownerName + identifier + full payment history render for any signed-in user with no role gate or masking (page.tsx:99-100,134-143).
 - **Verified evidence:** apps/web/src/app/(app)/revenue/assessees/[id]/page.tsx:99-100 shows ownerName, identifierNo, assesseeType and Ward in the header (ward IS shown, contrary to the note); address/contact are not rendered. Tabs show demands, bills and receipts (AssesseeDetailTabs.tsx:95-152). No role gate: there is no revenue/layout.tsx and no permission check on the page. Whether owner name and payment history are restricted data is a policy decision; municipal tax registers are often semi-public.
@@ -534,7 +534,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-BILLS-04  ·  LOW  ·  partly  ·  theme NAVUX (was STATUS)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 revenue: already fixed on main — bills/page.tsx:238 option label uses humanizeStatus(a.assesseeType); closed by this PR)
 - **W0 note:** partly fixed by #1868 — assessee option label now humanizes the enum on bills/page.tsx; remaining: shared AssesseeSelect not adopted (bills/receipts/refunds/recovery/write-offs/waivers/adjustments pickers are still inline GET-form selects, the latter six still print the raw assesseeType), no auto-submit.
 - **First-pass claim:** Picker is a GET form that reloads the full page; the assessee option label exposes the identifier and the raw enum (page.tsx:228-233).
 - **Verified evidence:** Picker is a GET <form> (bills/page.tsx:210-238) so View triggers a full server render; true. The option label `ownerName — identifierNo (assesseeType)` (230) intentionally includes the identifier to disambiguate namesakes; the raw enum assesseeType is the real blemish. Same pattern is copy-pasted in instalments, receipts, recovery pages.
@@ -749,7 +749,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-RECOVERY-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 revenue: already fixed on main — page.tsx:12 tile description 'Refer an assessee\'s outstanding arrears for coercive recovery.'; closed by this PR)
 - **First-pass claim:** Hub tile says "Refer defaulting demands for recovery action" (revenue/page.tsx:15) while the screen refers an assessee's whole arrears; scope of the referral is ambiguous.
 - **Verified evidence:** Hub tile at revenue/page.tsx:17 (not 15) says 'Refer defaulting demands for recovery action', while recovery/page.tsx:64 and the form POST {assesseeId, reason} (Form:49-52) and dialog copy refer the assessee's whole outstanding arrears; no demand selection exists.
 - **Files to change:** `apps/web/src/app/(app)/revenue/revenue/page.tsx`, `apps/web/src/app/(app)/revenue/recovery/page.tsx`
