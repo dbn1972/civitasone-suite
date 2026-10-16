@@ -433,7 +433,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-BBPS-03  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 revenue: added assessees prop to FetchBillForm and PayBillForm; server passes list; select replaces free-text; ownerName shown in ConfirmDialog; closed by this PR)
 - **First-pass claim:** Assessee is a free-text identifier with no lookup or name echo; confirmation dialog repeats the same string, so a wrong-assessee payment is not caught (PayBillForm.tsx:227-241).
 - **Verified evidence:** A ConfirmDialog already exists (PayBillForm.tsx:225-245, danger) and echoes amount, channel and the typed identifier (235-236), but the identifier is a free-text input (113-123) with no lookup or name echo, so the dialog cannot catch a wrong assessee. Fetch form has the same input (FetchBillForm.tsx:67-77). Mandatory reason / maker-checker do not apply: this is a single-step dispatch with no checker. Whether the BBPS identifier equals assessee.identifierNo is not visible (cannot-verify).
 - **Files to change:** `apps/web/src/app/(app)/revenue/bbps/PayBillForm.tsx`, `apps/web/src/app/(app)/revenue/bbps/FetchBillForm.tsx`, `apps/web/src/app/(app)/revenue/bbps/page.tsx`
