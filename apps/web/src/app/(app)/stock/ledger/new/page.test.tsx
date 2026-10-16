@@ -86,3 +86,43 @@ describe("GAP-STOCK-LEDGER-NEW-06: posting date uses IST today and rejects futur
     expect(await screen.findByText(/cannot be in the future/i)).toBeInTheDocument();
   });
 });
+
+describe("GAP-STOCK-LEDGER-NEW-03: rate required for receipts", () => {
+  it("blocks a receipt with blank rate and shows an error", async () => {
+    const fetchMock = installFetch();
+    render(<Page />);
+    // Default entry type is receipt
+    await waitFor(() => expect(screen.getByRole("option", { name: /A4 Paper/ })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Item"), { target: { value: ITEMS.data[0]!.id } });
+    fireEvent.change(screen.getByLabelText("Quantity"), { target: { value: "5" } });
+    // Leave rate blank
+    fireEvent.click(screen.getByRole("button", { name: "Record entry" }));
+    expect(await screen.findByText(/Rate is required for receipts/i)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toBe(false);
+  });
+
+  it("blocks a receipt with zero rate", async () => {
+    const fetchMock = installFetch();
+    render(<Page />);
+    await waitFor(() => expect(screen.getByRole("option", { name: /A4 Paper/ })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Item"), { target: { value: ITEMS.data[0]!.id } });
+    fireEvent.change(screen.getByLabelText("Quantity"), { target: { value: "5" } });
+    fireEvent.change(screen.getByLabelText("Rate per unit (₹)"), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record entry" }));
+    expect(await screen.findByText(/Rate is required for receipts/i)).toBeInTheDocument();
+    expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toBe(false);
+  });
+
+  it("allows an issue with blank rate (optional for non-receipt)", async () => {
+    const fetchMock = installFetch(() => res(true, 202, { id: "e2" }));
+    render(<Page />);
+    await waitFor(() => expect(screen.getByRole("option", { name: /A4 Paper/ })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Entry type"), { target: { value: "issue" } });
+    fireEvent.change(screen.getByLabelText("Item"), { target: { value: ITEMS.data[0]!.id } });
+    fireEvent.change(screen.getByLabelText("Quantity"), { target: { value: "5" } });
+    // No rate
+    fireEvent.click(screen.getByRole("button", { name: "Record entry" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/submitted/i));
+    expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toBe(true);
+  });
+});
