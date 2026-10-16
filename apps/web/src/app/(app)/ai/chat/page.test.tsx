@@ -18,6 +18,20 @@ vi.mock("../../../_data/loaders", () => ({
   getChatConversationCounts: (...a: unknown[]) => getChatConversationCountsMock(...a),
 }));
 
+vi.mock("next-intl/server", async () => {
+  const { createTranslator } = await import("next-intl");
+  const messages = (await import("@/messages/en.json")).default;
+  return {
+    getTranslations: async (ns?: string) => createTranslator({ locale: "en", messages, namespace: ns as never }),
+  };
+});
+
+vi.mock("next-intl", async (orig) => {
+  const actual = await orig<typeof import("next-intl")>();
+  const messages = (await import("@/messages/en.json")).default;
+  return { ...actual, useTranslations: (ns?: string) => actual.createTranslator({ locale: "en", messages, namespace: ns as never }) };
+});
+
 import Page from "./page";
 
 async function renderPage() {

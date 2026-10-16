@@ -41,7 +41,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-HOME-03  ·  LOW  ·  confirmed  ·  theme LAYOUT (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16 ALREADY-FIXED: columns='three' was already present in ai/page.tsx; no code change required; confirmed in w2/ai-part-1) (change to `[x]` when done, `[~]` if blocked + reason)
 - **First-pass claim:** Five tiles in a 'four' column grid leave an orphan tile on desktop (page.tsx:17).
 - **Verified evidence:** ai/page.tsx:443 columns='four' -> .g-4 four-column grid (civitas-ds.css:101); 5 tiles wrap 4+1 on desktop. Not a dead route.
 - **Files to change:** `apps/web/src/app/(app)/ai/page.tsx`
@@ -108,7 +108,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-AGENTS-03  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: closed by w2/ai-part-1; formatIndianDateTime applied to updatedAt/createdAt in mapRows; GWT test in apps/web/src/app/(app)/ai/_data.test.ts) (change to `[x]` when done, `[~]` if blocked + reason)
 - **First-pass claim:** Raw ISO timestamps or codes are printed in Meta (e.g. 2026-09-24T09:12:40.000Z) — no date formatting in mapRows/ModuleListTable (ai/_data.ts:69-77).
 - **Verified evidence:** _data.ts mapRows meta (line ~69-77) passes toText(row.updatedAt) / createdAt straight through; ModuleListTable.tsx renders {row.meta ?? '—'} with no formatting. Only reached when row.code and row.currency are absent. lib/formatters.ts has formatIndianDate (line 2) but no ISO date-time formatter was found there.
 - **Files to change:** `apps/web/src/app/(app)/ai/_data.ts`, `apps/web/src/lib/formatters.ts`
@@ -241,7 +241,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-CHAT-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: closed by w2/ai-part-1; aiChat namespace added to en.json+hi.json; getTranslations/useTranslations wired in page.tsx, ConversationsTable.tsx, StatusFilter.tsx; parity test added) (change to `[x]` when done, `[~]` if blocked + reason)
 - **First-pass claim:** Hard-coded English throughout (no next-intl) and emoji stat icons on fixed hex backgrounds (page.tsx:32-35).
 - **Verified evidence:** chat/page.tsx (~32-35) StatCards use emoji icons (💬🟢🙋⚪) with hex iconBg (#e0f2fe/#dcfce7/#fef3c7/#f1f5f9); title, subtitle, labels and all ConversationsTable/StatusFilter strings are English literals; no next-intl import in ai/chat/*. Theme FABRICATED is wrong — it is I18N/theme tokens.
 - **Files to change:** `apps/web/src/app/(app)/ai/chat/page.tsx`, `apps/web/src/app/(app)/ai/chat/ConversationsTable.tsx`, `apps/web/src/app/(app)/ai/chat/StatusFilter.tsx`
@@ -364,7 +364,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-CHAT-DETAIL-07  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: closed by w2/ai-part-1; aiChat namespace wired in chat/[id]/page.tsx, EndConversationButton.tsx, HandoffButton.tsx; parity test covers full namespace) (change to `[x]` when done, `[~]` if blocked + reason)
 - **First-pass claim:** Hard-coded English, emoji status icons on fixed hex backgrounds (page.tsx:60-61), and green/red message colours are inline hex (#047857/#b42318) in both action components.
 - **Verified evidence:** page.tsx:60-61 uses emoji icons and fixed hex backgrounds (#dcfce7/#fef3c7/#f1f5f9), other StatCards use #e0f2fe/#fef3c7/#fce7f3; strings ('Conversation', 'Started', 'Transcript', 'Handed to a human agent') are English literals, no getTranslations. Message colours #047857 and #b42318 are inline in EndConversationButton.tsx and HandoffButton.tsx. Also inline #475569/#64748b greys.
 - **Files to change:** `apps/web/src/app/(app)/ai/chat/[id]/page.tsx`, `apps/web/src/app/(app)/ai/chat/[id]/EndConversationButton.tsx`, `apps/web/src/app/(app)/ai/chat/[id]/HandoffButton.tsx`
@@ -750,7 +750,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-GOVERNANCE-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: closed by w2/ai-part-1; reason field threaded through route schema -> command payload -> consumer audit write in ai-agent-service; GWT test in services/ai-agent-service/tests/ai-agent-routes.test.ts) (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0-10 note:** review found the W0 tick partly — ConfirmDialog added (AgentKillSwitch.tsx:119-133) but dialog says optional reason is 'recorded in the audit trail' while ai-agent-service pause/resume route ignores it (agents/routes.ts:208-229 passes only id+version; commands.ts:41-55; consumer audits reason:null), so the audit-trail claim is false
 - **First-pass claim:** Pause is a one-click danger button with no ConfirmDialog (AgentKillSwitch.tsx:66-76): a mis-click halts a live citizen-facing agent, and the audit of that mutation is not shown here (whether ai-agent-service records it is undeterminable).
 - **Service:** `ai-agent-service`  ·  **Endpoint(s):** `POST /api/v1/ai/agents/{id}/pause and /resume`

@@ -1,13 +1,7 @@
 "use client";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
-
-const OPTIONS = [
-  { value: "", label: "All conversations" },
-  { value: "active", label: "Active only" },
-  { value: "handed_off", label: "With a human agent" },
-  { value: "ended", label: "Ended only" },
-];
+import { useTranslations } from "next-intl";
 
 /**
  * Filters by status on the server. The list is paginated by the API, so
@@ -15,10 +9,18 @@ const OPTIONS = [
  * under-report how many conversations match.
  */
 export function StatusFilter() {
+  const t = useTranslations("aiChat.statusFilter");
   const router = useRouter();
   const searchParams = useSearchParams();
   const [pending, startTransition] = useTransition();
   const selected = searchParams.get("status") ?? "";
+
+  const OPTIONS = [
+    { value: "", label: t("all") },
+    { value: "active", label: t("active") },
+    { value: "handed_off", label: t("handedOff") },
+    { value: "ended", label: t("ended") },
+  ];
 
   const onChange = (value: string) => {
     const next = new URLSearchParams(searchParams.toString());
@@ -32,12 +34,12 @@ export function StatusFilter() {
 
   return (
     <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-      <span style={{ fontSize: 13, color: "var(--muted)" }}>Status</span>
+      <span style={{ fontSize: 13, color: "var(--muted)" }}>{t("label")}</span>
       <select
         value={selected}
         disabled={pending}
         onChange={(e) => onChange(e.target.value)}
-        aria-label="Filter conversations by status"
+        aria-label={t("ariaLabel")}
       >
         {OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>{option.label}</option>
@@ -47,7 +49,7 @@ export function StatusFilter() {
           use a theme token so it is readable in dark mode. */}
       {pending && (
         <span role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--muted)" }}>
-          Loading…
+          {t("loading")}
         </span>
       )}
     </label>
