@@ -13500,6 +13500,17 @@
     "distributionBarAria": "{label}: {pct} of records"
   },
   "crmDealDetail": {
+    "logActivity": "Log Activity",
+    "markWon": "Mark Won",
+    "markWonTitle": "Mark \"{name}\" as won?",
+    "markWonDesc": "This closes the engagement as won, sets probability to 100% and is recorded in the audit trail.",
+    "markLost": "Mark Lost",
+    "markLostTitle": "Mark \"{name}\" as lost?",
+    "markLostDesc": "This closes the engagement as lost, sets probability to 0% and is recorded in the audit trail.",
+    "reasonClosingNote": "Reason / closing note",
+    "reasonForLoss": "Reason for loss",
+    "markedWon": "Engagement marked won.",
+    "markedLost": "Engagement marked lost.",
     "steps": {
       "qualification": "Qualification",
       "prospecting": "Prospecting",

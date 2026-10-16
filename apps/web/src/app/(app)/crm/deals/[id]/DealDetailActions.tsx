@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { ActionButton, Button, Field, Input, Select, Textarea } from "../../../../_components/ds";
 import { validateActivityForm, type ActivityFormErrors } from "../../activities/activityFormSchema";
@@ -18,6 +19,7 @@ type Props = {
 
 export function DealDetailActions({ dealId, dealName, contactId, status, canClose = true }: Props) {
   const router = useRouter();
+  const t = useTranslations("crmDealDetail");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -86,39 +88,39 @@ export function DealDetailActions({ dealId, dealName, contactId, status, canClos
   return (
     <>
       <Button onClick={() => setShowActivity((v) => !v)}>
-        Log Activity
+        {t("logActivity")}
       </Button>
       {canClose ? (
       <>
       <ActionButton
-        label="Mark Won"
+        label={t("markWon")}
         className="btn ghost"
         disabled={closed}
-        confirmTitle={`Mark “${dealName}” as won?`}
-        confirmDescription="This closes the deal as won, sets probability to 100% and is recorded in the audit trail."
-        confirmLabel="Mark Won"
+        confirmTitle={t("markWonTitle", { name: dealName })}
+        confirmDescription={t("markWonDesc")}
+        confirmLabel={t("markWon")}
         requireReason
-        reasonLabel="Reason / closing note"
+        reasonLabel={t("reasonClosingNote")}
         onConfirm={(reason) => closeDeal("won", reason)}
         onSuccess={() => {
-          setMessage("Deal marked won.");
+          setMessage(t("markedWon"));
           router.refresh();
         }}
       />
       <ActionButton
-        label="Mark Lost"
+        label={t("markLost")}
         className="btn ghost"
         danger
         disabled={closed}
-        confirmTitle={`Mark “${dealName}” as lost?`}
-        confirmDescription="This closes the deal as lost, sets probability to 0% and is recorded in the audit trail."
-        confirmLabel="Mark Lost"
+        confirmTitle={t("markLostTitle", { name: dealName })}
+        confirmDescription={t("markLostDesc")}
+        confirmLabel={t("markLost")}
         requireReason
-        reasonLabel="Reason for loss"
+        reasonLabel={t("reasonForLoss")}
         minReasonLength={10}
         onConfirm={(reason) => closeDeal("lost", reason)}
         onSuccess={() => {
-          setMessage("Deal marked lost.");
+          setMessage(t("markedLost"));
           router.refresh();
         }}
       />

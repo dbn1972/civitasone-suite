@@ -2159,7 +2159,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-DETAIL-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: closed by #N, W2 crm: closed by #N)
 - **First-pass claim:** Success and error text uses hard-coded hex colours (#047857 / #b42318) and English literals instead of tokens / next-intl (DealDetailActions.tsx:165-172); the page mixes 'Deal' (title) with 'Engagement' (list).
 - **Verified evidence:** DealDetailActions.tsx:165 color '#047857', :170 '#b42318' hard-coded; messages are English literals; page title 'Deal ...' (page.tsx:31) vs list 'Engagements' (deals/page.tsx:16). CustomFieldsManager uses same hex (204-205) too.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/[id]/DealDetailActions.tsx`, `apps/web/src/app/(app)/crm/deals/[id]/page.tsx`
