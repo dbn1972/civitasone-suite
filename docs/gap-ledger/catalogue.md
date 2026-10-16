@@ -141,7 +141,7 @@ Counts: ACTION 30, BACKEND-VERIFY 1
 
 ### GAP-CATALOGUE-BUNDLES-06  ·  LOW  ·  confirmed  ·  theme LISTUX (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD)
 - **W0 note:** partly fixed by #1923 — ModuleListTable now uses ds DataTable (sort/filter/paging, pageSize 15); still no module-specific empty-state CTA (emptyAction) or row links
 - **First-pass claim:** Read-only generic table: no filter, sort, paging or row link, and the empty state 'No records' has no call to action (ModuleListTable.tsx:34-36).
 - **Verified evidence:** ModuleListTable.tsx renders a plain table, no filter/sort/paging/row link (lines 37-58); empty state at line 35 has no action. Theme DEADROUTE is wrong (no dead link).
@@ -241,7 +241,7 @@ Counts: ACTION 30, BACKEND-VERIFY 1
 
 ### GAP-CATALOGUE-CATEGORIES-06  ·  LOW  ·  confirmed  ·  theme TABLE-FEATURES (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD)
 - **W0 note:** partly fixed by #1923 — ModuleListTable now uses ds DataTable (sort/filter/paging, pageSize 15); still no module-specific empty-state CTA (emptyAction) or row links
 - **First-pass claim:** Read-only generic table: no filter, sort, paging or row link, and the empty state 'No records' has no call to action (ModuleListTable.tsx:34-36).
 - **Verified evidence:** apps/web/src/app/_components/ModuleListTable.tsx:40-53 plain <table> with no sort/filter/paging/row link; empty state apps/web/src/app/_components/ModuleListTable.tsx:35 'No records / Nothing to show yet for this module.' has no action. ds DataTable already supports sortable/filterable/pageSize/rowLinkKey (cdp/profiles/page.tsx:39-60 pattern). Shared component, so it affects 60+ pages.
@@ -356,7 +356,7 @@ Counts: ACTION 30, BACKEND-VERIFY 1
 
 ### GAP-CATALOGUE-PRODUCTS-07  ·  LOW  ·  confirmed  ·  theme TABLE-FEATURES (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD)
 - **W0 note:** partly fixed by #1923 — ModuleListTable now uses ds DataTable (sort/filter/paging, pageSize 15); still no module-specific empty-state CTA (emptyAction) or row links
 - **First-pass claim:** Read-only generic table: no filter, sort, paging or row link, and the empty state 'No records' has no call to action (ModuleListTable.tsx:34-36).
 - **Verified evidence:** apps/web/src/app/_components/ModuleListTable.tsx:40-53 no sort/filter/paging/row link; empty state at :35 has no action.
@@ -471,7 +471,7 @@ Counts: ACTION 30, BACKEND-VERIFY 1
 
 ### GAP-CATALOGUE-RATES-07  ·  LOW  ·  confirmed  ·  theme TABLE-FEATURES (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD)
 - **W0 note:** partly fixed by #1923 — ModuleListTable now uses ds DataTable (sort/filter/paging, pageSize 15); still no module-specific empty-state CTA (emptyAction) or row links
 - **First-pass claim:** Read-only generic table: no filter, sort, paging or row link, and the empty state 'No records' has no call to action (ModuleListTable.tsx:34-36).
 - **Verified evidence:** apps/web/src/app/_components/ModuleListTable.tsx:40-53, empty state :35.

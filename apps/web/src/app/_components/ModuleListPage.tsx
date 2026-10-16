@@ -40,13 +40,20 @@ interface ModuleListPageProps {
   showId?: boolean;
   /** GAP-TENANT-QUOTAS-02: pass "quota" for quota status rendering. */
   statusStyle?: "quota";
+  /**
+   * GAP-CATALOGUE-{BUNDLES,CATEGORIES,PRODUCTS,RATES}-06 (TABLE-FEATURES):
+   * optional CTA for the empty state (e.g. a link to create the first record).
+   * Pass nothing for read-only modules; the empty message still updates via
+   * errorArea. Also forwarded to DataTable for filter-zero empty state.
+   */
+  emptyAction?: ReactNode;
 }
 
 function slugify(s: string): string {
   return `module.${s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`;
 }
 
-export function ModuleListPage({ title, description, rows, source, children, back, backLabel, errorArea, cacheKey, showId, statusStyle }: ModuleListPageProps) {
+export function ModuleListPage({ title, description, rows, source, children, back, backLabel, errorArea, cacheKey, showId, statusStyle, emptyAction }: ModuleListPageProps) {
   return (
     <>
       <PageHeader
@@ -68,6 +75,7 @@ export function ModuleListPage({ title, description, rows, source, children, bac
         {...(showId === false ? { showId: false } : {})}
         {...(statusStyle ? { statusStyle } : {})}
         {...(back ? { backHref: back } : {})}
+        {...(emptyAction ? { emptyAction } : {})}
       />
     </>
   );
