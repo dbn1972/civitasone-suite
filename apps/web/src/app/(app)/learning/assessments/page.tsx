@@ -4,7 +4,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 import { getAssessments } from "../_data";
 
-type Row = { id: string; title: string; passing: string; duration: string; attempts: number; status: string };
+type Row = { id: string; title: string; passing: string; duration: string; attempts: number; status: string; courseRef: string };
 
 // Mirrors services/hrms-service/src/modules/assessment/routes.ts HR_ROLES.
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -20,7 +20,7 @@ export default async function Page() {
   const visible = isHr ? assessments : assessments.filter((a) => a.status === "published");
 
   const rows: Row[] = visible.map((a) => ({
-    id: a.id, title: a.title,
+    id: a.id, title: a.title, courseRef: a.courseRef ?? "",
     // GAP-LEARNING-ASSESSMENTS-04: passingScore is a raw marks total (0..100000
     // in the backend validator), NOT a percentage — labelling it "%" would be
     // wrong. Show it as a marks figure. (Decision recorded in the GAP report.)
@@ -50,6 +50,20 @@ export default async function Page() {
               { key: "duration", label: "Duration", align: "right" },
               { key: "attempts", label: "Max attempts", align: "right" },
               { key: "status", label: "Status", cellType: "status" },
+              // GAP-LEARNING-ASSESSMENTS-03: courseRef was unused; now shown as a link.
+              {
+                key: "courseRef",
+                label: "Course",
+                sortable: false,
+                render: (r: Row) =>
+                  r.courseRef ? (
+                    <Link href={"/learning/courses/" + r.courseRef} className="btn ghost" style={{ fontSize: "0.8125rem", padding: "2px 10px" }}>
+                      View course
+                    </Link>
+                  ) : (
+                    <span style={{ color: "var(--ink2)" }}>—</span>
+                  ),
+              },
             ]}
             rows={rows}
             rowLinkKey="id"
