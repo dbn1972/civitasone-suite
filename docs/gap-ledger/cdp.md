@@ -539,7 +539,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-SEGMENTS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD — segments/routes.ts: GET uses CDP_ROLES; POST/PATCH/DELETE use ADMIN_ROLES (cdp_admin/super_admin); mutations publish to CQRS queue (commands.ts); cdp-routes.test.ts "403 — insufficient role (non-admin)" for POST segment covers role gate)
 - **First-pass claim:** Segments endpoint shape and mutation endpoints are not present in this snapshot (cdp-service absent): undeterminable.
 - **Service:** `cdp-service`  ·  **Endpoint(s):** `['GET /api/v1/cdp/segments']`
 - **Question:** What is the segment response shape and are create/update/delete endpoints present, role-gated and audited?
