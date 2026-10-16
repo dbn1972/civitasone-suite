@@ -578,9 +578,9 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 - **Source:** `apps/web/src/app/(app)/knowledge/policies/[id]/page.tsx`
 - **Design reference:** `redesign/knowledge/policies-detail.html`
 
-### GAP-KNOWLEDGE-POLICIES-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme PII
+### GAP-KNOWLEDGE-POLICIES-DETAIL-01  ·  HIGH  ·  interim  ·  theme PII
 
-- [ ] **Status** (W2 knowledge INTERIM - needs identity lookup: DPDP part done server-side (acknowledgement list returns everyone only to approver roles; others get the total and their own id) and the page prints no UUIDs. Resolving ids to names needs a directory lookup the knowledge-service must not join to; owner decision on the source (hr/identity API) needed.)
+- [~] **Status** (INTERIM — INTERIM — needs identity-service lookup for actor name resolution; DPDP masking done but reveal endpoint absent)
 - **W2 evidence:** Tests: services/knowledge-service/tests/w2-knowledge-clearance-visibility.test.ts 'the acknowledgement list shows an approver everyone, but a knowledge_user only the total and their own id'; apps/web/src/app/(app)/knowledge/policies/[id]/page.test.tsx 'GAP-DETAIL-01'.
 - **First-pass claim:** Acknowledgement list prints raw employee UUIDs to every viewer (page.tsx:60-64): unreadable for the HR owner and a DPDP concern (who has/hasn’t acknowledged is personal data); no role gate is visible in the web tree.
 - **Verified evidence:** policies/[id]/page.tsx:60-64 maps acks.employeeIds to <li> monospace raw ids. No role check exists in page.tsx; roleGuard.getSessionRoles()/PermissionDenied are used elsewhere (hr/rti/page.tsx:37-40) but not here. No shared Masked component exists. Server-side authorisation of the /acknowledgements endpoint is not visible (service absent). Employee names would need a lookup (getEmployees, app/_data/loaders.ts:1122) - the ack payload carries ids only.
