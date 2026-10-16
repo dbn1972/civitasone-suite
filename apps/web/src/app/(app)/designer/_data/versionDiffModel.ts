@@ -181,6 +181,50 @@ export function buildVersionDiffRows(
   const curIssuance = current.issuanceType ?? "—";
   pushChange(rows, "Output type", pubIssuance, curIssuance);
 
+  // GAP-DESIGNER-DETAIL-B5-03: include office fee overrides so a checker's diff
+  // shows any waiver (an office set to zero fee) rather than silently hiding it.
+  const pubOverrides = Array.isArray(published.officeOverrides)
+    ? (published.officeOverrides as unknown[])
+    : [];
+  const curOverrides = Array.isArray(current.officeOverrides)
+    ? (current.officeOverrides as unknown[])
+    : [];
+
+  function isOfficeRow(v: unknown): v is { officeId: string; feeFromMinor?: number; feeWaiverReason?: string } {
+    return typeof v === "object" && v !== null && "officeId" in v;
+  }
+
+  if (pubOverrides.length !== curOverrides.length) {
+    pushChange(
+      rows,
+      "Office variants",
+      pubOverrides.length + " office(s)",
+      curOverrides.length + " office(s)",
+      curOverrides.length > pubOverrides.length
+        ? "Added " + (curOverrides.length - pubOverrides.length) + " office variant(s)"
+        : "Removed " + (pubOverrides.length - curOverrides.length) + " office variant(s)",
+    );
+  } else if (curOverrides.length > 0) {
+    const pubByOffice = new Map(pubOverrides.filter(isOfficeRow).map((o) => [o.officeId, o]));
+    for (const row of curOverrides.filter(isOfficeRow)) {
+      const pub = pubByOffice.get(row.officeId);
+      const pubFee = pub?.feeFromMinor ?? null;
+      const curFee = row.feeFromMinor ?? null;
+      if (pubFee !== curFee) {
+        const before = pubFee == null ? "—" : formatMoney(pubFee);
+        const after = curFee == null ? "—" : formatMoney(curFee);
+        const reason = row.feeWaiverReason ? " (reason: " + row.feeWaiverReason + ")" : "";
+        pushChange(
+          rows,
+          "Office " + row.officeId + " fee",
+          before,
+          after,
+          "Office " + row.officeId + " fee changed " + before + " to " + after + reason,
+        );
+      }
+    }
+  }
+
   if (rows.length === 0) {
     rows.push({
       label: "Changes",
