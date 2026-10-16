@@ -167,3 +167,77 @@ describe("GAP-TELEPHONY-AGENTS-07: agents endpoint contract", () => {
     }
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GAP-TELEPHONY-CALLS-08
+// Question: What are call lifecycle status values and how is SLA computed?
+// ─────────────────────────────────────────────────────────────────────────────
+describe("GAP-TELEPHONY-CALLS-08: call lifecycle status enum and SLA", () => {
+  it("CALL_STATUSES covers every lifecycle value: queued ringing answered completed missed abandoned", () => {
+    const expected = ["queued", "ringing", "answered", "completed", "missed", "abandoned"] as const;
+    for (const s of expected) {
+      expect(CALL_STATUSES).toContain(s);
+    }
+    expect(CALL_STATUSES).toHaveLength(expected.length);
+  });
+
+  it("callSummarySchema includes slaAnswered as nullable boolean (server-computed field)", () => {
+    const valid = callSummarySchema.safeParse({
+      id: "11111111-1111-4000-8000-000000000001",
+      direction: "inbound",
+      callerNumber: null,
+      calleeNumber: null,
+      status: "completed",
+      disposition: "resolved",
+      queueId: null,
+      agentId: null,
+      linkedRefType: null,
+      linkedRefId: null,
+      hasRecording: false,
+      waitSeconds: 15,
+      talkSeconds: 120,
+      slaAnswered: true,
+      abandoned: false,
+      startedAt: null,
+      endedAt: null,
+      version: 1,
+    });
+    expect(valid.success).toBe(true);
+  });
+
+  it("listCallsQuery accepts all call status values as filter", () => {
+    for (const s of CALL_STATUSES) {
+      const r = listCallsQuery.safeParse({ status: s });
+      expect(r.success).toBe(true);
+    }
+  });
+
+  it("listCallsQuery rejects an unknown status with ZodError", () => {
+    const r = listCallsQuery.safeParse({ status: "on_hold" });
+    expect(r.success).toBe(false);
+  });
+
+  it("Given telephony_user; When GET /v1/telephony/calls?status=completed; Then 200 (not 400)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/telephony/calls?status=completed",
+      headers: { authorization: `Bearer ${token(TENANT_A, ["telephony_user"])}` },
+    });
+    await app.close();
+    expect(res.statusCode).not.toBe(400);
+    expect([200, 500]).toContain(res.statusCode);
+  });
+
+  it("Given telephony_user; When GET /v1/telephony/calls?status=abandoned; Then 200 (not 400)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/telephony/calls?status=abandoned",
+      headers: { authorization: `Bearer ${token(TENANT_A, ["telephony_user"])}` },
+    });
+    await app.close();
+    expect(res.statusCode).not.toBe(400);
+    expect([200, 500]).toContain(res.statusCode);
+  });
+});

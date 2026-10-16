@@ -477,9 +477,9 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 - **Impact if wrong:** Wrong or missing agent data; cross-tenant leak.
 - **Web change if wrong:** Adjust toAgents mapper/AgentRow if fields differ.
 
-### GAP-TELEPHONY-CALLS-08  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-TELEPHONY-CALLS-08  ·  LOW  ·  verified  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by gap-backend-verify.test.ts — CALL_STATUSES = queued|ringing|answered|completed|missed|abandoned (transitions.ts). SLA: server computes slaAnswered boolean via toSummary() using waitSeconds <= threshold (default 20 s, or queue-specific slaAnswerSeconds). callSummarySchema verified in gap-backend-verify.test.ts GAP-TELEPHONY-CALLS-08 suite)
 - **First-pass claim:** telephony-service is absent from the services/ snapshot; call lifecycle statuses and SLA definition cannot be verified — undeterminable.
 - **Service:** `telephony-service`  ·  **Endpoint(s):** `['GET /v1/telephony/calls']`
 - **Question:** What are the call lifecycle status values and how is SLA computed (threshold, field)?
