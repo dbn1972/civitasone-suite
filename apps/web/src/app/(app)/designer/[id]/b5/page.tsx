@@ -171,7 +171,7 @@ export default function DesignerB5Page() {
             padding: "8px 12px",
             fontSize: 13,
             color: "var(--bad)",
-            background: "var(--bad-bg, #fdecea)",
+            background: "var(--bad-bg)",
             borderRadius: "var(--r-sm)",
             border: "1px solid var(--bad)",
           }}

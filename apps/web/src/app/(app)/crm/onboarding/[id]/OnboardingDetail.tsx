@@ -485,12 +485,12 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
             </>
           )}
           {kycMessage ? (
-            <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>
+            <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>
               {kycMessage}
             </p>
           ) : null}
           {kycError ? (
-            <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", margin: 0 }}>
+            <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad)", margin: 0 }}>
               {kycError}
             </p>
           ) : null}
@@ -534,7 +534,7 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
                   ))}
                 </select>
                 {selectedOption?.kycBlocked ? (
-                  <p role="alert" style={{ fontSize: 12, color: "#b42318", marginTop: 4 }}>
+                  <p role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>
                     {t("completionGated")}
                   </p>
                 ) : null}
@@ -552,12 +552,12 @@ export function OnboardingDetail({ id, canApproveKyc = false }: { id: string; ca
             </>
           )}
           {stageMessage ? (
-            <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>
+            <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>
               {stageMessage}
             </p>
           ) : null}
           {stageError ? (
-            <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", margin: 0 }}>
+            <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad)", margin: 0 }}>
               {stageError}
             </p>
           ) : null}

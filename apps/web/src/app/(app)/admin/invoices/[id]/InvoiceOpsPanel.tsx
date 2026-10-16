@@ -138,14 +138,14 @@ export function InvoiceOpsPanel({ invoice, initial }: { invoice: AdminInvoiceDet
   return (
     <>
       {makerOff && (
-        <div role="note" data-testid="maker-off-notice" style={{ margin: "0 0 12px", padding: "10px 14px", borderRadius: 8, background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e", fontSize: 13 }}>
+        <div role="note" data-testid="maker-off-notice" style={{ margin: "0 0 12px", padding: "10px 14px", borderRadius: 8, background: "var(--warnbg)", border: "1px solid #fde68a", color: "var(--warn)", fontSize: 13 }}>
           {t("makerOffNotice")}
         </div>
       )}
       {notice && <div role="status" style={{ margin: "0 0 12px", fontSize: 13, color: "var(--mut)" }}>{notice}</div>}
       <Card title={t("offlineTitle")}>
         {payments === null ? (
-          <div role="alert" style={{ padding: 12, fontSize: 13, color: "#b42318" }}>
+          <div role="alert" style={{ padding: 12, fontSize: 13, color: "var(--bad)" }}>
             {t("loadFailed")} <Button type="button" variant="ghost" size="sm" onClick={() => void reload()}>{t("retry")}</Button>
           </div>
         ) : (
@@ -195,7 +195,7 @@ export function InvoiceOpsPanel({ invoice, initial }: { invoice: AdminInvoiceDet
 
       <Card title={t("reminderTitle")}>
         {reminders === null ? (
-          <div role="alert" style={{ padding: 12, fontSize: 13, color: "#b42318" }}>
+          <div role="alert" style={{ padding: 12, fontSize: 13, color: "var(--bad)" }}>
             {t("loadFailed")} <Button type="button" variant="ghost" size="sm" onClick={() => void reload()}>{t("retry")}</Button>
           </div>
         ) : (
@@ -214,7 +214,7 @@ export function InvoiceOpsPanel({ invoice, initial }: { invoice: AdminInvoiceDet
             ) : (
               <span style={{ fontSize: 12.5, color: "var(--mut)" }}>{initial.canOperate ? t("notSettleable") : t("viewOnly")}</span>
             )}
-            {reminderMsg && <span role={reminderMsg.kind === "err" ? "alert" : "status"} style={{ fontSize: 12.5, color: reminderMsg.kind === "err" ? "#b42318" : "#027a48" }}>{reminderMsg.text}</span>}
+            {reminderMsg && <span role={reminderMsg.kind === "err" ? "alert" : "status"} style={{ fontSize: 12.5, color: reminderMsg.kind === "err" ? "var(--bad)" : "var(--good)" }}>{reminderMsg.text}</span>}
           </div>
         )}
       </Card>
@@ -237,11 +237,11 @@ export function InvoiceOpsPanel({ invoice, initial }: { invoice: AdminInvoiceDet
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: 12.5 }}>{t("fieldReference")}
             <input value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} style={field} autoComplete="off" maxLength={60} />
-            {errors.reference && <span role="alert" style={{ color: "#b42318" }}>{errorText(errors, "reference")}</span>}
+            {errors.reference && <span role="alert" style={{ color: "var(--bad)" }}>{errorText(errors, "reference")}</span>}
           </label>
           <label style={{ display: "grid", gap: 4, fontSize: 12.5 }}>{t("fieldPaidOn")}
             <input type="date" value={form.paidOn} max={todayInIndia()} onChange={(e) => setForm({ ...form, paidOn: e.target.value })} style={field} />
-            {errors.paidOn && <span role="alert" style={{ color: "#b42318" }}>{errorText(errors, "paidOn")}</span>}
+            {errors.paidOn && <span role="alert" style={{ color: "var(--bad)" }}>{errorText(errors, "paidOn")}</span>}
           </label>
           <div style={{ fontSize: 12.5 }}>
             <div style={{ marginBottom: 4 }}>{t("fieldAmount")}</div>
@@ -250,7 +250,7 @@ export function InvoiceOpsPanel({ invoice, initial }: { invoice: AdminInvoiceDet
           </div>
           <label style={{ display: "grid", gap: 4, fontSize: 12.5 }}>{t("fieldReason")}
             <textarea rows={3} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} style={field} maxLength={500} />
-            {errors.reason && <span role="alert" style={{ color: "#b42318" }}>{errorText(errors, "reason")}</span>}
+            {errors.reason && <span role="alert" style={{ color: "var(--bad)" }}>{errorText(errors, "reason")}</span>}
           </label>
         </div>
       </ConfirmDialog>
@@ -341,7 +341,7 @@ function BillingSettingsCard({ settings, onChanged }: { settings: BillingSetting
           {!pending && (settings.offlineMakerChecker
             ? <Button type="button" variant="ghost" size="sm" onClick={() => { setError(undefined); setDialog("off"); }}>{t("makerRequestOff")}</Button>
             : <Button type="button" variant="ghost" size="sm" onClick={() => { setError(undefined); setDialog("on"); }}>{t("makerSwitchOn")}</Button>)}
-          {msg && <div role="status" style={{ fontSize: 12.5, color: "#027a48", marginTop: 6 }}>{msg}</div>}
+          {msg && <div role="status" style={{ fontSize: 12.5, color: "var(--good)", marginTop: 6 }}>{msg}</div>}
         </div>
         <div>
           <label htmlFor="reminder-days" style={{ fontSize: 13, fontWeight: 600 }}>{t("reminderDaysLabel")}</label>
@@ -350,7 +350,7 @@ function BillingSettingsCard({ settings, onChanged }: { settings: BillingSetting
             <Button type="button" size="sm" onClick={() => void saveDays()}>{t("saveDays")}</Button>
           </div>
           <div style={{ fontSize: 12, color: "var(--mut)" }}>{t("reminderDaysHint")}</div>
-          {daysMsg && <div role={daysMsg.kind === "err" ? "alert" : "status"} style={{ fontSize: 12.5, marginTop: 4, color: daysMsg.kind === "err" ? "#b42318" : "#027a48" }}>{daysMsg.text}</div>}
+          {daysMsg && <div role={daysMsg.kind === "err" ? "alert" : "status"} style={{ fontSize: 12.5, marginTop: 4, color: daysMsg.kind === "err" ? "var(--bad)" : "var(--good)" }}>{daysMsg.text}</div>}
         </div>
       </div>
       <ConfirmDialog

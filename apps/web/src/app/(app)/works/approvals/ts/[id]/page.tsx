@@ -184,19 +184,19 @@ export default async function TsDetailPage({
       >
         <StatCard
           icon="₹"
-          iconBg="#ecfdf3"
+          tone="good"
           label="TS Amount"
           value={formatMoney(ts.tsAmountMinor ?? "0")}
         />
         <StatCard
           icon="📑"
-          iconBg="#eff6ff"
+          tone="info"
           label="Status"
           value={humanize(ts.status)}
         />
         <StatCard
           icon="🗂"
-          iconBg="#fef3c7"
+          tone="warn"
           label="Sanction Type"
           value={humanize(ts.sanctionType)}
         />

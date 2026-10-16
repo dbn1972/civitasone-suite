@@ -48,7 +48,7 @@ export function DebugModeButton({ debugModeUntil }: { debugModeUntil: string | n
   return (
     <div style={{ marginTop: 10 }}>
       {active && (
-        <span style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, background: "#fef3c7", color: "#92400e", fontWeight: 600, marginInlineEnd: 8 }}>
+        <span style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, background: "var(--warnbg)", color: "var(--warn)", fontWeight: 600, marginInlineEnd: 8 }}>
           Debug until {formatInIST(debugModeUntil!, { hour: "2-digit", minute: "2-digit" })} IST
         </span>
       )}

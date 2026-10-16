@@ -79,7 +79,7 @@ export function ClaimActions({ claimId, claimAmountMinor }: { claimId: string; c
           style={{ width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
         />
         {amountError ? (
-          <p id="claim-settle-amount-error" role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+          <p id="claim-settle-amount-error" role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
             {amountError}
           </p>
         ) : null}

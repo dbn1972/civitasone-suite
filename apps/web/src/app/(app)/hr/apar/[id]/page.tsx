@@ -251,22 +251,22 @@ export default async function AparDetailPage({
         role="note"
         style={{
           margin: "12px 0", padding: "10px 14px", borderRadius: 8,
-          background: "var(--warnbg, #fffbeb)", border: "1px solid var(--warn, #b45309)",
-          color: "var(--warn, #92400e)", fontSize: 13, fontWeight: 600,
+          background: "var(--warnbg)", border: "1px solid var(--warn)",
+          color: "var(--warn)", fontSize: 13, fontWeight: 600,
         }}
       >
         🔒 {t("confidentialBanner")}
       </div>
 
       <StatGrid>
-        <StatCard icon="\U0001f4cb" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalCriteria")} value={scores.length} />
-        <StatCard icon="✅"       iconBg="var(--goodbg, #e6f7f0)" label={t("statScored")}         value={scoredCount} />
+        <StatCard icon="\U0001f4cb" iconBg="var(--infobg)" label={t("statTotalCriteria")} value={scores.length} />
+        <StatCard icon="✅"       iconBg="var(--goodbg)" label={t("statScored")}         value={scoredCount} />
         <StatCard
-          icon="\U0001f4ca" iconBg="var(--warnbg, #fff7e6)"
+          icon="\U0001f4ca" iconBg="var(--warnbg)"
           label={provisionalScore !== null ? t("statProvisionalScore") : t("statAvgScore")}
           value={provisionalScore !== null ? provisionalScore.toFixed(1) : avgScore}
         />
-        <StatCard icon="\U0001f4dc" iconBg="var(--bg, #f5f5f5)" label={t("statStageChanges")}  value={history.length} />
+        <StatCard icon="\U0001f4dc" iconBg="var(--bg)" label={t("statStageChanges")}  value={history.length} />
       </StatGrid>
 
       <Card title={t("appraisalDetailsTitle")}>

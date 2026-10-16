@@ -55,7 +55,7 @@ export function UpcomingPrograms({ programs }: UpcomingProgramsProps) {
 
   return (
     <div className="rounded-xl border shadow-sm overflow-hidden mb-6"
-      style={{ background: "var(--panel, #fff)", borderColor: "var(--line, #e2e8f0)" }}>
+      style={{ background: "var(--panel)", borderColor: "var(--line)" }}>
       <div className="px-5 py-4 border-b border-slate-100">
         <h3 className="text-base font-semibold text-slate-800">{t("upcomingHeading")}</h3>
         <p className="text-xs text-slate-500 mt-0.5">{t("upcomingSubtitle", { count: upcoming.length } as never)}</p>

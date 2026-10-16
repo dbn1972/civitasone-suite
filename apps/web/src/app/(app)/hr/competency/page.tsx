@@ -113,10 +113,10 @@ export default async function CompetencyPage() {
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-<StatCard icon="🏗️" iconBg="var(--infobg, #e6f0ff)" label={t("statFrameworks")}  value={errored ? null : frameworks.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)"  label={t("statActive")}      value={errored ? null : active} />
-        <StatCard icon="💻" iconBg="var(--warnbg, #fffbe6)"  label={t("statTechnical")}   value={errored ? null : technical} />
-        <StatCard icon="🤝" iconBg="var(--bg, #f5f5f5)"  label={t("statBehavioural")} value={errored ? null : behavioural} />
+<StatCard icon="🏗️" iconBg="var(--infobg)" label={t("statFrameworks")}  value={errored ? null : frameworks.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)"  label={t("statActive")}      value={errored ? null : active} />
+        <StatCard icon="💻" iconBg="var(--warnbg)"  label={t("statTechnical")}   value={errored ? null : technical} />
+        <StatCard icon="🤝" iconBg="var(--bg)"  label={t("statBehavioural")} value={errored ? null : behavioural} />
       </StatGrid>
 
       {errored ? (
@@ -147,7 +147,7 @@ export default async function CompetencyPage() {
                     title={t("myRadarChartTitle", { max: radar.maxValue })}
                   />
                 </div>
-                <p style={{ margin: "0 16px 16px", fontSize: 12, color: "var(--ink2, #475569)" }}>
+                <p style={{ margin: "0 16px 16px", fontSize: 12, color: "var(--ink2)" }}>
                   {t("myRadarNote")}
                 </p>
               </>

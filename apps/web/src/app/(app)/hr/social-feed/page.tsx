@@ -90,10 +90,10 @@ export default async function SocialFeedPage() {
       />
       {!errored ? <DataSourceBadge source={source} /> : null}
       <StatGrid>
-        <StatCard icon="🌟" iconBg="var(--warnbg, #fffbe6)" label={t("statKudosLabel")}         value={errored ? "—" : counts.kudos7d} />
-        <StatCard icon="🎂" iconBg="var(--badbg, #fff0f6)" label={t("statBirthdaysLabel")}    value={errored ? "—" : counts.birthdaysToday} />
-        <StatCard icon="👋" iconBg="var(--goodbg, #e6f7f0)" label={t("statNewJoineesLabel")}   value={errored ? "—" : counts.joinees30d} />
-        <StatCard icon="📢" iconBg="var(--infobg, #e6f0ff)" label={t("statAnnouncementsLabel")} value={errored ? "—" : counts.announcementsActive} />
+        <StatCard icon="🌟" iconBg="var(--warnbg)" label={t("statKudosLabel")}         value={errored ? "—" : counts.kudos7d} />
+        <StatCard icon="🎂" iconBg="var(--badbg)" label={t("statBirthdaysLabel")}    value={errored ? "—" : counts.birthdaysToday} />
+        <StatCard icon="👋" iconBg="var(--goodbg)" label={t("statNewJoineesLabel")}   value={errored ? "—" : counts.joinees30d} />
+        <StatCard icon="📢" iconBg="var(--infobg)" label={t("statAnnouncementsLabel")} value={errored ? "—" : counts.announcementsActive} />
       </StatGrid>
 
       {/* GAP-HR-SOCIAL-FEED-06: card title used to switch between
@@ -148,7 +148,7 @@ export default async function SocialFeedPage() {
                         </p>
                       )}
                       {item.message && (
-                        <p style={{ marginTop: 6, fontSize: 13, color: "var(--ink2)", background: "var(--bg2, #f5f5f5)", borderRadius: 8, padding: "8px 12px", fontStyle: "italic" }}>
+                        <p style={{ marginTop: 6, fontSize: 13, color: "var(--ink2)", background: "var(--bg2)", borderRadius: 8, padding: "8px 12px", fontStyle: "italic" }}>
                           {item.message}
                         </p>
                       )}
@@ -158,7 +158,7 @@ export default async function SocialFeedPage() {
               }
               if (item.type === "birthday") {
                 return (
-                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "var(--warnbg, #fff9f0)", borderBottom: "1px solid var(--line)" }}>
+                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "var(--warnbg)", borderBottom: "1px solid var(--line)" }}>
                     <span style={{ fontSize: 32 }} aria-hidden="true">🎂</span>
                     <span className="sr-only">{t("birthdayTypeLabel")}</span>
                     <div style={{ flex: 1 }}>
@@ -173,7 +173,7 @@ export default async function SocialFeedPage() {
               }
               if (item.type === "new_joinee") {
                 return (
-                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "var(--goodbg, #f0fff8)", borderBottom: "1px solid var(--line)" }}>
+                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "var(--goodbg)", borderBottom: "1px solid var(--line)" }}>
                     <span style={{ fontSize: 32 }} aria-hidden="true">👋</span>
                     <span className="sr-only">{t("newJoineeTypeLabel")}</span>
                     <div style={{ flex: 1 }}>
@@ -188,7 +188,7 @@ export default async function SocialFeedPage() {
               }
               if (item.type === "announcement") {
                 return (
-                  <div key={item.id} style={{ display: "flex", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)", background: item.pinned ? "var(--infobg, #f5f8ff)" : "transparent" }}>
+                  <div key={item.id} style={{ display: "flex", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)", background: item.pinned ? "var(--infobg)" : "transparent" }}>
                     <span style={{ fontSize: 24 }} aria-hidden="true">{item.pinned ? "📌" : "📢"}</span>
                     <span className="sr-only">{t("announcementTypeLabel")}</span>
                     <div style={{ flex: 1 }}>
@@ -199,7 +199,7 @@ export default async function SocialFeedPage() {
                       <p style={{ fontSize: 13, color: "var(--ink2)", marginTop: 4 }}>{item.body}</p>
                       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                         {item.category && (
-                          <span style={{ fontSize: 11, background: "var(--primary-l, #dbeafe)", color: "var(--primary-d, #1e40af)", padding: "2px 8px", borderRadius: 20 }}>
+                          <span style={{ fontSize: 11, background: "var(--primary-l)", color: "var(--primary-d)", padding: "2px 8px", borderRadius: 20 }}>
                             {item.category}
                           </span>
                         )}

@@ -35,13 +35,13 @@ export default async function AdminRolesPage() {
         actions={<PrintExportButton label="Export" style={{ minHeight: 44 }} documentTitle="Roles" />}
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="🔑" iconBg="#f1f5f9" label="Total Roles" value={errored ? "—" : total} />
-        <StatCard icon="⚙️" iconBg="#eff6ff" label="System Roles" value={errored ? "—" : systemRoles} />
-        <StatCard icon="✏️" iconBg="#ecfdf3" label="Custom Roles" value={errored ? "—" : customRoles} />
+        <StatCard icon="🔑" tone="neutral" label="Total Roles" value={errored ? "—" : total} />
+        <StatCard icon="⚙️" tone="info" label="System Roles" value={errored ? "—" : systemRoles} />
+        <StatCard icon="✏️" tone="good" label="Custom Roles" value={errored ? "—" : customRoles} />
         {/* GAP-TENANT-ADMIN-ROLES-03: this is a count of role assignments, not of
             distinct users — a user with 2 roles counts twice. Label + hint make
             that explicit so it is not mistaken for a user headcount. */}
-        <StatCard icon="👥" iconBg="#fffaeb" label="Role assignments" value={errored ? "—" : totalAssigned} hint="Total role assignments. A user holding two roles counts twice — this is not a distinct-user count." />
+        <StatCard icon="👥" tone="warn" label="Role assignments" value={errored ? "—" : totalAssigned} hint="Total role assignments. A user holding two roles counts twice — this is not a distinct-user count." />
       </div>
       {errored ? (
         <Card title="Role definitions" padding>

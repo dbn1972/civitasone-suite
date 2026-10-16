@@ -46,7 +46,7 @@ function Spinner() {
         height: 14,
         borderRadius: "50%",
         border: "2.5px solid rgba(255,255,255,0.35)",
-        borderTopColor: "#fff",
+        borderTopColor: "var(--panel)",
         animation: "prs-spin 0.75s linear infinite",
       }}
     />
@@ -97,30 +97,30 @@ export function PayrollRunStepper({ status }: { status: string }) {
           const active = isActive(st);
 
           const circleColor =
-            st === "done"  ? "var(--success,#16a34a)" :
-            active         ? "var(--primary,#2563eb)" :
-            st === "error" ? "var(--danger,#dc2626)"  :
-                             "var(--line,#cbd5e1)";
+            st === "done"  ? "var(--success)" :
+            active         ? "var(--primary)" :
+            st === "error" ? "var(--danger)"  :
+                             "var(--line)";
 
           const circleBg =
-            st === "done"  ? "var(--goodbg,#f0fdf4)" :
-            active         ? "var(--primary,#2563eb)" :
-            st === "error" ? "var(--badbg,#fef2f2)"   :
-                             "var(--surface,#fff)";
+            st === "done"  ? "var(--goodbg)" :
+            active         ? "var(--primary)" :
+            st === "error" ? "var(--badbg)"   :
+                             "var(--surface)";
 
           const circleText =
-            st === "done"  ? "var(--success,#16a34a)" :
-            active         ? "#fff"                   :
-            st === "error" ? "var(--danger,#dc2626)"  :
-                             "var(--mut,#94a3b8)";
+            st === "done"  ? "var(--success)" :
+            active         ? "var(--panel)"                   :
+            st === "error" ? "var(--danger)"  :
+                             "var(--mut)";
 
           const labelColor =
-            st === "done"  ? "var(--success,#16a34a)" :
-            active         ? "var(--primary,#2563eb)" :
-            st === "error" ? "var(--danger,#dc2626)"  :
-                             "var(--mut,#94a3b8)";
+            st === "done"  ? "var(--success)" :
+            active         ? "var(--primary)" :
+            st === "error" ? "var(--danger)"  :
+                             "var(--mut)";
 
-          const lineColor  = i < curIdx ? "var(--success,#16a34a)" : "var(--line,#e2e8f0)";
+          const lineColor  = i < curIdx ? "var(--success)" : "var(--line)";
 
           return (
             <li

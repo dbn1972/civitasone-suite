@@ -23,8 +23,8 @@ import { searchWorkOptions, resolveWorkOptions } from "../../../_data/worksPicke
 
 
 const errBanner: React.CSSProperties = {
-  background: "#fef2f2",
-  color: "#b42318",
+  background: "var(--badbg)",
+  color: "var(--bad)",
   borderRadius: 8,
   padding: "10px 14px",
   fontSize: 14,
@@ -172,7 +172,7 @@ function PhotoForm() {
 
         <div>
           <p style={{ fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 8 }}>
-            Site Photo <span style={{ color: "#b42318" }}>*</span>
+            Site Photo <span style={{ color: "var(--bad)" }}>*</span>
           </p>
           <FileUpload
             category="photo"

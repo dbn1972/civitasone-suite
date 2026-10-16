@@ -41,7 +41,7 @@ export function HRKPIStrip({
       {/* Headcount */}
       <div className="kpi-card kpi-blue" role="listitem">
         <div className="kpi-label">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--info, #2563eb)" strokeWidth="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--info)" strokeWidth="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
           Headcount
         </div>
         <div className="kpi-val">{displayCount(headcount)}</div>
@@ -56,7 +56,7 @@ export function HRKPIStrip({
           <span className="kpi-badge" role="status" aria-label={`${pendingLeaves} pending`}>{pendingLeaves}</span>
         )}
         <div className="kpi-label">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--bad, #dc2626)" strokeWidth="2" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--bad)" strokeWidth="2" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           Pending Approvals
         </div>
         <div className="kpi-val">{displayCount(pendingLeaves)}</div>
@@ -68,7 +68,7 @@ export function HRKPIStrip({
       {/* On Leave */}
       <div className="kpi-card kpi-slate" role="listitem">
         <div className="kpi-label">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--mut, #64748b)" strokeWidth="2" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--mut)" strokeWidth="2" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
           On Leave Today
         </div>
         <div className="kpi-val">{displayCount(onLeave)}</div>
@@ -83,7 +83,7 @@ export function HRKPIStrip({
           payroll-cutoff API is an open product decision, not made here. */}
       <div className="kpi-card kpi-amber" role="listitem" data-testid="kpi-payroll-closes">
         <div className="kpi-label">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--warn, #d97706)" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--warn)" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           Days left in month
         </div>
         {/* GAP-HR-DASHBOARD-05: was the unpluralized literal "{payrollDaysLeft} days" (1 -> "1 days"). */}
@@ -94,7 +94,7 @@ export function HRKPIStrip({
       {/* Departments */}
       <div className="kpi-card kpi-slate" role="listitem">
         <div className="kpi-label">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--mut, #64748b)" strokeWidth="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--mut)" strokeWidth="2" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
           Departments
         </div>
         <div className="kpi-val">{displayCount(departments)}</div>
@@ -107,7 +107,7 @@ export function HRKPIStrip({
       {/* Present Today */}
       <div className="kpi-card kpi-slate" role="listitem">
         <div className="kpi-label">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--mut, #64748b)" strokeWidth="2" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--mut)" strokeWidth="2" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
           Present Today
         </div>
         {!hasValue(attendanceTodayPct) ? (
@@ -133,36 +133,36 @@ export function HRKPIStrip({
         @media (max-width: 900px) { .kpi-strip { grid-template-columns: repeat(3, 1fr); } }
         @media (max-width: 560px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
         .kpi-card {
-          background: var(--panel, #fff);
+          background: var(--panel);
           border-radius: 8px;
           padding: 14px 16px 12px;
           box-shadow: 0 1px 3px rgba(15,34,64,.09);
           border-top: 3px solid transparent;
         }
-        .kpi-blue   { border-top-color: var(--info, #2563eb); }
-        .kpi-red    { border-top-color: var(--bad, #dc2626); }
-        .kpi-amber  { border-top-color: var(--warn, #d97706); }
-        .kpi-slate  { border-top-color: var(--line, #cbd5e1); }
+        .kpi-blue   { border-top-color: var(--info); }
+        .kpi-red    { border-top-color: var(--bad); }
+        .kpi-amber  { border-top-color: var(--warn); }
+        .kpi-slate  { border-top-color: var(--line); }
         .kpi-label {
           display: flex; align-items: center; gap: 4px;
           font-size: 10px; font-weight: 700; letter-spacing: .08em;
-          text-transform: uppercase; color: var(--muted, #64748b); margin-bottom: 6px;
+          text-transform: uppercase; color: var(--muted); margin-bottom: 6px;
         }
         .kpi-val {
           font-size: 26px; font-weight: 700; letter-spacing: -.03em;
           font-variant-numeric: tabular-nums; line-height: 1;
-          color: var(--ink, #0f172a);
+          color: var(--ink);
         }
         .kpi-val-sm  { font-size: 20px; }
-        .kpi-val-muted { font-size: 20px; color: var(--muted, #64748b); }
+        .kpi-val-muted { font-size: 20px; color: var(--muted); }
         .kpi-trend { font-size: 11px; font-weight: 500; margin-top: 5px; }
-        .trend-up     { color: var(--good, #15803d); }
-        .trend-down   { color: var(--bad, #dc2626); }
-        .trend-flat   { color: var(--muted, #64748b); }
-        .trend-urgent { color: var(--bad, #dc2626); font-weight: 700; }
+        .trend-up     { color: var(--good); }
+        .trend-down   { color: var(--bad); }
+        .trend-flat   { color: var(--muted); }
+        .trend-urgent { color: var(--bad); font-weight: 700; }
         .kpi-badge {
           position: absolute; top: 10px; inset-inline-end: 10px;
-          background: var(--bad, #dc2626); color: #fff;
+          background: var(--bad); color: #fff;
           font-size: 9px; font-weight: 800; border-radius: 9px;
           min-width: 18px; height: 18px;
           display: flex; align-items: center; justify-content: center; padding: 0 5px;

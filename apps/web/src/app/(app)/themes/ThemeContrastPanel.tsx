@@ -88,7 +88,7 @@ export function ThemeContrastPanel({ tokens }: { tokens: ThemeTokenSummary[] }) 
                   borderRadius: 4,
                   background: p.bg,
                   color: p.fg,
-                  border: "1px solid var(--line, #e2e8f0)",
+                  border: "1px solid var(--line)",
                   fontWeight: 700,
                   flex: "0 0 auto",
                 }}
@@ -100,7 +100,7 @@ export function ThemeContrastPanel({ tokens }: { tokens: ThemeTokenSummary[] }) 
               <span
                 style={{
                   fontWeight: 700,
-                  color: p.passes ? "var(--good, #16a34a)" : "var(--bad, #dc2626)",
+                  color: p.passes ? "var(--good)" : "var(--bad)",
                 }}
               >
                 {p.passes ? "Passes AA" : "Fails AA"}

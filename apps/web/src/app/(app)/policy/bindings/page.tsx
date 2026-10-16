@@ -34,9 +34,9 @@ export default async function PolicyBindingsPage() {
       />
       {source === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
-        <StatCard icon="🔗" iconBg="#eff8ff" label="Total" value={errored ? "—" : bindings.length} />
-        <StatCard icon="✅" iconBg="#dcfce7" label="Active" value={errored ? "—" : active} />
-        <StatCard icon="⛔" iconBg="#fee2e2" label="Revoked" value={errored ? "—" : revoked} />
+        <StatCard icon="🔗" tone="info" label="Total" value={errored ? "—" : bindings.length} />
+        <StatCard icon="✅" tone="good" label="Active" value={errored ? "—" : active} />
+        <StatCard icon="⛔" tone="bad" label="Revoked" value={errored ? "—" : revoked} />
       </StatGrid>
 
       <Card title="Create binding" padding>

@@ -138,8 +138,8 @@ export default async function IccDetailPage({ params }: { params: { id: string }
             display: "inline-flex",
             alignItems: "center",
             gap: 6,
-            background: remaining < 15 ? "var(--badbg, #fff1f0)" : undefined,
-            color: remaining < 15 ? "var(--danger, #b91c1c)" : undefined,
+            background: remaining < 15 ? "var(--badbg)" : undefined,
+            color: remaining < 15 ? "var(--danger)" : undefined,
           }}
         >
           <span aria-hidden>⏱️</span>

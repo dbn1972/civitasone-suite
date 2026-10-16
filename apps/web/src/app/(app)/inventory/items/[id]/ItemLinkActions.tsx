@@ -108,7 +108,7 @@ export function ItemLinkActions({
         </div>
       </div>
       <div role="status" aria-live="polite">
-        {message ? <p role="alert" style={{ margin: 0, fontSize: "0.875rem", color: "#b91c1c" }}>{message}</p> : null}
+        {message ? <p role="alert" style={{ margin: 0, fontSize: "0.875rem", color: "var(--bad)" }}>{message}</p> : null}
       </div>
     </div>
   );

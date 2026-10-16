@@ -220,7 +220,7 @@ export function ApplicantTypesForm({ definitionId, initial, servicePattern, onSa
                           marginInlineStart: 8,
                           fontSize: 11,
                           fontWeight: 600,
-                          color: "var(--warn, #a15c00)",
+                          color: "var(--warn)",
                           border: "1px solid var(--line)",
                           borderRadius: 4,
                           padding: "1px 6px",

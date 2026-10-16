@@ -363,7 +363,7 @@ export function MasterCreateForm({
         borderRadius: 10,
         padding: 20,
         marginBottom: 4,
-        background: "var(--surface, var(--bg, #fff))",
+        background: "var(--surface, var(--bg))",
       }}
     >
       <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 600 }}>
@@ -373,8 +373,8 @@ export function MasterCreateForm({
       {error && (
         <div
           style={{
-            background: "#fef2f2",
-            color: "#b42318",
+            background: "var(--badbg)",
+            color: "var(--bad)",
             padding: "10px 14px",
             borderRadius: 8,
             marginBottom: 14,
@@ -426,7 +426,7 @@ export function MasterCreateForm({
                   <label style={labelStyle} id={`mcf-${masterType}-${field.key}-label`}>
                     {field.label}
                     {field.required && (
-                      <span style={{ color: "#e53e3e", marginInlineStart: 2 }}>*</span>
+                      <span style={{ color: "var(--bad)", marginInlineStart: 2 }}>*</span>
                     )}
                   </label>
                   <EntityPicker
@@ -453,7 +453,7 @@ export function MasterCreateForm({
                 >
                   {field.label}
                   {field.required && (
-                    <span style={{ color: "#e53e3e", marginInlineStart: 2 }}>*</span>
+                    <span style={{ color: "var(--bad)", marginInlineStart: 2 }}>*</span>
                   )}
                 </label>
                 <input

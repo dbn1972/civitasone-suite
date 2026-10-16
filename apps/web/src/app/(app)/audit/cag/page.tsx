@@ -34,13 +34,13 @@ export default async function CagPage() {
       />
 
       <StatGrid>
-        <StatCard icon="📜" iconBg="#eef2ff" label="Paragraphs" value={totalParas ?? "—"} />
+        <StatCard icon="📜" tone="info" label="Paragraphs" value={totalParas ?? "—"} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled" value={settled ?? "—"} />
         <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={pending ?? "—"} />
         {unrecognised !== null && unrecognised > 0 ? (
           <StatCard icon="❔" iconBg="var(--warnbg)" label={t("cagUnrecognised")} value={unrecognised} />
         ) : null}
-        <StatCard icon="🏛️" iconBg="#fce7ee" label="Departments" value={departments ?? "—"} />
+        <StatCard icon="🏛️" tone="bad" label="Departments" value={departments ?? "—"} />
       </StatGrid>
 
       {errored ? (

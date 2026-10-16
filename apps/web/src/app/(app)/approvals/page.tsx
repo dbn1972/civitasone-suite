@@ -89,7 +89,7 @@ export default async function MyApprovalsPage({
         ) : (
           <>
             {showScopeNotice && (
-              <p role="status" style={{ fontSize: 13, color: "var(--mut, #64748b)", marginBottom: 8 }}>
+              <p role="status" style={{ fontSize: 13, color: "var(--mut)", marginBottom: 8 }}>
                 Showing {(page - 1) * PAGE_SIZE + 1}–{loadedUpTo} of {total}.
               </p>
             )}
@@ -106,7 +106,7 @@ export default async function MyApprovalsPage({
                 ) : (
                   <span />
                 )}
-                <span style={{ fontSize: 13, color: "var(--mut, #64748b)" }}>Page {page}</span>
+                <span style={{ fontSize: 13, color: "var(--mut)" }}>Page {page}</span>
                 {hasNext ? (
                   <Link href={`/approvals?page=${page + 1}`} className="btn ghost">
                     Next →

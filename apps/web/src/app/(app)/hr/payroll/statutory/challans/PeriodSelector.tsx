@@ -44,7 +44,7 @@ export function PeriodSelector({ period, formType }: { period: string; formType:
         <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("periodLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("periodLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={id}

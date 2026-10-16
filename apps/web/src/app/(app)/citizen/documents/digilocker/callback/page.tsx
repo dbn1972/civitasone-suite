@@ -98,7 +98,7 @@ export default function DigiLockerCallbackPage() {
 
             {phase.kind === "verified" ? (
               <div>
-                <p style={{ color: "var(--good, #067647)", fontWeight: 600 }}>{t("callbackVerified")}</p>
+                <p style={{ color: "var(--good)", fontWeight: 600 }}>{t("callbackVerified")}</p>
                 {phase.providerStatus ? (
                   <p style={{ fontSize: 13, color: "var(--muted)" }}>
                     {t("resultDigilocker", { status: humanizeStatus(phase.providerStatus) })}
@@ -109,7 +109,7 @@ export default function DigiLockerCallbackPage() {
 
             {phase.kind === "unverified" ? (
               <div>
-                <p style={{ color: "var(--warn, #b54708)", fontWeight: 600 }}>{t("callbackUnverified")}</p>
+                <p style={{ color: "var(--warn)", fontWeight: 600 }}>{t("callbackUnverified")}</p>
                 {phase.providerStatus ? (
                   <p style={{ fontSize: 13, color: "var(--muted)" }}>
                     {t("resultDigilocker", { status: humanizeStatus(phase.providerStatus) })}
@@ -119,7 +119,7 @@ export default function DigiLockerCallbackPage() {
             ) : null}
 
             {phase.kind === "error" ? (
-              <p role="alert" style={{ color: "var(--bad, #b42318)" }}>{phase.message}</p>
+              <p role="alert" style={{ color: "var(--bad)" }}>{phase.message}</p>
             ) : null}
           </div>
           {backLink}

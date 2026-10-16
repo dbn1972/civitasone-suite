@@ -182,7 +182,7 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={impAmountId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Impairment loss (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Impairment loss (₹) <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={impAmountId}
@@ -195,7 +195,7 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
                 aria-describedby={impErrors.amount ? impAmountErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {impErrors.amount && <p id={impAmountErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{impErrors.amount}</p>}
+              {impErrors.amount && <p id={impAmountErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{impErrors.amount}</p>}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={impDateId} style={{ fontSize: 13, fontWeight: 600 }}>Event date</label>
@@ -209,7 +209,7 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
                 aria-describedby={impErrors.date ? impDateErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {impErrors.date && <p id={impDateErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{impErrors.date}</p>}
+              {impErrors.date && <p id={impDateErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{impErrors.date}</p>}
             </div>
           </div>
           <p style={{ fontSize: 12, color: "var(--ink2)", marginTop: 8, marginBottom: 0 }}>
@@ -258,7 +258,7 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={revValueId} style={{ fontSize: 13, fontWeight: 600 }}>
-                New book value (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                New book value (₹) <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={revValueId}
@@ -271,7 +271,7 @@ export function AssetFinancialActions({ assetId, assetCode, bookValueMinor }: Pr
                 aria-describedby={revErrors.value ? revValueErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {revErrors.value && <p id={revValueErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{revErrors.value}</p>}
+              {revErrors.value && <p id={revValueErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{revErrors.value}</p>}
             </div>
           </div>
           <p style={{ fontSize: 12, color: "var(--ink2)", marginTop: 8, marginBottom: 0 }}>

@@ -130,7 +130,7 @@ export function NewMedicalClaimForm({
             <Input value={dependantName} onChange={(e) => setDependantName(e.target.value)} />
           </Field>
         )}
-        {error && <p role="alert" style={{ color: "#b91c1c", fontSize: "0.8125rem", margin: 0 }}>{error}</p>}
+        {error && <p role="alert" style={{ color: "var(--bad)", fontSize: "0.8125rem", margin: 0 }}>{error}</p>}
         <div>
           <Button variant="primary" disabled={saving} onClick={() => void submit()}>
             {saving ? t("submitting") : t("submitClaim")}

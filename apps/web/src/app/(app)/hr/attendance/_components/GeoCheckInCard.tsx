@@ -184,7 +184,7 @@ export function GeoCheckInCard({ employeeId, employeeStatus }: { employeeId: str
           </div>
 
           {error && (
-            <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad, #b91c1c)", margin: 0 }}>⚠ {error}</p>
+            <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad)", margin: 0 }}>⚠ {error}</p>
           )}
           {result && (
             <p

@@ -30,17 +30,17 @@ const TYPE_ICON: Record<string, string> = {
 };
 
 const STATUS_STYLE: Record<string, { bg: string; color: string; dot: string }> = {
-  planned:     { bg: "var(--infobg, #eff6ff)", color: "var(--info, #1d4ed8)", dot: "#60a5fa" },
-  in_progress: { bg: "#fff7e6", color: "var(--warn, #d97706)", dot: "#fbbf24" },
-  completed:   { bg: "var(--goodbg, #f0fdf4)", color: "var(--good, #15803d)", dot: "#4ade80" },
-  deferred:    { bg: "var(--bg, #f8fafc)", color: "var(--mut, #64748b)", dot: "#94a3b8" },
-  cancelled:   { bg: "var(--badbg, #fef2f2)", color: "var(--bad, #dc2626)", dot: "#f87171" },
+  planned:     { bg: "var(--infobg)", color: "var(--info)", dot: "#60a5fa" },
+  in_progress: { bg: "#fff7e6", color: "var(--warn)", dot: "#fbbf24" },
+  completed:   { bg: "var(--goodbg)", color: "var(--good)", dot: "#4ade80" },
+  deferred:    { bg: "var(--bg)", color: "var(--mut)", dot: "var(--mut)" },
+  cancelled:   { bg: "var(--badbg)", color: "var(--bad)", dot: "var(--bad)" },
 };
 
 const PRIORITY_COLOR: Record<string, string> = {
-  high:   "var(--bad, #dc2626)",
-  medium: "var(--warn, #d97706)",
-  low:    "var(--good, #15803d)",
+  high:   "var(--bad)",
+  medium: "var(--warn)",
+  low:    "var(--good)",
 };
 
 function getQuarter(date: Date): number {
@@ -92,7 +92,7 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
           top: 0,
           bottom: 0,
           width: 2,
-          background: "var(--line, #e2e8f0)",
+          background: "var(--line)",
           zIndex: 0,
         }}
       />
@@ -104,17 +104,17 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
             <div
               style={{
                 width: 32, height: 32, borderRadius: "50%",
-                background: "var(--info, #1d4ed8)", color: "#fff",
+                background: "var(--info)", color: "var(--panel)",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 11, fontWeight: 700, flexShrink: 0,
-                boxShadow: "0 0 0 4px var(--panel, #fff), 0 0 0 5px var(--line, #e2e8f0)",
+                boxShadow: "0 0 0 4px var(--panel), 0 0 0 5px var(--line)",
                 zIndex: 1, position: "relative",
               }}
             >
               {quarterLabel.split(" ")[0]}
             </div>
             <div>
-              <span style={{ fontWeight: 700, fontSize: 13, color: "var(--ink, #1e293b)" }}>{quarterLabel}</span>
+              <span style={{ fontWeight: 700, fontSize: 13, color: "var(--ink)" }}>{quarterLabel}</span>
             </div>
           </div>
 
@@ -127,8 +127,8 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
                 <div
                   key={act.id}
                   style={{
-                    background: "var(--panel, #fff)",
-                    border: `1px solid ${isPast ? "var(--badbd, #fca5a5)" : "#e2e8f0"}`,
+                    background: "var(--panel)",
+                    border: `1px solid ${isPast ? "var(--badbd)" : "var(--line)"}`,
                     borderInlineStart: `3px solid ${PRIORITY_COLOR[act.priority]}`,
                     borderRadius: 8,
                     padding: "10px 12px",
@@ -146,7 +146,7 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
                       height: 10,
                       borderRadius: "50%",
                       background: ss.dot,
-                      border: "2px solid #fff",
+                      border: "2px solid var(--panel)",
                       zIndex: 1,
                     }}
                   />
@@ -155,7 +155,7 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <span style={{ fontSize: 14 }} aria-hidden="true">{TYPE_ICON[act.type] ?? "📌"}</span>
-                        <span style={{ fontWeight: 600, fontSize: 13, color: "var(--ink, #1e293b)" }}>{act.title}</span>
+                        <span style={{ fontWeight: 600, fontSize: 13, color: "var(--ink)" }}>{act.title}</span>
                         <span
                           style={{
                             fontSize: 11, fontWeight: 600, background: ss.bg, color: ss.color,
@@ -170,18 +170,18 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
                           {humanizeStatus(act.status)}
                         </span>
                         {isPast && (
-                          <span style={{ fontSize: 11, background: "var(--badbg, #fee2e2)", color: "var(--bad, #dc2626)", borderRadius: 4, padding: "1px 5px", fontWeight: 600 }}>
+                          <span style={{ fontSize: 11, background: "var(--badbg)", color: "var(--bad)", borderRadius: 4, padding: "1px 5px", fontWeight: 600 }}>
                             {t("overdueLabel")}
                           </span>
                         )}
                       </div>
                       <div style={{ display: "flex", gap: 12, marginTop: 4, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 11, color: "var(--mut, #64748b)" }}>
+                        <span style={{ fontSize: 11, color: "var(--mut)" }}>
                           {formatDate(act.plannedDate)}
                           {act.durationDays ? ` · ${act.durationDays}d` : ""}
                         </span>
                         {act.skillTargeted && (
-                          <span style={{ fontSize: 11, color: "var(--mut, #64748b)" }}>
+                          <span style={{ fontSize: 11, color: "var(--mut)" }}>
                             {t("targetsLabel")} <strong>{act.skillTargeted}</strong>
                           </span>
                         )}

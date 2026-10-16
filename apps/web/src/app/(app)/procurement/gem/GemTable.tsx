@@ -91,11 +91,11 @@ export function GemTable({
   return (
     <>
       <StatGrid>
-        <StatCard icon="🛒" iconBg="#eef2ff" label="Total Orders" value={totalOrders} />
-        <StatCard icon="📦" iconBg="#ecfdf3" label="Delivered" value={delivered} />
-        <StatCard icon="🚚" iconBg="#fffaeb" label="In Transit" value={inTransit} />
-        <StatCard icon="🗂️" iconBg="#f1f5f9" label="Other / Cancelled" value={otherCount} />
-        <StatCard icon="💰" iconBg="#fce7ee" label="Total Value (excl. cancelled)" value={totalValue} />
+        <StatCard icon="🛒" tone="info" label="Total Orders" value={totalOrders} />
+        <StatCard icon="📦" tone="good" label="Delivered" value={delivered} />
+        <StatCard icon="🚚" tone="warn" label="In Transit" value={inTransit} />
+        <StatCard icon="🗂️" tone="neutral" label="Other / Cancelled" value={otherCount} />
+        <StatCard icon="💰" tone="bad" label="Total Value (excl. cancelled)" value={totalValue} />
       </StatGrid>
 
       <Card

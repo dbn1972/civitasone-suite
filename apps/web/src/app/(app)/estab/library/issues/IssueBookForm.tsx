@@ -146,7 +146,7 @@ export function IssueBookForm({
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={bookSelectId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Book <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              Book <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <select
               id={bookSelectId}
@@ -167,7 +167,7 @@ export function IssueBookForm({
               ))}
             </select>
             {fieldErrors.book && (
-              <p id={bookErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={bookErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.book}
               </p>
             )}
@@ -180,7 +180,7 @@ export function IssueBookForm({
 
           <div ref={employeePickerWrapRef} style={{ display: "grid", gap: 6 }}>
             <label htmlFor={employeeId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Employee <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              Employee <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <EmployeePicker
               value={employeeRef || null}
@@ -194,7 +194,7 @@ export function IssueBookForm({
               clearable
             />
             {fieldErrors.employeeRef && (
-              <p id={employeeErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={employeeErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.employeeRef}
               </p>
             )}
@@ -202,7 +202,7 @@ export function IssueBookForm({
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={dueAtId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Due Date <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              Due Date <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={dueAtId}
@@ -217,7 +217,7 @@ export function IssueBookForm({
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
             {fieldErrors.dueAt && (
-              <p id={dueAtErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={dueAtErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.dueAt}
               </p>
             )}

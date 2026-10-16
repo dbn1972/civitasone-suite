@@ -99,11 +99,11 @@ export default async function FieldVisitsPage() {
       <StatGrid>
         <StatCard
           icon="📍"
-          iconBg="#e0f2fe"
+          tone="info"
           label={capped ? `Visits (latest ${limit})` : "Visits"}
           value={(capped ? total : visits.length).toLocaleString("en-IN")}
         />
-        <StatCard icon="🚶" iconBg="#fef3c7" label={capped ? `Open (in latest ${limit})` : "Open"} value={open.toLocaleString("en-IN")} />
+        <StatCard icon="🚶" tone="warn" label={capped ? `Open (in latest ${limit})` : "Open"} value={open.toLocaleString("en-IN")} />
       </StatGrid>
       <Card title="Recent visits">
         <DataTable<Row>

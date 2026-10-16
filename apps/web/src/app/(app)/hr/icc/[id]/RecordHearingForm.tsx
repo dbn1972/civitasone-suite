@@ -44,7 +44,7 @@ export function RecordHearingForm({ complaintId }: { complaintId: string }) {
 
   return (
     <form onSubmit={submit} style={{ display: "grid", gap: 12, maxWidth: 480 }}>
-      {err.message && <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--danger, #b91c1c)" }}>{err.message}</p>}
+      {err.message && <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--danger)" }}>{err.message}</p>}
       <Field id="hearing-date" label="Hearing date" error={err.fieldError("hearingDate")} required>
         <Input type="date" required value={hearingDate} onChange={(e) => setHearingDate(e.target.value)} />
       </Field>

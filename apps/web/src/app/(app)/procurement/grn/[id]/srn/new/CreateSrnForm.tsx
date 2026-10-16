@@ -143,10 +143,10 @@ export function CreateSrnForm({
         <div className="fields">
           {/* GAP-PROCUREMENT-GRN-DETAIL-SRN-NEW-05 — a <label> must wrap a control;
               the store-officer display is read-only text, so it is a div. */}
-          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
             <span className="label">Recorded as (from your session)</span>
             <span>{storeOfficerLabel}</span>
-            <span style={{ fontSize: "0.75rem", color: "var(--muted, #6b7280)" }}>
+            <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
               The server sets the authoritative store officer from your signed-in session.
             </span>
           </div>
@@ -155,7 +155,7 @@ export function CreateSrnForm({
               recorded when the SRN is signed; hide it when not signing so the
               entered value is not silently discarded. */}
           {signNow ? (
-            <label className="field" htmlFor="srn-received-date" style={{ background: "#fff", padding: "13px 16px" }}>
+            <label className="field" htmlFor="srn-received-date" style={{ background: "var(--panel)", padding: "13px 16px" }}>
               <span className="label">Received date</span>
               <input
                 id="srn-received-date"
@@ -168,15 +168,15 @@ export function CreateSrnForm({
               />
             </label>
           ) : (
-            <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+            <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
               <span className="label">Received date</span>
-              <span style={{ fontSize: "0.8125rem", color: "var(--muted, #6b7280)" }}>
+              <span style={{ fontSize: "0.8125rem", color: "var(--muted)" }}>
                 Recorded when the SRN is signed.
               </span>
             </div>
           )}
 
-          <label className="field" htmlFor="srn-remarks" style={{ background: "#fff", padding: "13px 16px" }}>
+          <label className="field" htmlFor="srn-remarks" style={{ background: "var(--panel)", padding: "13px 16px" }}>
             <span className="label">Remarks</span>
             <textarea
               id="srn-remarks"
@@ -189,7 +189,7 @@ export function CreateSrnForm({
             />
           </label>
 
-          <label className="field" htmlFor="srn-sign-now" style={{ background: "#fff", padding: "13px 16px", flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <label className="field" htmlFor="srn-sign-now" style={{ background: "var(--panel)", padding: "13px 16px", flexDirection: "row", alignItems: "center", gap: 8 }}>
             <input id="srn-sign-now" type="checkbox" aria-describedby={message ? "srn-form-message" : undefined} checked={signNow} onChange={(e) => setSignNow(e.target.checked)} style={{ width: 18, height: 18 }} />
             <span className="label" style={{ margin: 0 }}>Sign now — confirms physical acceptance and clears the payment gate</span>
           </label>
@@ -197,7 +197,7 @@ export function CreateSrnForm({
 
         <div role="status" aria-live="polite">
           {message ? (
-            <p id="srn-form-message" role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, fontSize: "0.875rem", color: "#b91c1c" }}>{message}</p>
+            <p id="srn-form-message" role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, fontSize: "0.875rem", color: "var(--bad)" }}>{message}</p>
           ) : null}
         </div>
         <div style={{ marginTop: 16, display: "flex", gap: 8 }}>

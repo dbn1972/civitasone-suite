@@ -179,7 +179,7 @@ export function CaseActions({
   return (
     <Card title={t("heading")} padding>
       <AcceptedNotice {...accepted.noticeProps} />
-      {notice && <p role="status" style={{ margin: "0 0 10px", fontSize: 13, color: "var(--good, #166534)" }}>{notice}</p>}
+      {notice && <p role="status" style={{ margin: "0 0 10px", fontSize: 13, color: "var(--good)" }}>{notice}</p>}
       {actions.length === 0 ? (
         <p style={{ margin: 0, fontSize: 13, color: "var(--mut)" }}>{t("noneAvailable")}</p>
       ) : (

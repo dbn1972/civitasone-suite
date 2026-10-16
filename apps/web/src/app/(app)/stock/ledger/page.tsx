@@ -35,10 +35,10 @@ export default async function StockLedgerPage({ searchParams }: { searchParams?:
         }
       />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f7f5" label="Total Entries" value={errored ? "—" : entries.length.toLocaleString("en-IN")} />
-        <StatCard icon="📥" iconBg="#ecfdf3" label="Total Receipts" value={totalReceipts === null ? "—" : formatMoney(totalReceipts)} />
-        <StatCard icon="📤" iconBg="#fef3f2" label="Total Issues" value={totalIssues === null ? "—" : formatMoney(totalIssues)} />
-        <StatCard icon="⚖️" iconBg="#eff6ff" label="Net Receipts − Issues" value={netBalance === null ? "—" : formatMoney(netBalance)} />
+        <StatCard icon="📋" tone="good" label="Total Entries" value={errored ? "—" : entries.length.toLocaleString("en-IN")} />
+        <StatCard icon="📥" tone="good" label="Total Receipts" value={totalReceipts === null ? "—" : formatMoney(totalReceipts)} />
+        <StatCard icon="📤" tone="bad" label="Total Issues" value={totalIssues === null ? "—" : formatMoney(totalIssues)} />
+        <StatCard icon="⚖️" tone="info" label="Net Receipts − Issues" value={netBalance === null ? "—" : formatMoney(netBalance)} />
       </StatGrid>
       {errored ? (
         <div className="card" style={{ marginTop: 18 }}>

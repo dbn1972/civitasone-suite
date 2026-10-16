@@ -50,9 +50,9 @@ export function ReleaseCalendar({
           if (item.kind === "freeze") {
             const f = item.freeze;
             return (
-              <li key={`f-${f.id}`} style={{ borderInlineStart: "4px solid var(--infobg, #3b82f6)", paddingInlineStart: 12 }}>
+              <li key={`f-${f.id}`} style={{ borderInlineStart: "4px solid var(--infobg)", paddingInlineStart: 12 }}>
                 <strong>🧊 Freeze: {f.name}</strong>
-                <div style={{ color: "#667085", fontSize: 13 }}>
+                <div style={{ color: "var(--mut)", fontSize: 13 }}>
                   {formatIndianDateTime(f.startsAt)} → {formatIndianDateTime(f.endsAt)} · {f.reason}
                 </div>
               </li>
@@ -63,10 +63,10 @@ export function ReleaseCalendar({
           return (
             <li
               key={`w-${c.id}`}
-              style={{ borderInlineStart: `4px solid ${hasConflict ? "var(--badbg, #ef4444)" : "var(--goodbg, #22c55e)"}`, paddingInlineStart: 12 }}
+              style={{ borderInlineStart: `4px solid ${hasConflict ? "var(--badbg)" : "var(--goodbg)"}`, paddingInlineStart: 12 }}
             >
               <strong>🗓️ <a href={`/change/${c.id}`}>{c.title}</a></strong>
-              <div style={{ color: "#667085", fontSize: 13 }}>
+              <div style={{ color: "var(--mut)", fontSize: 13 }}>
                 {c.windowStart ? formatIndianDateTime(c.windowStart) : "—"} → {c.windowEnd ? formatIndianDateTime(c.windowEnd) : "—"}
               </div>
               {hasConflict && (

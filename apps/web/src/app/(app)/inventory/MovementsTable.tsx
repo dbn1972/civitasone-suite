@@ -95,11 +95,11 @@ export function MovementsTable({
       <StatGrid>
         <StatCard
           icon={kind === "receipt" ? "📥" : "📤"}
-          iconBg={kind === "receipt" ? "#dcfce7" : "#fee2e2"}
+          iconBg={kind === "receipt" ? "var(--goodbg)" : "var(--badbg)"}
           label={lineLabel}
           value={statValue(provenance, capped ? `${rows.length}+` : rows.length)}
         />
-        <StatCard icon="🔢" iconBg="#f1f5f9" label={qtyLabel} value={statValue(provenance, capped ? `${totalQty}+` : totalQty)} />
+        <StatCard icon="🔢" tone="neutral" label={qtyLabel} value={statValue(provenance, capped ? `${totalQty}+` : totalQty)} />
       </StatGrid>
       <Card title={kind === "receipt" ? "Receipts" : "Issues"}>
         <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="stock ledger" capNote={capNote(all.length, INVENTORY_LEDGER_LIMIT, "ledger movements")}>

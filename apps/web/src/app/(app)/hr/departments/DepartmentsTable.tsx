@@ -23,7 +23,7 @@ type TreeNode = DeptTreeNode<Dept>;
 const inputStyle: React.CSSProperties = {
   padding: "6px 10px",
   fontSize: 13,
-  border: "1px solid var(--line,#cbd5e1)",
+  border: "1px solid var(--line)",
   borderRadius: 8,
   width: "100%",
   boxSizing: "border-box",
@@ -91,7 +91,7 @@ function DeptNode({
           gap: 8,
           padding: "8px 12px",
           paddingInlineStart: 12 + depth * 24,
-          borderBottom: "1px solid var(--line,#f1f5f9)",
+          borderBottom: "1px solid var(--line)",
           borderRadius: 4,
         }}
       >
@@ -113,7 +113,7 @@ function DeptNode({
               border: "none",
               cursor: "pointer",
               fontSize: 11,
-              color: "var(--mut,#94a3b8)",
+              color: "var(--mut)",
               padding: 0,
               display: "flex",
               alignItems: "center",
@@ -130,7 +130,7 @@ function DeptNode({
               height: 20,
               flexShrink: 0,
               fontSize: 11,
-              color: "var(--mut,#94a3b8)",
+              color: "var(--mut)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -172,7 +172,7 @@ function DeptNode({
               ))}
             </select>
             {rowError && (
-              <span style={{ color: "var(--bad, #b91c1c)", fontSize: 11 }}>{rowError}</span>
+              <span style={{ color: "var(--bad)", fontSize: 11 }}>{rowError}</span>
             )}
             <Button variant="primary" size="sm" onClick={() => onSaveEdit(node.id)} disabled={saving}>
               {saving ? t("savingBtn") : t("saveBtn")}
@@ -186,7 +186,7 @@ function DeptNode({
               style={{
                 fontSize: 11,
                 fontWeight: 600,
-                color: "var(--mut,#94a3b8)",
+                color: "var(--mut)",
                 minWidth: 54,
                 letterSpacing: "0.3px",
               }}
@@ -203,8 +203,8 @@ function DeptNode({
                 display: "inline-flex",
                 alignItems: "center",
                 justifyContent: "center",
-                background: "var(--infobg,#eff6ff)",
-                color: "var(--info,#2563eb)",
+                background: "var(--infobg)",
+                color: "var(--info)",
                 borderRadius: 12,
                 fontSize: 11,
                 fontWeight: 600,
@@ -218,7 +218,7 @@ function DeptNode({
               <span
                 style={{
                   fontSize: 10,
-                  color: "var(--mut,#94a3b8)",
+                  color: "var(--mut)",
                   marginInlineStart: 4,
                 }}
               >
@@ -393,9 +393,9 @@ export function DepartmentsTable({ depts, canEdit }: { depts: Dept[]; canEdit: b
 
   return (
     <>
-      <div style={{ borderRadius: 8, overflow: "hidden", border: "1px solid var(--line,#e2e8f0)" }}>
+      <div style={{ borderRadius: 8, overflow: "hidden", border: "1px solid var(--line)" }}>
         {roots.length === 0 ? (
-          <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--mut,#64748b)", fontSize: 13 }}>
+          <div style={{ padding: "24px 16px", textAlign: "center", color: "var(--mut)", fontSize: 13 }}>
             {t("noDepartmentsFound")}
           </div>
         ) : (

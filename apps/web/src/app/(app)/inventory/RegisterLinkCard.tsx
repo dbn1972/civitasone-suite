@@ -16,7 +16,7 @@ export async function RegisterLinkCard({ stockItemId }: { stockItemId: string })
 
   let body: React.ReactNode;
   if (linkRes.source === "error") {
-    body = <p role="status" style={{ margin: 0, color: "#92400e" }}>{t("register.unavailable")}</p>;
+    body = <p role="status" style={{ margin: 0, color: "var(--warn)" }}>{t("register.unavailable")}</p>;
   } else if (linkRes.data === null) {
     body = (
       <p style={{ margin: 0 }}>

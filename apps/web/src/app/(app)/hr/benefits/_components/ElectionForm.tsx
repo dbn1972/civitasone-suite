@@ -29,7 +29,7 @@ export type BenefitPlan = {
   components: Array<{ name: string; maxMinor: number; taxExempt: boolean }>;
 };
 
-const fieldErrStyle: React.CSSProperties = { color: "var(--bad, #b91c1c)", fontSize: 12, margin: "3px 0 0" };
+const fieldErrStyle: React.CSSProperties = { color: "var(--bad)", fontSize: 12, margin: "3px 0 0" };
 
 interface Props {
   plans: BenefitPlan[];

@@ -27,7 +27,7 @@ const fieldCol = {
 
 const fieldErrorStyle = {
   fontSize: 12,
-  color: "var(--danger, #b91c1c)",
+  color: "var(--danger)",
 } as const;
 
 /**
@@ -182,7 +182,7 @@ export function LocationActions({ rows }: { rows: Row[] }) {
             <p
               role="alert"
               aria-live="assertive"
-              style={{ minHeight: 18, marginTop: 8, fontSize: 12, color: "var(--danger, #b91c1c)" }}
+              style={{ minHeight: 18, marginTop: 8, fontSize: 12, color: "var(--danger)" }}
             >
               {error}
             </p>
@@ -190,7 +190,7 @@ export function LocationActions({ rows }: { rows: Row[] }) {
             <p
               role="status"
               aria-live="polite"
-              style={{ minHeight: 18, marginTop: 8, fontSize: 12, color: "var(--ok, #15803d)" }}
+              style={{ minHeight: 18, marginTop: 8, fontSize: 12, color: "var(--ok)" }}
             >
               {success}
             </p>

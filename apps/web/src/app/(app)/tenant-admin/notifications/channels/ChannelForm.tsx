@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { z } from "zod";
-import { Button, Card } from "@/app/_components/ds";
+import { Button, Card, Field, Input, Select } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { z } from "zod";
 
 // GAP-TENANT-ADMIN-NOTIFICATIONS-CHANNELS-01: mirrors the notification-service
 // createChannelBody EXACTLY (type, name, isDefault, enabled). The service's
@@ -79,24 +79,20 @@ export function ChannelForm() {
   return (
     <Card title="Add a channel" padding>
       <form onSubmit={submit} aria-label="Add notification channel" style={{ display: "grid", gap: 12, maxWidth: 420 }}>
-        <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
-          <span>Channel name</span>
-          <input
+        <Field label="Channel name" required error={fieldError || undefined}>
+          <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Office email"
-            aria-invalid={fieldError ? true : undefined}
-            style={{ minHeight: 40, padding: "0 10px", border: "1px solid var(--line)", borderRadius: 8 }}
           />
-        </label>
-        <label style={{ display: "grid", gap: 4, fontSize: 13 }}>
-          <span>Delivery type</span>
-          <select value={type} onChange={(e) => setType(e.target.value)} style={{ minHeight: 40, padding: "0 10px", border: "1px solid var(--line)", borderRadius: 8 }}>
+        </Field>
+        <Field label="Delivery type">
+          <Select value={type} onChange={(e) => setType(e.target.value)}>
             {Object.entries(TYPE_LABELS).map(([v, l]) => (
               <option key={v} value={v}>{l}</option>
             ))}
-          </select>
-        </label>
+          </Select>
+        </Field>
         <label style={{ display: "flex", gap: 8, fontSize: 13, alignItems: "center" }}>
           <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
           <span>Enabled</span>
@@ -106,9 +102,8 @@ export function ChannelForm() {
           <span>Use as the default for this delivery type</span>
         </label>
 
-        {fieldError && <p role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: 0 }}>{fieldError}</p>}
         {error && <p role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: 0 }}>{error}</p>}
-        <div role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647" }}>{status}</div>
+        <div role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--good)" }}>{status}</div>
 
         <div>
           <Button type="submit" disabled={busy} aria-busy={busy}>{busy ? "Adding…" : "Add channel"}</Button>

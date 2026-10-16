@@ -52,12 +52,12 @@ export default async function TenantAuditPage({ searchParams }: { searchParams?:
           is honestly just the rows in the table below. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 14, marginBottom: 18 }}>
         {actionFilter ? null : (
-          <StatCard icon="🗂️" iconBg="#f1f5f9" label={t("total")} value={errored || summaryUnavailable ? t("noValue") : serverSummary!.total} />
+          <StatCard icon="🗂️" tone="neutral" label={t("total")} value={errored || summaryUnavailable ? t("noValue") : serverSummary!.total} />
         )}
-        <StatCard icon="📋" iconBg="#f1f5f9" label={t("last24h")} value={errored ? t("noValue") : actionFilter ? last24h : summaryUnavailable ? t("noValue") : serverSummary!.last24h} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label={t("success")} value={errored ? t("noValue") : actionFilter ? successes : summaryUnavailable ? t("noValue") : serverSummary!.success} />
-        <StatCard icon="❌" iconBg="#fef3f2" label={t("failures")} value={errored ? t("noValue") : actionFilter ? failures : summaryUnavailable ? t("noValue") : serverSummary!.failures} />
-        <StatCard icon="👥" iconBg="#eff6ff" label={t("loaded")} value={errored ? t("noValue") : loaded} />
+        <StatCard icon="📋" tone="neutral" label={t("last24h")} value={errored ? t("noValue") : actionFilter ? last24h : summaryUnavailable ? t("noValue") : serverSummary!.last24h} />
+        <StatCard icon="✅" tone="good" label={t("success")} value={errored ? t("noValue") : actionFilter ? successes : summaryUnavailable ? t("noValue") : serverSummary!.success} />
+        <StatCard icon="❌" tone="bad" label={t("failures")} value={errored ? t("noValue") : actionFilter ? failures : summaryUnavailable ? t("noValue") : serverSummary!.failures} />
+        <StatCard icon="👥" tone="info" label={t("loaded")} value={errored ? t("noValue") : loaded} />
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
       {actionFilter && !errored && (

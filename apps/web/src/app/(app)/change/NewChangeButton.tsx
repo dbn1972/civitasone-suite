@@ -84,7 +84,7 @@ export function NewChangeButton() {
             </div>
           </div>
           {type === "emergency" && (
-            <p style={{ fontSize: 12, color: "#b45309", margin: "2px 0 0" }}>
+            <p style={{ fontSize: 12, color: "var(--warn)", margin: "2px 0 0" }}>
               Emergency changes are flagged for expedited CAB review. A rollback plan is still
               required before approval, and the change is reviewed retrospectively.
             </p>
@@ -95,7 +95,7 @@ export function NewChangeButton() {
           <textarea id="ch-desc" className="inp" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What is changing and why…" />
           <label className="lbl" htmlFor="ch-rb">Rollback plan (optional now, required before CAB approval)</label>
           <textarea id="ch-rb" className="inp" rows={2} value={rollbackPlan} onChange={(e) => setRollbackPlan(e.target.value)} placeholder="How to revert if the release fails…" />
-          {error && <div role="alert" style={{ color: "#b42318", fontSize: 13, marginTop: 4 }}>{error}</div>}
+          {error && <div role="alert" style={{ color: "var(--bad)", fontSize: 13, marginTop: 4 }}>{error}</div>}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
             <button type="button" className="btn ghost" onClick={close} disabled={busy}>Cancel</button>
             <button type="button" className="btn primary" onClick={() => void submit()} disabled={busy}>{busy ? "Raising…" : "Raise change"}</button>

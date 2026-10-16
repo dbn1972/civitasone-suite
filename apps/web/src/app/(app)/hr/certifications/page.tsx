@@ -70,12 +70,12 @@ export default async function CertificationsPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-<StatCard icon="🏅" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statValid")}              value={valid} />
+<StatCard icon="🏅" iconBg="var(--infobg)" label={t("statTotal")} value={items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statValid")}              value={valid} />
         {anyTracked && (
           <>
-            <StatCard icon="⚠️" iconBg="var(--warnbg, #fff7e6)" label={t("statExpiringSoon")}      value={expiringSoon} />
-            <StatCard icon="🚫" iconBg="var(--badbg, #fff1f0)" label={t("statExpired")}            value={expired} />
+            <StatCard icon="⚠️" iconBg="var(--warnbg)" label={t("statExpiringSoon")}      value={expiringSoon} />
+            <StatCard icon="🚫" iconBg="var(--badbg)" label={t("statExpired")}            value={expired} />
           </>
         )}
       </StatGrid>
@@ -86,15 +86,15 @@ export default async function CertificationsPage() {
           <div
             role="alert"
             style={{
-              background: "var(--warnbg, #fffbeb)",
-              border: "1px solid var(--warnbd, #fcd34d)",
+              background: "var(--warnbg)",
+              border: "1px solid var(--warnbd)",
               borderRadius: 8,
               padding: "10px 14px",
               display: "flex",
               alignItems: "center",
               gap: 10,
               fontSize: 13,
-              color: "var(--warn, #92400e)",
+              color: "var(--warn)",
             }}
           >
             <span style={{ fontSize: 16 }}>⚠</span>
@@ -106,12 +106,12 @@ export default async function CertificationsPage() {
           <div
             role="status"
             style={{
-              background: "var(--line2, #f1f5f9)",
-              border: "1px solid var(--line, #e2e8f0)",
+              background: "var(--line2)",
+              border: "1px solid var(--line)",
               borderRadius: 8,
               padding: "10px 14px",
               fontSize: 13,
-              color: "var(--mut, #64748b)",
+              color: "var(--mut)",
             }}
           >
             {t("noExpiryTracking")}
@@ -125,7 +125,7 @@ export default async function CertificationsPage() {
         ) : sorted.length === 0 ? (
           <div style={{ padding: 32, textAlign: "center", color: "var(--mut)" }}>
             <p style={{ fontSize: 32, margin: "0 0 8px" }}>🏅</p>
-            <p style={{ fontWeight: 600, color: "var(--ink2, #475569)", margin: 0 }}>{t("emptyTitle")}</p>
+            <p style={{ fontWeight: 600, color: "var(--ink2)", margin: 0 }}>{t("emptyTitle")}</p>
             <p style={{ fontSize: 13, margin: "4px 0 0" }}>
               {t("emptyMessage")}
             </p>

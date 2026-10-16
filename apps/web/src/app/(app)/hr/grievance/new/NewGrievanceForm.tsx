@@ -75,7 +75,7 @@ export function NewGrievanceForm() {
     <form onSubmit={submit} noValidate style={{ display: "grid", gap: 14, maxWidth: 640 }}>
       {/* POSH Act, 2013: sexual-harassment complaints belong with the Internal
           Committee, not this register, so there is deliberately no such category. */}
-      <p role="note" style={{ margin: 0, padding: "10px 12px", border: "1px solid var(--warnbd, #f5d78e)", background: "var(--warnbg, #fffbe6)", borderRadius: 8, fontSize: 13 }}>
+      <p role="note" style={{ margin: 0, padding: "10px 12px", border: "1px solid var(--warnbd)", background: "var(--warnbg)", borderRadius: 8, fontSize: 13 }}>
         {t.rich("iccNote", { link: (chunks) => <Link href="/hr/icc">{chunks}</Link> })}
       </p>
       {error && <p role="alert" className="pill bad" style={{ margin: 0 }}>{error}</p>}

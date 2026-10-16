@@ -92,7 +92,7 @@ export function GenerateBillForm({
           <div style={{ display: "grid", gap: 6, maxWidth: 420 }}>
             <label htmlFor={selectId} style={{ fontSize: 13, fontWeight: 600 }}>
               Demand{" "}
-              <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+              <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                 *
               </span>
             </label>
@@ -114,7 +114,7 @@ export function GenerateBillForm({
               ))}
             </select>
             {fieldErrors.demand && (
-              <p id={demandErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={demandErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.demand}
               </p>
             )}

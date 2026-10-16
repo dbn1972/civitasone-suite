@@ -45,10 +45,10 @@ export function InvoiceDetail({ state }: { state: InvoiceDetailState }) {
         <Button type="button" variant="ghost" size="sm" onClick={() => window.print()}>{t("print")}</Button>
       </div>
       <StatGrid>
-        <StatCard icon="🧾" iconBg="#eef2ff" label={t("total")} value={money(inv.totalMinor)} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label={t("paid")} value={money(inv.paidMinor)} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label={t("outstanding")} value={money(inv.outstandingMinor)} />
-        <StatCard icon="🧮" iconBg="#f1f5f9" label={t("tax")} value={money(inv.taxMinor)} />
+        <StatCard icon="🧾" tone="info" label={t("total")} value={money(inv.totalMinor)} />
+        <StatCard icon="✅" tone="good" label={t("paid")} value={money(inv.paidMinor)} />
+        <StatCard icon="⏳" tone="warn" label={t("outstanding")} value={money(inv.outstandingMinor)} />
+        <StatCard icon="🧮" tone="neutral" label={t("tax")} value={money(inv.taxMinor)} />
       </StatGrid>
       <Card title={t("details")}>
         <dl style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: "8px 16px", margin: 0, fontSize: 13.5 }}>

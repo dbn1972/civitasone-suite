@@ -61,7 +61,7 @@ export function ThemeTokenTable({ tokens }: { tokens: ThemeTokenSummary[] }) {
                       height: 16,
                       borderRadius: 4,
                       background: value,
-                      border: "1px solid var(--line, #e2e8f0)",
+                      border: "1px solid var(--line)",
                       flex: "0 0 auto",
                     }}
                   />

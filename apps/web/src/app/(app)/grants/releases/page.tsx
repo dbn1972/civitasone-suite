@@ -48,14 +48,14 @@ export default async function GrantReleasesPage() {
       <PageHeader title="Grant Releases" subtitle="Fund releases to grantees with bank reference tracking." />
       <div aria-label="Grant releases">
         <StatGrid>
-          <StatCard icon="📋" iconBg="#f1f5f9" label="Total" value={releases.length} />
-          <StatCard icon="✅" iconBg="#dcfce7" label="Processed" value={processed} />
-          <StatCard icon="⏳" iconBg="#fef3c7" label="Pending" value={pending} />
+          <StatCard icon="📋" tone="neutral" label="Total" value={releases.length} />
+          <StatCard icon="✅" tone="good" label="Processed" value={processed} />
+          <StatCard icon="⏳" tone="warn" label="Pending" value={pending} />
           {/* GAP-GRANTS-RELEASES-06: state the inclusion rule so the figure's
               meaning is explicit. */}
           <StatCard
             icon="💰"
-            iconBg="#dbeafe"
+            tone="info"
             label="Total Released"
             value={formatMoney(totalReleased)}
             hint="Processed + credited releases only (excludes pending)."

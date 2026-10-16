@@ -49,7 +49,7 @@ export default async function FleetOverviewPage() {
             Schedule preventive maintenance for a vehicle.
           </p>
           <p style={stat}>
-            <strong style={{ color: ok && data.overdueMaintenance > 0 ? "var(--bad, #c0392b)" : undefined }}>{fmt(data.overdueMaintenance)}</strong> overdue ·{" "}
+            <strong style={{ color: ok && data.overdueMaintenance > 0 ? "var(--bad)" : undefined }}>{fmt(data.overdueMaintenance)}</strong> overdue ·{" "}
             <strong>{fmt(data.scheduledMaintenance)}</strong> due in 7 days
           </p>
           <Link href="/assets/fleet/maintenance" className="btn primary">

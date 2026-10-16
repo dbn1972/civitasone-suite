@@ -166,7 +166,7 @@ export function EstabApprovalsPanel() {
               label: "File",
               render: (task) =>
                 task.refId ? (
-                  <Link href={`/estab/files/${task.refId}`} className="mono" style={{ color: "#4f46e5" }}>
+                  <Link href={`/estab/files/${task.refId}`} className="mono" style={{ color: "var(--indigo)" }}>
                     {files[task.refId]?.fileNo ?? `${task.refId.slice(0, 8)}…`}
                   </Link>
                 ) : (

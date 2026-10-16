@@ -27,10 +27,10 @@ type Designation = {
 
 function groupBadgeStyle(group: ServiceGroup | null): React.CSSProperties {
   const colors: Record<ServiceGroup | "none", { bg: string; color: string }> = {
-    "Group-A": { bg: "var(--infobg, #eff6ff)", color: "var(--info, #1d4ed8)" },
-    "Group-B": { bg: "var(--goodbg, #f0fdf4)", color: "var(--good, #15803d)" },
-    "Group-C": { bg: "var(--warnbg, #fff7ed)", color: "var(--warn, #c2410c)" },
-    none:      { bg: "var(--bg, #f5f5f5)", color: "var(--mut, #525252)" },
+    "Group-A": { bg: "var(--infobg)", color: "var(--info)" },
+    "Group-B": { bg: "var(--goodbg)", color: "var(--good)" },
+    "Group-C": { bg: "var(--warnbg)", color: "var(--warn)" },
+    none:      { bg: "var(--bg)", color: "var(--mut)" },
   };
   const { bg, color } = colors[group ?? "none"];
   return {
@@ -51,7 +51,7 @@ function groupBadgeStyle(group: ServiceGroup | null): React.CSSProperties {
 const inputStyle: React.CSSProperties = {
   padding: "6px 10px",
   fontSize: 13,
-  border: "1px solid var(--line,#cbd5e1)",
+  border: "1px solid var(--line)",
   borderRadius: 8,
   width: "100%",
   boxSizing: "border-box",
@@ -202,7 +202,7 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
             style={{ ...inputStyle, maxWidth: 80 }}
           />
         ) : (
-          <span style={{ color: "var(--mut,#64748b)", fontSize: 12, fontWeight: 600, letterSpacing: "0.3px" }}>
+          <span style={{ color: "var(--mut)", fontSize: 12, fontWeight: 600, letterSpacing: "0.3px" }}>
             {item.code}
           </span>
         ),
@@ -220,7 +220,7 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
               style={inputStyle}
             />
             {rowError && (
-              <p style={{ color: "var(--bad, #b91c1c)", fontSize: 11, marginTop: 3, marginBottom: 0 }}>{rowError}</p>
+              <p style={{ color: "var(--bad)", fontSize: 11, marginTop: 3, marginBottom: 0 }}>{rowError}</p>
             )}
           </>
         ) : (
@@ -246,12 +246,12 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
                 ("unclassified" everywhere it's read back) with nothing in
                 this row saying so -- same hint text/pattern as the create
                 form's levelHint (GAP-HR-DESIGNATIONS-NEW-03). */}
-            <p style={{ margin: 0, fontSize: 11, color: "var(--mut, #64748b)", textAlign: "end" }}>
+            <p style={{ margin: 0, fontSize: 11, color: "var(--mut)", textAlign: "end" }}>
               {t("levelEditHint")}
             </p>
           </div>
         ) : item.level > 0 ? (
-          <span style={{ fontWeight: 700, color: "var(--fg,#0f172a)" }}>{t("levelPrefix", { level: item.level })}</span>
+          <span style={{ fontWeight: 700, color: "var(--fg)" }}>{t("levelPrefix", { level: item.level })}</span>
         ) : "—",
     },
     {
@@ -275,7 +275,7 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
             style={{ ...inputStyle, maxWidth: 100 }}
           />
         ) : (
-          <span style={{ color: "var(--mut,#64748b)" }}>{item.payGrade ?? "—"}</span>
+          <span style={{ color: "var(--mut)" }}>{item.payGrade ?? "—"}</span>
         ),
     },
     ...(canEdit

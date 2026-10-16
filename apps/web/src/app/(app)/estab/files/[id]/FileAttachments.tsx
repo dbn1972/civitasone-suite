@@ -117,7 +117,7 @@ export function FileAttachments({ fileId, attachments }: Props) {
       <div className="card-h"><h3>Attachments</h3></div>
       <div className="pad">
         {attachments.length === 0 ? (
-          <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 12px" }}>No attachments on this file yet.</p>
+          <p style={{ fontSize: 13, color: "var(--mut)", margin: "0 0 12px" }}>No attachments on this file yet.</p>
         ) : (
           <ul style={{ margin: "0 0 12px", paddingLeft: 18, fontSize: 13 }}>
             {attachments.map((a) => (
@@ -129,7 +129,7 @@ export function FileAttachments({ fileId, attachments }: Props) {
                   disabled={downloadingId === a.id}
                   style={{
                     background: "none", border: "none", padding: 0, cursor: "pointer",
-                    color: "var(--brand, #2563eb)", textDecoration: "underline", font: "inherit",
+                    color: "var(--brand)", textDecoration: "underline", font: "inherit",
                   }}
                 >
                   {downloadingId === a.id ? "Opening…" : a.fileName}
@@ -151,7 +151,7 @@ export function FileAttachments({ fileId, attachments }: Props) {
             onUploaded={(key, meta) => setPending({ storageRef: key, meta })}
           />
           {pending ? (
-            <p style={{ fontSize: 12, color: "var(--muted, #64748b)", margin: 0 }}>
+            <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>
               Ready to attach: <code style={{ fontSize: 11 }}>{pending.meta.fileName}</code>
               {" "}({Math.max(1, Math.ceil(pending.meta.size / 1024))} KB)
             </p>

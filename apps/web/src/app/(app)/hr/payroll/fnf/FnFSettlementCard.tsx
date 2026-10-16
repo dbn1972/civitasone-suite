@@ -167,8 +167,8 @@ function FnFCard({ row, viewer }: { row: FnFCardRow; viewer?: FnfViewer }) {
                 </tr>
               ))}
               <tr style={{ borderBottom: "1px solid var(--line2)" }}>
-                <th scope="row" style={{ padding: "7px 0", color: "var(--bad, #c0392b)", fontWeight: 400, textAlign: "start" }}>{t("tdsOnSeparationLabel")}</th>
-                <td style={{ padding: "7px 0", textAlign: "end", fontWeight: 600, color: "var(--bad, #c0392b)" }}>
+                <th scope="row" style={{ padding: "7px 0", color: "var(--bad)", fontWeight: 400, textAlign: "start" }}>{t("tdsOnSeparationLabel")}</th>
+                <td style={{ padding: "7px 0", textAlign: "end", fontWeight: 600, color: "var(--bad)" }}>
                   {toMinor(row.tdsOnSeparationMinor) === null ? "—" : `−${formatMoney(row.tdsOnSeparationMinor)}`}
                 </td>
               </tr>

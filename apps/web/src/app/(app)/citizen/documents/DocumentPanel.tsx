@@ -186,17 +186,17 @@ export function DocumentPanel({ services }: { services: DocumentServiceOption[] 
           ) : null}
 
           {uploaded ? (
-            <div className="pad" style={{ marginTop: 12, background: "var(--surface, #f8fafc)", borderRadius: 8, fontSize: 13 }}>
+            <div className="pad" style={{ marginTop: 12, background: "var(--surface)", borderRadius: 8, fontSize: 13 }}>
               <div>{t("resultSubmitted", { status: humanizeStatus(uploaded.verificationStatus) })}</div>
               {uploaded.providerStatus ? (
                 <div>{t("resultDigilocker", { status: humanizeStatus(uploaded.providerStatus) })}</div>
               ) : null}
               {uploaded.configured === false ? (
-                <div style={{ color: "var(--bad, #b42318)" }}>{t("resultProviderUnconfigured")}</div>
+                <div style={{ color: "var(--bad)" }}>{t("resultProviderUnconfigured")}</div>
               ) : null}
             </div>
           ) : null}
-          {error ? <p role="alert" style={{ color: "var(--bad, #b42318)", fontSize: 13 }}>{error}</p> : null}
+          {error ? <p role="alert" style={{ color: "var(--bad)", fontSize: 13 }}>{error}</p> : null}
         </div>
       </div>
 
@@ -212,7 +212,7 @@ export function DocumentPanel({ services }: { services: DocumentServiceOption[] 
               <ul style={{ fontSize: 13, listStyle: "none", padding: 0 }}>
                 {checklist.items.map((i) => (
                   <li key={i.docType} style={{ padding: "4px 0" }}>
-                    <span style={{ color: i.verified ? "var(--good, #067647)" : i.provided ? "var(--warn, #b54708)" : "var(--bad, #b42318)" }}>
+                    <span style={{ color: i.verified ? "var(--good)" : i.provided ? "var(--warn)" : "var(--bad)" }}>
                       {i.verified ? `✔ ${t("statusVerified")}` : i.provided ? `• ${t("statusProvided")}` : `✗ ${t("statusMissing")}`}
                     </span>{" "}
                     {i.label ?? humanizeStatus(i.docType)}{i.mandatory ? ` (${t("required")})` : ""}

@@ -151,7 +151,7 @@ export function TaxProofSettingsCard() {
                 onChange={(e) => setVerifiedFrom(e.target.value)}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              <span role="note" style={{ fontSize: 12, color: "var(--warn, #b45309)" }}>{t("settings.verifiedFromWarning")}</span>
+              <span role="note" style={{ fontSize: 12, color: "var(--warn)" }}>{t("settings.verifiedFromWarning")}</span>
             </div>
             {settings.canEdit ? (
               <>

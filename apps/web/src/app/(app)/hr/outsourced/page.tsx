@@ -53,10 +53,10 @@ export default async function OutsourcedPage({ searchParams }: { searchParams?: 
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel={tc("backToHr")} />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📄" iconBg="var(--infobg, #e6f0ff)" label={t("statContractsLabel")} value={errored ? "—" : page.stats.activeContracts} />
-        <StatCard icon="🏢" iconBg="var(--bg, #f5f5f5)" label={t("statVendorsLabel")} value={errored ? "—" : page.stats.vendors} />
-        <StatCard icon="👥" iconBg="var(--goodbg, #e6f7f0)" label={t("statHeadcountLabel")} value={errored ? "—" : page.stats.totalHeadcount} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statExpiringLabel")} value={errored ? "—" : page.stats.expiringIn60Days} />
+        <StatCard icon="📄" iconBg="var(--infobg)" label={t("statContractsLabel")} value={errored ? "—" : page.stats.activeContracts} />
+        <StatCard icon="🏢" iconBg="var(--bg)" label={t("statVendorsLabel")} value={errored ? "—" : page.stats.vendors} />
+        <StatCard icon="👥" iconBg="var(--goodbg)" label={t("statHeadcountLabel")} value={errored ? "—" : page.stats.totalHeadcount} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statExpiringLabel")} value={errored ? "—" : page.stats.expiringIn60Days} />
       </StatGrid>
       {errored ? (
         <Card title={t("cardTitle")}>

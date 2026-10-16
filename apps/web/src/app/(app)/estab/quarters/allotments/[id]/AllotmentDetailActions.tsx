@@ -266,7 +266,7 @@ export function AllotmentDetailActions({
           <>
             <div style={{ display: "grid", gap: 6, maxWidth: 260 }}>
               <label htmlFor={vacationDateField} style={{ fontSize: 13, fontWeight: 600 }}>
-                Vacation due date <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Vacation due date <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={vacationDateField}
@@ -281,7 +281,7 @@ export function AllotmentDetailActions({
                 aria-describedby={vacationDateError ? vacationDateErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {vacationDateError && <p id={vacationDateErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{vacationDateError}</p>}
+              {vacationDateError && <p id={vacationDateErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{vacationDateError}</p>}
               <Button type="button" variant="ghost" style={{ minHeight: 44, width: "fit-content" }} onClick={continueVacationNotice}>
                 Issue vacation notice
               </Button>

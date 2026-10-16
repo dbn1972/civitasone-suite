@@ -120,7 +120,7 @@ export function NewInternalTicketForm() {
       aria-busy={isSubmitting}
     >
       <div className="fields">
-        {/* GAP-HELPDESK-INTERNAL-NEW-03: removed background: "#fff" — let the DS
+        {/* GAP-HELPDESK-INTERNAL-NEW-03: removed background: "var(--panel)" — let the DS
             .field class handle theming; replaced #b91c1c / #047857 message
             colours with CSS variables (var(--bad)/var(--good)). */}
         <div className="field" style={{ gridColumn: "1 / -1", padding: "13px 16px" }}>

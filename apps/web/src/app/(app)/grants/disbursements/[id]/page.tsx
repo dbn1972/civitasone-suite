@@ -62,10 +62,10 @@ export default async function GrantDisbursementDetailPage({ params }: { params: 
           Release Date/Status) is removed. The details Card now only carries
           fields NOT already in the stat row. */}
       <StatGrid>
-        <StatCard icon="₹" iconBg="#ecfdf5" label="Amount" value={formatMoney(disbursement.amount)} />
-        <StatCard icon="📋" iconBg="#eff6ff" label="Status" value={disbursement.status.replace(/_/g, " ")} />
-        <StatCard icon="👥" iconBg="#faf5ff" label="Grantee" value={disbursement.granteeName ?? "—"} />
-        <StatCard icon="📅" iconBg="#fff7ed" label="Release Date" value={formatIndianDate(disbursement.releaseDate)} />
+        <StatCard icon="₹" tone="good" label="Amount" value={formatMoney(disbursement.amount)} />
+        <StatCard icon="📋" tone="info" label="Status" value={disbursement.status.replace(/_/g, " ")} />
+        <StatCard icon="👥" tone="neutral" label="Grantee" value={disbursement.granteeName ?? "—"} />
+        <StatCard icon="📅" tone="warn" label="Release Date" value={formatIndianDate(disbursement.releaseDate)} />
       </StatGrid>
 
       <Card title="Disbursement details" padding>

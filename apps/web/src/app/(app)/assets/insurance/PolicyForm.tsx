@@ -205,7 +205,7 @@ export function PolicyForm({ disabledReason }: { disabledReason?: string }) {
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={policyNoId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Policy Number <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              Policy Number <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={policyNoId}
@@ -218,7 +218,7 @@ export function PolicyForm({ disabledReason }: { disabledReason?: string }) {
               style={inputStyle}
             />
             {fieldErrors.policyNo && (
-              <p id={`${policyNoId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={`${policyNoId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.policyNo}
               </p>
             )}
@@ -226,7 +226,7 @@ export function PolicyForm({ disabledReason }: { disabledReason?: string }) {
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={insurerId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Insurer <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              Insurer <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={insurerId}
@@ -239,7 +239,7 @@ export function PolicyForm({ disabledReason }: { disabledReason?: string }) {
               style={inputStyle}
             />
             {fieldErrors.insurer && (
-              <p id={`${insurerId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={`${insurerId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.insurer}
               </p>
             )}
@@ -247,7 +247,7 @@ export function PolicyForm({ disabledReason }: { disabledReason?: string }) {
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={coverageId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Sum Insured (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              Sum Insured (₹) <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={coverageId}
@@ -261,7 +261,7 @@ export function PolicyForm({ disabledReason }: { disabledReason?: string }) {
               style={inputStyle}
             />
             {fieldErrors.coverage && (
-              <p id={`${coverageId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={`${coverageId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.coverage}
               </p>
             )}
@@ -269,7 +269,7 @@ export function PolicyForm({ disabledReason }: { disabledReason?: string }) {
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={premiumId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Premium (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              Premium (₹) <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={premiumId}
@@ -283,7 +283,7 @@ export function PolicyForm({ disabledReason }: { disabledReason?: string }) {
               style={inputStyle}
             />
             {fieldErrors.premium && (
-              <p id={`${premiumId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={`${premiumId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.premium}
               </p>
             )}
@@ -291,7 +291,7 @@ export function PolicyForm({ disabledReason }: { disabledReason?: string }) {
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={startDateId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Start Date <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              Start Date <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={startDateId}
@@ -305,7 +305,7 @@ export function PolicyForm({ disabledReason }: { disabledReason?: string }) {
               style={inputStyle}
             />
             {fieldErrors.startDate && (
-              <p id={`${startDateId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={`${startDateId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.startDate}
               </p>
             )}
@@ -313,7 +313,7 @@ export function PolicyForm({ disabledReason }: { disabledReason?: string }) {
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={endDateId} style={{ fontSize: 13, fontWeight: 600 }}>
-              End Date <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              End Date <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={endDateId}
@@ -327,7 +327,7 @@ export function PolicyForm({ disabledReason }: { disabledReason?: string }) {
               style={inputStyle}
             />
             {fieldErrors.endDate && (
-              <p id={`${endDateId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={`${endDateId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.endDate}
               </p>
             )}
@@ -349,7 +349,7 @@ export function PolicyForm({ disabledReason }: { disabledReason?: string }) {
               style={inputStyle}
             />
             {fieldErrors.renewal && (
-              <p id={`${renewalId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={`${renewalId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.renewal}
               </p>
             )}
@@ -357,7 +357,7 @@ export function PolicyForm({ disabledReason }: { disabledReason?: string }) {
         </div>
 
         {disabledReason ? (
-          <p role="alert" style={{ margin: "12px 0 0", fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+          <p role="alert" style={{ margin: "12px 0 0", fontSize: 12.5, color: "var(--bad)" }}>
             {disabledReason}
           </p>
         ) : null}

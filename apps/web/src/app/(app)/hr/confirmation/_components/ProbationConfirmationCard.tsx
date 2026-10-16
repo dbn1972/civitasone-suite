@@ -38,17 +38,17 @@ export type ConfirmationRow = {
 type LocalAction = "default" | "confirmed" | "extended";
 
 function dueMeta(days: number): { label: string; color: string } {
-  if (days < 0)   return { label: `${Math.abs(days)}d overdue`, color: "var(--bad, #dc2626)" };
-  if (days === 0) return { label: "Due today",                  color: "var(--bad, #dc2626)" };
-  if (days <= 7)  return { label: `Due in ${days}d`,            color: "var(--warn, #b45309)" };
-  if (days <= 30) return { label: `Due in ${days}d`,            color: "var(--warn, #d97706)" };
-  return { label: `Due in ${days}d`,                            color: "var(--info, #2563eb)" };
+  if (days < 0)   return { label: `${Math.abs(days)}d overdue`, color: "var(--bad)" };
+  if (days === 0) return { label: "Due today",                  color: "var(--bad)" };
+  if (days <= 7)  return { label: `Due in ${days}d`,            color: "var(--warn)" };
+  if (days <= 30) return { label: `Due in ${days}d`,            color: "var(--warn)" };
+  return { label: `Due in ${days}d`,                            color: "var(--info)" };
 }
 
 const REC_CONFIG: Record<string, { label: string; badge: string; color: string; bg: string }> = {
-  recommended:     { label: "Recommended",      badge: "👍", color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)" },
-  not_recommended: { label: "Not Recommended",  badge: "👎", color: "var(--bad, #dc2626)", bg: "var(--badbg, #fef2f2)" },
-  pending:         { label: "Awaiting Manager", badge: "⏳", color: "var(--warn, #b45309)", bg: "var(--warnbg, #fffbe6)" },
+  recommended:     { label: "Recommended",      badge: "👍", color: "var(--good)", bg: "var(--goodbg)" },
+  not_recommended: { label: "Not Recommended",  badge: "👎", color: "var(--bad)", bg: "var(--badbg)" },
+  pending:         { label: "Awaiting Manager", badge: "⏳", color: "var(--warn)", bg: "var(--warnbg)" },
 };
 
 // GAP-HR-CONFIRMATION-02: today's date in IST, for the confirmation-date
@@ -175,7 +175,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
       className="card"
       style={{
         marginBottom: 0,
-        borderInlineStart: `4px solid ${days == null ? "var(--line, #e2e8f0)" : days < 0 ? "var(--bad, #dc2626)" : days <= 14 ? "#f59e0b" : "var(--line, #e2e8f0)"}`,
+        borderInlineStart: `4px solid ${days == null ? "var(--line)" : days < 0 ? "var(--bad)" : days <= 14 ? "var(--amber)" : "var(--line)"}`,
       }}
       aria-label={`Probation confirmation for ${row.employee}`}
     >
@@ -184,7 +184,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
         <div
           aria-hidden="true"
           style={{
-            width: 40, height: 40, borderRadius: "50%", background: "var(--infobg, #eff6ff)",
+            width: 40, height: 40, borderRadius: "50%", background: "var(--infobg)",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 18, flexShrink: 0,
           }}
@@ -205,8 +205,8 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
             role="status"
             style={{
               padding: "3px 12px", borderRadius: 20, fontSize: "0.75rem", fontWeight: 600,
-              background: action === "confirmed" ? "var(--goodbg, #f0fdf4)" : "#fffbe6",
-              color:      action === "confirmed" ? "var(--good, #16a34a)" : "#b45309",
+              background: action === "confirmed" ? "var(--goodbg)" : "var(--warnbg)",
+              color:      action === "confirmed" ? "var(--good)" : "var(--warn)",
             }}
           >
             <span aria-hidden="true">{action === "confirmed" ? "✅" : "🔄"}</span>{" "}
@@ -249,7 +249,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
       <div
         style={{
           padding: "10px 16px 14px", marginTop: 12,
-          borderTop: "1px solid var(--line, #e2e8f0)",
+          borderTop: "1px solid var(--line)",
           display: "flex", alignItems: "center",
           justifyContent: "space-between", gap: 10, flexWrap: "wrap",
         }}
@@ -453,7 +453,7 @@ export function ProbationConfirmationList({ rows, hasMore }: ListProps) {
       </div>
 
       {hasMore && (
-        <p style={{ margin: "0 0 14px", fontSize: "0.8125rem", color: "var(--warn, #b45309)" }}>
+        <p style={{ margin: "0 0 14px", fontSize: "0.8125rem", color: "var(--warn)" }}>
           Showing the first 500 probationers. Refine your search to find someone not listed here.
         </p>
       )}

@@ -81,7 +81,7 @@ export function IssueIdCardForm() {
   return (
     <form onSubmit={submit} style={{ display: "grid", gap: 14, maxWidth: 480 }}>
       {err.message && (
-        <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--danger, #b91c1c)" }}>
+        <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--danger)" }}>
           {err.message}
         </p>
       )}
@@ -123,7 +123,7 @@ export function IssueIdCardForm() {
       </Field>
 
       {success && (
-        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--ok, #15803d)" }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--ok)" }}>
           {success}
         </p>
       )}

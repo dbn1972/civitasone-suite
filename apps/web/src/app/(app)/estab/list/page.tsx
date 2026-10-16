@@ -90,7 +90,7 @@ export default async function EstabFilesListPage() {
       <div
         className="banner"
         style={{
-          background: "#e6f7f5",
+          background: "var(--goodbg)",
           border: "1px solid #99e6da",
           color: "#0f766e",
           borderRadius: 12,
@@ -104,11 +104,11 @@ export default async function EstabFilesListPage() {
         <span aria-hidden="true">📁</span> <b>eOffice integration.</b> Digital files with e-sign note sheets, full movement trail — no physical files.
       </div>
       <StatGrid>
-        <StatCard icon="📁" iconBg="#e6f7f5" label="Active Files" value={errored ? "—" : active.toLocaleString("en-IN")} />
-        <StatCard icon="⏱" iconBg="#fffaeb" label="Avg Pendency" value={errored ? "—" : avgPendencyDisplay} />
-        <StatCard icon="🟡" iconBg="#fffaeb" label="Pending" value={errored ? "—" : pending.toLocaleString("en-IN")} />
+        <StatCard icon="📁" tone="good" label="Active Files" value={errored ? "—" : active.toLocaleString("en-IN")} />
+        <StatCard icon="⏱" tone="warn" label="Avg Pendency" value={errored ? "—" : avgPendencyDisplay} />
+        <StatCard icon="🟡" tone="warn" label="Pending" value={errored ? "—" : pending.toLocaleString("en-IN")} />
         {/* GAP-ESTAB-LIST-02: label "Closed", not "Closed (MTD)" */}
-        <StatCard icon="✅" iconBg="#eff6ff" label="Closed" value={errored ? "—" : closed.toLocaleString("en-IN")} />
+        <StatCard icon="✅" tone="info" label="Closed" value={errored ? "—" : closed.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         {errored ? (

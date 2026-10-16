@@ -9,9 +9,9 @@ export default function LegalCaseNotFound() {
         style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}
       >
         <Link href="/legal" className="lnk">Legal</Link>
-        <span aria-hidden="true" style={{ margin: "0 7px", color: "#cdd2dc" }}>/</span>
+        <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
         <Link href="/legal/list" className="lnk">Cases</Link>
-        <span aria-hidden="true" style={{ margin: "0 7px", color: "#cdd2dc" }}>/</span>
+        <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
         <span aria-current="page">Not found</span>
       </nav>
       <EmptyState

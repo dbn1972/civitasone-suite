@@ -38,10 +38,10 @@ export function CertificationCard({
   const days = expiryDate ? daysUntilExpiry(expiryDate) : null;
 
   const STATUS_STYLE: Record<CertificationStatus, { label: string; bg: string; color: string; border: string }> = {
-    valid:         { label: t("statusValid"),        bg: "var(--goodbg, #f0fdf4)", color: "var(--good, #15803d)", border: "var(--goodbd, #86efac)" },
-    expiring_soon: { label: t("statusExpiringSoon"),  bg: "var(--warnbg, #fffbeb)", color: "var(--warn, #d97706)", border: "var(--warnbd, #fcd34d)" },
-    expired:       { label: t("statusExpired"),       bg: "var(--badbg, #fef2f2)",  color: "var(--bad, #dc2626)",  border: "var(--badbd, #fca5a5)" },
-    no_expiry:     { label: t("noExpiry"),             bg: "var(--line2, #f1f5f9)",  color: "var(--mut, #64748b)",  border: "var(--line, #e2e8f0)" },
+    valid:         { label: t("statusValid"),        bg: "var(--goodbg)", color: "var(--good)", border: "var(--goodbd)" },
+    expiring_soon: { label: t("statusExpiringSoon"),  bg: "var(--warnbg)", color: "var(--warn)", border: "var(--warnbd)" },
+    expired:       { label: t("statusExpired"),       bg: "var(--badbg)",  color: "var(--bad)",  border: "var(--badbd)" },
+    no_expiry:     { label: t("noExpiry"),             bg: "var(--line2)",  color: "var(--mut)",  border: "var(--line)" },
   };
 
   const ss = STATUS_STYLE[status];
@@ -50,10 +50,10 @@ export function CertificationCard({
     <div
       id={id}
       style={{
-        border: `1px solid ${isMandatory ? "var(--infobd, #bfdbfe)" : "var(--line, #e2e8f0)"}`,
-        borderTop: `3px solid ${isMandatory ? "var(--info, #3b82f6)" : "var(--mut, #94a3b8)"}`,
+        border: `1px solid ${isMandatory ? "var(--infobd)" : "var(--line)"}`,
+        borderTop: `3px solid ${isMandatory ? "var(--info)" : "var(--mut)"}`,
         borderRadius: 10,
-        background: "var(--panel, #fff)",
+        background: "var(--panel)",
         padding: "14px 16px",
         display: "flex",
         flexDirection: "column",
@@ -67,7 +67,7 @@ export function CertificationCard({
         <div
           style={{
             position: "absolute", top: 10, insetInlineEnd: 12,
-            fontSize: 10, fontWeight: 700, background: "var(--infobg, #dbeafe)", color: "var(--info, #1d4ed8)",
+            fontSize: 10, fontWeight: 700, background: "var(--infobg)", color: "var(--info)",
             borderRadius: 4, padding: "2px 6px", textTransform: "uppercase", letterSpacing: "0.06em",
           }}
         >
@@ -77,22 +77,22 @@ export function CertificationCard({
 
       {/* Title & issuing body */}
       <div>
-        <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "var(--ink, #1e293b)", lineHeight: 1.3, paddingInlineEnd: isMandatory ? 80 : 0 }}>
+        <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "var(--ink)", lineHeight: 1.3, paddingInlineEnd: isMandatory ? 80 : 0 }}>
           {certificationName}
         </p>
-        <p style={{ margin: "3px 0 0", fontSize: 12, color: "var(--mut, #64748b)" }}>{issuingBody}</p>
+        <p style={{ margin: "3px 0 0", fontSize: 12, color: "var(--mut)" }}>{issuingBody}</p>
       </div>
 
       {/* Dates */}
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
         <div>
           <p style={{ margin: 0, fontSize: 10, color: "var(--mut)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("obtained")}</p>
-          <p style={{ margin: "2px 0 0", fontSize: 13, fontWeight: 600, color: "var(--ink, #1e293b)" }}>{formatIndianDate(obtainedDate)}</p>
+          <p style={{ margin: "2px 0 0", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{formatIndianDate(obtainedDate)}</p>
         </div>
         {expiryDate ? (
           <div>
             <p style={{ margin: 0, fontSize: 10, color: "var(--mut)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("expires")}</p>
-            <p style={{ margin: "2px 0 0", fontSize: 13, fontWeight: 600, color: status === "expired" ? "var(--bad, #dc2626)" : "var(--ink, #1e293b)" }}>
+            <p style={{ margin: "2px 0 0", fontSize: 13, fontWeight: 600, color: status === "expired" ? "var(--bad)" : "var(--ink)" }}>
               {formatIndianDate(expiryDate)}
             </p>
           </div>
@@ -109,12 +109,12 @@ export function CertificationCard({
         <div
           role="alert"
           style={{
-            background: "var(--warnbg, #fffbeb)",
-            border: "1px solid var(--warnbd, #fcd34d)",
+            background: "var(--warnbg)",
+            border: "1px solid var(--warnbd)",
             borderRadius: 6,
             padding: "6px 10px",
             fontSize: 12,
-            color: "var(--warn, #d97706)",
+            color: "var(--warn)",
             fontWeight: 600,
             display: "flex",
             alignItems: "center",
@@ -130,12 +130,12 @@ export function CertificationCard({
         <div
           role="alert"
           style={{
-            background: "var(--badbg, #fef2f2)",
-            border: "1px solid var(--badbd, #fca5a5)",
+            background: "var(--badbg)",
+            border: "1px solid var(--badbd)",
             borderRadius: 6,
             padding: "6px 10px",
             fontSize: 12,
-            color: "var(--bad, #dc2626)",
+            color: "var(--bad)",
             fontWeight: 600,
             display: "flex",
             alignItems: "center",
@@ -163,8 +163,8 @@ export function CertificationCard({
             style={{
               fontSize: 12, fontWeight: 700, padding: "5px 12px",
               border: "none", borderRadius: 6,
-              background: status === "expired" ? "var(--bad, #dc2626)" : "var(--warn, #d97706)",
-              color: "#fff", textDecoration: "none", display: "inline-block",
+              background: status === "expired" ? "var(--bad)" : "var(--warn)",
+              color: "var(--panel)", textDecoration: "none", display: "inline-block",
             }}
           >
             {t("renew")}

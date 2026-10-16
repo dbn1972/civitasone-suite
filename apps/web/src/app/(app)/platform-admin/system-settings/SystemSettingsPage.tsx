@@ -61,7 +61,7 @@ function SectionCard({ title, editing, onEdit, onSave, onCancel, busy, error, ch
           <Button variant="ghost" size="sm" onClick={onEdit}>Edit</Button>
         )}
       </div>
-      {error ? <p role="alert" style={{ fontSize: 12.5, color: "var(--bad, #b42318)", margin: 0, padding: "6px 16px 0" }}>{error}</p> : null}
+      {error ? <p role="alert" style={{ fontSize: 12.5, color: "var(--bad)", margin: 0, padding: "6px 16px 0" }}>{error}</p> : null}
       <div style={{ padding: "16px" }}>{children}</div>
     </div>
   );
@@ -200,7 +200,7 @@ export function SystemSettingsPage({ initial }: { initial: AdminSettings }) {
   return (
     <div>
       {successMsg ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12.5, color: "var(--good, #027a48)", marginBottom: 12, padding: "8px 12px", background: "var(--goodbg, #ecfdf3)", borderRadius: 8 }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 12.5, color: "var(--good)", marginBottom: 12, padding: "8px 12px", background: "var(--goodbg)", borderRadius: 8 }}>
           {successMsg}
         </p>
       ) : null}

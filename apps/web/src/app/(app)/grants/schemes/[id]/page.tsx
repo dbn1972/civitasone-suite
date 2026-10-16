@@ -81,10 +81,10 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
       />
 
       <StatGrid>
-        <StatCard icon="💰" iconBg="#ecfdf5" label="Total Budget" value={formatMoney(scheme.budgetMinor)} />
-        <StatCard icon="📤" iconBg="#dbeafe" label="Disbursed" value={formatMoney(scheme.disbursedMinor)} />
-        <StatCard icon="🧮" iconBg="#f1f5f9" label="Remaining" value={formatMoney(remainingMinor)} />
-        <StatCard icon="📈" iconBg="#fef3c7" label="Utilisation" value={formatPercent(utilisationPct)} />
+        <StatCard icon="💰" tone="good" label="Total Budget" value={formatMoney(scheme.budgetMinor)} />
+        <StatCard icon="📤" tone="info" label="Disbursed" value={formatMoney(scheme.disbursedMinor)} />
+        <StatCard icon="🧮" tone="neutral" label="Remaining" value={formatMoney(remainingMinor)} />
+        <StatCard icon="📈" tone="warn" label="Utilisation" value={formatPercent(utilisationPct)} />
       </StatGrid>
 
       {/* GAP-GRANTS-SCHEMES-DETAIL-04: budget-vs-disbursed bar (replaces dead

@@ -24,10 +24,10 @@ export default async function MilestonesPage() {
         back="/projects"
       />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#eef0fe" label="Total" value={errored ? "—" : milestones.length} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={pending ?? "—"} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Completed" value={completed ?? "—"} />
-        <StatCard icon="🔴" iconBg="#fef3f2" label="Delayed" value={delayed ?? "—"} />
+        <StatCard icon="📋" tone="info" label="Total" value={errored ? "—" : milestones.length} />
+        <StatCard icon="⏳" tone="warn" label="Pending" value={pending ?? "—"} />
+        <StatCard icon="✅" tone="good" label="Completed" value={completed ?? "—"} />
+        <StatCard icon="🔴" tone="bad" label="Delayed" value={delayed ?? "—"} />
       </StatGrid>
       <Card title="Milestones">
         {errored ? (

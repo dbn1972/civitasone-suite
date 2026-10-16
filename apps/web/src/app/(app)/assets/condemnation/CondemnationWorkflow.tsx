@@ -76,14 +76,14 @@ function Field({
       <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
         {label}{" "}
         {required && (
-          <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+          <span aria-hidden="true" style={{ color: "var(--bad)" }}>
             *
           </span>
         )}
       </label>
       {children}
       {error && (
-        <p id={`${id}-err`} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>
+        <p id={`${id}-err`} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>
           {error}
         </p>
       )}
@@ -654,7 +654,7 @@ function RecommendationPanel({ data, onDone }: { data: CondemnationData; onDone:
 
           <div style={{ display: "grid", gap: 8 }}>
             <div style={{ fontSize: 13, fontWeight: 600 }}>
-              Committee members <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span> (min. 2)
+              Committee members <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span> (min. 2)
             </div>
             {members.map((m, i) => (
               <div key={i} style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", alignItems: "start" }}>
@@ -677,7 +677,7 @@ function RecommendationPanel({ data, onDone }: { data: CondemnationData; onDone:
                 </Field>
               </div>
             ))}
-            {errors.members && <p role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.members}</p>}
+            {errors.members && <p role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.members}</p>}
             <div>
               <Button type="button" variant="ghost" size="sm" onClick={() => setMembers((prev) => [...prev, emptyMember()])}>
                 + Add member

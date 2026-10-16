@@ -150,22 +150,22 @@ export function PromotionCard({ promotion }: Props) {
         {/* Designation progression */}
         <div style={{
           display: "flex", alignItems: "center", gap: 12,
-          padding: "12px 16px", background: "var(--panel, #f8fafc)",
+          padding: "12px 16px", background: "var(--panel)",
           borderRadius: 10, marginBottom: 14, flexWrap: "wrap",
         }}>
           <div style={{ textAlign: "center" }}>
             <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--mut)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("currentLabel")}</p>
             <p style={{ margin: "4px 0 0", fontSize: "0.9375rem", fontWeight: 600 }}>{fromLabel}</p>
           </div>
-          <div style={{ fontSize: 22, color: "var(--info, #2563eb)", flexShrink: 0 }} aria-hidden="true">&#8594;</div>
+          <div style={{ fontSize: 22, color: "var(--info)", flexShrink: 0 }} aria-hidden="true">&#8594;</div>
           <div style={{ textAlign: "center" }}>
             <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--mut)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("promotedToLabel")}</p>
-            <p style={{ margin: "4px 0 0", fontSize: "0.9375rem", fontWeight: 700, color: "var(--good, #16a34a)" }}>{toLabel}</p>
+            <p style={{ margin: "4px 0 0", fontSize: "0.9375rem", fontWeight: 700, color: "var(--good)" }}>{toLabel}</p>
           </div>
           {payStr && (
             <div style={{ marginInlineStart: "auto", textAlign: "end" }}>
               <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--mut)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("newBasicLabel")}</p>
-              <p style={{ margin: "4px 0 0", fontSize: "1rem", fontWeight: 700, color: "var(--good, #0f766e)" }}>{payStr}</p>
+              <p style={{ margin: "4px 0 0", fontSize: "1rem", fontWeight: 700, color: "var(--good)" }}>{payStr}</p>
             </div>
           )}
         </div>
@@ -206,10 +206,10 @@ export function PromotionCard({ promotion }: Props) {
                 <div key={key} style={{
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "6px 12px", borderRadius: 20, border: "1px solid",
-                  borderColor: done ? "var(--good, #16a34a)" : active ? "var(--info, #2563eb)" : "var(--line)",
-                  background:  done ? "var(--goodbg, #f0fdf4)" : active ? "var(--infobg, #eff6ff)" : "transparent",
+                  borderColor: done ? "var(--good)" : active ? "var(--info)" : "var(--line)",
+                  background:  done ? "var(--goodbg)" : active ? "var(--infobg)" : "transparent",
                   fontSize: "0.8125rem", fontWeight: done || active ? 600 : 400,
-                  color: done ? "var(--good, #16a34a)" : active ? "var(--info, #2563eb)" : "var(--mut)",
+                  color: done ? "var(--good)" : active ? "var(--info)" : "var(--mut)",
                 }}>
                   <span aria-hidden="true">{done ? "✓" : icon}</span>
                   <span>{t(labelKey)}</span>

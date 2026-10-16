@@ -83,9 +83,9 @@ export function BinsTable({
   return (
     <div aria-label="Inventory bins and racks">
       <StatGrid>
-          <StatCard icon="🗄️" iconBg="#f1f5f9" label="Total Bins" value={statValue(provenance, rows.length)} />
-          <StatCard icon="✅" iconBg="#dcfce7" label="Active" value={statValue(provenance, active)} />
-          <StatCard icon="📐" iconBg="#fef3c7" label="Capacity Tracked" value={statValue(provenance, withCapacity)} />
+          <StatCard icon="🗄️" tone="neutral" label="Total Bins" value={statValue(provenance, rows.length)} />
+          <StatCard icon="✅" tone="good" label="Active" value={statValue(provenance, active)} />
+          <StatCard icon="📐" tone="warn" label="Capacity Tracked" value={statValue(provenance, withCapacity)} />
       </StatGrid>
       <Card title="Bins">
         <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="bins and racks" capNote={capNote(rows.length, INVENTORY_LIST_LIMIT, "bins")}>

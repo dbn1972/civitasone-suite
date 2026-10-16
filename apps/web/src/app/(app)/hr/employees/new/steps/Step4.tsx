@@ -68,7 +68,7 @@ function MaskedInput({
           background: "none",
           border: "none",
           cursor: "pointer",
-          color: "var(--mut, #64748b)",
+          color: "var(--mut)",
           fontSize: 14,
           padding: "2px 4px",
           lineHeight: 1,
@@ -84,14 +84,14 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
   const t = useTranslations("employeeWizard");
   return (
     <>
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink, #0f172a)", marginTop: 0, marginBottom: 20 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginTop: 0, marginBottom: 20 }}>
         {t("step4Heading")}
       </h2>
 
       <div style={grid2}>
         {/* PAN */}
         <Field id="w-pan" label={<>{t("panLabel")}
-            <span style={{ fontWeight: 400, color: "var(--mut, #64748b)", marginInlineStart: 6, fontSize: 11 }}>
+            <span style={{ fontWeight: 400, color: "var(--mut)", marginInlineStart: 6, fontSize: 11 }}>
               {t("storedEncrypted")}
             </span></>} error={errors.pan} announce style={fieldWrap}>
           <MaskedInput
@@ -110,7 +110,7 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
 
         {/* Aadhaar */}
         <Field id="w-aadhaar" label={<>{t("aadhaarRefLabel")}
-            <span style={{ fontWeight: 400, color: "var(--mut, #64748b)", marginInlineStart: 6, fontSize: 11 }}>
+            <span style={{ fontWeight: 400, color: "var(--mut)", marginInlineStart: 6, fontSize: 11 }}>
               {t("aadhaarHint")}
             </span></>} style={fieldWrap}>
           <MaskedInput
@@ -127,7 +127,7 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
 
         {/* Bank Account */}
         <Field id="w-bank" label={<>{t("bankAccountNoLabel")}
-            <span style={{ fontWeight: 400, color: "var(--mut, #64748b)", marginInlineStart: 6, fontSize: 11 }}>
+            <span style={{ fontWeight: 400, color: "var(--mut)", marginInlineStart: 6, fontSize: 11 }}>
               {t("storedEncrypted")}
             </span></>} style={fieldWrap}>
           <MaskedInput

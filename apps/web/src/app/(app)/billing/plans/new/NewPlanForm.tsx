@@ -163,7 +163,7 @@ export function NewPlanForm() {
     fontSize: 13, minHeight: 44, background: "var(--panel)", color: "var(--ink)", outline: "none",
   };
   const labelStyle: React.CSSProperties = { display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink2)", marginBottom: 4 };
-  const errStyle: React.CSSProperties = { marginTop: 4, fontSize: 12, color: "var(--bad, #b42318)" };
+  const errStyle: React.CSSProperties = { marginTop: 4, fontSize: 12, color: "var(--bad)" };
 
   return (
     <form

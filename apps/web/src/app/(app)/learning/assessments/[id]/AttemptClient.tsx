@@ -127,7 +127,7 @@ export function AttemptClient({ assessmentId, employeeId, questions }: AttemptCl
           {phase === "starting" ? "Starting…" : "Start attempt"}
         </Button>
         {formError.message && (
-          <p role="alert" aria-live="assertive" style={{ color: "var(--bad, #dc2626)", marginTop: 8 }}>{formError.message}</p>
+          <p role="alert" aria-live="assertive" style={{ color: "var(--bad)", marginTop: 8 }}>{formError.message}</p>
         )}
       </div>
     );
@@ -170,7 +170,7 @@ export function AttemptClient({ assessmentId, employeeId, questions }: AttemptCl
           {phase === "submitting" ? "Submitting…" : "Submit attempt"}
         </Button>
         {formError.message && (
-          <p role="alert" aria-live="assertive" style={{ color: "var(--bad, #dc2626)", marginTop: 8 }}>{formError.message}</p>
+          <p role="alert" aria-live="assertive" style={{ color: "var(--bad)", marginTop: 8 }}>{formError.message}</p>
         )}
       </div>
     </div>

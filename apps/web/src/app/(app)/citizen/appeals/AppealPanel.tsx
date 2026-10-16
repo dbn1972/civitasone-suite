@@ -112,11 +112,11 @@ export function AppealPanel() {
           {busy ? t("filing") : t("submit")}
         </Button>
         {filed ? (
-          <div role="status" className="pad" style={{ marginTop: 12, background: "#ecfdf3", borderRadius: 8 }}>
+          <div role="status" className="pad" style={{ marginTop: 12, background: "var(--goodbg)", borderRadius: 8 }}>
             {t("filedStatus", { status: filed.status })} {t("filedDeadline", { date: formatIndianDate(filed.filingDeadline) })}
           </div>
         ) : null}
-        {error ? <p role="alert" style={{ color: "#b42318", fontSize: 13 }}>{error}</p> : null}
+        {error ? <p role="alert" style={{ color: "var(--bad)", fontSize: 13 }}>{error}</p> : null}
       </form>
     </div>
   );

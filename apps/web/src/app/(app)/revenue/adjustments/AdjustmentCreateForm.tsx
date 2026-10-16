@@ -145,7 +145,7 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={fromId} style={{ fontSize: 13, fontWeight: 600 }}>
                 From Demand{" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -167,7 +167,7 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
                 ))}
               </select>
               {fieldErrors.from && (
-                <p id={fromErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={fromErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.from}
                 </p>
               )}
@@ -193,7 +193,7 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={toId} style={{ fontSize: 13, fontWeight: 600 }}>
                 To Demand{" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -215,7 +215,7 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
                 ))}
               </select>
               {fieldErrors.to && (
-                <p id={toErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={toErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.to}
                 </p>
               )}
@@ -224,7 +224,7 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={amountId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Amount (₹){" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -243,7 +243,7 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
               {fieldErrors.amount && (
-                <p id={amountErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={amountErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.amount}
                 </p>
               )}
@@ -252,7 +252,7 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
             <div style={{ display: "grid", gap: 6, gridColumn: "1 / -1" }}>
               <label htmlFor={reasonId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Reason{" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -269,7 +269,7 @@ export function AdjustmentCreateForm({ assesseeId, demands }: { assesseeId: stri
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)" }}
               />
               {fieldErrors.reason && (
-                <p id={reasonErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={reasonErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.reason}
                 </p>
               )}

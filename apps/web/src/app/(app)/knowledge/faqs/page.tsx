@@ -29,9 +29,9 @@ export default async function Page() {
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
         {/* GAP-KNOWLEDGE-FAQS-01: pass "—" when errored */}
-        <StatCard icon="❓" iconBg="#eef2ff" label="FAQs" value={errored ? "—" : faqs.length.toLocaleString("en-IN")} />
-        <StatCard icon="🗂️" iconBg="#ecfdf5" label="Categories" value={errored ? "—" : categories.size.toLocaleString("en-IN")} />
-        <StatCard icon="🧭" iconBg="#fffbeb" label="Guided flows" value={errored ? "—" : flows.length.toLocaleString("en-IN")} />
+        <StatCard icon="❓" tone="info" label="FAQs" value={errored ? "—" : faqs.length.toLocaleString("en-IN")} />
+        <StatCard icon="🗂️" tone="good" label="Categories" value={errored ? "—" : categories.size.toLocaleString("en-IN")} />
+        <StatCard icon="🧭" tone="warn" label="Guided flows" value={errored ? "—" : flows.length.toLocaleString("en-IN")} />
       </StatGrid>
 
       {errored ? (
@@ -60,7 +60,7 @@ export default async function Page() {
                     <ol style={{ margin: 0, paddingLeft: 20 }}>
                       {flow.steps.map((s) => (
                         <li key={s.order} style={{ padding: "3px 0", lineHeight: 1.5 }}>
-                          <strong>{s.title}</strong> — <span style={{ color: "var(--ink2, #475569)" }}>{s.instruction}</span>
+                          <strong>{s.title}</strong> — <span style={{ color: "var(--ink2)" }}>{s.instruction}</span>
                         </li>
                       ))}
                     </ol>

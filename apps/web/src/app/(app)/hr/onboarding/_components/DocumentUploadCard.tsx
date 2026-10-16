@@ -28,10 +28,10 @@ const STATUS_CONFIG: Record<
   DocStatus,
   { label: string; icon: string; color: string; bg: string; border: string }
 > = {
-  pending:  { icon: "…", label: "Pending",  color: "var(--warn, #92400e)",  bg: "var(--warnbg, #fef3c7)",  border: "var(--warnbd, #fde68a)" },
-  uploaded: { icon: "↑", label: "Uploaded", color: "var(--info, #1d4ed8)",  bg: "var(--infobg, #dbeafe)",  border: "var(--infobd, #bfdbfe)" },
-  verified: { icon: "✓", label: "Verified", color: "var(--good, #166534)",  bg: "var(--goodbg, #dcfce7)",  border: "var(--goodbd, #bbf7d0)" },
-  rejected: { icon: "✕", label: "Rejected", color: "var(--bad, #991b1b)",   bg: "var(--badbg, #fee2e2)",   border: "var(--badbd, #fecaca)" },
+  pending:  { icon: "…", label: "Pending",  color: "var(--warn)",  bg: "var(--warnbg)",  border: "var(--warnbd)" },
+  uploaded: { icon: "↑", label: "Uploaded", color: "var(--info)",  bg: "var(--infobg)",  border: "var(--infobd)" },
+  verified: { icon: "✓", label: "Verified", color: "var(--good)",  bg: "var(--goodbg)",  border: "var(--goodbd)" },
+  rejected: { icon: "✕", label: "Rejected", color: "var(--bad)",   bg: "var(--badbg)",   border: "var(--badbd)" },
 };
 
 function StatusChip({ status }: { status: DocStatus }) {
@@ -161,10 +161,10 @@ function DocCard({ doc, onUploaded, onVerify, onReject }: SingleCardProps) {
     <div
       data-testid={`doc-card-${doc.id}`}
       style={{
-        border: `1px solid ${localStatus === "rejected" ? "var(--badbd, #fecaca)" : "var(--border, #e2e8f0)"}`,
+        border: `1px solid ${localStatus === "rejected" ? "var(--badbd)" : "var(--border)"}`,
         borderRadius: 10,
         padding: 16,
-        background: "var(--card-bg, #fff)",
+        background: "var(--card-bg)",
         display: "flex",
         flexDirection: "column",
         gap: 10,
@@ -175,17 +175,17 @@ function DocCard({ doc, onUploaded, onVerify, onReject }: SingleCardProps) {
         <span style={{ fontSize: 20, lineHeight: 1 }} aria-hidden>📄</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--heading, #1e293b)" }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "var(--heading)" }}>
               {doc.name}
             </span>
             {doc.required ? (
-              <span style={{ fontSize: 10, color: "var(--bad, #b91c1c)", fontWeight: 600 }}>(Required)</span>
+              <span style={{ fontSize: 10, color: "var(--bad)", fontWeight: 600 }}>(Required)</span>
             ) : (
-              <span style={{ fontSize: 10, color: "var(--muted, #64748b)", fontWeight: 500 }}>(Optional)</span>
+              <span style={{ fontSize: 10, color: "var(--muted)", fontWeight: 500 }}>(Optional)</span>
             )}
           </div>
           {doc.description && (
-            <p style={{ margin: "1px 0 0", fontSize: 11, color: "var(--muted, #64748b)" }}>
+            <p style={{ margin: "1px 0 0", fontSize: 11, color: "var(--muted)" }}>
               {doc.description}
             </p>
           )}
@@ -201,17 +201,17 @@ function DocCard({ doc, onUploaded, onVerify, onReject }: SingleCardProps) {
             alignItems: "center",
             gap: 8,
             padding: "6px 10px",
-            background: "var(--bg, #f8fafc)",
+            background: "var(--bg)",
             borderRadius: 6,
-            border: "1px solid var(--border, #e2e8f0)",
+            border: "1px solid var(--border)",
           }}
         >
           <span style={{ fontSize: 16 }} aria-hidden>📎</span>
-          <span style={{ fontSize: 12, color: "var(--body, #334155)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span style={{ fontSize: 12, color: "var(--body)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {localFile}
           </span>
           {localStatus === "verified" && (
-            <span style={{ fontSize: 11, color: "var(--good, #166534)" }}>✓ Verified</span>
+            <span style={{ fontSize: 11, color: "var(--good)" }}>✓ Verified</span>
           )}
           {/* GAP-HR-ONBOARDING-DETAIL-02: HR can now actually open what was
               uploaded, via the same presigned-download route the platform's
@@ -239,7 +239,7 @@ function DocCard({ doc, onUploaded, onVerify, onReject }: SingleCardProps) {
               type="button"
               onClick={() => onVerify(doc.id)}
               className="btn"
-              style={{ fontSize: 11, padding: "4px 10px", color: "var(--good, #166534)", borderColor: "var(--goodbd, #bbf7d0)" }}
+              style={{ fontSize: 11, padding: "4px 10px", color: "var(--good)", borderColor: "var(--goodbd)" }}
             >
               Verify
             </button>
@@ -249,7 +249,7 @@ function DocCard({ doc, onUploaded, onVerify, onReject }: SingleCardProps) {
               type="button"
               onClick={() => onReject(doc.id)}
               className="btn"
-              style={{ fontSize: 11, padding: "4px 10px", color: "var(--bad, #991b1b)", borderColor: "var(--badbd, #fecaca)" }}
+              style={{ fontSize: 11, padding: "4px 10px", color: "var(--bad)", borderColor: "var(--badbd)" }}
             >
               Reject
             </button>
@@ -269,12 +269,12 @@ function DocCard({ doc, onUploaded, onVerify, onReject }: SingleCardProps) {
           aria-label={doc.required ? `Upload ${doc.name} (required)` : `Upload ${doc.name}`}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") inputRef.current?.click(); }}
           style={{
-            border: `2px dashed ${dragging ? "var(--indigo, #4f46e5)" : "var(--border, #cbd5e1)"}`,
+            border: `2px dashed ${dragging ? "var(--indigo)" : "var(--border)"}`,
             borderRadius: 8,
             padding: "14px 10px",
             textAlign: "center",
             cursor: uploading ? "progress" : "pointer",
-            background: dragging ? "var(--primary-soft, #ede9fe)" : "var(--bg, #f8fafc)",
+            background: dragging ? "var(--primary-soft)" : "var(--bg)",
             transition: "border-color 0.15s, background 0.15s",
           }}
         >
@@ -291,14 +291,14 @@ function DocCard({ doc, onUploaded, onVerify, onReject }: SingleCardProps) {
             aria-required={doc.required ? "true" : undefined}
           />
           {uploading ? (
-            <span style={{ fontSize: 12, color: "var(--indigo, #4f46e5)" }}>Uploading…</span>
+            <span style={{ fontSize: 12, color: "var(--indigo)" }}>Uploading…</span>
           ) : (
             <>
               <div style={{ fontSize: 20, marginBottom: 4 }} aria-hidden>⬆</div>
-              <div style={{ fontSize: 12, color: "var(--body, #334155)", fontWeight: 500 }}>
-                Drag &amp; drop or <span style={{ color: "var(--indigo, #4f46e5)", textDecoration: "underline" }}>browse</span>
+              <div style={{ fontSize: 12, color: "var(--body)", fontWeight: 500 }}>
+                Drag &amp; drop or <span style={{ color: "var(--indigo)", textDecoration: "underline" }}>browse</span>
               </div>
-              <div style={{ fontSize: 10, color: "var(--muted, #94a3b8)", marginTop: 2 }}>
+              <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>
                 PDF, JPG, PNG, DOCX · Max 10 MB
               </div>
             </>
@@ -311,21 +311,21 @@ function DocCard({ doc, onUploaded, onVerify, onReject }: SingleCardProps) {
           (implicit aria-live="polite") instead of role="alert" since this
           isn't an error. */}
       {uploadSuccessMessage && (
-        <p role="status" style={{ margin: 0, fontSize: 12, color: "var(--good, #067647)", fontWeight: 500 }}>
+        <p role="status" style={{ margin: 0, fontSize: 12, color: "var(--good)", fontWeight: 500 }}>
           {uploadSuccessMessage}
         </p>
       )}
 
       {/* Upload error */}
       {uploadError && (
-        <p role="alert" style={{ margin: 0, fontSize: 12, color: "var(--bad, #dc2626)", fontWeight: 500 }}>
+        <p role="alert" style={{ margin: 0, fontSize: 12, color: "var(--bad)", fontWeight: 500 }}>
           {uploadError}
         </p>
       )}
 
       {/* View (download) error */}
       {viewError && (
-        <p role="alert" style={{ margin: 0, fontSize: 12, color: "var(--bad, #dc2626)", fontWeight: 500 }}>
+        <p role="alert" style={{ margin: 0, fontSize: 12, color: "var(--bad)", fontWeight: 500 }}>
           {viewError}
         </p>
       )}
@@ -348,7 +348,7 @@ const DEFAULT_DPDP_NOTICE =
 export function DocumentUploadCard({ documents, onUploaded, onVerify, onReject, dpdpNotice }: DocumentUploadCardProps) {
   return (
     <div data-testid="document-upload-section">
-      <h3 style={{ margin: "0 0 10px", fontSize: 15, fontWeight: 700, color: "var(--heading, #1e293b)" }}>
+      <h3 style={{ margin: "0 0 10px", fontSize: 15, fontWeight: 700, color: "var(--heading)" }}>
         Required Documents
       </h3>
       {/* GAP-HR-ONBOARDING-DETAIL-03: purpose/visibility notice, shown before
@@ -368,11 +368,11 @@ export function DocumentUploadCard({ documents, onUploaded, onVerify, onReject, 
           alignItems: "flex-start",
           padding: "10px 12px",
           marginBottom: 14,
-          background: "var(--infobg, #eff6ff)",
-          border: "1px solid var(--infobd, #bfdbfe)",
+          background: "var(--infobg)",
+          border: "1px solid var(--infobd)",
           borderRadius: 8,
           fontSize: 12,
-          color: "var(--info, #1e40af)",
+          color: "var(--info)",
         }}
       >
         <span aria-hidden style={{ fontSize: 14 }}>ℹ️</span>

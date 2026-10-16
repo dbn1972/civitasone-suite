@@ -77,10 +77,10 @@ export function NoticesTable({ notices, source = "api" }: { notices: CitizenNoti
     return (
       <>
         <StatGrid>
-          <StatCard icon="📰" iconBg="#eef2ff" label={t("statTotal")} value="—" />
-          <StatCard icon="⚖️" iconBg="#ecfdf3" label={t("statStatutory")} value="—" />
-          <StatCard icon="🏛️" iconBg="#fffaeb" label={t("statHearings")} value="—" />
-          <StatCard icon="📋" iconBg="#fce7ee" label={t("statTenders")} value="—" />
+          <StatCard icon="📰" tone="info" label={t("statTotal")} value="—" />
+          <StatCard icon="⚖️" tone="good" label={t("statStatutory")} value="—" />
+          <StatCard icon="🏛️" tone="warn" label={t("statHearings")} value="—" />
+          <StatCard icon="📋" tone="bad" label={t("statTenders")} value="—" />
         </StatGrid>
         <RefreshErrorState error={toHumanError("load", { area: "public notices" })} backHref="/citizen" />
       </>
@@ -90,10 +90,10 @@ export function NoticesTable({ notices, source = "api" }: { notices: CitizenNoti
   return (
     <>
       <StatGrid>
-        <StatCard icon="📰" iconBg="#eef2ff" label={t("statTotal")} value={active.length} />
-        <StatCard icon="⚖️" iconBg="#ecfdf3" label={t("statStatutory")} value={statutory} />
-        <StatCard icon="🏛️" iconBg="#fffaeb" label={t("statHearings")} value={publicHearings} />
-        <StatCard icon="📋" iconBg="#fce7ee" label={t("statTenders")} value={tenders} />
+        <StatCard icon="📰" tone="info" label={t("statTotal")} value={active.length} />
+        <StatCard icon="⚖️" tone="good" label={t("statStatutory")} value={statutory} />
+        <StatCard icon="🏛️" tone="warn" label={t("statHearings")} value={publicHearings} />
+        <StatCard icon="📋" tone="bad" label={t("statTenders")} value={tenders} />
       </StatGrid>
 
       <Card title={t("tableTitle")}>

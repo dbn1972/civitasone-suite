@@ -100,7 +100,7 @@ export function StatutoryComplianceCard({
       >
         <div
           style={{
-            background: "var(--infobg, #eff6ff)",
+            background: "var(--infobg)",
             borderRadius: 8,
             padding: "8px 12px",
           }}
@@ -122,7 +122,7 @@ export function StatutoryComplianceCard({
         </div>
         <div
           style={{
-            background: "var(--goodbg, #f0fdf4)",
+            background: "var(--goodbg)",
             borderRadius: 8,
             padding: "8px 12px",
           }}

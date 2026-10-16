@@ -20,7 +20,7 @@ export default async function DataExportPage() {
           right. Copy reworded; the hard-coded "48 hours" window removed (the
           per-row expiry is shown from the API). Token-based colours (no inline
           hex) so it themes in dark mode. Final wording to be confirmed by DPO. */}
-      <div className="card" style={{ marginBottom: 24, padding: 16, borderInlineStart: "4px solid var(--primary, #2563eb)" }}>
+      <div className="card" style={{ marginBottom: 24, padding: 16, borderInlineStart: "4px solid var(--primary)" }}>
         <p style={{ margin: 0, fontSize: 14, color: "var(--ink)" }}>
           📋 <strong>DPDP notice:</strong> Your organisation can export the data it holds in CivitasOne. Exports that
           include personal data are recorded with the requester&apos;s identity and purpose. Each export link remains
@@ -29,10 +29,10 @@ export default async function DataExportPage() {
       </div>
 
       <StatGrid>
-        <StatCard icon="📦" iconBg="#eef2ff" label="Total Exports" value={exports.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Ready" value={readyCount} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Processing" value={processingCount} />
-        <StatCard icon="📊" iconBg="#f1f5f9" label="Expired" value={exports.filter((e) => e.status === "expired").length} />
+        <StatCard icon="📦" tone="info" label="Total Exports" value={exports.length} />
+        <StatCard icon="✅" tone="good" label="Ready" value={readyCount} />
+        <StatCard icon="⏳" tone="warn" label="Processing" value={processingCount} />
+        <StatCard icon="📊" tone="neutral" label="Expired" value={exports.filter((e) => e.status === "expired").length} />
       </StatGrid>
 
       <DataExportClient exports={exports} source={source} />

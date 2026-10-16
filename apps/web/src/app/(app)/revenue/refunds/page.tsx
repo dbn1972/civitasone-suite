@@ -210,7 +210,7 @@ export default async function RefundsPage({
           <StatGrid>
             <StatCard
               icon="🧾"
-              iconBg="#e6f0ff"
+              tone="info"
               label="Receipts on record"
               value={receiptsResult.source === "error" ? "—" : receipts.length}
             />

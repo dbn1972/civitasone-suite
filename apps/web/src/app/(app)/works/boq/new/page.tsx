@@ -15,8 +15,8 @@ import { searchSrItems } from "../../_data/client";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
-const errBanner = { background: "#fef2f2", color: "#b42318", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 } as const;
-const okBanner = { background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 } as const;
+const errBanner = { background: "var(--badbg)", color: "var(--bad)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 } as const;
+const okBanner = { background: "var(--goodbg)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 } as const;
 
 /**
  * GAP-WORKS-BOQ-NEW-01/02/04: zod at the form boundary. Quantity is a decimal

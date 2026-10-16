@@ -109,11 +109,11 @@ export function OnboardingTable({
       errorMessage={errorMessage}
       stats={[
         // GAP-ADMIN-ONBOARDING-04: In Queue excludes completed/rejected/cancelled.
-        { icon: "📥", iconBg: "#eef2ff", label: "In Queue", value: s.inQueue },
-        { icon: "🆕", iconBg: "#ecfdf3", label: "New Requests", value: s.newReqs },
-        { icon: "🔄", iconBg: "#fffaeb", label: "In Progress", value: s.inProgress },
-        { icon: "🚀", iconBg: "#fce7ee", label: "Ready for Go-Live", value: s.ready },
-        { icon: "❔", iconBg: "#f1f5f9", label: "Other stage", value: s.other, onlyWhenPositive: true },
+        { icon: "📥", iconBg: "var(--infobg)", label: "In Queue", value: s.inQueue },
+        { icon: "🆕", iconBg: "var(--goodbg)", label: "New Requests", value: s.newReqs },
+        { icon: "🔄", iconBg: "var(--warnbg)", label: "In Progress", value: s.inProgress },
+        { icon: "🚀", iconBg: "var(--badbg)", label: "Ready for Go-Live", value: s.ready },
+        { icon: "❔", iconBg: "var(--line2)", label: "Other stage", value: s.other, onlyWhenPositive: true },
       ]}
     >
       {canManage && (

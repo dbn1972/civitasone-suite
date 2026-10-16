@@ -90,9 +90,9 @@ export default async function WorkflowDefinitionsPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🔁" iconBg="#e7edfd" label="Total Workflows" value={errored ? "—" : definitions.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active ?? "—"} />
-        <StatCard icon="📋" iconBg="#fffaeb" label="Templates" value={errored ? "—" : templates.length} />
+        <StatCard icon="🔁" tone="info" label="Total Workflows" value={errored ? "—" : definitions.length} />
+        <StatCard icon="✅" tone="good" label="Active" value={active ?? "—"} />
+        <StatCard icon="📋" tone="warn" label="Templates" value={errored ? "—" : templates.length} />
       </StatGrid>
 
       <Card title="Your approval workflows">

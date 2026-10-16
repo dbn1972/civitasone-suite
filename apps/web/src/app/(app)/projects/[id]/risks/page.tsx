@@ -31,10 +31,10 @@ export default async function ProjectRisksPage({ params }: { params: { id: strin
         </Card>
       )}
       <StatGrid>
-        <StatCard icon="⚠️" iconBg="#fef3f2" label="Open"      value={errored ? "—" : open} />
-        <StatCard icon="🔴" iconBg="#fef3f2" label="Critical"  value={errored ? "—" : critical} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Mitigated" value={errored ? "—" : mitigated} />
-        <StatCard icon="📋" iconBg="#eef0fe" label="Total"     value={errored ? "—" : risks.length} />
+        <StatCard icon="⚠️" tone="bad" label="Open"      value={errored ? "—" : open} />
+        <StatCard icon="🔴" tone="bad" label="Critical"  value={errored ? "—" : critical} />
+        <StatCard icon="✅" tone="good" label="Mitigated" value={errored ? "—" : mitigated} />
+        <StatCard icon="📋" tone="info" label="Total"     value={errored ? "—" : risks.length} />
       </StatGrid>
       <Card title="Risks">
         {errored ? (

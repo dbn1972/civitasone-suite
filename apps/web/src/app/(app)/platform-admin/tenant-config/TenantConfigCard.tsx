@@ -49,7 +49,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
       <Button variant="ghost" size="sm" aria-label={`Copy ${label}`} onClick={onCopy} style={{ fontSize: 12 }}>
         Copy
       </Button>
-      <span role="status" aria-live="polite" style={{ fontSize: 12, color: state === "error" ? "var(--bad, #b42318)" : "var(--primary-d)" }}>
+      <span role="status" aria-live="polite" style={{ fontSize: 12, color: state === "error" ? "var(--bad)" : "var(--primary-d)" }}>
         {state === "copied" ? `${label} copied` : state === "error" ? "Copy failed — select and copy manually" : ""}
       </span>
     </span>
@@ -58,10 +58,10 @@ function CopyButton({ value, label }: { value: string; label: string }) {
 
 function StorageBar({ used, quota }: { used: number; quota: number }) {
   const pct = Math.min(100, Math.round((used / quota) * 100));
-  const color = pct > 90 ? "var(--bad, #b42318)" : pct > 75 ? "var(--warn, #b54708)" : "var(--good, #027a48)";
+  const color = pct > 90 ? "var(--bad)" : pct > 75 ? "var(--warn)" : "var(--good)";
   return (
     <div>
-      <div style={{ height: 8, borderRadius: 4, background: "var(--line2, #f8fafc)", overflow: "hidden", marginBottom: 4 }}>
+      <div style={{ height: 8, borderRadius: 4, background: "var(--line2)", overflow: "hidden", marginBottom: 4 }}>
         <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 4, transition: "width 0.3s" }} />
       </div>
       <span style={{ fontSize: 12, color: "var(--ink2)" }}>{used} GB used of {quota} GB ({pct}%)</span>
@@ -71,7 +71,7 @@ function StorageBar({ used, quota }: { used: number; quota: number }) {
 
 function FeatureBadge({ feature }: { feature: string }) {
   return (
-    <span style={{ padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "var(--primary-light, #eff6ff)", color: "var(--primary-d, #1e40af)", border: "1px solid #bfdbfe", marginInlineEnd: 4, marginBottom: 4, display: "inline-block" }}>
+    <span style={{ padding: "2px 10px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "var(--primary-light)", color: "var(--primary-d)", border: "1px solid var(--infobg)", marginInlineEnd: 4, marginBottom: 4, display: "inline-block" }}>
       {featureLabel(feature)}
     </span>
   );
@@ -156,7 +156,7 @@ export function TenantConfigCard({ config, daysLeft, isPlatformAdmin = false }: 
             ? <span>
                 {formatIndianDate(config.licensedUntil)}
                 {daysLeft !== null && daysLeft < 30 && daysLeft >= 0 && (
-                  <span style={{ marginInlineStart: 8, fontSize: 12, color: "var(--warn, #b54708)", fontWeight: 700 }}>
+                  <span style={{ marginInlineStart: 8, fontSize: 12, color: "var(--warn)", fontWeight: 700 }}>
                     Renew within {daysLeft} day{daysLeft === 1 ? "" : "s"}
                   </span>
                 )}

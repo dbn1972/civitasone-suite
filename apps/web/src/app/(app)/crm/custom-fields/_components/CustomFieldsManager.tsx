@@ -305,8 +305,8 @@ export function CustomFieldsManager() {
           />
         </div>
 
-        {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
-        {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", margin: 0 }}>{error}</p> : null}
+        {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>{message}</p> : null}
+        {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad)", margin: 0 }}>{error}</p> : null}
 
         {source === "loading" ? (
           <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>Loading custom fields…</p>
@@ -350,7 +350,7 @@ export function CustomFieldsManager() {
                         aria-describedby={errors.fieldName ? nameErrId : undefined}
                       />
                       {errors.fieldName ? (
-                        <span id={nameErrId} role="alert" style={{ fontSize: 12, color: "#b42318" }}>{errors.fieldName}</span>
+                        <span id={nameErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{errors.fieldName}</span>
                       ) : null}
                     </label>
                     <label style={{ display: "grid", gap: 4 }}>
@@ -366,7 +366,7 @@ export function CustomFieldsManager() {
                         ))}
                       </select>
                       {row.id && row.origFieldType !== undefined && row.origFieldType !== row.fieldType ? (
-                        <span role="alert" style={{ fontSize: 12, color: "#b45309" }}>
+                        <span role="alert" style={{ fontSize: 12, color: "var(--warn)" }}>
                           {t("typeChangeWarning")}
                         </span>
                       ) : null}
@@ -402,7 +402,7 @@ export function CustomFieldsManager() {
                           </Button>
                         </div>
                         {errors.options ? (
-                          <span id={optErrId} role="alert" style={{ fontSize: 12, color: "#b42318" }}>{errors.options}</span>
+                          <span id={optErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{errors.options}</span>
                         ) : null}
                       </div>
                     </fieldset>
@@ -436,7 +436,7 @@ export function CustomFieldsManager() {
                   </div>
 
                   {looksSensitive(row.fieldName) ? (
-                    <p role="alert" style={{ fontSize: 12, color: "#b45309", margin: "8px 0 0" }}>
+                    <p role="alert" style={{ fontSize: 12, color: "var(--warn)", margin: "8px 0 0" }}>
                       {t("sensitiveWarning")}
                     </p>
                   ) : null}

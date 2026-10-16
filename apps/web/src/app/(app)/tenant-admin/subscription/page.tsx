@@ -52,13 +52,13 @@ export default async function SubscriptionPage() {
       ) : subscription ? (
         <>
           <div className="grid g-4" style={{ marginBottom: 18 }}>
-            <StatCard icon="📋" iconBg="#f1f5f9" label="Plan" value={subscription.plan} />
-            <StatCard icon="👥" iconBg="#eff6ff" label="Active Users" value={subscription.activeUsers} />
-            <StatCard icon="🎯" iconBg="#fffaeb" label="User Limit" value={subscription.userLimit != null ? subscription.userLimit : "∞"} />
+            <StatCard icon="📋" tone="neutral" label="Plan" value={subscription.plan} />
+            <StatCard icon="👥" tone="info" label="Active Users" value={subscription.activeUsers} />
+            <StatCard icon="🎯" tone="warn" label="User Limit" value={subscription.userLimit != null ? subscription.userLimit : "∞"} />
             {/* GAP-TENANT-ADMIN-SUBSCRIPTION-03/05: amount is money in MINOR
                 units (paise) per the platform money rule — format via
                 formatMoney (never ₹ + toLocaleString on a raw number). */}
-            <StatCard icon="💳" iconBg="#ecfdf3" label="Amount" value={subscription.amount != null ? formatMoney(subscription.amount) : "—"} />
+            <StatCard icon="💳" tone="good" label="Amount" value={subscription.amount != null ? formatMoney(subscription.amount) : "—"} />
           </div>
           <div className="grid g-2" style={{ marginTop: 18 }}>
             <div className="card">
@@ -83,7 +83,7 @@ export default async function SubscriptionPage() {
                       aria-valuemax={100}
                       aria-label={`Users usage ${usagePct}%`}
                     >
-                      <i style={{ width: `${usagePct}%`, background: usagePct >= 90 ? "#ef4444" : usagePct >= 70 ? "#f59e0b" : "#22c55e" }} />
+                      <i style={{ width: `${usagePct}%`, background: usagePct >= 90 ? "var(--bad)" : usagePct >= 70 ? "var(--amber)" : "var(--good)" }} />
                     </div>
                   )}
                   {usagePct !== null && (

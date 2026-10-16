@@ -159,8 +159,8 @@ export default function DesignerB7Page() {
             margin: "0 0 8px",
             padding: "6px 10px",
             fontSize: 12,
-            color: "var(--warn, #a15c00)",
-            background: "var(--warnbg, #fffbe6)",
+            color: "var(--warn)",
+            background: "var(--warnbg)",
             border: "1px solid var(--line)",
             borderRadius: "var(--r-sm)",
           }}

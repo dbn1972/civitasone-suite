@@ -129,13 +129,13 @@ export default async function AssesseeDetailPage({ params }: { params: { id: str
           <StatGrid>
             <StatCard
               icon="✅"
-              iconBg="#ecfdf3"
+              tone="good"
               label="Status"
               value={assessee.isActive ? "Active" : "Inactive"}
             />
-            <StatCard icon="📄" iconBg="#eff6ff" label="Demands" value={demandsErrored ? null : demandsResult.data.length} />
-            <StatCard icon="🧾" iconBg="#fffaeb" label="Bills" value={billsErrored ? null : billsResult.data.length} />
-            <StatCard icon="🧮" iconBg="#eef2ff" label="Receipts" value={receiptsErrored ? null : receiptsResult.data.length} />
+            <StatCard icon="📄" tone="info" label="Demands" value={demandsErrored ? null : demandsResult.data.length} />
+            <StatCard icon="🧾" tone="warn" label="Bills" value={billsErrored ? null : billsResult.data.length} />
+            <StatCard icon="🧮" tone="info" label="Receipts" value={receiptsErrored ? null : receiptsResult.data.length} />
           </StatGrid>
 
           {dcbResult.data && (

@@ -61,8 +61,8 @@ function StepBar({ step, steps, stepsAriaLabel }: { step: number; steps: readonl
               <div
                 style={{
                   width: 28, height: 28, borderRadius: "50%",
-                  background: done ? "var(--good, #27ae60)" : active ? "var(--accent, #2563eb)" : "var(--line2)",
-                  color: done || active ? "#fff" : "var(--ink2)",
+                  background: done ? "var(--good)" : active ? "var(--accent)" : "var(--line2)",
+                  color: done || active ? "var(--panel)" : "var(--ink2)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 12, fontWeight: 700,
                 }}
@@ -70,12 +70,12 @@ function StepBar({ step, steps, stepsAriaLabel }: { step: number; steps: readonl
               >
                 {done ? "✓" : i + 1}
               </div>
-              <span style={{ fontSize: 11, marginTop: 4, color: active ? "var(--accent, #2563eb)" : "var(--ink2)", whiteSpace: "nowrap" }}>
+              <span style={{ fontSize: 11, marginTop: 4, color: active ? "var(--accent)" : "var(--ink2)", whiteSpace: "nowrap" }}>
                 {label}
               </span>
             </div>
             {i < steps.length - 1 && (
-              <div style={{ flex: 1, height: 2, background: done ? "var(--good, #27ae60)" : "var(--line2)", margin: "0 6px", marginBottom: 20 }} />
+              <div style={{ flex: 1, height: 2, background: done ? "var(--good)" : "var(--line2)", margin: "0 6px", marginBottom: 20 }} />
             )}
           </div>
         );
@@ -225,7 +225,7 @@ export function BankFileWizard({
         <div style={{ display: "grid", gap: 18 }}>
           <div>
             <label htmlFor={runSelectId} style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 }}>
-              {t("payrollRunLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("payrollRunLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <select id={runSelectId} className="input" value={runId} onChange={(e) => setRunId(e.target.value)} style={{ maxWidth: 380 }}>
               {runs.map((r) => (
@@ -235,7 +235,7 @@ export function BankFileWizard({
               ))}
             </select>
             {selectedRun?.status === "paid" && (
-              <p role="note" style={{ fontSize: 12, color: "var(--warn, #b45309)", margin: "6px 0 0" }}>
+              <p role="note" style={{ fontSize: 12, color: "var(--warn)", margin: "6px 0 0" }}>
                 {t("reissueNote")}
               </p>
             )}
@@ -252,7 +252,7 @@ export function BankFileWizard({
                     style={{
                       display: "flex", alignItems: "center", gap: 10, cursor: disabled ? "not-allowed" : "pointer",
                       padding: "10px 14px", borderRadius: 8, opacity: disabled ? 0.6 : 1,
-                      border: `2px solid ${format === f ? "var(--accent, #2563eb)" : "var(--line2)"}`,
+                      border: `2px solid ${format === f ? "var(--accent)" : "var(--line2)"}`,
                       background: format === f ? "var(--infobg)" : "transparent",
                     }}
                   >
@@ -325,7 +325,7 @@ export function BankFileWizard({
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
                   <span aria-hidden="true" style={{ fontSize: 20 }}>{dscExpired ? "⛔" : dscExpiringSoon ? "⚠️" : "✅"}</span>
-                  <span style={{ fontWeight: 600, color: dscExpired ? "var(--bad, #c0392b)" : dscExpiringSoon ? "var(--warn, #b45309)" : "var(--good, #27ae60)" }}>
+                  <span style={{ fontWeight: 600, color: dscExpired ? "var(--bad)" : dscExpiringSoon ? "var(--warn)" : "var(--good)" }}>
                     {dscExpired ? t("dscExpired") : dscExpiringSoon ? t("dscExpiringSoon", { days: dscDaysLeft ?? 0 }) : t("dscOnFile")}
                   </span>
                 </div>
@@ -345,7 +345,7 @@ export function BankFileWizard({
                 </table>
               </>
             ) : (
-              <div style={{ display: "flex", gap: 10, color: "var(--warn, #b45309)" }}>
+              <div style={{ display: "flex", gap: 10, color: "var(--warn)" }}>
                 <span aria-hidden="true" style={{ fontSize: 20 }}>⚠️</span>
                 <div>
                   <p style={{ margin: 0, fontWeight: 600 }}>
@@ -381,7 +381,7 @@ export function BankFileWizard({
                 <p style={{ fontSize: 13, fontFamily: "monospace", color: "var(--ink2)" }}>{filename}</p>
                 <p style={{ marginTop: 8 }}><SigningBadge format={sigFormat} signed={signed === true} /></p>
                 {signed !== true && (
-                  <p role="note" style={{ fontSize: 12, color: "var(--bad, #c0392b)", margin: "6px 0 0" }}>{t("unsignedDisclosure")}</p>
+                  <p role="note" style={{ fontSize: 12, color: "var(--bad)", margin: "6px 0 0" }}>{t("unsignedDisclosure")}</p>
                 )}
                 {encrypted && <p style={{ fontSize: 12, color: "var(--ink2)", margin: "6px 0 0" }}>{t("encryptedNote")}</p>}
                 {signed === true && issuanceId && (sigFormat === "pgp_detached" || sigFormat === "pkcs7_detached") && (
@@ -403,7 +403,7 @@ export function BankFileWizard({
                 <p aria-hidden="true" style={{ fontSize: 36, margin: "0 0 10px" }}>⬇️</p>
                 <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>{t("readyTitle")}</p>
                 {error && !confirmOpen && (
-                  <p role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 13, marginBottom: 10 }}>{error}</p>
+                  <p role="alert" style={{ color: "var(--bad)", fontSize: 13, marginBottom: 10 }}>{error}</p>
                 )}
                 <Button onClick={() => { setError(undefined); setConfirmOpen(true); }} disabled={busy || !selectedRun}>
                   {t("downloadBtn")}

@@ -150,10 +150,10 @@ export default async function ContractorsPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🏢" iconBg="var(--infobg, #eff6ff)"  label="Total"    value={total} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #ecfdf3)"  label="Active"   value={activeCount} />
-        <StatCard icon="⭐" iconBg="var(--warnbg, #fef3c7)"  label="Rated"    value={ratedCount} />
-        <StatCard icon="🔲" iconBg="var(--panel, #f1f5f9)"   label="Unrated"  value={unratedCount} />
+        <StatCard icon="🏢" iconBg="var(--infobg)"  label="Total"    value={total} />
+        <StatCard icon="✅" iconBg="var(--goodbg)"  label="Active"   value={activeCount} />
+        <StatCard icon="⭐" iconBg="var(--warnbg)"  label="Rated"    value={ratedCount} />
+        <StatCard icon="🔲" iconBg="var(--panel)"   label="Unrated"  value={unratedCount} />
       </StatGrid>
 
       <Card title={`Contractors (${total}${atPageLimit ? "+" : ""})`}>

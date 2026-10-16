@@ -49,7 +49,7 @@ const newBtnStyle: React.CSSProperties = {
   fontWeight: 600,
   fontSize: 14,
   background: "var(--primary)",
-  color: "#fff",
+  color: "var(--panel)",
   textDecoration: "none",
 };
 
@@ -95,17 +95,17 @@ export default async function DepartmentsPage() {
           AutoBreadcrumb like every other HR page. */}
 
       <StatGrid>
-        <StatCard icon="🗂️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? "—" : depts.length} />
-        <StatCard icon="🌳" iconBg="var(--goodbg, #e6f7f0)" label={t("statRootLabel")}  value={rootDepts ?? "—"} />
-        <StatCard icon="🌿" iconBg="var(--warnbg, #fff7e6)" label={t("statSubLabel")}   value={subDepts ?? "—"} />
-        <StatCard icon="👥" iconBg="var(--bg, #f5f5f5)" label={t("statNoEmployeesLabel")} value={noEmployeeDepts ?? "—"} />
+        <StatCard icon="🗂️" iconBg="var(--infobg)" label={t("statTotalLabel")} value={errored ? "—" : depts.length} />
+        <StatCard icon="🌳" iconBg="var(--goodbg)" label={t("statRootLabel")}  value={rootDepts ?? "—"} />
+        <StatCard icon="🌿" iconBg="var(--warnbg)" label={t("statSubLabel")}   value={subDepts ?? "—"} />
+        <StatCard icon="👥" iconBg="var(--bg)" label={t("statNoEmployeesLabel")} value={noEmployeeDepts ?? "—"} />
       </StatGrid>
 
       {!canEdit && (
         <p
           role="note"
           id="departments-readonly-note"
-          style={{ fontSize: 13, color: "var(--mut,#64748b)", margin: "4px 0 12px" }}
+          style={{ fontSize: 13, color: "var(--mut)", margin: "4px 0 12px" }}
         >
           {t("readOnlyNote")}
         </p>

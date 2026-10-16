@@ -125,7 +125,7 @@ export function AssessmentCreateForm({
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={assesseeIdField} style={{ fontSize: 13, fontWeight: 600 }}>
-                Assessee <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Assessee <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <AssesseeSelect
                 id={assesseeIdField}
@@ -137,12 +137,12 @@ export function AssessmentCreateForm({
                 invalid={!!errors.assesseeId}
                 describedBy={errors.assesseeId ? assesseeErrId : undefined}
               />
-              {errors.assesseeId && <p id={assesseeErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.assesseeId}</p>}
+              {errors.assesseeId && <p id={assesseeErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.assesseeId}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={rateHeadIdField} style={{ fontSize: 13, fontWeight: 600 }}>
-                Rate Head <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Rate Head <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <RateHeadSelect
                 id={rateHeadIdField}
@@ -154,12 +154,12 @@ export function AssessmentCreateForm({
                 invalid={!!errors.rateHeadId}
                 describedBy={errors.rateHeadId ? rateHeadErrId : undefined}
               />
-              {errors.rateHeadId && <p id={rateHeadErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.rateHeadId}</p>}
+              {errors.rateHeadId && <p id={rateHeadErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.rateHeadId}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={fyField} style={{ fontSize: 13, fontWeight: 600 }}>
-                Financial Year <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Financial Year <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={fyField}
@@ -173,12 +173,12 @@ export function AssessmentCreateForm({
                 aria-describedby={errors.financialYear ? fyErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.financialYear && <p id={fyErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.financialYear}</p>}
+              {errors.financialYear && <p id={fyErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.financialYear}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={baseValueField} style={{ fontSize: 13, fontWeight: 600 }}>
-                Base Value (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Base Value (₹) <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={baseValueField}
@@ -192,7 +192,7 @@ export function AssessmentCreateForm({
                 aria-describedby={errors.baseValue ? baseValueErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.baseValue && <p id={baseValueErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.baseValue}</p>}
+              {errors.baseValue && <p id={baseValueErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.baseValue}</p>}
             </div>
           </div>
 

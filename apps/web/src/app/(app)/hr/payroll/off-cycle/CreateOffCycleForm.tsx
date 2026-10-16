@@ -189,7 +189,7 @@ export function CreateOffCycleForm({ existingRuns = [] }: { existingRuns?: Reado
 
           <div style={{ display: "grid", gap: 8 }}>
             <span style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("itemsLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("itemsLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </span>
             {items.map((it, index) => {
               const empFieldId = `${errId}-emp-${index}`;
@@ -225,7 +225,7 @@ export function CreateOffCycleForm({ existingRuns = [] }: { existingRuns?: Reado
                     </Button>
                   </div>
                   {isDupe && (
-                    <span role="alert" style={{ fontSize: 12, color: "var(--bad, #c0392b)" }}>
+                    <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>
                       {t("duplicateEmployeeRowError")}
                     </span>
                   )}
@@ -285,7 +285,7 @@ export function CreateOffCycleForm({ existingRuns = [] }: { existingRuns?: Reado
               strong: (chunks) => <strong>{chunks}</strong>,
             })}
             {periodHasRun && (
-              <p role="note" style={{ margin: "10px 0 0", fontWeight: 600, color: "var(--warn, #92400e)" }}>
+              <p role="note" style={{ margin: "10px 0 0", fontWeight: 600, color: "var(--warn)" }}>
                 {t("existingRunWarning", { period: formatPeriod(period.trim()) })}
               </p>
             )}

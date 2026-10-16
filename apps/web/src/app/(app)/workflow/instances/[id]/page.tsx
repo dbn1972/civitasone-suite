@@ -93,10 +93,10 @@ export default async function InstanceDetailPage({ params }: { params: { id: str
       />
 
       <StatGrid>
-        <StatCard icon="📍" iconBg="#eef2ff" label="Current step" value={currentStep} />
-        <StatCard icon="📋" iconBg="#fef9c3" label="Open tasks" value={tasksSource === "error" ? null : openTasks.length} />
-        <StatCard icon="🕘" iconBg="#f5f3ff" label="Transitions" value={historySource === "error" ? null : history.length} />
-        <StatCard icon="#️⃣" iconBg="#ecfdf5" label="Version" value={instance.version} />
+        <StatCard icon="📍" tone="info" label="Current step" value={currentStep} />
+        <StatCard icon="📋" tone="warn" label="Open tasks" value={tasksSource === "error" ? null : openTasks.length} />
+        <StatCard icon="🕘" tone="neutral" label="Transitions" value={historySource === "error" ? null : history.length} />
+        <StatCard icon="#️⃣" tone="good" label="Version" value={instance.version} />
       </StatGrid>
 
       {instance.refType ? (

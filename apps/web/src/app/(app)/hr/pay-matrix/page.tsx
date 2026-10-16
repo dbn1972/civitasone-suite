@@ -86,8 +86,8 @@ export default async function PayMatrixPage({
         <div
           role="note"
           style={{
-            background: "var(--warnbg, #fffbe6)",
-            border: "1px solid var(--warn-line, #f0d878)",
+            background: "var(--warnbg)",
+            border: "1px solid var(--warn-line)",
             borderRadius: 8,
             padding: "10px 14px",
             fontSize: 13,
@@ -116,10 +116,10 @@ export default async function PayMatrixPage({
         </form>
       ) : null}
       <StatGrid>
-        <StatCard icon="📊" iconBg="var(--infobg, #e6f0ff)" label={t("statPayLevelsLabel")} value={errored ? null : levelCount} />
-        <StatCard icon="🗂️" iconBg="var(--bg, #f5f5f5)" label={t("statTotalCellsLabel")} value={errored ? null : cellCount} />
-        <StatCard icon="💰" iconBg="var(--warnbg, #fffbe6)" label={t("statMinBasicPayLabel")} value={errored ? null : minPay} />
-        <StatCard icon="💎" iconBg="var(--goodbg, #e6f7f0)" label={t("statMaxBasicPayLabel")} value={errored ? null : maxPay} />
+        <StatCard icon="📊" iconBg="var(--infobg)" label={t("statPayLevelsLabel")} value={errored ? null : levelCount} />
+        <StatCard icon="🗂️" iconBg="var(--bg)" label={t("statTotalCellsLabel")} value={errored ? null : cellCount} />
+        <StatCard icon="💰" iconBg="var(--warnbg)" label={t("statMinBasicPayLabel")} value={errored ? null : minPay} />
+        <StatCard icon="💎" iconBg="var(--goodbg)" label={t("statMaxBasicPayLabel")} value={errored ? null : maxPay} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (

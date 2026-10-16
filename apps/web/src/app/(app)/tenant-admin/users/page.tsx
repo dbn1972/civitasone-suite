@@ -37,10 +37,10 @@ export default async function AdminUsersPage() {
           unmasked directory with no record of who took it. Export now lives on the
           table as the audited CSV export (audit write is awaited and fail-closed). */}
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="👥" iconBg="#f1f5f9" label="Total Users" value={tile(total)} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={tile(active)} />
-        <StatCard icon="⛔" iconBg="#fef3f2" label="Suspended" value={tile(suspended)} />
-        <StatCard icon="🔐" iconBg="#eff6ff" label="MFA Enabled" value={tile(mfaEnabled)} />
+        <StatCard icon="👥" tone="neutral" label="Total Users" value={tile(total)} />
+        <StatCard icon="✅" tone="good" label="Active" value={tile(active)} />
+        <StatCard icon="⛔" tone="bad" label="Suspended" value={tile(suspended)} />
+        <StatCard icon="🔐" tone="info" label="MFA Enabled" value={tile(mfaEnabled)} />
       </div>
       {errored ? (
         // Mirror users/[id]/page.tsx's error treatment: a retry-able state, not

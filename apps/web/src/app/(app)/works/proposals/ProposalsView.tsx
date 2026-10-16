@@ -90,9 +90,9 @@ export function ProposalsView({
   return (
     <>
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg, #eff6ff)" label="Total Works"   value={total} />
-        <StatCard icon="📝" iconBg="var(--warnbg, #fef3c7)" label="Draft"         value={draftCount} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #ecfdf3)" label="DAO Finalized" value={daoFinalizedCount} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label="Total Works"   value={total} />
+        <StatCard icon="📝" iconBg="var(--warnbg)" label="Draft"         value={draftCount} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="DAO Finalized" value={daoFinalizedCount} />
       </StatGrid>
 
       <nav
@@ -111,8 +111,8 @@ export function ProposalsView({
                 fontSize: 13,
                 padding: "5px 12px",
                 borderRadius: 20,
-                background: isActive ? "var(--primary, var(--accent))" : "var(--surface, #fff)",
-                color: isActive ? "#fff" : "var(--ink)",
+                background: isActive ? "var(--primary, var(--accent))" : "var(--surface)",
+                color: isActive ? "var(--panel)" : "var(--ink)",
                 textDecoration: "none",
                 fontWeight: isActive ? 600 : 400,
                 border: "1px solid var(--line)",

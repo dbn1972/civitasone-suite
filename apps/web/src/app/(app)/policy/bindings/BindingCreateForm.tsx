@@ -113,7 +113,7 @@ export function BindingCreateForm({ currentUserId }: { currentUserId: string | n
           />
         </Field>
         {isSelf && (
-          <p role="alert" style={{ color: "#b91c1c", margin: 0 }}>
+          <p role="alert" style={{ color: "var(--bad)", margin: 0 }}>
             You cannot bind a role to your own account.
           </p>
         )}
@@ -121,7 +121,7 @@ export function BindingCreateForm({ currentUserId }: { currentUserId: string | n
           {status === "pending" ? "Submitting…" : "Create binding"}
         </Button>
         {message && (
-          <p role="status" aria-live="polite" style={{ color: status === "error" ? "#b91c1c" : "#166534" }}>
+          <p role="status" aria-live="polite" style={{ color: status === "error" ? "var(--bad)" : "var(--good)" }}>
             {message}
           </p>
         )}

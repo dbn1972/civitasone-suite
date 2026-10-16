@@ -264,7 +264,7 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
 
           {error && (
             <div role="alert" aria-live="assertive">
-              <p className="pad" style={{ color: "var(--bad, #b91c1c)", fontSize: "0.8125rem", paddingBottom: 0 }}>⚠ {error}</p>
+              <p className="pad" style={{ color: "var(--bad)", fontSize: "0.8125rem", paddingBottom: 0 }}>⚠ {error}</p>
             </div>
           )}
 
@@ -320,7 +320,7 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                       selection (validateStep1). */}
                   {deptStatus === "error" ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ color: "var(--bad, #b91c1c)", fontSize: "0.75rem" }}>{tr("deptLoadFailed")}</span>
+                      <span style={{ color: "var(--bad)", fontSize: "0.75rem" }}>{tr("deptLoadFailed")}</span>
                       <Button type="button" variant="ghost" style={{ fontSize: 12 }} onClick={() => setReloadKey((k) => k + 1)}>{tr("retry")}</Button>
                     </div>
                   ) : (
@@ -371,12 +371,12 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
           {step === 2 && (
             <div className="pad" style={{ display: "grid", gap: 16 }}>
               {submittedTransferId && (
-                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--warnbg, #fffbeb)", borderRadius: 8, border: "1px solid var(--warnbd, #fde68a)" }}>
+                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--warnbg)", borderRadius: 8, border: "1px solid var(--warnbd)" }}>
                   {tr("alreadyCreated")}
                 </div>
               )}
               {selectedEmployee && (
-                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--infobg, #f0f9ff)", borderRadius: 8, border: "1px solid var(--infobd, #bae6fd)" }}>
+                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--infobg)", borderRadius: 8, border: "1px solid var(--infobd)" }}>
                   <strong>{selectedEmployee.name}</strong> → {departments.find((d) => d.id === toDeptId)?.name ?? toDeptId}
                   {effectiveDate && <> · {tr("effectiveOn", { date: effectiveDate })}</>}
                 </div>

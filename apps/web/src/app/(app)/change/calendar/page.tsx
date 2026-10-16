@@ -46,8 +46,8 @@ export default async function Page({ searchParams }: { searchParams?: { showEnde
       <StatGrid>
         {/* GAP-CHANGE-CALENDAR-02: per-loader "—" on error so a broken feed never
             reads as a reassuring 0 (which could invite scheduling into a freeze). */}
-        <StatCard icon="🗓️" iconBg="#ecfdf5" label="Scheduled releases" value={cErrored ? "—" : scheduled.length.toLocaleString("en-IN")} />
-        <StatCard icon="🧊" iconBg="#eff6ff" label="Change freezes" value={fErrored ? "—" : freezes.length.toLocaleString("en-IN")} />
+        <StatCard icon="🗓️" tone="good" label="Scheduled releases" value={cErrored ? "—" : scheduled.length.toLocaleString("en-IN")} />
+        <StatCard icon="🧊" tone="info" label="Change freezes" value={fErrored ? "—" : freezes.length.toLocaleString("en-IN")} />
       </StatGrid>
 
       {/* GAP-CHANGE-CALENDAR-01: visual agenda flagging window/freeze conflicts. */}

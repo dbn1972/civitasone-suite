@@ -189,7 +189,7 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
         )}
 
         {slip.components.length > 0 && (!earningsMatchGross || !deductionsMatchTotal) && (
-          <p role="note" className="no-print" style={{ margin: "16px 0 0", fontSize: 12, color: "var(--warn, #92400e)" }}>{t("reconcileNote")}</p>
+          <p role="note" className="no-print" style={{ margin: "16px 0 0", fontSize: 12, color: "var(--warn)" }}>{t("reconcileNote")}</p>
         )}
 
         {/* Net Pay */}

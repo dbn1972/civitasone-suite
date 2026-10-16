@@ -78,7 +78,7 @@ export function GratuityCalculator({ rule = DEFAULT_GRATUITY_RULE }: { rule?: Gr
           estimator with no link to an actual employee record -- its figure
           can disagree with the register below, and nothing previously said
           which one is authoritative. */}
-      <p style={{ margin: "0 0 18px", fontSize: 12, color: "var(--warn, #92400e)", fontWeight: 600 }}>
+      <p style={{ margin: "0 0 18px", fontSize: 12, color: "var(--warn)", fontWeight: 600 }}>
         {t("disclaimerEstimateOnly")}
       </p>
 
@@ -167,12 +167,12 @@ export function GratuityCalculator({ rule = DEFAULT_GRATUITY_RULE }: { rule?: Gr
         <div
           style={{
             marginTop: 14,
-            background: "var(--warnbg, #fffbeb)",
-            border: "1px solid var(--warnbd, #fde68a)",
+            background: "var(--warnbg)",
+            border: "1px solid var(--warnbd)",
             borderRadius: 8,
             padding: "10px 14px",
             fontSize: 13,
-            color: "var(--warn, #92400e)",
+            color: "var(--warn)",
           }}
         >
           {t.rich("belowEligibilityMessage", {
@@ -187,26 +187,26 @@ export function GratuityCalculator({ rule = DEFAULT_GRATUITY_RULE }: { rule?: Gr
         <div
           style={{
             marginTop: 14,
-            background: "var(--goodbg, #f0fdf4)",
-            border: "1px solid var(--goodbd, #bbf7d0)",
+            background: "var(--goodbg)",
+            border: "1px solid var(--goodbd)",
             borderRadius: 8,
             padding: "14px 18px",
           }}
         >
-          <p style={{ margin: 0, fontSize: 12, color: "var(--good, #14532d)" }}>{t("resultLabel")}</p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--good)" }}>{t("resultLabel")}</p>
           <p
             style={{
               margin: "4px 0 0",
               fontSize: 28,
               fontWeight: 800,
-              color: "var(--good, #16a34a)",
+              color: "var(--good)",
               lineHeight: 1,
             }}
           >
             {formatMoney(gratuityMinor)}
           </p>
           {isCapped && (
-            <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--warn, #92400e)" }}>
+            <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--warn)" }}>
               {t(isDcrg ? "cappedNoteDcrg" : "cappedNote", { amount: formatMoney(ceilingMinor) })}
             </p>
           )}

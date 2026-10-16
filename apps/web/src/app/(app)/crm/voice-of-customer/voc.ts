@@ -70,10 +70,10 @@ export const MOOD_ICON: Record<Mood, string> = {
 };
 
 export const MOOD_ICON_BG: Record<Mood, string> = {
-  positive: "#dcfce7",
-  neutral: "#fef3c7",
-  negative: "#fee2e2",
-  unknown: "#e5e7eb",
+  positive: "var(--goodbg)",
+  neutral: "var(--warnbg)",
+  negative: "var(--badbg)",
+  unknown: "var(--line)",
 };
 
 /** Share of a polarity as a whole percentage. 0 when nothing has been scored. */

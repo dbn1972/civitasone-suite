@@ -52,10 +52,10 @@ export default async function Page() {
         actions={<RegisterRTIButton />}
       />
       <StatGrid>
-        <StatCard icon="📄" iconBg="#e0f5fa" label={t("statApplications")} value={errored ? "—" : rtis.length.toLocaleString("en-IN")} />
-        <StatCard icon="⏱" iconBg="#fffaeb" label={t("statOpen")} value={open === null ? "—" : open.toLocaleString("en-IN")} />
-        <StatCard icon="⚠️" iconBg="#fef3f2" label={t("statOverdue")} value={overdue === null ? "—" : overdue.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label={t("statReplied")} value={replied === null ? "—" : replied.toLocaleString("en-IN")} />
+        <StatCard icon="📄" tone="info" label={t("statApplications")} value={errored ? "—" : rtis.length.toLocaleString("en-IN")} />
+        <StatCard icon="⏱" tone="warn" label={t("statOpen")} value={open === null ? "—" : open.toLocaleString("en-IN")} />
+        <StatCard icon="⚠️" tone="bad" label={t("statOverdue")} value={overdue === null ? "—" : overdue.toLocaleString("en-IN")} />
+        <StatCard icon="✅" tone="good" label={t("statReplied")} value={replied === null ? "—" : replied.toLocaleString("en-IN")} />
       </StatGrid>
       {errored ? (
         <div className="card" style={{ marginTop: 18 }}>

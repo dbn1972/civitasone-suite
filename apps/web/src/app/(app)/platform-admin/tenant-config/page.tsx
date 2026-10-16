@@ -48,14 +48,14 @@ export default async function TenantConfigPage() {
       ) : (
         <>
           <div className="grid g-4" style={{ marginBottom: 18 }}>
-            <StatCard icon="🏢" iconBg="#eff6ff" label="Tenant" value={statusLabel} />
+            <StatCard icon="🏢" tone="info" label="Tenant" value={statusLabel} />
             {isPlatformAdmin && config.dbSchema && (
-              <StatCard icon="🗄️" iconBg="#ecfdf3" label="DB schema" value="Isolated" />
+              <StatCard icon="🗄️" tone="good" label="DB schema" value="Isolated" />
             )}
             {isPlatformAdmin && config.keycloakRealm && (
-              <StatCard icon="🔐" iconBg="#f1f5f9" label="SSO realm" value="Keycloak" />
+              <StatCard icon="🔐" tone="neutral" label="SSO realm" value="Keycloak" />
             )}
-            <StatCard icon="📄" iconBg="#fffaeb" label="License" value={licenseLabel} />
+            <StatCard icon="📄" tone="warn" label="License" value={licenseLabel} />
           </div>
           {/* GAP-PLATFORM-ADMIN-TENANT-CONFIG-03: the old banner told non-admins
               to "contact a platform admin to modify" settings that have no edit

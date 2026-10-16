@@ -95,31 +95,31 @@ export const SESSION_KEY = "civitas-add-emp-draft";
 export const SENSITIVE_DRAFT_FIELDS = ["pan", "aadhaarRef", "bankAccountNo", "bankIfsc"] as const;
 
 // ── Shared DS tokens ─────────────────────────────────────────────────────────
-export const ACCENT = "#047857";
+export const ACCENT = "var(--good)";
 
 export const inputStyle: React.CSSProperties = {
   width: "100%",
   boxSizing: "border-box",
   padding: "10px 12px",
   fontSize: 14,
-  border: "1px solid var(--line, #cbd5e1)",
+  border: "1px solid var(--line)",
   borderRadius: 8,
-  background: "var(--panel, #fff)",
-  color: "var(--ink, #0f172a)",
+  background: "var(--panel)",
+  color: "var(--ink)",
   minHeight: 44,
   outline: "none",
 };
 
 export const inputErrorStyle: React.CSSProperties = {
   ...inputStyle,
-  border: "1px solid var(--bad, #ef4444)",
-  background: "var(--badbg, #fff7f7)",
+  border: "1px solid var(--bad)",
+  background: "var(--badbg)",
 };
 
 export const labelStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
-  color: "var(--ink, #0f172a)",
+  color: "var(--ink)",
 };
 
 export const fieldWrap: React.CSSProperties = { display: "grid", gap: 6 };
@@ -133,7 +133,7 @@ export const grid2: React.CSSProperties = {
 export const primaryBtn: React.CSSProperties = {
   padding: "10px 22px",
   background: ACCENT,
-  color: "#fff",
+  color: "var(--panel)",
   border: "none",
   borderRadius: 8,
   fontSize: 14,
@@ -145,8 +145,8 @@ export const primaryBtn: React.CSSProperties = {
 export const ghostBtn: React.CSSProperties = {
   padding: "10px 22px",
   background: "transparent",
-  color: "var(--ink2, #475569)",
-  border: "1px solid var(--line, #cbd5e1)",
+  color: "var(--ink2)",
+  border: "1px solid var(--line)",
   borderRadius: 8,
   fontSize: 14,
   fontWeight: 500,
@@ -155,8 +155,8 @@ export const ghostBtn: React.CSSProperties = {
 };
 
 export const cardStyle: React.CSSProperties = {
-  background: "var(--panel, #fff)",
-  border: "1px solid var(--line, #e2e8f0)",
+  background: "var(--panel)",
+  border: "1px solid var(--line)",
   borderRadius: 8,
   padding: 24,
 };

@@ -88,7 +88,7 @@ export function CreatePlanForm({ departments }: { departments: DeptOption[] }) {
         <input id={idRole} value={roleCode} onChange={(e) => setRoleCode(e.target.value)} maxLength={64} placeholder="e.g. clerk" style={inputStyle} />
       </div>
       {state === "error" && error && (
-        <p role="alert" style={{ fontSize: 13, color: "var(--red, #dc2626)", margin: 0 }}>{error}</p>
+        <p role="alert" style={{ fontSize: 13, color: "var(--red)", margin: 0 }}>{error}</p>
       )}
       <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
         <Button type="button" variant="ghost" style={{ minHeight: 44 }} onClick={() => router.push("/learning/training-plans")}>Cancel</Button>
@@ -100,5 +100,5 @@ export function CreatePlanForm({ departments }: { departments: DeptOption[] }) {
   );
 }
 
-const labelStyle: React.CSSProperties = { display: "block", fontSize: 13, fontWeight: 500, color: "var(--muted, #6b7280)", marginBottom: 5 };
+const labelStyle: React.CSSProperties = { display: "block", fontSize: 13, fontWeight: 500, color: "var(--muted)", marginBottom: 5 };
 const inputStyle: React.CSSProperties = { width: "100%", boxSizing: "border-box", minHeight: 44 };

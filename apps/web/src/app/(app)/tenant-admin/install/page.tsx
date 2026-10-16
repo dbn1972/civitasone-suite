@@ -62,10 +62,10 @@ export default async function InstallStatusPage() {
       <StatGrid>
         {/* GAP-TENANT-ADMIN-INSTALL-01: with no steps, Progress shows "—" not a
             misleading 0%. */}
-        <StatCard icon="🚀" iconBg="#eff6ff" label="Progress" value={errored || total === 0 ? "—" : `${progressPct}%`} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Completed" value={errored ? "—" : completed} />
-        <StatCard icon="🔄" iconBg="#fffaeb" label="In Progress" value={errored ? "—" : inProgress} />
-        <StatCard icon="⬜" iconBg="#f1f5f9" label="Pending" value={errored ? "—" : pending} />
+        <StatCard icon="🚀" tone="info" label="Progress" value={errored || total === 0 ? "—" : `${progressPct}%`} />
+        <StatCard icon="✅" tone="good" label="Completed" value={errored ? "—" : completed} />
+        <StatCard icon="🔄" tone="warn" label="In Progress" value={errored ? "—" : inProgress} />
+        <StatCard icon="⬜" tone="neutral" label="Pending" value={errored ? "—" : pending} />
       </StatGrid>
 
       {errored ? (
@@ -84,7 +84,7 @@ export default async function InstallStatusPage() {
                   <span>Installation completion</span>
                   <span>{completed}/{total} steps</span>
                 </div>
-                <ProgressBar value={progressPct} color="#2563eb" />
+                <ProgressBar value={progressPct} color="var(--info)" />
               </div>
             </Card>
           )}
@@ -97,9 +97,9 @@ export default async function InstallStatusPage() {
             <Card title="Installation Steps" padding>
               <ol aria-label="Installation steps" style={{ listStyle: "none", padding: 0, margin: 0 }}>
                 {installSteps.map((step, idx) => (
-                  <li key={step.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--border, #e2e8f0)" }}>
+                  <li key={step.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--border)" }}>
                     <span aria-hidden="true" style={{ fontSize: 16, flexShrink: 0 }}>{stepIcon(step.status)}</span>
-                    <span style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--bg2, #f8fafc)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, flexShrink: 0, border: "1px solid var(--border, #e2e8f0)" }}>
+                    <span style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--bg2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 600, flexShrink: 0, border: "1px solid var(--border)" }}>
                       {step.stepNo ?? idx + 1}
                     </span>
                     <div style={{ flex: 1 }}>

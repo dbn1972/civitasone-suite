@@ -57,7 +57,7 @@ function shortActor(id: string | null | undefined): string {
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ display: "flex", justifyContent: "space-between", gap: 16, padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
-      <span style={{ fontSize: 12, color: "var(--muted, #667085)" }}>{label}</span>
+      <span style={{ fontSize: 12, color: "var(--muted)" }}>{label}</span>
       <span style={{ fontSize: 13, textAlign: "right", wordBreak: "break-word" }}>{children}</span>
     </div>
   );
@@ -104,7 +104,7 @@ export default function TemplateDetailPage() {
       <>
         <PageHeader title="Template" subtitle="Loading template…" back="/notifications/templates" />
         <Card padding>
-          <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted, #667085)" }}>Loading template…</p>
+          <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)" }}>Loading template…</p>
         </Card>
       </>
     );
@@ -187,8 +187,8 @@ export default function TemplateDetailPage() {
           <Row label="Last updated">{formatIndianDateTime(latest.createdAt ?? null)}</Row>
           <Row label="Author">{shortActor(latest.createdBy)}</Row>
           <div style={{ paddingTop: 12 }}>
-            <div style={{ fontSize: 12, color: "var(--muted, #667085)", marginBottom: 4 }}>Body</div>
-            <pre style={{ whiteSpace: "pre-wrap", fontSize: 13, background: "var(--bg, #f8fafc)", color: "var(--fg, inherit)", padding: 12, borderRadius: 8, border: "1px solid var(--line)", margin: 0 }}>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>Body</div>
+            <pre style={{ whiteSpace: "pre-wrap", fontSize: 13, background: "var(--bg)", color: "var(--fg, inherit)", padding: 12, borderRadius: 8, border: "1px solid var(--line)", margin: 0 }}>
               {latest.body}
             </pre>
           </div>

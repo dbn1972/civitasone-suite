@@ -35,10 +35,10 @@ export default async function RFQPage() {
       />
 
       <StatGrid>
-        <StatCard icon="📝" iconBg="#e7edfd" label="Total RFQs" value={rfqs.length} />
-        <StatCard icon="📤" iconBg="#eff6ff" label="Issued" value={issued} />
-        <StatCard icon="📥" iconBg="#ecfdf3" label="Quotes received" value={totalQuotes} />
-        <StatCard icon="🏆" iconBg="#fffaeb" label="Awarded" value={awarded} />
+        <StatCard icon="📝" tone="info" label="Total RFQs" value={rfqs.length} />
+        <StatCard icon="📤" tone="info" label="Issued" value={issued} />
+        <StatCard icon="📥" tone="good" label="Quotes received" value={totalQuotes} />
+        <StatCard icon="🏆" tone="warn" label="Awarded" value={awarded} />
       </StatGrid>
 
       {source === "error" ? (

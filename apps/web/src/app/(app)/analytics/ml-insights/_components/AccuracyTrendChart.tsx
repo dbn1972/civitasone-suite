@@ -16,9 +16,9 @@ interface AccuracyTrendChartProps {
 
 const BAND_COLOUR: Record<"good" | "warn" | "poor", string> = {
   // DS status tokens with hex fallbacks for environments without the CSS vars.
-  good: "var(--ok, #22c55e)",
-  warn: "var(--warn, #f59e0b)",
-  poor: "var(--err, #ef4444)",
+  good: "var(--ok)",
+  warn: "var(--warn)",
+  poor: "var(--err)",
 };
 
 const BAND_TEXT: Record<"good" | "warn" | "poor", string> = {

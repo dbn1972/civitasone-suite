@@ -63,7 +63,7 @@ export function PlansClient({ plansData, source }: { plansData: PlansData; sourc
           return (
             <div key={plan.id} className="card" style={{ border: isCurrent ? "2px solid var(--primary)" : "1px solid var(--line)", position: "relative" }}>
               {isCurrent && (
-                <span style={{ position: "absolute", top: -10, left: 16, background: "var(--primary)", color: "var(--on-primary, #fff)", padding: "2px 10px", borderRadius: 12, fontSize: 11, fontWeight: 600 }}>Current Plan</span>
+                <span style={{ position: "absolute", top: -10, left: 16, background: "var(--primary)", color: "var(--on-primary)", padding: "2px 10px", borderRadius: 12, fontSize: 11, fontWeight: 600 }}>Current Plan</span>
               )}
               <h3 style={{ marginTop: isCurrent ? 8 : 0 }}>{plan.name}</h3>
               <p style={{ fontSize: 28, fontWeight: 700, margin: "8px 0" }}>{formatMoney(plan.pricePerMonth)}<small style={{ fontSize: 14, fontWeight: 400, color: "var(--mut)" }}>/month</small></p>

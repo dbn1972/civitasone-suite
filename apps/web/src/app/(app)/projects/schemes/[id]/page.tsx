@@ -71,13 +71,13 @@ export default async function SchemeDetailPage({ params }: { params: Promise<{ i
       />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="#eff6ff" label="Total Projects" value={scheme.projects.length} />
-        <StatCard icon="💰" iconBg="#ecfdf3" label="Budget" value={formatMoney(scheme.totalOutlayMinor)} />
-        <StatCard icon="📈" iconBg="#fffaeb" label="Utilized %" value={formatPercent(scheme.utilisationPct)} />
+        <StatCard icon="📋" tone="info" label="Total Projects" value={scheme.projects.length} />
+        <StatCard icon="💰" tone="good" label="Budget" value={formatMoney(scheme.totalOutlayMinor)} />
+        <StatCard icon="📈" tone="warn" label="Utilized %" value={formatPercent(scheme.utilisationPct)} />
         {/* != null, not ??: a recorded-but-zero beneficiary count (0) is a
             real value, not an absent one, and must not fall back to "--". */}
         <StatCard
-          icon="👥" iconBg="#f1f5f9" label="Beneficiaries"
+          icon="👥" tone="neutral" label="Beneficiaries"
           value={scheme.beneficiaries != null ? scheme.beneficiaries.toLocaleString("en-IN") : "—"}
         />
       </StatGrid>

@@ -217,10 +217,10 @@ export default async function BoqDetailPage({
       ) : (
         <>
           <StatGrid>
-            <StatCard icon="📐" iconBg="#eff6ff" label="Total Items"   value={totalItems} />
-            <StatCard icon="💰" iconBg="#ecfdf3" label={recap?.grandTotal ? "Grand Total" : "Sum of items"}  value={totalAmount} hint={recap?.grandTotal ? "Recapitulation grand total." : "Sum of BoQ line amounts (recapitulation not yet computed)."} />
-            <StatCard icon="📊" iconBg="#fffaeb" label="Contingency %" value={contingencyPct} />
-            <StatCard icon="🏗️" iconBg="#f0fdf4" label="Work Charge %" value={workChargePct} />
+            <StatCard icon="📐" tone="info" label="Total Items"   value={totalItems} />
+            <StatCard icon="💰" tone="good" label={recap?.grandTotal ? "Grand Total" : "Sum of items"}  value={totalAmount} hint={recap?.grandTotal ? "Recapitulation grand total." : "Sum of BoQ line amounts (recapitulation not yet computed)."} />
+            <StatCard icon="📊" tone="warn" label="Contingency %" value={contingencyPct} />
+            <StatCard icon="🏗️" tone="good" label="Work Charge %" value={workChargePct} />
           </StatGrid>
 
           <Card title="BoQ Items">
@@ -263,7 +263,7 @@ export default async function BoqDetailPage({
                         <td className="num">{formatMoney(line.amountMinor)}</td>
                       </tr>
                     ))}
-                    <tr style={{ borderTop: "2px solid var(--border, #e2e8f0)" }}>
+                    <tr style={{ borderTop: "2px solid var(--border)" }}>
                       <th scope="row" style={{ textAlign: "start", fontWeight: 700 }}>Grand Total</th>
                       <td></td>
                       <td></td>

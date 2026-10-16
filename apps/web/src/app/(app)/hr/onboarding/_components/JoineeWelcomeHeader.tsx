@@ -25,9 +25,9 @@ function formatDate(iso: string): string {
 }
 
 function progressColor(pct: number): string {
-  if (pct >= 80) return "var(--good, #067647)";
-  if (pct >= 40) return "var(--amber, #d97706)";
-  return "var(--blue, #4f46e5)";
+  if (pct >= 80) return "var(--good)";
+  if (pct >= 40) return "var(--amber)";
+  return "var(--blue)";
 }
 
 export function JoineeWelcomeHeader({
@@ -50,8 +50,8 @@ export function JoineeWelcomeHeader({
         display: "flex",
         alignItems: "flex-start",
         gap: 20,
-        background: "var(--card-bg, #fff)",
-        border: "1px solid var(--border, #e2e8f0)",
+        background: "var(--card-bg)",
+        border: "1px solid var(--border)",
         borderRadius: 12,
         padding: "24px 28px",
         marginBottom: 20,
@@ -65,11 +65,11 @@ export function JoineeWelcomeHeader({
           width: 60,
           height: 60,
           borderRadius: "50%",
-          background: "linear-gradient(135deg,var(--indigo, #4f46e5),var(--violet, #7c3aed))",
+          background: "linear-gradient(135deg,var(--indigo),var(--violet))",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          color: "#fff",
+          color: "var(--panel)",
           fontWeight: 700,
           fontSize: 22,
           letterSpacing: 1,
@@ -81,7 +81,7 @@ export function JoineeWelcomeHeader({
       {/* Name + meta */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--heading, #1e293b)" }}>
+          <h2 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "var(--heading)" }}>
             Welcome, {name}!
           </h2>
           <span
@@ -90,8 +90,8 @@ export function JoineeWelcomeHeader({
               fontWeight: 600,
               padding: "2px 8px",
               borderRadius: 99,
-              background: "var(--primary-soft, #ede9fe)",
-              color: "var(--violet, #5b21b6)",
+              background: "var(--primary-soft)",
+              color: "var(--violet)",
               letterSpacing: "0.03em",
             }}
           >
@@ -115,10 +115,10 @@ export function JoineeWelcomeHeader({
             { label: "Office Location", value: officeLocation },
           ].map(({ label, value }) => (
             <div key={label}>
-              <dt style={{ fontSize: 11, fontWeight: 600, color: "var(--muted, #64748b)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <dt style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 {label}
               </dt>
-              <dd style={{ margin: 0, fontSize: 13, color: "var(--body, #334155)", fontWeight: 500, lineHeight: 1.4 }}>
+              <dd style={{ margin: 0, fontSize: 13, color: "var(--body)", fontWeight: 500, lineHeight: 1.4 }}>
                 {value}
               </dd>
             </div>
@@ -138,7 +138,7 @@ export function JoineeWelcomeHeader({
         }}
       >
         <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden>
-          <circle cx="32" cy="32" r="26" fill="none" stroke="var(--border, #e2e8f0)" strokeWidth="8" />
+          <circle cx="32" cy="32" r="26" fill="none" stroke="var(--border)" strokeWidth="8" />
           <circle
             cx="32" cy="32" r="26"
             fill="none"
@@ -152,7 +152,7 @@ export function JoineeWelcomeHeader({
             {pct}%
           </text>
         </svg>
-        <span style={{ fontSize: 11, color: "var(--muted, #64748b)", fontWeight: 500 }}>Onboarding</span>
+        <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 500 }}>Onboarding</span>
       </div>
     </div>
   );

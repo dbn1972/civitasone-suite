@@ -120,7 +120,7 @@ export default async function WorksHub() {
               padding: 20,
               borderRadius: 12,
               border: "1px solid var(--line)",
-              background: "var(--surface, #fff)",
+              background: "var(--surface)",
               textDecoration: "none",
               color: "inherit",
             }}

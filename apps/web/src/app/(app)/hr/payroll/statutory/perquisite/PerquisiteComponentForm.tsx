@@ -158,7 +158,7 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy, editing 
                 value={nature}
                 onChange={(e) => setNature(e.target.value as typeof NATURES[number])}
                 disabled={!!editingNature}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "#fff" }}
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "var(--panel)" }}
               >
                 {NATURES.map((n) => (
                   <option key={n} value={n}>{t(NATURE_LABEL_KEYS[n])}</option>
@@ -176,7 +176,7 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy, editing 
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={valueId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("valueByEmployerLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("valueByEmployerLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={valueId}

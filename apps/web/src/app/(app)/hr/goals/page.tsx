@@ -81,9 +81,9 @@ function buildCategoryScores(
   labels: { individual: string; team: string; organization: string },
 ): CategoryScore[] {
   const buckets: Array<{ key: string; label: string; color: string }> = [
-    { key: "individual",   label: labels.individual,   color: "var(--info, #3b82f6)" },
-    { key: "team",         label: labels.team,         color: "var(--good, #10b981)" },
-    { key: "organization", label: labels.organization, color: "var(--violet, #8b5cf6)" },
+    { key: "individual",   label: labels.individual,   color: "var(--info)" },
+    { key: "team",         label: labels.team,         color: "var(--good)" },
+    { key: "organization", label: labels.organization, color: "var(--violet)" },
   ];
 
   return buckets
@@ -168,10 +168,10 @@ export default async function GoalsPage() {
 
       {/* Summary stats */}
       <StatGrid>
-<StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statOnTrack")} value={errored ? null : onTrack} />
-        <StatCard icon="⚠️" iconBg="var(--warnbg, #fff7e6)" label={t("statAtRisk")} value={errored ? null : atRisk} />
-        <StatCard icon="🏆" iconBg="var(--bg, #f5f5f5)" label={t("statCompleted")} value={errored ? null : completed} />
+<StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statOnTrack")} value={errored ? null : onTrack} />
+        <StatCard icon="⚠️" iconBg="var(--warnbg)" label={t("statAtRisk")} value={errored ? null : atRisk} />
+        <StatCard icon="🏆" iconBg="var(--bg)" label={t("statCompleted")} value={errored ? null : completed} />
       </StatGrid>
 
       {/* Progress rings summary */}
@@ -197,7 +197,7 @@ export default async function GoalsPage() {
         ) : items.length === 0 ? (
           <div style={{ padding: 32, textAlign: "center", color: "var(--mut)" }}>
             <p style={{ fontSize: 32, margin: "0 0 8px" }}>🎯</p>
-<p style={{ fontWeight: 600, color: "var(--ink2, #475569)", margin: 0 }}>{t("emptyTitle")}</p>
+<p style={{ fontWeight: 600, color: "var(--ink2)", margin: 0 }}>{t("emptyTitle")}</p>
             <p style={{ fontSize: 13, margin: "4px 0 0" }}>
               {t("emptyMessage")}
             </p>

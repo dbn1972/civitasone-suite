@@ -40,7 +40,7 @@ export function MaskablePromptText({ text, label }: MaskablePromptTextProps) {
           >
             {revealed ? `Hide identifiers in ${label}` : `Show original ${label}`}
           </button>
-          <span style={{ fontSize: 12, color: "var(--muted, #64748b)", marginInlineStart: 10 }}>
+          <span style={{ fontSize: 12, color: "var(--muted)", marginInlineStart: 10 }}>
             Identity numbers are hidden here. This on-screen hiding is advisory only.
           </span>
         </div>

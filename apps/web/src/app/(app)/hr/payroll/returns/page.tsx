@@ -333,13 +333,13 @@ export default async function ReturnsPage({
                 <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTdsDeducted")} value={formatMoney(totalTdsDeductedMinor24)} />
                 <StatCard
                   icon={f24Lookup.data.reconciliation.matched ? "✅" : "⚠️"}
-iconBg={f24Lookup.data.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(--badbg, #fdecea)"}
+iconBg={f24Lookup.data.reconciliation.matched ? "var(--goodbg)" : "var(--badbg)"}
                   label={t("statReconciliation")}
                   value={f24Lookup.data.reconciliation.matched ? t("matched") : t("unreconciled")}
                 />
                 <StatCard icon="🏦" iconBg="var(--warnbg)" label={t("statTdsDeposited")} value={formatMoney(totalTdsDepositedMinor24)} />
                 <StatCard icon="⚠️" iconBg="var(--errorbg)" label={t("statVariance")} value={formatMoney(varianceMinor24)} />
-                <StatCard icon="🪪" iconBg="var(--badbg, #fdecea)" label={t("statPanMissing")} value={panMissing24} />
+                <StatCard icon="🪪" iconBg="var(--badbg)" label={t("statPanMissing")} value={panMissing24} />
               </StatGrid>
               {f24Lookup.data.reconciliation.warning && (
                 <p role="alert" className="pill bad" style={{ width: "fit-content", marginTop: 10 }}>
@@ -398,7 +398,7 @@ iconBg={f24Lookup.data.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(
                 <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTdsDeducted")} value={formatMoney(f26.totalTdsDeductedMinor)} />
                 <StatCard
                   icon={f26.reconciliation.matched ? "✅" : "⚠️"}
-iconBg={f26.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(--badbg, #fdecea)"}
+iconBg={f26.reconciliation.matched ? "var(--goodbg)" : "var(--badbg)"}
                   label={t("statReconciliation")}
                   value={f26.reconciliation.matched ? t("matched") : t("unreconciled")}
                 />

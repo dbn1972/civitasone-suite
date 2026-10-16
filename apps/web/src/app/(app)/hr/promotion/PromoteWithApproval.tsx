@@ -324,7 +324,7 @@ export function PromoteWithApproval() {
                     />
                   </Field>
                   {effectiveDate && effectiveDate < todayIsoIST() && (
-                    <span style={{ fontSize: "0.75rem", color: "var(--warn, #b45309)" }}>{t("effectiveDateBackdatedNotice")}</span>
+                    <span style={{ fontSize: "0.75rem", color: "var(--warn)" }}>{t("effectiveDateBackdatedNotice")}</span>
                   )}
                 </div>
 
@@ -349,12 +349,12 @@ export function PromoteWithApproval() {
           {step === 2 && (
             <div className="pad" style={{ display: "grid", gap: 16 }}>
               {submittedPromotionId && (
-                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--warnbg, #fffbeb)", borderRadius: 8, border: "1px solid var(--warnbd, #fde68a)" }}>
+                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--warnbg)", borderRadius: 8, border: "1px solid var(--warnbd)" }}>
                   {t("resumeNotice")}
                 </div>
               )}
               {employeeId && (
-                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--goodbg, #f0fdf4)", borderRadius: 8, border: "1px solid var(--goodbd, #bbf7d0)" }}>
+                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--goodbg)", borderRadius: 8, border: "1px solid var(--goodbd)" }}>
                   <strong>{employeeName || employeeId}</strong>: {currentDesignation ?? "—"} → {toDesigName || toDesigId}
                   {effectiveDate && <> · {t("effectiveOn", { date: effectiveDate })}</>}
                 </div>

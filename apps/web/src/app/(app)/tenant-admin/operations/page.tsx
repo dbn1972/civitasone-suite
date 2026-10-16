@@ -105,11 +105,11 @@ export default async function AdminOperationsPage() {
         {/* GAP-TENANT-ADMIN-OPERATIONS-02: "n of M checks passing" over the
             checks we could evaluate (PM2-dependent checks drop out as Unknown
             when PM2 is not reporting), not an opaque n/10. */}
-        <StatCard icon="🏆" iconBg="#f1f5f9" label="Checks passing" value={`${passing}/${evaluated.length}`} />
-        <StatCard icon="💚" iconBg="#ecfdf3" label="PM2 Online" value={`${ops.summary.onlineProcesses}/${ops.summary.totalProcesses}`} />
-        <StatCard icon="⚙️" iconBg="#eff6ff" label="Workers Online" value={`${ops.summary.workersOnline}/${ops.summary.workersTotal}`} />
+        <StatCard icon="🏆" tone="neutral" label="Checks passing" value={`${passing}/${evaluated.length}`} />
+        <StatCard icon="💚" tone="good" label="PM2 Online" value={`${ops.summary.onlineProcesses}/${ops.summary.totalProcesses}`} />
+        <StatCard icon="⚙️" tone="info" label="Workers Online" value={`${ops.summary.workersOnline}/${ops.summary.workersTotal}`} />
         {/* GAP-TENANT-ADMIN-OPERATIONS-03: derived from totals, matches the incident wording. */}
-        <StatCard icon="🚨" iconBg="#fef3f2" label="Processes Not Online" value={notOnline} />
+        <StatCard icon="🚨" tone="bad" label="Processes Not Online" value={notOnline} />
       </div>
 
       {/* GAP-TENANT-ADMIN-OPERATIONS-02: explain what failed / what couldn't be

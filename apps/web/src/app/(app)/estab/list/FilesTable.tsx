@@ -81,7 +81,7 @@ export function FilesTable({ rows }: { rows: FileRow[] }) {
               if (!row.dueDate) return <span style={{ color: "var(--ink2)" }}>—</span>;
               const overdue = row.dueDate < today && row.statusRaw !== "archived" && row.statusRaw !== "disposed";
               return (
-                <span style={overdue ? { color: "var(--bad, #c0392b)", fontWeight: 600 } : undefined}>
+                <span style={overdue ? { color: "var(--bad)", fontWeight: 600 } : undefined}>
                   {formatIndianDate(row.dueDate)}
                 </span>
               );

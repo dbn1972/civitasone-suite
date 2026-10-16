@@ -184,7 +184,7 @@ export function FeeBuilder({
                 padding: "4px 10px",
                 borderRadius: 999,
                 border: "1px solid var(--line)",
-                background: s.done ? "var(--good-bg, #e8f5e9)" : "var(--panel)",
+                background: s.done ? "var(--good-bg)" : "var(--panel)",
                 color: s.done ? "var(--good)" : "var(--mut)",
                 fontWeight: 600,
               }}
@@ -371,7 +371,7 @@ export function FeeBuilder({
                     padding: "10px 12px",
                     borderRadius: "var(--r-sm)",
                     border: "1px solid var(--bad)",
-                    background: "var(--bad-bg, #fdecea)",
+                    background: "var(--bad-bg)",
                     color: "var(--bad)",
                     fontSize: 13,
                     fontWeight: 600,

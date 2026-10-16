@@ -80,12 +80,12 @@ export function AccountOwnerForm({
         {busy ? t("saving") : t("change")}
       </Button>
       {saved ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", marginTop: 8 }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", marginTop: 8 }}>
           {t("submitted")}
         </p>
       ) : null}
       {error ? (
-        <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", marginTop: 8 }}>
+        <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad)", marginTop: 8 }}>
           {error}
         </p>
       ) : null}

@@ -77,7 +77,7 @@ export function AgentKillSwitch({
       ) : (
         <div className="pad">
           {!canManage ? (
-            <p style={{ fontSize: 12, color: "var(--muted, #667085)", margin: "0 0 10px" }}>
+            <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 10px" }}>
               Pausing or resuming an agent requires the AI administrator role.
             </p>
           ) : null}
@@ -110,10 +110,10 @@ export function AgentKillSwitch({
         </div>
       )}
       {message ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good, #047857)", padding: "0 12px 12px" }}>{message}</p>
+        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", padding: "0 12px 12px" }}>{message}</p>
       ) : null}
       {error ? (
-        <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad, #b42318)", padding: "0 12px 12px" }}>{error}</p>
+        <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad)", padding: "0 12px 12px" }}>{error}</p>
       ) : null}
 
       {/* GAP-AI-GOVERNANCE-02: confirm before halting / resuming a live agent. */}

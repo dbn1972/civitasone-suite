@@ -137,7 +137,7 @@ export function IntakePanel({ services, assistingOfficer }: { services: IntakeSe
           </Button>
 
           {draft ? (
-            <div className="pad" style={{ marginTop: 12, background: "var(--surface, #f8fafc)", borderRadius: 8 }}>
+            <div className="pad" style={{ marginTop: 12, background: "var(--surface)", borderRadius: 8 }}>
               <span>
                 {t("draftSavedPrefix")} ({channelLabel(draft.channel)}
                 {draft.assistedBy ? `, ${t("assistedByLabel")} ${draft.assistedBy}` : ""}).
@@ -147,13 +147,13 @@ export function IntakePanel({ services, assistingOfficer }: { services: IntakeSe
           ) : null}
 
           {ack ? (
-            <div role="status" className="pad" style={{ marginTop: 12, background: "var(--good-bg, #ecfdf3)", borderRadius: 8 }}>
+            <div role="status" className="pad" style={{ marginTop: 12, background: "var(--good-bg)", borderRadius: 8 }}>
               <div>{t("ackPrefix")} <strong>{ack.trackingNo}</strong></div>
               <div style={{ fontSize: 13 }}>{t("applicationIdLabel")}: <strong>{ack.applicationId}</strong></div>
               <div style={{ marginTop: 4 }}><StatusPill status={ack.status} /></div>
             </div>
           ) : null}
-          {error ? <p role="alert" style={{ color: "var(--bad, #b42318)", fontSize: 13 }}>{error}</p> : null}
+          {error ? <p role="alert" style={{ color: "var(--bad)", fontSize: 13 }}>{error}</p> : null}
         </form>
       </div>
 

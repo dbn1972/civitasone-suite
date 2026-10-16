@@ -88,15 +88,15 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
       />
 
       <StatGrid>
-        <StatCard icon="💰" iconBg="#ecfdf5" label="Requested" value={amountLabel(application.amountRequestedMinor)} />
+        <StatCard icon="💰" tone="good" label="Requested" value={amountLabel(application.amountRequestedMinor)} />
         <StatCard
           icon="✅"
-          iconBg="#dbeafe"
+          tone="info"
           label="Approved"
           value={application.amountApprovedMinor != null ? amountLabel(application.amountApprovedMinor) : "Pending"}
         />
-        <StatCard icon="📋" iconBg="#fef3c7" label="Status" value={application.status.replace(/_/g, " ")} />
-        <StatCard icon="📅" iconBg="#f1f5f9" label="Submitted" value={application.submittedAt ? formatIndianDate(application.submittedAt) : "—"} />
+        <StatCard icon="📋" tone="warn" label="Status" value={application.status.replace(/_/g, " ")} />
+        <StatCard icon="📅" tone="neutral" label="Submitted" value={application.submittedAt ? formatIndianDate(application.submittedAt) : "—"} />
       </StatGrid>
 
       <Card title="Application Details" padding>

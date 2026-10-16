@@ -156,8 +156,8 @@ export function RetirementProcessWizard({ employeeName, separationId }: Props) {
           style={{
             display: "flex", gap: 8, alignItems: "flex-start",
             padding: "10px 14px", marginBottom: 16, borderRadius: 8,
-            background: "var(--goodbg, #f0fdf4)", border: "1px solid var(--goodbd, #bbf7d0)",
-            fontSize: "0.8125rem", color: "var(--good, #16a34a)",
+            background: "var(--goodbg)", border: "1px solid var(--goodbd)",
+            fontSize: "0.8125rem", color: "var(--good)",
           }}
         >
           <span aria-hidden="true">✅</span>
@@ -169,13 +169,13 @@ export function RetirementProcessWizard({ employeeName, separationId }: Props) {
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: "0.8125rem", color: "var(--mut)" }}>
           <span>{t("overallProgress")}</span>
-          <span style={{ fontWeight: 600, color: allDone ? "var(--good, #16a34a)" : "var(--ink)" }}>{overallPct}%</span>
+          <span style={{ fontWeight: 600, color: allDone ? "var(--good)" : "var(--ink)" }}>{overallPct}%</span>
         </div>
-        <div style={{ height: 8, background: "var(--bg2, #f1f5f9)", borderRadius: 99, overflow: "hidden" }}>
+        <div style={{ height: 8, background: "var(--bg2)", borderRadius: 99, overflow: "hidden" }}>
           <div
             style={{
               height: "100%",
-              background: allDone ? "var(--good, #16a34a)" : "#2563eb",
+              background: allDone ? "var(--good)" : "var(--info)",
               width: `${overallPct}%`,
               borderRadius: 99,
               transition: "width 0.4s ease",
@@ -200,8 +200,8 @@ export function RetirementProcessWizard({ employeeName, separationId }: Props) {
               style={{
                 display: "flex", alignItems: "center", gap: 7,
                 padding: "8px 14px", borderRadius: 8, border: "none", cursor: "pointer",
-                background: active ? "var(--primary, #2563eb)" : done ? "var(--goodbg, #f0fdf4)" : "var(--bg2, #f1f5f9)",
-                color: active ? "var(--panel, #fff)" : done ? "var(--good, #16a34a)" : "var(--ink)",
+                background: active ? "var(--primary)" : done ? "var(--goodbg)" : "var(--bg2)",
+                color: active ? "var(--panel)" : done ? "var(--good)" : "var(--ink)",
                 fontWeight: active ? 600 : 400,
                 fontSize: "0.8125rem",
                 transition: "background 0.2s, color 0.2s",
@@ -229,8 +229,8 @@ export function RetirementProcessWizard({ employeeName, separationId }: Props) {
             role="tabpanel"
             aria-labelledby={`wizard-step-tab-${si}`}
             style={{
-              border: "1px solid var(--line, #e2e8f0)", borderRadius: 10, padding: 20,
-              background: done ? "var(--goodbg, #f0fdf4)" : "var(--bg, #fff)",
+              border: "1px solid var(--line)", borderRadius: 10, padding: 20,
+              background: done ? "var(--goodbg)" : "var(--bg)",
               transition: "background 0.3s",
             }}
           >
@@ -239,7 +239,7 @@ export function RetirementProcessWizard({ employeeName, separationId }: Props) {
                 aria-hidden="true"
                 style={{
                   width: 48, height: 48, borderRadius: 10,
-                  background: done ? "var(--goodbg, #dcfce7)" : "#e6f0ff",
+                  background: done ? "var(--goodbg)" : "var(--infobg)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 24, flexShrink: 0,
                 }}
@@ -255,10 +255,10 @@ export function RetirementProcessWizard({ employeeName, separationId }: Props) {
             </div>
 
             <div style={{ marginBottom: 14 }}>
-              <div style={{ height: 4, background: "var(--bg2, #f1f5f9)", borderRadius: 99, overflow: "hidden" }}>
+              <div style={{ height: 4, background: "var(--bg2)", borderRadius: 99, overflow: "hidden" }}>
                 <div
                   style={{
-                    height: "100%", background: done ? "var(--good, #16a34a)" : "#2563eb",
+                    height: "100%", background: done ? "var(--good)" : "var(--info)",
                     width: `${stepPct}%`, transition: "width 0.3s",
                   }}
                 />
@@ -277,7 +277,7 @@ export function RetirementProcessWizard({ employeeName, separationId }: Props) {
                       style={{
                         display: "flex", alignItems: "flex-start", gap: 12,
                         cursor: readOnly ? "default" : "pointer", padding: "10px 14px", borderRadius: 8,
-                        background: isChecked ? "var(--goodbg, #f0fdf4)" : "var(--bg2, #f8fafc)",
+                        background: isChecked ? "var(--goodbg)" : "var(--bg2)",
                         transition: "background 0.2s",
                       }}
                     >
@@ -286,13 +286,13 @@ export function RetirementProcessWizard({ employeeName, separationId }: Props) {
                         checked={isChecked}
                         disabled={!separationId || readOnly || loading}
                         onChange={() => toggle(step.id, ci)}
-                        style={{ marginTop: 2, flexShrink: 0, accentColor: "var(--good, #16a34a)" }}
+                        style={{ marginTop: 2, flexShrink: 0, accentColor: "var(--good)" }}
                         aria-label={check}
                       />
                       <span
                         style={{
                           fontSize: "0.875rem",
-                          color: isChecked ? "var(--good, #16a34a)" : "var(--ink)",
+                          color: isChecked ? "var(--good)" : "var(--ink)",
                           textDecoration: isChecked ? "line-through" : "none",
                           transition: "color 0.2s, text-decoration 0.2s",
                         }}
@@ -312,7 +312,7 @@ export function RetirementProcessWizard({ employeeName, separationId }: Props) {
               {si < steps.length - 1 ? (
                 <Button onClick={() => setActiveStep(si + 1)}>{t("nextButton")}</Button>
               ) : readOnly ? (
-                <span style={{ fontSize: "0.8125rem", color: "var(--good, #16a34a)", fontWeight: 600 }}>
+                <span style={{ fontSize: "0.8125rem", color: "var(--good)", fontWeight: 600 }}>
                   {t("ppoAlreadyIssued")}
                 </span>
               ) : (

@@ -130,11 +130,11 @@ export default async function AparListPage({
       <DataSourceBadge source={result.source} />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")}           value={errored ? null : total} />
-        <StatCard icon="✍️" iconBg="var(--warnbg, #fffbe6)" label={t("statSelfAppraisal")}    value={errored ? null : counts.selfPending} />
-        <StatCard icon="🔍" iconBg="var(--infobg, #e6f0ff)" label={t("statUnderReview")}      value={errored ? null : counts.inReview} />
-        <StatCard icon="📨" iconBg="var(--warnbg, #fff7e6)" label={t("statAwaitingClosure")}  value={errored ? null : counts.awaitingClosure} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statFinalised")}        value={errored ? null : counts.finalised} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")}           value={errored ? null : total} />
+        <StatCard icon="✍️" iconBg="var(--warnbg)" label={t("statSelfAppraisal")}    value={errored ? null : counts.selfPending} />
+        <StatCard icon="🔍" iconBg="var(--infobg)" label={t("statUnderReview")}      value={errored ? null : counts.inReview} />
+        <StatCard icon="📨" iconBg="var(--warnbg)" label={t("statAwaitingClosure")}  value={errored ? null : counts.awaitingClosure} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statFinalised")}        value={errored ? null : counts.finalised} />
       </StatGrid>
 
       {/* GAP-HR-APPRAISALS-02: a single at-a-glance "how far along is this

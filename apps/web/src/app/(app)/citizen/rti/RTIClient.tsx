@@ -69,12 +69,12 @@ function clockCell(row: Row, labels: ClockLabels) {
   const n = row.daysLeft;
   if (n === null) return <span style={{ color: "var(--muted)" }}>—</span>;
   if (n < 0) {
-    return <span style={{ color: "#b42318", fontWeight: 600 }}>{labels.overdueBy(Math.abs(n))}</span>;
+    return <span style={{ color: "var(--bad)", fontWeight: 600 }}>{labels.overdueBy(Math.abs(n))}</span>;
   }
   if (n === 0) {
-    return <span style={{ color: "#b42318", fontWeight: 600 }}>{labels.dueToday}</span>;
+    return <span style={{ color: "var(--bad)", fontWeight: 600 }}>{labels.dueToday}</span>;
   }
-  const color = n <= 5 ? "#b54708" : "#067647";
+  const color = n <= 5 ? "var(--warn)" : "var(--good)";
   return <span style={{ color, fontWeight: n <= 5 ? 600 : 400 }}>{labels.daysLeft(n)}</span>;
 }
 

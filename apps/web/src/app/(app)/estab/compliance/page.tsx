@@ -43,10 +43,10 @@ export default async function CompliancePage() {
       {/* delta removed — it was a hardcoded "+3%", not a real period-over-period
           change; and counts show "—" rather than a fabricated 0 on load failure. */}
       <StatGrid>
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Compliance Rate" value={errored || rate === null ? "—" : `${rate}%`} />
-        <StatCard icon="📋" iconBg="#e6f7f5" label="Open Actions" value={errored ? "—" : openActions.toLocaleString("en-IN")} />
-        <StatCard icon="⏰" iconBg="#fffaeb" label="Overdue" value={errored ? "—" : overdue.toLocaleString("en-IN")} />
-        <StatCard icon="🔴" iconBg="#fef3f2" label={`Escalated (> ${ESCALATION_DAYS}d overdue)`} value={errored ? "—" : escalated.toLocaleString("en-IN")} />
+        <StatCard icon="✅" tone="good" label="Compliance Rate" value={errored || rate === null ? "—" : `${rate}%`} />
+        <StatCard icon="📋" tone="good" label="Open Actions" value={errored ? "—" : openActions.toLocaleString("en-IN")} />
+        <StatCard icon="⏰" tone="warn" label="Overdue" value={errored ? "—" : overdue.toLocaleString("en-IN")} />
+        <StatCard icon="🔴" tone="bad" label={`Escalated (> ${ESCALATION_DAYS}d overdue)`} value={errored ? "—" : escalated.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         {errored ? (

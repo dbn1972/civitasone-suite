@@ -58,7 +58,7 @@ export function InspectGrnForm({ grnId, grnNo, isCreator = false }: { grnId: str
   if (isCreator) {
     return (
       <div className="card pad">
-        <p role="status" style={{ margin: 0, fontSize: "0.875rem", color: "var(--muted, #6b7280)" }}>
+        <p role="status" style={{ margin: 0, fontSize: "0.875rem", color: "var(--muted)" }}>
           You created {label}, so you cannot also inspect it. Under separation of duties a different
           officer must accept or reject it. The Accept and Reject actions are disabled for you.
         </p>
@@ -72,7 +72,7 @@ export function InspectGrnForm({ grnId, grnNo, isCreator = false }: { grnId: str
 
   return (
     <div className="card pad">
-      <p style={{ marginBottom: 12, fontSize: "0.875rem", color: "var(--muted, #6b7280)" }}>
+      <p style={{ marginBottom: 12, fontSize: "0.875rem", color: "var(--muted)" }}>
         Inspect the received items and record a decision. You must be a different officer from
         whoever created this GRN.
       </p>
