@@ -1,4 +1,4 @@
-import { HR_HR_LOCATION_ADMIN_ROLES } from "@/lib/auth/workRoles";
+import { HR_LOCATION_ADMIN_ROLES } from "@/lib/auth/workRoles";
 import Link from "next/link";
 import { PageHeader, Card, EmptyState, StatGrid, StatCard, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";

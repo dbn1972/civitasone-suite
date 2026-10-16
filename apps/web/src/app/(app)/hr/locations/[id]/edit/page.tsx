@@ -1,4 +1,4 @@
-import { HR_HR_LOCATION_ADMIN_ROLES } from "@/lib/auth/workRoles";
+import { HR_LOCATION_ADMIN_ROLES } from "@/lib/auth/workRoles";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../../_components/PermissionDenied";
 import { LoadErrorState, PageHeader } from "../../../../../_components/ds";
