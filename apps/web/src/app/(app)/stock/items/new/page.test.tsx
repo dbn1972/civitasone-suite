@@ -48,12 +48,28 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("New Stock Item page", () => {
-  // GAP-STOCK-ITEMS-NEW-05: Cancel link present.
-  it("GAP-STOCK-ITEMS-NEW-05: renders a Cancel link to /stock/list", async () => {
+  // GAP-STOCK-ITEMS-NEW-05: Cancel button present; navigates immediately when form is clean.
+  it("GAP-STOCK-ITEMS-NEW-05: renders a Cancel button that navigates when form is clean", async () => {
     installLookupFetch();
     render(<Page />);
-    const cancel = await screen.findByRole("link", { name: "Cancel" });
-    expect(cancel).toHaveAttribute("href", "/stock/list");
+    const cancel = await screen.findByRole("button", { name: "Cancel" });
+    fireEvent.click(cancel);
+    expect(pushMock).toHaveBeenCalledWith("/stock/list");
+  });
+
+  // GAP-STOCK-ITEMS-NEW-05: dirty form -> ConfirmDialog before navigation.
+  it("GAP-STOCK-ITEMS-NEW-05: dirty form opens a Discard confirm dialog on Cancel", async () => {
+    installLookupFetch();
+    render(<Page />);
+    await waitFor(() => expect(screen.getByRole("option", { name: "Stationery" })).toBeInTheDocument());
+    // Make form dirty
+    fireEvent.change(screen.getByLabelText("Item name"), { target: { value: "Paper" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    // ConfirmDialog should appear
+    expect(await screen.findByText("Discard unsaved changes?")).toBeInTheDocument();
+    // Clicking Discard navigates
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(pushMock).toHaveBeenCalledWith("/stock/list");
   });
 
   // GAP-STOCK-ITEMS-NEW-07: item type helper text.

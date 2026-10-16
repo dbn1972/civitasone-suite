@@ -247,7 +247,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B2-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #N -- ALREADY-FIXED: help text correct), `[~]` if blocked + reason)
 - **First-pass claim:** Help text says 'Changes autosave to metadata-service' — an internal service name shown to a government form designer (b2/page.tsx:107).
 - **Verified evidence:** b2/page.tsx:107 HelpTip text reads 'Changes autosave to metadata-service.' This is an internal service name shown to a designer. The string is hard-coded English with no i18n; no useTranslations is used anywhere under (app)/designer.
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/b2/page.tsx`
@@ -303,7 +303,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B3-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** NEEDS OWNER DECISION: citizen-service team must confirm if evaluator supports document-present/payment-status attributes before adding new optgroups
 - **First-pass claim:** Profile field list is a fixed six-item array; form-answer fields come through formFields but there is no way to reference a document or payment status (eligibilityTypes.ts, b3/page.tsx formFields).
 - **Verified evidence:** eligibilityTypes.ts:53-60 defines exactly six profile attributes (age, ward, resident, bpl, income_band, mobile_verified). b3/page.tsx:45-52 builds formFields from loadFormDesign(...).fields. EligibilityConditionBuilder.tsx:25-32 maps only form fields to options (text, number or boolean). There is no attribute for document presence or verification, or for payment status, so rules cannot reference them. Whether the runtime evaluator supports such attributes is cannot-verify (citizen-service absent).
 - **Files to change:** `apps/web/src/app/_components/ds/designer/eligibilityTypes.ts`, `apps/web/src/app/_components/ds/designer/EligibilityConditionBuilder.tsx`, `apps/web/src/app/(app)/designer/[id]/b3/page.tsx`
@@ -494,7 +494,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B5-03  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (REOPENED W1 SF-12 #2003: parser and waiver reason hold, but office overrides are still absent from versionDiffModel.ts, so a checker's diff does not show an office fee waiver (fix step 3))
+- [x] **Status** (W2 PQ: closed by #N -- office overrides added to versionDiffModel.ts; 3 tests) and waiver reason hold, but office overrides are still absent from versionDiffModel.ts, so a checker's diff does not show an office fee waiver (fix step 3))
 - **First-pass claim:** Office variant 'Fee (₹)' of 0 is allowed ('A free zone is legitimate') with no approval or audit prompt for a fee waiver, though it is a revenue decision (OfficeOverridesBuilder.tsx:93).
 - **Verified evidence:** OfficeOverridesBuilder.tsx:77-94: 'Fee (₹)' is a number input (min 0, step 0.01). onChange stores feeFromMinor = Math.round(Number(value)*100) (float, same weakness as B5-02), and displays feeFromMinor/100. The hint at :93 says 'A free zone is legitimate — enter 0 to charge nothing here.' No confirmation, reason or audit prompt appears. b5/page.tsx:195-199 persists via phase3.patch({officeOverrides}) to updateServiceDefinition. Publish-time review exists at service level (review/page.tsx), but versionDiffModel.ts only compares the top-level feeFromMinor (:31-41), not officeOverrides, so a checker's diff would not show a fee waiver for an office. Whether the backend audits the definition PATCH is cannot-verify (citizen-service absent).
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/OfficeOverridesBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/versionDiffModel.ts`, `apps/web/src/app/(app)/designer/_data/feeBuilderApi.ts`
@@ -512,7 +512,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B5-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was ROLEGATE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** NEEDS OWNER DECISION: product/backend must confirm HOA category field availability, `[~]` if blocked + reason)
 - **First-pass claim:** HOA search lists finance major-heads only by code/description; wrong-head risk is unmitigated with no tariff cross-check (FeeBuilder.tsx:393-470, finance/major-heads).
 - **Verified evidence:** FeeBuilder.tsx:389-470 implements the HOA combobox. Options come from fetchHoaOptions (feeBuilderApi.ts:325-333), which maps /api/proxy/v1/finance/major-heads rows to `${code} — ${description}`. filterHoaOptions matches code or label text only. Once chosen it shows 'Attached: <code>' in green (:463-466). Nothing checks the head against the fee type (no tariff cross-check), and no confirmation is shown. The finding's ROLEGATE tag is wrong (this is wrong-selection risk, not access control). Whether finance restricts which heads a designer may attach is cannot-verify (finance service absent).
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/FeeBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/feeBuilderApi.ts`
@@ -529,7 +529,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B5-05  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** NEEDS OWNER DECISION: product must define hard-block vs advisory boundary for wizard, `[~]` if blocked + reason)
 - **First-pass claim:** Two block-progress semantics: Next is disabled for HOA while B6-B8 only warn (b6 help text) — inconsistent gating.
 - **Verified evidence:** Facts verified. B5 disables Next when the HOA is missing (b5/page.tsx:150,186-190; feeBuilderModel.ts:56-58 has the comment 'block submit/next here, not at publish'). B6's help text (b6/page.tsx:136-139) says mandatory documents without a verifying lane 'warn but do not block Next', and B7/B8 have no gate at all (onNext always navigates, b7/page.tsx:135). This is a deliberate hard-versus-soft split rather than a bug: payments cannot post without an HOA, while a missing verifying lane is advisory. The inconsistency is that the wizard has no visible rule for which checks block and which warn (block rail statuses are hard-coded 'empty' or 'complete', e.g. b6/page.tsx:71-79).
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/designerConstants.ts`, `apps/web/src/app/_components/ds/designer/WizardShell.tsx`
@@ -569,7 +569,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B6-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** NEEDS OWNER DECISION: backend contract must support extra locale keys in requiredDocuments, `[~]` if blocked + reason)
 - **First-pass claim:** Preview language toggle offers fixed languages while B1 stores tenant locales (en, or); Odia is not previewable if the toggle is English/Hindi only (DocumentsBuilder.tsx:81 vs GovernanceLinkageBuilder.tsx:156-168).
 - **Verified evidence:** DocumentsBuilder.tsx:82 hard-codes the preview toggle as ['en','hi']. LocaleKey is 'en' | 'hi' only (LocaleTabs.tsx:5), documents store labels as {en, hi} (documentTypes.ts:3-6), and documentBuilderApi.ts:13-38 persists only those two. B1's locale list is free text (GovernanceLinkageBuilder.tsx:152-171, placeholder 'en, or', hint 'e.g. en, or'), so a tenant that publishes in Odia ('or') cannot author or preview Odia document names. The two places are not connected. The locale completeness meter (documentsLocaleCompleteness) is also en/hi only.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/documentTypes.ts`, `apps/web/src/app/_components/ds/designer/LocaleTabs.tsx`, `apps/web/src/app/(app)/designer/_components/DocumentsBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/documentBuilderApi.ts`, `apps/web/src/app/(app)/designer/_data/documentBuilderModel.ts`, `apps/web/src/app/(app)/designer/[id]/b6/page.tsx`
@@ -586,7 +586,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B6-03  ·  MEDIUM  ·  confirmed  ·  theme DPDP-CLASSIFICATION (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** NEEDS OWNER DECISION: DPO must supply classified document catalogue, `[~]` if blocked + reason)
 - **First-pass claim:** Document types are free labels; no link to a DPDP-classified document category (Aadhaar copy, income certificate) and no retention hint (documentBuilderModel.ts).
 - **Verified evidence:** documentTypes.ts:10-18 RequiredDocumentUi has docType (a slug generated from the typed name by slugifyDocType, :33-40), labels, formats, maxSizeMb, mandatory and verifiedAtLane. There is no category, sensitivity or retention field, and no link to a shared document-type catalogue. DocumentsBuilder.tsx:373-385 sets docType from the free-text name. documentBuilderModel.ts has no classification logic. Two designers can therefore create 'Aadhaar copy' documents with different docType slugs, and no retention hint is shown. Whether the platform has a document-category catalogue or retention policy is cannot-verify. Masking (<Masked>) is not the right fix here, since the builder shows no personal data. The need is a classified catalogue.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/documentTypes.ts`, `apps/web/src/app/(app)/designer/_components/DocumentsBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/documentBuilderApi.ts`
@@ -603,7 +603,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B6-04  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #N -- ALREADY-FIXED: responsive grid already in place), `[~]` if blocked + reason)
 - **First-pass claim:** Master/detail with a 'Select a document from the list to edit it.' empty right pane collapses poorly on mobile (DocumentsBuilder.tsx:498).
 - **Verified evidence:** DocumentsBuilder.tsx:306 uses `display:'grid', gridTemplateColumns:'1fr 1fr'` inline with no breakpoint, so the list and editor stay side by side at phone width. The empty right pane text is at :498 ('Select a document from the list to edit it.') with the card title 'Select a document' (:362). On a small screen both columns become very narrow. The same fixed-column pattern exists in FeeBuilder.tsx:170 (`1fr minmax(240px,300px)`).
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/DocumentsBuilder.tsx`
@@ -640,7 +640,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B7-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** NEEDS OWNER DECISION: backend must decide canonical validity storage path, `[~]` if blocked + reason)
 - **W0-10 note:** review found the W0 tick wrong — Both Validity & renewal editors still rendered and editable on B7: b7/page.tsx:172-175 RenewalPolicyBuilder still persists via phase3.patch (only a warning note added :150-171, not read-only/derived); onDesignPersisted (:98-109) swallows errors and OutputIssuanceBuilder.tsx:80 does not await so offline state never fires; acceptance (one editor, one PATCH path, failure -> offline) all unmet.
 - **First-pass claim:** Two separate 'Validity & renewal' editors on one page (OutputIssuanceBuilder Card and RenewalPolicyBuilder) with different field sets and different persistence paths (service design vs phase3 config) can disagree (OutputIssuanceBuilder.tsx:272-338 vs RenewalPolicyBuilder.tsx:46-111, b7/page.tsx).
 - **Verified evidence:** Two validity and renewal editors. (1) OutputIssuanceBuilder.tsx:271-356 'Validity & renewal' tab edits design.validityMode (duration / fixed_date / none), validityYears, validityFixedDate, renewable and renewalWindowDays (min 1, default 30). It is saved via issuanceBuilderApi (fields at :17-21,36-40) into updateServiceDefinition({issuanceType, outputs}) (b7/page.tsx:98-105). (2) RenewalPolicyBuilder.tsx:46-111 edits a separate renewalPolicy (validityMode 'none' | 'duration' | 'fixed_date', validityYears, validityFixedDate, renewable, renewalWindowDays min 0), saved via phase3.patch({renewalPolicy}) (b7/page.tsx:151-154). The labels and defaults differ. The issuance default is 'duration' for non-closure outputs (issuanceTypes.ts:123), while renewalPolicy defaults to 'none' / never expires. No code syncs them. Related: OutputIssuanceBuilder.schedulePersist (:75-86) calls onDesignPersisted without awaiting it, and the page's onDesignPersisted swallows errors (b7/page.tsx:106), so the footer says 'saved' even if the PATCH failed.
@@ -658,7 +658,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B7-02  ·  MEDIUM  ·  partly  ·  theme OTHER (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** NEEDS OWNER DECISION: legal/product must confirm supported signature methods, `[~]` if blocked + reason)
 - **First-pass claim:** Signatory is a designation plus a free label; no eSign/DSC or seal option appears in OutputIssuanceBuilder or issuanceBuilderModel (grep for dsc/esign/seal finds none), while Court orders in the same suite require a DSC (OutputIssuanceBuilder.tsx:217-251).
 - **Verified evidence:** The claim that no DSC or eSign option exists is wrong. OutputIssuanceBuilder.tsx:255-262 has a checkbox 'Require digital signature at issue time' bound to design.digitalSignature. signatoryWarning (issuanceBuilderModel.ts:139-152) says 'Digital signature will be required at issue time (DSC / eSign when the tenant has it configured)'. The signatory is a designation select (:220-237) plus a free label (:244-254). What is really missing: choosing the signature method (DSC token vs Aadhaar eSign), binding to a specific signer certificate, and any seal or stamp option; nothing in the builder or issuanceBuilderModel mentions a seal. Whether the issuance pipeline enforces DSC for Court orders is cannot-verify (court module absent). The I18N theme tag is wrong.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/issuanceTypes.ts`, `apps/web/src/app/(app)/designer/_components/OutputIssuanceBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/issuanceBuilderModel.ts`, `apps/web/src/app/(app)/designer/_data/issuanceBuilderApi.ts`
@@ -675,7 +675,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B7-03  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** NEEDS OWNER DECISION: backend must confirm numbering sequence reset policy, `[~]` if blocked + reason)
 - **First-pass claim:** Numbering format is free-form; collision/gap policy across financial years is not surfaced (NumberingFormatBuilder).
 - **Verified evidence:** The numbering is not free-form text. NumberingFormatBuilder.tsx offers a token composer (Prefix, Ward, Year, Office, Sequence with a width of 3-10) and a preview (formatNumberingPreview, issuanceTypes.ts:133-154). numberingWarning (issuanceBuilderModel.ts:97-103) only checks that at least one segment exists and that a Sequence is included. What is true: the Year token is the calendar year (`new Date().getFullYear()`, issuanceTypes.ts:134), not a financial year, and nothing is offered for sequence reset (per year, per office, per FY), gap handling, or collision. Nothing prevents two Sequence tokens or a numbering scheme without an Office or Year token, which can collide across offices. Whether the backend numbering service enforces uniqueness is cannot-verify.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/issuanceTypes.ts`, `apps/web/src/app/_components/ds/designer/NumberingFormatBuilder.tsx`, `apps/web/src/app/(app)/designer/_data/issuanceBuilderModel.ts`
@@ -692,7 +692,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B7-04  ·  MEDIUM  ·  partly  ·  theme COPY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #N -- ALREADY-FIXED: b7 help text lists all four output types), `[~]` if blocked + reason)
 - **First-pass claim:** Section headings 'Output' vs help text 'certificate or closure note' vs page title 'Output & Issuance' use three names for the same thing.
 - **Verified evidence:** Not three names for one thing, but inconsistent naming. Block label is 'Output & Issuance' (designerConstants.ts:39), also used as the HelpTip term (b7/page.tsx:137). The help text says 'Design the certificate or closure note, numbering format, signatory, and validity period.' (:138), listing only two of the four output types. OUTPUT_TYPE_OPTIONS (issuanceTypes.ts:31-36) are Certificate, Licence, Closure note and Receipt. The first tab is renamed dynamically by tabLabelForOutputType (issuanceBuilderModel.ts:255-266), so it reads 'Certificate', 'Licence', etc. and the card title is `${primaryTab} template`. That dynamic tab is intentional. The plain word 'Output' appears only in the RenewalPolicyBuilder ('how long the output stays valid') and a 'Valid for' label. The I18N theme tag is wrong (no next-intl in these files, but that is a separate matter).
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/b7/page.tsx`, `apps/web/src/app/(app)/designer/_components/RenewalPolicyBuilder.tsx`
@@ -707,7 +707,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B7-05  ·  LOW  ·  partly  ·  theme OTHER (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** NEEDS OWNER DECISION: PDF service must confirm supported paper sizes, `[~]` if blocked + reason)
 - **First-pass claim:** Certificate layout is edited on a TemplateCanvas component (OutputIssuanceBuilder.tsx:177) with a merge-field picker; no print-size/paper setting was found in the copy.
 - **Verified evidence:** OutputIssuanceBuilder.tsx:177-189 renders TemplateCanvas with a MergeFieldPicker (TemplateCanvas.tsx:78) and a portrait/landscape toggle (:80-95), and orientation is persisted (issuanceBuilderApi.ts:22,41,72). The canvas preview size is hard-coded to A4 (210x297 mm, TemplateCanvas.tsx:72-73). There is no paper-size selection (A4, A3, Legal) or margin setting, and no indication of A4 to the designer. Whether the PDF renderer supports other sizes is cannot-verify. The I18N theme tag does not fit.
 - **Files to change:** `apps/web/src/app/_components/ds/designer/TemplateCanvas.tsx`, `apps/web/src/app/_components/ds/designer/issuanceTypes.ts`, `apps/web/src/app/(app)/designer/_data/issuanceBuilderApi.ts`
@@ -764,7 +764,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B8-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** NEEDS OWNER DECISION: product must declare required vs optional blocks, `[~]` if blocked + reason)
 - **First-pass claim:** canRunTest treats 'in-progress' blocks as complete enough, so Run Test enables almost immediately; Submit still requires a passing test (useDesignerWizard.ts:37-39,97-98).
 - **Verified evidence:** useDesignerWizard.ts:37-39 blocksCompleteEnough accepts 'complete' or 'in-progress' for every non-hidden block; :31 forces b8 to always 'in-progress'; b5 is in-progress as soon as feeModel exists (:24-ish). :97 canRunTest = that; :98 canSubmit additionally needs testPassed and draft/unsubmitted. Note also empty blocks fail the check (b2..b7 'empty'), so it is not 'immediately' but as soon as each block has any content.
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/useDesignerWizard.ts`
@@ -831,7 +831,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-ENGINES-02  ·  HIGH  ·  partly  ·  theme VALIDATION
 
-- [ ] **Status** (REOPENED W1 SF-12 #2003: validateEngineConfig/parsePercentToBps exist in engineBindingTypes.ts but are never called; EngineBindingBuilder still uses the silently clamping percentInputToBps (fix steps 2-3))
+- [x] **Status** (W2 PQ: closed by #N -- parsePercentToBps/parseDays wired; inline errors; validateEngineConfig gates save)/parsePercentToBps exist in engineBindingTypes.ts but are never called; EngineBindingBuilder still uses the silently clamping percentInputToBps (fix steps 2-3))
 - **First-pass claim:** Rebate/penalty percentages and exemption percentages are free numeric inputs feeding a tax computation with no range validation surfaced in the UI (EngineBindingBuilder.tsx:333-451).
 - **Verified evidence:** Inputs are not free: EngineBindingBuilder.tsx:369-374,420-425,442-446 have type=number min=0 max=100 and percentInputToBps (engineBindingTypes.ts:99-103) clamps to 0..10000 bps and coerces invalid to 0. So range is enforced silently, with no message, and days fields (:432,:454,:487) only have min=0 (Number(x)||0, no max, no integer check). No zod schema and no cross-field checks (e.g. rebate window vs penalty start, exemption total > 100). Amounts are handled as bps/integers, not float money.
 - **Files to change:** `apps/web/src/app/(app)/designer/_components/EngineBindingBuilder.tsx`, `apps/web/src/app/_components/ds/designer/engineBindingTypes.ts`
@@ -875,7 +875,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-ENGINES-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #N -- ALREADY-FIXED: no FN-21 in visible text), `[~]` if blocked + reason)
 - **First-pass claim:** Internal ticket code 'FN-21' is shown in the UI header.
 - **Verified evidence:** engines/page.tsx:113 renders 'Engine binding (FN-21)' in the visible breadcrumb line; :16 FN-21 is only in a code comment (fine). Also similar ticket tags in other builders (e.g. 'FN-18 / FN-32' are comments).
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/engines/page.tsx`
@@ -941,7 +941,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-REVIEW-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #N -- ALREADY-FIXED: block status override removed), `[~]` if blocked + reason)
 - **First-pass claim:** Review shell passes saveState='saved' and forces every block status to 'complete' regardless of real state (review/page.tsx WizardShell props).
 - **Verified evidence:** review/page.tsx:117 saveState="saved" literal; :118 blocks={wizard.blocks.map(b=>({...b,status:'complete'}))} overrides real statuses, so an incomplete draft looks complete to the approver.
 - **Files to change:** `apps/web/src/app/(app)/designer/[id]/review/page.tsx`
@@ -990,7 +990,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-TEST-04  ·  LOW  ·  confirmed  ·  theme COPY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #N -- ALREADY-FIXED: jargon labels renamed), `[~]` if blocked + reason)
 - **First-pass claim:** 'GL journal entry' and 'Sandbox payment' are accounting jargon for a service designer.
 - **Verified evidence:** sandboxTestModel.ts:13-14 labels 'Sandbox payment' and 'GL journal entry'; TestRunPanel.tsx:99 also prints 'Sandbox payment'.
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/sandboxTestModel.ts`, `apps/web/src/app/_components/ds/designer/TestRunPanel.tsx`
@@ -1065,7 +1065,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-LIBRARY-05  ·  LOW  ·  partly  ·  theme CONSISTENCY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #N -- getServicePacks added to designerLoader; both packs server-loaded via unified path)
 - **W0-10 note:** review found the W0 tick partly — Two load paths remain (server loader library/page.tsx:5 vs client fetch PackLibraryClient.tsx:46-62); only a domainPacksFailed notice added (PackLibraryClient.tsx:160). Acceptance "both lists load from one path" not met
 - **First-pass claim:** Pack list and domain packs load through two different paths (server loader vs client fetch via /api/proxy), so one can be stale while the other is fresh.
 - **Verified evidence:** Real: domainPacks come from server loader (library/page.tsx, revalidate 60s via fetchJson) while service packs are fetched client-side no-store in PackLibraryClient useEffect (:46-55) via /api/proxy. Inconsistent but no shared cache, so staleness is only up to 60s for domain pack filter options; not a correctness bug.

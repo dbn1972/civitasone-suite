@@ -643,7 +643,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-ELIGIBILITY-05  ·  LOW  ·  partly  ·  theme NAVIGATION (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: closed by #2064 — serviceKey added to mapper; name linked to /citizen/services/{serviceKey} when present; status already humanised in prior wave)
 - **First-pass claim:** Rule-set table has no link to the rules or the service it belongs to (eligibility/page.tsx:47-55).
 - **Verified evidence:** Rule-set table columns (page.tsx:41-46,50-54) show name, v{version}, ruleCount, raw status with no link. Data from getEligibilityRuleSets (citizenGaps.ts); whether ruleset has serviceId/rules detail route is unknown (no detail route in citizen/eligibility). Low impact.
 - **Files to change:** `apps/web/src/app/(app)/citizen/eligibility/page.tsx`
@@ -1046,7 +1046,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-NOTICES-05  ·  LOW  ·  partly  ·  theme FEATURE (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 citizen: INTERIM NEEDS-OWNER-DECISION — no attachmentUrl/documentId in CitizenNotice and no publish/withdraw backend endpoint verified; cannot implement safely without backend contract)
 - **First-pass claim:** Read-only route; no publish/withdraw action or link to the notice document (page tree has no mutation).
 - **Verified evidence:** Route is read-only: NoticesTable has no actions and CitizenNotice (_data/loaders.ts:3420-3428) has no document/url field, so no link to the notice document is possible from current data. No publish/withdraw endpoint is referenced anywhere in apps/web (grep). This is a missing feature rather than a dead route/link; backend contract cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/notices/NoticesTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -1129,7 +1129,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-PAYMENTS-06  ·  MEDIUM  ·  partly  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: closed by #2064 — UUID input replaced with trackingNo resolver; resolves to applicationId via /v1/citizen/intake/track/:trackingNo; print receipt already added in prior wave)
 - **W0-10 note:** review found the W0 tick partly — Print receipt button added (PaymentPanel.tsx:150) but Application ID is still a hand-typed UUID input (:112-113, placeholder 00000000-...); no tracking-number resolution so acceptance 'tracking number resolves to application' unmet
 - **First-pass claim:** Application ID is a hand-typed UUID (PaymentPanel.tsx:49-50); the success line is not announced with the receipt link or a print action.
 - **Verified evidence:** PaymentPanel.tsx:49-50 is a hand-typed UUID input (label 'Application ID (UUID)' en.json:673). Success message :32 is a plain text status with receipt number only - no link to a receipt and no print action (PrintButton/PrintDocumentLink exist in _components). role=status makes it announced to screen readers, so the 'not announced' phrase is inaccurate.
@@ -1306,7 +1306,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-REQUESTS-06  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was UUID)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: closed by #2064 — requestNo added to Grievance type and mapper; detail uses grievance.requestNo ?? “—”)
 - **First-pass claim:** Request No shown here is the API's requestNo, but the detail page recomputes its own 'GR-' + first 8 chars of the UUID (RequestDetailClient.tsx:158), so the same record carries two different numbers.
 - **Verified evidence:** List shows API requestNo (CitizenRequestsClient.tsx:28,9) from /v1/citizen/requests; requests/[id]/RequestDetailClient.tsx:158 builds `GR-${grievance.id.slice(0,8).toUpperCase()}` for header and subtitle, ignoring any server number. Row links go to /citizen/requests/<id> (rowLinkKey=id), so the same record displays two numbers. Detail loads a grievance object; whether it carries requestNo/grievanceNo cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/requests/[id]/RequestDetailClient.tsx`, `apps/web/src/app/(app)/citizen/_data/loaders.ts`
@@ -1328,7 +1328,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-REQUESTS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme ERRORTEXT (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: already-fixed on main — load() uses userFacingErrorFromResponse(res, "load") so no raw server text reaches the UI; verified in RequestDetailClient.tsx load() function)
 - **First-pass claim:** Load failure prints the raw response body to the clerk: throw new Error(await res.text()) then {loadError} in a <p role=alert> (RequestDetailClient.tsx:52,141) — violates the RouteError 'never show server text' rule.
 - **Verified evidence:** RequestDetailClient.tsx:52 throws new Error(await res.text()) and :56 stores e.message in loadError, rendered in <p role=alert> at :141. Same pattern for mutations (:89,106,115,124) shown through formError (:250) and ActionButton error (ActionButton.tsx:49 e.message). Server text is displayed, against RouteError's rule. Retry button exists.
 - **Files to change:** `apps/web/src/app/(app)/citizen/requests/[id]/RequestDetailClient.tsx`
@@ -1344,7 +1344,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-REQUESTS-DETAIL-03  ·  MEDIUM  ·  partly  ·  theme FABRICATED (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: closed by #2064 — same fix as REQUESTS-06; requestNo from API replaces GR-id8 synthesis)
 - **First-pass claim:** Displayed Request No is synthesised as 'GR-' + id.slice(0,8) (RequestDetailClient.tsx:158) and will not match the list page's requestNo.
 - **Verified evidence:** RequestDetailClient.tsx:158 builds requestNo = 'GR-' + id.slice(0,8).toUpperCase(); Grievance type (_data/loaders.ts:31-42) has no requestNo field. The list (CitizenRequestsClient.tsx:9,28) shows the API's requestNo and links rows to /citizen/requests/{id} (rowLinkPrefix). Unless the API format equals GR-<id8> the two will differ; whether list ids are grievance ids is cannot-verify (citizen-service absent).
 - **Files to change:** `apps/web/src/app/(app)/citizen/requests/[id]/RequestDetailClient.tsx`, `apps/web/src/app/(app)/citizen/_data/loaders.ts`

@@ -1,5 +1,6 @@
 import { PageHeader, Card, DataTable, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import type { AssesseeOption } from "./FetchBillForm";
 import { formatIndianDateTime } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { FetchBillForm } from "./FetchBillForm";
@@ -43,6 +44,35 @@ function mapRequests(payload: unknown): BbpsRequestRow[] | null {
   return mapped;
 }
 
+// GAP-REVENUE-BBPS-03: load assessees so the clerk picks from a list instead
+// of typing a raw identifier (a wrong identifier sends payment to the wrong account).
+function mapAssessees(payload: unknown): AssesseeOption[] | null {
+  const rows = Array.isArray(payload)
+    ? payload
+    : isRecord(payload) && Array.isArray((payload as { data?: unknown }).data)
+      ? (payload as { data: unknown[] }).data
+      : null;
+  if (!rows) return null;
+  const mapped: AssesseeOption[] = [];
+  for (const raw of rows) {
+    if (!isRecord(raw) || typeof raw.id !== "string" || typeof raw.ownerName !== "string") continue;
+    mapped.push({
+      id: raw.id,
+      ownerName: raw.ownerName,
+      identifierNo: typeof raw.identifierNo === "string" ? raw.identifierNo : "—",
+      assesseeType: typeof raw.assesseeType === "string" ? raw.assesseeType : "—",
+    });
+  }
+  return mapped.length > 0 ? mapped : mapped; // always return array (empty ok)
+}
+
+async function getAssessees(): Promise<LoaderResult<AssesseeOption[]>> {
+  return fetchJson<unknown, AssesseeOption[]>("/api/v1/revenue/assessees?limit=200", [], {
+    telemetryKey: "revenue.bbps.assessees",
+    mapResponse: mapAssessees,
+  });
+}
+
 async function getRecentRequests(): Promise<LoaderResult<BbpsRequestRow[]>> {
   return fetchJson<unknown, BbpsRequestRow[]>("/api/v1/revenue/bbps/requests?limit=20", [], {
     telemetryKey: "revenue.bbps.requests",
@@ -52,6 +82,7 @@ async function getRecentRequests(): Promise<LoaderResult<BbpsRequestRow[]>> {
 
 export default async function BbpsPage() {
   const { data: requests, source } = await getRecentRequests();
+  const { data: assessees } = await getAssessees();
   // Display strings are precomputed here: DataTable is a client component, and a
 // Server Component cannot pass `render` functions across the RSC boundary.
   const rows = requests.map((r) => ({
@@ -77,8 +108,8 @@ export default async function BbpsPage() {
         </p>
       </Card>
 
-      <FetchBillForm />
-      <PayBillForm />
+      <FetchBillForm assessees={assessees} />
+      <PayBillForm assessees={assessees} />
 
       <Card title="Recent BBPS requests" padding>
         {source === "error" ? (

@@ -77,3 +77,52 @@ describe("versionDiffModel", () => {
     expect(feeSummaryForPublish(current)).toMatch(/HOA 4201/);
   });
 });
+
+describe("versionDiffModel office overrides (GAP-DESIGNER-DETAIL-B5-03)", () => {
+  const base: ServiceDefinitionDto = {
+    ...current,
+    officeOverrides: [
+      { officeId: "off-1", feeFromMinor: 50000 },
+    ],
+  };
+
+  it("shows fee change when an office override fee changes", () => {
+    const rows = buildVersionDiffRows(base, {
+      officeOverrides: [{ officeId: "off-1", feeFromMinor: 75000 }],
+    });
+    const row = rows.find((r) => r.label === "Office off-1 fee");
+    expect(row).toBeDefined();
+    expect(row?.after).toMatch(/₹500\.00/);
+  });
+
+  it("shows waiver reason in summary when fee becomes zero", () => {
+    const withWaiver: ServiceDefinitionDto = {
+      ...base,
+      officeOverrides: [
+        { officeId: "off-1", feeFromMinor: 0, feeWaiverReason: "statutory exemption" },
+      ],
+    };
+    const rows = buildVersionDiffRows(withWaiver, {
+      officeOverrides: [{ officeId: "off-1", feeFromMinor: 50000 }],
+    });
+    const row = rows.find((r) => r.label === "Office off-1 fee");
+    expect(row).toBeDefined();
+    expect(row?.summary).toContain("statutory exemption");
+  });
+
+  it("shows office count change when a new override is added", () => {
+    const withTwo: ServiceDefinitionDto = {
+      ...base,
+      officeOverrides: [
+        { officeId: "off-1", feeFromMinor: 50000 },
+        { officeId: "off-2", feeFromMinor: 30000 },
+      ],
+    };
+    const rows = buildVersionDiffRows(withTwo, {
+      officeOverrides: [{ officeId: "off-1", feeFromMinor: 50000 }],
+    });
+    const row = rows.find((r) => r.label === "Office variants");
+    expect(row).toBeDefined();
+    expect(row?.summary).toMatch(/Added 1/);
+  });
+});

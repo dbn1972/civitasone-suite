@@ -6,11 +6,13 @@
  * penalty/interest, and a ConfirmDialog echoes names + FY + formatted amount
  * before posting (GAP-REVENUE-WAIVERS-01/02). Command-only (CQRS 202); the
  * checker decides via /revenue/waivers/[id]/decide (GAP-REVENUE-WAIVERS-03).
+ * GAP-REVENUE-WAIVERS-03: pending waivers list so checker can discover items.
  */
-import { Button, PageHeader, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
+import { Button, PageHeader, Card, EmptyState, RefreshErrorState, DataTable } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
+import { formatMoney, humanizeStatus } from "@/lib/formatters";
 import { WaiverForm } from "./WaiverForm";
 
 export type AssesseeOption = {
@@ -82,6 +84,49 @@ function mapDemands(payload: unknown): DemandOption[] | null {
   return mapped;
 }
 
+export type PendingWaiverRow = {
+  id: string;
+  decidePath: string;
+  amountLabel: string;
+  waiverTypeLabel: string;
+  reason: string;
+  statusLabel: string;
+};
+
+// GAP-REVENUE-WAIVERS-03: pending waivers the checker can discover and open.
+async function getPendingWaivers(): Promise<LoaderResult<PendingWaiverRow[]>> {
+  return fetchJson<unknown, PendingWaiverRow[]>(
+    "/api/v1/revenue/waivers?status=pending&limit=100",
+    [],
+    {
+      telemetryKey: "revenue.waivers.pending",
+      mapResponse: (payload) => {
+        const rows = arrayFromPayload(payload);
+        if (!rows) return null;
+        const mapped: PendingWaiverRow[] = [];
+        for (const raw of rows) {
+          if (!isRecord(raw) || typeof raw.id !== "string") continue;
+          mapped.push({
+            id: raw.id,
+            decidePath: `/revenue/waivers/${raw.id}/decide`,
+            amountLabel: formatMoney(
+              typeof raw.amountMinor === "string" || typeof raw.amountMinor === "number"
+                ? raw.amountMinor
+                : null,
+            ),
+            waiverTypeLabel: humanizeStatus(
+              typeof raw.waiverType === "string" ? raw.waiverType : "unknown",
+            ),
+            reason: typeof raw.reason === "string" ? raw.reason : "—",
+            statusLabel: humanizeStatus(typeof raw.status === "string" ? raw.status : "pending"),
+          });
+        }
+        return mapped;
+      },
+    },
+  );
+}
+
 async function getAssessees(): Promise<LoaderResult<AssesseeOption[]>> {
   return fetchJson<unknown, AssesseeOption[]>("/api/v1/revenue/assessees?limit=200", [], {
     telemetryKey: "revenue.waivers.assessees",
@@ -105,6 +150,7 @@ export default async function WaiversPage({
   const assesseeId = searchParams?.assesseeId?.trim() || "";
 
   const { data: assessees, source: assesseesSource } = await getAssessees();
+  const { data: pending, source: pendingSource } = await getPendingWaivers();
 
   const demandsResult = assesseeId
     ? await getDemands(assesseeId)
@@ -178,6 +224,37 @@ export default async function WaiversPage({
       ) : (
         <WaiverForm assesseeId={assesseeId} assesseeName={selected?.ownerName ?? null} demands={demands} />
       )}
+
+      <Card title="Pending waivers" padding>
+        {pendingSource === "error" ? (
+          <RefreshErrorState
+            error={toHumanError("load", { area: "pending waivers" })}
+            source={{ area: "pending waivers" }}
+          />
+        ) : pending.length === 0 ? (
+          <EmptyState
+            icon="✅"
+            title="No pending waivers"
+            message="Waivers awaiting a checker's decision will appear here."
+          />
+        ) : (
+          <DataTable<PendingWaiverRow>
+            columns={[
+              { key: "amountLabel", label: "Amount" },
+              { key: "waiverTypeLabel", label: "Type" },
+              { key: "reason", label: "Reason" },
+              { key: "statusLabel", label: "Status", cellType: "status" },
+            ]}
+            rows={pending}
+            rowLinkKey="decidePath"
+            rowLinkPrefix=""
+            sortable
+            filterable
+            filterPlaceholder="Filter by reason or amount…"
+            pageSize={15}
+          />
+        )}
+      </Card>
 
       <Card title="About Waivers" padding>
         <p style={{ fontSize: 13, color: "var(--ink2)", margin: 0, lineHeight: 1.6 }}>

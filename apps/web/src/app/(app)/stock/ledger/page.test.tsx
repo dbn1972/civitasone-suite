@@ -17,3 +17,16 @@ describe("GAP-STOCK-LEDGER-01: failed ledger load", () => {
     expect(html).toContain("—");
   });
 });
+
+describe("GAP-STOCK-LEDGER-05: ledger KPI and column labels are unambiguous", () => {
+  it("renders Net Receipts − Issues label (not Net Balance) in the healthy path", async () => {
+    const { getStockLedger } = await import("../../../_data/loaders");
+    (getStockLedger as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      data: [{ id: "e1", itemCode: "X", itemName: "Y", date: "2026-01-01", type: "receipt", quantity: 1, direction: "in", signedQuantity: 1, unitCost: 100, totalValue: 100, balance: 1 }],
+      source: "api",
+    });
+    const html = renderToStaticMarkup(await StockLedgerPage());
+    expect(html).toContain("Net Receipts");
+    expect(html).not.toContain(">Net Balance<");
+  });
+});

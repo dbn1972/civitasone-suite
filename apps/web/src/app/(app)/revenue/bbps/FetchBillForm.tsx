@@ -4,11 +4,28 @@ import { useId, useRef, useState } from "react";
 import { Button, Card } from "@/app/_components/ds";
 import { StatusPill } from "@/app/_components/ds/StatusPill";
 import { browserJson } from "@/lib/api/browserClient";
+import { humanizeStatus } from "@/lib/formatters";
 import { useBbpsRequestStatus } from "./useBbpsRequestStatus";
 
 type AcceptedResponse = { data?: { messageId?: string } };
 
-export function FetchBillForm() {
+export type AssesseeOption = {
+  id: string;
+  ownerName: string;
+  identifierNo: string;
+  assesseeType: string;
+};
+
+interface FetchBillFormProps {
+  /**
+   * GAP-REVENUE-BBPS-03: assessees loaded by the server component so the
+   * clerk picks from a list rather than typing a raw identifier. When empty
+   * (e.g. in tests) the form falls back to a free-text input.
+   */
+  assessees?: ReadonlyArray<AssesseeOption>;
+}
+
+export function FetchBillForm({ assessees = [] }: FetchBillFormProps) {
   const [assesseeIdentifier, setAssesseeIdentifier] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -72,6 +89,24 @@ export function FetchBillForm() {
                 *
               </span>
             </label>
+            {assessees.length > 0 ? (
+              <select
+                id={inputId}
+                value={assesseeIdentifier}
+                onChange={(e) => setAssesseeIdentifier(e.target.value)}
+                aria-required="true"
+                aria-invalid={!!fieldErrors.assesseeIdentifier || undefined}
+                aria-describedby={fieldErrors.assesseeIdentifier ? inputErrorId : undefined}
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, minWidth: 280 }}
+              >
+                <option value="">Select an assessee…</option>
+                {assessees.map((a) => (
+                  <option key={a.id} value={a.identifierNo}>
+                    {a.ownerName} — {a.identifierNo} ({humanizeStatus(a.assesseeType)})
+                  </option>
+                ))}
+              </select>
+            ) : (
             <input
               id={inputId}
               ref={inputRef}
@@ -83,6 +118,7 @@ export function FetchBillForm() {
               aria-describedby={fieldErrors.assesseeIdentifier ? inputErrorId : undefined}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
+            )}
             {fieldErrors.assesseeIdentifier && (
               <p id={inputErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
                 {fieldErrors.assesseeIdentifier}

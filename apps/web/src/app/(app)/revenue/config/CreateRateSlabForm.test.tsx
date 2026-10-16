@@ -62,6 +62,38 @@ describe("CreateRateSlabForm", () => {
     expect(screen.queryByText(/API_ERROR: 400/)).not.toBeInTheDocument();
   });
 
+  it("rejects a band that overlaps an existing same-effective-date band (GAP-REVENUE-CONFIG-04 overlap check)", () => {
+    const existingSlabs = [
+      {
+        id: "s-existing",
+        rateHeadId: "rh1",
+        slabType: "band" as const,
+        bandFrom: "5000", // ₹50
+        bandTo: "20000", // ₹200
+        rateValue: "1000",
+        effectiveFrom: "2026-04-01",
+        effectiveTo: null,
+        isActive: true,
+      },
+    ];
+    render(
+      <CreateRateSlabForm
+        rateHeadId="rh1"
+        rateHeadLabel="PT — Property Tax"
+        existingSlabs={existingSlabs}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText(/^Slab Type/), { target: { value: "band" } });
+    fireEvent.change(screen.getByLabelText(/^Band From/), { target: { value: "100" } }); // ₹100 — inside existing ₹50-₹200
+    fireEvent.change(screen.getByLabelText(/^Band To/), { target: { value: "150" } }); // ₹150 — still inside
+    fireEvent.change(screen.getByLabelText(/^Rate \(₹\)/), { target: { value: "50" } });
+    fireEvent.change(screen.getByLabelText(/^Effective From/), { target: { value: "2026-04-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Rate Slab" }));
+
+    expect(screen.getByText(/overlaps an existing band/i)).toBeInTheDocument();
+    expect(screen.queryByText("Create this rate slab?")).not.toBeInTheDocument();
+  });
+
   it("rejects a band whose Band To is not greater than Band From (GAP-REVENUE-CONFIG-04)", () => {
     render(<CreateRateSlabForm rateHeadId="rh1" rateHeadLabel="PT — Property Tax" />);
     fireEvent.change(screen.getByLabelText(/^Slab Type/), { target: { value: "band" } });

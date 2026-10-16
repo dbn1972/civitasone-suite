@@ -94,4 +94,38 @@ describe("PayBillForm", () => {
     });
     expect(screen.queryByText(/BBPS_OVERPAYMENT: exceeds outstanding/)).not.toBeInTheDocument();
   });
+
+  describe("with assessees list (GAP-REVENUE-BBPS-03)", () => {
+    const ASSESSEES = [
+      { id: "a1", ownerName: "Priya Singh", identifierNo: "PROP-101", assesseeType: "residential" },
+      { id: "a2", ownerName: "Ravi Kumar", identifierNo: "PROP-202", assesseeType: "commercial" },
+    ];
+
+    it("renders a select instead of a free-text input when assessees are provided", () => {
+      render(<PayBillForm assessees={ASSESSEES} />);
+      const select = screen.getByLabelText(/Assessee Identifier/) as HTMLSelectElement;
+      expect(select.tagName).toBe("SELECT");
+      const labels = Array.from(select.options).map((o) => o.textContent ?? "");
+      expect(labels.some((l) => l.includes("Priya Singh"))).toBe(true);
+      expect(labels.some((l) => l.includes("PROP-101"))).toBe(true);
+    });
+
+    it("shows ownerName in the confirm dialog description (GAP-REVENUE-BBPS-03)", async () => {
+      vi.spyOn(globalThis, "fetch").mockResolvedValue(
+        new Response(JSON.stringify({ data: { messageId: "msg-99" } }), { status: 202 }),
+      );
+      render(<PayBillForm assessees={ASSESSEES} />);
+      fireEvent.change(screen.getByLabelText(/Assessee Identifier/), { target: { value: "PROP-101" } });
+      fireEvent.change(screen.getByLabelText(/^Amount/), { target: { value: "200" } });
+      fireEvent.change(screen.getByLabelText(/BBPS Transaction ID/), { target: { value: "TXN-9999" } });
+      fireEvent.click(screen.getByRole("button", { name: "Record BBPS payment" }));
+
+      await waitFor(() => expect(screen.getByText("Record this BBPS payment?")).toBeInTheDocument());
+      // Dialog must show the owner name, not just the raw identifier.
+      // There may be multiple elements containing "Priya Singh" (the select option + the dialog),
+      // so assert the dialog's description paragraph contains the name.
+      const dialogText = document.querySelector("[role=dialog]")?.textContent ?? document.body.textContent ?? "";
+      expect(dialogText).toContain("Priya Singh");
+    });
+  });
 });

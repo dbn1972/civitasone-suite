@@ -43,10 +43,15 @@ function validateForm(form: typeof INITIAL): Record<string, string> {
   if (!form.itemId) errors.itemId = "Pick an item.";
   const qty = Number(form.qty);
   if (!form.qty || !Number.isInteger(qty) || qty <= 0) errors.qty = "Enter a whole quantity greater than zero.";
-  if (form.rate !== "") {
+  // GAP-STOCK-LEDGER-NEW-03: receipts must carry a non-zero rate so WAVG
+  // valuation is not distorted by a zero-rate inbound movement. Rate is
+  // optional for issue/adjustment (stock leaves at its current valuation).
+  if (form.entryType === "receipt" && (form.rate === "" || form.rate === "0")) {
+    errors.rate = "Rate is required for receipts and must be greater than zero.";
+  } else if (form.rate !== "") {
     // Strict paise-exact parse: "12.345", "1e3" or "1,000" must be rejected here, not
     // silently posted as a zero rate (rupeesInputToMinorNumber is for previews).
-    if (rupeesToMinorString(form.rate, { allowZero: true }) === null) errors.rate = "Rate must be zero or a positive amount with at most 2 decimals.";
+    if (rupeesToMinorString(form.rate, { allowZero: false }) === null) errors.rate = "Rate must be a positive amount with at most 2 decimals.";
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(form.postingDate)) errors.postingDate = "Pick a posting date.";
   if (form.postingDate > todayIST()) errors.postingDate = "Posting date cannot be in the future.";
@@ -233,7 +238,7 @@ export default function NewStockEntryPage() {
                 onChange={(e) => setForm({ ...form, rate: e.target.value })}
                 style={inputStyle} {...ariaFor("rate", "entry-rate-err")}
               />
-              <span style={{ fontSize: 12, color: "var(--mut)" }}>Optional. Used for stock valuation.</span>
+              <span style={{ fontSize: 12, color: "var(--mut)" }}>{form.entryType === "receipt" ? "Required for receipts — used for weighted-average valuation." : "Optional. Used for stock valuation."}</span>
               {fieldErr("rate", "entry-rate-err")}
             </div>
 

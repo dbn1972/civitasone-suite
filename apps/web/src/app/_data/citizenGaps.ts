@@ -18,6 +18,9 @@ export interface EligibilityRuleSet {
   id: string;
   name: string;
   serviceId: string;
+  /** Slug used in /citizen/services/[serviceKey] routes. Only present if the
+   *  API returns it; absent entries get no link (GAP-CITIZEN-ELIGIBILITY-05). */
+  serviceKey?: string | null;
   version: number;
   status: string;
   ruleCount: number;
@@ -31,6 +34,7 @@ export async function getEligibilityRuleSets(): Promise<LoaderResult<Eligibility
         id: str(r.id),
         name: str(r.name),
         serviceId: str(r.serviceId),
+        serviceKey: typeof r.serviceKey === "string" && r.serviceKey ? r.serviceKey : null,
         version: typeof r.version === "number" ? r.version : 1,
         status: str(r.status) || "draft",
         ruleCount: Array.isArray(r.rules) ? r.rules.length : 0,
