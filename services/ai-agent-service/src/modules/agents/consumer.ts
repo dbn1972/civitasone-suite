@@ -113,7 +113,9 @@ export function registerAgentConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.pauseAgent, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; version: number };
+    // GAP-AI-GOVERNANCE-02: reason from the operator is now in the payload
+    // and written to the audit so the "recorded in the audit trail" claim is true.
+    const p = msg.payload as { id: string; tenantId: string; version: number; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.update(tx, p.id, msg.tenantId, { status: "paused", updatedBy: msg.actorId }, p.version);
@@ -132,7 +134,7 @@ export function registerAgentConsumers(rawQueue: Queue): void {
         input: null,
         output: null,
         blocked: false,
-        reason: null,
+        reason: p.reason ?? null,
       });
       await enqueue(tx, {
         topic: AUDIT_TOPIC,
@@ -146,7 +148,8 @@ export function registerAgentConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.resumeAgent, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; version: number };
+    // GAP-AI-GOVERNANCE-02: reason carried through to the audit.
+    const p = msg.payload as { id: string; tenantId: string; version: number; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const ok = await repo.update(tx, p.id, msg.tenantId, { status: "active", updatedBy: msg.actorId }, p.version);
@@ -157,7 +160,7 @@ export function registerAgentConsumers(rawQueue: Queue): void {
         input: null,
         output: null,
         blocked: false,
-        reason: null,
+        reason: p.reason ?? null,
       });
       await enqueue(tx, {
         topic: AUDIT_TOPIC,
