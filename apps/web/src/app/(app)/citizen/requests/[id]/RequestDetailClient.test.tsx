@@ -197,4 +197,30 @@ describe("RequestDetailClient -- GAP-CITIZEN-REQUESTS-DETAIL-01 (officer role ga
     expect(screen.queryByRole("button", { name: enMessages.citizenRequests.escalate })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: enMessages.citizenRequests.reopen })).not.toBeInTheDocument();
   });
+  // Given: the backend grievance payload carries a requestNo field
+  // When: the detail client renders with initialGrievance containing requestNo
+  // Then: the header subtitle and the Request No field display the server value,
+  //       not the client-synthesised "GR-<id8>" (GAP-CITIZEN-REQUESTS-06 / -DETAIL-03)
+  it("GAP-CITIZEN-REQUESTS-06/DETAIL-03: shows the server requestNo, not a synthesised GR-id8", async () => {
+    const withRequestNo = { ...mockGrievance, requestNo: "GR-2026-00999" };
+    renderClient({ initialGrievance: withRequestNo, initialSource: "api" });
+    await screen.findByText("Garbage not collected");
+    // The server number appears in the detail field
+    expect(screen.getAllByText("GR-2026-00999").length).toBeGreaterThan(0);
+    // The synthesised pattern "GR-" + first-8-of-UUID must NOT appear
+    expect(screen.queryByText(/GR-GR1/i)).not.toBeInTheDocument();
+  });
+
+  // Given: the backend does not return requestNo (field absent/null)
+  // When: the detail client renders
+  // Then: the fallback em-dash "—" is shown, not a sliced UUID
+  it("GAP-CITIZEN-REQUESTS-06/DETAIL-03: shows em-dash when requestNo is absent", async () => {
+    const withoutRequestNo = { ...mockGrievance, requestNo: undefined };
+    renderClient({ initialGrievance: withoutRequestNo as typeof mockGrievance, initialSource: "api" });
+    await screen.findByText("Garbage not collected");
+    // The detail field shows "—"
+    const noFields = screen.queryAllByText(/GR-[A-Z0-9]{8}/i);
+    expect(noFields).toHaveLength(0);
+  });
+
 });

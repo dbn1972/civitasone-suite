@@ -34,6 +34,10 @@ export interface GrievanceAction {
 
 export interface Grievance {
   id: string;
+  /** Server-issued reference number (e.g. GR-2026-00123). Present only if the
+   *  backend returns it on GET /v1/citizen/grievances/:id. Falls back to "—"
+   *  in the UI when absent (GAP-CITIZEN-REQUESTS-06 / DETAIL-03). */
+  requestNo?: string | null;
   category: string;
   subject: string;
   description: string;
@@ -58,6 +62,7 @@ function toGrievanceAction(r: Record<string, unknown>): GrievanceAction {
 function toGrievance(r: Record<string, unknown>): Grievance {
   return {
     id: str(r.id),
+    requestNo: strOrNull(r.requestNo),
     category: str(r.category),
     subject: str(r.subject),
     description: str(r.description),
