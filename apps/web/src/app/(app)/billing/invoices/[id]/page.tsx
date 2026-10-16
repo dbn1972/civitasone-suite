@@ -3,6 +3,9 @@ import { AutoBreadcrumb } from "../../../../_components/AutoBreadcrumb";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoneyIn, formatIndianDateTime, humanizeStatus } from "@/lib/formatters";
 import { InvoiceActions } from "./InvoiceActions";
+// GAP-BILLING-INVOICES-DETAIL-01: gate Generate/Cancel IRN on billing roles.
+import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
+import { BILLING_INVOICE_READER_ROLES } from "@/lib/auth/adminRoles";
 
 export interface InvoiceItemRow extends Record<string, unknown> {
   id: string;
@@ -98,7 +101,8 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
         <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
           <AutoBreadcrumb />
         </nav>
-        <PageHeader title="Invoice" back="/billing/invoices" />
+        {/* GAP-BILLING-INVOICES-DETAIL-08: AutoBreadcrumb is the single back affordance. */}
+        <PageHeader title="Invoice" />
         <LoadErrorState
           result={{ status: invoiceStatus, errorMessage: invoiceErrorMessage }}
           area="invoice"
@@ -114,7 +118,8 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
         <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
           <AutoBreadcrumb />
         </nav>
-        <PageHeader title="Invoice not found" back="/billing/invoices" />
+        {/* GAP-BILLING-INVOICES-DETAIL-08: AutoBreadcrumb is the single back affordance. */}
+        <PageHeader title="Invoice not found" />
         <EmptyState icon="🧾" title="Invoice not found" message="This invoice may have been removed or the ID is invalid." />
       </div>
     );
@@ -126,6 +131,11 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
   // "not generated yet" case. Pass this distinction to InvoiceActions.
   const einvoiceUnknown = einvoiceSource === "error" && einvoiceStatus !== 404;
 
+  // GAP-BILLING-INVOICES-DETAIL-01: only billing roles may trigger IRN actions;
+  // the backend enforces requireRole but we must not show the controls to users
+  // who hold no billing role (they would only get a 403 after confirming).
+  const canIrn = hasAnyRole(getSessionRoles(), [...BILLING_INVOICE_READER_ROLES]);
+
   const cur = invoice.currency;
 
   return (
@@ -134,10 +144,11 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
         <AutoBreadcrumb />
       </nav>
 
+      {/* GAP-BILLING-INVOICES-DETAIL-08: back prop removed; AutoBreadcrumb (above)
+          is the single back affordance so we don't show two parallel ← links. */}
       <PageHeader
         title={`Invoice ${invoice.id.replace(/-/g, "").slice(0, 8)}`}
         subtitle={`Period ${invoice.periodMonth} · ${cur}`}
-        back="/billing/invoices"
       />
 
       <StatGrid>
@@ -207,7 +218,7 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
       )}
 
       <Card title="GST e-invoice (IRN)" padding>
-        <InvoiceActions invoiceId={invoice.id} einvoice={einvoice} einvoiceUnknown={einvoiceUnknown} />
+        <InvoiceActions invoiceId={invoice.id} einvoice={einvoice} einvoiceUnknown={einvoiceUnknown} canIrn={canIrn} />
       </Card>
     </div>
   );

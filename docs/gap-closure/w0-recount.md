@@ -1,6 +1,6 @@
 # W0-08: recount after Wave 0 reconciliation
 
-Total: **305 open**, 4277 closed, 69 blocked or obsolete.
+Total: **281 open**, 4292 closed, 78 blocked or obsolete.
 
 Priority queue: 10 open, 208 closed (0 entries ticked by W0-07 to match closed module items).
 
@@ -10,8 +10,6 @@ Priority queue: 10 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | revenue | 15 | 64 | 0 |
 | tenant-admin | 15 | 180 | 0 |
 | legal | 14 | 38 | 0 |
-| audit | 13 | 62 | 0 |
-| billing | 12 | 42 | 4 |
 | court | 11 | 25 | 0 |
 | cdp | 10 | 25 | 0 |
 | themes | 10 | 21 | 0 |
@@ -22,6 +20,7 @@ Priority queue: 10 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | knowledge | 8 | 61 | 0 |
 | meeting | 8 | 25 | 0 |
 | workflow | 8 | 34 | 2 |
+| audit | 7 | 68 | 0 |
 | catalogue | 7 | 24 | 0 |
 | install | 7 | 30 | 0 |
 | stock | 7 | 33 | 6 |
@@ -29,7 +28,6 @@ Priority queue: 10 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | tenant | 7 | 66 | 0 |
 | visitor | 7 | 17 | 0 |
 | auth | 6 | 12 | 0 |
-| notifications | 6 | 44 | 0 |
 | platform-admin | 6 | 39 | 0 |
 | ai | 5 | 40 | 0 |
 | journeys | 5 | 11 | 0 |
@@ -60,6 +58,7 @@ Priority queue: 10 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | admin | 0 | 164 | 0 |
 | approvals | 0 | 8 | 0 |
 | assets | 0 | 151 | 0 |
+| billing | 0 | 45 | 13 |
 | citizen | 0 | 125 | 9 |
 | crm | 0 | 353 | 6 |
 | docs | 0 | 14 | 0 |
@@ -70,6 +69,7 @@ Priority queue: 10 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | hr | 0 | 527 | 0 |
 | inventory | 0 | 62 | 0 |
 | locations | 0 | 28 | 8 |
+| notifications | 0 | 50 | 0 |
 | payroll | 0 | 259 | 0 |
 | recruitment | 0 | 85 | 0 |
 | sandbox | 0 | 5 | 0 |
