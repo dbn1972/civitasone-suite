@@ -2102,10 +2102,6 @@
       "screen": "/procurement/reverse-auction/[id]"
     },
     {
-      "module": "procurement",
-      "screen": "/procurement/vendors"
-    },
-    {
       "module": "recommendations",
       "screen": "/recommendations/feedback"
     },
