@@ -65,3 +65,21 @@ describe("LegalCasesTable rendering", () => {
     expect(screen.queryByRole("tab", { name: "Adverse risk" })).not.toBeInTheDocument();
   });
 });
+
+describe("LegalCasesTable subject display (GAP-LEGAL-CASES-NEW-01)", () => {
+  beforeEach(() => resourceMock.mockReset());
+
+  it("Given a case with a subject, When rendered, Then subject appears under the title", () => {
+    mockRows([row({ subject: "Dispute over land acquisition compensation" })]);
+    render(<LegalCasesTable items={[]} source="api" />);
+    expect(screen.getByText("Dispute over land acquisition compensation")).toBeInTheDocument();
+  });
+
+  it("Given a case without a subject, When rendered, Then no empty secondary line", () => {
+    mockRows([row()]);
+    const { container } = render(<LegalCasesTable items={[]} source="api" />);
+    // The span only renders when subject is truthy.
+    const spans = container.querySelectorAll("span[style*=\"font-size: 0.75rem\"]");
+    expect(spans.length).toBe(0);
+  });
+});

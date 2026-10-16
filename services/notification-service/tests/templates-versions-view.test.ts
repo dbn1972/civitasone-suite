@@ -57,6 +57,16 @@ describe("template version read model", () => {
     expect(current?.subject).toBe("v2 subject");
   });
 
+  it("returns versions newest-first so versions[0] is the latest (DETAIL-02)", async () => {
+    const versions = await runWithTenant(TENANT, () => queries.listTemplateVersions(TENANT, V1));
+    expect(versions.length).toBeGreaterThanOrEqual(2);
+    // After the GAP-NOTIFICATIONS-TEMPLATES-DETAIL-02 fix: versions[0] is the newest.
+    expect(versions[0]?.id).toBe(V2);
+    expect(versions[0]?.version).toBe(2);
+    expect(versions[versions.length - 1]?.id).toBe(V1);
+    expect(versions[versions.length - 1]?.version).toBe(1);
+  });
+
   it("carries createdAt and createdBy per version (DETAIL-04)", async () => {
     const versions = await runWithTenant(TENANT, () => queries.listTemplateVersions(TENANT, V1));
     for (const v of versions) {

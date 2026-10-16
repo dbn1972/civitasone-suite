@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button, ConfirmDialog, DataTable, EmptyState } from "../../../_components/ds";
 import { formatIndianDateTime } from "@/lib/formatters";
@@ -16,6 +16,9 @@ import type { WebauthnCredential } from "../_data";
  *   /v1/identity/webauthn/credentials/:id (services/identity-service
  *   webauthn/routes.ts), behind a ConfirmDialog that warns a passkey removal
  *   can lock the user out, keep another factor.
+ * - Rename: wired to PATCH /v1/identity/webauthn/credentials/:id with a
+ *   deviceName body (1–200 chars). Inline edit: clicking "Rename" opens an
+ *   input pre-filled with the current name; Escape or Cancel reverts it.
  * - Register: the backend register ceremony currently returns 501
  *   NOT_IMPLEMENTED (full FIDO2 cryptographic verification is not yet built —
  *   see webauthn/routes.ts POST /register). Rather than offer a button that is
@@ -30,6 +33,17 @@ export function PasskeyManager({ credentials }: { credentials: WebauthnCredentia
   const [error, setError] = useState<string | undefined>(undefined);
   const [notice, setNotice] = useState("");
   const formError = useFormError("passkey");
+
+  // Rename state
+  const [renaming, setRenaming] = useState<WebauthnCredential | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [renameBusy, setRenameBusy] = useState(false);
+  const [renameError, setRenameError] = useState<string | undefined>(undefined);
+  const renameInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (renaming !== null) renameInputRef.current?.focus();
+  }, [renaming]);
+  const renameFormError = useFormError("passkey-rename");
 
   async function remove() {
     if (!pending) return;
@@ -52,6 +66,40 @@ export function PasskeyManager({ credentials }: { credentials: WebauthnCredentia
       setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function rename() {
+    if (!renaming) return;
+    const trimmed = renameValue.trim();
+    if (!trimmed) {
+      setRenameError("Name must not be blank.");
+      return;
+    }
+    if (trimmed.length > 200) {
+      setRenameError("Name must be 200 characters or fewer.");
+      return;
+    }
+    setRenameBusy(true);
+    setRenameError(undefined);
+    renameFormError.clear();
+    try {
+      const res = await fetch(`/api/proxy/v1/identity/webauthn/credentials/${renaming.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ deviceName: trimmed }),
+      });
+      if (!res.ok) {
+        setRenameError((await renameFormError.fromResponse(res, "save")).message);
+        return;
+      }
+      setNotice(`Passkey renamed to "${trimmed}".`);
+      setRenaming(null);
+      router.refresh();
+    } catch (caught) {
+      setRenameError(renameFormError.fromException("save", caught).message);
+    } finally {
+      setRenameBusy(false);
     }
   }
 
@@ -83,7 +131,31 @@ export function PasskeyManager({ credentials }: { credentials: WebauthnCredentia
             {
               key: "deviceName",
               label: "Device",
-              render: (c) => c.deviceName ?? "Unnamed passkey",
+              render: (c) => {
+                if (renaming?.id === c.id) {
+                  return (
+                    <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                      <input
+                        aria-label="New passkey name"
+                        value={renameValue}
+                        maxLength={200}
+                        style={{ font: "inherit", padding: "2px 6px", borderRadius: 4, border: "1px solid var(--border)", width: 160 }}
+                        disabled={renameBusy}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { void rename(); }
+                          if (e.key === "Escape") { setRenaming(null); setRenameError(undefined); }
+                        }}
+                        ref={renameInputRef}
+                      />
+                      <Button size="sm" disabled={renameBusy} onClick={() => void rename()}>Save</Button>
+                      <Button size="sm" variant="ghost" disabled={renameBusy} onClick={() => { setRenaming(null); setRenameError(undefined); }}>Cancel</Button>
+                      {renameError ? <span role="alert" style={{ fontSize: 12, color: "var(--danger)" }}>{renameError}</span> : null}
+                    </span>
+                  );
+                }
+                return <>{c.deviceName ?? "Unnamed passkey"}</>;
+              },
             },
             { key: "createdAt", label: "Registered", render: (c) => formatIndianDateTime(c.createdAt) },
             {
@@ -96,17 +168,31 @@ export function PasskeyManager({ credentials }: { credentials: WebauthnCredentia
               label: "Actions",
               sortable: false,
               render: (c) => (
-                <Button
-                  variant="danger"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => {
-                    setError(undefined);
-                    setPending(c);
-                  }}
-                >
-                  Remove
-                </Button>
+                <span style={{ display: "inline-flex", gap: 6 }}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy || renameBusy}
+                    onClick={() => {
+                      setRenameError(undefined);
+                      setRenameValue(c.deviceName ?? "");
+                      setRenaming(c as WebauthnCredential);
+                    }}
+                  >
+                    Rename
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    disabled={busy || renameBusy}
+                    onClick={() => {
+                      setError(undefined);
+                      setPending(c as WebauthnCredential);
+                    }}
+                  >
+                    Remove
+                  </Button>
+                </span>
               ),
             },
           ]}

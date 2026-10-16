@@ -162,9 +162,15 @@ describe("formatIndianDate", () => {
     expect(formatIndianDate("")).toBe("—");
   });
 
-  it("returns original string for unparseable date", () => {
-    const bad = "not-a-date";
-    expect(formatIndianDate(bad)).toBe(bad);
+  it("returns em-dash for unparseable date (GAP-PROJECTS-DETAIL-MEMBERS-05)", () => {
+    // An invalid date string echoed verbatim reads like a real value to the user.
+    // The correct display is "—", same as null/undefined/"".
+    expect(formatIndianDate("not-a-date")).toBe("—");
+    // Any string that does not produce a parseable instant returns em-dash:
+    expect(formatIndianDate("hello world")).toBe("—");
+    expect(formatIndianDate("99:99:99")).toBe("—");
+    // Note: JS Date.UTC overflows (e.g. month 13 -> Jan+1), so those are
+    // VALID dates -- this function does not range-check the calendar fields.
   });
 
   it("formats Republic Day correctly", () => {

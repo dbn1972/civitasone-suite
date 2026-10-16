@@ -29,7 +29,8 @@
     "fastify": "^4.27.0",
     "pino": "^8.21.0",
     "postgres": "^3.4.0",
-    "zod": "^3.23.0"
+    "zod": "^3.23.0",
+    "@civitasone/rate-limit": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.4.0",

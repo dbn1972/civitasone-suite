@@ -311,4 +311,26 @@ describe("DedupCandidatesPage", () => {
     expect(screen.getAllByText("Priya Sharma").length).toBeGreaterThanOrEqual(2);
     expect(screen.getAllByText("Infosys").length).toBeGreaterThanOrEqual(2);
   });
+
+  it("GAP-CRM-DEDUP-CANDIDATES-04: renders at most PAGE_SIZE=15 pairs per page and shows pagination controls", async () => {
+    // Create 20 pairs with varied confidence levels
+    const pairs = Array.from({ length: 20 }, (_, i) => ({
+      pairId: `p${i}`,
+      left: { name: `Left ${i}`, email: `left${i}@example.com`, phone: "9876543210", company: "Org" },
+      right: { name: `Right ${i}`, email: `right${i}@example.com`, phone: "9876543210", company: "Org" },
+      confidence: 0.9 - i * 0.01,
+      matchReasons: [],
+    }));
+    vi.mocked(api.getDedupCandidates).mockResolvedValueOnce({ data: pairs, source: "api" } as never);
+    render(<DedupCandidatesPage />);
+    await waitFor(() => expect(screen.queryAllByText("Left 0").length).toBeGreaterThan(0));
+    // Page 1: first 15 pairs visible
+    expect(screen.queryAllByText("Left 0").length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("Left 14").length).toBeGreaterThan(0);
+    // Pair 15 is NOT on page 1
+    expect(screen.queryAllByText("Left 15").length).toBe(0);
+    // Pagination controls show "Page 1 of 2"
+    expect(screen.getByText(/Page 1 of 2/i)).toBeInTheDocument();
+  });
+
 });

@@ -6,6 +6,7 @@ import { db, sqlClient } from "./shared/db.js";
 import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { registerSchemaErrorHandler } from "@civitasone/schemas/plugin";
+import { registerRateLimit } from "@civitasone/rate-limit";
 import { randomUUID } from "node:crypto";
 import { HttpError } from "./shared/context.js";
 import { userRoutes } from "./modules/users/routes.js";
@@ -48,6 +49,10 @@ export async function buildApp(): Promise<FastifyInstance> {
     const tid = (req as { ctx?: { tenantId?: string } }).ctx?.tenantId;
     if (tid) tenantStorage.enterWith({ tenantId: tid });
   });
+
+  // CodeQL js/missing-rate-limiting: register rate-limit plugin so per-route
+  // config { config: { rateLimit: { max, timeWindow } } } is honoured.
+  await registerRateLimit(app);
 
   registerOpsRoutes(app, { service: "identity-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 

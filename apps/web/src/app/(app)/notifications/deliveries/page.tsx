@@ -8,6 +8,7 @@ import { toHumanError } from "@/lib/messages";
 import { formatIndianDate, maskRecipient } from "@/lib/formatters";
 import { StatusBadge } from "../_components/StatusBadge";
 import { isInDeliveryGroup } from "../_components/deliveryStatus";
+import { channelLabel } from "../_components/channelLabel";
 
 type DeliveryRow = {
   id: string;
@@ -65,7 +66,7 @@ export default function NotificationDeliveriesPage() {
     // default in the log. No reveal control: notification-service exposes no
     // audited PII-reveal endpoint (see lib/formatters.maskRecipient / ds Masked).
     recipient: maskRecipient(d.recipient),
-    channel: d.channel.replace(/_/g, " "),
+    channel: channelLabel(d.channel),
     attemptCount: d.attemptCount,
     deliveredAt: d.deliveredAt ? formatIndianDate(d.deliveredAt) : "—",
     status: d.status,

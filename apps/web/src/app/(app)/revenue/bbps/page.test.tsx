@@ -23,11 +23,16 @@ describe("BbpsPage", () => {
   });
 
   it("shows the Recent BBPS requests card with rows (GAP-REVENUE-BBPS-02)", async () => {
-    fetchJsonMock.mockResolvedValue({
-      data: [
-        { id: "r1", bbpsTxnId: "TXN-1", status: "failed", requestType: "pay", amountMinor: "100000", failureReason: "exceeds outstanding", createdAt: "2026-07-01T10:00:00.000Z" },
-      ],
-      source: "api",
+    fetchJsonMock.mockImplementation((url: string) => {
+      if (typeof url === "string" && url.includes("/assessees")) {
+        return Promise.resolve({ data: [], source: "api" });
+      }
+      return Promise.resolve({
+        data: [
+          { id: "r1", bbpsTxnId: "TXN-1", status: "failed", requestType: "pay", amountMinor: "100000", failureReason: "exceeds outstanding", createdAt: "2026-07-01T10:00:00.000Z" },
+        ],
+        source: "api",
+      });
     });
     const ui = await BbpsPage();
     render(ui);

@@ -1,10 +1,11 @@
+import { PageHeader, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import Link from "next/link";
-import { PageHeader, DataTable, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 import { getAssessments } from "../_data";
+import { AssessmentsTable } from "./_components/AssessmentsTable";
 
-type Row = { id: string; title: string; passing: string; duration: string; attempts: number; status: string };
+type Row = { id: string; title: string; passing: string; duration: string; attempts: number; status: string; courseRef: string };
 
 // Mirrors services/hrms-service/src/modules/assessment/routes.ts HR_ROLES.
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -20,7 +21,7 @@ export default async function Page() {
   const visible = isHr ? assessments : assessments.filter((a) => a.status === "published");
 
   const rows: Row[] = visible.map((a) => ({
-    id: a.id, title: a.title,
+    id: a.id, title: a.title, courseRef: a.courseRef ?? "",
     // GAP-LEARNING-ASSESSMENTS-04: passingScore is a raw marks total (0..100000
     // in the backend validator), NOT a percentage — labelling it "%" would be
     // wrong. Show it as a marks figure. (Decision recorded in the GAP report.)
@@ -43,23 +44,7 @@ export default async function Page() {
         ) : rows.length === 0 ? (
           <EmptyState icon="📝" title="No assessments available" message="Published assessments will appear here to attempt." />
         ) : (
-          <DataTable<Row>
-            columns={[
-              { key: "title", label: "Assessment" },
-              { key: "passing", label: "Passing score", align: "right" },
-              { key: "duration", label: "Duration", align: "right" },
-              { key: "attempts", label: "Max attempts", align: "right" },
-              { key: "status", label: "Status", cellType: "status" },
-            ]}
-            rows={rows}
-            rowLinkKey="id"
-            rowLinkPrefix="/learning/assessments/"
-            identifyingColumnKey="title"
-            sortable
-            filterable
-            filterPlaceholder="Filter assessments…"
-            pageSize={15}
-          />
+          <AssessmentsTable rows={rows} />
         )}
       </div>
     </>

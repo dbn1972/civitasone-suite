@@ -13592,6 +13592,17 @@
     "distributionBarAria": "{label}: {pct} of records"
   },
   "crmDealDetail": {
+    "logActivity": "Log Activity",
+    "markWon": "Mark Won",
+    "markWonTitle": "Mark \"{name}\" as won?",
+    "markWonDesc": "This closes the engagement as won, sets probability to 100% and is recorded in the audit trail.",
+    "markLost": "Mark Lost",
+    "markLostTitle": "Mark \"{name}\" as lost?",
+    "markLostDesc": "This closes the engagement as lost, sets probability to 0% and is recorded in the audit trail.",
+    "reasonClosingNote": "Reason / closing note",
+    "reasonForLoss": "Reason for loss",
+    "markedWon": "Engagement marked won.",
+    "markedLost": "Engagement marked lost.",
     "steps": {
       "qualification": "Qualification",
       "prospecting": "Prospecting",
@@ -13636,7 +13647,8 @@
     "weightHelp": "How much this field counts toward the match score. Higher-weight fields (e.g. email, GSTIN) push two records together more strongly than low-weight ones.",
     "threshold": "Threshold",
     "thresholdHelp": "The minimum similarity (0–100) this field must reach to count as a match. For a fuzzy match, 90 means \"almost identical\"; a lower threshold flags looser matches.",
-    "totalEnabledWeight": "Total enabled weight: <strong>{total}</strong>"
+    "totalEnabledWeight": "Total enabled weight: <strong>{total}</strong>",
+    "rulesRemoved": "{count, plural, one {1 rule removed — save to apply.} other {{count} rules removed — save to apply.}}"
   },
   "crmEditContactForm": {
     "leadStatus": "Lead status",
@@ -14567,7 +14579,11 @@
     "loadArea": "contact",
     "backLabel": "Contacts"
   },
+  "crmDealsPage": {
+    "subtitle": "Track high-value vendor engagements, procurement opportunities, and government stakeholder interactions"
+  },
   "crmContactsPage": {
+    "subtitle": "Vendor, beneficiary, NGO, and government official contacts — tenant-scoped contact master",
     "filteredToAccount": "Filtered to one account",
     "filteredToAccountNamed": "Filtered to one account: {name}",
     "clearAccountFilterAria": "Clear account filter",
@@ -14652,7 +14668,8 @@
     "dismissDescription": "This pair will not surface again as a duplicate. You can note why below.",
     "dismissConfirm": "Dismiss pair",
     "dismissReasonLabel": "Reason (optional)",
-    "dismissFailed": "Dismiss failed"
+    "dismissFailed": "Dismiss failed",
+    "page": "Page {page} of {total}"
   },
   "crmDocumentRegister": {
     "missingMandatory": "Missing mandatory",

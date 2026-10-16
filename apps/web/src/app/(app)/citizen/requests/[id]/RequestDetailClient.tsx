@@ -196,7 +196,7 @@ export function RequestDetailClient({
 
   const isResolved = grievance.status === "resolved" || grievance.status === "closed";
   // GAP-CITIZEN-REQUESTS-06 / DETAIL-03: use the server-issued number instead
-  // of synthesising "GR-" + id.slice(0,8), which diverged from the list page.
+  // of synthesising "GR-" + raw id prefix, which diverged from the list page.
   // Falls back to "—" when the backend does not yet return requestNo.
   const requestNo = grievance.requestNo ?? "—";
 

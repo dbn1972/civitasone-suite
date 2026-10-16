@@ -13086,6 +13086,17 @@
     "distributionBarAria": "{label}: रिकॉर्ड का {pct}"
   },
   "crmDealDetail": {
+    "logActivity": "गतिविधि दर्ज करें",
+    "markWon": "जीता हुआ चिह्नित करें",
+    "markWonTitle": "\"{name}\" को जीता हुआ चिह्नित करें?",
+    "markWonDesc": "यह सौदे को जीता हुआ बंद करता है, संभाव्यता 100% सेट करता है और ऑडिट ट्रेल में दर्ज होता है।",
+    "markLost": "हारा हुआ चिह्नित करें",
+    "markLostTitle": "\"{name}\" को हारा हुआ चिह्नित करें?",
+    "markLostDesc": "यह सौदे को हारा हुआ बंद करता है, संभाव्यता 0% सेट करता है और ऑडिट ट्रेल में दर्ज होता है।",
+    "reasonClosingNote": "कारण / समापन नोट",
+    "reasonForLoss": "हानि का कारण",
+    "markedWon": "सौदा जीता हुआ चिह्नित हुआ।",
+    "markedLost": "सौदा हारा हुआ चिह्नित हुआ।",
     "steps": {
       "qualification": "योग्यता निर्धारण",
       "prospecting": "संभावना की खोज",
@@ -13130,7 +13141,8 @@
     "weightHelp": "मिलान स्कोर में यह फ़ील्ड कितना गिना जाता है। अधिक-भार वाले फ़ील्ड (जैसे ईमेल, GSTIN) कम-भार वाले फ़ील्ड की तुलना में दो रिकॉर्ड को अधिक मज़बूती से एक साथ जोड़ते हैं।",
     "threshold": "सीमा",
     "thresholdHelp": "मिलान माने जाने के लिए इस फ़ील्ड को न्यूनतम कितनी समानता (0–100) तक पहुँचना होगा। फ़ज़ी मिलान के लिए, 90 का अर्थ \"लगभग समान\" है; कम सीमा ढीले मिलान को भी चिह्नित करती है।",
-    "totalEnabledWeight": "कुल सक्षम भार: <strong>{total}</strong>"
+    "totalEnabledWeight": "कुल सक्षम भार: <strong>{total}</strong>",
+    "rulesRemoved": "{count, plural, one {1 नियम हटाया गया — सहेजने पर लागू होगा।} other {{count} नियम हटाए गए — सहेजने पर लागू होंगे।}}"
   },
   "crmEditContactForm": {
     "leadStatus": "लीड स्थिति",
@@ -14061,7 +14073,11 @@
     "loadArea": "संपर्क",
     "backLabel": "संपर्क"
   },
+  "crmDealsPage": {
+    "subtitle": "उच्च-मूल्य विक्रेता संलग्नताएँ, खरीद अवसर और सरकारी हितधारक इंटरैक्शन ट्रैक करें"
+  },
   "crmContactsPage": {
+    "subtitle": "विक्रेता, लाभार्थी, NGO और सरकारी संपर्क — संपर्क पंजी",
     "filteredToAccount": "एक खाते तक फ़िल्टर किया गया",
     "filteredToAccountNamed": "एक खाते तक फ़िल्टर किया गया: {name}",
     "clearAccountFilterAria": "खाता फ़िल्टर हटाएँ",
@@ -14146,7 +14162,8 @@
     "dismissDescription": "यह जोड़ी दोबारा डुप्लिकेट के रूप में नहीं दिखाई देगी। आप नीचे कारण लिख सकते हैं।",
     "dismissConfirm": "जोड़ी खारिज करें",
     "dismissReasonLabel": "कारण (वैकल्पिक)",
-    "dismissFailed": "खारिज करना विफल रहा"
+    "dismissFailed": "खारिज करना विफल रहा",
+    "page": "पृष्ठ {page} / {total}"
   },
   "crmDocumentRegister": {
     "missingMandatory": "अनिवार्य दस्तावेज़ अनुपलब्ध",

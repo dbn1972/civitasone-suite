@@ -58,7 +58,7 @@ async function fetchRolePermissions(roleId: string): Promise<{ ok: boolean; keys
   }
 }
 
-async function saveRolePermissions(roleId: string, permissionKeys: string[], reason?: string): Promise<{ ok: boolean; message?: string }> {
+async function saveRolePermissions(roleId: string, permissionKeys: string[], reason?: string): Promise<{ ok: boolean; isDomainError?: boolean; message?: string }> {
   try {
     // GAP-PLATFORM-ADMIN-ROLES-03: include the change reason in the body for
     // the audit trail. The backend ignores unknown fields if it does not yet
@@ -70,7 +70,25 @@ async function saveRolePermissions(roleId: string, permissionKeys: string[], rea
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!res.ok) return { ok: false, message: rolePermissionsError("save") };
+    if (!res.ok) {
+      // GAP-PLATFORM-ADMIN-ROLES-01: if the backend enforces SoD and returns
+      // SOD_CONFLICT/SOD_VIOLATION, surface a domain-specific clerk-safe message
+      // rather than a generic "save failed" fallback. UI toggle disabling is
+      // convenience only; the server is the authority.
+      let code: string | undefined;
+      try { code = ((await res.clone().json()) as { code?: string }).code; } catch { /* ignore */ }
+      if (code === "SOD_CONFLICT" || code === "SOD_VIOLATION") {
+        return {
+          ok: false,
+          isDomainError: true,
+          message:
+            "These changes would give one role both submit and approve rights for a financial module. " +
+            "Under GFR 2017 maker-checker rules, submit and approve must be held by different roles. " +
+            "Remove one of them and try again.",
+        };
+      }
+      return { ok: false, message: rolePermissionsError("save") };
+    }
     return { ok: true };
   } catch {
     return { ok: false, message: rolePermissionsError("save") };
@@ -245,6 +263,10 @@ export function RolePermissionsMatrix({
     setBusy(true);
     setSaveError("");
     const failures: string[] = [];
+    // GAP-PLATFORM-ADMIN-ROLES-01: track domain-specific messages (e.g.
+    // SOD_CONFLICT) per failed role so they can be surfaced to the operator
+    // instead of the generic "save failed" copy.
+    const failureMessages: string[] = [];
     const saved: string[] = [];
     for (const roleId of dirtyRoleIds) {
       const draft = draftByRole[roleId] ?? new Set<string>();
@@ -252,6 +274,7 @@ export function RolePermissionsMatrix({
       const result = await saveRolePermissions(roleId, [...draft], reason);
       if (!result.ok) {
         failures.push(role?.name ?? roleId);
+        if (result.isDomainError && result.message) failureMessages.push(result.message);
         continue;
       }
       saved.push(role?.name ?? roleId);
@@ -264,8 +287,20 @@ export function RolePermissionsMatrix({
       // knows the real post-save state — some roles ARE already committed.
       // The dirty set shrinks to only the failed roles, so a retry resends
       // just those (baseline was updated per success above).
+      // GAP-PLATFORM-ADMIN-ROLES-01: if every failure carries the same
+      // domain-specific message (e.g. SOD_CONFLICT) show it in place of the
+      // generic retry hint — retrying a SoD violation won't help.
       const savedPart = saved.length > 0 ? `${saved.length} saved (${saved.join(", ")}); ` : "";
-      setSaveError(`${savedPart}${failures.length} failed (${failures.join(", ")}). Only the failed role${failures.length === 1 ? "" : "s"} remain unsaved — press Save again to retry.`);
+      const domainMessage =
+        failureMessages.length === failures.length &&
+        failureMessages.length > 0 &&
+        failureMessages.every((m) => m === failureMessages[0])
+          ? failureMessages[0]
+          : undefined;
+      const suffix = domainMessage
+        ? ` ${domainMessage}`
+        : ` Only the failed role${failures.length === 1 ? "" : "s"} remain unsaved — press Save again to retry.`;
+      setSaveError(`${savedPart}${failures.length} failed (${failures.join(", ")}).${suffix}`);
       return;
     }
     setNotice(`${changedCount} permission change${changedCount === 1 ? "" : "s"} saved across ${saved.length} role${saved.length === 1 ? "" : "s"}.`);

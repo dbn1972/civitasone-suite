@@ -19,6 +19,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
+import { relayOnce } from "@civitasone/outbox";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
@@ -264,5 +265,84 @@ describe("GET /v1/audit/plans/:id/risks", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(Array.isArray(res.json())).toBe(true);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// GAP-AUDIT-RISK-REGISTER-07 — POST /v1/audit/risks writes exactly one
+//   audit event per mutation
+//
+// Given: a riskCreate command driven through the full consumer pipeline
+//   (risk consumer + audit consumer);
+// When: the queue is drained;
+// Then: exactly one audit_events row is created with target = the new risk id
+//   and action = "create".
+// ──────────────────────────────────────────────────────────────────────────────
+describe("GAP-AUDIT-RISK-REGISTER-07 — POST /v1/audit/risks writes exactly one audit event", () => {
+  const R07_TENANT = randomUUID();
+  const R07_ACTOR  = randomUUID();
+
+  let MemQR: typeof import("@civitasone/queue")["MemoryQueue"];
+  let withTenantConsR: typeof import("@civitasone/db")["withTenantConsumer"];
+  let auditEvtsR: typeof import("../src/modules/events/schema.js")["auditEvents"];
+  let dbInstR: typeof import("../src/shared/db.js")["db"];
+  let regRisk: typeof import("../src/modules/risk/consumer.js")["registerRiskConsumers"];
+  let regAuditR: typeof import("../src/modules/events/consumer.js")["registerAuditConsumers"];
+  let runWTR: typeof import("@civitasone/db")["runWithTenant"];
+
+  function wireTenantQR(q: import("@civitasone/queue").Queue): import("@civitasone/queue").Queue {
+    const raw = q.subscribe.bind(q);
+    q.subscribe = ((topic: string, handler: import("@civitasone/queue").Handler) =>
+      raw(topic, withTenantConsR(handler) as import("@civitasone/queue").Handler)) as typeof q.subscribe;
+    return q;
+  }
+
+  beforeAll(async () => {
+    ({ MemoryQueue: MemQR } = await import("@civitasone/queue"));
+    ({ withTenantConsumer: withTenantConsR } = await import("@civitasone/db"));
+    ({ auditEvents: auditEvtsR } = await import("../src/modules/events/schema.js"));
+    ({ db: dbInstR } = await import("../src/shared/db.js"));
+    ({ registerRiskConsumers: regRisk } = await import("../src/modules/risk/consumer.js"));
+    ({ registerAuditConsumers: regAuditR } = await import("../src/modules/events/consumer.js"));
+    ({ runWithTenant: runWTR } = await import("@civitasone/db"));
+  });
+
+  it("exactly one audit event is written when a risk is created", async () => {
+    const riskId = randomUUID();
+    const q = wireTenantQR(new MemQR());
+    regRisk(q);
+    regAuditR(q);
+    await q.start();
+
+    await q.publish("audit.risk.create", {
+      messageId: riskId, type: "audit.risk.create",
+      tenantId: R07_TENANT, actorId: R07_ACTOR,
+      correlationId: randomUUID(), schemaVersion: "1.0",
+      payload: {
+        id: riskId, tenantId: R07_TENANT,
+        riskCode: `RC-AUD-${Date.now()}`, title: "Audit event risk test",
+        likelihood: "likely", impact: "major",
+      },
+    });
+    await new Promise<void>((r) => setTimeout(r, 700));
+    // Flush outbox so registerAuditConsumers picks up the enqueued audit events.
+    await relayOnce(dbInstR as never, q, 100, "audit-service");
+    await new Promise<void>((r) => setTimeout(r, 300));
+    await q.stop();
+
+    const { eq: eqFn } = await import("drizzle-orm");
+    const events = await runWTR(R07_TENANT, () =>
+      dbInstR.transaction((tx) =>
+        tx.select().from(auditEvtsR).where(eqFn(auditEvtsR.tenantId, R07_TENANT)).limit(20),
+      ),
+    );
+    const createEvents = events.filter(
+      (r) =>
+        r.target === riskId &&
+        typeof r.payload === "object" &&
+        r.payload !== null &&
+        (r.payload as Record<string, unknown>)["action"] === "create",
+    );
+    expect(createEvents).toHaveLength(1);
   });
 });

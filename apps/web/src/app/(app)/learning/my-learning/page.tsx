@@ -2,6 +2,7 @@ import { PageHeader, EmptyState, RefreshErrorState } from "@/app/_components/ds"
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 import { getMyLearning, getMyProfile, OVERDUE_STALE_DAYS } from "../_data";
+import { getEmployeeById } from "@/app/_data/loaders";
 import { EnrolmentsTable, type EnrolmentRow } from "./EnrolmentsTable";
 
 type Search = { [k: string]: string | string[] | undefined };
@@ -32,6 +33,9 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
   const me = await getMyProfile();
   const myId = me.data?.id ?? null;
   const overrideId = isPrivileged && queryEmployeeId ? queryEmployeeId : undefined;
+
+  // GAP-LEARNING-MY-LEARNING-02: when HR is viewing another employee, show their name in the subtitle.
+  const viewedName = overrideId ? (await getEmployeeById(overrideId)).data?.name ?? null : null;
 
   // An employee with no linked record AND no privileged override has nothing to
   // show — be honest rather than printing an empty table or a uuid prompt.
@@ -68,7 +72,13 @@ export default async function Page({ searchParams }: { searchParams?: Search }) 
 
   return (
     <>
-      <PageHeader title="My Learning" subtitle="Your course enrolments, progress and resume point." back="/learning" />
+      <PageHeader
+        title="My Learning"
+        subtitle={viewedName
+          ? `Course enrolments for ${viewedName}.`
+          : "Your course enrolments, progress and resume point."}
+        back="/learning"
+      />
       <div className="card">
         <div className="card-h"><h3>{heading}</h3></div>
         {source === "error" ? (

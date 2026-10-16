@@ -204,7 +204,7 @@ export function NewPlanForm() {
         {fieldErrors.code && <p id={codeErrId} style={errStyle} role="alert">⚠ {fieldErrors.code}</p>}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16 }}>
         <div>
           <label htmlFor={amountId} style={labelStyle}>Amount (₹)</label>
           <input
@@ -229,13 +229,12 @@ export function NewPlanForm() {
         </div>
       </div>
 
-      <div className="flex items-start gap-2">
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
         <input
           id={govtExemptId} type="checkbox" checked={govtExempt}
           onChange={(e) => setGovtExempt(e.target.checked)}
-          className="h-4 w-4 rounded"
           aria-describedby={govtExemptHelpId}
-          style={{ marginTop: 3 }}
+          style={{ width: 16, height: 16, borderRadius: 4, marginTop: 3 }}
         />
         <div>
           <label htmlFor={govtExemptId} style={{ fontSize: 13, fontWeight: 600, color: "var(--ink2)" }}>
@@ -257,9 +256,9 @@ export function NewPlanForm() {
           id={statusMsgId}
           role={status === "error" ? "alert" : "status"}
           aria-live={status === "error" ? "assertive" : "polite"}
-          className={`text-sm ${status === "error" ? "text-red-600" : "text-emerald-700"}`}
+          style={{ fontSize: 13, color: status === "error" ? "var(--bad, #b42318)" : "var(--good, #065f46)" }}
         >
-          <span className="font-semibold">{status === "error" ? "Error: " : "Success: "}</span>
+          <span style={{ fontWeight: 600 }}>{status === "error" ? "Error: " : "Success: "}</span>
           {message}
         </p>
       )}

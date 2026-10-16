@@ -47,12 +47,18 @@ export function InvoiceActions({
   invoiceId,
   einvoice,
   einvoiceUnknown = false,
+  canIrn = true,
 }: {
   invoiceId: string;
   einvoice: EInvoiceStatus | null;
   /** GAP-BILLING-INVOICES-DETAIL-04: the e-invoice fetch failed with a non-404
    *  (outage) — GSTN status is UNKNOWN, so neither generate nor cancel is safe. */
   einvoiceUnknown?: boolean;
+  /** GAP-BILLING-INVOICES-DETAIL-01: the page passes false when the signed-in
+   *  user does not hold a billing role; Generate/Cancel IRN are hidden (the
+   *  backend enforces requireRole, but controls must not appear for unauthorised
+   *  users who would only learn of refusal after clicking Confirm). */
+  canIrn?: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -231,32 +237,41 @@ export function InvoiceActions({
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <Button
-          variant="primary"
-          style={{ minHeight: 44 }}
-          disabled={busy || !canGenerate}
-          aria-label={`Generate e-invoice (IRN) for invoice ${invoiceId}`}
-          onClick={() => {
-            setGenerateError(undefined);
-            setGenerateOpen(true);
-          }}
-        >
-          Generate e-invoice / IRN
-        </Button>
-        <Button
-          variant="danger"
-          style={{ minHeight: 44 }}
-          disabled={busy || !canCancel}
-          aria-label={`Cancel IRN for invoice ${invoiceId}`}
-          onClick={() => {
-            setCancelError(undefined);
-            setCancelOpen(true);
-          }}
-        >
-          Cancel IRN
-        </Button>
-      </div>
+      {/* GAP-BILLING-INVOICES-DETAIL-01: only billing roles may request or cancel
+          an IRN — the backend enforces requireRole, but a non-billing user must
+          not see the controls at all (a doomed Confirm dialog is not a gate). */}
+      {canIrn ? (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <Button
+            variant="primary"
+            style={{ minHeight: 44 }}
+            disabled={busy || !canGenerate}
+            aria-label={`Generate e-invoice (IRN) for invoice ${invoiceId}`}
+            onClick={() => {
+              setGenerateError(undefined);
+              setGenerateOpen(true);
+            }}
+          >
+            Generate e-invoice / IRN
+          </Button>
+          <Button
+            variant="danger"
+            style={{ minHeight: 44 }}
+            disabled={busy || !canCancel}
+            aria-label={`Cancel IRN for invoice ${invoiceId}`}
+            onClick={() => {
+              setCancelError(undefined);
+              setCancelOpen(true);
+            }}
+          >
+            Cancel IRN
+          </Button>
+        </div>
+      ) : (
+        <p style={{ margin: 0, fontSize: 13, color: "var(--ink2)" }}>
+          Generating or cancelling an IRN requires a billing role. Contact your billing administrator.
+        </p>
+      )}
 
       {/* GAP-BILLING-INVOICES-DETAIL-02: honest closed-window copy. */}
       {status === "generated" && windowClosed && deadline && (

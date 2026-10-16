@@ -3,10 +3,28 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { z } from "zod";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
 
 type Priority = "Low" | "Medium" | "High" | "Critical";
+
+// GAP-HELPDESK-INTERNAL-NEW-02: zod schema for the form — validates at the
+// boundary before the fetch fires, maps errors to per-field messages so the
+// user sees inline feedback and a screen reader hears the error in context.
+const NewInternalTicketSchema = z.object({
+  subject: z
+    .string()
+    .min(1, "Subject is required.")
+    .max(200, "Subject must be 200 characters or fewer."),
+  description: z
+    .string()
+    .min(1, "Description is required.")
+    .max(5000, "Description must be 5,000 characters or fewer."),
+  priority: z.enum(["Low", "Medium", "High", "Critical"]),
+});
+
+type FieldErrors = Partial<Record<"subject" | "description" | "priority", string>>;
 
 /**
  * Staff-facing ticket intake for the internal ops queue — posts to
@@ -27,27 +45,35 @@ export function NewInternalTicketForm() {
   const [priority, setPriority] = useState<Priority>("Medium");
   const [status, setStatus] = useState<"idle" | "submitting" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const formError = useFormError("ticket");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!subject.trim()) {
-      setStatus("error");
-      setMessage("Subject is required.");
-      return;
-    }
-    if (!description.trim()) {
-      setStatus("error");
-      setMessage("Description is required.");
-      return;
-    }
-    setStatus("submitting");
+    setFieldErrors({});
     setMessage("");
 
+    // GAP-HELPDESK-INTERNAL-NEW-02: zod-validate before sending; surface each
+    // error next to the field so the user does not have to guess which one failed.
+    const parsed = NewInternalTicketSchema.safeParse({ subject, description, priority });
+    if (!parsed.success) {
+      const fe: FieldErrors = {};
+      for (const issue of parsed.error.issues) {
+        const k = issue.path[0] as keyof FieldErrors;
+        if (k && !fe[k]) fe[k] = issue.message;
+      }
+      setFieldErrors(fe);
+      setStatus("error");
+      setMessage("Please correct the errors above.");
+      return;
+    }
+
+    setStatus("submitting");
+
     const body: Record<string, string> = {
-      subject: subject.trim(),
-      description: description.trim(),
-      priority,
+      subject: parsed.data.subject.trim(),
+      description: parsed.data.description.trim(),
+      priority: parsed.data.priority,
     };
 
     try {
@@ -111,7 +137,14 @@ export function NewInternalTicketForm() {
             style={{ minHeight: 44 }}
             placeholder="Brief summary of the issue"
             disabled={isSubmitting}
+            aria-invalid={!!fieldErrors.subject || undefined}
+            aria-describedby={fieldErrors.subject ? "subject-error" : undefined}
           />
+          {fieldErrors.subject && (
+            <p id="subject-error" role="alert" style={{ marginTop: 4, fontSize: "0.8rem", color: "var(--bad)" }}>
+              {fieldErrors.subject}
+            </p>
+          )}
         </div>
 
         <div className="field" style={{ gridColumn: "1 / -1", padding: "13px 16px" }}>
@@ -128,7 +161,14 @@ export function NewInternalTicketForm() {
             maxLength={5000}
             placeholder="Describe the issue in detail…"
             disabled={isSubmitting}
+            aria-invalid={!!fieldErrors.description || undefined}
+            aria-describedby={fieldErrors.description ? "description-error" : undefined}
           />
+          {fieldErrors.description && (
+            <p id="description-error" role="alert" style={{ marginTop: 4, fontSize: "0.8rem", color: "var(--bad)" }}>
+              {fieldErrors.description}
+            </p>
+          )}
         </div>
 
         <div className="field" style={{ padding: "13px 16px" }}>
@@ -148,6 +188,11 @@ export function NewInternalTicketForm() {
             <option value="High">High</option>
             <option value="Critical">Critical</option>
           </select>
+          {fieldErrors.priority && (
+            <p role="alert" style={{ marginTop: 4, fontSize: "0.8rem", color: "var(--bad)" }}>
+              {fieldErrors.priority}
+            </p>
+          )}
         </div>
       </div>
 

@@ -1,5 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+import type { ReactElement } from "react";
+
+function render(ui: ReactElement) {
+  return rtlRender(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({

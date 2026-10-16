@@ -224,4 +224,46 @@ export async function webauthnRoutes(app: FastifyInstance): Promise<void> {
     }
     return reply.code(204).send();
   });
+
+  /**
+   * GAP-IDENTITY-WEBAUTHN-02: rename a passkey device label.
+   *
+   * Ownership is scoped in the WHERE clause (tenant_id, id, user_id) so a
+   * rename for another user's credential matches zero rows and 404s — the same
+   * pattern the DELETE uses. The PATCH is never a no-op success; 0 rows
+   * updated means the credential does not exist or is not owned by the caller.
+   */
+  app.patch(
+    "/v1/identity/webauthn/credentials/:id",
+    { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } },
+    async (req, reply) => {
+      const ctx = resolveContext(req);
+      const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+      const bodyParse = z.object({
+        deviceName: z.string().min(1, "deviceName must not be blank").max(200, "deviceName too long"),
+      }).safeParse(req.body);
+      if (!bodyParse.success) {
+        throw new HttpError(400, "VALIDATION_ERROR", bodyParse.error.errors.map((e) => e.message).join("; "));
+      }
+      const { deviceName } = bodyParse.data;
+
+      const existing = await repo.findById(ctx.tenantId, id);
+      // Not found, or found but not owned by the caller: 404 either way.
+      if (!existing || existing.userId !== ctx.actorId) {
+        throw new HttpError(404, "NOT_FOUND", "credential not found");
+      }
+
+      const updated = await repo.renameByIdForOwner(ctx.tenantId, id, ctx.actorId, deviceName);
+      if (updated === 0) {
+        throw new HttpError(404, "NOT_FOUND", "credential not found");
+      }
+
+      return reply.send({
+        id,
+        deviceName,
+        createdAt: existing.createdAt.toISOString(),
+        lastUsedAt: existing.lastUsedAt ? existing.lastUsedAt.toISOString() : undefined,
+      });
+    },
+  );
 }

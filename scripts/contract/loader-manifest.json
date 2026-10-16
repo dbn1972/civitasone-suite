@@ -2035,10 +2035,6 @@
     },
     {
       "module": "learning",
-      "screen": "/learning/my-learning"
-    },
-    {
-      "module": "learning",
       "screen": "/learning"
     },
     {

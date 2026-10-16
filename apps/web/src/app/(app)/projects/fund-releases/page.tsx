@@ -20,9 +20,26 @@ export default async function FundReleasesPage() {
 
   // GAP-PROJECTS-FUND-RELEASES-06: on an EMPTY list the money tiles show "—"
   // (no releases to total), not a fabricated ₹0.00 that reads like a real zero.
-  const totalReleased = errored || empty ? null : releases.filter((r) => r.status === "released").reduce((s, r) => s + r.amount, 0);
-  const totalSanctioned = errored || empty ? null : releases.filter((r) => r.status === "sanctioned").reduce((s, r) => s + r.amount, 0);
-  const totalUtilized = errored || empty ? null : releases.filter((r) => r.status === "utilized").reduce((s, r) => s + r.amount, 0);
+  //
+  // GAP-PROJECTS-FUND-RELEASES-04: amounts are paise (bigint-safe integers).
+  // Use BigInt summation so there are no floating-point rounding errors on
+  // large sums (e.g. 100 Cr = 10_000_000_000 minor units). Convert back to
+  // Number only at the formatMoney call, which accepts both.
+  //
+  // "Disbursed" tile = released + utilized: a utilised release has left the
+  // "released" bucket, so "Total Disbursed" covers both states. This was the
+  // W0-gap remainder: the old "Released" tile excluded utilised rows, making
+  // the disbursed KPI misleadingly low for any project with utilised funds.
+  function sumMinorBigInt(rows: typeof releases, ...statuses: string[]): bigint {
+    const statusSet = new Set(statuses);
+    return rows
+      .filter((r) => statusSet.has(r.status))
+      .reduce((s, r) => s + BigInt(Math.round(r.amount)), 0n);
+  }
+
+  const totalDisbursed = errored || empty ? null : sumMinorBigInt(releases, "released", "utilized");
+  const totalSanctioned = errored || empty ? null : sumMinorBigInt(releases, "sanctioned");
+  const totalUtilized = errored || empty ? null : sumMinorBigInt(releases, "utilized");
 
   const rows: FundReleaseRow[] = releases.map((r) => ({ ...r }));
 
@@ -35,9 +52,9 @@ export default async function FundReleasesPage() {
       />
       <StatGrid>
         <StatCard icon="📋" iconBg="#eef0fe" label="Total" value={errored ? "—" : releases.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Released" value={totalReleased === null ? "—" : formatMoney(totalReleased)} />
-        <StatCard icon="📄" iconBg="#fffaeb" label="Sanctioned" value={totalSanctioned === null ? "—" : formatMoney(totalSanctioned)} />
-        <StatCard icon="💰" iconBg="#eff6ff" label="Utilized" value={totalUtilized === null ? "—" : formatMoney(totalUtilized)} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Disbursed" value={totalDisbursed === null ? "—" : formatMoney(Number(totalDisbursed))} />
+        <StatCard icon="📄" iconBg="#fffaeb" label="Sanctioned" value={totalSanctioned === null ? "—" : formatMoney(Number(totalSanctioned))} />
+        <StatCard icon="💰" iconBg="#eff6ff" label="Utilized" value={totalUtilized === null ? "—" : formatMoney(Number(totalUtilized))} />
       </StatGrid>
       <Card title="Fund Releases">
         {errored ? (

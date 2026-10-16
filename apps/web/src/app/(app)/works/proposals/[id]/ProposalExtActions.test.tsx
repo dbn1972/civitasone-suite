@@ -270,6 +270,47 @@ describe("ProposalExtActions — GAP-WORKS-PROPOSALS-DETAIL-04 (typo protection 
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  // GAP-WORKS-PROPOSALS-DETAIL-04 acceptance: a non-UUID sub-division or
+  // section id must block submit with an inline error and never open the
+  // permanent-record confirm. (Sub-Division and Section are still plain-text
+  // UUID inputs — masters are pending an owner decision — but the client-side
+  // UUID guard must prevent bad ids from reaching the append-only API.)
+  it("blocks a non-UUID sub-division id with an inline error and never opens the confirm", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderWithToast(<ProposalExtActions workId={WORK_ID} roles={["works_admin"]} />);
+    openSection("Map Office");
+    await pickDivision();
+    fireEvent.change(screen.getByPlaceholderText("Sub-division UUID (optional)"), {
+      target: { value: "not-a-uuid" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Map Office" }));
+
+    expect(screen.getByRole("alert").textContent).toMatch(/valid UUID/i);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("office-mapping"),
+      expect.anything(),
+    );
+  });
+
+  it("blocks a non-UUID section id with an inline error and never opens the confirm", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    renderWithToast(<ProposalExtActions workId={WORK_ID} roles={["works_admin"]} />);
+    openSection("Map Office");
+    await pickDivision();
+    fireEvent.change(screen.getByPlaceholderText("Section UUID (optional)"), {
+      target: { value: "not-a-uuid" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Map Office" }));
+
+    expect(screen.getByRole("alert").textContent).toMatch(/valid UUID/i);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("office-mapping"),
+      expect.anything(),
+    );
+  });
 });
 
 describe("ProposalExtActions — GAP-WORKS-PROPOSALS-DETAIL-05 (split parent context)", () => {

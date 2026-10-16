@@ -57,3 +57,25 @@ describe("AssessmentsPage — GAP-LEARNING-ASSESSMENTS-02/03/04", () => {
     expect(screen.getByText("50 marks")).toBeInTheDocument();
   });
 });
+
+describe("AssessmentsPage — GAP-LEARNING-ASSESSMENTS-03 — course link column", () => {
+  it("Given assessment with courseRef; When rendered; Then 'View course' link points to /learning/courses/<courseRef>", async () => {
+    getAssessmentsMock.mockResolvedValue({
+      data: [{ id: "a1", title: "Finance Basics", passingScore: "50", durationMins: 30, maxAttempts: 2, status: "published", courseRef: "course-abc" }],
+      source: "api",
+    });
+    render(await AssessmentsPage());
+    const link = document.querySelector('a[href="/learning/courses/course-abc"]');
+    expect(link).toBeTruthy();
+  });
+
+  it("Given assessment without courseRef; When rendered; Then no /learning/courses/ link shown", async () => {
+    getAssessmentsMock.mockResolvedValue({
+      data: [{ id: "a2", title: "HR Policy", passingScore: "40", durationMins: 20, maxAttempts: 3, status: "published", courseRef: null }],
+      source: "api",
+    });
+    render(await AssessmentsPage());
+    const link = document.querySelector('a[href^="/learning/courses/"]');
+    expect(link).toBeNull();
+  });
+});

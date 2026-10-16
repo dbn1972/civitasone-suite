@@ -50,3 +50,32 @@ export async function deleteByIdForOwner(tenantId: string, id: string, userId: s
     return result.length;
   });
 }
+
+/**
+ * Rename a credential's deviceName, scoped to BOTH tenant and owner (userId).
+ * The ownership predicate lives in the WHERE clause — a rename for a credential
+ * owned by someone else matches zero rows and returns 0 without touching any
+ * row. Returns 1 on success, 0 if the credential does not exist or is not
+ * owned by the caller.
+ */
+export async function renameByIdForOwner(
+  tenantId: string,
+  id: string,
+  userId: string,
+  deviceName: string,
+): Promise<number> {
+  return db.transaction(async (tx) => {
+    const result = await tx
+      .update(webauthnCredentials)
+      .set({ deviceName })
+      .where(
+        and(
+          eq(webauthnCredentials.tenantId, tenantId),
+          eq(webauthnCredentials.id, id),
+          eq(webauthnCredentials.userId, userId),
+        ),
+      )
+      .returning({ id: webauthnCredentials.id });
+    return result.length;
+  });
+}

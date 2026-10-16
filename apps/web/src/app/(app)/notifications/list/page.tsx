@@ -10,6 +10,7 @@ import { useOfflineResource } from "@/lib/sync/resource";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDateTime, maskRecipient } from "@/lib/formatters";
 import { StatusBadge } from "../_components/StatusBadge";
+import { channelLabel } from "../_components/channelLabel";
 import { bucketCounts, isUnread } from "../_components/classifyStatus";
 
 type NotifRow = {
@@ -77,7 +78,7 @@ export default function NotificationsListPage() {
     module: n.module,
     // GAP-NOTIFICATIONS-LIST-01: recipient is DPDP personal data — never printed verbatim.
     recipient: maskRecipient(n.recipient),
-    channel: n.channel.replace(/_/g, " "),
+    channel: channelLabel(n.channel),
     status: n.status,
     // GAP-NOTIFICATIONS-LIST-05: show date AND time — inbox events can be minutes old.
     createdAt: formatIndianDateTime(n.createdAt),

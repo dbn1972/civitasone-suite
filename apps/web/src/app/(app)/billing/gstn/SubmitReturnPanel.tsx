@@ -2,12 +2,19 @@
 
 import { useId, useMemo, useRef, useState } from "react";
 import { Button, ConfirmDialog, StatusPill } from "@/app/_components/ds";
+import type { PillVariant } from "@/app/_components/ds/StatusPill";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
 import { isValidGstin } from "@/lib/gstin";
 
 const RETURN_TYPES = ["GSTR1", "GSTR3B", "GSTR9", "GSTR9C"] as const;
+
+// GAP-BILLING-GSTN-07: GSTN "filed" means the return was accepted by the portal —
+// a terminal success state (like "paid"/"completed"). STATUS_MAP maps "filed"
+// to "warn" for the RTI module (a filed RTI case is still in-progress). Carry an
+// explicit variant override here so the pill reads green only in this GSTN context.
+const GSTN_RESULT_TONE: Partial<Record<string, PillVariant>> = { filed: "good" };
 
 interface GstReturnResult {
   referenceId: string;
@@ -265,7 +272,7 @@ export function SubmitReturnPanel({
               </Button>
             </span>
           </div>
-          <div className="field"><span className="label">Status</span><span><StatusPill status={result.status} /></span></div>
+          <div className="field"><span className="label">Status</span><span><StatusPill status={result.status} variant={GSTN_RESULT_TONE[result.status]} /></span></div>
           <div className="field"><span className="label">GSTIN</span><span className="mono">{result.gstin}</span></div>
           <div className="field"><span className="label">Return Period</span><span>{result.returnPeriod}</span></div>
           <div className="field"><span className="label">Submitted</span><span>{result.submittedAt}</span></div>

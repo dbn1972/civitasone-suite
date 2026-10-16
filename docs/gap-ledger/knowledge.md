@@ -1074,7 +1074,7 @@ Counts: ACTION 57, BACKEND-VERIFY 12
 
 ### GAP-KNOWLEDGE-RECORDS-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 knowledge: closed by GAP-KNOWLEDGE-RECORDS-05 — verified route authenticates (401 without token), tenant-scopes (RLS + tenantId WHERE clause), and returns retentionPeriod/disposalDueDate. Test: services/knowledge-service/tests/gap-knowledge-records-05.test.ts)
 - **First-pass claim:** Backend knowledge-service is not in the snapshot (services/ holds only hrms-service): endpoints, roles, audit and payload validation for /v1/knowledge/* are undeterminable; shapes below come from the page/loader code only.
 - **Service:** `knowledge-service`  ·  **Endpoint(s):** `['GET /api/v1/knowledge/records']`
 - **Question:** GET /v1/knowledge/records must authenticate, tenant-scope, restrict by record classification/retention and return expiry/retention dates the page uses for its 30-day window.

@@ -1,7 +1,7 @@
 {
   "$comment": "TRACKED DEBT, not an approved state (SEC-014). Each entry is a mutating (POST/PUT/PATCH/DELETE) route handler in which this scanner found no call to a recognized authorization helper (see AUTHZ_HELPER_NAMES in authz-tenant-scanner.mjs) and no `config: { public: true }` marker. Some entries are genuine missing-authz gaps (the fleet's own manual 2,110-handler audit found real ones, e.g. historically services/hrms-service/src/modules/social/routes.ts's announcements handler until it was fixed); others are known scanner limitations, not real bugs -- a preHandler-gated route (e.g. visitor-service's deviceAuth), or a self-service-by-session action with no role/permission decision to find. The gate is on NEW entries (a handler added after this guard existed) and STALE entries (a listed handler that no longer reproduces -- confirm it's a real, reviewed fix before regenerating, not an accidental deletion/rename). See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md SEC-014 and .claude/skills/19-security-beyond-tenancy.md S1. Regenerate with --write-baseline only after confirming any newly-absent entries are a real, reviewed fix.",
   "generatedAt": "2026-10-09",
-  "count": 40,
+  "count": 41,
   "entries": [
     "services/analytics-service/src/modules/activation/routes.ts::POST /v1/analytics/activation/events",
     "services/billing-service/src/modules/gateways/routes.ts::POST /v1/billing/webhooks/ccavenue",
@@ -25,6 +25,7 @@
     "services/identity-service/src/modules/sync/routes.ts::POST /v1/sync/pull",
     "services/identity-service/src/modules/sync/routes.ts::POST /v1/sync/push",
     "services/identity-service/src/modules/webauthn/routes.ts::DELETE /v1/identity/webauthn/credentials/:id",
+    "services/identity-service/src/modules/webauthn/routes.ts::PATCH /v1/identity/webauthn/credentials/:id",
     "services/identity-service/src/modules/webauthn/routes.ts::POST /v1/identity/webauthn/authenticate",
     "services/identity-service/src/modules/webauthn/routes.ts::POST /v1/identity/webauthn/register",
     "services/knowledge-service/src/modules/ai/routes.ts::POST /v1/knowledge/ai/classify",

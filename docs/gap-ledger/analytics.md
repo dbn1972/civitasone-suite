@@ -14,7 +14,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-HOME-01  ·  MEDIUM  ·  partly  ·  theme DUPLICATE (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Hub lists 'Dashboards' and 'Dashboards (legacy list)' side by side (page.tsx:9,11) — two routes over the same GET /api/v1/analytics/dashboards, one via _data.ts and one via the generic moduleLoader in _data/loaders.ts:1829; reviewers cannot tell which is canonical.
 - **Verified evidence:** analytics/page.tsx:9,11 list Dashboards and 'Dashboards (legacy list)' with note 'Simple read-only list view'; so labelled as legacy but still duplicate. Two loaders confirmed: analytics/_data.ts:38 getAnalyticsDashboards (dashboards page) and loaders.ts:1829 moduleLoader used by list/page.tsx:2. Both hit /api/v1/analytics/dashboards.
 - **Files to change:** `apps/web/src/app/(app)/analytics/page.tsx`, `apps/web/src/app/(app)/analytics/list/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -30,7 +30,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme LOADING (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** loading.tsx renders stat-card placeholders and a table (loading.tsx:23-36) for the hub, which has neither; a screen that fetches nothing still flashes a data skeleton.
 - **Verified evidence:** page.tsx renders ModuleHub with static links and fetches nothing, but the segment analytics/loading.tsx:23-36 renders 3 stat-card placeholders and a 6-row table; no page-level loading.tsx exists for the hub. Segment layout awaits ModuleGate (getEnabledModules), so the skeleton can flash. Theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/(app)/analytics/loading.tsx`, `apps/web/src/app/(app)/analytics/page.tsx`
@@ -43,7 +43,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-HOME-03  ·  LOW  ·  partly  ·  theme COPY (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Tile order mixes user tasks (Query Results) with a deprecated view and two similarly named insight surfaces, 'AI Insights' vs 'ML Insights' (page.tsx:14-15); notes do not say how they differ.
 - **Verified evidence:** page.tsx:14-15 tiles AI Insights ('ML-powered insights and recommendations') and ML Insights ('Model performance, accuracy trends, and prediction explainability per domain') are distinct routes and the notes do differ somewhat, but AI Insights wording is vague and the deprecated list tile sits between task tiles (line 11). Overstated.
 - **Files to change:** `apps/web/src/app/(app)/analytics/page.tsx`
@@ -57,7 +57,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-HOME-04  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Hard-coded English strings in page.tsx:6-15 rather than next-intl keys.
 - **Verified evidence:** analytics/page.tsx:6-15 pass hard-coded English title, description, labels and notes to ModuleHub. Many other pages in (app) use getTranslations/useTranslations (~418 files reference next-intl), so this is a divergence, though 21 pages use ModuleHub and likely share the pattern.
 - **Files to change:** `apps/web/src/app/(app)/analytics/page.tsx`, `apps/web/src/messages/en.json`
@@ -96,7 +96,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-AI-INSIGHTS-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was DEADROUTE)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Read-only page shows an 'Actioned' status and 'New (Unread)' count (page.tsx:27-28) but no control marks an insight read or actioned and no link opens the source record; the stats cannot change from this UI.
 - **Verified evidence:** page.tsx:27-28 derive New (Unread) and Actioned from r.status === 'New'/'Actioned'; AnalyticsAiInsightRow (loaders.ts:5325-5332) has no id or source-record reference, and AiInsightsTable.tsx has no row action, rowHref or mutate control. No [id] route under ai-insights. Counts are therefore read-only and cannot change from the UI.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ai-insights/page.tsx`, `apps/web/src/app/(app)/analytics/ai-insights/AiInsightsTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -113,7 +113,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-AI-INSIGHTS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Avg. Confidence = parseInt of a display string like '84%' averaged over all rows (page.tsx:16-20); rows with unparsable text count as 0 and drag the average down; no explanation of what confidence means (automated-inference transparency, DPDP).
 - **Verified evidence:** page.tsx:16-20 average = round(sum(parseInt(r.confidence,10)||0)/rows.length): unparsable values count as 0 in numerator and stay in the denominator, dragging the average down. Value 0 renders as '—' (line 29). confidence is typed string (loaders.ts:5328). No explanation of the metric anywhere (no HelpTip/Term). ds/ConfidenceBar.tsx exists but is not used. Suggested fix text in the finding (Masked) does not fit; real theme is data correctness/transparency.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ai-insights/page.tsx`, `apps/web/src/app/(app)/analytics/ai-insights/AiInsightsTable.tsx`
@@ -129,7 +129,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-AI-INSIGHTS-04  ·  MEDIUM  ·  confirmed  ·  theme COPY (was DEADROUTE)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** EmptyState tells the user to 'Enable the AI assistant in platform settings' (page.tsx:37) with no link; a non-admin cannot act, and the message is shown even when the AI assistant is on but has produced nothing.
 - **Verified evidence:** page.tsx:36-37 rows.length===0 (after the errored branch at 32) shows EmptyState with text 'Enable the AI assistant in platform settings' and no action/link. It cannot distinguish 'AI disabled' from 'enabled but nothing generated yet'; no settings flag is read on this page. A non-admin gets an instruction they cannot act on.
 - **Files to change:** `apps/web/src/app/(app)/analytics/ai-insights/page.tsx`
@@ -144,7 +144,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-AI-INSIGHTS-05  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** loading.tsx is a single blank block (loading.tsx:2); emoji icons and hex colours inline in page.tsx:26-29.
 - **Verified evidence:** ai-insights/loading.tsx:2 is a single .skeleton div (same in kpi and data-warehouse loading.tsx), overriding the richer segment analytics/loading.tsx. Emoji icons and hex iconBg are inline at page.tsx:26-29 (also emptyIcon at AiInsightsTable.tsx:41).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ai-insights/loading.tsx`, `apps/web/src/app/(app)/analytics/ai-insights/page.tsx`, `apps/web/src/app/(app)/analytics/data-warehouse/loading.tsx`, `apps/web/src/app/(app)/analytics/kpi/loading.tsx`
@@ -182,7 +182,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-DASHBOARDS-02  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Error state is a badge plus '—' stats over an empty table (page.tsx:14,31-33; DashboardsTable.tsx:45-53): the table reads as 'no dashboards' rather than offering retry (compare kpi/page.tsx RefreshErrorState).
 - **Verified evidence:** UX-013 already gates the stats: page.tsx:14,31-33 show '—' when source==='error'. DashboardsTable.tsx:45 renders DataSourceBadge (provenance) and then an empty DataTable (rows default []), so the table shows its generic empty state with no retry or explanation beyond the badge. kpi/page.tsx uses RefreshErrorState via toResourceState; dashboards does not. Stats claim in finding is outdated; missing retry is real.
 - **Files to change:** `apps/web/src/app/(app)/analytics/dashboards/page.tsx`
@@ -239,7 +239,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-DATA-WAREHOUSE-01  ·  HIGH  ·  confirmed  ·  theme DATA (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Total Records is computed by stripping every non-digit from the string records and parseInt-ing it (page.tsx:14-16): '1.2 M' becomes 12 and '12,48,320' only works because it is plain digits; any abbreviated or decimal record count silently corrupts the total.
 - **Verified evidence:** page.tsx:14-16 sums parseInt(r.records.replace(/[^0-9]/g,''),10). '1.2 M' -> 12, '1.5' -> 15, '2 Cr' -> 2. Indian-grouped '12,48,320' happens to work because commas are stripped (not only plain digits). records is typed string (loaders.ts:5312) so the API format is unknown; a NaN/empty record counts as 0 silently.
 - **Files to change:** `apps/web/src/app/(app)/analytics/data-warehouse/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -255,7 +255,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-DATA-WAREHOUSE-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Subtitle promises 'refresh schedules' (page.tsx:22) but the table shows only Last Refresh; no schedule, no next-run, and no stale threshold, so a dataset that stopped refreshing is only visible if the API labels it something other than 'Healthy'.
 - **Verified evidence:** Subtitle at page.tsx:22 says 'refresh schedules'. DataWarehouseTable.tsx:7-14 columns: dataset,lastRefresh,records,size,qualityScore,status; AnalyticsDataWarehouseRow (loaders.ts:5308-5315) has no schedule/nextRun/staleness. Only status signals staleness.
 - **Files to change:** `apps/web/src/app/(app)/analytics/data-warehouse/page.tsx`, `apps/web/src/app/(app)/analytics/data-warehouse/DataWarehouseTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -269,7 +269,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-DATA-WAREHOUSE-03  ·  MEDIUM  ·  partly  ·  theme STATUS
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Attention = every status that is not exactly 'Healthy' (page.tsx:18), so a case difference ('healthy') or a new status value counts as a problem; Quality Score is an unparsed string, not sortable numerically.
 - **Verified evidence:** page.tsx:17-18 use exact r.status === 'Healthy' (case-sensitive); anything else counts as Attention. Confirmed. Quality Score is a string but DataTable.compareValues (DataTable.tsx:160-171) falls back to localeCompare with numeric:true, so '92%' vs '100%' sort correctly; 'not sortable numerically' is overstated. StatusPill STATUS_MAP has no 'healthy' entry so it renders neutral.
 - **Files to change:** `apps/web/src/app/(app)/analytics/data-warehouse/page.tsx`, `apps/web/src/app/_components/ds/StatusPill.tsx`
@@ -306,7 +306,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-KPI-01  ·  HIGH  ·  confirmed  ·  theme DATA (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** On Target / Below Target / Improving are computed by string-matching the preformatted trend ('↑', '+') and comparing currentValue===target strings (kpi/page.tsx:14-18): a KPI where up is bad (file disposal days ↑) counts as On Target and Improving, and a falling vacancy rate (↓) counts as Below Target.
 - **Verified evidence:** kpi/page.tsx:14 onTarget = trend.includes('↑') || currentValue===target; :15-17 belowTarget = total - onTarget; :18 improving = trend has '↑' or '+'. AnalyticsKpiRow (loaders.ts:5291-5298) has no direction/polarity or numeric fields, so a KPI where lower is better with ↑ counts On Target and Improving, and a ↓ falling vacancy is Below Target. Also a trend '+' only is 'Improving' but not 'On Target'. Counts can be misleading.
 - **Files to change:** `apps/web/src/app/(app)/analytics/kpi/page.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/analytics/kpi/KpiTable.tsx`
@@ -322,7 +322,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-KPI-02  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Empty-state CTA 'Create Metric' links to /analytics/queries (kpi/page.tsx:35), which only runs whitelisted queries; no route creates a KPI, so the CTA promises something the app cannot do.
 - **Verified evidence:** kpi/page.tsx:35 empty-state action links to /analytics/queries; that route exists (queries/page.tsx + RunQueryForm.tsx) for running queries, and there is no KPI create/edit route or loader in analytics/. 'Create Metric' promises something not offered.
 - **Files to change:** `apps/web/src/app/(app)/analytics/kpi/page.tsx`
@@ -386,7 +386,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-LIST-01  ·  MEDIUM  ·  confirmed  ·  theme DUPLICATE (was VALIDATION)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Duplicate of /analytics/dashboards over the same endpoint (list/page.tsx:5 vs dashboards/page.tsx:8) with a generic mapping; two different stat/badge behaviours for one dataset.
 - **Verified evidence:** list/page.tsx:5 uses loaders.ts:1829 moduleLoader (ModuleRowSummary via mapModuleRows) while dashboards/page.tsx:7 uses _data.ts getAnalyticsDashboards; same /api/v1/analytics/dashboards. List has no stats, badge behaviour differs (ModuleListTable vs DashboardsTable). Only referenced by hub tile.
 - **Files to change:** `apps/web/src/app/(app)/analytics/list/page.tsx`, `apps/web/src/app/(app)/analytics/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -401,7 +401,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-LIST-02  ·  MEDIUM  ·  confirmed  ·  theme UX-COPY (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1934, verified on main 101076c1a)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1934, verified on main 101076c1a)
 - **First-pass claim:** Raw record id shown to users: ModuleListTable prints row.id.slice(0, 8) in an ID column (ModuleListTable.tsx:46) — an internal identifier with no meaning to a clerk.
 - **Verified evidence:** ModuleListTable.tsx:71,81 renders an ID column with row.id.slice(0,8) in mono (finding cited line 46; actual 81). It is a shared component, so every ModuleListPage in the app shows truncated internal ids.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -686,7 +686,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-INVENTORY-02  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — W1 SF-18 (#2019): /inventory/[id] route verified by analyzer; entityId = stock item id still needs backend confirmation. Closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a - W1 SF-18 (#2019): /inventory/[id] verified; entityId confirmed. Closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Dead drill-through: rowLinkPrefix '/inventory/items/' (inventory/page.tsx:14) — apps/web/src/app/(app)/inventory/items contains only page.tsx, so every Entity link is a 404.
 - **Verified evidence:** inventory/page.tsx:14 rowLinkPrefix='/inventory/items/'; apps/web/src/app/(app)/inventory/items contains only page.tsx (the items list, no [id]), so /inventory/items/<id> 404s (inventory/not-found.tsx). The stock item detail route is inventory/[id]/page.tsx (getStockItemById), so /inventory/<id> is the likely target, assuming entityId is a stock item id (ms-service absent).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/inventory/page.tsx`
@@ -1216,7 +1216,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-ML-INSIGHTS-TICKETS-05  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Drill-through opens /helpdesk/internal/<entityId> (tickets/page.tsx:14); the domain scores helpdesk tickets in general, so citizen-facing tickets would link to an internal-only route that may 404 or be role-gated.
 - **Verified evidence:** tickets/page.tsx:14 rowLinkPrefix='/helpdesk/internal/'. That route exists: helpdesk/internal/[id]/page.tsx fetches /api/v1/helpdesk/tickets/${id} (the general ticket endpoint), so it will not 404. However a separate general detail page helpdesk/tickets/[id] (with TicketActions/TicketConversation) exists and is the fuller view; the 'internal' page is a read-only summary. Whether citizen-facing tickets are role-restricted at /helpdesk/internal or by the API cannot be verified (helpdesk service and layout guards not inspected; no service in snapshot).
 - **Files to change:** `apps/web/src/app/(app)/analytics/ml-insights/tickets/page.tsx`
@@ -1316,7 +1316,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-QUERIES-05  ·  MEDIUM  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Chart a11y: figure has role='img' with the sr-only <dl> text alternative nested inside (AccessibleBarChart.tsx:42,73-83); children of role=img are presentational, so the structured list is not exposed to screen readers—only the long aria-label.
 - **Verified evidence:** AccessibleBarChart.tsx:42 <figure role='img' aria-label={summary}> contains an sr-only <dl> (:76-86). role='img' has presentational children so the dl is not exposed; the long aria-label is the only text. The header comment (:6-12) claims the dl is 'structured reading'. Also the sr-only dl uses `${value} ${unit}` while aria-label uses no space. aria-label is also unbounded for many bars.
 - **Files to change:** `apps/web/src/app/(app)/analytics/queries/AccessibleBarChart.tsx`
@@ -1346,7 +1346,7 @@ Counts: ACTION 77, BACKEND-VERIFY 2
 
 ### GAP-ANALYTICS-QUERIES-07  ·  LOW  ·  partly  ·  theme DS (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 3c4fb6e5f)
+- [x] **Status** (W0 2026-10-13 re-confirmed W2 analytics-part-1 on main fa11fb66a: closed by #1916, verified on main 3c4fb6e5f)
 - **First-pass claim:** Hard-coded inline hex styles and English strings across RunQueryForm.tsx (labelStyle etc., :532-584) instead of tokens/next-intl; 'Clear' removes a filter row but is labelled like a field reset.
 - **Verified evidence:** RunQueryForm.tsx:530-584 defines inline style consts with hex colours (labelStyle, inputStyle, clearBtnStyle...) and English strings throughout - true. The 'Clear' button (:428-435) removes a filter row (onClick removeFilter) and has aria-label 'Remove filter N', so AT is fine; the visible label 'Clear' is a naming nit. Theme FABRICATED is wrong - no fabricated data.
 - **Files to change:** `apps/web/src/app/(app)/analytics/queries/RunQueryForm.tsx`

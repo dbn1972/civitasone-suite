@@ -632,13 +632,24 @@ describe("POST /notifications/campaigns", () => {
 
 describe("PATCH /notifications/campaigns/:id/send", () => {
   it("returns 202 with valid uuid (admin)", async () => {
+    // Maker-checker: send route checks campaign exists and creator != sender.
+    const campaignId = randomUUID();
+    const SYSTEM_ACTOR = "00000000-0000-0000-0000-000000000001";
+    await sqlClient.begin((sql) => sql`
+      INSERT INTO bulk.notification_campaigns
+        (id, tenant_id, template_id, name, status, budget_minor, currency, created_by, updated_by)
+      VALUES
+        (${campaignId}::uuid, ${TENANT}::uuid, ${randomUUID()}::uuid,
+         'send-auth-fixture', 'draft', 0, 'INR', ${SYSTEM_ACTOR}::uuid, ${SYSTEM_ACTOR}::uuid)
+    `);
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH",
-      url: `/notifications/campaigns/${randomUUID()}/send`,
+      url: `/notifications/campaigns/${campaignId}/send`,
       headers: { authorization: `Bearer ${adminToken}` },
     });
     await app.close();
+    await sqlClient`DELETE FROM bulk.notification_campaigns WHERE id = ${campaignId}::uuid`;
     expect(res.statusCode).toBe(202);
   });
 

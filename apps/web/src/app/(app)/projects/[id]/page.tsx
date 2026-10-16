@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { getProjectById } from "../../../_data/loaders";
 import { PageHeader, Card, StatusPill, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate, percentOfMinor, formatPercent } from "@/lib/formatters";
@@ -89,19 +88,9 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
           <div className="fld"><div className="l">Completion %</div><div className="v">{project.completionPct.toFixed(1)}%</div></div>
         </div>
       </Card>
-      <Card padding>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Link href={`/projects/${params.id}/tasks`} className="btn">
-            Tasks
-          </Link>
-          <Link href={`/projects/${params.id}/members`} className="btn">
-            Team
-          </Link>
-          <Link href={`/projects/${params.id}/risks`} className="btn">
-            Risks
-          </Link>
-        </div>
-      </Card>
+      {/* GAP-PROJECTS-DETAIL-06: sub-page navigation moved to layout.tsx
+          (ProjectDetailNav) so the active tab is highlighted. The button
+          card that was here is removed — the shared nav replaces it. */}
       <Card title="Milestones">
         {milestoneRows.length === 0 ? (
           <EmptyState icon="📋" title="No milestones" message="No milestones have been defined for this project." />

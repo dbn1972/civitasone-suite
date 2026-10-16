@@ -11,6 +11,11 @@ vi.mock("../_data", () => ({
   getMyProfile: () => getMyProfileMock(),
   OVERDUE_STALE_DAYS: 30,
 }));
+const getEmployeeByIdMock = vi.fn();
+vi.mock("@/app/_data/loaders", () => ({
+  getEmployeeById: (...a: unknown[]) => getEmployeeByIdMock(...a),
+}));
+
 // EnrolmentsTable is another route-family's client component; stub it so this
 // test focuses on HOME-02's page-level behaviour (scoping, filter, no-record).
 vi.mock("./EnrolmentsTable", () => ({
@@ -25,6 +30,8 @@ beforeEach(() => {
   rolesMock.mockReturnValue(["employee"]);
   getMyProfileMock.mockResolvedValue({ data: { id: "emp-3", name: "Ravi" }, source: "api" });
   getMyLearningMock.mockResolvedValue({ data: [], source: "api" });
+  getEmployeeByIdMock.mockResolvedValue({ data: null, source: "api" });
+  getEmployeeByIdMock.mockClear();
 });
 
 async function renderPage(search: Record<string, string> = {}) {
@@ -59,5 +66,24 @@ describe("MyLearningPage — GAP-LEARNING-HOME-02", () => {
     expect(screen.getByText("Enrolments — completed")).toBeInTheDocument();
     expect(screen.getByText("A")).toBeInTheDocument();
     expect(screen.queryByText("B")).not.toBeInTheDocument();
+  });
+});
+
+describe("MyLearningPage — GAP-LEARNING-MY-LEARNING-02 — employee name in subtitle", () => {
+  it("Given HR role; When ?employeeId supplied; Then subtitle shows that employee's name", async () => {
+    rolesMock.mockReturnValue(["hr_admin"]);
+    getEmployeeByIdMock.mockResolvedValue({ data: { id: "emp-99", name: "Priya Sharma" }, source: "api" });
+    getMyLearningMock.mockResolvedValue({ data: [], source: "api" });
+    await renderPage({ employeeId: "emp-99" });
+    expect(screen.getByText("Course enrolments for Priya Sharma.")).toBeInTheDocument();
+  });
+
+  it("Given employee role; When no ?employeeId; Then default subtitle shown and getEmployeeById not called", async () => {
+    rolesMock.mockReturnValue(["employee"]);
+    getMyProfileMock.mockResolvedValue({ data: { id: "emp-3", name: "Ravi" }, source: "api" });
+    getMyLearningMock.mockResolvedValue({ data: [], source: "api" });
+    await renderPage();
+    expect(screen.getByText("Your course enrolments, progress and resume point.")).toBeInTheDocument();
+    expect(getEmployeeByIdMock).not.toHaveBeenCalled();
   });
 });
