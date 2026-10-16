@@ -98,7 +98,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DEFINITIONS-04  ·  MEDIUM  ·  partly  ·  theme NAVUX
 
-- [x] **Status** (W2 PQ: closed by #TBD, W2 part 1: breadcrumbs removed from my-tasks/page.tsx; Breadcrumbs.tsx deleted)
+- [x] **Status** (W2 PQ: closed by #2083, W2 part 1: breadcrumbs removed from my-tasks/page.tsx; Breadcrumbs.tsx deleted)
 - **W0 note:** partly fixed by #1923 — local Breadcrumbs removed from most pages but workflow/my-tasks/page.tsx still imports it and workflow/_components/Breadcrumbs.tsx still exists
 - **First-pass claim:** No Breadcrumbs component here, unlike the sibling Instances/My-tasks/detail pages that render Breadcrumbs (list/page.tsx:24); the page also wraps in page-main with a different container (definitions/page.tsx:54).
 - **Verified evidence:** True that definitions/page.tsx renders no local <Breadcrumbs> while list/detail pages do. But AppShell.tsx:30 renders a global <AutoBreadcrumb/> in the TopBar for every route and workflow/ is in LINKABLE_INTERMEDIATE_PATHS (navRouteManifest.ts:128); tenant-admin/users/page.tsx:18-22 documents removing page-local crumbs as redundant. So the sibling pages are the outliers (duplicate crumbs). 'page-main' is used in ~719 files and has no rule in civitas-ds.css, so the 'different container' claim is not a real difference.
@@ -211,7 +211,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DEFINITIONS-DETAIL-05  ·  LOW  ·  confirmed  ·  theme COPY (was WIRING)
 
-- [x] **Status** (W2 PQ: closed by #TBD, W2 part 1: card title renamed from 'Process graph' to 'Steps and transitions' in definitions/[id]/page.tsx)
+- [x] **Status** (W2 PQ: closed by #2083, W2 part 1: card title renamed from 'Process graph' to 'Steps and transitions' in definitions/[id]/page.tsx)
 - **First-pass claim:** The card is titled "Process graph" but DefinitionGraph is a flat list — its docstring promises an SVG flow strip that is not rendered (DefinitionGraph.tsx:1-6); branches are visible only as "[condition]" text.
 - **Verified evidence:** DefinitionGraph.tsx:1-6 docstring says 'plus an SVG flow strip when the graph is small'; the component (:100-173) only renders an ordered list with outgoing edges and [condition] text. Card title in page.tsx:63 is 'Process graph'. No dead code beyond the docstring.
 - **Files to change:** `apps/web/src/app/(app)/workflow/_components/DefinitionGraph.tsx`
@@ -402,7 +402,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-INSTANCES-DETAIL-05  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [x] **Status** (W2 PQ: closed by #TBD, W2 part 1: isMaker prop added to TaskActions; Approve disabled with tooltip when requesterId==currentUserId; SELF_APPROVAL_DENIED mapped)
+- [x] **Status** (W2 PQ: closed by #2083, W2 part 1: isMaker prop added to TaskActions; Approve disabled with tooltip when requesterId==currentUserId; SELF_APPROVAL_DENIED mapped)
 - **W0 note:** partly fixed by #1923 — TaskActions now maps maker-checker failures to a specific message; no isMaker check hides or disables Approve in the UI
 - **First-pass claim:** Failure of a decision shows only "We couldn't save your task…" (TaskActions.tsx:31-34); a maker-checker denial (same user as maker) is indistinguishable from a network error, and Approve is offered to the maker in the first place.
 - **Verified evidence:** TaskActions.tsx:160-172 postJson throws taskActionError() for any non-2xx, discarding status (403/409 vs 5xx/network), shown by ActionButton (useConfirmAction catch). True. Approve is offered whenever status pending (248-263) with no knowledge of the current user or maker; the description only says maker-checker applies (253). Whether the backend enforces maker!=checker is cannot-verify (workflow-service absent); the task payload has no makerId (workflowTypes WorkflowTask).
@@ -665,7 +665,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-HOME-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 PQ: closed by #TBD, W2 part 1: ALREADY FIXED — analytics/summary requires workflow role (requireRole in analytics/routes.ts:7), tenant-scoped via ctx.tenantId)
+- [x] **Status** (W2 PQ: closed by #2083, W2 part 1: ALREADY FIXED — analytics/summary requires workflow role (requireRole in analytics/routes.ts:7), tenant-scoped via ctx.tenantId)
 - **First-pass claim:** Access is open: no requireAnyRole and the hub links straight to task inbox, instance history and the definition designer (workflow/layout.tsx is ModuleGate only). Tenant-wide analytics are visible to every user; service-side scoping is undeterminable (services/workflow-service absent).
 - **Service:** `workflow-service`  ·  **Endpoint(s):** `['GET /api/v1/workflow/analytics/summary']`
 - **Question:** Is analytics/summary scoped to the caller's tenant and role (or restricted to workflow admins), or does it return tenant-wide figures to every authenticated user?
@@ -676,7 +676,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-HOME-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 PQ: closed by #TBD, W2 part 1: ALREADY FIXED — slaBreachRate returned as 0..1 fraction (queries.ts summary()), formatBreachRate in workflowTypes.ts correctly multiplies by 100 and shows em dash for zero tracked)
+- [x] **Status** (W2 PQ: closed by #2083, W2 part 1: ALREADY FIXED — slaBreachRate returned as 0..1 fraction (queries.ts summary()), formatBreachRate in workflowTypes.ts correctly multiplies by 100 and shows em dash for zero tracked)
 - **First-pass claim:** Breach rate assumes a 0–1 fraction (slaBreachRate*100, page.tsx:50) and defaults every missing metric to 0 (workflowData.ts:317-346): a service returning percent would print 630%, and a partial payload prints a clean "0.0%". Contract undeterminable (service absent).
 - **Service:** `workflow-service`  ·  **Endpoint(s):** `['GET /api/v1/workflow/analytics/summary']`
 - **Question:** Does slaBreachRate come back as a 0-1 fraction (not percent) and are all metrics always present in the payload?
@@ -687,7 +687,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DEFINITIONS-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 PQ: closed by #TBD, W2 part 1: ALREADY FIXED — definitions/page.tsx aligned to real contract (no module/triggerEvent/steps columns; Definition type uses only id/code/name/status/version))
+- [x] **Status** (W2 PQ: closed by #2083, W2 part 1: ALREADY FIXED — definitions/page.tsx aligned to real contract (no module/triggerEvent/steps columns; Definition type uses only id/code/name/status/version))
 - **First-pass claim:** Two divergent contracts for the same endpoint: this page reads module/triggerEvent/steps (page.tsx:6-14) with a bare cast, while workflowData.ts maps GET /v1/workflow/definitions to {code, version, description} only (workflowData.ts:107-131). Which fields the service actually returns is undeterminable (workflow-service absent); Module and Trigger columns may render blank.
 - **Service:** `workflow-service`  ·  **Endpoint(s):** `['GET /api/v1/workflow/definitions', 'GET /api/v1/workflow/templates']`
 - **Question:** Does GET /v1/workflow/definitions return items with id, name, module, triggerEvent, steps (count), status, version (page.tsx:6-14) as well as code/description used by workflowData.ts:107-131?
@@ -698,7 +698,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DESIGNER-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 PQ: closed by #TBD, W2 part 1: ALREADY FIXED — designer/routes.ts requires ROLES; designer/page.tsx passes definitions to DesignerCanvas and shows badge only on error)
+- [x] **Status** (W2 PQ: closed by #2083, W2 part 1: ALREADY FIXED — designer/routes.ts requires ROLES; designer/page.tsx passes definitions to DesignerCanvas and shows badge only on error)
 - **First-pass claim:** Server fetch is wasted and its failure misleads: page.tsx awaits GET /workflow/designer/definitions (designerData.ts:77-100) only to pass it to a component that ignores it, so the header badge "Couldn't load — showing nothing" (page.tsx:16) reports a failure with zero effect on the canvas. Endpoint contract undeterminable (workflow-service absent).
 - **Service:** `workflow-service`  ·  **Endpoint(s):** `['GET /api/v1/workflow/designer/definitions?pageSize=100', 'GET /api/v1/workflow/designer/definitions/:id']`
 - **Question:** Do the designer definitions endpoints exist, return a stable list shape, and require a designer role rather than any authenticated user?
@@ -709,7 +709,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-MY-TASKS-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 PQ: closed by #TBD, W2 part 1: ALREADY FIXED — backend enforces NOT_ASSIGNEE/SELF_APPROVAL_DENIED/SOD_REPEAT_ACTOR; TaskActions hides decisions when claimedByOther; isMaker disables Approve)
+- [x] **Status** (W2 PQ: closed by #2083, W2 part 1: ALREADY FIXED — backend enforces NOT_ASSIGNEE/SELF_APPROVAL_DENIED/SOD_REPEAT_ACTOR; TaskActions hides decisions when claimedByOther; isMaker disables Approve)
 - **First-pass claim:** Decision buttons are shown on every pending row: TaskActions gates only Claim on `assigned` (TaskActions.tsx:107-166), so Approve/Return/Reject render for tasks another officer has claimed, and for the maker's own submission despite the "approver must be distinct" dialog copy. Such clicks end in a generic "We couldn't save your task" (TaskActions.tsx:31-34); real enforcement is undeterminable (workflow-service absent).
 - **Service:** `workflow-service`  ·  **Endpoint(s):** `['POST /v1/workflow/tasks/:id/complete', 'POST /v1/workflow/tasks/:id/claim', 'GET /v1/workflow/tasks']`
 - **Question:** Does complete reject (403/409) when the task is claimed by another assignee, when actor is not in the task's role group, and when actor equals the maker (maker-checker)?
