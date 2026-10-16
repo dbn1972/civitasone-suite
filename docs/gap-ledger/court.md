@@ -512,9 +512,9 @@ Counts: ACTION 35, BACKEND-VERIFY 1
   - Existing aria-labels on Adjourn/Record outcome preserved
 - **Needs:** web  ·  **Effort:** S ~half day  ·  **Risk:** Low; preserve accessible names used by tests.
 
-### GAP-COURT-HEARINGS-05  ·  LOW  ·  partly  ·  theme COPY (was CAP)
+### GAP-COURT-HEARINGS-05  ·  LOW  ·  interim  ·  theme COPY (was CAP)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — W2 INTERIM — hearingStatusLabel done; bench label display needs bench-name endpoint (absent from court-service snapshot))
 - **W0 note:** partly fixed by #1923 — status uses a fixed label dictionary (hearingStatusLabel); remaining: benchId/bench label is still not shown on the hearing row
 - **First-pass claim:** Status vocabulary (scheduled/held/adjourned/cancelled) is humanised client-side; bench id is never shown.
 - **Verified evidence:** Status is humanised via humanize() (HearingsConsole.tsx:291, format.ts:27) - true. benchId exists on Hearing (types.ts:160) but is not rendered in HearingRow (:250-295) - true. The 'capped fetch / client filtering' fix text does not apply: no client filtering in this page; the cap is on getCases (limit=100).

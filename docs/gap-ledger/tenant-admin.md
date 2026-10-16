@@ -395,9 +395,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
   - Clicking home 'Export report' lands on audit page without a dead query param (or downloads a file if implemented).
 - **Needs:** web  ·  **Effort:** S ~half day  ·  **Risk:** Audit log exports contain actor emails/IPs (PII); any real export must be role-gated and logged.
 
-### GAP-TENANT-ADMIN-AUDIT-03  ·  MEDIUM  ·  partly  ·  theme PII
+### GAP-TENANT-ADMIN-AUDIT-03  ·  MEDIUM  ·  interim  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — W2 INTERIM — masking done; audited reveal + server-side audit.viewed event need DPDP policy decision + backend endpoint)
 - **W2 INTERIM (needs owner decision):** emails/IPs are masked by default and exports are now audited, but a click-to-reveal with an audited reveal and a server-side audit.viewed event are NOT built: they need a policy decision (may tenant admins reveal? an audit.viewed per list read doubles the log volume and appears in the log itself). Note also: audit-service /v1/audit/events allows audit_officer|audit_admin|super_admin|platform_admin — NOT tenant_admin — so confirm who this page is meant for.
 - **W0 note:** partly fixed by #1864 — Emails/IPs masked by default (maskEmail/maskIp); no reveal control or audit.viewed logging
 - **First-pass claim:** DPDP: actor identifiers (emails) and source IPs are shown in clear to every role in the layout with no masking or view-audit; reading the audit log is itself not evidenced as audited (AuditLogTable.tsx:51-56).
@@ -1480,9 +1480,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 - **Depends on:** GAP-TENANT-ADMIN-PLANS-01
 
-### GAP-TENANT-ADMIN-PLANS-04  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
+### GAP-TENANT-ADMIN-PLANS-04  ·  MEDIUM  ·  interim  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — W2 INTERIM — payment mode (PO/GeM/treasury) is a product decision; GST invoice columns need billing-API fields)
 - **W2 INTERIM (needs owner decision):** Razorpay checkout and the dead PDF button are gone; GST invoice columns and the Govt payment-mode (PO/GeM/treasury) choice need billing-API fields + a product decision.
 - **W0 note:** partly fixed by #1864 — Razorpay checkout and dead PDF button removed; GST invoice columns still absent (awaiting billing API)
 - **First-pass claim:** 'Pay via Razorpay' presents a card-gateway checkout to a Government department whose payments run through PO/GeM/treasury; GST invoice details are absent from the invoice table and the 📥 PDF button has no handler (PlansClient.tsx:171,145).
@@ -1643,9 +1643,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 - **Depends on:** GAP-TENANT-ADMIN-READINESS-01
 
-### GAP-TENANT-ADMIN-READINESS-03  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
+### GAP-TENANT-ADMIN-READINESS-03  ·  MEDIUM  ·  interim  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — W2 INTERIM — readiness gates are platform-engineering gates with no tenant-fixable target; whether tenant admins see them is a product decision)
 - **W2 INTERIM (needs owner decision):** the readiness gates are platform-engineering gates (queue-first writes, k6, contract tests...) with no tenant-fixable screen, so there is no honest Fix target; GATE_META has no href by design. Decide whether tenant admins should see these gates at all.
 - **W0 note:** partly fixed by #1864 — Fix-link logic exists but GATE_META entries define no href, so no Fix link ever renders
 - **First-pass claim:** Rows are not actionable: a failing "Compliance Verified" or "Security Hardened" has no link to the screen that fixes it (page.tsx:79-89).
@@ -2072,9 +2072,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 - **Depends on:** GAP-TENANT-ADMIN-SESSIONS-DETAIL-01
 
-### GAP-TENANT-ADMIN-SESSIONS-DETAIL-05  ·  LOW  ·  partly  ·  theme PII
+### GAP-TENANT-ADMIN-SESSIONS-DETAIL-05  ·  LOW  ·  interim  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — W2 INTERIM — IP masked; audited reveal + session-viewed event need DPDP policy decision + identity-service endpoint)
 - **W2 note (INTERIM, needs owner decision):** IP is already masked by default (no clear IP is rendered). An audited reveal and a server-side session-viewed event need a DPDP policy decision on admin IP visibility and a new identity-service endpoint; not invented here. Full user agent is still printed.
 - **W0-10 note:** review found the W0 tick partly — sessions/[id]/page.tsx:93 IP masked via maskIp (no clear IP shown), but no reveal and no audited reveal/view event (acceptance "reveal audited" unmet; deliberate per comment :14); full userAgent still printed :106.
 - **First-pass claim:** Full user agent and IP are printed for any viewer; personal-data handling (DPDP) and access audit are not addressed (page.tsx:73,84-86).
@@ -2396,9 +2396,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 - **Depends on:** GAP-TENANT-ADMIN-USAGE-04
 
-### GAP-TENANT-ADMIN-SUBSCRIPTION-04  ·  MEDIUM  ·  partly  ·  theme WIRING (was DATEFMT)
+### GAP-TENANT-ADMIN-SUBSCRIPTION-04  ·  MEDIUM  ·  interim  ·  theme WIRING (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — W2 INTERIM — billing-service has no invoice PDF renderer; dead download control removed, list needs billing-service invoice endpoint)
 - **W2 INTERIM (needs owner decision):** the 'Download invoice' link targeted /v1/billing/invoices/latest?format=pdf which NO service implements (billing-service has GET /invoices/:id with a uuid id and no PDF renderer) — it was a dead control, removed (subscription/page.tsx). An invoice list + PDF download needs a billing-service invoice-PDF endpoint.
 - **W0 note:** partly fixed by #1864 — Download routed via /api/proxy; still latest-only link, no invoice list
 - **First-pass claim:** "Download invoice" is a plain link to the "latest" invoice with no invoice list, date or amount, and goes to /api/v1 directly rather than through the proxy used by mutations (page.tsx:28).
