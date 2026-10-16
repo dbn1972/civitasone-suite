@@ -198,7 +198,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-ITEMS-NEW-01  ·  HIGH  ·  partly  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 stock: partial; 202→'submitted'/201→'created' distinction fixed; list revalidation within 60s cache still applies for the 201 sync path — acknowledged limitation of async queue)
 - **W0 note:** partly fixed by #1916 — 202 vs 200/201 messages are distinct, but the list is still revalidated on a 60 s cache (getStockItems revalidateSeconds:60) so a 201 create is not shown immediately
 - **First-pass claim:** Create returns 200/202 (queue path) and the page immediately says 'Stock item created.' then redirects to /stock/list after 700 ms (page.tsx:108-114); the list loader revalidates for 60 s (loaders.ts:3891-3897) and the consumer applies the write asynchronously, so the new SKU commonly is not on the list the clerk lands on.
 - **Verified evidence:** submit() (page.tsx:107-114) treats res.ok||202 as success, sets 'Stock item created.', router.refresh(), pushes /stock/list after 700 ms. list loader getStockItems revalidates 60 s (loaders.ts:3891-3897). The stale-list part is verifiable; that the server applies the write asynchronously (queue consumer) cannot be verified - stock-service is not in the snapshot, though the code comment/202 handling implies it.
@@ -259,7 +259,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-ITEMS-NEW-05  ·  MEDIUM  ·  confirmed  ·  theme NAVUX
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 stock: closed; Cancel is now a button; dirty form opens ConfirmDialog before navigating; beforeunload still covers tab-close)
 - **W0 note:** partly fixed by #1916 — Cancel link and beforeunload dirty guard added; guard does not cover in-app client navigation (Cancel/back link shows no confirm prompt)
 - **First-pass claim:** No Cancel button and no unsaved-changes guard; the only exit is the header back link (page.tsx:127-129, 201).
 - **Verified evidence:** Only PageHeader back="/stock/list" (line 128); form has a single submit button (line 201); no beforeunload/dirty guard.
@@ -338,7 +338,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-02  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 stock: partial; mapper now uses '—' instead of id slices; warehouseName absent from stock_ledger rows — full fix needs backend join. NEEDS OWNER DECISION)
 - **First-pass claim:** 'Warehouse' column renders entry.party (StockLedgerClient.tsx:47) but mapStockLedgerEntries never sets party (apiMappers.ts:981-992), so the column is always '—'; the create form also treats warehouse as a raw UUID.
 - **Verified evidence:** StockLedgerClient.tsx:47 renders entry.party ?? '-'; mapStockLedgerEntries (apiMappers.ts:962-993) never sets party or a warehouse field, so the column is always '-'. Create form ledger/new/page.tsx:168-169 has a free-text 'Warehouse ID (optional)' input with placeholder 'UUID', sent as fromWarehouseId/toWarehouseId (lines 90-91). Whether the ledger API returns warehouse id/name per row cannot be seen (service absent).
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/stock/ledger/StockLedgerClient.tsx`, `apps/web/src/app/(app)/stock/ledger/new/page.tsx`
@@ -354,7 +354,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-03  ·  MEDIUM  ·  confirmed  ·  theme UUID (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 stock: partial; mapper uses toText(row.itemCode)/'—' fallback — no id slice; itemCode/itemName still absent from stock_ledger rows, backend join needed. NEEDS OWNER DECISION)
 - **First-pass claim:** Item cell prints itemCode = itemId.slice(0,8).toUpperCase() and, without itemName in the payload, the id prefix again (apiMappers.ts:983-984) — clerks see 'A3F91C2E' rather than the SKU code from the item register.
 - **Verified evidence:** apiMappers.ts:983-984 - itemCode = itemId.slice(0,8).toUpperCase() (or entry id prefix); itemName = row.itemName ?? itemId.slice(0,8). Client joins `${itemCode} ${itemName}` (StockLedgerClient.tsx:46), so without itemName the cell prints the id prefix twice. No SKU code is read from the row (row.itemCode is not consulted).
 - **Files to change:** `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/stock/ledger/StockLedgerClient.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -386,7 +386,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-05  ·  MEDIUM  ·  confirmed  ·  theme LABEL (was MONEY)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 stock: closed; StatCard renamed 'Net Receipts − Issues'; column renamed 'Balance qty'. Product decision on including transfers/adjustments still open)
 - **First-pass claim:** Net Balance = receipts − issues (page.tsx:12) ignores transfers and adjustments, and the table's 'Balance' column is a quantity — two different 'balance' meanings on one screen, one in ₹ and one in units.
 - **Verified evidence:** page.tsx:10-12 Net Balance = receipts - issues (transfer/adjustment excluded); totalValue = unitCost*quantity in paise (mapper line ~986) and shown via formatMoney (paise-correct). The table 'Balance' column (Client:30,50) is balanceQty (units). So one screen has a rupee 'Net Balance' and a unit 'Balance'. Money handling itself uses formatMoney; no float rupee math seen.
 - **Files to change:** `apps/web/src/app/(app)/stock/ledger/page.tsx`, `apps/web/src/app/(app)/stock/ledger/StockLedgerClient.tsx`
@@ -487,7 +487,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme MONEY
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 stock: closed; receipt rate now required and >0; issue/adjustment rate stays optional; float conversion (rupeesInputToMinorNumber) already fixed in W1)
 - **W1 note:** W1 SF-12 #2003 fixed the float Math.round(Number(x)*100) conversion (now rupeesInputToMinorNumber from lib/money, covered by money.sf12.test.ts). Still open: require a rate for receipts and reject 0 unless confirmed.
 - **First-pass claim:** Rate is optional and defaults to 0 (page.tsx:76-77): a zero-rate receipt is accepted and will distort weighted-average valuation; the ₹→paise conversion uses Math.round(Number(x)*100) on a float.
 - **Verified evidence:** page.tsx:77 rateMinor = Math.round(Number(rate||"0")*100): blank rate becomes 0 and is posted for receipts; float multiplication (e.g. 1.005*100=100.49999999999999). No decimal-string paise helper found under src/lib (only formatMoney/formatRupees).
@@ -672,7 +672,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-HOME-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 stock: backend verified; stock-service present; GET /v1/stock/dashboard + /v1/stock/items enforce requireRole(ctx, STOCK_ROLES); 403 on missing role, 200 on valid role)
 - **First-pass claim:** stock-service is not present in the services/ snapshot (only hrms-service), so endpoints behind these routes cannot be verified — undeterminable.
 - **Service:** `stock-service`  ·  **Endpoint(s):** `['GET /api/v1/stock/dashboard', 'GET /api/v1/stock/items']`
 - **Question:** Do the stock endpoints behind /stock exist with the shapes the loaders assume, and enforce stock roles?
@@ -683,7 +683,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-DASHBOARD-06  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 stock: backend verified; inventoryValue = valuation.totalValuePaise (BigInt, explicitly named paise in dashboard/queries.ts); no 100x risk)
 - **First-pass claim:** formatMoney(data.inventoryValue) assumes paise; the payload type is a bare number (loaders.ts:3872-3880) so rupee-vs-paise cannot be confirmed — stock-service is absent from the snapshot (undeterminable).
 - **Service:** `stock-service`  ·  **Endpoint(s):** `['GET /api/v1/stock/dashboard']`
 - **Question:** Is inventoryValue returned in paise (minor units) as an integer?
@@ -694,7 +694,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-NEW-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 stock: backend verified; entry consumer audit() emits {service,action,resourceType,resourceId,outcome} only — reason/notes are NOT included. Structured reason field absent from POST validator. NEEDS OWNER DECISION: add reason to audit payload + validator)
 - **First-pass claim:** The audit reason is folded into the free-text notes as 'Reason: …' (page.tsx:79-82) instead of a structured field; whether the server emits a proper audit event with it is undeterminable.
 - **Service:** `stock-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/stock/entries']`
 - **Question:** Does stock-service accept a structured reason field and emit an audit event containing it, rather than parsing 'Reason:' from notes?
@@ -705,7 +705,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LIST-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 stock: backend verified; ItemWithUom (item list response) has no totalValue field — mapper returns null → '—'. No 100x risk since field is absent. NEEDS OWNER DECISION: add totalValue (bigint paise) to GET /v1/stock/items response)
 - **First-pass claim:** Money: 'Value ₹' column and Stock Value StatCard assume totalValue is paise (StockListClient.tsx:39 comment, formatMoney) but parseMinor() accepts any numeric string (apiMappers.ts:63-71); unit of the stock-service field cannot be verified — undeterminable.
 - **Service:** `stock-service`  ·  **Endpoint(s):** `['GET /api/v1/stock/items']`
 - **Question:** Is totalValue in paise as an integer for every item?
