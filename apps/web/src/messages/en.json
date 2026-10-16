@@ -333,12 +333,30 @@
       "title": "Data & Analytics",
       "subtitle": "Saved dashboards and safe, whitelisted query runs over the analytics service's own data.",
       "tiles": {
-        "dashboards": { "label": "Dashboards", "note": "Saved dashboards with widgets, sharing and access control" },
-        "queries": { "label": "Query Results", "note": "Recent query runs with accessible charts and tables" },
-        "kpi": { "label": "KPI Library", "note": "Organisation-wide Key Performance Indicators" },
-        "dataWarehouse": { "label": "Data Warehouse", "note": "Consolidated datasets and data quality metrics" },
-        "aiInsights": { "label": "AI Insights", "note": "Recommended actions generated for your modules" },
-        "mlInsights": { "label": "ML Insights", "note": "How well each prediction model performs" }
+        "dashboards": {
+          "label": "Dashboards",
+          "note": "Saved dashboards with widgets, sharing and access control"
+        },
+        "queries": {
+          "label": "Query Results",
+          "note": "Recent query runs with accessible charts and tables"
+        },
+        "kpi": {
+          "label": "KPI Library",
+          "note": "Organisation-wide Key Performance Indicators"
+        },
+        "dataWarehouse": {
+          "label": "Data Warehouse",
+          "note": "Consolidated datasets and data quality metrics"
+        },
+        "aiInsights": {
+          "label": "AI Insights",
+          "note": "Recommended actions generated for your modules"
+        },
+        "mlInsights": {
+          "label": "ML Insights",
+          "note": "How well each prediction model performs"
+        }
       }
     }
   },
@@ -5761,13 +5779,34 @@
     },
     "gfr": {
       "band": {
-        "LS": { "name": "Local Shopping", "note": "Spot purchase up to ₹5,000 without tender" },
-        "DP": { "name": "Direct Purchase", "note": "Direct purchase up to ₹25,000; single quotation" },
-        "LTR": { "name": "Limited Tender Request", "note": "₹25,001 to ₹10,00,000; minimum 3 quotations" },
-        "LTE": { "name": "Limited Tender Enquiry", "note": "₹10,00,001 to ₹25,00,000; minimum 10 vendors invited" },
-        "OT": { "name": "Open Tender", "note": "₹25,00,001 to ₹5,00,00,000; advertised tender" },
-        "GT": { "name": "Global Tender", "note": "Above ₹5,00,00,000 or for specialised unavailable items" },
-        "ST": { "name": "Single Tender", "note": "Single source; requires committee justification" }
+        "LS": {
+          "name": "Local Shopping",
+          "note": "Spot purchase up to ₹5,000 without tender"
+        },
+        "DP": {
+          "name": "Direct Purchase",
+          "note": "Direct purchase up to ₹25,000; single quotation"
+        },
+        "LTR": {
+          "name": "Limited Tender Request",
+          "note": "₹25,001 to ₹10,00,000; minimum 3 quotations"
+        },
+        "LTE": {
+          "name": "Limited Tender Enquiry",
+          "note": "₹10,00,001 to ₹25,00,000; minimum 10 vendors invited"
+        },
+        "OT": {
+          "name": "Open Tender",
+          "note": "₹25,00,001 to ₹5,00,00,000; advertised tender"
+        },
+        "GT": {
+          "name": "Global Tender",
+          "note": "Above ₹5,00,00,000 or for specialised unavailable items"
+        },
+        "ST": {
+          "name": "Single Tender",
+          "note": "Single source; requires committee justification"
+        }
       }
     },
     "tenders": "Tenders",
@@ -5798,22 +5837,70 @@
       "subtitle": "Requisitions, vendors, purchase orders, and tenders with approval controls.",
       "allModules": "View all modules",
       "tiles": {
-        "dashboard": { "title": "Dashboard", "description": "Snapshot of procurement activity" },
-        "planning": { "title": "Annual Plans", "description": "GFR annual procurement plan aggregation and approval" },
-        "indents": { "title": "Purchase Indents", "description": "Material requisitions from departments" },
-        "vendors": { "title": "Vendors", "description": "Empanelled vendor directory" },
-        "rfq": { "title": "RFQ", "description": "Request for quotation management" },
-        "orders": { "title": "Purchase Orders", "description": "Operational order book" },
-        "grn": { "title": "Goods Receipt", "description": "GRN tracking and quality checks" },
-        "contracts": { "title": "Contracts", "description": "Rate and service contracts" },
-        "tenders": { "title": "Tenders", "description": "Open and limited tenders" },
-        "approvals": { "title": "Approvals", "description": "Pending approvals and sign-offs" },
-        "bidEvaluation": { "title": "Bid Evaluation", "description": "Technical and financial scoring matrix" },
-        "reverseAuction": { "title": "Reverse Auction", "description": "Live and scheduled reverse auctions" },
-        "gem": { "title": "GeM", "description": "Government e-Marketplace integration" },
-        "emdBg": { "title": "EMD & BG", "description": "Earnest Money Deposit (EMD) and bank guarantee (BG) register" },
-        "empanelment": { "title": "Empanelment", "description": "Vendor empanelment management" },
-        "preBid": { "title": "Pre-Bid", "description": "Pre-bid conference log" }
+        "dashboard": {
+          "title": "Dashboard",
+          "description": "Snapshot of procurement activity"
+        },
+        "planning": {
+          "title": "Annual Plans",
+          "description": "GFR annual procurement plan aggregation and approval"
+        },
+        "indents": {
+          "title": "Purchase Indents",
+          "description": "Material requisitions from departments"
+        },
+        "vendors": {
+          "title": "Vendors",
+          "description": "Empanelled vendor directory"
+        },
+        "rfq": {
+          "title": "RFQ",
+          "description": "Request for quotation management"
+        },
+        "orders": {
+          "title": "Purchase Orders",
+          "description": "Operational order book"
+        },
+        "grn": {
+          "title": "Goods Receipt",
+          "description": "GRN tracking and quality checks"
+        },
+        "contracts": {
+          "title": "Contracts",
+          "description": "Rate and service contracts"
+        },
+        "tenders": {
+          "title": "Tenders",
+          "description": "Open and limited tenders"
+        },
+        "approvals": {
+          "title": "Approvals",
+          "description": "Pending approvals and sign-offs"
+        },
+        "bidEvaluation": {
+          "title": "Bid Evaluation",
+          "description": "Technical and financial scoring matrix"
+        },
+        "reverseAuction": {
+          "title": "Reverse Auction",
+          "description": "Live and scheduled reverse auctions"
+        },
+        "gem": {
+          "title": "GeM",
+          "description": "Government e-Marketplace integration"
+        },
+        "emdBg": {
+          "title": "EMD & BG",
+          "description": "Earnest Money Deposit (EMD) and bank guarantee (BG) register"
+        },
+        "empanelment": {
+          "title": "Empanelment",
+          "description": "Vendor empanelment management"
+        },
+        "preBid": {
+          "title": "Pre-Bid",
+          "description": "Pre-bid conference log"
+        }
       }
     }
   },
@@ -9818,7 +9905,6 @@
     "initiator": "Initiating officer",
     "officersLoadFailed": "Couldn't load officers.",
     "loadingOfficers": "Loading officers…",
-    "errInitiatorEqualsApprover": "The initiating officer and the approving officer must be different people.",
     "selectInitiator": "Select initiating officer…",
     "approver": "Forward to (approving officer)",
     "selectApprover": "Select approving officer…",
@@ -12307,7 +12393,7 @@
   },
   "estabDfaFocus": {
     "shown": "Showing the draft you selected: {dfaNo} — {subject}.",
-    "missing": "The draft you selected isn't in this view — switch to \u201CAll\u201D or another status to find it."
+    "missing": "The draft you selected isn't in this view — switch to “All” or another status to find it."
   },
   "estabW2": {
     "dismiss": "Dismiss",
@@ -13555,7 +13641,8 @@
     "weightHelp": "How much this field counts toward the match score. Higher-weight fields (e.g. email, GSTIN) push two records together more strongly than low-weight ones.",
     "threshold": "Threshold",
     "thresholdHelp": "The minimum similarity (0–100) this field must reach to count as a match. For a fuzzy match, 90 means \"almost identical\"; a lower threshold flags looser matches.",
-    "totalEnabledWeight": "Total enabled weight: <strong>{total}</strong>"
+    "totalEnabledWeight": "Total enabled weight: <strong>{total}</strong>",
+    "rulesRemoved": "{count, plural, one {1 rule removed — save to apply.} other {{count} rules removed — save to apply.}}"
   },
   "crmEditContactForm": {
     "leadStatus": "Lead status",
@@ -15231,14 +15318,38 @@
         "accountCompile": "Account Compile"
       },
       "tiles": {
-        "proposals": { "label": "Work Proposals", "desc": "Register and track proposals" },
-        "tenders": { "label": "Tender Pipeline", "desc": "Publish and manage tenders" },
-        "contractors": { "label": "Contractors", "desc": "Registered firms & ratings" },
-        "execution": { "label": "Execution", "desc": "Progress, issues, photos" },
-        "billing": { "label": "Bills & MB", "desc": "MBs, bills and disbursement" },
-        "procurement": { "label": "Procurement", "desc": "Purchase orders" },
-        "masters": { "label": "Masters Registry", "desc": "Lookup values & categories" },
-        "reports": { "label": "Reports", "desc": "Analytics and work register" }
+        "proposals": {
+          "label": "Work Proposals",
+          "desc": "Register and track proposals"
+        },
+        "tenders": {
+          "label": "Tender Pipeline",
+          "desc": "Publish and manage tenders"
+        },
+        "contractors": {
+          "label": "Contractors",
+          "desc": "Registered firms & ratings"
+        },
+        "execution": {
+          "label": "Execution",
+          "desc": "Progress, issues, photos"
+        },
+        "billing": {
+          "label": "Bills & MB",
+          "desc": "MBs, bills and disbursement"
+        },
+        "procurement": {
+          "label": "Procurement",
+          "desc": "Purchase orders"
+        },
+        "masters": {
+          "label": "Masters Registry",
+          "desc": "Lookup values & categories"
+        },
+        "reports": {
+          "label": "Reports",
+          "desc": "Analytics and work register"
+        }
       }
     },
     "masters": {
@@ -15667,28 +15778,28 @@
     }
   },
   "tenantPages": {
-      "office": "Office",
-      "codeListsTitle": "Office — Code Lists",
-      "codeListsSubtitle": "Reference code lists and their dated values.",
-      "consentExchangeTitle": "Office — Consent Exchange",
-      "consentExchangeSubtitle": "Cross-organisation consent requests (read-only).",
-      "dataMigrationTitle": "Office — Data Migration",
-      "dataMigrationSubtitle": "Organisation data migrations and reconciliation jobs.",
-      "orgHierarchyTitle": "Office — Org Hierarchy",
-      "orgHierarchySubtitle": "Organisation units and hierarchy nodes.",
-      "overviewTitle": "Office — Overview",
-      "overviewSubtitle": "Your organisation's current profile.",
-      "plansTitle": "Office — Plans",
-      "plansSubtitle": "Available plans with pricing and module entitlements.",
-      "positionsTitle": "Office — Positions",
-      "positionsSubtitle": "Position master records with sanctioned strength and vacancies.",
-      "quotasTitle": "Office — Quotas & Usage",
-      "quotasSubtitle": "Resource consumption against plan limits for this office.",
-      "settingsTitle": "Office — Settings",
-      "settingsSubtitle": "Office configuration keys and their values.",
-      "stewardshipTitle": "Office — Stewardship",
-      "stewardshipSubtitle": "Data governance domains and their owners.",
-      "subscriptionsTitle": "Office — Subscriptions",
-      "subscriptionsSubtitle": "Current subscription plan, renewal date and lifecycle state."
+    "office": "Office",
+    "codeListsTitle": "Office — Code Lists",
+    "codeListsSubtitle": "Reference code lists and their dated values.",
+    "consentExchangeTitle": "Office — Consent Exchange",
+    "consentExchangeSubtitle": "Cross-organisation consent requests (read-only).",
+    "dataMigrationTitle": "Office — Data Migration",
+    "dataMigrationSubtitle": "Organisation data migrations and reconciliation jobs.",
+    "orgHierarchyTitle": "Office — Org Hierarchy",
+    "orgHierarchySubtitle": "Organisation units and hierarchy nodes.",
+    "overviewTitle": "Office — Overview",
+    "overviewSubtitle": "Your organisation's current profile.",
+    "plansTitle": "Office — Plans",
+    "plansSubtitle": "Available plans with pricing and module entitlements.",
+    "positionsTitle": "Office — Positions",
+    "positionsSubtitle": "Position master records with sanctioned strength and vacancies.",
+    "quotasTitle": "Office — Quotas & Usage",
+    "quotasSubtitle": "Resource consumption against plan limits for this office.",
+    "settingsTitle": "Office — Settings",
+    "settingsSubtitle": "Office configuration keys and their values.",
+    "stewardshipTitle": "Office — Stewardship",
+    "stewardshipSubtitle": "Data governance domains and their owners.",
+    "subscriptionsTitle": "Office — Subscriptions",
+    "subscriptionsSubtitle": "Current subscription plan, renewal date and lifecycle state."
   }
 }
