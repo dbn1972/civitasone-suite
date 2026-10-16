@@ -44,7 +44,7 @@ Counts: ACTION 12, BACKEND-VERIFY 4
 
 ### GAP-JOURNEYS-HOME-03  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2: closed by this PR — alias map already on main; unit tests added in moduleVisibility.test.ts:136-169)
 - **First-pass claim:** Module gate key is "journey" while route and nav are "journeys" (layout.tsx:5) — fuzzy substring match in isModuleEnabled makes it work, but a tenant flag named "journeys" versus "journey" is ambiguous.
 - **Verified evidence:** layout.tsx:5 uses moduleKey="journey"; Sidebar.tsx:127 also uses moduleKey "journey" for href /journeys, so nav and gate agree. isModuleEnabled (lib/moduleVisibility.ts:44-45) matches by equality or substring either direction, so a tenant flag named 'journeys' or 'journey' both pass (also could false-match unrelated names). Real issue is only the fuzzy matching ambiguity, low impact.
 - **Files to change:** `apps/web/src/lib/moduleVisibility.ts`
@@ -237,7 +237,7 @@ Counts: ACTION 12, BACKEND-VERIFY 4
 
 ### GAP-JOURNEYS-ACTIVE-03  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2: closed by this PR — journey-service present in worktree; requireRole+tenant-scope+pageSize cap verified in routes.ts; pinned by journey-list-contract.test.ts)
 - **First-pass claim:** journey-service is not in the snapshot; the real row shape, permissions and pagination are undeterminable (no limit param on the request).
 - **Service:** `journey-service`  ·  **Endpoint(s):** `['GET /api/v1/journeys/executions']`
 - **Question:** GET /v1/journeys/executions must require a journeys role, tenant-scope, accept limit/cursor with a server default cap, and return {id,name,status,updatedAt} per row.
@@ -248,7 +248,7 @@ Counts: ACTION 12, BACKEND-VERIFY 4
 
 ### GAP-JOURNEYS-ANALYTICS-03  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2: closed by this PR — journey-service present in worktree; requireRole+tenant-scope+pageSize cap verified in routes.ts; pinned by journey-list-contract.test.ts)
 - **First-pass claim:** journey-service is not in the snapshot; the real row shape, permissions and pagination are undeterminable (no limit param on the request).
 - **Service:** `journey-service`  ·  **Endpoint(s):** `['GET /api/v1/journeys/executions']`
 - **Question:** GET /v1/journeys/executions must paginate or aggregate server-side, since the analytics page derives metrics from the same unbounded list as Active.
@@ -259,7 +259,7 @@ Counts: ACTION 12, BACKEND-VERIFY 4
 
 ### GAP-JOURNEYS-BUILDER-03  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2: closed by this PR — journey-service present in worktree; requireRole+tenant-scope+pageSize cap verified in routes.ts; pinned by journey-list-contract.test.ts)
 - **First-pass claim:** journey-service is not in the snapshot; the real row shape, permissions and pagination are undeterminable (no limit param on the request).
 - **Service:** `journey-service`  ·  **Endpoint(s):** `['GET /api/v1/journeys']`
 - **Question:** GET /v1/journeys must require a journeys role, tenant-scope, accept limit/cursor, and return definition summaries with id/name/status.
@@ -270,7 +270,7 @@ Counts: ACTION 12, BACKEND-VERIFY 4
 
 ### GAP-JOURNEYS-TEMPLATES-03  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2: closed by this PR — journey-service present in worktree; requireRole+tenant-scope+pageSize cap verified in routes.ts; pinned by journey-list-contract.test.ts)
 - **First-pass claim:** journey-service is not in the snapshot; the real row shape, permissions and pagination are undeterminable (no limit param on the request).
 - **Service:** `journey-service`  ·  **Endpoint(s):** `['GET /api/v1/journeys/triggers']`
 - **Question:** GET /v1/journeys/triggers (loaded as 'templates') must return template/trigger definitions with id/name/description and paginate; confirm triggers are the intended data for a Templates page.
