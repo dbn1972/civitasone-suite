@@ -403,9 +403,9 @@ Counts: ACTION 35, BACKEND-VERIFY 1
   - Duplicate item number blocked with inline error.
 - **Needs:** web+backend  ·  **Effort:** S ~half day  ·  **Risk:** Low.
 
-### GAP-COURT-CAUSE-LIST-04  ·  MEDIUM  ·  partly  ·  theme OTHER
+### GAP-COURT-CAUSE-LIST-04  ·  MEDIUM  ·  closed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (closed — items whose case falls outside the 100-row getCases() fetch are now resolved individually via fetchCase(caseId) (client.ts); title/type/stage render from the per-case response; CNR and title cells fall back to em-dash while loading) (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0 note:** partly fixed by #1923 — Type and Stage columns added from the matched case; remaining: cases are still fetched with limit=100 and an item whose case is outside it falls back to 'Case' + id prefix (no getCase(id) resolve), no purpose column
 - **First-pass claim:** Listed-items table shows only CNR/id: no case title, purpose or parties for the bench (CauseListConsole.tsx items map).
 - **Verified evidence:** Table (CauseListConsole.tsx:187-204) does show case title and CNR via cases.find(x=>x.id===it.caseId), falling back to 'Case' and caseId.slice(0,8) if the case is not in the 100-row fetch (loaders.ts:191). Missing: hearing purpose, parties and stage. Items endpoint fields for purpose unknown (CauseListItem type not extended).
