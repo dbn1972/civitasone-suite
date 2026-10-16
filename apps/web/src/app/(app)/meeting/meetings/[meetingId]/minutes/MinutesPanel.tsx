@@ -28,6 +28,12 @@ type Props = {
   notDrafted?: boolean;
   /** Current signed-in user id (JWT sub) for a maker==checker self-approval warning. */
   currentUserId?: string | null;
+  /**
+   * GAP-MEETING-MEETINGS-MEETINGID-MINUTES-03: whether the viewing session holds
+   * a chairperson-level role permitted to approve/reject minutes. When false the
+   * Approve/Return buttons are hidden (the server is the authoritative gate).
+   */
+  canApprove?: boolean;
 };
 
 const monoStyle: React.CSSProperties = {
@@ -59,6 +65,7 @@ export function MinutesPanel({
   initialMinutes,
   notDrafted = true,
   currentUserId = null,
+  canApprove = true,
 }: Props) {
   const [minutes, setMinutes] = useState<Minutes | null>(initialMinutes);
   const [content, setContent] = useState(initialMinutes?.content ?? "");
@@ -412,7 +419,9 @@ export function MinutesPanel({
                 You drafted these minutes — a different chairperson must approve or return them
                 (maker-checker). Awaiting their decision.
               </span>
-            ) : (
+            ) : canApprove ? (
+              // GAP-MEETING-MEETINGS-MEETINGID-MINUTES-03: only chairperson-role viewers see
+              // Approve/Return buttons; others see a neutral waiting message.
               <>
                 <button
                   type="button"
@@ -437,6 +446,10 @@ export function MinutesPanel({
                   Return to secretary
                 </button>
               </>
+            ) : (
+              <span style={{ fontSize: 13, color: "var(--ink2)" }}>
+                Submitted for chairperson approval — awaiting decision.
+              </span>
             )
           )}
           {isApproved && (

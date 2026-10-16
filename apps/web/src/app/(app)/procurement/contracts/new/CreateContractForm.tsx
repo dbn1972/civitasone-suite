@@ -106,7 +106,7 @@ export function CreateContractForm() {
       }
       setStatus("accepted");
       setMessage("Contract created.");
-      router.push("/procurement/contracts");
+      router.push("/contracts/list");
       router.refresh();
     } catch {
       const human = toHumanError("offline", { area: "contract" });
@@ -212,7 +212,7 @@ export function CreateContractForm() {
         <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={status === "submitting" || (vendorSearch === "error" && !vendor)}>
           {status === "submitting" ? "Creating…" : "Create contract"}
         </Button>
-        <Link href="/procurement/contracts" className="btn ghost" style={{ minHeight: 44 }}>Cancel</Link>
+        <Link href="/contracts/list" className="btn ghost" style={{ minHeight: 44 }}>Cancel</Link>
       </div>
     </form>
   );

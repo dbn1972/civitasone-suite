@@ -1,18 +1,15 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-
-const REASONS = [
-  { value: "agent_initiated", label: "I am taking this over" },
-  { value: "requested", label: "Citizen asked for a person" },
-  { value: "low_confidence", label: "Assistant could not answer" },
-  { value: "guardrail", label: "Guardrail flagged the exchange" },
-];
+import { useTranslations } from "next-intl";
 
 /**
  * Escalates a live conversation to a human agent, carrying the transcript with
  * it so the receiving officer does not ask the citizen to start again. The
  * service builds that context — this only supplies the reason and routing.
+ *
+ * GAP-AI-CHAT-DETAIL-07: all English literals moved to the aiChat.handoff
+ * namespace so they can be switched with the locale.
  *
  * Shown only while the conversation is active: ai-agent-service rejects
  * escalating a conversation that has already been handed off or ended.
@@ -24,6 +21,7 @@ export function HandoffButton({
   conversationId: string;
   version: number;
 }) {
+  const t = useTranslations("aiChat.handoff");
   const router = useRouter();
   const [reasonCode, setReasonCode] = useState("agent_initiated");
   const [queue, setQueue] = useState("");
@@ -31,6 +29,13 @@ export function HandoffButton({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  const REASONS = [
+    { value: "agent_initiated", label: t("reasonAgentInitiated") },
+    { value: "requested", label: t("reasonRequested") },
+    { value: "low_confidence", label: t("reasonLowConfidence") },
+    { value: "guardrail", label: t("reasonGuardrail") },
+  ];
 
   async function handOff() {
     setBusy(true);
@@ -56,28 +61,24 @@ export function HandoffButton({
           message?: string;
         };
         if (body.code === "INVALID_TRANSITION") {
-          setError(
-            "This conversation is no longer with the assistant. Reload to see its current state.",
-          );
+          setError(t("errorAlreadyHandedOff"));
           return;
         }
         if (body.code === "VERSION_CONFLICT") {
-          setError(
-            "Someone else updated this conversation. Reload and try again.",
-          );
+          setError(t("errorVersionConflict"));
           return;
         }
         if (res.status === 403) {
-          setError("You do not have permission to hand off this conversation.");
+          setError(t("errorForbidden"));
           return;
         }
-        setError("Could not hand off the conversation.");
+        setError(t("errorGeneric"));
         return;
       }
-      setMessage("Handed off. The agent receives the transcript so far.");
+      setMessage(t("successMessage"));
       router.refresh();
     } catch {
-      setError("Could not reach the service. Try again shortly.");
+      setError(t("errorNetwork"));
     } finally {
       setBusy(false);
     }
@@ -86,7 +87,7 @@ export function HandoffButton({
   return (
     <div className="card">
       <div className="card-h">
-        <h3>Hand off to a human agent</h3>
+        <h3>{t("cardTitle")}</h3>
       </div>
       <div className="pad">
         <label
@@ -98,7 +99,7 @@ export function HandoffButton({
             marginBottom: 6,
           }}
         >
-          Reason
+          {t("reasonLabel")}
         </label>
         <select
           id="handoff-reason"
@@ -123,7 +124,7 @@ export function HandoffButton({
             margin: "12px 0 6px",
           }}
         >
-          Route to queue (optional)
+          {t("queueLabel")}
         </label>
         {/* GAP-AI-CHAT-DETAIL-06: ai-agent-service has no queue-registry
             endpoint, so the queue stays free text (forcing a closed list with
@@ -137,7 +138,7 @@ export function HandoffButton({
           onChange={(e) => setQueue(e.target.value)}
           maxLength={64}
           disabled={busy}
-          placeholder="e.g. water-supply-tier2"
+          placeholder={t("queuePlaceholder")}
           style={{ width: "100%", padding: 10, fontSize: 14 }}
         />
         <datalist id="handoff-queue-suggestions">
@@ -157,7 +158,7 @@ export function HandoffButton({
             margin: "12px 0 6px",
           }}
         >
-          Note for the agent (optional)
+          {t("noteLabel")}
         </label>
         <input
           id="handoff-note"
@@ -166,7 +167,7 @@ export function HandoffButton({
           onChange={(e) => setNote(e.target.value)}
           maxLength={500}
           disabled={busy}
-          placeholder="e.g. pension arrears since April, already verified"
+          placeholder={t("notePlaceholder")}
           style={{ width: "100%", padding: 10, fontSize: 14 }}
         />
 
@@ -177,7 +178,7 @@ export function HandoffButton({
           disabled={busy}
           style={{ minHeight: 44, marginTop: 12 }}
         >
-          {busy ? "Handing off…" : "Hand off to a human"}
+          {busy ? t("buttonBusy") : t("button")}
         </button>
 
         {message ? (

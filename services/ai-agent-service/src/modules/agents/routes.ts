@@ -42,7 +42,12 @@ const handoffBody = z.object({
   conversationId: z.string().uuid().optional(),
 });
 
-const versionBody = z.object({ version: z.number().int().min(1).optional() }).optional();
+// GAP-AI-GOVERNANCE-02: reason is now accepted on pause/resume so the audit
+// trail carries an operator-supplied explanation rather than null.
+const versionBody = z.object({
+  version: z.number().int().min(1).optional(),
+  reason: z.string().max(500).optional(),
+}).optional();
 
 const listQuery = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -226,7 +231,7 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "VERSION_CONFLICT", "agent has been modified; retry with current version");
     }
 
-    return reply.code(202).send(await commands.pauseAgent(ctx, id, version));
+    return reply.code(202).send(await commands.pauseAgent(ctx, id, version, body.reason));
   });
 
   app.post("/v1/ai/agents/:id/resume", async (req, reply) => {
@@ -250,7 +255,7 @@ export async function agentRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(409, "VERSION_CONFLICT", "agent has been modified; retry with current version");
     }
 
-    return reply.code(202).send(await commands.resumeAgent(ctx, id, version));
+    return reply.code(202).send(await commands.resumeAgent(ctx, id, version, body.reason));
   });
 
   app.post("/v1/ai/agents/:id/invoke", async (req, reply) => {

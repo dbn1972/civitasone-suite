@@ -29,7 +29,7 @@ Counts: ACTION 18, BACKEND-VERIFY 5
 
 ### GAP-CONTRACTS-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2086)
 - **W0 note:** partly fixed by #1928 — Sidebar Contracts entry added (moduleKey contracts); duplicate /procurement/contracts list still exists alongside /contracts/list (no redirect/consolidation)
 - **First-pass claim:** The route is missing from the app Sidebar (Sidebar.tsx has no 'contracts' entry) and appears only in navRouteManifest, GlobalSearch and VoiceNav; officers have no visible entry point, and a parallel /procurement/contracts page also exists.
 - **Verified evidence:** ds/Sidebar.tsx lists Procurement (:65) etc. and has no 'contracts' entry (grep for 'ontract' empty); '/contracts' appears in navRouteManifest.ts:37, GlobalSearch.tsx and VoiceNav.tsx, and layout.tsx gates it with ModuleGate moduleKey 'contracts'. Parallel hub /procurement/contracts exists (procurement/page.tsx:14). Nothing links into /contracts from the shell.
@@ -78,7 +78,7 @@ Counts: ACTION 18, BACKEND-VERIFY 5
 
 ### GAP-CONTRACTS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1928, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1928; W2 re-confirmed by #2086 — MilestoneActions/BondActions/ObligationsPanel reviewed, failmask fix still present)
 - **First-pass claim:** A failed contract fetch is shown as 'Contract not found — may have been removed or the ID is invalid' (page.tsx:24-34): getContractById returns null on error, so the source==='error' badge at page.tsx:56 is dead code for the main record and an outage reads as deletion.
 - **Verified evidence:** contracts/[id]/page.tsx:23-34 shows 'Contract not found' whenever !contract. getContractById (_data/loaders.ts:1775-1781) uses fetchJson with default null, so any failure returns { data:null, source:'error' }; hence the DataSourceBadge at page.tsx:56 is only reachable when contract is truthy (source then 'api'), i.e. dead code. LoaderResult also carries status (apiClient.ts:144-166), so 404 can be told apart from 5xx/network/403.
 - **Files to change:** `apps/web/src/app/(app)/contracts/[id]/page.tsx`
@@ -95,7 +95,7 @@ Counts: ACTION 18, BACKEND-VERIFY 5
 
 ### GAP-CONTRACTS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1928, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1928; W2 re-confirmed by #2086 — BOND_TYPES, validity window, exact paise math all intact in BondActions.tsx)
 - **First-pass claim:** Registering a bond hard-codes bondType 'performance', validFrom = today and validTo = 31 Dec of next year (BondActions.tsx:100-107); the officer cannot enter the real guarantee validity dates, so bond expiry tracking will be wrong.
 - **Verified evidence:** BondActions.tsx:95-107 posts bondType:'performance', validFrom: today (UTC date via toISOString().slice, so off by one before 05:30 IST) and validTo `${year+1}-12-31`. The form (:81-83,191,199) only collects issuer, reference no and amount; amountMinor uses Math.round(Number(rupees)*100) (:90,102), a float path. Bond validity in contract-service is cannot-verify (service absent), but the payload fields are sent.
 - **Files to change:** `apps/web/src/app/(app)/contracts/[id]/BondActions.tsx`
@@ -112,7 +112,7 @@ Counts: ACTION 18, BACKEND-VERIFY 5
 
 ### GAP-CONTRACTS-DETAIL-03  ·  MEDIUM  ·  partly  ·  theme ERRMSG (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1928, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1928; W2 re-confirmed by #2086 — ObligationsPanel error handling intact)
 - **First-pass claim:** 'Start' on an obligation is an unconfirmed single click (ObligationsPanel.tsx:122-130) and obligation owner is a raw 'Owner (user id)' UUID text field (ObligationsPanel.tsx:165-166); bond/obligation failures show raw response text (BondActions.tsx:111,140, ObligationsPanel.tsx:58,89).
 - **Verified evidence:** Real: ObligationsPanel.tsx:98-101,122-130 'Start' is a plain unconfirmed button (pending->in_progress, non-terminal so a confirm is arguably unnecessary; overstated), Owner is a raw text 'Owner (user id)' input with 'uuid' placeholder (:~163-166); BondActions.tsx:111,140 and ObligationsPanel.tsx:58,89 throw Error(await res.text()) and display it, unlike MilestoneActions which uses useFormError.fromResponse.
 - **Files to change:** `apps/web/src/app/(app)/contracts/[id]/ObligationsPanel.tsx`, `apps/web/src/app/(app)/contracts/[id]/BondActions.tsx`
@@ -143,7 +143,7 @@ Counts: ACTION 18, BACKEND-VERIFY 5
 
 ### GAP-CONTRACTS-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1928, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1928; W2 re-confirmed by #2086 — due date display in MilestoneActions intact)
 - **First-pass claim:** Milestones list prints title and status only; dueDate is loaded (page.tsx:112-118) but never displayed, so 'Mark late' is decided without seeing the due date.
 - **Verified evidence:** page.tsx:103-107 list items show only title and status; dueDate is mapped at :116 and typed in MilestoneActions.tsx:12 but never rendered there either (only 'dueDate' occurrence in the file is the type). Complete/Mark late (MilestoneActions) are therefore chosen without due date.
 - **Files to change:** `apps/web/src/app/(app)/contracts/[id]/page.tsx`, `apps/web/src/app/(app)/contracts/[id]/MilestoneActions.tsx`
@@ -157,7 +157,7 @@ Counts: ACTION 18, BACKEND-VERIFY 5
 
 ### GAP-CONTRACTS-DETAIL-06  ·  LOW  ·  confirmed  ·  theme STALE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2086)
 - **W0 note:** partly fixed by #1928 — Copy reworded to received/will update shortly; still missing per-row Pending pill and delayed router.refresh polling
 - **First-pass claim:** Milestone/bond/obligation writes return 202 (queued): the UI shows 'accepted (queued)' and calls router.refresh(), so state may not change on screen for some time.
 - **Verified evidence:** MilestoneActions.tsx (act(): 'accepted (queued)' message then router.refresh()), BondActions.tsx (:'Performance bond registration accepted (queued)') and ObligationsPanel.tsx treat 202 as success. State only changes after the async consumer runs, so the refreshed list can still show old state; queue latency is cannot-verify.
@@ -256,7 +256,7 @@ Counts: ACTION 18, BACKEND-VERIFY 5
 
 ### GAP-CONTRACTS-NEW-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1928, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1928; W2 re-confirmed by #2086 — EntityPicker vendor search present in NewContractForm.tsx)
 - **First-pass claim:** Vendor must be typed as a UUID ('Vendor ID (UUID)', regex UUID_RE, NewContractForm.tsx:7,47); no picker or lookup, so a clerk needs to copy a 36-character id from another screen — the most likely cause of failed submissions.
 - **Verified evidence:** NewContractForm.tsx:7 defines UUID_RE, :47-52 rejects non-UUID, :156-170 is a plain text input labelled 'Vendor ID (UUID)'. No picker exists: repo has no EntityPicker; SmartCombobox (_components/SmartCombobox.tsx) takes string[] options only, so cannot map id->name.
 - **Files to change:** `apps/web/src/app/(app)/contracts/new/NewContractForm.tsx`, `apps/web/src/app/_components/ds/EntityPicker.tsx (new)`
@@ -273,7 +273,7 @@ Counts: ACTION 18, BACKEND-VERIFY 5
 
 ### GAP-CONTRACTS-NEW-02  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1928, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1928; W2 re-confirmed by #2086 — zod schema safeParse still present in NewContractForm.tsx)
 - **First-pass claim:** Validation stops at the first error and shows one banner message (NewContractForm.tsx:30-66) instead of marking all invalid fields inline; aria-invalid is set but no per-field text.
 - **Verified evidence:** handleSubmit (NewContractForm.tsx:32-77) returns at the first failing check and sets a single message plus invalidField; only one field is aria-invalid at a time and no per-field text or aria-describedby exists (only form-level aria-describedby, :116). Banner role=alert at :235-244.
 - **Files to change:** `apps/web/src/app/(app)/contracts/new/NewContractForm.tsx`
@@ -309,7 +309,7 @@ Counts: ACTION 18, BACKEND-VERIFY 5
 
 ### GAP-CONTRACTS-NEW-04  ·  MEDIUM  ·  partly  ·  theme DSFORM (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1928, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13: closed by #1928; W2 re-confirmed by #2086 — no tailwind classes in NewContractForm.tsx, design system tokens used)
 - **First-pass claim:** Form is built from inline styles and Tailwind text-red-600 / text-emerald-700 classes (NewContractForm.tsx:240), bypassing DS field/inputs; contract type, department and description are not collected though the detail page displays them.
 - **Verified evidence:** True: all inputs use inline style objects (NewContractForm.tsx:120-224) and the message uses text-red-600/text-emerald-700 (:240). Overstated: contract type/department are not collected because contract-service has no type concept (loaders.ts:1720-1731 comment) and detail page defaults dept to 'Procurement' (page.helpers.ts:68); the create body accepts only contractNo, vendorId, title, valueMinor, startDate, expiry (:87-94). Description field not in the payload either.
 - **Files to change:** `apps/web/src/app/(app)/contracts/new/NewContractForm.tsx`
@@ -361,7 +361,7 @@ Counts: ACTION 18, BACKEND-VERIFY 5
 
 ### GAP-CONTRACTS-NEW-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2086 — web-only: unsaved-change guard added, 409 display tested. Backend 409/audit verification listed as NEEDS OWNER DECISION: contract-service absent from repo.)
 - **W0-10 note:** review found the W0 tick partly — Web shows backend fieldErrors (NewContractForm.tsx:139-140) but no unsaved-change guard anywhere in form; duplicate-contractNo 409 and audit on create not verifiable (contract-service absent from repo) and no test asserting 409 display
 - **First-pass claim:** No unsaved-changes guard or duplicate-number check before POST; audit of the mutation is not visible from the client (server-side, undeterminable).
 - **Service:** `contract-service`  ·  **Endpoint(s):** `['POST /v1/contract/contracts']`

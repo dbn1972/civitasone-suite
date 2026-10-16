@@ -625,6 +625,54 @@ export const MEETING_CREATE_ROLES = [
 ];
 
 /**
+ * GAP-MEETING-MEETINGS-MEETINGID-03: console control roles.
+ * These mirror the server role sets in meeting-service:
+ *   TRANSITION_ROLES — meeting-core/routes.ts (chairperson drives state machine)
+ *   CHECKIN_ROLES    — attendance/routes.ts (members check themselves in)
+ *   CAST_ROLES       — voting/routes.ts (eligible voters cast ballots)
+ *   CONCLUDE_ROLES   — voting/routes.ts (chair/secretary conclude the vote)
+ * These web constants are used to HIDE unavailable controls (honest UX);
+ * the server remains the security authority.
+ */
+export const MEETING_TRANSITION_ROLES = [
+  "meeting_admin",
+  "committee_chairperson",
+  "tenant_admin",
+  "super_admin",
+  "admin",
+];
+export const MEETING_CHECKIN_ROLES = [
+  "meeting_admin",
+  "committee_secretary",
+  "committee_chairperson",
+  "committee_member",
+  "tenant_admin",
+  "super_admin",
+];
+export const MEETING_CAST_ROLES = [
+  "meeting_admin",
+  "committee_chairperson",
+  "committee_member",
+  "tenant_admin",
+  "super_admin",
+];
+export const MEETING_CONCLUDE_ROLES = [
+  "meeting_admin",
+  "committee_chairperson",
+  "committee_secretary",
+  "tenant_admin",
+  "super_admin",
+];
+/** GAP-MEETING-MEETINGS-MEETINGID-MINUTES-03: role permitted to approve/reject minutes. */
+export const MEETING_MINUTES_APPROVE_ROLES = [
+  "meeting_admin",
+  "committee_chairperson",
+  "tenant_admin",
+  "super_admin",
+  "admin",
+];
+
+/**
  * GAP-THEMES-HOME-01 / GAP-THEMES-TOKENS-02 / GAP-THEMES-BRAND-05 /
  * GAP-THEMES-BRANDING-05 / GAP-THEMES-TEMPLATES-04: theme-module role gating.
  *

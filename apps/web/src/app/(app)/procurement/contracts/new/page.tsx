@@ -7,7 +7,7 @@ export default function NewContractPage() {
       <PageHeader
         title="New Contract"
         subtitle="Register a rate or service contract against an empanelled vendor."
-        back="/procurement/contracts"
+        back="/contracts/list"
       />
       <CreateContractForm />
     </>

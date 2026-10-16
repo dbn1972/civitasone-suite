@@ -98,3 +98,19 @@ describe("MyTasksPage — GAP-WORKFLOW-MY-TASKS-03/05", () => {
     expect(openTile?.querySelector(".val")?.textContent).toBe("200+");
   });
 });
+
+describe("MyTasksPage breadcrumbs — GAP-WORKFLOW-DEFINITIONS-04", () => {
+  beforeEach(() => {
+    getTasksMock.mockResolvedValue({ data: [], source: "api" });
+  });
+
+  it("renders no local Breadcrumbs nav element (AutoBreadcrumb in AppShell is the sole trail)", async () => {
+    // Given: no open tasks
+    // When: rendering the my-tasks page
+    const { container } = render(await MyTasksPage());
+    // Then: no inline <nav aria-label="Breadcrumb"> is rendered
+    // (the page relies on the global AutoBreadcrumb in the TopBar instead)
+    const crumbNavs = Array.from(container.querySelectorAll("nav[aria-label='Breadcrumb']"));
+    expect(crumbNavs).toHaveLength(0);
+  });
+});

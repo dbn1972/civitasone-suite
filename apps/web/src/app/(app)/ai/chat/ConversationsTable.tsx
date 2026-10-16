@@ -1,4 +1,5 @@
 "use client";
+import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "../../../_components/ds";
 import type { ChatConversation } from "@civitasone/types";
 import { formatDuration, formatInIST } from "@/lib/formatters";
@@ -30,6 +31,8 @@ function shortRef(id: string): string {
 }
 
 export function ConversationsTable({ conversations }: { conversations: ChatConversation[] }) {
+  const t = useTranslations("aiChat");
+
   const rows: ConversationRow[] = conversations.map((conversation) => {
     const minutes = conversationDurationMinutes(conversation);
     const isHandedOff = conversation.status === "handed_off";
@@ -40,16 +43,16 @@ export function ConversationsTable({ conversations }: { conversations: ChatConve
       rawStatus: conversation.status,
       // GAP-AI-CHAT-04: show the routing queue for a handed-off conversation,
       // "Unrouted" when it was handed off without one, "—" otherwise.
-      queue: isHandedOff ? (conversation.handoffQueue ?? "Unrouted") : "—",
+      queue: isHandedOff ? (conversation.handoffQueue ?? t("table.unrouted")) : "—",
       // GAP-AI-CHAT-04: how long a handed-off conversation has been waiting for
       // an operator (elapsed since handedOffAt). "—" for non-handed rows.
       waiting:
         isHandedOff && conversation.handedOffAt
-          ? `Waiting ${formatDuration(conversation.handedOffAt)}`
+          ? t("table.waitingLabel", { duration: formatDuration(conversation.handedOffAt) })
           : "—",
       language: conversation.language.toUpperCase(),
       handoff: handoffReasonLabel(conversation.handoffReason) ?? "—",
-      duration: minutes === null ? "In progress" : `${minutes.toLocaleString("en-IN")} min`,
+      duration: minutes === null ? t("table.inProgress") : t("table.durationMin", { minutes: minutes.toLocaleString("en-IN") }),
       startedAt: formatDateTime(conversation.startedAt),
     };
   });
@@ -62,24 +65,24 @@ export function ConversationsTable({ conversations }: { conversations: ChatConve
   return (
     <DataTable<ConversationRow>
       columns={[
-        { key: "ref", label: "Conversation", render: (row) => <span className="mono" title={row.id}>{row.ref}</span> },
-        { key: "status", label: "Status", render: (row) => <StatusPill status={row.status} /> },
-        { key: "queue", label: "Queue" },
-        { key: "waiting", label: "Waiting", render: (row) => (row.waiting === "—" ? "—" : <StatusPill status="pending" label={row.waiting} />) },
-        { key: "language", label: "Language" },
-        { key: "handoff", label: "Handoff reason" },
-        { key: "duration", label: "Duration", align: "right" },
-        { key: "startedAt", label: "Started" },
+        { key: "ref", label: t("table.colConversation"), render: (row) => <span className="mono" title={row.id}>{row.ref}</span> },
+        { key: "status", label: t("table.colStatus"), render: (row) => <StatusPill status={row.status} /> },
+        { key: "queue", label: t("table.colQueue") },
+        { key: "waiting", label: t("table.colWaiting"), render: (row) => (row.waiting === "—" ? "—" : <StatusPill status="pending" label={row.waiting} />) },
+        { key: "language", label: t("table.colLanguage") },
+        { key: "handoff", label: t("table.colHandoffReason") },
+        { key: "duration", label: t("table.colDuration"), align: "right" },
+        { key: "startedAt", label: t("table.colStarted") },
       ]}
       rows={rows}
       rowHref={(row) => `/ai/chat/${row.id}`}
       sortable
       filterable
-      filterPlaceholder="Filter conversations…"
+      filterPlaceholder={t("table.filterPlaceholder")}
       pageSize={20}
       emptyIcon="💬"
-      emptyTitle="No conversations yet"
-      emptyMessage="Chat conversations started through any channel appear here with their full transcript."
+      emptyTitle={t("table.emptyTitle")}
+      emptyMessage={t("table.emptyMessage")}
     />
   );
 }

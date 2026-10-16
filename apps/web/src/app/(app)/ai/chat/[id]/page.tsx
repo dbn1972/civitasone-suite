@@ -1,4 +1,5 @@
 import { formatIndianDateTime } from "@/lib/formatters";
+import { getTranslations } from "next-intl/server";
 import { Card, EmptyState, PageHeader, StatCard, StatGrid, StatusPill, RefreshErrorState } from "../../../../_components/ds";
 import { getChatConversation, getChatTranscript } from "../../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
@@ -36,6 +37,8 @@ export default async function ChatConversationPage({ params }: PageProps) {
     redirect("/ai");
   }
 
+  const t = await getTranslations("aiChat");
+
   const [{ data: conversation, source: conversationSource }, { data: messages, source: transcriptSource }] =
     await Promise.all([getChatConversation(params.id), getChatTranscript(params.id)]);
 
@@ -45,7 +48,7 @@ export default async function ChatConversationPage({ params }: PageProps) {
   if (conversationSource === "error") {
     return (
       <>
-        <PageHeader title="Conversation" back="/ai/chat" />
+        <PageHeader title={t("detail.statStatus")} back="/ai/chat" />
         <Card>
           <RefreshErrorState error={toHumanError("load", { area: "conversation" })} />
         </Card>
@@ -56,7 +59,7 @@ export default async function ChatConversationPage({ params }: PageProps) {
   if (!conversation) {
     return (
       <>
-        <PageHeader title="Conversation" back="/ai/chat" />
+        <PageHeader title={t("detail.statStatus")} back="/ai/chat" />
         <Card>
           <EmptyState
             icon="💬"
@@ -85,45 +88,45 @@ export default async function ChatConversationPage({ params }: PageProps) {
   return (
     <>
       <PageHeader
-        title="Conversation"
-        subtitle={`Started ${formatDateTime(conversation.startedAt)}`}
+        title={t("detail.statStatus")}
+        subtitle={`${t("detail.statStarted")} ${formatDateTime(conversation.startedAt)}`}
         back="/ai/chat"
       />
       <StatGrid>
         <StatCard
           icon={statusIcon}
           iconBg={statusIconBg}
-          label="Status"
+          label={t("detail.statStatus")}
           value={statusLabel(conversation.status)}
         />
-        <StatCard icon="💬" iconBg="var(--infobg)" label="Messages" value={transcriptErrored ? "—" : stats.messages.toLocaleString("en-IN")} />
+        <StatCard icon="💬" iconBg="var(--infobg)" label={t("detail.statMessages")} value={transcriptErrored ? "—" : stats.messages.toLocaleString("en-IN")} />
         <StatCard
           icon="⏱️"
           iconBg="var(--warnbg)"
-          label="Duration"
-          value={minutes === null ? "In progress" : `${minutes.toLocaleString("en-IN")} min`}
+          label={t("detail.statDuration")}
+          value={minutes === null ? t("table.inProgress") : t("table.durationMin", { minutes: minutes.toLocaleString("en-IN") })}
         />
-        <StatCard icon="🔢" iconBg="var(--infobg)" label="Tokens" value={transcriptErrored ? "—" : stats.totalTokens.toLocaleString("en-IN")} />
+        <StatCard icon="🔢" iconBg="var(--infobg)" label={t("detail.statTokens")} value={transcriptErrored ? "—" : stats.totalTokens.toLocaleString("en-IN")} />
       </StatGrid>
 
       {isHandedOff || conversation.handedOffAt !== null ? (
-        <Card title="Handed to a human agent">
+        <Card title={t("detail.sectionHandedToAgent")}>
           <dl style={{ display: "grid", gridTemplateColumns: "160px 1fr", gap: "8px 16px", padding: "12px 16px", margin: 0 }}>
             <dt style={{ fontSize: 13, color: "var(--muted)" }}>Reason</dt>
             <dd style={{ margin: 0, fontSize: 14 }}>
               {handoffReasonLabel(conversation.handoffReason) ?? "Not recorded"}
             </dd>
-            <dt style={{ fontSize: 13, color: "var(--muted)" }}>Handed off at</dt>
+            <dt style={{ fontSize: 13, color: "var(--muted)" }}>{t("detail.statHandedOff")}</dt>
             <dd style={{ margin: 0, fontSize: 14 }}>{formatDateTime(conversation.handedOffAt)}</dd>
             <dt style={{ fontSize: 13, color: "var(--muted)" }}>Queue</dt>
-            <dd style={{ margin: 0, fontSize: 14 }}>{conversation.handoffQueue ?? "Unrouted"}</dd>
+            <dd style={{ margin: 0, fontSize: 14 }}>{conversation.handoffQueue ?? t("table.unrouted")}</dd>
             <dt style={{ fontSize: 13, color: "var(--muted)" }}>Note</dt>
             <dd style={{ margin: 0, fontSize: 14 }}>{conversation.handoffNote ?? "—"}</dd>
           </dl>
         </Card>
       ) : null}
 
-      <Card title="Transcript">
+      <Card title={t("detail.sectionTranscript")}>
         {transcriptErrored ? (
           <RefreshErrorState error={toHumanError("load", { area: "conversation transcript" })} />
         ) : ordered.length === 0 ? (

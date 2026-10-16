@@ -2,7 +2,7 @@
 
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActionButton } from "../../../_components/ds";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatIndianDate, formatMoney, formatShortId } from "@/lib/formatters";
@@ -26,6 +26,9 @@ const BOND_TYPES: Array<{ value: "performance" | "bank_guarantee" | "security_de
   { value: "bank_guarantee", label: "Bank guarantee" },
   { value: "security_deposit", label: "Security deposit" },
 ];
+
+// GAP-CONTRACTS-DETAIL-06: intervals for post-202 polling.
+const POLL_DELAYS = [5_000, 10_000];
 
 type Props = { contractId: string; bonds: ContractBond[]; canRegister: boolean };
 
@@ -92,6 +95,9 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
   // stay usable.
   const [busyBondId, setBusyBondId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  // GAP-CONTRACTS-DETAIL-06: pending bond transitions (id -> prevStatus).
+  const [pendingMap, setPendingMap] = useState<Map<string, string>>(new Map());
+  const pollTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [error, setError] = useState<string | undefined>();
   const [bondType, setBondType] = useState<"performance" | "bank_guarantee" | "security_deposit">("performance");
   const [issuer, setIssuer] = useState("SBI");
@@ -99,6 +105,24 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
   const [amountInr, setAmountInr] = useState("");
   const [validFrom, setValidFrom] = useState("");
   const [validTo, setValidTo] = useState("");
+
+  // Clear pending entries when props update (server re-render caught up).
+  useEffect(() => {
+    setPendingMap((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Map(prev);
+      let changed = false;
+      for (const [id, prevStatus] of next) {
+        const current = bonds.find((b) => b.id === id);
+        if (!current || current.status !== prevStatus) { next.delete(id); changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [bonds]);
+  useEffect(() => {
+    const timers = pollTimers.current;
+    return () => { for (const t of timers) clearTimeout(t); };
+  }, []);
 
   // GAP-CONTRACTS-DETAIL-02: live paise preview of the typed rupees, computed
   // with the same exact string parser used on submit (null when invalid).
@@ -174,8 +198,14 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
       if (res.status !== 202 && !res.ok) {
         throw await userFacingErrorFromResponse(res, "save");
       }
+      // GAP-CONTRACTS-DETAIL-06: track as Pending and poll.
+      const prevStatus = bonds.find((b) => b.id === bondId)?.status ?? "";
+      setPendingMap((prev) => new Map(prev).set(bondId, prevStatus));
       setMessage(`Bond ${toStatus} request received — the status will update shortly.`);
       router.refresh();
+      for (const delay of POLL_DELAYS) {
+        pollTimers.current.push(setTimeout(() => router.refresh(), delay));
+      }
     } finally {
       setBusyBondId(null);
     }
@@ -190,6 +220,10 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
           {bonds.map((b) => (
             <li key={b.id} style={{ marginBottom: 8, fontSize: 13 }}>
               <strong>{b.referenceNo ?? formatShortId(b.id)}</strong> — {b.status}
+              {/* GAP-CONTRACTS-DETAIL-06: Pending pill while transition propagates. */}
+              {pendingMap.has(b.id) ? (
+                <span className="pill mut" aria-label="Status update pending" style={{ marginLeft: 6 }}>Pending</span>
+              ) : null}
               {/* GAP-CONTRACTS-DETAIL-02: surface the bond's validity window so
                   an officer can see at a glance when the security lapses. */}
               {b.validFrom || b.validTo ? (

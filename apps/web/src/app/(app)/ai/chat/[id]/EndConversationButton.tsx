@@ -1,6 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { ConfirmDialog } from "../../../../_components/ds";
 
 /**
@@ -17,6 +18,9 @@ import { ConfirmDialog } from "../../../../_components/ds";
  * conflicting way to capture one fact. The reason is simply why the
  * conversation is being ended.
  *
+ * GAP-AI-CHAT-DETAIL-07: all English literals moved to the aiChat.endConversation
+ * namespace so they can be switched with the locale.
+ *
  * Both an active conversation and one already with a human agent can be closed;
  * the button is hidden once it has ended, since the service rejects that
  * transition.
@@ -28,6 +32,7 @@ export function EndConversationButton({
   conversationId: string;
   version: number;
 }) {
+  const t = useTranslations("aiChat.endConversation");
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -47,25 +52,25 @@ export function EndConversationButton({
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { code?: string; message?: string };
         if (body.code === "INVALID_TRANSITION") {
-          setError("This conversation has already ended. Reload to see its current state.");
+          setError(t("errorAlreadyEnded"));
           return;
         }
         if (body.code === "VERSION_CONFLICT") {
-          setError("Someone else updated this conversation. Reload and try again.");
+          setError(t("errorVersionConflict"));
           return;
         }
         if (res.status === 403) {
-          setError("You do not have permission to end this conversation.");
+          setError(t("errorForbidden"));
           return;
         }
-        setError("Could not end the conversation.");
+        setError(t("errorGeneric"));
         return;
       }
-      setMessage("Conversation ended. The transcript is preserved.");
+      setMessage(t("successMessage"));
       setOpen(false);
       router.refresh();
     } catch {
-      setError("Could not reach the service. Try again shortly.");
+      setError(t("errorNetwork"));
     } finally {
       setBusy(false);
     }
@@ -73,10 +78,10 @@ export function EndConversationButton({
 
   return (
     <div className="card">
-      <div className="card-h"><h3>End Conversation</h3></div>
+      <div className="card-h"><h3>{t("cardTitle")}</h3></div>
       <div className="pad">
         <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 0 }}>
-          Ending a conversation is final — the citizen&apos;s session is closed and it cannot be reopened.
+          {t("warning")}
         </p>
         <button
           type="button"
@@ -85,7 +90,7 @@ export function EndConversationButton({
           disabled={busy}
           style={{ minHeight: 44 }}
         >
-          End conversation
+          {t("button")}
         </button>
         {message ? (
           <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", marginTop: 12, marginBottom: 0 }}>
@@ -102,13 +107,13 @@ export function EndConversationButton({
       <ConfirmDialog
         open={open}
         danger
-        title="End conversation?"
-        description="This closes the conversation for the citizen and cannot be undone. Give a short reason for the record."
+        title={t("dialogTitle")}
+        description={t("dialogDescription")}
         requireReason
         minReasonLength={10}
         maxReasonLength={500}
-        reasonLabel="Reason for ending"
-        confirmLabel="End conversation"
+        reasonLabel={t("reasonLabel")}
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={error}
         onConfirm={(reason) => { void end(reason); }}

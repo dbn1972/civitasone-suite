@@ -1337,13 +1337,7 @@
     "confirmRecordBody": "A receipt will be issued and the collection recorded in the audit trail. This cannot be undone from here.",
     "confirmRecordCta": "Record payment",
     "printReceipt": "Print receipt",
-    "loadFailed": "The fee schedules could not be loaded, so payments cannot be recorded right now.",
-    "trackingNoLabel": "Tracking number",
-    "trackingNoPlaceholder": "e.g. TRK-2026-0001",
-    "resolveTracking": "Find application",
-    "resolving": "Looking up…",
-    "resolvedApplication": "Application {applicationId} resolved.",
-    "resolveError": "Could not find an application for that tracking number."
+    "loadFailed": "The fee schedules could not be loaded, so payments cannot be recorded right now."
   },
   "citizenPortal": {
     "pageTitle": "Citizen Portal Overview",
@@ -15807,5 +15801,91 @@
     "stewardshipSubtitle": "Data governance domains and their owners.",
     "subscriptionsTitle": "Office — Subscriptions",
     "subscriptionsSubtitle": "Current subscription plan, renewal date and lifecycle state."
+  },
+  "aiChat": {
+    "page": {
+      "title": "Assistant Conversations",
+      "subtitle": "Chat sessions handled by the assistant, with full transcripts.",
+      "governanceLink": "Governance",
+      "conversationsCard": "Conversations"
+    },
+    "stats": {
+      "conversations": "Conversations",
+      "active": "Active",
+      "withAgent": "With agent",
+      "ended": "Ended"
+    },
+    "table": {
+      "colConversation": "Conversation",
+      "colStatus": "Status",
+      "colQueue": "Queue",
+      "colWaiting": "Waiting",
+      "colLanguage": "Language",
+      "colHandoffReason": "Handoff reason",
+      "colDuration": "Duration",
+      "colStarted": "Started",
+      "filterPlaceholder": "Filter conversations…",
+      "emptyTitle": "No conversations yet",
+      "emptyMessage": "Chat conversations started through any channel appear here with their full transcript.",
+      "inProgress": "In progress",
+      "durationMin": "{minutes} min",
+      "unrouted": "Unrouted",
+      "waitingLabel": "Waiting {duration}"
+    },
+    "statusFilter": {
+      "label": "Status",
+      "all": "All conversations",
+      "active": "Active only",
+      "handedOff": "With a human agent",
+      "ended": "Ended only",
+      "loading": "Loading…",
+      "ariaLabel": "Filter conversations by status"
+    },
+    "detail": {
+      "statStatus": "Status",
+      "statMessages": "Messages",
+      "statTokens": "Tokens",
+      "statStarted": "Started",
+      "statEnded": "Ended",
+      "statHandedOff": "Handed off",
+      "statDuration": "Duration",
+      "sectionTranscript": "Transcript",
+      "sectionHandedToAgent": "Handed to a human agent"
+    },
+    "endConversation": {
+      "cardTitle": "End Conversation",
+      "warning": "Ending a conversation is final — the citizen’s session is closed and it cannot be reopened.",
+      "button": "End conversation",
+      "dialogTitle": "End conversation?",
+      "dialogDescription": "This closes the conversation for the citizen and cannot be undone. Give a short reason for the record.",
+      "reasonLabel": "Reason for ending",
+      "confirmLabel": "End conversation",
+      "successMessage": "Conversation ended. The transcript is preserved.",
+      "errorAlreadyEnded": "This conversation has already ended. Reload to see its current state.",
+      "errorVersionConflict": "Someone else updated this conversation. Reload and try again.",
+      "errorForbidden": "You do not have permission to end this conversation.",
+      "errorGeneric": "Could not end the conversation.",
+      "errorNetwork": "Could not reach the service. Try again shortly."
+    },
+    "handoff": {
+      "cardTitle": "Hand off to a human agent",
+      "reasonLabel": "Reason",
+      "queueLabel": "Route to queue (optional)",
+      "queuePlaceholder": "e.g. water-supply-tier2",
+      "noteLabel": "Note for the agent (optional)",
+      "notePlaceholder": "e.g. pension arrears since April, already verified",
+      "button": "Hand off to a human",
+      "buttonBusy": "Handing off…",
+      "successMessage": "Handed off. The agent receives the transcript so far.",
+      "errorAlreadyHandedOff": "This conversation is no longer with the assistant. Reload to see its current state.",
+      "errorVersionConflict": "Someone else updated this conversation. Reload and try again.",
+      "errorForbidden": "You do not have permission to hand off this conversation.",
+      "errorGeneric": "Could not hand off the conversation.",
+      "errorNetwork": "Could not reach the service. Try again shortly.",
+      "reasonAgentInitiated": "I am taking this over",
+      "reasonRequested": "Citizen asked for a person",
+      "reasonLowConfidence": "Assistant could not answer",
+      "reasonGuardrail": "Guardrail flagged the exchange"
+    }
   }
 }

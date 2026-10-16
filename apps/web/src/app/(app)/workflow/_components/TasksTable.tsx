@@ -80,6 +80,9 @@ function TaskRowActions({ task, currentUserId }: { task: WorkflowTask; currentUs
         currentUserId={currentUserId}
         compact
         approveBlockedReason={blocked}
+        // GAP-WORKFLOW-INSTANCES-DETAIL-05 — disable Approve when the signed-in
+        // user is the maker (submitter) of this instance (maker-checker).
+        isMaker={!!(currentUserId && task.requesterId && task.requesterId === currentUserId)}
       />
       {/* FN-26 — lane-scoped mandatory document checklist for officers. */}
       {gated ? (

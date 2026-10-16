@@ -79,6 +79,7 @@ export function ModuleListTable({
   source,
   errorArea,
   backHref,
+  emptyAction,
   showId = true,
   statusStyle,
 }: {
@@ -97,6 +98,14 @@ export function ModuleListTable({
   showId?: boolean;
   /** GAP-TENANT-QUOTAS-02: "quota" renders status with an icon cue + sentence case. */
   statusStyle?: "quota";
+  /**
+   * GAP-CATALOGUE-{BUNDLES,CATEGORIES,PRODUCTS,RATES}-06 (TABLE-FEATURES):
+   * optional CTA shown in the zero-row empty state (e.g. a link to create the
+   * first record). When omitted the state has no action, which is correct for
+   * read-only modules like catalogue. Also forwarded to DataTable.emptyAction
+   * so the same CTA shows when a filter returns zero matches.
+   */
+  emptyAction?: ReactNode;
 }) {
   const columns = (showId ? MODULE_COLUMNS : MODULE_COLUMNS.filter((c) => c.key !== "id")).map((c) =>
     c.key === "status" && statusStyle === "quota"
@@ -148,6 +157,7 @@ export function ModuleListTable({
           icon="📋"
           title="No records"
           message={`The ${errorArea ?? "records"} list loaded successfully, but there is nothing to show yet.`}
+          {...(emptyAction ? { action: emptyAction } : {})}
         />
       ) : (
         <DataTable<ModuleRow>
@@ -157,6 +167,7 @@ export function ModuleListTable({
           filterable
           filterPlaceholder="Filter records…"
           pageSize={15}
+          {...(emptyAction ? { emptyAction } : {})}
         />
       )}
     </Card>

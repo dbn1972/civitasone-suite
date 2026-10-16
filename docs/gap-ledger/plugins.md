@@ -381,7 +381,7 @@ Counts: ACTION 21, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-PLUGINS-HOME-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: already fixed on main by #1928 — apps/web/src/app/(app)/plugins/layout.tsx:14 requireAnyRole(PLUGIN_MODULE_ROLES, '/dashboard'); W2 re-verify: registry/routes.ts requireRole(["plugin_admin","super_admin"]) on install/enable/disable, consumer emits audit.event.record; closed by #1928)
 - **First-pass claim:** No role gate on a module that installs and disables tenant-wide plugins: plugins/ has no layout.tsx or ModuleGate and no requireAnyRole, so every signed-in user gets the tiles and the Installed page controls. Server RBAC undeterminable (plugin-service absent).
 - **Service:** `plugin-service`  ·  **Endpoint(s):** `['GET /api/v1/plugins/items', 'POST /api/v1/plugins/install', 'POST /api/v1/plugins/:id/:verb']`
 - **Question:** install/enable/disable must require tenant_admin/platform_admin and be audited; list may be broader.

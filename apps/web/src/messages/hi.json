@@ -1321,13 +1321,7 @@
     "confirmRecordBody": "एक रसीद जारी की जाएगी और संग्रह ऑडिट ट्रेल में दर्ज किया जाएगा। इसे यहां से पूर्ववत नहीं किया जा सकता।",
     "confirmRecordCta": "भुगतान दर्ज करें",
     "printReceipt": "रसीद प्रिंट करें",
-    "loadFailed": "शुल्क अनुसूचियां लोड नहीं हो सकीं, इसलिए अभी भुगतान दर्ज नहीं किया जा सकता।",
-    "trackingNoLabel": "ट्रैकिंग संख्या",
-    "trackingNoPlaceholder": "जैसे TRK-2026-0001",
-    "resolveTracking": "आवेदन खोजें",
-    "resolving": "खोज रहे हैं…",
-    "resolvedApplication": "आवेदन {applicationId} मिला।",
-    "resolveError": "उस ट्रैकिंग संख्या के लिए कोई आवेदन नहीं मिला।"
+    "loadFailed": "शुल्क अनुसूचियां लोड नहीं हो सकीं, इसलिए अभी भुगतान दर्ज नहीं किया जा सकता।"
   },
   "citizenPortal": {
     "pageTitle": "नागरिक पोर्टल अवलोकन",
@@ -15307,5 +15301,91 @@
     "stewardshipSubtitle": "डेटा गवर्नेंस डोमेन और उनके स्वामी।",
     "subscriptionsTitle": "कार्यालय — सदस्यताएँ",
     "subscriptionsSubtitle": "वर्तमान सदस्यता योजना, नवीनीकरण तिथि और जीवनचक्र की स्थिति।"
+  },
+  "aiChat": {
+    "page": {
+      "title": "सहायक वार्तालाप",
+      "subtitle": "सहायक द्वारा संभाले गए चैट सत्र, पूर्ण ट्रांस्क्रिप्ट सहित।",
+      "governanceLink": "शासन",
+      "conversationsCard": "वार्तालाप"
+    },
+    "stats": {
+      "conversations": "वार्तालाप",
+      "active": "सक्रिय",
+      "withAgent": "एजेंट के साथ",
+      "ended": "समाप्त"
+    },
+    "table": {
+      "colConversation": "वार्तालाप",
+      "colStatus": "स्थिति",
+      "colQueue": "क्यू",
+      "colWaiting": "प्रतीक्षा",
+      "colLanguage": "भाषा",
+      "colHandoffReason": "हस्तांतरण कारण",
+      "colDuration": "अवधि",
+      "colStarted": "आरंभ",
+      "filterPlaceholder": "वार्तालाप फ़िल्टर करें…",
+      "emptyTitle": "अभी तक कोई वार्तालाप नहीं",
+      "emptyMessage": "किसी भी चैनल से शुरू हुए चैट वार्तालाप पूर्ण ट्रांस्क्रिप्ट सहित यहाँ दिखाई देंगे।",
+      "inProgress": "जारी है",
+      "durationMin": "{minutes} मिनट",
+      "unrouted": "अनरूटेड",
+      "waitingLabel": "प्रतीक्षा {duration}"
+    },
+    "statusFilter": {
+      "label": "स्थिति",
+      "all": "सभी वार्तालाप",
+      "active": "केवल सक्रिय",
+      "handedOff": "मानव एजेंट के साथ",
+      "ended": "केवल समाप्त",
+      "loading": "लोड हो रहा है…",
+      "ariaLabel": "स्थिति द्वारा वार्तालाप फ़िल्टर करें"
+    },
+    "detail": {
+      "statStatus": "स्थिति",
+      "statMessages": "संदेश",
+      "statTokens": "टोकन",
+      "statStarted": "आरंभ",
+      "statEnded": "समाप्त",
+      "statHandedOff": "सोंपा गया",
+      "statDuration": "अवधि",
+      "sectionTranscript": "ट्रांस्क्रिप्ट",
+      "sectionHandedToAgent": "मानव एजेंट को सौंपा गया"
+    },
+    "endConversation": {
+      "cardTitle": "वार्तालाप समाप्त करें",
+      "warning": "वार्तालाप समाप्त करना अंतिम है — नागरिक का सत्र बंद हो जाता है और इसे पुनः खोला नहीं जा सकता।",
+      "button": "वार्तालाप समाप्त करें",
+      "dialogTitle": "वार्तालाप समाप्त करें?",
+      "dialogDescription": "इससे नागरिक के लिए वार्तालाप बंद हो जाता है और इसे वापस नहीं लिया जा सकता। रिकॉर्ड के लिए संक्षिप्त कारण दें।",
+      "reasonLabel": "समाप्त करने का कारण",
+      "confirmLabel": "वार्तालाप समाप्त करें",
+      "successMessage": "वार्तालाप समाप्त हो गया। ट्रांस्क्रिप्ट सुरक्षित है।",
+      "errorAlreadyEnded": "यह वार्तालाप पहले ही समाप्त हो चुका है। वर्तमान स्थिति देखने के लिए पुनः लोड करें।",
+      "errorVersionConflict": "किसी और ने इस वार्तालाप को अपडेट किया। पुनः लोड करें और पुनः प्रयास करें।",
+      "errorForbidden": "आपको इस वार्तालाप को समाप्त करने की अनुमति नहीं है।",
+      "errorGeneric": "वार्तालाप समाप्त नहीं हो सका।",
+      "errorNetwork": "सेवा तक नहीं पहुंच सके। कुछ देर बाद पुनः प्रयास करें।"
+    },
+    "handoff": {
+      "cardTitle": "मानव एजेंट को सौंपें",
+      "reasonLabel": "कारण",
+      "queueLabel": "क्यू में रूट करें (वैकल्पिक)",
+      "queuePlaceholder": "उदा. water-supply-tier2",
+      "noteLabel": "एजेंट के लिए नोट (वैकल्पिक)",
+      "notePlaceholder": "उदा. अप्रैल से पेंशन बकाया",
+      "button": "मानव एजेंट को सौंपें",
+      "buttonBusy": "हस्तांतरण हो रहा है…",
+      "successMessage": "सौंप दिया गया। एजेंट को अभी तक की ट्रांस्क्रिप्ट मिलती है।",
+      "errorAlreadyHandedOff": "यह वार्तालाप अब सहायक के साथ नहीं है। वर्तमान स्थिति देखने के लिए पुनः लोड करें।",
+      "errorVersionConflict": "किसी और ने इस वार्तालाप को अपडेट किया। पुनঃ लोड करें और पुनঃ प्रयास करें।",
+      "errorForbidden": "आपको इस वार्तालाप को सौंपने की अनुमति नहीं है।",
+      "errorGeneric": "वार्तालाप हस्तांतरित नहीं हो सका।",
+      "errorNetwork": "सेवा तक नहीं पहुंच सके। कुछ देर बाद पुनः प्रयास करें।",
+      "reasonAgentInitiated": "मैं यह संभाल रहा हूँ",
+      "reasonRequested": "नागरिक ने व्यक्ति से मांगा",
+      "reasonLowConfidence": "सहायक उत्तर नहीं दे सका",
+      "reasonGuardrail": "गार्डरेल ने वार्तालाप फ़्लैग किया"
+    }
   }
 }

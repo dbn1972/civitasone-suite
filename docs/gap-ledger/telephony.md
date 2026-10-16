@@ -144,7 +144,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-AGENTS-05  ·  MEDIUM  ·  partly  ·  theme FEATURE (was ROLEGATE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 PQ: blocked — NEEDS OWNER DECISION. Backend ready: POST /v1/telephony/agents/:id/status exists (agents/routes.ts) and allows agents to set own presence and supervisors to set anyone’s. Web page is intentionally read-only (no unsafe control to hide). Feature requires product sign-off to determine UI scope for presence override and queue reassignment controls, plus audit events design. No code change made.)
 - **First-pass claim:** Read-only board: no way to change presence, reassign a queue or open the agent's current call; no role check separates a supervisor from a line agent (ModuleGate only, layout.tsx:5).
 - **Verified evidence:** Page is read-only (agents/page.tsx:82, no actions) and telephony/layout.tsx:5-7 only wraps ModuleGate, so no supervisor/agent distinction - true as observed. Whether the API exposes presence/reassign endpoints or role claims for it cannot be verified (telephony-service absent), so it is a missing feature/decision, not a defect in existing code.
 - **Files to change:** `apps/web/src/app/(app)/telephony/agents/page.tsx`
@@ -455,9 +455,9 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 ---
 ## Backend verification items (service code absent from snapshot)
 
-### GAP-TELEPHONY-HOME-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-TELEPHONY-HOME-05  ·  LOW  ·  verified  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by gap-backend-verify.test.ts — telephony-service callRoutes/agentRoutes both invoke requireRole(ctx, TELEPHONY_ROLES); tested in services/telephony-service/tests/gap-backend-verify.test.ts)
 - **First-pass claim:** No telephony-service exists in the services/ snapshot (only hrms-service); routes behind /v1/telephony/* cannot be verified — undeterminable.
 - **Service:** `telephony-service`  ·  **Endpoint(s):** `['GET /v1/telephony/*']`
 - **Question:** Do the routes behind the telephony hub exist and enforce a telephony role and tenant scope?
@@ -466,9 +466,9 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 - **Impact if wrong:** Call data exposed to unauthorised staff.
 - **Web change if wrong:** none unless gate missing; then add ModuleGate/role check on the hub.
 
-### GAP-TELEPHONY-AGENTS-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-TELEPHONY-AGENTS-07  ·  LOW  ·  verified  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by gap-backend-verify.test.ts — agentViewSchema (validators.ts) includes all AgentRow fields incl. queueName; sendValidated enforces schema on every response; RLS tenant isolation tested in gap-backend-verify.test.ts GAP-TELEPHONY-AGENTS-07 suite)
 - **First-pass claim:** telephony-service is absent from the services/ snapshot; the /v1/telephony/agents contract cannot be verified — undeterminable.
 - **Service:** `telephony-service`  ·  **Endpoint(s):** `['GET /v1/telephony/agents']`
 - **Question:** Does the agents endpoint return {data:[{...}]} with the fields AgentRow expects, tenant-scoped and role-guarded?
@@ -477,9 +477,9 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 - **Impact if wrong:** Wrong or missing agent data; cross-tenant leak.
 - **Web change if wrong:** Adjust toAgents mapper/AgentRow if fields differ.
 
-### GAP-TELEPHONY-CALLS-08  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-TELEPHONY-CALLS-08  ·  LOW  ·  verified  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by gap-backend-verify.test.ts — CALL_STATUSES = queued|ringing|answered|completed|missed|abandoned (transitions.ts). SLA: server computes slaAnswered boolean via toSummary() using waitSeconds <= threshold (default 20 s, or queue-specific slaAnswerSeconds). callSummarySchema verified in gap-backend-verify.test.ts GAP-TELEPHONY-CALLS-08 suite)
 - **First-pass claim:** telephony-service is absent from the services/ snapshot; call lifecycle statuses and SLA definition cannot be verified — undeterminable.
 - **Service:** `telephony-service`  ·  **Endpoint(s):** `['GET /v1/telephony/calls']`
 - **Question:** What are the call lifecycle status values and how is SLA computed (threshold, field)?
@@ -488,9 +488,9 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 - **Impact if wrong:** Wrong SLA reporting to supervisors.
 - **Web change if wrong:** Align status map and SLA calc in calls/page.tsx to the enum; prefer server-provided sla flag.
 
-### GAP-TELEPHONY-DISPOSITIONS-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-TELEPHONY-DISPOSITIONS-07  ·  LOW  ·  verified  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by gap-backend-verify.test.ts — DISPOSITIONS enum (transitions.ts): resolved, callback_scheduled, escalated, transferred, information_provided, wrong_number, voicemail, no_resolution. Finished-call status is exactly "completed" (CALL_STATUSES). callSummarySchema accepts disposition as nullable string. Tested in gap-backend-verify.test.ts GAP-TELEPHONY-DISPOSITIONS-07 suite)
 - **First-pass claim:** telephony-service is absent from the services/ snapshot; the set of disposition codes and the 'completed' status value cannot be verified — undeterminable.
 - **Service:** `telephony-service`  ·  **Endpoint(s):** `['GET /v1/telephony/calls']`
 - **Question:** What disposition codes exist and is the finished-call status literally 'completed'?
@@ -499,9 +499,9 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 - **Impact if wrong:** Disposition report counts wrong or empty.
 - **Web change if wrong:** Update the filter/grouping in dispositions/page.tsx to the real enum values.
 
-### GAP-TELEPHONY-LIST-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-TELEPHONY-LIST-04  ·  MEDIUM  ·  verified  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by gap-backend-verify.test.ts — apps/web/src/app/api/proxy/[...path]/route.ts:54 builds target as "\${GATEWAY}/api/\${subpath}", so /api/proxy/v1/telephony/calls → GATEWAY/api/v1/telephony/calls — identical to loaders.ts /api/v1/telephony/calls. Single gateway registry entry (registry.ts:62) routes both to telephony-service:3026. Verified in gap-backend-verify.test.ts GAP-TELEPHONY-LIST-04 suite)
 - **First-pass claim:** Reads /api/v1/telephony/calls server-side (loaders.ts:1821) while the new Call Log reads /api/proxy/v1/telephony/calls client-side (resource.ts:103); two gateway paths for one resource — which is authoritative is undeterminable.
 - **Service:** `telephony-service`  ·  **Endpoint(s):** `['GET /api/v1/telephony/calls (server, loaders.ts:1821)', 'GET /api/proxy/v1/telephony/calls (client, resource.ts:103)']`
 - **Question:** Do both gateway paths reach the same telephony-service /v1/telephony/calls route with identical auth and shape?
@@ -510,9 +510,9 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 - **Impact if wrong:** Inconsistent call lists between pages.
 - **Web change if wrong:** Standardise both on one path in loaders.ts:1821 or resource.ts:103.
 
-### GAP-TELEPHONY-LIST-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-TELEPHONY-LIST-06  ·  LOW  ·  verified  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by gap-backend-verify.test.ts — callSummarySchema (validators.ts) includes all list-page fields: id, direction, callerNumber (masked), calleeNumber, status, disposition, queueId, agentId, hasRecording, waitSeconds, talkSeconds, slaAnswered, abandoned, startedAt, endedAt. sendValidated enforces schema. Verified in gap-backend-verify.test.ts GAP-TELEPHONY-LIST-06 suite)
 - **First-pass claim:** telephony-service is absent from the services/ snapshot; the list endpoint's row fields cannot be verified — undeterminable.
 - **Service:** `telephony-service`  ·  **Endpoint(s):** `['GET /api/v1/telephony/calls']`
 - **Question:** Does each row contain the fields the list renders (id, direction, agent, status, duration, timestamp)?

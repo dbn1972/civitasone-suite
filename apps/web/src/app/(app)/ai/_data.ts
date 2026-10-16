@@ -4,6 +4,7 @@
  */
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import type { ModuleRowSummary } from "@civitasone/types";
+import { formatIndianDateTime } from "@/lib/formatters";
 import {
   mapAgentStatuses,
   mapAuditEntries,
@@ -68,11 +69,16 @@ function mapRows(payload: unknown): ModuleRowSummary[] {
       toText(row.agentId) ??
       toText(row.profileId);
     const status = toText(row.status) ?? toText(row.state) ?? toText(row.lifecycle);
+    // GAP-AI-AGENTS-03: ISO timestamps in updatedAt/createdAt are formatted to
+    // "dd Mon yyyy, hh:mm am/pm" in Asia/Kolkata so the Meta column shows a
+    // human-readable date rather than a raw ISO string.
+    const updatedAtText = toText(row.updatedAt);
+    const createdAtText = toText(row.createdAt);
     const meta =
       toText(row.code) ??
       toText(row.currency) ??
-      toText(row.updatedAt) ??
-      toText(row.createdAt) ??
+      (updatedAtText !== undefined ? formatIndianDateTime(updatedAtText) : undefined) ??
+      (createdAtText !== undefined ? formatIndianDateTime(createdAtText) : undefined) ??
       (typeof row.points === "number" ? `${row.points} pts` : undefined) ??
       (typeof row.balance === "number" ? `bal ${row.balance}` : undefined);
     mapped.push({

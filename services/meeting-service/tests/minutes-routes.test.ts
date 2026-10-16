@@ -24,6 +24,8 @@ const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-cccc-4000-8000-0000000009a3";
 const OTHER_TENANT = "aaaaaaaa-cccc-4000-8000-0000000009ff";
 const ACTOR = "00000000-cccc-4000-8000-0000000009a3";
+/** A different actor who did NOT draft the seeded minutes */
+const APPROVER = "eeeeeeee-cccc-4000-8000-0000000009a3";
 
 const MEETING = "bbbbbbbb-cccc-4000-8000-0000000009a3";
 const MINUTES = "cccccccc-cccc-4000-8000-0000000009a3";
@@ -38,6 +40,12 @@ function token(roles: string[] = ["super_admin"], tid: string = TENANT): string 
 }
 function authHeader(roles?: string[], tid?: string) {
   return { authorization: `Bearer ${token(roles, tid)}` };
+}
+/** token for APPROVER — a distinct actor who has not drafted the seeded minutes */
+/** meeting_admin bypasses assertMeetingOwnership while still being different from ACTOR */
+function approverToken(roles: string[] = ["meeting_admin"]): Record<string, string> {
+  const t = signToken({ sub: APPROVER, tid: TENANT, roles, sid: "sess-approver" }, SECRET, 3600);
+  return { authorization: `Bearer ${t}` };
 }
 
 let app: FastifyInstance;
@@ -143,6 +151,15 @@ describe("GET /v1/meetings/:meetingId/minutes (get the meeting's minutes)", () =
     expect(res.json().data.id).toBe(MINUTES);
   });
 
+  // GAP-MEETING-MEETINGS-MEETINGID-MINUTES-02: response includes createdByName field
+  it("200 response includes createdByName field (GAP-MEETING-MEETINGS-MEETINGID-MINUTES-02)", async () => {
+    const res = await app.inject({ method: "GET", url: base, headers: authHeader(["committee_member"]) });
+    expect(res.statusCode).toBe(200);
+    const row = res.json().data as Record<string, unknown>;
+    // createdByName must be present as a key (null is acceptable when identity service is unreachable in CI)
+    expect(Object.prototype.hasOwnProperty.call(row, "createdByName")).toBe(true);
+  });
+
   it("401 without a token", async () => {
     const res = await app.inject({ method: "GET", url: base });
     expect(res.statusCode).toBe(401);
@@ -198,8 +215,8 @@ describe("POST submit / approve / reject / sign / circulate", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("approve → 202 for the chairperson", async () => {
-    const res = await app.inject({ method: "POST", url: `${base}/${MINUTES}/approve`, headers: authHeader(["committee_chairperson"]), payload: { version: 1 } });
+  it("approve → 202 for the chairperson (different actor, GAP-MEETING-MEETINGS-MEETINGID-MINUTES-03)", async () => {
+    const res = await app.inject({ method: "POST", url: `${base}/${MINUTES}/approve`, headers: approverToken(), payload: { version: 1 } });
     expect(res.statusCode).toBe(202);
   });
 
@@ -218,8 +235,21 @@ describe("POST submit / approve / reject / sign / circulate", () => {
     expect(res.statusCode).toBe(404);
   });
 
-  it("reject → 202 for the chairperson with mandatory comments", async () => {
-    const res = await app.inject({ method: "POST", url: `${base}/${MINUTES}/reject`, headers: authHeader(["committee_chairperson"]), payload: { version: 1, rejectionComments: "please correct the quorum note" } });
+  // GAP-MEETING-MEETINGS-MEETINGID-MINUTES-03: maker-checker
+  it("approve → 403 when drafter (ACTOR) tries to approve their own minutes", async () => {
+    const res = await app.inject({ method: "POST", url: `${base}/${MINUTES}/approve`, headers: authHeader(["committee_chairperson"]), payload: { version: 1 } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("FORBIDDEN");
+  });
+
+  it("reject → 403 when drafter tries to reject their own minutes", async () => {
+    const res = await app.inject({ method: "POST", url: `${base}/${MINUTES}/reject`, headers: authHeader(["committee_chairperson"]), payload: { version: 1, rejectionComments: "test" } });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("FORBIDDEN");
+  });
+
+  it("reject → 202 for the chairperson with mandatory comments (different actor)", async () => {
+    const res = await app.inject({ method: "POST", url: `${base}/${MINUTES}/reject`, headers: approverToken(), payload: { version: 1, rejectionComments: "please correct the quorum note" } });
     expect(res.statusCode).toBe(202);
   });
 

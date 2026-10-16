@@ -126,14 +126,14 @@ describe("POST /v1/meetings", () => {
   });
 
   it("202 creates a meeting (secretary)", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/meetings", headers: auth(["committee_secretary"]), payload: body() });
+    const res = await app.inject({ method: "POST", url: "/v1/meetings", headers: { ...auth(["committee_secretary"]), "x-idempotency-key": globalThis.crypto.randomUUID() }, payload: body() });
     expect(res.statusCode).toBe(202);
     expect(res.json().data.status).toBe("accepted");
     expect(typeof res.json().data.id).toBe("string");
   });
 
   it("400 on an invalid type", async () => {
-    const res = await app.inject({ method: "POST", url: "/v1/meetings", headers: auth(["committee_secretary"]), payload: { ...body(), type: "nope" } });
+    const res = await app.inject({ method: "POST", url: "/v1/meetings", headers: { ...auth(["committee_secretary"]), "x-idempotency-key": globalThis.crypto.randomUUID() }, payload: { ...body(), type: "nope" } });
     expect(res.statusCode).toBe(400);
   });
 
@@ -145,6 +145,23 @@ describe("POST /v1/meetings", () => {
   it("403 for a read-only role", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/meetings", headers: auth(["observer"]), payload: body() });
     expect(res.statusCode).toBe(403);
+  });
+
+  // GAP-MEETING-MEETINGS-NEW-04: idempotency key is mandatory on POST /v1/meetings
+  it("400 when X-Idempotency-Key header is absent (GAP-MEETING-MEETINGS-NEW-04)", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/meetings", headers: auth(["committee_secretary"]), payload: body() });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe("VALIDATION_FAILED");
+  });
+
+  it("same idempotency key returns same meeting id (GAP-MEETING-MEETINGS-NEW-04)", async () => {
+    const key = globalThis.crypto.randomUUID();
+    const headers = { ...auth(["committee_secretary"]), "x-idempotency-key": key };
+    const r1 = await app.inject({ method: "POST", url: "/v1/meetings", headers, payload: body() });
+    const r2 = await app.inject({ method: "POST", url: "/v1/meetings", headers, payload: body() });
+    expect(r1.statusCode).toBe(202);
+    expect(r2.statusCode).toBe(202);
+    expect(r1.json().data.id).toBe(r2.json().data.id);
   });
 });
 

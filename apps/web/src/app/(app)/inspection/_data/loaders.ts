@@ -60,6 +60,12 @@ export const InspectionListItemSchema = z
     reviewerId: z.string().nullish(),
     scheduledDate: z.string().nullish(),
     createdAt: z.string().optional(),
+    // GAP-INSPECTION-INSPECTIONS-01: the execution.inspections table stores
+    // assigned inspectors as a jsonb uuid[] column (schema.ts:assignedInspectors).
+    // Parse as an array of strings (UUIDs) so the list page can render an
+    // Inspector column without a second round-trip to a user-lookup service.
+    assignedInspectors: z.array(z.string()).optional(),
+    startedAt: z.string().nullish(),
   })
   .passthrough();
 export type InspectionListItem = z.infer<typeof InspectionListItemSchema>;

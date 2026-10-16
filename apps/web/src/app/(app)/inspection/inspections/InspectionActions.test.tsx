@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -30,27 +30,13 @@ describe("InspectionRowAction", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  // Regression for a CRITICAL bug, confirmed live against the real service:
-  // "Finalize" (under_review -> finalized) is the one action with no
-  // action.body. The old run() set `Content-Type: application/json`
-  // unconditionally regardless of body — that header survives the
-  // /api/proxy catch-all verbatim (it forwards whatever content-type header
-  // the browser sent, independent of whether a body existed) and reaches
-  // Fastify's default JSON parser, which rejects an empty body under that
-  // content-type with 400 FST_ERR_CTP_EMPTY_JSON_BODY. So the Finalize
-  // button always failed in real use — a bug the backend's own
-  // app.inject()-based integration test missed, because inject() doesn't
-  // set a content-type header the way a real fetch() does when none is
-  // passed. There was previously no frontend test for Finalize at all,
-  // which is exactly how this shipped undetected on both sides.
-  it("Finalize requires a real confirm step (irreversible — under_review -> finalized has no way back) and sends no Content-Type header", async () => {
+  it("Finalize requires a real confirm step and sends no Content-Type header", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
     );
     render(<InspectionRowAction id="11111111-2222-4333-8444-555555555555" status="under_review" />);
     fireEvent.click(screen.getByRole("button", { name: "Finalize" }));
 
-    // A bare click must NOT fire the request — the confirm dialog gates it.
     expect(fetchSpy).not.toHaveBeenCalled();
     const dialog = await screen.findByRole("alertdialog");
     expect(within(dialog).getByText(/cannot be undone/i)).toBeInTheDocument();
@@ -64,33 +50,28 @@ describe("InspectionRowAction", () => {
     expect((init.headers as Record<string, string> | undefined)?.["Content-Type"]).toBeUndefined();
   });
 
-  it("shows a clerk-safe message when transition fails, never the raw response text (UX-016)", async () => {
+  it("shows a clerk-safe message when transition fails, never the raw response text", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response("invalid transition", { status: 422 }),
     );
     render(<InspectionRowAction id="11111111-2222-4333-8444-555555555555" status="scheduled" />);
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
-    await waitFor(() => expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument()
+    );
     expect(screen.queryByText(/invalid transition/i)).not.toBeInTheDocument();
   });
 
-  // GAP-INSPECTION-INSPECTIONS-04: "Complete" is a sign-off that records the
-  // inspection's outcome. It must NOT fire a hard-coded "Completed from
-  // inspection hub" string on one click; it opens a confirm dialog, blocks
-  // confirmation until the officer types remarks, and sends those remarks as
-  // body.remarks. This fails against the pre-fix single-click button.
-  it("Complete requires typed remarks and sends them as body.remarks (no hard-coded string)", async () => {
+  it("Complete requires typed remarks and sends them as body.remarks", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
     );
     render(<InspectionRowAction id="11111111-2222-4333-8444-555555555555" status="in_progress" />);
 
-    // A bare click must open the dialog, not fire the request.
     fireEvent.click(screen.getByRole("button", { name: "Complete" }));
     expect(fetchSpy).not.toHaveBeenCalled();
     const dialog = await screen.findByRole("alertdialog");
 
-    // Confirm is blocked until remarks are typed.
     const confirmBtn = within(dialog).getByRole("button", { name: "Complete" });
     expect(confirmBtn).toBeDisabled();
 
@@ -106,5 +87,54 @@ describe("InspectionRowAction", () => {
       targetState: "completed",
       remarks: "Fire exits clear; extinguishers serviced.",
     });
+  });
+
+  // GAP-INSPECTION-INSPECTIONS-02: after a 202, the Start button is disabled
+  // while the follow-up poll is in flight to prevent duplicate commands.
+  it("disables the Start button while the follow-up poll is pending", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
+    );
+    render(<InspectionRowAction id="aaaabbbb-2222-4333-8444-555555555555" status="scheduled" />);
+
+    // Click and flush fetch/state updates without advancing the fake 5s timer.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    });
+
+    expect(screen.getByText(/status will update shortly/i)).toBeInTheDocument();
+    // 5s timer has not fired yet — button should be disabled (pending).
+    expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+
+    vi.useRealTimers();
+  });
+
+  // GAP-INSPECTION-INSPECTIONS-02: if status is still the same after the
+  // follow-up refresh, the component should show a "still processing" warning.
+  it("shows a stale warning when status is unchanged 5s after a 202", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
+    );
+    render(<InspectionRowAction id="aaaabbbb-2222-4333-8444-555555555555" status="scheduled" />);
+
+    // Click and flush fetch/state updates without advancing the fake timer.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    });
+
+    expect(screen.getByText(/status will update shortly/i)).toBeInTheDocument();
+
+    // Advance past the 5-second follow-up timer; act() flushes the React state
+    // updates that the timer callback (setPollDue) triggers.
+    await act(async () => {
+      vi.advanceTimersByTime(6000);
+    });
+
+    // router.refresh() was called again; status prop still "scheduled" -> stale warning.
+    expect(screen.getByRole("status")).toHaveTextContent(/unchanged.*may still be processing/i);
+
+    vi.useRealTimers();
   });
 });

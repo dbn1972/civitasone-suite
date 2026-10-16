@@ -45,3 +45,18 @@ describe("DefinitionGraph (GAP-WORKFLOW-DEFINITIONS-DETAIL-04/05)", () => {
     expect(screen.getByLabelText("when amount > 100000")).toBeInTheDocument();
   });
 });
+
+describe("DefinitionGraph docstring / GAP-WORKFLOW-DEFINITIONS-DETAIL-05", () => {
+  it("renders an ordered list (not a heading labelled 'Process graph')", () => {
+    // Given: a single node definition (no edges so no duplicate name references)
+    const nodes = [
+      node({ nodeKey: "approval", name: "Approval Step", roleRef: null, slaMinutes: null }),
+    ];
+    // When: rendering the graph
+    const { container } = render(<DefinitionGraph nodes={nodes} edges={[]} />);
+    // Then: the component renders an ordered list of steps
+    expect(container.querySelector("ol")).toBeInTheDocument();
+    // And: the node name is visible exactly once
+    expect(screen.getByText("Approval Step")).toBeInTheDocument();
+  });
+});

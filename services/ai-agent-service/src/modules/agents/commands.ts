@@ -42,16 +42,28 @@ export async function pauseAgent(
   ctx: RequestContext,
   id: string,
   version: number,
+  // GAP-AI-GOVERNANCE-02: operator-supplied reason carried into the audit.
+  reason?: string,
 ): Promise<Accepted> {
-  return publishCommand(ctx, COMMANDS.pauseAgent, id, { id, version });
+  return publishCommand(ctx, COMMANDS.pauseAgent, id, {
+    id,
+    version,
+    ...(reason ? { reason } : {}),
+  });
 }
 
 export async function resumeAgent(
   ctx: RequestContext,
   id: string,
   version: number,
+  // GAP-AI-GOVERNANCE-02: operator-supplied reason carried into the audit.
+  reason?: string,
 ): Promise<Accepted> {
-  return publishCommand(ctx, COMMANDS.resumeAgent, id, { id, version });
+  return publishCommand(ctx, COMMANDS.resumeAgent, id, {
+    id,
+    version,
+    ...(reason ? { reason } : {}),
+  });
 }
 
 export async function handoffAgent(

@@ -77,7 +77,7 @@ Counts: ACTION 30, BACKEND-VERIFY 1
 
 ### GAP-CATALOGUE-BUNDLES-01  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 PQ: INTERIM — member count now surfaced via mapBundleRows (componentProductIds); bundle price and validity do not exist in catalogue-service schema.ts and cannot be shown without a backend schema change; recorded under NEEDS OWNER DECISION in PR body)
 - **W0 note:** partly fixed by #1923 — mapBundleRows shows member count; price and validity not shown (catalogue-service bundle model has no such columns, needs backend)
 - **First-pass claim:** A bundle list without contents or price: members, bundle price and validity are not mapped (_data.ts:36-72), so 'combo offerings' cannot be inspected; Detail is a free-text description.
 - **Verified evidence:** ModuleRowSummary output (id,label,sublabel,status,meta) is generic (_data.ts:68-74); loader does not map members/price/validity. Whether /api/v1/catalogue/bundles returns those fields is cannot-verify (catalogue-service absent). Table columns are fixed ID/Name/Detail/Status/Meta (ModuleListTable.tsx:40-44).
@@ -141,7 +141,7 @@ Counts: ACTION 30, BACKEND-VERIFY 1
 
 ### GAP-CATALOGUE-BUNDLES-06  ·  LOW  ·  confirmed  ·  theme LISTUX (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2085)
 - **W0 note:** partly fixed by #1923 — ModuleListTable now uses ds DataTable (sort/filter/paging, pageSize 15); still no module-specific empty-state CTA (emptyAction) or row links
 - **First-pass claim:** Read-only generic table: no filter, sort, paging or row link, and the empty state 'No records' has no call to action (ModuleListTable.tsx:34-36).
 - **Verified evidence:** ModuleListTable.tsx renders a plain table, no filter/sort/paging/row link (lines 37-58); empty state at line 35 has no action. Theme DEADROUTE is wrong (no dead link).
@@ -241,7 +241,7 @@ Counts: ACTION 30, BACKEND-VERIFY 1
 
 ### GAP-CATALOGUE-CATEGORIES-06  ·  LOW  ·  confirmed  ·  theme TABLE-FEATURES (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2085)
 - **W0 note:** partly fixed by #1923 — ModuleListTable now uses ds DataTable (sort/filter/paging, pageSize 15); still no module-specific empty-state CTA (emptyAction) or row links
 - **First-pass claim:** Read-only generic table: no filter, sort, paging or row link, and the empty state 'No records' has no call to action (ModuleListTable.tsx:34-36).
 - **Verified evidence:** apps/web/src/app/_components/ModuleListTable.tsx:40-53 plain <table> with no sort/filter/paging/row link; empty state apps/web/src/app/_components/ModuleListTable.tsx:35 'No records / Nothing to show yet for this module.' has no action. ds DataTable already supports sortable/filterable/pageSize/rowLinkKey (cdp/profiles/page.tsx:39-60 pattern). Shared component, so it affects 60+ pages.
@@ -264,7 +264,7 @@ Counts: ACTION 30, BACKEND-VERIFY 1
 
 ### GAP-CATALOGUE-PRODUCTS-01  ·  MEDIUM  ·  confirmed  ·  theme COPY (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2085)
 - **W0 note:** partly fixed by #1923 — hub copy no longer promises variants/pricing, but products page still uses the generic columns (no variants count or price)
 - **First-pass claim:** Hub says products have 'variants and pricing' (catalogue/page.tsx:6) but the list shows neither price, variants nor category — only id/name/detail/status/code (products/page.tsx:14-19; _data.ts:36-72).
 - **Verified evidence:** catalogue/page.tsx:6 promises variants and pricing; products list uses generic ModuleListTable columns ID/Name/Detail/Status/Meta (apps/web/src/app/_components/ModuleListTable.tsx:40-44) fed by mapRows (apps/web/src/app/(app)/catalogue/_data.ts:28-77) which has no price, variant or category column (category only leaks into Detail when description/status missing). Which fields the API returns cannot be verified: catalogue-service absent.
@@ -356,7 +356,7 @@ Counts: ACTION 30, BACKEND-VERIFY 1
 
 ### GAP-CATALOGUE-PRODUCTS-07  ·  LOW  ·  confirmed  ·  theme TABLE-FEATURES (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2085)
 - **W0 note:** partly fixed by #1923 — ModuleListTable now uses ds DataTable (sort/filter/paging, pageSize 15); still no module-specific empty-state CTA (emptyAction) or row links
 - **First-pass claim:** Read-only generic table: no filter, sort, paging or row link, and the empty state 'No records' has no call to action (ModuleListTable.tsx:34-36).
 - **Verified evidence:** apps/web/src/app/_components/ModuleListTable.tsx:40-53 no sort/filter/paging/row link; empty state at :35 has no action.
@@ -471,7 +471,7 @@ Counts: ACTION 30, BACKEND-VERIFY 1
 
 ### GAP-CATALOGUE-RATES-07  ·  LOW  ·  confirmed  ·  theme TABLE-FEATURES (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2085)
 - **W0 note:** partly fixed by #1923 — ModuleListTable now uses ds DataTable (sort/filter/paging, pageSize 15); still no module-specific empty-state CTA (emptyAction) or row links
 - **First-pass claim:** Read-only generic table: no filter, sort, paging or row link, and the empty state 'No records' has no call to action (ModuleListTable.tsx:34-36).
 - **Verified evidence:** apps/web/src/app/_components/ModuleListTable.tsx:40-53, empty state :35.
@@ -492,7 +492,7 @@ Counts: ACTION 30, BACKEND-VERIFY 1
 
 ### GAP-CATALOGUE-HOME-02  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2085 — already fixed; layout.tsx:4-5 requireAnyRole(CATALOGUE_READER_ROLES) = [catalogue_user, catalogue_admin, super_admin] matches catalogue-service routes.ts CATALOGUE_ROLES exactly; layout.test.tsx confirms redirect for unauthorised roles)
 - **First-pass claim:** No create/edit routes exist under catalogue/ (only four list pages) and no role gate is declared (layout.tsx:4-5), so 'Manage' has no owner or UI; who maintains the catalogue cannot be determined from web code and catalogue-service is absent from the snapshot.
 - **Service:** `catalogue-service`  ·  **Endpoint(s):** `['GET /api/v1/catalogue/products', '/products/tree', '/rates', '/bundles']`
 - **Question:** Which roles may create/edit products, rates and bundles, and is there any write API the web should expose?

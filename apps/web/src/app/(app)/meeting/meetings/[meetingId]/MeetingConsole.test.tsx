@@ -82,6 +82,13 @@ function baseProps() {
     attendanceSource: "api" as const,
     initialActiveVotes: [activeVote()],
     activeVotesSource: "api" as const,
+    // GAP-MEETING-MEETINGS-MEETINGID-03: full permissions for existing tests
+    viewerPermissions: {
+      canTransition: true,
+      canCheckIn: true,
+      canCast: true,
+      canConclude: true,
+    },
   };
 }
 
@@ -286,3 +293,41 @@ describe("MeetingConsole — misc a11y/copy", () => {
     expect(screen.getByText(/Use "Open a vote" below to start a motion/)).toBeInTheDocument();
   });
 });
+
+describe("MeetingConsole — RBAC permission gates (GAP-MEETING-MEETINGS-MEETINGID-03)", () => {
+  it("hides transition buttons when canTransition=false", () => {
+    render(
+      <MeetingConsole
+        {...baseProps()}
+        viewerPermissions={{ canTransition: false, canCheckIn: true, canCast: true, canConclude: true }}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /adjourn meeting/i })).not.toBeInTheDocument();
+  });
+
+  it("shows transition buttons when canTransition=true", () => {
+    render(
+      <MeetingConsole
+        {...baseProps()}
+        viewerPermissions={{ canTransition: true, canCheckIn: true, canCast: true, canConclude: true }}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /adjourn meeting/i })).toBeInTheDocument();
+  });
+});
+
+describe("MeetingConsole — in-page anchor nav (GAP-MEETING-MEETINGS-MEETINGID-07)", () => {
+  it("renders jump-to-section links for Stats, Agenda, Attendance, Voting", () => {
+    render(<MeetingConsole {...baseProps()} />);
+    expect(screen.getByRole("link", { name: "Stats" })).toHaveAttribute("href", "#section-stats");
+    expect(screen.getByRole("link", { name: "Agenda" })).toHaveAttribute("href", "#section-agenda");
+    expect(screen.getByRole("link", { name: "Attendance" })).toHaveAttribute("href", "#section-attendance");
+    expect(screen.getByRole("link", { name: "Voting" })).toHaveAttribute("href", "#section-voting");
+  });
+
+  it("jump-to-section nav has a descriptive aria-label", () => {
+    render(<MeetingConsole {...baseProps()} />);
+    expect(screen.getByRole("navigation", { name: /jump to section/i })).toBeInTheDocument();
+  });
+});
+
