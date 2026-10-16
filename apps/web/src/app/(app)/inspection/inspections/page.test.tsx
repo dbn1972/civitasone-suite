@@ -11,10 +11,6 @@ vi.mock("next/navigation", () => ({
 
 import InspectionsPage from "./page";
 
-// The page now calls getInspectionsPage(), whose loader maps the API envelope
-// to { rows, total } via `asListResult`. These tests mock the shared fetchJson
-// to return the LoaderResult that loader would produce, so they exercise the
-// page's parsing/rendering against the real list shape.
 function listResult(rows: unknown[], total: number | null, source = "api") {
   return { data: { rows, total }, source };
 }
@@ -24,13 +20,6 @@ describe("InspectionsPage", () => {
     fetchJsonMock.mockReset();
   });
 
-  // Regression for a confirmed CRITICAL bug: execution.inspections' status
-  // column is named `state` in the schema/API response (services/inspection-service/
-  // src/modules/execution/schema.ts), but the page used to read `row.status`,
-  // a field the API never returns. GAP-INSPECTION-INSPECTIONS-01 also renders
-  // the status through <StatusPill>, which humanizes the DB value, so the pill
-  // shows "Scheduled" (not the raw "scheduled"); the action button still keys
-  // off the raw state.
   it("reads the real `state` field (not `status`) so the status shows and the action button renders", async () => {
     fetchJsonMock.mockResolvedValueOnce(
       listResult([{ id: "11111111-2222-4333-8444-555555555555", state: "scheduled", entityId: "e1" }], 1),
@@ -39,15 +28,10 @@ describe("InspectionsPage", () => {
     const ui = await InspectionsPage({ searchParams: {} });
     render(ui);
 
-    // StatusPill humanizes the DB enum for display.
     expect(screen.getAllByText("Scheduled").length).toBeGreaterThan(0);
-    // actionForStatus("scheduled") => "Start" (InspectionActions.tsx). Before
-    // the fix this button never rendered because status was always "".
     expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
   });
 
-  // GAP-INSPECTION-INSPECTIONS-06: friendly, honest empty copy with a CTA —
-  // never the old developer string "No inspections returned from the API."
   it("renders an honest empty state with a CTA when there are no inspections", async () => {
     fetchJsonMock.mockResolvedValueOnce(listResult([], 0));
 
@@ -59,9 +43,7 @@ describe("InspectionsPage", () => {
     expect(screen.queryByText(/returned from the API/i)).not.toBeInTheDocument();
   });
 
-  // UX-013: a real fetch failure must show the error state, not the same empty
-  // prompt a genuinely empty tenant gets.
-  it("shows the error state — not the empty-state prompt — on a real fetch failure (source: error)", async () => {
+  it("shows the error state on a real fetch failure (source: error)", async () => {
     fetchJsonMock.mockResolvedValueOnce(listResult([], null, "error"));
 
     const ui = await InspectionsPage({ searchParams: {} });
@@ -71,9 +53,6 @@ describe("InspectionsPage", () => {
     expect(screen.queryByText("No inspections yet")).not.toBeInTheDocument();
   });
 
-  // GAP-INSPECTION-INSPECTIONS-03: an API row missing the non-null `state`
-  // column means the schema contract broke; show the error state rather than
-  // silently rendering a blank/garbled table.
   it("treats a row missing `state` as an error (schema mismatch), not an empty table", async () => {
     fetchJsonMock.mockResolvedValueOnce(
       listResult([{ id: "11111111-2222-4333-8444-555555555555", entityId: "e1" }], 1),
@@ -85,9 +64,6 @@ describe("InspectionsPage", () => {
     expect(screen.getByText("We couldn't load inspections.")).toBeInTheDocument();
   });
 
-  // GAP-INSPECTION-INSPECTIONS-05: server-side pagination. The page must
-  // forward the requested page to the loader and expose a Next link while more
-  // pages exist (total > page*pageSize), and a Previous link off page 1.
   it("forwards ?page=2 to the loader and renders prev/next pagination", async () => {
     fetchJsonMock.mockResolvedValueOnce(
       listResult(
@@ -99,7 +75,6 @@ describe("InspectionsPage", () => {
     const ui = await InspectionsPage({ searchParams: { page: "2" } });
     render(ui);
 
-    // The loader was asked for page 2.
     expect(String(fetchJsonMock.mock.calls[0]![0])).toContain("page=2");
 
     const pager = screen.getByRole("navigation", { name: "Pagination" });
@@ -117,7 +92,61 @@ describe("InspectionsPage", () => {
     const ui = await InspectionsPage({ searchParams: { page: "1" } });
     render(ui);
 
-    // Only one row, total 1 -> no pager controls needed at all.
     expect(screen.queryByRole("navigation", { name: "Pagination" })).not.toBeInTheDocument();
+  });
+
+  // GAP-INSPECTION-INSPECTIONS-01: the Inspector(s) column shows a short UUID
+  // (or "—" when absent) from the jsonb assignedInspectors field.
+  it("renders an Inspector(s) column and shows the first inspector short-id", async () => {
+    fetchJsonMock.mockResolvedValueOnce(
+      listResult(
+        [
+          {
+            id: "44444444-2222-4333-8444-555555555555",
+            state: "in_progress",
+            entityId: "eeeeeeee-2222-4333-8444-555555555555",
+            assignedInspectors: [
+              "ffffffff-2222-4333-8444-555555555555",
+              "99999999-2222-4333-8444-555555555555",
+            ],
+          },
+        ],
+        1,
+      ),
+    );
+
+    const ui = await InspectionsPage({ searchParams: {} });
+    render(ui);
+
+    // Column header must be present.
+    expect(screen.getByRole("columnheader", { name: "Inspector(s)" })).toBeInTheDocument();
+    // First inspector short UUID + "+1" for the second.
+    expect(screen.getByText("ffffffff… +1")).toBeInTheDocument();
+
+    // GAP-INSPECTION-INSPECTIONS-01: the inspection id must be a link to the
+    // detail route, not a bare text node.
+    const link = screen.getByRole("link", { name: "44444444…" });
+    expect(link).toHaveAttribute("href", "/inspection/inspections/44444444-2222-4333-8444-555555555555");
+  });
+
+  // GAP-INSPECTION-INSPECTIONS-01: "—" when assignedInspectors is absent.
+  it("shows an em-dash in the Inspector(s) column when the field is missing", async () => {
+    fetchJsonMock.mockResolvedValueOnce(
+      listResult(
+        [{ id: "55555555-2222-4333-8444-555555555555", state: "scheduled" }],
+        1,
+      ),
+    );
+
+    const ui = await InspectionsPage({ searchParams: {} });
+    render(ui);
+
+    // The inspector cell must fall back to "—".
+    const rows = screen.getAllByRole("row");
+    // rows[0] is the header; rows[1] is the data row.
+    const dataRow = rows[1]!;
+    const cells = within(dataRow).getAllByRole("cell");
+    // Inspector(s) is the third data column (0-indexed: Inspection, Entity, Inspector).
+    expect(cells[2]!.textContent).toBe("—");
   });
 });
