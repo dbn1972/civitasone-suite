@@ -96,7 +96,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-ALERTS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: already-fixed on main — normalization via norm(), drafts excluded from statTotal, alerts/page.tsx:24-28 (closed by #1870 confirmed W2))
 - **W0-10 note:** review found the W0 tick partly — Case-insensitive norm() in citizen/alerts/page.tsx:24 and drafts excluded from Published, but no loader normalisation/CitizenAlertStatus union (loaders.ts:4571 bare cast), no Other bucket (e.g. 'scheduled' counted in no bucket so buckets != row count), no humanizeStatus in AlertsTable.tsx:74
 - **First-pass claim:** Status counts use exact-case 'Active'/'Expired'/'Draft' (page.tsx:10-12) while the table paints any string via cellType 'status'; any other casing/status (e.g. 'scheduled', 'active') is uncounted and 'Total Published' includes Drafts (page.tsx:27).
 - **Verified evidence:** page.tsx:10-12 compare status with exact-case 'Active'/'Expired'/'Draft'; CitizenAlert.status is a free string (loaders.ts:3409, mapped by bare cast at :3416, no normalisation). DataTable status column (AlertsTable.tsx:65) shows any string, so 'active'/'scheduled' render but are uncounted. Allowed backend values cannot be verified (citizen service absent).
@@ -142,7 +142,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-ALERTS-05  ·  LOW  ·  partly  ·  theme SCOPE (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 citizen: INTERIM NEEDS-OWNER-DECISION — alert authoring scope unclear; backend absent)
 - **First-pass claim:** Page is read-only: no publish/draft/expire action exists in the route though the stats imply a publishing workflow (page tree has no mutation).
 - **Verified evidence:** The route is read-only: page.tsx and AlertsTable.tsx contain no POST/PATCH or link to a create/publish screen, and citizen/page.tsx only links here. But stat cards (Active/Expired/Drafts) describe state, they do not promise controls; and whether an alert-authoring UI exists elsewhere (e.g. admin/communications) was not found in citizen/*. Backend publish endpoints cannot be verified (service absent).
 - **Files to change:** `apps/web/src/app/(app)/citizen/alerts/page.tsx`
@@ -305,7 +305,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-CATALOGUE-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: already-fixed on main — ICU plural documentsCount in CatalogueTable.tsx:46 (closed by #1870 confirmed W2))
 - **First-pass claim:** Documents column shows a count with no unit ('4') and no drill-down (catalogue/page.tsx:59).
 - **Verified evidence:** page.tsx:59 prints `s.requiredDocumentCount` bare under header 'Documents'; loader reduces requiredDocuments[] to a length (citizenPartials.ts:42), discarding names, so no drill-down without changing the loader.
 - **Files to change:** `apps/web/src/app/(app)/citizen/catalogue/page.tsx`, `apps/web/src/app/_data/citizenPartials.ts`
@@ -546,7 +546,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-DOCUMENTS-05  ·  MEDIUM  ·  confirmed  ·  theme MISSINGACTION (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 citizen: INTERIM NEEDS-OWNER-DECISION — real file upload endpoint required; JSON-only POST today DocumentPanel.tsx:37)
 - **First-pass claim:** Checklist rows have no per-item upload/re-upload action; 'missing' items are text only (DocumentPanel.tsx:92-102).
 - **Verified evidence:** Checklist <li> rows (DocumentPanel.tsx:89-96) render status text + label only; no button. Upload requires the separate form above with hand-typed docType. Upload endpoint posts JSON only ({applicationId, serviceId, docType}, :37) - no file is actually attached (existing FileUpload.tsx in ds not used), so real upload capability cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/documents/DocumentPanel.tsx`
@@ -692,7 +692,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-FEEDBACK-04  ·  LOW  ·  confirmed  ·  theme DS-CONSISTENCY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: already-fixed on main — Card component used in feedback/page.tsx:15 (closed by #1870 confirmed W2))
 - **First-pass claim:** Uses <div className="card"> directly instead of the DS Card component (page.tsx:15).
 - **Verified evidence:** feedback/page.tsx:14 uses <div className="card">; ds Card component exists (_components/ds/Card.tsx:13 renders div.card). Trivial; many citizen pages do the same (eligibility, discovery). Theme WIRING wrong.
 - **Files to change:** `apps/web/src/app/(app)/citizen/feedback/page.tsx`
@@ -756,7 +756,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-GRIEVANCES-04  ·  MEDIUM  ·  partly  ·  theme IA (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 citizen: INTERIM NEEDS-OWNER-DECISION — two overlapping grievance lists; canonical source and merge/redirect path unclear)
 - **First-pass claim:** Two parallel lists of the same grievances: /citizen/requests (GET /citizen/requests) and this register (GET /citizen/grievances) count differently and show different numbers (requests/page.tsx:16-19 vs grievances/page.tsx:30-37).
 - **Verified evidence:** /citizen/requests lists GET /api/v1/citizen/requests (loaders.ts:3337) with a Grievance/Service segmented filter (CitizenRequestsClient.tsx:21,37-40) and links to requests/[id] which is the grievance detail; /citizen/grievances lists GET /citizen/grievances. Two lists overlap but counts computed differently (requests page counts by status buckets). Whether both endpoints return the same records is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/citizen/requests/page.tsx`, `apps/web/src/app/(app)/citizen/grievances/page.tsx`, `apps/web/src/app/(app)/citizen/page.tsx`
@@ -1596,7 +1596,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-RTI-DETAIL-06  ·  MEDIUM  ·  confirmed  ·  theme MISSING (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 citizen: INTERIM NEEDS-BACKEND — expose appeal decision/hearing/outcome and transfers[] on GET /v1/citizen/rti/:id)
 - **First-pass claim:** No record of first-appeal outcome, hearing or transfer history: appeals show only 'First appeal — status' and date (RTIDetailClient.tsx:250-253); the §6(3) transfer done from the list leaves no trace here.
 - **Verified evidence:** Appeals list (RTIDetailClient.tsx:250-253) prints only appealType label, a.status and createdAt. RtiAppeal (loaders.ts:136-143 mapper) has id, appealType, grounds, status, createdAt only - grounds is fetched but not displayed; no decision/hearing/outcome fields. RtiDetail (loaders.ts ~105-126) has no transfer fields, and the list's transfer POST (RTIClient.tsx:100) leaves nothing to show. Whether the API returns such data is unverifiable (rti service absent).
 - **Files to change:** `apps/web/src/app/(app)/citizen/rti/[id]/RTIDetailClient.tsx`, `apps/web/src/app/(app)/citizen/_data/loaders.ts`
@@ -1648,7 +1648,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-03  ·  MEDIUM  ·  partly  ·  theme PERF (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: already-fixed on main — firstDraftIdForService() avoids formData over-fetch runtimeApi.ts:126 (closed by #1870 confirmed W2))
 - **First-pass claim:** Resume lookup GETs every draft of the citizen and filters by serviceId/status client-side (runtimeApi.ts:97-103, ServicePageClient.tsx:31) — over-fetches form data (PII) just to show a banner.
 - **Verified evidence:** ServicePageClient.tsx:31 calls listDraftsForService(service.id) (runtimeApi.ts:97-106) which GETs /api/proxy/v1/citizen/intake/drafts (no serviceId query param) and filters serviceId/status==='draft' client-side, mapping full formData into the browser only to read drafts[0].id. Over-fetch is real; it is the citizen's own drafts so not cross-user, and a masking/role reveal (suggested fix) does not apply. Also !res.ok silently returns [] (no banner). Whether the backend supports ?serviceId filter is cannot-verify (intake service not in snapshot).
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/_data/runtimeApi.ts`, `apps/web/src/app/(app)/citizen/services/_components/ServicePageClient.tsx`
@@ -1678,7 +1678,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-05  ·  LOW  ·  confirmed  ·  theme UX (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: already-fixed on main — checkbox glyph replaced with bullet in ServicePageClient.tsx:119 (closed by #1870 confirmed W2))
 - **First-pass claim:** The ☐ glyph on each required document (ServicePageClient.tsx:116) looks like a checkbox but is not interactive; the resume banner and the primary button both link to the same href (ServicePageClient.tsx:159-173).
 - **Verified evidence:** ServicePageClient.tsx:115-117 renders an aria-hidden '☐' glyph before each required document (non-interactive, misleading affordance). Resume banner link (:159-163) and primary CTA (:168-174) both use applyHref, so they are the same target (CTA label switches to resumeApplication when a draft exists, making the banner redundant).
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/_components/ServicePageClient.tsx`
@@ -1715,7 +1715,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-APPLY-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: already-fixed on main — paymentState tracking + payNow retry ServiceRuntimeFlow.tsx:226-265 (closed by #1870 confirmed W2))
 - **First-pass claim:** Payment failure is swallowed after submit: createPaymentIntent/confirmPayment are wrapped in an empty catch with 'payment is best-effort' (ServiceRuntimeFlow.tsx:206-219). The citizen presses 'Pay (sandbox) & submit', sees 'Application submitted', and may never have paid; the fee screen never says so.
 - **Verified evidence:** ServiceRuntimeFlow.tsx:206-219: after submitDraft, if service.feeFromMinor!=null && ack.applicationId, createPaymentIntent+confirmPayment('sandbox') sit in try/catch with an empty handler (comment 'payment is best-effort', line 217), then setStep('submitted'). Also when submitDraft returns applicationId '' (PENDING case) the payment block is skipped entirely and silently. The submitted screen shows no payment status.
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/_components/ServiceRuntimeFlow.tsx`, `apps/web/src/app/(app)/citizen/services/_data/runtimeApi.ts`
@@ -1749,7 +1749,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-APPLY-03  ·  HIGH  ·  confirmed  ·  theme ASYNC (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: already-fixed on main — trackingNo null returned, pending state shown ServiceRuntimeFlow + runtimeApi.ts:187-222 (closed by #1870 confirmed W2))
 - **First-pass claim:** submitDraft resolves with trackingNo 'PENDING' when the 200ms wait plus draft/application lookups miss (runtimeApi.ts:164-186); the submitted screen then prints 'PENDING' as the tracking number and links to /track/PENDING, which will fail. Submission is asynchronous (202) but the UI pretends to have a number.
 - **Verified evidence:** runtimeApi.ts:156-187: after POST submit (202 ok) it waits 200ms, reads the draft and applications; any miss returns trackingNo 'PENDING' (line 186). ServiceRuntimeFlow.tsx:220 setTrackingNo(ack.trackingNo) then the submitted screen (:401-431) prints it, offers copy, and links to /citizen/services/<key>/track/PENDING. The payment block is also skipped in that case (applicationId '').
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/_data/runtimeApi.ts`, `apps/web/src/app/(app)/citizen/services/_components/ServiceRuntimeFlow.tsx`
@@ -1766,7 +1766,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-APPLY-04  ·  MEDIUM  ·  confirmed  ·  theme AUDIT (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: already-fixed on main — assistedBy+counterMode officer gate apply/page.tsx:57-63 (closed by #1870 confirmed W2))
 - **First-pass claim:** Counter mode never records the operator: ServiceRuntimeFlow accepts assistedBy but apply/page.tsx:45 does not pass it, so saveDraft never sends operatorId (ServiceRuntimeFlow.tsx:134-140) and assisted applications are unattributed.
 - **Verified evidence:** apply/page.tsx:45 renders <ServiceRuntimeFlow service counterMode/> without assistedBy (prop declared at ServiceRuntimeFlow.tsx:30,84, default null). Autosave adds operatorId only when counterMode&&assistedBy (:139). onSubmit's own saveDraft call (:195-201) never sends operatorId at all, even if assistedBy were set. Whether the backend attributes the JWT user server-side cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/[serviceKey]/apply/page.tsx`, `apps/web/src/app/(app)/citizen/services/_components/ServiceRuntimeFlow.tsx`
@@ -1796,7 +1796,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-APPLY-06  ·  MEDIUM  ·  partly  ·  theme VALIDATION (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: already-fixed on main — aadhaar/PIN validation runtimeApi.ts:351-355, Back buttons variant=ghost (closed by #1870 confirmed W2))
 - **First-pass claim:** Validation covers only required, mobile and email (runtimeApi.ts:256-265); Aadhaar/PIN-like fields get no format check, and Back button uses variant='primary' identical to Next (ServiceRuntimeFlow.tsx:321,391), so the two are indistinguishable.
 - **Verified evidence:** runtimeApi.ts:256-265 validateField checks required, apiName containing 'mobile', and 'email' only, by substring on apiName; no Aadhaar (12 digit/Verhoeff), PIN (6 digit) or PAN checks. Back button is variant='primary' at ServiceRuntimeFlow.tsx:321 and :392, identical to Next (:325) and Submit (:393). Theme tag is wrong (validation/visual hierarchy, not masking).
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/_data/runtimeApi.ts`, `apps/web/src/app/(app)/citizen/services/_components/ServiceRuntimeFlow.tsx`
@@ -1849,7 +1849,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-TRACK-TRACKINGNO-01  ·  HIGH  ·  confirmed  ·  theme FAILMASK
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: already-fixed on main — TrackingError class not_found/unavailable + retry runtimeApi.ts:269, TrackClient.tsx:22-92 (closed by #1870 confirmed W2))
 - **First-pass claim:** Every fetch failure is shown as a wrong tracking number: trackApplication throws 'Tracking number not found.' for any non-OK response (runtimeApi.ts:231) and TrackClient prints it under 'Tracking unavailable' (TrackClient.tsx:56-68). Citizens who just paid may conclude their application was lost.
 - **Verified evidence:** runtimeApi.ts:227-232 trackApplication throws the single message 'Tracking number not found.' for ANY !res.ok (404, 401, 5xx, proxy blip). TrackClient.tsx:38-40 stores e.message, and :56-67 renders ErrorState 'Tracking unavailable' + 'Tracking number not found. Check the tracking number and try again...' with actions ['back'] only (no retry) and backHref /citizen/catalogue. A network throw from fetch() is shown as the raw browser message. Note the 'show — instead of 0' part of the suggested fix does not apply to this page.
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/_data/runtimeApi.ts`, `apps/web/src/app/(app)/citizen/services/_components/TrackClient.tsx`
@@ -1883,7 +1883,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-TRACK-TRACKINGNO-04  ·  MEDIUM  ·  confirmed  ·  theme STATUS (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: already-fixed on main — isClosure for closed/resolved TrackClient.tsx:118 (closed by #1870 confirmed W2))
 - **First-pass claim:** Certificate-ready check (issued, approved, completed, confirmed; TrackClient.tsx:84-86) differs from the timeline 'issued' list, which also includes closed and resolved (runtimeApi.ts:331): a resolved grievance shows all steps done yet 'Not issued yet'.
 - **Verified evidence:** TrackClient.tsx:84-86 certificateReady list is [issued, approved, completed, confirmed] on ack.status.trim().toLowerCase(); runtimeApi.ts:331 trackingLaneIndex issued list is [issued, approved, completed, closed, resolved, confirmed] (after normalizeStatus, which turns spaces/underscores to '-'). For status 'closed' or 'resolved' the timeline shows the last lane current/done while the certificate card says 'Not issued yet'. Suggested fix (ConfirmDialog/maker-checker) is irrelevant: read-only page, no action.
 - **Files to change:** `apps/web/src/app/(app)/citizen/services/_components/TrackClient.tsx`, `apps/web/src/app/(app)/citizen/services/_data/runtimeApi.ts`
@@ -2062,7 +2062,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-FEEDBACK-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 citizen: INTERIM NEEDS-BACKEND — POST /v1/citizen/feedback endpoint absent from snapshot)
 - **First-pass claim:** No endpoint referenced anywhere in the tree; whether a feedback API exists is undeterminable (citizen-service absent from snapshot).
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['(none referenced) expected POST /v1/citizen/feedback']`
 - **Question:** Does a citizen feedback endpoint exist, with validation, rate limit and citizen ownership?
@@ -2084,7 +2084,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-PORTAL-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 citizen: INTERIM NEEDS-BACKEND — active/resolved metric definitions in portal/metrics undeterminable; service absent)
 - **First-pass claim:** Metrics come from citizen-service portal/metrics (loaders.ts:3355-3361 comment); service absent, so definitions of 'active' and 'resolved' are undeterminable.
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['GET /v1/citizen/portal/metrics']`
 - **Question:** How are active and resolved defined (statuses included, time window, SLA) in portal/metrics?
@@ -2095,7 +2095,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-REQUESTS-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 citizen: INTERIM NEEDS-BACKEND — citizen-service RBAC for grievance list/create not verifiable; service absent)
 - **First-pass claim:** citizen-service is not in the snapshot (services/ = hrms-service only) — route handlers, RBAC, statuses and audit behaviour behind /api/v1/citizen/* are undeterminable.
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['GET/POST /api/proxy/v1/citizen/grievances', 'GET /api/v1/crm/grievances (loader)']`
 - **Question:** What RBAC, status enum and audit apply to grievance list and create, and is list scoped to caller or department?
@@ -2106,7 +2106,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-REQUESTS-DETAIL-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 citizen: closed by this PR — isOfficer prop added to RequestDetailClient.tsx; officer actions gated by isOfficer; Reopen citizen-only; isOfficer derived server-side in [id]/page.tsx from getSessionRoles(). Backend still authoritative.)
 - **First-pass claim:** Officer actions (Resolve, Escalate, Reopen, Add action) are rendered for every signed-in user; the only gate is grievance status (RequestDetailClient.tsx:172-210). No requireAnyRole; server RBAC is undeterminable (no citizen-service in snapshot).
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['POST /v1/citizen/grievances/:id/{resolve,escalate,reopen,actions}']`
 - **Question:** Are resolve, escalate and add-action limited to officer roles and reopen to the owning citizen, with 403 otherwise?
@@ -2139,7 +2139,7 @@ Counts: ACTION 123, BACKEND-VERIFY 11
 
 ### GAP-CITIZEN-SERVICES-SERVICEKEY-TRACK-TRACKINGNO-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 citizen: INTERIM NEEDS-BACKEND — intake tracking API design undeterminable; service absent)
 - **First-pass claim:** Access control cannot be seen from the UI: the route takes only a tracking number and displays status, service and certificate state with no citizen ownership check on the client (TrackClient.tsx:27-43). Whether /intake/track/:no is scoped to the caller or enumerable is undeterminable — no citizen backend in this snapshot (DPDP).
 - **Service:** `citizen-service`  ·  **Endpoint(s):** `['GET /v1/citizen/intake/track/:trackingNo']`
 - **Question:** Is tracking lookup scoped to the caller (or requires a secret), and are tracking numbers non-guessable and rate limited?

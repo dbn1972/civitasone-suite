@@ -106,7 +106,8 @@ describe("RequestDetailClient -- PERF-009 tranche 2 (SSR loader integration)", (
 
   it("GAP-CITIZEN-REQUESTS-DETAIL-04: escalate sends the exact reason, never a placeholder", async () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true, status: 202, json: async () => ({}) });
-    renderClient({ initialGrievance: { ...mockGrievance, status: "open" }, initialSource: "api" });
+    // isOfficer required so the escalate button renders
+    renderClient({ initialGrievance: { ...mockGrievance, status: "open" }, initialSource: "api", isOfficer: true });
     // Call the escalate flow indirectly: the ConfirmDialog's onConfirm passes a
     // reason. We assert the request body carries the typed reason verbatim.
     // (Reaching into the dialog is covered by ActionButton's own tests; here we
@@ -121,7 +122,8 @@ describe("RequestDetailClient -- PERF-009 tranche 2 (SSR loader integration)", (
 
   it("GAP-CITIZEN-REQUESTS-DETAIL-04/05: confirming escalate sends the typed reason verbatim and shows a Processing cue", async () => {
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true, status: 202, json: async () => ({ ...mockGrievance, status: "open" }) });
-    renderClient({ initialGrievance: { ...mockGrievance, status: "open" }, initialSource: "api" });
+    // isOfficer required so escalate button renders
+    renderClient({ initialGrievance: { ...mockGrievance, status: "open" }, initialSource: "api", isOfficer: true });
 
     fireEvent.click(await screen.findByRole("button", { name: enMessages.citizenRequests.escalate }));
     const dialog = await screen.findByRole("alertdialog");
@@ -140,5 +142,59 @@ describe("RequestDetailClient -- PERF-009 tranche 2 (SSR loader integration)", (
     });
     // DETAIL-05: a Processing cue is shown while the async (202) result settles.
     expect(await screen.findByText(enMessages.citizenRequests.processing)).toBeInTheDocument();
+  });
+});
+
+describe("RequestDetailClient -- GAP-CITIZEN-REQUESTS-DETAIL-01 (officer role gate)", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  // Given: citizen (isOfficer=false, default) viewing an open grievance
+  // When: component renders
+  // Then: Resolve, Escalate and Add action buttons are absent; Reopen absent (not resolved yet)
+  it("citizen sees no officer actions on an open grievance", async () => {
+    renderClient({ initialGrievance: { ...mockGrievance, status: "open" }, initialSource: "api", isOfficer: false });
+    await screen.findByText("Garbage not collected");
+    expect(screen.queryByRole("button", { name: enMessages.citizenRequests.resolve })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: enMessages.citizenRequests.escalate })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: enMessages.citizenRequests.addAction })).not.toBeInTheDocument();
+  });
+
+  // Given: citizen (isOfficer=false) viewing a resolved grievance
+  // When: component renders
+  // Then: Reopen is visible; Resolve and Escalate are absent
+  it("citizen sees Reopen on a resolved grievance but not Resolve/Escalate", async () => {
+    renderClient({ initialGrievance: { ...mockGrievance, status: "resolved" }, initialSource: "api", isOfficer: false });
+    await screen.findByText("Garbage not collected");
+    expect(await screen.findByRole("button", { name: enMessages.citizenRequests.reopen })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: enMessages.citizenRequests.resolve })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: enMessages.citizenRequests.escalate })).not.toBeInTheDocument();
+  });
+
+  // Given: officer (isOfficer=true) viewing an open grievance
+  // When: component renders
+  // Then: Resolve, Escalate and Add action are present; Reopen is absent (not resolved)
+  it("officer sees Resolve, Escalate and Add action on an open grievance but not Reopen", async () => {
+    renderClient({ initialGrievance: { ...mockGrievance, status: "open" }, initialSource: "api", isOfficer: true });
+    await screen.findByText("Garbage not collected");
+    expect(await screen.findByRole("button", { name: enMessages.citizenRequests.resolve })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: enMessages.citizenRequests.escalate })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: enMessages.citizenRequests.addAction })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: enMessages.citizenRequests.reopen })).not.toBeInTheDocument();
+  });
+
+  // Given: officer (isOfficer=true) viewing a resolved grievance
+  // When: component renders
+  // Then: no Resolve/Escalate (already resolved); no Reopen (officer cannot reopen, citizen does)
+  it("officer sees no action buttons on a resolved grievance", async () => {
+    renderClient({ initialGrievance: { ...mockGrievance, status: "resolved" }, initialSource: "api", isOfficer: true });
+    await screen.findByText("Garbage not collected");
+    expect(screen.queryByRole("button", { name: enMessages.citizenRequests.resolve })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: enMessages.citizenRequests.escalate })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: enMessages.citizenRequests.reopen })).not.toBeInTheDocument();
   });
 });
