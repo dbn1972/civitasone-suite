@@ -337,9 +337,9 @@ Counts: ACTION 23, BACKEND-VERIFY 3
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Title change alters slugified offline cache key, dropping existing cached lists once.
 - **Depends on:** shared ModuleListPage
 
-### GAP-FIELD-TASKS-05  ·  LOW  ·  confirmed  ·  theme WIRING
+### GAP-FIELD-TASKS-05  ·  LOW  ·  interim  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — field-service mutation endpoints (create/assign/complete) absent from snapshot; role/audit design unconfirmed)
 - **W0 note:** partly fixed by #1923 — Assignee column added (raw assigneeId, not name); no Assign/Mark complete actions and hub copy still says completion tracking
 - **First-pass claim:** No create/assign/complete control exists on this page although the module description promises "Field task assignments and completion tracking" (field/page.tsx:6); tasks can only be listed here. Task assignee is not a column, so the list cannot be read by agent.
 - **Verified evidence:** No create/assign/complete controls in tasks/page.tsx (only ModuleListPage). The mapper (_data.ts:51-59) only surfaces agentId as a last-resort sublabel after description/status, so assignee is effectively never displayed. field-service mutation endpoints cannot be verified (service absent), so which actions exist is unknown.
@@ -410,9 +410,9 @@ Counts: ACTION 23, BACKEND-VERIFY 3
   - Unit: formatCoord rounds to configured precision.
 - **Needs:** decision  ·  **Effort:** M ~1-2d  ·  **Risk:** PII/DPDP exposure of employee location; over-restriction could block supervisors' legitimate use.
 
-### GAP-FIELD-VISITS-04  ·  MEDIUM  ·  confirmed  ·  theme FABRICATED
+### GAP-FIELD-VISITS-04  ·  MEDIUM  ·  interim  ·  theme FABRICATED
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — total/date-range endpoint absent from field-service; backend support unverified)
 - **W0 note:** partly fixed by ##1923 — Done: KPI labels 'latest N' when total>shown, date+time via formatIndianDateTime. Remains: still hard-coded limit=100 (FIELD_VISITS_LIMIT), no date-range filter/pagination
 - **First-pass claim:** limit=100 hard-coded with no pagination or date filter (_data.ts:112), so the "Visits" KPI silently caps at 100 and Open counts only within that window; check-in shows date only (formatIndianDate) — no time, though duration is shown.
 - **Verified evidence:** _data.ts:112 (and :90) hard-code ?limit=100; the page has no pagination or date filter, and StatCard 'Visits' = data.length (visits/page.tsx:44), 'Open' counted within the same 100 (22), so both cap silently. Check-in uses formatIndianDate (27), which is date-only (formatters.ts:2-7), while duration is shown.

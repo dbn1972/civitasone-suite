@@ -779,9 +779,9 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 - **Source:** `apps/web/src/app/(app)/audit/plan/page.tsx`
 - **Design reference:** `redesign/audit/plan.html`
 
-### GAP-AUDIT-PLAN-01  ·  HIGH  ·  confirmed  ·  theme WIRING (was CONFIRM)
+### GAP-AUDIT-PLAN-01  ·  HIGH  ·  interim  ·  theme WIRING (was CONFIRM)
 
-- [ ] **Status** (W2 audit: reopened by independent check on #2058. Previously ticked ALREADY-FIXED. the Risk column itself is correct and tested (PlanTable reads riskLevel), but end to end it is NOT met: PlanAuditButton.tsx POSTs /v1/audit/plans (creates a plan row) while the table lists GET /v1/audit/plan (plan ITEMS). Nothing in apps/web calls POST /v1/audit/plans/:id/items and the plan consumer inserts no item, so a plan created through the dialog never appears in the table. Needs a decision/build: add the first item after create, or list plans with their items. Tests that exist: plan/PlanTable.columns.test.tsx riskLevel and fallback cases; services/audit-service/tests/plan-routes.test.ts projection test. NEEDS OWNER/BACKEND DECISION)
+- [~] **Status** (INTERIM — INTERIM — plan-item endpoint absent from audit-service; needs owner/backend decision on plan-to-item flow)
 - **First-pass claim:** The Risk level chosen in the dialog (low/medium/high, PlanAuditButton.tsx:106-110) is posted but never shown: the table derives Risk from the audit type (special/compliance → High, performance → Medium, else Low; PlanTable.tsx:10-14). A planner who picks “High” for a routine audit sees “Low” after saving.
 - **Verified evidence:** PlanAuditButton.tsx:21,51,106-111 collects riskLevel low/medium/high and posts it; PlanTable.tsx:8-12,30 derives displayed Risk solely from `type` (special/compliance -> High, performance -> Medium, else Low) and never reads any risk field; the dialog does not send `type` at all. Whether AuditPlanItem has a riskLevel field is cannot-verify (@civitasone/types absent). Theme CONFIRM wrong.
 - **Files to change:** `apps/web/src/app/(app)/audit/plan/PlanTable.tsx`, `apps/web/src/app/(app)/audit/plan/PlanAuditButton.tsx`, `apps/web/src/lib/audit/observationLabels.ts (new)`

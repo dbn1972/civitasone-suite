@@ -733,9 +733,9 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
   - Component test for anchor href.
 - **Needs:** web+backend  ·  **Effort:** M ~1-2d  ·  **Risk:** Serving classified file content: enforce classification/access check server-side.
 
-### GAP-ESTAB-FILES-DETAIL-03  ·  MEDIUM  ·  partly  ·  theme CONFIRM (was OTHER)
+### GAP-ESTAB-FILES-DETAIL-03  ·  MEDIUM  ·  interim  ·  theme CONFIRM (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — decision needed: policy on who may sign vs submit direct; allowedActions endpoint absent from estab-service)
 - **W2 note:** W2 estab re-check: still decision-first (who may sign directly vs submit; server allowedActions). Draft selection is already latest-first. Left open. (#2052)
 - **W0 note:** partly fixed by #1916 — Helper text clarified, draft chosen explicitly; no server allowedActions.
 - **First-pass claim:** Submit for approval and Sign note both act on the first draft yellow note (page.tsx:51-53). "Sign at your level" (FileDetailActions.tsx:209-211) lets one officer create a green note without the workflow task, so it is unclear which path is the approved chain.
@@ -859,9 +859,9 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
   - Second file for an already-linked DAK returns 409 with humanised message.
 - **Needs:** web+backend  ·  **Effort:** M ~1-2d  ·  **Risk:** Duplicate files for one DAK is a records-integrity issue.
 
-### GAP-ESTAB-FILES-NEW-03  ·  MEDIUM  ·  partly  ·  theme MASTERDATA (was DEADROUTE)
+### GAP-ESTAB-FILES-NEW-03  ·  MEDIUM  ·  interim  ·  theme MASTERDATA (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — NEEDS OWNER DECISION: authoritative dept master (operator divisions vs HRMS) and backend validation policy)
 - **W2 estab note:** INTERIM, NEEDS OWNER DECISION. The department on new-file and on DAK open-file is now a pick-list of the enrolled operator divisions (useEstabDivisions) with no free-text fallback and no silent 'ADMIN'. Still open: (a) which master is authoritative (operator divisions vs hrms departments) and (b) whether estab-service must reject a dept outside it. Not built because rejecting would block greenfield tenants that have no operators yet.
 - **W0-10 note:** review found the W0 tick partly — department select built from operators' divisions (files/new/page.tsx:74) but free-text input fallback remains (:416) so typos possible; dak/page.tsx:316 open-file dept still free text 'e.g. ADMIN'; no master dept endpoint/backend validation; still falls back to 'ADMIN' (:154)
 - **First-pass claim:** Department is a free-text input defaulting to "ADMIN" (page.tsx:20,41); the register filters and dak/open-file also hard-code ADMIN, so typos create orphan departments.
@@ -1472,9 +1472,9 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 - **Depends on:** GAP-ESTAB-LIBRARY-ISSUES-05
 
-### GAP-ESTAB-LIBRARY-ISSUES-05  ·  LOW  ·  confirmed  ·  theme OTHER
+### GAP-ESTAB-LIBRARY-ISSUES-05  ·  LOW  ·  interim  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — renewal/fine/condition-on-return decision pending; fine capture involves paise rules, needs owner sign-off)
 - **W2 note:** W2 estab re-check: the stats-gating step is already on main (loan stats depend on the issues loader only). Renewal, fine and condition-on-return still need a product decision. Left open. (#2052)
 - **W0 note:** partly fixed by #1916 — Stats gated per loader fixed; no renewal/fine/condition-on-return capture
 - **First-pass claim:** Either loader failing blanks all three stats even if the other loaded (page.tsx:15-17,39-41); no renewal, fine or "condition on return" capture on Return (IssuesTable.tsx:34-46).

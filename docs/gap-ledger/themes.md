@@ -278,9 +278,9 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 - **Source:** `apps/web/src/app/(app)/themes/templates/page.tsx`
 - **Design reference:** `redesign/themes/templates.html`
 
-### GAP-THEMES-TEMPLATES-01  ·  MEDIUM  ·  confirmed  ·  theme OTHER
+### GAP-THEMES-TEMPLATES-01  ·  MEDIUM  ·  interim  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — INTERIM — depends on GAP-THEMES-TEMPLATES-05; theme-service template response shape and apply endpoint unverified)
 - **First-pass claim:** Hub says 'Design tokens, templates and branding for tenant editions' (themes/page.tsx:7) yet templates show no edition, token count or preview and cannot be applied from this route (themes/_data.ts:28-77).
 - **Verified evidence:** Hub text (themes/page.tsx:7) promises 'Design tokens, templates and branding for tenant editions'. templates/page.tsx only calls getThemeTemplates (_data.ts:89) whose mapRows (_data.ts:28-77) reduces every row to id/label/sublabel/status/meta; there is no edition, token-count or preview mapping, and the page has no apply/publish action (only ThemeActions on /themes/tokens publishes). Whether theme-service returns edition/tokenCount fields cannot be verified (service absent from snapshot).
 - **Files to change:** `apps/web/src/app/(app)/themes/templates/page.tsx`, `apps/web/src/app/(app)/themes/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`
