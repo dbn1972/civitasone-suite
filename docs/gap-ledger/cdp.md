@@ -393,7 +393,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-SEGMENTS-03  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD — ModuleListTable rebuilt on DataTable (sortable/filterable/showId prop); segments page uses CdpListTable with no id column; segments/page.test.tsx covers Members+Rule columns)
 - **First-pass claim:** ModuleListTable prints the raw record id truncated to 8 chars in an 'ID' column (ModuleListTable.tsx:44) and a generic 'Detail'/'Meta' pair, so a steward sees hash-like fragments instead of business labels; no sort, filter or pagination for lists that can hold many rows.
 - **Verified evidence:** ModuleListTable.tsx:50 prints row.id.slice(0,8) in the ID column; headers Detail/Meta generic (l.42,44); plain <table> with no sort, filter or pagination (l.37-58). Shared by every ModuleListPage route so the same defect exists across modules.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
