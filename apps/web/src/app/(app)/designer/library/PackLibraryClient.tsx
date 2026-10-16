@@ -34,13 +34,30 @@ interface PackLibraryClientProps {
    * surfacing it as a notice keeps the two load paths honest.
    */
   domainPacksFailed?: boolean;
+  /**
+   * GAP-DESIGNER-LIBRARY-05: service packs pre-loaded by the server loader.
+   * Both lists now come from the same server-loader path so the initial render
+   * has both available. The client can still retry on error without a full
+   * page reload.
+   */
+  initialPacks?: ServicePackDto[];
+  /** true when the server loader for service packs failed. */
+  initialPacksFailed?: boolean;
 }
 
-export function PackLibraryClient({ domainPacks, domainPacksFailed = false }: PackLibraryClientProps) {
+export function PackLibraryClient({
+  domainPacks,
+  domainPacksFailed = false,
+  initialPacks = [],
+  initialPacksFailed = false,
+}: PackLibraryClientProps) {
   const router = useRouter();
-  const [packs, setPacks] = useState<ServicePackDto[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<HumanError | null>(null);
+  // GAP-DESIGNER-LIBRARY-05: start with server-loaded packs; reloadToken>0 triggers a client-side retry.
+  const [packs, setPacks] = useState<ServicePackDto[]>(initialPacks);
+  const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<HumanError | null>(
+    initialPacksFailed ? (() => { const e = toHumanError("load", { area: "service packs" }); return e; })() : null,
+  );
   const [reloadToken, setReloadToken] = useState(0);
   const [notice, setNotice] = useState<string | null>(null);
   const [sector, setSector] = useState("all");
@@ -52,7 +69,10 @@ export function PackLibraryClient({ domainPacks, domainPacksFailed = false }: Pa
   const [importPack, setImportPack] = useState<ServicePackDto | null>(null);
   const [importBusy, setImportBusy] = useState(false);
 
+  // GAP-DESIGNER-LIBRARY-05: only re-fetch when the user clicks Retry (reloadToken > 0).
+  // Initial data comes from the server loader (initialPacks prop) so no client fetch on mount.
   useEffect(() => {
+    if (reloadToken === 0) return;
     let cancelled = false;
     (async () => {
       setLoading(true);
