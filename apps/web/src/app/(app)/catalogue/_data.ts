@@ -3,7 +3,6 @@
  * Calls catalogue-service through the gateway via cookie-aware fetchJson.
  */
 import { catalogueProductListSchema, type CatalogueProductRow } from "@civitasone/schemas/web";
-import { catalogueProductListSchema, type CatalogueProductRow } from "@civitasone/schemas/web";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import type { ModuleRowSummary } from "@civitasone/types";
 import { formatMoney, formatIndianDate, humanizeStatus, todayIST } from "@/lib/formatters";
@@ -87,22 +86,6 @@ export function mapRows(payload: unknown): ModuleRowSummary[] | null {
     });
   }
   return mapped;
-}
-
-/**
- * GAP-CATALOGUE-{BUNDLES,CATEGORIES,PRODUCTS,RATES}-0{5,6} (CACHE): no
- * `revalidateSeconds`. The pages are `export const dynamic = "force-dynamic"`
- * because the fetch carries a per-user auth header that must NOT enter the
- * shared Next data cache; fetchJson then uses `cache:"no-store"`. The old
- * `revalidateSeconds:30` was dead config (force-dynamic overrode it) that
- * misleadingly implied a 30s shared cache.
- */
-function moduleLoader(path: string, key: string) {
-  return (): Promise<LoaderResult<ModuleRowSummary[]>> =>
-    fetchJson<unknown, ModuleRowSummary[]>(path, [] as ModuleRowSummary[], {
-      telemetryKey: key,
-      mapResponse: mapRows,
-    });
 }
 
 // ---------------------------------------------------------------------------
