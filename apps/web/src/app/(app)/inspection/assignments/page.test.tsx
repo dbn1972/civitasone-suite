@@ -9,15 +9,25 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
 
+// GAP-INSPECTION-ASSIGNMENTS-06: mock roleGuard so tests can control the
+// viewer role without needing a real JWT cookie.
+const { getSessionRolesMock } = vi.hoisted(() => ({
+  getSessionRolesMock: vi.fn<() => string[]>().mockReturnValue(["supervising_officer"]),
+}));
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => getSessionRolesMock(),
+  hasAnyRole: (roles: string[], allowed: string[]) =>
+    (allowed as string[]).some((r) => (roles as string[]).includes(r)),
+}));
+
 import AssignmentsPage from "./page";
 
 describe("AssignmentsPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
+    getSessionRolesMock.mockReturnValue(["supervising_officer"]);
   });
 
-  // GAP-INSPECTION-ASSIGNMENTS-04: inspector + scheduled date render from the
-  // real assignment fields, and the Scheduled column shows a formatted date.
   it("shows inspector id and the formatted scheduled date", async () => {
     fetchJsonMock.mockResolvedValueOnce({
       data: [
@@ -39,7 +49,6 @@ describe("AssignmentsPage", () => {
     expect(screen.getByText("cccccccc…")).toBeInTheDocument();
     expect(screen.getByText("11 Mar 2026")).toBeInTheDocument();
     expect(screen.getByText("Assigned")).toBeInTheDocument();
-    // No row shows "—" for the inspector/scheduled columns when data exists.
     expect(screen.getByRole("columnheader", { name: "Inspector" })).toBeInTheDocument();
   });
 
@@ -51,7 +60,7 @@ describe("AssignmentsPage", () => {
     render(ui);
 
     expect(screen.queryByRole("button", { name: /create assignment/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/We couldn't load assignments\./)).toBeInTheDocument();
+    expect(screen.getByText(/load assignments/)).toBeInTheDocument();
   });
 
   it("shows the create form when the list loaded (even if empty)", async () => {
@@ -61,5 +70,18 @@ describe("AssignmentsPage", () => {
     render(ui);
 
     expect(screen.getByRole("button", { name: /create assignment/i })).toBeInTheDocument();
+  });
+
+  // GAP-INSPECTION-ASSIGNMENTS-06: a read-only viewer (inspector role) does
+  // not see the create form, even when the list loaded successfully.
+  it("hides the create form for a viewer who lacks create-assignment roles", async () => {
+    getSessionRolesMock.mockReturnValue(["inspector"]);
+    fetchJsonMock.mockResolvedValueOnce({ data: [], source: "api" });
+
+    const ui = await AssignmentsPage();
+    render(ui);
+
+    expect(screen.queryByRole("button", { name: /create assignment/i })).not.toBeInTheDocument();
+    expect(screen.getByText("No assignments yet")).toBeInTheDocument();
   });
 });

@@ -6,8 +6,22 @@ import { AssignmentActions } from "./AssignmentActions";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
+import { getSessionRoles, hasAnyRole } from "@/lib/auth/roleGuard";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * GAP-INSPECTION-ASSIGNMENTS-06: roles that may create an assignment. Must
+ * match SUPERVISING_ROLES in services/inspection-service/src/modules/
+ * assignment/routes.ts — the server is the authority; this is a client-side
+ * courtesy gate only (to avoid showing a form that will be rejected).
+ */
+const ASSIGNMENT_CREATE_ROLES = [
+  "supervising_officer",
+  "inspection_admin",
+  "tenant_admin",
+  "super_admin",
+] as const;
 
 /** Short id for display when no human reference exists. */
 function shortId(id: unknown): string {
@@ -20,6 +34,10 @@ export default async function Page() {
   const { data } = result;
   const resource = toResourceState(result);
   const errored = resource.status === "error";
+  // GAP-INSPECTION-ASSIGNMENTS-06: hide the create form for roles that cannot
+  // create assignments (read-only viewers, inspectors, etc.). The server
+  // enforces RBAC; this is a UI-side courtesy gate.
+  const canCreate = hasAnyRole(getSessionRoles(), [...ASSIGNMENT_CREATE_ROLES]);
   return (
     <div className="wrap">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, marginBottom: 8 }}>
@@ -29,10 +47,10 @@ export default async function Page() {
       </nav>
       <PageHeader title="Assignments" back="/inspection" />
       {/* GAP-INSPECTION-ASSIGNMENTS-06: do not show the create form when the
-          list failed to load — a failed page is not a safe place to accept a
-          new assignment. The route itself remains the authoritative RBAC gate
-          (assignment/routes.ts SUPERVISING_ROLES). */}
-      {!errored && <AssignmentActions />}
+          list failed to load (a failed page is not a safe place to accept a
+          new assignment), and hide it for roles that cannot create assignments
+          (server RBAC is authoritative; this is a courtesy gate only). */}
+      {!errored && canCreate && <AssignmentActions />}
       {errored ? (
         <RefreshErrorState error={toHumanError("load", { area: "assignments" })} backHref="/inspection" />
       ) : data.length === 0 ? (
