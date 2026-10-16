@@ -6,8 +6,9 @@ import { render, screen } from "@testing-library/react";
 const getEnabledModulesMock = vi.fn();
 vi.mock("@/lib/moduleVisibility", () => ({
   getEnabledModules: () => getEnabledModulesMock(),
-  isModuleEnabled: (enabled: string[] | null, key: string | null) => {
+  isModuleEnabled: (enabled: string[] | null, key: string | null, roles?: string[]) => {
     if (key === null) return true;
+    if (roles?.includes("super_admin") || roles?.includes("platform_admin")) return true;
     if (!enabled) return true;
     const k = key.toLowerCase();
     return enabled.some((n) => n === k || n.includes(k) || k.includes(n));
@@ -65,7 +66,7 @@ describe("Help Centre hub", () => {
     render(await HelpPage());
     expect(screen.getByRole("searchbox", { name: /search words/i })).toBeInTheDocument();
   });
-}
+
   // GAP-HELP-HOME-03: super_admin bypasses module gating (roles now threaded consistently).
   it("super_admin sees all modules even with a restricted enabled list", async () => {
     getEnabledModulesMock.mockResolvedValue(["finance"]);
