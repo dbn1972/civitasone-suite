@@ -1095,7 +1095,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-COMPLIANCE-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (W2 audit: NOT DONE. 403 for employee is tested (compliance.test.ts 'GET /v1/audit/compliance - 403 for employee role') but there is no test asserting the 200 response shape/status enum the page maps; needs a real-DB test)
+- [x] **Status** (W2 audit: closed by this PR. Tests added to compliance.test.ts: 'GAP-AUDIT-COMPLIANCE-07 — GET /v1/audit/compliance returns items with all documented shape fields and a valid status enum value' and 'a row with status pending maps to the pending response status'. Response shape (id, lawOrRule, requirement, frequency, dueDate, department, status) and status enum (complied|pending|overdue|na) verified with a real-DB seeded row)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/compliance']`
 - **Question:** Does GET /audit/compliance restrict to audit roles and return the item shape/status enum the page maps?
@@ -1117,7 +1117,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-EXPORTS-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (W2 audit: NOT DONE. Create/status/download/verify role gates and a wrong-token 403 are tested (exports-routes.test.ts), but single-use/expiring token and 'each export writes an audit row' have no test)
+- [x] **Status** (W2 audit: PARTIAL closed by this PR. Tests added to exports-routes.test.ts: 'each export mutation writes exactly one audit event' (create + complete events verified in auditEvents table). Single-use/expiring token NOT implemented — no tokenUsedAt/tokenExpiresAt column in schema; current behaviour (token is persistent/reusable) documented in 'the download token is persistent' test; full token-expiry implementation NEEDS OWNER DECISION on TTL)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/exports', 'POST /api/proxy/audit/exports', 'GET /api/proxy/v1/audit/exports/{id}', 'GET .../{id}/verify', 'GET .../{id}/download?token=']`
 - **Question:** Are export create/verify/download role-gated, is the download token single-use/expiring, and is each export itself written to the audit log?
@@ -1139,7 +1139,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-OBSERVATIONS-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (W2 audit: NOT DONE. GET 403/200 and tenant isolation are tested (observation-routes.test.ts); POST severity/status enum validation and exactly-one audit event per mutation have no test)
+- [x] **Status** (W2 audit: closed by this PR. Tests added to observation-routes.test.ts: 'GAP-AUDIT-OBSERVATIONS-07 — POST enum validation (400 on invalid enum)' (invalid category → 400, invalid riskLevel → 400); 'GAP-AUDIT-OBSERVATIONS-07 — POST writes exactly one audit event per mutation' (exactly one auditEvents row with action=create per observationCreate command, verified via fresh MemoryQueue + both consumers drained)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/observations', 'POST /api/proxy/v1/audit/observations']`
 - **Question:** Does POST observations validate severity/status enums, restrict to audit_officer and write an audit event?
@@ -1150,7 +1150,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-OBSERVATIONS-DETAIL-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (W2 audit: NOT DONE. GET/reply/review role gates are tested (observation-routes.test.ts); draft-para role, audit event per mutation and status-transition enforcement have no route-level test)
+- [x] **Status** (W2 audit: closed by this PR. Tests added to observation-routes.test.ts: 'GAP-AUDIT-OBSERVATIONS-DETAIL-07 — POST /:id/draft-para role gate' (401/403-employee/403-dept_head/202-audit_officer); 'reply command writes exactly one audit event with action=reply'; 'status-transition enforcement: replying on a compliance_pending obs leaves status unchanged' (consumer throws, observation stays compliance_pending)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/observations/{id}', 'POST .../{id}/reply', 'POST .../{id}/draft-para']`
 - **Question:** Do reply and draft-para require audit/auditee roles respectively, write an audit event, and enforce observation status transitions?
@@ -1161,7 +1161,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-PLAN-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (W2 audit: NOT DONE. GET 403/200 and POST 403/400 are tested (plan-routes.test.ts); POST date-range validation and 'records who created' have no test)
+- [x] **Status** (W2 audit: closed by this PR. src/modules/plan/validators.ts: createPlanBody now has a .refine() that rejects periodFrom > periodTo (YYYY-MM-DD); also adds regex validation. Tests added to plan-routes.test.ts: 'GAP-AUDIT-PLAN-07 — POST date-range validation' (periodFrom > periodTo → 400, same day → 202, non-date string → 400); 'POST records who created the plan' (createdBy = actorId, verified via consumer drain)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/plan', 'POST /api/proxy/v1/audit/plans']`
 - **Question:** Does POST plans validate dates/scope, restrict to audit_admin and record who created the plan?
@@ -1172,7 +1172,7 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 
 ### GAP-AUDIT-RISK-REGISTER-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (W2 audit: NOT DONE. POST 403 and invalid-likelihood 400 are tested (risk-routes.test.ts, risk.test.ts); 'exactly one audit event per mutation' has no test)
+- [x] **Status** (W2 audit: closed by this PR. Tests added to risk-routes.test.ts: 'GAP-AUDIT-RISK-REGISTER-07 — POST /v1/audit/risks writes exactly one audit event' (exactly one auditEvents row with action=create per riskCreate command, verified via fresh MemoryQueue + both consumers drained)
 - **First-pass claim:** services/audit-service is not in the snapshot (only services/hrms-service) — endpoint contract, RBAC and audit-on-mutation behaviour are undeterminable
 - **Service:** `audit-service`  ·  **Endpoint(s):** `['GET /api/v1/audit/risks', 'POST /api/proxy/v1/audit/risks']`
 - **Question:** Does POST risks validate likelihood/impact enums, restrict to audit roles and log the mutation?
