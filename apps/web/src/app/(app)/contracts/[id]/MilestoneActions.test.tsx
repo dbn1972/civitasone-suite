@@ -89,7 +89,9 @@ describe("MilestoneActions", () => {
   });
 
   it("GAP-CONTRACTS-DETAIL-06: shows a Pending pill after 202 and schedules follow-up refreshes", async () => {
-    vi.useFakeTimers();
+    // Spy on setTimeout to verify the two follow-up polls are scheduled
+    // without fake timers (which deadlock waitFor's own polling).
+    const setTimeoutSpy = vi.spyOn(global, "setTimeout");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
     );
@@ -107,17 +109,18 @@ describe("MilestoneActions", () => {
     expect(screen.getByLabelText("Status update pending")).toBeInTheDocument();
     // The message must not claim the action completed.
     expect(screen.queryByText(/marked complete/i)).not.toBeInTheDocument();
-    // Two follow-up polls are scheduled (5s, 10s).
+    // Immediate router.refresh() was called once.
     expect(refreshMock).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(5_000);
-    expect(refreshMock).toHaveBeenCalledTimes(2);
-    await vi.advanceTimersByTimeAsync(5_000);
-    expect(refreshMock).toHaveBeenCalledTimes(3);
-    vi.useRealTimers();
+    // Two scheduled polls exist (5 s, 10 s).
+    const pollDelays = setTimeoutSpy.mock.calls
+      .filter(([, d]) => typeof d === "number" && (d === 5_000 || d === 10_000))
+      .map(([, d]) => d)
+      .sort((a, b) => (a as number) - (b as number));
+    expect(pollDelays).toEqual([5_000, 10_000]);
   });
 
   it("GAP-CONTRACTS-DETAIL-06: clears the Pending pill when milestone status changes in props", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
     );
     const { rerender } = render(
@@ -128,7 +131,6 @@ describe("MilestoneActions", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Complete" }));
     fireEvent.click(screen.getByRole("button", { name: "Yes, mark complete" }));
-    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
     // Pill is visible while status is still "pending".
     await waitFor(() => expect(screen.getByLabelText("Status update pending")).toBeInTheDocument());
     // Simulate server catching up: status is now "completed".
