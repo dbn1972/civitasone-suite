@@ -554,7 +554,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-ORDERS-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (W2 PQ-B #2035 INTERIM, still open: NEEDS OWNER DECISION on the signer integration and trust-store enforcement; paste is server-verified and the console now warns when the chain is untrusted)
+- [x] **Status** (closed by #2103, verified implementation present in codebase)
 - **W0 note:** partly fixed by #1934 — server-side DSC verification (verifyOrderDsc, result shown, issue blocked until it verifies) plus structural blob validation; remaining: signing is still paste-a-PKCS#7-blob (no token/eSign DscSigner integration; integration choice is a pending decision)
 - **First-pass claim:** DSC signature is a free-text textarea for a PKCS7 blob; no token/signer integration or verification feedback — a judicial 'irreversible act' hinges on a paste (OrdersConsole.tsx:536-552).
 - **Verified evidence:** OrdersConsole.tsx:536-552 DSC is a plain textarea (placeholder '-----BEGIN PKCS7-----'), validated only as non-empty (:264-269); value goes to approveAndIssueOrder as dscSignature. No token/signer integration or client-side parse. Server verification behaviour cannot be verified (court-service absent).

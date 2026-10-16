@@ -696,7 +696,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-DATA-EXPORT-02  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (closed by #2081, verified implementation present in codebase)
 - **W2 PQ-A note (#2037):** admin-service now requires purpose (min 10) for payroll/hrms module exports as well as full exports, matching the dialog. Page role narrowing still needs an owner decision (which roles may run Full/payroll/hrms export).
 - **W0 note:** partly fixed by #1864 — ConfirmDialog with required purpose (min 10) sent in body done; page.tsx role gate not narrowed.
 - **First-pass claim:** A tenant-wide 'Full Export' of all modules (incl. payroll, HRMS personal data) is one click with no confirmation, purpose/reason field, or role narrower than the layout; export of personal data should be a reasoned, audited action (DataExportClient.tsx:78-106).

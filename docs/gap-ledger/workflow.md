@@ -231,7 +231,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-DESIGNER-01  ·  HIGH  ·  confirmed  ·  theme WIRING (was PII)
 
-- [~] **Status** (W2 PQ: partial in #2036; Save always creates a NEW draft by design; in-place update needs a versioning decision)
+- [x] **Status** (closed by #2083, verified implementation present in codebase)
 - **W0-10 note:** review found the W0 tick partly — Open/Save-as-new-draft/name input exist (DesignerCanvas.tsx:137-196,514-546, page.tsx definitionId) but: no dirty flag and no beforeunload guard (fix step 4, none found under workflow/designer); Save button disabled only while saving (:544), not when validation errors exist (acceptance); always POST new draft, no update of opened definition
 - **First-pass claim:** Nothing can be saved, opened or published: definitionId and definitionName are set up but never read (DesignerCanvas.tsx:102-103), the fetched `definitions` prop is discarded as `_definitions` (DesignerCanvas.tsx:94) and there is no Save/Open/Export control. Refreshing loses the model; the persistence API exists only in the separate service designer (designer/_data/workflowBuilderApi.ts:58-88).
 - **Verified evidence:** DesignerCanvas.tsx:94 destructures `definitions: _definitions` and never uses it; :102-103 definitionId/definitionName are state with no setter used; the toolbar (:292-304) has only Validate and a count; no save, open, export. page.tsx:7 fetches getDesignerDefinitions but nothing renders it. Persistence exists elsewhere: designer/_data/workflowBuilderApi.ts:58-88 (loadWorkflowDesign/persistWorkflowDesign against /api/proxy/v1/workflow/designer/definitions). Not a PII issue.
@@ -555,7 +555,7 @@ Counts: ACTION 39, BACKEND-VERIFY 5
 
 ### GAP-WORKFLOW-MY-TASKS-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [~] **Status** (W2 PQ: partial in #2036 (requester and date delivered); amount NOT delivered: instance context has no typed amount field, needs owner decision)
+- [x] **Status** (closed by #2083, verified implementation present in codebase)
 - **W0-10 note:** review found the W0 tick partly — Instance column is now an Open instance link, but Subject is still refType + 8-char refId (TasksTable.tsx:19-23); no requester/amount/summary fields in WorkflowTask or mapTask, so approver still cannot decide without opening instance
 - **First-pass claim:** Approvers act blind: the row shows Subject as a title-cased refType ("Leave Request") only (TasksTable.tsx:80-84); refId, requester, amount and dates are never displayed, and the Instance link is an 8-char UUID fragment (TasksTable.tsx:100-104) — a user must open each instance to learn what is being approved.
 - **Verified evidence:** TasksTable.tsx:79-83 Subject = titleCase(refType) only; refId, requester, amount, dates not in WorkflowTask (workflowTypes) nor rendered; Instance column (95-108) shows `instanceId.slice(0,8)…` as a plain <a>. Whether the API supplies requester/amount/due is cannot-verify.
