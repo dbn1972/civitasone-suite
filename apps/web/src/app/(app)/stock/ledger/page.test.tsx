@@ -30,3 +30,28 @@ describe("GAP-STOCK-LEDGER-05: ledger KPI and column labels are unambiguous", ()
     expect(html).not.toContain(">Net Balance<");
   });
 });
+
+describe("GAP-STOCK-LEDGER-08: loader receives date-range and type from searchParams", () => {
+  it("passes from/to/type/cursor from searchParams to getStockLedger", async () => {
+    const { getStockLedger } = await import("../../../_data/loaders");
+    const mock = getStockLedger as ReturnType<typeof vi.fn>;
+    mock.mockResolvedValueOnce({ data: [], source: "api" });
+    await StockLedgerPage({ searchParams: { from: "2026-01-01", to: "2026-06-30", type: "receipt", cursor: "abc" } });
+    expect(mock).toHaveBeenCalledWith(expect.objectContaining({
+      from: "2026-01-01",
+      to: "2026-06-30",
+      type: "receipt",
+      cursor: "abc",
+    }));
+  });
+
+  it("calls with no extra params when searchParams is empty", async () => {
+    const { getStockLedger } = await import("../../../_data/loaders");
+    const mock = getStockLedger as ReturnType<typeof vi.fn>;
+    mock.mockResolvedValueOnce({ data: [], source: "api" });
+    await StockLedgerPage({ searchParams: {} });
+    // Should still be called (just with limit)
+    expect(mock).toHaveBeenCalled();
+  });
+});
+

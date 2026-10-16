@@ -5279,11 +5279,12 @@ export async function getStockDashboard(): Promise<LoaderResult<StockDashboard>>
  * `offset` to page through the list.
  */
 export async function getStockItems(
-  opts: { limit?: number; offset?: number } = {},
+  opts: { limit?: number; offset?: number; status?: string } = {},
 ): Promise<LoaderResult<StockItemSummary[]>> {
   const qs = new URLSearchParams();
   if (opts.limit) qs.set("limit", String(opts.limit));
   if (opts.offset) qs.set("offset", String(opts.offset));
+  if (opts.status) qs.set("status", opts.status);
   const query = qs.toString();
   return fetchJson<unknown, StockItemSummary[]>(`/api/v1/stock/items${query ? `?${query}` : ""}`, [], {
     revalidateSeconds: 60,
@@ -5301,12 +5302,14 @@ export async function getStockItemById(id: string): Promise<LoaderResult<StockIt
 }
 
 export async function getStockLedger(
-  opts: { limit?: number; from?: string; to?: string } = {},
+  opts: { limit?: number; from?: string; to?: string; cursor?: string; type?: string } = {},
 ): Promise<LoaderResult<StockLedgerEntry[]>> {
   const qs = new URLSearchParams();
   if (opts.limit) qs.set("limit", String(opts.limit));
   if (opts.from) qs.set("from", opts.from);
   if (opts.to) qs.set("to", opts.to);
+  if (opts.cursor) qs.set("cursor", opts.cursor);
+  if (opts.type) qs.set("type", opts.type);
   const query = qs.toString();
   return fetchJson<unknown, StockLedgerEntry[]>(`/api/v1/stock/ledger${query ? `?${query}` : ""}`, [], {
     revalidateSeconds: 60,

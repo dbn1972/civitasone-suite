@@ -14571,7 +14571,8 @@
     "filteredToAccount": "Filtered to one account",
     "filteredToAccountNamed": "Filtered to one account: {name}",
     "clearAccountFilterAria": "Clear account filter",
-    "clearAccountFilter": "Clear ✕"
+    "clearAccountFilter": "Clear ✕",
+    "subtitle": "Vendor, beneficiary, NGO, and government official contacts — tenant-scoped contact master"
   },
   "crmContactNewPage": {
     "contactArea": "contact",
@@ -15790,5 +15791,8 @@
     "stewardshipSubtitle": "Data governance domains and their owners.",
     "subscriptionsTitle": "Office — Subscriptions",
     "subscriptionsSubtitle": "Current subscription plan, renewal date and lifecycle state."
+  },
+  "crmDealsPage": {
+    "subtitle": "Track high-value vendor engagements, procurement opportunities, and government stakeholder interactions"
   }
 }

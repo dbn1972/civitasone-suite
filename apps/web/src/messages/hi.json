@@ -14065,7 +14065,8 @@
     "filteredToAccount": "एक खाते तक फ़िल्टर किया गया",
     "filteredToAccountNamed": "एक खाते तक फ़िल्टर किया गया: {name}",
     "clearAccountFilterAria": "खाता फ़िल्टर हटाएँ",
-    "clearAccountFilter": "हटाएँ ✕"
+    "clearAccountFilter": "हटाएँ ✕",
+    "subtitle": "विक्रेता, लाभार्थी, एनजीओ और सरकारी अधिकारी संपर्क — किरायेदार-स्कोप्ड संपर्क पंजी"
   },
   "crmContactNewPage": {
     "contactArea": "संपर्क",
@@ -15290,5 +15291,8 @@
     "stewardshipSubtitle": "डेटा गवर्नेंस डोमेन और उनके स्वामी।",
     "subscriptionsTitle": "कार्यालय — सदस्यताएँ",
     "subscriptionsSubtitle": "वर्तमान सदस्यता योजना, नवीनीकरण तिथि और जीवनचक्र की स्थिति।"
+  },
+  "crmDealsPage": {
+    "subtitle": "उच्च-मूल्य विक्रेता सहभागिताएँ, खरीद अवसर और सरकारी हितधारक संपर्क ट्रैक करें • संलग्नताएँ"
   }
 }
