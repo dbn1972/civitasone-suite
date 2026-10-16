@@ -1,5 +1,5 @@
 import { PageHeader, Card, EmptyState, RefreshErrorState, StatusPill } from "@/app/_components/ds";
-import { getSessionUserId } from "@/lib/auth/roleGuard";
+import { getSessionUserId, getSessionRoles, hasAnyRole, MEETING_MINUTES_APPROVE_ROLES } from "@/lib/auth/roleGuard";
 import { getMeeting, getMinutes, getResolutions } from "../../../_data/loaders";
 import { fmtDateTime, humanize, meetingPillStatus, meetingStatusLabel, votePillStatus } from "../../../_data/format";
 import { MinutesPanel } from "./MinutesPanel";
@@ -44,6 +44,9 @@ export default async function MinutesPage({
     minutes.data === null && minutes.source === "error" && minutes.status !== 404;
 
   const currentUserId = getSessionUserId();
+  // GAP-MEETING-MEETINGS-MEETINGID-MINUTES-03: compute whether viewer can
+  // approve/reject minutes (chairperson role required).
+  const canApprove = hasAnyRole(getSessionRoles(), MEETING_MINUTES_APPROVE_ROLES);
 
   // GAP-MEETING-MEETINGS-MEETINGID-MINUTES-06: give the header the meeting's
   // status + scheduled time so the record has context (falls back to the plain
@@ -84,6 +87,7 @@ export default async function MinutesPage({
         minutesReachable={minutes.source === "api" || minutes.data !== null}
         notDrafted={notDrafted && !minutesOutage}
         currentUserId={currentUserId}
+        canApprove={canApprove}
       />
 
       {/* Vote records for this meeting (Req 11.4) */}
