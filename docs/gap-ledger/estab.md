@@ -2002,9 +2002,9 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 - **Needs:** web+backend  ·  **Effort:** XS <1h  ·  **Risk:** Wrong role list would lock out admins; verify claim names against the service guards.
 - **Depends on:** GAP-ESTAB-QUARTERS-ALLOTMENTS-DETAIL-04
 
-### GAP-ESTAB-OPERATORS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
+### GAP-ESTAB-OPERATORS-03  ·  MEDIUM  ·  interim  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — deactivate warns with held-file count and handover link; block vs warn vs auto-reassign policy pending owner decision)
 - **W2 note:** INTERIM, needs owner decision: the deactivate dialog warns with the held-file count and a Handover link; block vs warn vs auto-reassign, listing the files, and a server-side audit are not decided. (#2052)
 - **W0 note:** partly fixed by #1916 — Deactivate confirm warns about held files; no held-file count/block, server audit not visible
 - **First-pass claim:** Deactivate warns that held files "should be handed over first" (OperatorsPanel.tsx:223) but neither checks nor lists the files held; a desk can be deactivated with live files.

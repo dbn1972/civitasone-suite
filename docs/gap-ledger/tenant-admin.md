@@ -512,9 +512,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Same as DETAIL-02.
 - **Depends on:** GAP-TENANT-ADMIN-BREAKGLASS-DETAIL-01, GAP-TENANT-ADMIN-BREAKGLASS-DETAIL-02
 
-### GAP-TENANT-ADMIN-BREAKGLASS-05  ·  MEDIUM  ·  partly  ·  theme OTHER
+### GAP-TENANT-ADMIN-BREAKGLASS-05  ·  MEDIUM  ·  interim  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — Close button restricted to platform_admin/super_admin; requester self-close policy pending owner decision)
 - **W2 note (INTERIM, needs owner decision):** the Close button is now shown only to platform_admin/super_admin (identity-service close is BG_ADMIN-only, so tenant_admin used to be offered a button the server 403s). Whether the requester may close their own session is a policy call (closing is risk-reducing; blocking it can leave an emergency session open) and is NOT invented here. Also found: admin-service `GET /v1/admin/breakglass[/:id]` is super_admin/platform_admin only, yet the tenant-admin layout admits tenant_admin, so a tenant_admin sees the load-error state; decide whether a tenant_admin may read break-glass events against their own tenant.
 - **First-pass claim:** Close session is offered to every allowed role, including the requester if they hold tenant_admin — no separation-of-duties gate; reason is required and audited (BreakglassActions.tsx:40,54).
 - **Verified evidence:** Confirmed: BreakglassTable.tsx:68-69 shows BreakglassActions for every active row and BreakglassActions.tsx:40 offers 'Close session' with no current-user comparison (only `requester` name used for dialog text, :48); reason is required (:54, requireReason) and sent (:23). The tenant-admin layout allows tenant_admin/platform_admin/super_admin. Overstated: closing (revoking) emergency access is a risk-reducing action, so a requester closing their own session is normally acceptable; separation-of-duties matters for grant/approval, which this UI does not show. Server-side enforcement and audit of /break-glass/:id/close are cannot-verify (identity service absent).
@@ -714,9 +714,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Needs:** decision  ·  **Effort:** S ~half day  ·  **Risk:** Personal-data egress (payroll/HRMS); role decision needs owner sign-off. Server-side enforcement must not rely on the UI.
 - **Depends on:** GAP-TENANT-ADMIN-DATA-EXPORT-01
 
-### GAP-TENANT-ADMIN-DATA-EXPORT-03  ·  MEDIUM  ·  confirmed  ·  theme PII
+### GAP-TENANT-ADMIN-DATA-EXPORT-03  ·  MEDIUM  ·  interim  ·  theme PII
 
-- [ ] **Status** (W2 tenant-admin REOPENED: acceptance 'download of a ready export returns a file' is unmet)
+- [~] **Status** (INTERIM — export generator/storage (S3/signed URL) absent; download endpoint is a stub returning itself)
 - **W2 note (needs owner decision):** the Download link is real and authenticated, and Single Entity now requires an id, but the export itself is a stub: the process consumer marks the request ready with fileSizeBytes 0 and no file is generated; `GET /v1/admin/data-export/:id/download` returns a JSON `{downloadUrl, expiresAt}` whose URL points back at itself. A real export needs a generator and storage (S3 or signed URL) - not invented here.
 - **First-pass claim:** 'Single Entity' type offers no entity selector, so the request cannot say which entity; and the Download button has no href/handler in code (DataExportClient.tsx:85,141-143).
 - **Verified evidence:** DataExportClient.tsx:85 offers <option value="entity">Single Entity</option>, but the form renders only a Module select for type==='module' (lines 89-97); the POST body (line 53) has no entity field, so an 'entity' request is unspecified. The Download Button at line 141 has no onClick and is not an anchor with href; DataExportRequest (loaders) contains no download URL that could be used - a download endpoint is not visible in the snapshot.
@@ -1171,9 +1171,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Source:** `apps/web/src/app/(app)/tenant-admin/page.tsx`
 - **Design reference:** `redesign/tenant-admin/notifications-channels.html`
 
-### GAP-TENANT-ADMIN-NOTIFICATIONS-CHANNELS-01  ·  HIGH  ·  confirmed  ·  theme WIRING
+### GAP-TENANT-ADMIN-NOTIFICATIONS-CHANNELS-01  ·  HIGH  ·  interim  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — no provider config store; test-send and edit need backend endpoint decisions)
 - **W2 note (INTERIM):** Add form (#1864) plus, new in W2, audited Enable/Disable (PATCH /notifications/channels/:id, CQRS command, markProcessed + guarded write + audit in one transaction, reason mandatory to disable, tenant-isolated; real-DB test `services/notification-service/tests/channel-enable-disable.test.ts`). STILL OPEN, needs owner decision: Test-send (no provider send path for a single channel is exposed) and Edit (the channel model is {type,name,isDefault,enabled}; no provider/config store exists).
 - **W0 note:** partly fixed by #1864 — ChannelForm Add form exists; edit, test-send and disable intentionally not built (backend has create+list only)
 - **First-pass claim:** Subtitle says 'Configure … providers' but the only way to add a channel is to hand-craft a POST body shown in a <pre>; no Add channel form, edit, test-send or disable (page.tsx:37-42,67-87).
@@ -1447,9 +1447,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
   - Failed response shows error and plan unchanged.
 - **Needs:** web+backend  ·  **Effort:** L >2d  ·  **Risk:** Business/money: users are told they upgraded and paid when nothing happened; entitlement and invoice mismatch.
 
-### GAP-TENANT-ADMIN-PLANS-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
+### GAP-TENANT-ADMIN-PLANS-02  ·  HIGH  ·  interim  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — downgrade API unverified; needs owner decision + billing backend)
 - **W2 reopened:** the provisional re-check failed its criteria — the downgrade flow shows only a 'contact your administrator' dialog: no required reason, no usage-vs-target-limit blocking, no pending state/audit row (acceptance unmet). Tenant-self-serve plan change needs an owner decision (tenant-service has /v1/tenant/subscription/downgrade; billing-service is super-admin-only) — INTERIM only.
 - **First-pass claim:** Downgrade 'Confirm Downgrade' only sets local state and closes — no API call, no audit reason, no check that current users/data exceed the target plan's limits beyond a warning line (PlansClient.tsx:212).
 - **Verified evidence:** PlansClient.tsx:212 (line 243 by file) 'Confirm Downgrade' runs setCurrentPlanId(targetPlanId!) and closes the modal; no request, no reason, no audit. The only guard is a static warning comparing plan maxUsers (197-201), not actual active users/storage, which the page does not load.
@@ -2095,9 +2095,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Source:** `apps/web/src/app/(app)/tenant-admin/settings/page.tsx`
 - **Design reference:** `redesign/tenant-admin/settings.html`
 
-### GAP-TENANT-ADMIN-SETTINGS-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
+### GAP-TENANT-ADMIN-SETTINGS-01  ·  HIGH  ·  interim  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — no approval-workflow endpoint; needs owner decision on maker-checker for module changes)
 - **W2 INTERIM (needs owner decision):** the direct toggle + confirm + required reason + server audit is what exists; there is NO workflow module-change-requests endpoint, so an approval flow cannot be built without a product decision (maker-checker for module changes?). Backend TENANT_ADMIN gate is admin-service config/routes.ts. Found+fixed while verifying: the Settings page could never load real data (loader schema vs admin-service shape) — GET /v1/admin/tenant/modules?detail=1 + envelope-tolerant loader.
 - **W0 note:** partly fixed by #1864 — Dead banner removed; decision recorded that no workflow endpoint exists, direct toggle with confirm+reason; no approval flow
 - **First-pass claim:** ModuleApprovalBanner (tenant_admin "Approval required", workflow-service request) is dead code; the page lets a tenant_admin toggle modules directly with no approval or confirmation, contradicting the documented workflow (ModuleApprovalBanner.tsx:8-15, ModuleToggleActions.tsx:44-52).
@@ -2283,9 +2283,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Source:** `apps/web/src/app/(app)/tenant-admin/sso/page.tsx`
 - **Design reference:** `redesign/tenant-admin/sso.html`
 
-### GAP-TENANT-ADMIN-SSO-01  ·  HIGH  ·  confirmed  ·  theme OTHER
+### GAP-TENANT-ADMIN-SSO-01  ·  HIGH  ·  interim  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — admin-service GET /v1/admin/sso/providers returns 501; needs backend implementation decision)
 - **W2 INTERIM (needs owner decision):** admin-service GET /v1/admin/sso/providers and /idp/providers still answer 501 (no provider store; identity-service saml/config is an unfinished stub) — an add/edit form would POST to nothing. Pages stay honestly read-only with no circular links.
 - **W0 note:** partly fixed by #1864 — Circular links removed, page documented read-only; no add/edit provider (backend 501)
 - **First-pass claim:** The two provider screens point at each other: "Configure IDP" here opens /tenant-admin/idp and that page's "Add Provider" opens /tenant-admin/sso, so no screen actually adds or edits a provider (page.tsx:24,46; idp/page.tsx:24).

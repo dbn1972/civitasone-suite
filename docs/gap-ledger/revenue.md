@@ -1143,9 +1143,9 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 - **Needs:** web+backend  ·  **Effort:** M ~1-2d  ·  **Risk:** New endpoint must be role-guarded and tenant-scoped.
 - **Depends on:** GAP-REVENUE-REFUNDS-01
 
-### GAP-REVENUE-WRITE-OFFS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
+### GAP-REVENUE-WRITE-OFFS-03  ·  MEDIUM  ·  interim  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — demand selector exists; requiring demandId + API contract change + migration needs revenue/audit owner decision)
 - **W0 note:** partly fixed by #1868 — WriteOffCreateForm has an optional demand selector that posts demandId+financialYear and the decide page shows the FY; remaining: demand is optional (decision to require it + backend contract pending) and the amount cap is against the assessee DCB balance, not the chosen demand.
 - **First-pass claim:** Write-off is against the assessee, not a specific demand/FY, so the audit trail cannot say which year's demand was reduced (WriteOffCreateForm.tsx:62-70).
 - **Verified evidence:** WriteOffCreateForm.tsx:116-120 posts { assesseeId, amountMinor, reason } with no demandId or financialYear, and the page has no demand selector; the decide page's WriteOffRecord (decide/page.tsx:7-14) carries none either. Whether the backend can accept/record a demandId is cannot-verify.

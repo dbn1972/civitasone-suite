@@ -86,9 +86,9 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 - **Needs:** decision  ·  **Effort:** XS <1h  ·  **Risk:** None.
 - **Depends on:** GAP-AUDIT-DASHBOARD-03
 
-### GAP-AUDIT-HOME-06  ·  LOW  ·  partly  ·  theme PII
+### GAP-AUDIT-HOME-06  ·  LOW  ·  interim  ·  theme PII
 
-- [ ] **Status** (W2 audit: INTERIM, needs owner decision. Not changed: actor identity is the core content of an audit log and the page is role-gated; the ledger step is a documented lawful basis plus security-review sign-off, which only the owner can record. Related pending owner question: who the tenant-admin audit page is for (audit-service /v1/audit/events currently allows audit_officer, audit_admin, super_admin, platform_admin only; not changed by W2))
+- [~] **Status** (INTERIM — actor identity is core audit-log content; lawful basis + security sign-off is owner's call)
 - **First-pass claim:** Actor shown as raw email/name string; no masking for DPDP (mapAuditRows loaders.ts:420).
 - **Verified evidence:** Confirmed: apps/web/src/app/_data/loaders.ts:420 maps actor to raw string/email/name and AuditLogTable.tsx:19 prints it. But the page is role-gated (audit/layout.tsx:5) and actor identity is the core content of an audit log, so masking would defeat the purpose; DPDP concern applies mainly to export/IP/user-agent (see EXPORTS-02). Low severity.
 - **Files to change:** `apps/web/src/app/(app)/audit/AuditLogTable.tsx`
@@ -491,9 +491,9 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low; shared loader pattern - check other pages that rely on null-for-empty to signal failure.
 - **Depends on:** GAP-AUDIT-INVESTIGATION-04
 
-### GAP-AUDIT-INVESTIGATION-02  ·  HIGH  ·  confirmed  ·  theme PII
+### GAP-AUDIT-INVESTIGATION-02  ·  HIGH  ·  interim  ·  theme PII
 
-- [ ] **Status** (W2 audit: INTERIM, needs owner decision (which roles may see subject/findings and whether CSV export is allowed at all; step 1 of the ledger). In place on main: server-side redaction in investigation/page.tsx for roles outside AUDIT_INVESTIGATION_DETAIL_ROLES, table mask, export disabled and export guard exportAudit. Tests: investigation/page.test.tsx 'does not ship raw subject/findings to a role outside the detail set', InvestigationTable.test.tsx 'masks subject/findings and hides CSV export for a non-privileged role'. Not built: an audited per-row reveal control, and backend field redaction (GET /v1/audit/investigations only role-gates; it returns clear text to every reader role))
+- [~] **Status** (INTERIM — server-side redaction done for audit roles; CSV export policy and full reveal audit need DPO decision)
 - **First-pass claim:** Free-text findings and subject of internal investigations are shown in the table and exported to CSV for every audit-layout role (InvestigationTable.tsx:24-25, layout.tsx:5) — no masking or role gate for sensitive case content (DPDP).
 - **Verified evidence:** InvestigationTable.tsx:20-23 renders `subject` and `findings` in clear text for every row and line 31 sets `exportable` so DataTable.downloadCsv (DataTable.tsx:281-289) writes all columns to a client-side CSV. Access gate is only layout.tsx:5 ALLOWED (audit_officer, audit_admin, platform_admin, super_admin, finance_admin, dept_head) - finance_admin and dept_head can read every case. No shared <Masked> exists (only local MaskedInput in hr/employees/new/steps/Step4.tsx and admin/integrations), no export audit event. Backend redaction cannot be verified (audit-service absent).
 - **Files to change:** `apps/web/src/app/_components/ds/Masked.tsx (new)`, `apps/web/src/app/_components/ds/index.ts`, `apps/web/src/app/(app)/audit/investigation/InvestigationTable.tsx`, `apps/web/src/app/(app)/audit/investigation/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`
@@ -541,9 +541,9 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low; coordinate the status enum with backend.
 - **Depends on:** GAP-AUDIT-INVESTIGATION-01
 
-### GAP-AUDIT-INVESTIGATION-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
+### GAP-AUDIT-INVESTIGATION-05  ·  MEDIUM  ·  interim  ·  theme OTHER
 
-- [ ] **Status** (W2 audit: INTERIM, needs owner decision / backend. audit-service has only GET /v1/audit/investigations; there is no detail, assign, submit-findings or close endpoint, and no maker-checker rule defined. Inventing them in the web is unsafe, so the tracker stays display-only)
+- [~] **Status** (INTERIM — audit-service has only GET /v1/audit/investigations; detail/assign/submit-findings/close endpoints absent, not invented)
 - **First-pass claim:** No case detail route or action: rows are not links and no mutation (assign, submit findings, close) exists in code — the tracker is display-only.
 - **Verified evidence:** InvestigationTable.tsx:17-32 passes no rowHref or action column to DataTable; there is no app/(app)/audit/investigation/[id] route (dir contains only InvestigationTable, error, loading, page) and no fetch/POST in the folder. Only /audit/page.tsx:24 links to the list. Display-only. Backend endpoints for assign/submit/close cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/audit/investigation/[id]/page.tsx (new)`, `apps/web/src/app/(app)/audit/investigation/InvestigationActions.tsx (new)`, `apps/web/src/app/(app)/audit/investigation/InvestigationTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -839,9 +839,9 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
   - Period cell shows '12 days'.
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 
-### GAP-AUDIT-PLAN-05  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
+### GAP-AUDIT-PLAN-05  ·  MEDIUM  ·  interim  ·  theme CONFIRM
 
-- [ ] **Status** (W2 audit: PARTIAL, INTERIM for the rest. Done in #2058: create now shows a confirm summary and sends nothing until confirmed (PlanAuditButton.test.tsx 'does not POST until the confirm dialog is confirmed, and the summary names the plan'). Not built: edit/defer/complete row actions; audit-service has only PATCH /v1/audit/plans/:id/start and no defer/complete endpoint or reason field, so a required 'defer reason' would be dropped silently. Needs owner/backend decision)
+- [~] **Status** (INTERIM — create confirm done; Close/Change-status with reason needs backend reason field + owner decision)
 - **First-pass claim:** Create is unconfirmed, and audit-on-mutation cannot be verified (audit-service absent); no edit, defer or complete action exists for existing rows.
 - **Verified evidence:** PlanAuditButton.tsx:34-70 posts to /api/proxy/v1/audit/plans with no ConfirmDialog; PlanTable.tsx has no rowHref/action column, while statuses deferred and completed exist in statusPill (15-18) - so no edit/defer/complete UI. Audit-on-mutation is cannot-verify (audit-service absent).
 - **Files to change:** `apps/web/src/app/(app)/audit/plan/PlanAuditButton.tsx`, `apps/web/src/app/(app)/audit/plan/PlanTable.tsx`, `apps/web/src/app/(app)/audit/plan/PlanActions.tsx (new)`
@@ -919,9 +919,9 @@ Counts: ACTION 64, BACKEND-VERIFY 11, CANNOT-VERIFY 1
   - Each status renders its own label; unknown status not shown as Monitored.
 - **Needs:** decision  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 
-### GAP-AUDIT-RISK-REGISTER-04  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
+### GAP-AUDIT-RISK-REGISTER-04  ·  MEDIUM  ·  interim  ·  theme CONFIRM
 
-- [ ] **Status** (W2 audit: PARTIAL, INTERIM for the rest. Done in #2058: create shows a confirm summary with the computed score and sends nothing until confirmed (AddRiskButton.test.tsx 'does not POST until the confirm dialog is confirmed, and the summary shows the score'); option labels were already fixed. Not built: Close/Change-status with required reason: PATCH /v1/audit/risks/:id accepts status but has no reason field (the body schema would strip it), so the reason would not be recorded. Needs backend change + owner decision; also there is no Controlled tile any more)
+- [~] **Status** (INTERIM — create confirm done; Close/Change-status with reason needs PATCH /v1/audit/risks/:id reason field + owner decision)
 - **First-pass claim:** Dialog options show raw enum text (“it”, “almost certain”, lowercase) (AddRiskButton.tsx:94-106); no ConfirmDialog and no way to edit or close a risk from the page.
 - **Verified evidence:** AddRiskButton.tsx:94 category options print raw enum value (`{c}`: 'it', 'financial'), 100 likelihood uses replace('_',' ') (lowercase 'almost certain'), 106 impact raw; no ConfirmDialog (submit at 38-71 posts directly); RiskTable.tsx has no rowHref or action column so risks cannot be edited or closed here (statuses closed/mitigated/escalated only arrive from elsewhere; endpoint unverified).
 - **Files to change:** `apps/web/src/app/(app)/audit/risk-register/AddRiskButton.tsx`, `apps/web/src/app/(app)/audit/risk-register/RiskTable.tsx`, `apps/web/src/app/(app)/audit/risk-register/RiskActions.tsx (new)`
