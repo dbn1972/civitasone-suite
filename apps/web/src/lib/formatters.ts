@@ -93,11 +93,16 @@ export function formatIndianDate(isoDate: string | null | undefined): string {
   if (isBareCalendarDate(isoDate)) {
     const [y, m, d] = isoDate.split("-").map(Number);
     const asUtcMidnight = new Date(Date.UTC(y, m - 1, d));
-    if (isNaN(asUtcMidnight.getTime())) return isoDate;
+    // GAP-PROJECTS-DETAIL-MEMBERS-05: return "—" for structurally valid but
+    // calendrically impossible bare dates (e.g. "2024-13-45") rather than
+    // echoing the raw string, which a user would read as a date value.
+    if (isNaN(asUtcMidnight.getTime())) return "—";
     return formatDateInZone(asUtcMidnight, "UTC");
   }
   const d = new Date(isoDate);
-  if (isNaN(d.getTime())) return isoDate;
+  // GAP-PROJECTS-DETAIL-MEMBERS-05: return "—" for any string that does not
+  // parse to a valid instant — the same convention as null/undefined and "".
+  if (isNaN(d.getTime())) return "—";
   return formatDateInZone(d, IST_TIME_ZONE);
 }
 
