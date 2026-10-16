@@ -13969,7 +13969,11 @@
     "loadArea": "संपर्क",
     "backLabel": "संपर्क"
   },
+  "crmDealsPage": {
+    "subtitle": "उच्च-मूल्य विक्रेता संलग्नताएँ, खरीद अवसर और सरकारी हितधारक इंटरैक्शन ट्रैक करें"
+  },
   "crmContactsPage": {
+    "subtitle": "विक्रेता, लाभार्थी, NGO और सरकारी संपर्क — संपर्क पंजी",
     "filteredToAccount": "एक खाते तक फ़िल्टर किया गया",
     "filteredToAccountNamed": "एक खाते तक फ़िल्टर किया गया: {name}",
     "clearAccountFilterAria": "खाता फ़िल्टर हटाएँ",

@@ -14475,7 +14475,11 @@
     "loadArea": "contact",
     "backLabel": "Contacts"
   },
+  "crmDealsPage": {
+    "subtitle": "Track high-value vendor engagements, procurement opportunities, and government stakeholder interactions"
+  },
   "crmContactsPage": {
+    "subtitle": "Vendor, beneficiary, NGO, and government official contacts — tenant-scoped contact master",
     "filteredToAccount": "Filtered to one account",
     "filteredToAccountNamed": "Filtered to one account: {name}",
     "clearAccountFilterAria": "Clear account filter",

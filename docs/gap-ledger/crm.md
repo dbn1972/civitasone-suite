@@ -183,7 +183,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-07  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: closed by #N, W2 crm: closed by #N)
 - **W0-10 note:** review found the W0 tick partly — accounts/activities fixed (subtitle via t()), but acceptance 'no Devanagari literals remain in crm/**/*.tsx' fails: crm/contacts/page.tsx:97 ('संपर्क पंजी') and crm/deals/page.tsx:12 ('संलग्नताएँ') still hard-coded
 - **First-pass claim:** Subtitle carries a hard-coded Devanagari suffix (संगठन पंजी) instead of a next-intl key, and for an Odisha tenant would be expected in Odia (app/(app)/crm/accounts/page.tsx:34).
 - **Verified evidence:** accounts/page.tsx:34 subtitle is a literal string ending '• संगठन पंजी' (Devanagari) and activities/page.tsx:22 has the same pattern ('• अन्तःक्रियाएँ'); neither uses next-intl. Correction: Odia is not a supported locale at all (src/i18n/config.ts:12 SUPPORTED_LOCALES = en, hi, ta, te, kn), so 'expected in Odia' is not currently actionable; the real defect is a hard-coded Hindi suffix shown to every locale/tenant (a Tamil/English user sees Hindi text) and it is not FABRICATED data.

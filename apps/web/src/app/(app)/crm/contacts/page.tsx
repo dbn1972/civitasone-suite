@@ -94,7 +94,7 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
     <>
       <PageHeader
         title="Contacts"
-        subtitle="Vendor, beneficiary, NGO, and government official contacts — tenant-scoped contact master • संपर्क पंजी"
+        subtitle={t("subtitle")}
         back="/crm"
       />
       {/* UX-002: the data-source badge now lives in ContactsTable, driven by
