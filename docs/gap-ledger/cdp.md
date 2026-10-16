@@ -528,7 +528,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-PROFILES-DETAIL-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD — profiles/routes.ts GET /:id returns {data} envelope; returns 404 for unknown id (cdp-routes.test.ts "404 — profile not found"); getCdpProfile(_data.ts) returns null on 404; detail page shows "Profile not found" for null — page.test.tsx:77 covers it)
 - **First-pass claim:** cdp-service (profiles, identity, timeline) absent from snapshot — response envelope {data} known only from schemas import; undeterminable.
 - **Service:** `cdp-service`  ·  **Endpoint(s):** `['GET /api/v1/cdp/profiles/:id', 'GET /api/v1/cdp/identity/:id (encoded)']`
 - **Question:** Does profile/identity/timeline return a {data} envelope matching @civitasone/schemas CDPProfile, with 404 for unknown id and 403 for unauthorized viewers?
