@@ -182,7 +182,7 @@ Counts: ACTION 53, BACKEND-VERIFY 5
 
 ### GAP-BILLING-GSTN-07  ·  LOW  ·  confirmed  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 batch11+: code already fixed on main — StatusPill has filed=warn, processing=warn, suspended=bad (already in main))
 - **W0 note:** partly fixed by #1873 — Submit result now uses StatusPill and 'filed' is mapped, but 'filed' maps to 'warn' (shared RTI key in StatusPill.tsx) rather than 'good' as the acceptance requires.
 - **First-pass claim:** StatusPill maps neither 'filed', 'processing' nor 'suspended' (StatusPill.tsx:5-36), and the Submit result prints status as plain text while the Status tab uses a pill (SubmitReturnPanel.tsx:213 vs ReturnStatusPanel.tsx:97).
 - **Verified evidence:** StatusPill STATUS_MAP (StatusPill.tsx:5-39) contains none of filed, processing, suspended (also 'rejected' and 'submitted' exist). ReturnStatusPanel.tsx:363 uses <StatusPill>, so 'filed'/'processing' fall back to blue; SubmitReturnPanel.tsx:262 prints result.status as raw text.

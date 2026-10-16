@@ -90,7 +90,7 @@ Counts: ACTION 6
 
 ### GAP-DEVELOPER-PORTAL-HOME-06  ·  LOW  ·  partly  ·  theme THEME (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 batch11+: code already fixed on main — background: var(--bg), no explicit iconBg hex (already in main))
 - **W0-10 note:** review found the W0 tick partly — Hex/#fff removed, but emoji icons remain (developer-portal/page.tsx:142-143 StatCard icon=emoji); step 2 lucide swap not done, no dark-mode snapshot
 - **First-pass claim:** Emoji icons and hard-coded #hex icon backgrounds (#f1f5f9, #ecfdf3, #eef2ff, #fffaeb) ignore dark mode (page.tsx StatCard iconBg).
 - **Verified evidence:** apps/web/src/app/(app)/developer-portal/page.tsx:100-103 iconBg hex values and :126 li background '#fff' are hard-coded; emoji icons in CAPABILITIES. Dark-mode effect not run here. StatCard prop iconBg accepts a string; token alternative not checked.

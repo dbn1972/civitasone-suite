@@ -183,7 +183,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-07  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 batch11+: code already fixed on main — subtitle uses i18n tl() — no hardcoded Devanagari (already in main))
 - **W0-10 note:** review found the W0 tick partly — accounts/activities fixed (subtitle via t()), but acceptance 'no Devanagari literals remain in crm/**/*.tsx' fails: crm/contacts/page.tsx:97 ('संपर्क पंजी') and crm/deals/page.tsx:12 ('संलग्नताएँ') still hard-coded
 - **First-pass claim:** Subtitle carries a hard-coded Devanagari suffix (संगठन पंजी) instead of a next-intl key, and for an Odisha tenant would be expected in Odia (app/(app)/crm/accounts/page.tsx:34).
 - **Verified evidence:** accounts/page.tsx:34 subtitle is a literal string ending '• संगठन पंजी' (Devanagari) and activities/page.tsx:22 has the same pattern ('• अन्तःक्रियाएँ'); neither uses next-intl. Correction: Odia is not a supported locale at all (src/i18n/config.ts:12 SUPPORTED_LOCALES = en, hi, ta, te, kn), so 'expected in Odia' is not currently actionable; the real defect is a hard-coded Hindi suffix shown to every locale/tenant (a Tamil/English user sees Hindi text) and it is not FABRICATED data.
@@ -1536,7 +1536,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-NEW-06  ·  LOW  ·  confirmed  ·  theme COPY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 batch11+: code already fixed on main — placeholders replaced with generic ones (already in main))
 - **First-pass claim:** Placeholders come from another state: "Asha Rao", "Bengaluru", "560001", GSTIN 29ABCDE1234F1Z5 (a Karnataka code); an Odisha tenant sees wrong examples (app/(app)/crm/contacts/new/page.tsx:244).
 - **Verified evidence:** new/page.tsx placeholders: 'e.g. Asha Rao' (l.212), GSTIN '29ABCDE1234F1Z5' (l.244; 29 = Karnataka), city 'Bengaluru' (l.266), PIN '560001' (l.274), phone 9900000000. They are placeholders, not saved data.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/new/page.tsx`
@@ -4993,7 +4993,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-06  ·  LOW  ·  confirmed  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 batch11+: code already fixed on main — sectionLabel uses t(section6) i18n key — consistent with [id] page (already in main))
 - **W0-10 note:** review found the W0 tick partly — lib/crm/rti.ts sectionLabel + test exist and detail page imports it, but RtiTable.tsx:82-86 and new/page.tsx:12-15 keep local maps (i18n keys): table shows "§6 Information" vs detail/new "§6 — Information Request", filters namespace shows "§6 — Information" - acceptance "all screens show the same label" unmet
 - **First-pass claim:** Section reads "§6 Information" here but "§6 — Information Request" on the detail and new-request screens (RtiTable.tsx:55, rti/[id]/page.tsx:37).
 - **Verified evidence:** RtiTable.tsx:436-440 sectionLabel returns '§6 Information' / '§11 Third-party' while detail (page.tsx:34-37) and new (new/page.tsx:8-11) use '§6 — Information Request' / '§11 — Third-party Information'. Three separate label maps; theme WIRING is wrong (pure label drift).
