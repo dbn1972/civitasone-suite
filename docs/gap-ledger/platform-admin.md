@@ -258,7 +258,7 @@ Counts: ACTION 40, BACKEND-VERIFY 5
 
 ### GAP-PLATFORM-ADMIN-ORG-CONFIG-07  ·  LOW  ·  partly  ·  theme HYGIENE (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2081 — trimmed 3-line COMP-014 comment to 2-line summary in page.tsx and OrgConfigPage.tsx)
 - **First-pass claim:** Stale COMP-014 history comments occupy ~25 lines of page.tsx:6-19 and OrgConfigPage.tsx:37-47; harmless but noisy.
 - **Verified evidence:** Comment blocks exist: org-config/page.tsx:6-16 (11 lines) and OrgConfigPage.tsx:24-32 plus 106-109 and 118-120 (about 17 lines); cited ranges off (OrgConfigPage 37-47 is state code). They describe the COMP-014 rationale; harmless. Low priority.
 - **Files to change:** `apps/web/src/app/(app)/platform-admin/org-config/page.tsx`, `apps/web/src/app/(app)/platform-admin/org-config/OrgConfigPage.tsx`
@@ -721,7 +721,7 @@ Counts: ACTION 40, BACKEND-VERIFY 5
 
 ### GAP-PLATFORM-ADMIN-ROLES-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 PQ: web interim in #2081 — SOD_CONFLICT/SOD_VIOLATION surfaced as clerk-safe maker-checker message; backend SoD enforcement needs owner decision / admin-service verification)
 - **First-pass claim:** SoD guard is client-only and lossy: sod=true only disables the toggle button; a role that already holds submit+approve is shown as "SoD" but nothing revokes it, and saveRolePermissions PATCHes the whole permissionKeys array (RolePermissionsMatrix.tsx:37-49,225). The server-side rule cannot be verified (identity-service absent from snapshot).
 - **Service:** `admin-service / identity-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/roles/:id', 'PATCH /api/v1/admin/roles/:id/permissions']`
 - **Question:** PATCH role permissions must enforce SoD server-side (reject any permissionKeys set containing both submit and approve for the same resource) and audit the diff.
