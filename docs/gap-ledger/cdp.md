@@ -504,7 +504,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-IDENTITY-04  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD — visitor-routes.ts listQuery has limit: z.coerce.number().int().min(1).max(200) — mandatory, capped; web loader sends ?limit=50; cdp-visitor-stitch.test.ts "400 — limit is mandatory" covers the 400 path)
 - **First-pass claim:** Visitor row shape (visitorRef, lastSeenAt, firstSeenAt) is described only in mapper comments; cdp-service absent from snapshot (limit mandatory, per _data.ts:106-112 comment) — undeterminable.
 - **Service:** `cdp-service`  ·  **Endpoint(s):** `['GET /api/v1/cdp/identity/anonymous-visitors?limit=']`
 - **Question:** Does anonymous-visitors require and cap limit, and return {visitorRef, firstSeenAt, lastSeenAt} only?
