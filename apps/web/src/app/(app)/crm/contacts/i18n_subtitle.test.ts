@@ -9,24 +9,24 @@ import hiMessages from "@/messages/hi.json";
  */
 describe("GAP-CRM-ACCOUNTS-07 — subtitle i18n", () => {
   it("crmContactsPage.subtitle has no Devanagari in English locale", () => {
-    const subtitle = (enMessages as Record<string, Record<string, string>>)["crmContactsPage"]?.subtitle ?? "";
+    const subtitle = (enMessages as unknown as Record<string, Record<string, string>>)["crmContactsPage"]?.subtitle ?? "";
     // No Devanagari Unicode block (U+0900–U+097F)
     expect(subtitle).not.toMatch(/[\u0900-\u097F]/);
   });
 
   it("crmDealsPage.subtitle has no Devanagari in English locale", () => {
-    const subtitle = (enMessages as Record<string, Record<string, string>>)["crmDealsPage"]?.subtitle ?? "";
+    const subtitle = (enMessages as unknown as Record<string, Record<string, string>>)["crmDealsPage"]?.subtitle ?? "";
     expect(subtitle).not.toMatch(/[\u0900-\u097F]/);
   });
 
   it("crmContactsPage.subtitle is defined in Hindi locale and contains Devanagari", () => {
-    const subtitle = (hiMessages as Record<string, Record<string, string>>)["crmContactsPage"]?.subtitle ?? "";
+    const subtitle = (hiMessages as unknown as Record<string, Record<string, string>>)["crmContactsPage"]?.subtitle ?? "";
     expect(subtitle.length).toBeGreaterThan(0);
     expect(subtitle).toMatch(/[\u0900-\u097F]/);
   });
 
   it("crmDealsPage.subtitle is defined in Hindi locale and contains Devanagari", () => {
-    const subtitle = (hiMessages as Record<string, Record<string, string>>)["crmDealsPage"]?.subtitle ?? "";
+    const subtitle = (hiMessages as unknown as Record<string, Record<string, string>>)["crmDealsPage"]?.subtitle ?? "";
     expect(subtitle.length).toBeGreaterThan(0);
     expect(subtitle).toMatch(/[\u0900-\u097F]/);
   });

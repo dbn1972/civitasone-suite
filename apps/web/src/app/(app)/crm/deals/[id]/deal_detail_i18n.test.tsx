@@ -7,7 +7,7 @@ import enMessages from "@/messages/en.json";
  * a prior wave; this test verifies the string literals are now in en.json.
  */
 describe("GAP-CRM-DEALS-DETAIL-06 — DealDetailActions i18n", () => {
-  const ns = (enMessages as Record<string, Record<string, string>>)["crmDealDetail"] ?? {};
+  const ns = (enMessages as unknown as Record<string, Record<string, string>>)["crmDealDetail"] ?? {};
 
   it("markWon key exists", () => {
     expect(ns.markWon).toBeTruthy();
