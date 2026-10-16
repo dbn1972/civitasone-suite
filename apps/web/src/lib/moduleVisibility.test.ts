@@ -132,4 +132,39 @@ describe("module visibility gating (R13.1, R13.2, R13.4)", () => {
       expect(isModuleEnabled(standaloneKeys, "hrms-leave", ["super_admin"])).toBe(true);
     });
   });
+
+  // GAP-JOURNEYS-HOME-03: the journeys route/nav use moduleKey "journey" while
+  // a tenant flag may be registered as the plural "journeys" (or vice versa).
+  // The isModuleEnabled alias map pins both directions explicitly so the contract
+  // is tested and cannot silently drift if the fallback is ever changed.
+  describe("journey/journeys singular-plural alias (GAP-JOURNEYS-HOME-03)", () => {
+    it("tenant flag 'journey' enables moduleKey 'journeys'", () => {
+      expect(isModuleEnabled(["journey", "finance"], "journeys")).toBe(true);
+    });
+
+    it("tenant flag 'journeys' enables moduleKey 'journey'", () => {
+      expect(isModuleEnabled(["journeys", "finance"], "journey")).toBe(true);
+    });
+
+    it("both singular and plural flags enable either spelling", () => {
+      expect(isModuleEnabled(["journey"], "journey")).toBe(true);
+      expect(isModuleEnabled(["journeys"], "journeys")).toBe(true);
+    });
+
+    it("unrelated flag 'journal' does NOT enable the journeys module", () => {
+      // Acceptance criterion from GAP-JOURNEYS-HOME-03: 'journal' must not match.
+      expect(isModuleEnabled(["journal", "finance"], "journey")).toBe(false);
+      expect(isModuleEnabled(["journal", "finance"], "journeys")).toBe(false);
+    });
+
+    it("empty enabled list hides journeys for a regular user", () => {
+      expect(isModuleEnabled([], "journey")).toBe(false);
+      expect(isModuleEnabled([], "journeys")).toBe(false);
+    });
+
+    it("super_admin still sees journeys even when not in the tenant list", () => {
+      expect(isModuleEnabled([], "journey", ["super_admin"])).toBe(true);
+      expect(isModuleEnabled(["finance"], "journeys", ["super_admin"])).toBe(true);
+    });
+  });
 });
