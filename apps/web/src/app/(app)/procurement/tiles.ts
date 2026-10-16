@@ -31,7 +31,7 @@ export const procurementTileDefs: TileDef[] = [
 	{ tileKey: "rfq", href: "/procurement/rfq", title: "RFQ", description: "Request for quotation management" },
 	{ tileKey: "orders", href: "/procurement/orders", title: "Purchase Orders", description: "Operational order book" },
 	{ tileKey: "grn", href: "/procurement/grn", title: "Goods Receipt", description: "GRN tracking and quality checks" },
-	{ tileKey: "contracts", href: "/procurement/contracts", title: "Contracts", description: "Rate and service contracts" },
+	{ tileKey: "contracts", href: "/contracts/list", title: "Contracts", description: "Rate and service contracts" },
 	{ tileKey: "tenders", href: "/procurement/tenders", title: "Tenders", description: "Open and limited tenders" },
 	// Approval-sensitive tiles: gated to approver roles (procurement_admin,
 	// super_admin). A plain procurement_officer is 403'd by the approve/

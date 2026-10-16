@@ -53,6 +53,7 @@ import {
 } from "./validators.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
+import { resolveUserNames } from "../../shared/identity-client.js";
 
 // ─── RBAC (mirrors meeting-core / committee role sets) ───────────────────────
 // Read access for all meeting governance roles within the tenant.
@@ -145,14 +146,24 @@ export async function minutesRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ data: accepted });
   });
 
-  // ── Get the meeting's minutes (Req 7.1) ──────────────────────────────────
+  // ── Get the meeting's minutes (Req 7.1) ─────────────────────────────────────
   app.get("/v1/meetings/:meetingId/minutes", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ROLES);
     const { meetingId } = meetingParam.parse(req.params);
     const row = await repo.getMinutesByMeeting(ctx.tenantId, meetingId);
     if (!row) throw new HttpError(404, "MINUTES_NOT_FOUND", "minutes not found");
-    return reply.send({ data: row });
+    // GAP-MEETING-MEETINGS-MEETINGID-MINUTES-02: resolve creator and approver
+    // display names from the identity-service (best-effort; falls back to null
+    // so the web shows the raw UUID rather than breaking the read).
+    const names = await resolveUserNames(ctx.tenantId, [row.createdBy, row.approvedBy]);
+    return reply.send({
+      data: {
+        ...row,
+        createdByName: names.get(row.createdBy) ?? null,
+        approvedByName: row.approvedBy ? (names.get(row.approvedBy) ?? null) : null,
+      },
+    });
   });
 
   // ── Update the draft content (Req 7.1, 7.8) ──────────────────────────────
@@ -181,26 +192,35 @@ export async function minutesRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ data: accepted });
   });
 
-  // ── Approve the minutes — chairperson only (Req 7.5) ──────────────────────
+  // ── Approve the minutes — chairperson only; drafter excluded (Req 7.5) ──────
   app.post("/v1/meetings/:meetingId/minutes/:minutesId/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CHAIR_ROLES);
     const { meetingId, minutesId } = minutesParam.parse(req.params);
     const body = minutesApproveSchema.parse(req.body);
-    await loadMinutesOr404(ctx.tenantId, meetingId, minutesId);
+    const minutesRow = await loadMinutesOr404(ctx.tenantId, meetingId, minutesId);
+    // GAP-MEETING-MEETINGS-MEETINGID-MINUTES-03: maker-cannot-approve.
+    // The drafter (createdBy) must not approve their own minutes draft.
+    if (minutesRow.createdBy === ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "the drafter of minutes may not approve them (maker-checker separation)");
+    }
     const meeting = await loadMeetingRefOr404(ctx.tenantId, meetingId);
     await assertMeetingOwnership(ctx, meeting, CHAIR_STANDING_ROLES);
     const accepted = await commands.minutesApprove(ctx, minutesId, body);
     return reply.code(202).send({ data: accepted });
   });
 
-  // ── Reject the minutes — chairperson only (Req 7.6) ───────────────────────
+  // ── Reject the minutes — chairperson only; drafter excluded (Req 7.6) ───────
   app.post("/v1/meetings/:meetingId/minutes/:minutesId/reject", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CHAIR_ROLES);
     const { meetingId, minutesId } = minutesParam.parse(req.params);
     const body = minutesRejectSchema.parse(req.body);
-    await loadMinutesOr404(ctx.tenantId, meetingId, minutesId);
+    const minutesRow = await loadMinutesOr404(ctx.tenantId, meetingId, minutesId);
+    // GAP-MEETING-MEETINGS-MEETINGID-MINUTES-03: maker-cannot-approve/reject.
+    if (minutesRow.createdBy === ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "the drafter of minutes may not reject them (maker-checker separation)");
+    }
     const meeting = await loadMeetingRefOr404(ctx.tenantId, meetingId);
     await assertMeetingOwnership(ctx, meeting, CHAIR_STANDING_ROLES);
     const accepted = await commands.minutesReject(ctx, minutesId, body);

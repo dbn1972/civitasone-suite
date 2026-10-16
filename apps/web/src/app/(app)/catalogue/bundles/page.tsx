@@ -14,6 +14,7 @@ export default async function Page() {
       <ModuleListPage
         title="Catalogue — Bundles"
         description="Product bundles and combo offerings."
+        errorArea="bundles"
         rows={data}
         source={source}
       />

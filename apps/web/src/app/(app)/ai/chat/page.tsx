@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { Card, PageHeader, StatCard, StatGrid, RefreshErrorState } from "../../../_components/ds";
 import { getChatConversations, getChatConversationCounts } from "../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
@@ -12,6 +13,7 @@ interface PageProps {
 }
 
 export default async function ChatPage({ searchParams }: PageProps) {
+  const t = await getTranslations("aiChat");
   const requested = searchParams?.status;
   const status = requested === "active" || requested === "handed_off" || requested === "ended"
     ? requested
@@ -30,16 +32,16 @@ export default async function ChatPage({ searchParams }: PageProps) {
   return (
     <>
       <PageHeader
-        title="Assistant Conversations"
-        subtitle="Chat sessions handled by the assistant, with full transcripts."
+        title={t("page.title")}
+        subtitle={t("page.subtitle")}
         back="/ai"
-        actions={<Link className="btn" href="/ai/governance">Governance</Link>}
+        actions={<Link className="btn" href="/ai/governance">{t("page.governanceLink")}</Link>}
       />
       <StatGrid>
-        <StatCard icon="💬" iconBg="var(--infobg)" label="Conversations" value={fmt(counts?.total)} />
-        <StatCard icon="🟢" iconBg="var(--goodbg)" label="Active" value={fmt(counts?.active)} />
-        <StatCard icon="🙋" iconBg="var(--warnbg)" label="With agent" value={fmt(counts?.handedOff)} />
-        <StatCard icon="⚪" iconBg="var(--line2)" label="Ended" value={fmt(counts?.ended)} />
+        <StatCard icon="💬" iconBg="var(--infobg)" label={t("stats.conversations")} value={fmt(counts?.total)} />
+        <StatCard icon="🟢" iconBg="var(--goodbg)" label={t("stats.active")} value={fmt(counts?.active)} />
+        <StatCard icon="🙋" iconBg="var(--warnbg)" label={t("stats.withAgent")} value={fmt(counts?.handedOff)} />
+        <StatCard icon="⚪" iconBg="var(--line2)" label={t("stats.ended")} value={fmt(counts?.ended)} />
       </StatGrid>
 
       <StatusFilter />
@@ -48,11 +50,11 @@ export default async function ChatPage({ searchParams }: PageProps) {
           Show a retry state in place of the table; the StatusFilter stays above
           so an operator can retry with another filter. */}
       {source === "error" ? (
-        <Card title="Conversations">
+        <Card title={t("page.conversationsCard")}>
           <RefreshErrorState error={toHumanError("load", { area: "conversations" })} />
         </Card>
       ) : (
-        <Card title="Conversations">
+        <Card title={t("page.conversationsCard")}>
           <ConversationsTable conversations={conversations} />
         </Card>
       )}

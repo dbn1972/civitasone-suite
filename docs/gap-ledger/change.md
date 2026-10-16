@@ -346,7 +346,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-DETAIL-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2090 — maker-checker assertApproverDistinct 409 MAKER_CHECKER_VIOLATION in routes.ts+f3-apply.ts; recordTransition writes audit row+event in one tx on every transition)
 - **First-pass claim:** Audit rows and maker-checker rules come from the admin service, which is absent from this snapshot: undeterminable whether every transition is audited server-side.
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/change/requests/:id', 'POST /v1/admin/change/requests/:id/{submit,approve,reject,schedule,rollback-plan}']`
 - **Question:** Is every lifecycle transition audited server-side with actor, and does approve enforce maker-checker (approver != requester)?
@@ -357,7 +357,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-CALENDAR-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2090 — GET /v1/admin/change/freezes returns {data:[{id,name,startsAt,endsAt,reason}]} ISO-8601, gated by CHANGE_ROLES)
 - **First-pass claim:** Freeze endpoint path/shape is in _data/loaders.ts (getChangeFreezes); admin service absent from snapshot: undeterminable.
 - **Service:** `admin-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/change/freezes']`
 - **Question:** Does the freezes route return {data:[...]} with start/end/reason and is it readable by any change-module role?
@@ -368,7 +368,7 @@ Counts: ACTION 19, BACKEND-VERIFY 4
 
 ### GAP-CHANGE-COMMS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2090 — admin.change.approved/scheduled enqueued on transitions; notification.broadcast.send on complete(success)+releaseNotes via outbox relay)
 - **First-pass claim:** Notification-service delivery is described only in copy (page.tsx:34); neither admin nor notification service is in the snapshot: undeterminable.
 - **Service:** `notification-service`  ·  **Endpoint(s):** `['(none in web) admin change events -> notification-service']`
 - **Question:** Is the comms text true: does an approved/scheduled change actually enqueue notifications to stakeholders?

@@ -178,7 +178,7 @@ Counts: ACTION 23
 
 ### GAP-INSPECTION-ASSIGNMENTS-06  ·  LOW  ·  partly  ·  theme RBAC (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #w2/inspection-part-1 commit f5d30e0f9)
 - **W0 note:** partly fixed by ##1928 — Done: create form hidden when list errored. Remains: no client role/permission gate (viewer still sees form; server RBAC authoritative)
 - **First-pass claim:** Create form remains visible on error state and for read-only viewers (page.tsx:23-25).
 - **Verified evidence:** assignments/page.tsx:23 renders <AssignmentActions /> unconditionally, before the errored/empty branches (24-49), so the create form is visible when the list load failed. No role check exists in the component; whether read-only viewers exist or are refused server-side cannot be verified. Not a dead route.
@@ -248,7 +248,7 @@ Counts: ACTION 23
 
 ### GAP-INSPECTION-CAPA-04  ·  MEDIUM  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #w2/inspection-part-1 commit e54172fda)
 - **W0 note:** partly fixed by ##1928 — Done: honest 'status will update shortly' copy. Remains: no post-202 refresh/compare to flag an unapplied or failed command
 - **First-pass claim:** Every action returns 202 'queued'; an INVALID_TRANSITION at the async consumer is never shown to the user, as the code comment itself admits (CapaActions.tsx:16-22).
 - **Verified evidence:** CapaActions.tsx:237-243 comment explains the earlier bug (Complete offered for open) and that buttons now map to legal transitions (244-246); all three actions accept 202 and show '(queued)' (272,296,318) then router.refresh(). The comment describes a fixed case, not an admission of current silence, but the residual issue holds: a stale-status race or other consumer failure after the 202 is never surfaced. Whether the service offers a status/command result endpoint cannot be verified.
@@ -300,7 +300,7 @@ Counts: ACTION 23
 
 ### GAP-INSPECTION-INSPECTIONS-01  ·  HIGH  ·  confirmed  ·  theme IDENTIFIER (was UUID)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #w2/inspection-part-1 commit b78be2041)
 - **W0 note:** partly fixed by ##1928 — Done: typed row, Scheduled date column, Entity col. Remains: Inspection and Entity still shown as truncated UUID prefix; no inspector column, no detail link/number
 - **First-pass claim:** Users see a truncated raw UUID ('9f3c1a72…') as the only identifier and Summary falls back through title/name/findingCode/entityId to '—' — no inspection number, site, inspector or date columns (page.tsx:41,48).
 - **Verified evidence:** inspections/page.tsx:41 shows String(row.id).slice(0,8)+'…'; columns are only ID, Status, Summary, Action (:29-34); Summary is String(row.title ?? row.name ?? row.findingCode ?? row.entityId ?? '—') at :48. No number, site, inspector, date. Actual field names in inspection-service are not visible (service absent) so which columns are available is cannot-verify.
@@ -318,7 +318,7 @@ Counts: ACTION 23
 
 ### GAP-INSPECTION-INSPECTIONS-02  ·  HIGH  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #w2/inspection-part-1 commit 93f6934f2)
 - **W0 note:** partly fixed by ##1928 — Done: UserFacingError shows specific server message; copy 'Request sent - status will update shortly'. Remains: no polling/disable of row action after 202
 - **First-pass claim:** Successful action toasts say 'accepted (queued)' because the API returns 202; the row is not updated until the async consumer runs, and a server-side INVALID_TRANSITION is never surfaced (InspectionActions.tsx callApi/run, router.refresh() immediately).
 - **Verified evidence:** InspectionActions.tsx: callApi (:88-96) accepts 202 as success; run() (:98-113) sets 'X accepted (queued).' at :105 then router.refresh() at :106, so the row is unchanged until the consumer runs; same in Finalize onSuccess (:130-131). Overstated on INVALID_TRANSITION: synchronous 4xx do throw via formError.fromResponse (:93), but run()'s catch {} (:107-108) discards it and shows a generic formError.fromException message, and asynchronous consumer failures are never surfaced.

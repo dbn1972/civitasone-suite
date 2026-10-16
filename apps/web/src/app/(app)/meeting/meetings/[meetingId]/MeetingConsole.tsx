@@ -36,6 +36,14 @@ import {
 
 type Src = "api" | "error";
 
+/** GAP-MEETING-MEETINGS-MEETINGID-03: caller-scoped permissions derived from session roles. */
+type ViewerPermissions = {
+  canTransition: boolean;
+  canCheckIn: boolean;
+  canCast: boolean;
+  canConclude: boolean;
+};
+
 type Props = {
   meeting: Meeting;
   agenda: AgendaItem[];
@@ -44,6 +52,8 @@ type Props = {
   attendanceSource: Src;
   initialActiveVotes: ActiveVote[];
   activeVotesSource: Src;
+  /** GAP-MEETING-MEETINGS-MEETINGID-03: session-derived permissions. */
+  viewerPermissions: ViewerPermissions;
 };
 
 const labelStyle: React.CSSProperties = {
@@ -165,6 +175,7 @@ export function MeetingConsole({
   attendanceSource,
   initialActiveVotes,
   activeVotesSource,
+  viewerPermissions,
 }: Props) {
   const router = useRouter();
   const [status, setStatus] = useState(meeting.status);
@@ -354,24 +365,26 @@ export function MeetingConsole({
             )}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {transitions.map((t) => (
-              <button
-                key={t.toState}
-                type="button"
-                className={t.danger ? "btn danger" : "btn primary"}
-                disabled={busy !== null}
-                onClick={() => {
-                  if (t.danger) {
-                    setTransitionErr(undefined);
-                    setPendingTransition({ toState: t.toState, label: t.label });
-                  } else {
-                    void onTransition(t.toState);
-                  }
-                }}
-              >
-                {busy === `transition:${t.toState}` ? "…" : t.label}
-              </button>
-            ))}
+            {/* GAP-MEETING-MEETINGS-MEETINGID-03: lifecycle buttons only for transition-authorised roles */}
+            {viewerPermissions.canTransition &&
+              transitions.map((t) => (
+                <button
+                  key={t.toState}
+                  type="button"
+                  className={t.danger ? "btn danger" : "btn primary"}
+                  disabled={busy !== null}
+                  onClick={() => {
+                    if (t.danger) {
+                      setTransitionErr(undefined);
+                      setPendingTransition({ toState: t.toState, label: t.label });
+                    } else {
+                      void onTransition(t.toState);
+                    }
+                  }}
+                >
+                  {busy === `transition:${t.toState}` ? "…" : t.label}
+                </button>
+              ))}
             <Link className="btn ghost" href={`/meeting/meetings/${meeting.id}/minutes`}>
               Minutes →
             </Link>
@@ -379,7 +392,29 @@ export function MeetingConsole({
         </div>
       </Card>
 
-      <StatGrid>
+      {/* GAP-MEETING-MEETINGS-MEETINGID-07: in-page anchor nav for narrow screens.
+          At ≤375px a long single-column console is unreachable without scrolling;
+          these skip-links let users jump directly to the section they need. */}
+      <nav
+        aria-label="Jump to section"
+        style={{
+          display: "flex",
+          gap: 8,
+          flexWrap: "wrap",
+          fontSize: 13,
+          marginBottom: 4,
+        }}
+      >
+        <a href="#section-stats" className="lnk" style={{ fontSize: 13 }}>Stats</a>
+        <span aria-hidden="true" style={{ color: "var(--ink3)" }}>·</span>
+        <a href="#section-agenda" className="lnk" style={{ fontSize: 13 }}>Agenda</a>
+        <span aria-hidden="true" style={{ color: "var(--ink3)" }}>·</span>
+        <a href="#section-attendance" className="lnk" style={{ fontSize: 13 }}>Attendance</a>
+        <span aria-hidden="true" style={{ color: "var(--ink3)" }}>·</span>
+        <a href="#section-voting" className="lnk" style={{ fontSize: 13 }}>Voting</a>
+      </nav>
+
+      <div id="section-stats"><StatGrid>
         <StatCard
           icon={meeting.quorumEstablished ? "✅" : "⚠️"}
           iconBg={meeting.quorumEstablished ? "#ecfdf5" : "#fff7ed"}
@@ -404,10 +439,10 @@ export function MeetingConsole({
           label="Open votes"
           value={votesState === "api" ? votes.length.toLocaleString("en-IN") : "—"}
         />
-      </StatGrid>
+      </StatGrid></div>
 
       {/* Voting panel */}
-      <Card
+      <div id="section-voting"><Card
         title={`Live voting (${votesState === "api" ? votes.length : "—"} open)`}
         link={
           <button type="button" className="btn ghost sm" onClick={() => void refreshVotes()}>
@@ -440,6 +475,8 @@ export function MeetingConsole({
                 onVoted={(position) =>
                   setMyVotes((prev) => ({ ...prev, [v.resolutionId]: position }))
                 }
+                canCast={viewerPermissions.canCast}
+                canConclude={viewerPermissions.canConclude}
               />
             ))}
           </div>
@@ -454,10 +491,10 @@ export function MeetingConsole({
           setToast={setToast}
           onCreated={refreshVotes}
         />
-      </Card>
+      </Card></div>
 
       {/* Agenda */}
-      <Card title={`Agenda (${agendaSource === "api" ? agenda.length : "—"})`} padding>
+      <div id="section-agenda"><Card title={`Agenda (${agendaSource === "api" ? agenda.length : "—"})`} padding>
         {agendaSource === "error" ? (
           // Agenda has no dedicated client-side refetch (unlike attendance/votes
           // below) — router.refresh() re-runs the server component that loads
@@ -518,10 +555,10 @@ export function MeetingConsole({
               ))}
           </div>
         )}
-      </Card>
+      </Card></div>
 
       {/* Attendance / quorum */}
-      <Card
+      <div id="section-attendance"><Card
         title="Attendance & quorum"
         link={
           <span style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>
@@ -624,7 +661,8 @@ export function MeetingConsole({
                         </td>
                         <td style={monoStyle}>{fmtTime(p.checkInAt)}</td>
                         <td style={{ textAlign: "right" }}>
-                          {inRoom ? (
+                          {/* GAP-MEETING-MEETINGS-MEETINGID-03: check-in/out for authorised roles only */}
+                          {viewerPermissions.canCheckIn && (inRoom ? (
                             <button
                               type="button"
                               className="btn ghost sm"
@@ -642,7 +680,7 @@ export function MeetingConsole({
                             >
                               {busy === `checkin:${p.participantId}` ? "…" : "Check in"}
                             </button>
-                          )}
+                          ))}
                         </td>
                       </tr>
                     );
@@ -652,7 +690,7 @@ export function MeetingConsole({
             </div>
           </>
         )}
-      </Card>
+      </Card></div>
 
       <ConfirmDialog
         open={pendingTransition !== null}
@@ -689,6 +727,8 @@ function VotePanel({
   onChanged,
   myPosition,
   onVoted,
+  canCast,
+  canConclude,
 }: PanelCtl & {
   meetingId: string;
   vote: ActiveVote;
@@ -696,6 +736,9 @@ function VotePanel({
   /** This browser's own recorded position for this resolution, if any (Req 7). */
   myPosition?: VotePosition;
   onVoted: (position: VotePosition) => void;
+  /** GAP-MEETING-MEETINGS-MEETINGID-03: session permissions. */
+  canCast: boolean;
+  canConclude: boolean;
 }) {
   const secret = vote.voteType === "secret_ballot";
   // Cast is gated behind a confirmation: a ballot can't be changed once cast
@@ -790,7 +833,7 @@ function VotePanel({
           >
             ✓ You voted: {humanize(myPosition)}
           </span>
-        ) : (
+        ) : canCast ? (
           <>
             <button
               type="button"
@@ -826,19 +869,22 @@ function VotePanel({
               Cast: Abstain
             </button>
           </>
+        ) : null}
+        {/* GAP-MEETING-MEETINGS-MEETINGID-03: conclude only for authorised roles */}
+        {canConclude && (
+          <button
+            type="button"
+            className="btn primary sm"
+            disabled={busy !== null}
+            onClick={() => {
+              setConcludeErr(undefined);
+              setConcludeConfirm(true);
+            }}
+            style={{ marginLeft: "auto" }}
+          >
+            {busy === `conclude:${vote.resolutionId}` ? "…" : "Conclude vote"}
+          </button>
         )}
-        <button
-          type="button"
-          className="btn primary sm"
-          disabled={busy !== null}
-          onClick={() => {
-            setConcludeErr(undefined);
-            setConcludeConfirm(true);
-          }}
-          style={{ marginLeft: "auto" }}
-        >
-          {busy === `conclude:${vote.resolutionId}` ? "…" : "Conclude vote"}
-        </button>
       </div>
       {secret && (
         <p style={{ fontSize: 12, color: "var(--ink2)", marginTop: 8 }}>

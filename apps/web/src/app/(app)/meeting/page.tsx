@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeader, StatCard, StatGrid, Card, RefreshErrorState } from "@/app/_components/ds";
-import { getSessionRoles, hasAnyRole, MEETING_CONFIG_ADMIN_ROLES } from "@/lib/auth/roleGuard";
-import { getMeetings } from "./_data/loaders";
+import { getSessionRoles, hasAnyRole, MEETING_CONFIG_ADMIN_ROLES, MEETING_CREATE_ROLES } from "@/lib/auth/roleGuard";
+import { getMeetings, getMeetingsPage } from "./_data/loaders";
 
 export const dynamic = "force-dynamic";
 
@@ -28,9 +28,13 @@ const CONSOLES: ConsoleTile[] = [
 ];
 
 export default async function MeetingHomePage() {
-  const [all, inProgress] = await Promise.all([
-    getMeetings(),
-    getMeetings("in_progress"),
+  // GAP-MEETING-HOME-02: use getMeetingsPage so meta.total reflects the true
+  // server-side count rather than the default page size (50). pageSize:1 means
+  // only one row is fetched; total comes from the COUNT query the repo always runs.
+  const [allPage, inProgressPage, allData] = await Promise.all([
+    getMeetingsPage({ page: 1, pageSize: 1 }),
+    getMeetingsPage({ status: "in_progress", page: 1, pageSize: 1 }),
+    getMeetings(), // used for status-filter breakdown counts (all << 500)
   ]);
 
   // GAP-MEETING-HOME-04: hide the Admin Configuration tile for non-admins (the
@@ -38,21 +42,27 @@ export default async function MeetingHomePage() {
   // security boundary).
   const roles = getSessionRoles();
   const tiles = CONSOLES.filter((c) => !c.requiredRoles || hasAnyRole(roles, c.requiredRoles));
+  // GAP-MEETING-MEETINGS-03: hide "+ New meeting" for roles that cannot create meetings.
+  // The backend (POST /v1/meetings) is the authoritative gate; this avoids a pointless 403.
+  const canCreate = hasAnyRole(roles, MEETING_CREATE_ROLES);
 
   // GAP-MEETING-HOME-03: adjourned (minutes not started) and minutes_pending
   // are distinct chase-states — keep them apart so the number is actionable.
-  const scheduled = all.data.filter(
+  const scheduled = allData.data.filter(
     (m) => m.status === "scheduled" || m.status === "agenda_locked",
   ).length;
-  const adjourned = all.data.filter((m) => m.status === "adjourned").length;
-  const minutesPending = all.data.filter((m) => m.status === "minutes_pending").length;
+  const adjourned = allData.data.filter((m) => m.status === "adjourned").length;
+  const minutesPending = allData.data.filter((m) => m.status === "minutes_pending").length;
 
   // Both queries must succeed for the stats to be trustworthy — if either
   // fails we must not render a fabricated "0" (GAP-MEETING-HOME-01).
-  const source = all.source === "error" || inProgress.source === "error" ? "error" : "api";
+  const source = allPage.source === "error" || inProgressPage.source === "error" || allData.source === "error" ? "error" : "api";
   const errored = source === "error";
   // When errored, show "—" (unknown via StatCard's null handling), never a fabricated zero.
   const stat = (n: number): string | null => (errored ? null : n.toLocaleString("en-IN"));
+  // True server-side total from meta.total (GAP-MEETING-HOME-02).
+  const totalMeetings = allPage.data.total;
+  const totalInProgress = inProgressPage.data.total;
 
   return (
     <>
@@ -60,9 +70,11 @@ export default async function MeetingHomePage() {
         title="Meeting Management"
         subtitle="Convene, conduct and record committee and board meetings — agenda to minutes, one place."
         actions={
-          <Link className="btn primary" href="/meeting/meetings/new">
-            + New meeting
-          </Link>
+          canCreate ? (
+            <Link className="btn primary" href="/meeting/meetings/new">
+              + New meeting
+            </Link>
+          ) : null
         }
       />
 
@@ -80,14 +92,14 @@ export default async function MeetingHomePage() {
             icon="📋"
             tone="info"
             label="Total Meetings"
-            value={stat(all.data.length)}
+            value={stat(totalMeetings)}
             href="/meeting/meetings"
           />
           <StatCard
             icon="🟢"
             tone="good"
             label="In Progress"
-            value={stat(inProgress.data.length)}
+            value={stat(totalInProgress)}
             href="/meeting/meetings?status=in_progress"
           />
           <StatCard

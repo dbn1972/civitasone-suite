@@ -27,6 +27,20 @@ vi.mock("../../../../_data/loaders", () => ({
   getChatTranscript: (...a: unknown[]) => getChatTranscriptMock(...a),
 }));
 
+vi.mock("next-intl/server", async () => {
+  const { createTranslator } = await import("next-intl");
+  const messages = (await import("@/messages/en.json")).default;
+  return {
+    getTranslations: async (ns?: string) => createTranslator({ locale: "en", messages, namespace: ns as never }),
+  };
+});
+
+vi.mock("next-intl", async (orig) => {
+  const actual = await orig<typeof import("next-intl")>();
+  const messages = (await import("@/messages/en.json")).default;
+  return { ...actual, useTranslations: (ns?: string) => actual.createTranslator({ locale: "en", messages, namespace: ns as never }) };
+});
+
 import Page from "./page";
 
 const ID = "aaaaaaaa-1111-4000-8000-000000000001";
@@ -85,7 +99,7 @@ describe("role gate (GAP-AI-CHAT-DETAIL-04)", () => {
   it("renders for ai_user", async () => {
     mockRoles = ["ai_user"];
     await renderPage();
-    expect(screen.getByText("Conversation")).toBeInTheDocument();
+    expect(screen.getByText("Transcript")).toBeInTheDocument();
   });
 });
 

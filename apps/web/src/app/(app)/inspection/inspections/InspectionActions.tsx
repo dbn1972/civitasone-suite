@@ -2,7 +2,7 @@
 
 import { UserFacingError } from "@/lib/userFacingError";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { ActionButton } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { formatShortId } from "@/lib/formatters";
@@ -28,19 +28,9 @@ type ActionSpec = {
    * easily-reversible steps (Start / Resume) stay single-click.
    */
   requireRemarks?: boolean;
-  /** Dialog copy for a `requireRemarks` action. */
   confirmTitle?: string;
   confirmDescription?: string;
   reasonLabel?: string;
-  /**
-   * True only for the one transition with no way back: domain.ts's
-   * INSPECTION_TRANSITIONS gives `finalized` an empty transitions array (a
-   * true terminal state), and the finalize consumer describes itself as
-   * "lock data and transition to finalized". Gated behind a real confirm
-   * step (ActionButton/ConfirmDialog) instead of firing on a single click,
-   * unlike the other four transitions here which all remain reversible or
-   * revisable later in the workflow.
-   */
   irreversible?: boolean;
 };
 
@@ -53,9 +43,6 @@ function actionForStatus(status: string): ActionSpec | null {
         body: { targetState: "in_progress", remarks: "Started from inspection hub" },
       };
     case "in_progress":
-      // GAP-INSPECTION-INSPECTIONS-04: Complete records the inspection's
-      // outcome — require the inspector to type their own remarks instead of
-      // firing a hard-coded string on one click.
       return {
         label: "Complete",
         path: "transition",
@@ -73,8 +60,6 @@ function actionForStatus(status: string): ActionSpec | null {
         body: { targetState: "in_progress", remarks: "Resumed from inspection hub" },
       };
     case "completed":
-      // GAP-INSPECTION-INSPECTIONS-04: submitting for review is a sign-off —
-      // require the officer's remarks.
       return {
         label: "Submit review",
         path: "transition",
@@ -99,30 +84,59 @@ export function InspectionRowAction({ id, status }: RowProps) {
   const [error, setError] = useState<string | undefined>();
   const formError = useFormError("inspection action");
 
+  // GAP-INSPECTION-INSPECTIONS-02: track the status at the time of a 202
+  // action so a follow-up refresh can detect whether the async consumer
+  // applied the command. The row action is kept disabled while pending.
+  const priorStatusRef = useRef<string | null>(null);
+  const [pollDue, setPollDue] = useState(false);
+
+  // When the follow-up refresh completes and pollDue is set, compare status.
+  useEffect(() => {
+    if (!pollDue) return;
+    setPollDue(false);
+    if (priorStatusRef.current === null) return;
+    if (status === priorStatusRef.current) {
+      setMessage(
+        "Status unchanged — the request may still be processing. Refresh to check again.",
+      );
+    } else {
+      setMessage("");
+    }
+    priorStatusRef.current = null;
+  }, [pollDue, status]);
+
+  // If status changes while a poll is pending (fast consumer), clear immediately.
+  useEffect(() => {
+    if (priorStatusRef.current === null) return;
+    if (status !== priorStatusRef.current) {
+      setMessage("");
+      priorStatusRef.current = null;
+      setPollDue(false);
+    }
+  }, [status]);
+
+  function scheduleFollowUp(priorStatus: string): void {
+    priorStatusRef.current = priorStatus;
+    setTimeout(() => {
+      router.refresh();
+      setPollDue(true);
+    }, 5000);
+  }
+
   const action = actionForStatus(status);
   if (!action) return <span style={{ color: "var(--ink2)", fontSize: 12 }}>—</span>;
 
+  // The row action stays disabled while a poll is in flight (priorStatusRef
+  // is non-null) to prevent the user from queuing a duplicate command before
+  // the first one is confirmed as applied.
+  const pending = priorStatusRef.current !== null;
+
   async function callApi(spec: ActionSpec, reason?: string) {
-    // GAP-INSPECTION-INSPECTIONS-04: for a sign-off action the officer's typed
-    // remarks replace the old hard-coded string; merge them into the body.
     const body = spec.body
       ? spec.requireRemarks && reason
         ? { ...spec.body, remarks: reason }
         : spec.body
       : undefined;
-    // CRITICAL fix, confirmed live: "Finalize" (under_review -> finalized)
-    // has no body, but this used to send `Content-Type: application/json`
-    // unconditionally anyway. That header survives the /api/proxy catch-all
-    // verbatim (it forwards whatever content-type the browser sent,
-    // independent of whether a body existed) and reaches Fastify's default
-    // JSON parser, which rejects an empty body under that content-type with
-    // 400 FST_ERR_CTP_EMPTY_JSON_BODY — meaning the Finalize button always
-    // failed in real use. (The backend's own app.inject()-based integration
-    // test missed this because inject() doesn't set a content-type header the
-    // way a real fetch() does when none is passed — it only reproduces the
-    // bug when the header is explicitly forced, which is what real traffic
-    // actually sends.) Only attach Content-Type — and a body — when there's a
-    // body to send.
     const res = await fetch(`/api/proxy/v1/inspection/inspections/${id}/${spec.path}`, {
       method: "POST",
       headers: body ? { "Content-Type": "application/json" } : undefined,
@@ -133,11 +147,6 @@ export function InspectionRowAction({ id, status }: RowProps) {
     }
   }
 
-  // GAP-INSPECTION-INSPECTIONS-02: the API returns 202 Accepted and the row's
-  // state only changes once the async consumer runs, so the old "accepted
-  // (queued)" wording read like a terminal success. This honest copy tells the
-  // user the request is in flight and the list will reflect it shortly;
-  // router.refresh() re-reads the list so the new state appears when ready.
   const QUEUED_MESSAGE = "Request sent — the status will update shortly.";
 
   async function run() {
@@ -149,6 +158,8 @@ export function InspectionRowAction({ id, status }: RowProps) {
       await callApi(action);
       setMessage(QUEUED_MESSAGE);
       router.refresh();
+      // GAP-INSPECTION-INSPECTIONS-02: follow-up refresh to surface a stale row.
+      scheduleFollowUp(status);
     } catch (caught) {
       setError(formError.fromException("save", caught).message);
     } finally {
@@ -157,11 +168,6 @@ export function InspectionRowAction({ id, status }: RowProps) {
   }
 
   if (action.irreversible) {
-    // Finalize is a true dead end (domain.ts: finalized -> []) that also
-    // locks the inspection's data — gate it behind a real confirm step
-    // instead of firing on a single click, per the same ActionButton /
-    // ConfirmDialog pattern already used for irreversible actions elsewhere
-    // in this app (e.g. apps/web/.../assets/[id]/AssetDetailActions.tsx).
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <ActionButton
@@ -175,6 +181,7 @@ export function InspectionRowAction({ id, status }: RowProps) {
           onSuccess={() => {
             setMessage(QUEUED_MESSAGE);
             router.refresh();
+            scheduleFollowUp(status);
           }}
         />
         {message ? (
@@ -187,9 +194,6 @@ export function InspectionRowAction({ id, status }: RowProps) {
   }
 
   if (action.requireRemarks) {
-    // GAP-INSPECTION-INSPECTIONS-04: Complete / Submit review are sign-off
-    // steps — gate them behind a ConfirmDialog with REQUIRED remarks (sent as
-    // body.remarks) instead of firing a hard-coded string on one click.
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <ActionButton
@@ -204,6 +208,7 @@ export function InspectionRowAction({ id, status }: RowProps) {
           onSuccess={() => {
             setMessage(QUEUED_MESSAGE);
             router.refresh();
+            scheduleFollowUp(status);
           }}
         />
         {message ? (
@@ -217,7 +222,14 @@ export function InspectionRowAction({ id, status }: RowProps) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <button type="button" className="btn ghost" disabled={busy} onClick={() => void run()}>
+      {/* GAP-INSPECTION-INSPECTIONS-02: disabled while a poll is in flight to
+          prevent duplicate commands while the first one's outcome is unknown. */}
+      <button
+        type="button"
+        className="btn ghost"
+        disabled={busy || pending}
+        onClick={() => void run()}
+      >
         {action.label}
       </button>
       {message ? (

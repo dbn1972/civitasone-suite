@@ -1004,6 +1004,26 @@ describe("POST /v1/ai/agents/:id/pause", () => {
     const r = await app.inject({ method: "POST", url: `/v1/ai/agents/${AGENT_ID}/pause` });
     expect(r.statusCode).toBe(401);
     await app.close();});
+
+  // GAP-AI-GOVERNANCE-02 GWT: operator-supplied reason is forwarded into the
+  // publish payload so the consumer can write it to the audit trail — the fix
+  // that makes the "recorded in the audit trail" claim in the ConfirmDialog true.
+  it("202 — reason in body is forwarded to publishCommand payload", async () => {
+    H.agentFindByIdMock.mockResolvedValue(makeAgent());
+    H.publishMock.mockResolvedValue({ messageId: "msg-1", status: "accepted" });
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST",
+      url: `/v1/ai/agents/${AGENT_ID}/pause`,
+      headers: auth(),
+      payload: { reason: "Scheduled maintenance window" },
+    });
+    expect(r.statusCode).toBe(202);
+    // queue.publish is called as (type, message) where message.payload carries
+    // the command payload — verify reason was threaded through.
+    const [, msg] = H.publishMock.mock.calls[0] as [string, { payload: Record<string, unknown> }];
+    expect(msg.payload.reason).toBe("Scheduled maintenance window");
+    await app.close();});
 });
 
 describe("POST /v1/ai/agents/:id/resume", () => {
