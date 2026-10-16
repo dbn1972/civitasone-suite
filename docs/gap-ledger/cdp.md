@@ -340,7 +340,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-PROFILES-DETAIL-05  ·  LOW  ·  partly  ·  theme NAVUX
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD — all CDP child pages use PageHeader back="/cdp"; identity+segments page.test.tsx each assert exactly one back link)
 - **First-pass claim:** Detail route has no breadcrumb nav (only PageHeader back) unlike sibling children; layout uses .grid.g-main and .fields classes (page.tsx:115,193) not in ds.
 - **Verified evidence:** Detail page does have PageHeader back='/cdp/profiles' with label (page.tsx:92-97), so a back link exists; there is no multi-level breadcrumb. The claim that .grid.g-main and .fields are not in the design system is wrong: both are defined in app/civitas-ds.css (l.104, 218). Siblings identity/segments/steward hand-roll a duplicate <nav class='back'> above PageHeader, so the inconsistency runs the other way. Tables are wrapped in .tbl-wrap (horizontal scroll) but have no card transform on mobile.
 - **Files to change:** `apps/web/src/app/(app)/cdp/identity/page.tsx`, `apps/web/src/app/(app)/cdp/segments/page.tsx`, `apps/web/src/app/(app)/cdp/steward/page.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
