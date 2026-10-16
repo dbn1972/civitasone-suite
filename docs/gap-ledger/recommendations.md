@@ -91,7 +91,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-FEEDBACK-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by this PR; FeedbackSummaryView with typed loader (rejection-summary endpoint) replaces generic ModuleListTable; acceptance: named columns with consistent meaning verified in _data.ts and FeedbackSummaryView.tsx)
 - **First-pass claim:** Generic table: ID is row.id.slice(0, 8) (ModuleListTable.tsx:50) and Detail/Status/Meta are guessed from whichever of ~10 keys exist (_data.ts:36-62), so a column can mean different things per row.
 - **Verified evidence:** ModuleListTable.tsx:50 renders row.id.slice(0,8); _data.ts:32-67 mapRows picks id/label/sublabel/status/meta from cascades of ~10 alternative keys (e.g. sublabel falls back description>status>state>category>tier>programName>agentId>profileId; meta code>currency>updatedAt>createdAt>points>balance), so semantics vary per row, and sublabel often duplicates status. Also id falls back to name or 'row-N'.
 - **Files to change:** `apps/web/src/app/(app)/recommendations/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/recommendations/feedback/page.tsx`
@@ -158,7 +158,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-HEALTH-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by this PR; HealthTable (typed HealthRow loader with zod schema) replaces ModuleListTable; Account / Score / Band / Updated columns have fixed meaning per row)
 - **First-pass claim:** Generic table: ID is row.id.slice(0, 8) (ModuleListTable.tsx:50) and Detail/Status/Meta are guessed from whichever of ~10 keys exist (_data.ts:36-62), so a column can mean different things per row.
 - **Verified evidence:** Same generic mapping as FEEDBACK-02: ModuleListTable.tsx:50 slices id to 8 chars; _data.ts:32-67 cascades keys for label/sublabel/status/meta.
 - **Files to change:** `apps/web/src/app/(app)/recommendations/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/recommendations/health/page.tsx`
@@ -179,7 +179,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-MATRIX-01  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by this PR; matrix/page.tsx subtitle is 'Product affinity rules (read-only).' — no longer claims 'configuration')
 - **First-pass claim:** Described as "configuration" but the page is read-only: no add, edit or disable rule control anywhere in the tree (matrix/page.tsx:14-19).
 - **Verified evidence:** matrix/page.tsx:14-19 description 'Product affinity rules and cross-sell configuration.' (page.tsx:16), page renders ModuleListPage only; no create/edit/disable controls exist in recommendations/ tree (files: nba, matrix, health, feedback pages, _data.ts with GET loaders only). Write endpoints in recommendation-service cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/recommendations/matrix/page.tsx`
@@ -208,7 +208,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-MATRIX-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by this PR; MatrixTable (typed MatrixRuleRow loader) replaces ModuleListTable; Source Product / Target Product / Weight / Priority columns have fixed meaning per row)
 - **First-pass claim:** Generic table: ID is row.id.slice(0, 8) (ModuleListTable.tsx:50) and Detail/Status/Meta are guessed from whichever of ~10 keys exist (_data.ts:36-62), so a column can mean different things per row.
 - **Verified evidence:** Same as FEEDBACK-02: ModuleListTable.tsx:50 slice(0,8) id; _data.ts:32-67 key-guessing cascades.
 - **Files to change:** `apps/web/src/app/(app)/recommendations/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/recommendations/matrix/page.tsx`
@@ -261,7 +261,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-NBA-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by this PR; NbaTable (typed NbaScoreRow loader) replaces ModuleListTable; Subject / Model / Score / Confidence / Updated columns; id.slice(0,8) replaced by formatSubjectRef; sublabel/status duplication gone)
 - **First-pass claim:** Generic table: ID is row.id.slice(0, 8) (ModuleListTable.tsx:50) and Detail/Status/Meta are guessed from whichever of ~10 keys exist (_data.ts:36-62), so a column can mean different things per row.
 - **Verified evidence:** ModuleListTable.tsx:50 renders row.id.slice(0,8); _data.ts:32-41 id falls back through id/key/code/name/agentId/profileId/accountId/conversationId/'row-N', label 42-50, sublabel 51-59 (description, else status, ... else agentId), meta 61-67 (code, currency, updatedAt, createdAt, points, balance). Sublabel and Status can duplicate (status is a sublabel fallback), and meta can be a code, timestamp or points depending on the row. Same shared loader serves all recommendations pages.
 - **Files to change:** `apps/web/src/app/(app)/recommendations/_data.ts`, `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/recommendations/nba/page.tsx`
@@ -282,7 +282,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-FEEDBACK-04  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: verified — recommendation-service present; rejection-summary GET uses resolveContext + requireRole (REC_ROLES) = 401 without token, 403 wrong role; web side now calls /feedback/rejection-summary (no per-recommendation required); N/A for unbounded: requireRole enforced)
 - **First-pass claim:** recommendation-service is absent from the snapshot; auth, pagination and shape of /api/v1/recommendations/feedback are undeterminable.
 - **Service:** `recommendation-service`  ·  **Endpoint(s):** `['GET /api/v1/recommendations/feedback']`
 - **Question:** Is the endpoint authenticated, role-limited, paginated (limit/cursor) and does it return the shape the loader expects?
@@ -293,7 +293,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-HEALTH-04  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: verified — health/scoring-routes.ts GET /v1/recommendations/health/at-risk uses resolveContext + requireRole + limit param (max 200); 401 without token, 403 wrong role; paginated)
 - **First-pass claim:** recommendation-service is absent from the snapshot; auth, pagination and shape of /api/v1/recommendations/health/at-risk are undeterminable.
 - **Service:** `recommendation-service`  ·  **Endpoint(s):** `['GET /api/v1/recommendations/health/at-risk']`
 - **Question:** Is the endpoint authenticated, role-limited, paginated (limit/cursor) and does it return the shape the loader expects?
@@ -304,7 +304,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-MATRIX-04  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: verified — matrix/routes.ts GET /v1/recommendations/matrix uses resolveContext + requireRole + limit/offset (max 200); 401 without token, 403 wrong role; paginated)
 - **First-pass claim:** recommendation-service is absent from the snapshot; auth, pagination and shape of /api/v1/recommendations/matrix are undeterminable.
 - **Service:** `recommendation-service`  ·  **Endpoint(s):** `['GET /api/v1/recommendations/matrix']`
 - **Question:** Is the endpoint authenticated, role-limited, paginated (limit/cursor) and does it return the shape the loader expects?
@@ -315,7 +315,7 @@ Counts: ACTION 16, BACKEND-VERIFY 4
 
 ### GAP-RECOMMENDATIONS-NBA-04  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: verified — predictive/routes.ts GET /v1/recommendations/predictive uses resolveContext + requireRole + limit/offset (max 200, READ_ROLES); 401 without token, 403 wrong role; paginated)
 - **First-pass claim:** recommendation-service is absent from the snapshot; auth, pagination and shape of /api/v1/recommendations/predictive are undeterminable.
 - **Service:** `recommendation-service`  ·  **Endpoint(s):** `['GET /api/v1/recommendations/predictive']`
 - **Question:** Is the endpoint authenticated, role-limited, paginated (limit/cursor) and does it return the shape the loader expects?
