@@ -10,6 +10,13 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
 }));
 
+// EndConversationButton uses useTranslations after GAP-AI-CHAT-DETAIL-07.
+vi.mock("next-intl", async (orig) => {
+  const actual = await orig<typeof import("next-intl")>();
+  const messages = (await import("@/messages/en.json")).default;
+  return { ...actual, useTranslations: (ns?: string) => actual.createTranslator({ locale: "en", messages, namespace: ns as never }) };
+});
+
 import { EndConversationButton } from "./EndConversationButton";
 
 const ID = "aaaaaaaa-1111-4000-8000-000000000001";

@@ -11,6 +11,13 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn(), replace: vi.fn() }),
 }));
 
+// ConversationsTable uses useTranslations after GAP-AI-CHAT-06.
+vi.mock("next-intl", async (orig) => {
+  const actual = await orig<typeof import("next-intl")>();
+  const messages = (await import("@/messages/en.json")).default;
+  return { ...actual, useTranslations: (ns?: string) => actual.createTranslator({ locale: "en", messages, namespace: ns as never }) };
+});
+
 import { ConversationsTable } from "./ConversationsTable";
 
 const UUID_A = "abc12345-1111-4000-8000-000000000001";
