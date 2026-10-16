@@ -1,6 +1,6 @@
 # W0-08: recount after Wave 0 reconciliation
 
-Total: **416 open**, 4211 closed, 24 blocked or obsolete.
+Total: **413 open**, 4214 closed, 24 blocked or obsolete.
 
 Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed module items).
 
@@ -51,14 +51,12 @@ Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | pricing | 3 | 4 | 0 |
 | analytics | 2 | 77 | 0 |
 | domains | 2 | 4 | 0 |
-| help | 2 | 7 | 0 |
 | identity | 2 | 32 | 0 |
 | metadata | 2 | 21 | 0 |
 | reports | 2 | 36 | 0 |
 | settings | 2 | 5 | 0 |
 | dashboard | 1 | 10 | 0 |
 | developer-portal | 1 | 5 | 0 |
-| fleet | 1 | 8 | 0 |
 | library | 1 | 4 | 0 |
 | offline | 1 | 4 | 0 |
 | plugins | 1 | 21 | 0 |
@@ -68,6 +66,8 @@ Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | docs | 0 | 14 | 0 |
 | establishment | 0 | 4 | 0 |
 | finance | 0 | 311 | 0 |
+| fleet | 0 | 9 | 0 |
+| help | 0 | 9 | 0 |
 | hr | 0 | 527 | 0 |
 | inventory | 0 | 62 | 0 |
 | locations | 0 | 28 | 8 |
