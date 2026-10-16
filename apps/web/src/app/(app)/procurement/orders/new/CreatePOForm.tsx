@@ -132,7 +132,7 @@ export function CreatePOForm() {
     setCopyState("loading");
     try {
       const res = await fetch(`/api/proxy/v1/procurement/indents/${indentId}`);
-      if (!res.ok) throw new Error("indent load failed");
+      if (!res.ok) { setCopyState("error"); return; }
       const body = await res.json() as { lineItems?: IndentLine[] };
       const lines = (body.lineItems ?? []).filter((l) => (l.itemCode ?? "").trim() && (l.itemName ?? l.description ?? "").trim());
       if (lines.length === 0) { setCopyState("empty"); return; }
