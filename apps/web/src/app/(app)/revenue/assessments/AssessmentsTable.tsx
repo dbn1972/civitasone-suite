@@ -282,7 +282,7 @@ export function AssessmentsTable({
     },
     { key: "baseValue" as const, label: "Base Value", align: "right" as const, cellType: "amount" as const },
     { key: "status" as const, label: "Status", cellType: "status" as const },
-    { key: "version" as const, label: "Version", align: "right" as const },
+    { key: "version" as const, label: "Rev.", align: "right" as const }, /* GAP-REVENUE-ASSESSMENTS-05: no version-history route; shown as abbreviated "Rev." (revision counter) */
     {
       key: "id" as const,
       label: "Actions",

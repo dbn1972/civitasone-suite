@@ -395,7 +395,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-ASSESSMENTS-05  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 revenue: renamed column label from 'Version' to 'Rev.' at AssessmentsTable.tsx:285; closed by this PR)
 - **First-pass claim:** Version column is shown to clerks without any history/compare link (AssessmentsTable.tsx:331).
 - **Verified evidence:** AssessmentsTable.tsx:331 shows a plain 'Version' column (right-aligned number) with no link. It is informational (revise bumps version), not a defect on its own. No history/compare route or endpoint for assessments exists in the web app (no revenue/assessments/[id]) and revenue-service is absent, so a compare link is a new feature.
 - **Files to change:** `apps/web/src/app/(app)/revenue/assessments/AssessmentsTable.tsx`
