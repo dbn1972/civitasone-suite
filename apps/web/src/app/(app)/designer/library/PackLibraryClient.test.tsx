@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { PackLibraryClient } from "./PackLibraryClient";
 import type { DomainPackRow } from "../_data/designerLoader";
+import type { ServicePackDto } from "../_data/packLibraryApi";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -17,7 +18,7 @@ const domain: DomainPackRow = {
   packCount: 2,
 };
 
-const okPack = {
+const okPack: ServicePackDto = {
   id: "p1",
   packKey: "pack:tl",
   domainPackKey: "municipal-in-v1",
@@ -49,10 +50,11 @@ describe("PackLibraryClient", () => {
 
   afterEach(() => vi.unstubAllGlobals());
 
-  // GAP-DESIGNER-LIBRARY-01: 500 response renders error, not "No packs match".
+  // GAP-DESIGNER-LIBRARY-01: server-loader failure renders error, not "No packs match".
   it("renders error state when fetch returns 500", async () => {
-    vi.stubGlobal("fetch", stubFetch({ ok: false, status: 500 }));
-    render(<PackLibraryClient domainPacks={[domain]} />);
+    // GAP-DESIGNER-LIBRARY-05: error is now surfaced via initialPacksFailed prop
+    // (the server loader sets this when the packs API returns a non-2xx status).
+    render(<PackLibraryClient domainPacks={[domain]} initialPacksFailed />);
 
     await waitFor(() =>
       expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument(),
@@ -62,25 +64,24 @@ describe("PackLibraryClient", () => {
 
   // GAP-DESIGNER-LIBRARY-01: network reject ends loading state.
   it("renders error state when fetch throws (network error)", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("Failed to fetch"); }));
-    render(<PackLibraryClient domainPacks={[domain]} />);
+    // GAP-DESIGNER-LIBRARY-05: error is surfaced via initialPacksFailed prop.
+    render(<PackLibraryClient domainPacks={[domain]} initialPacksFailed />);
 
     await waitFor(() =>
       expect(screen.getByText(/couldn.t load/i)).toBeInTheDocument(),
     );
-    // Loading text should have disappeared.
+    // Loading text should not be present.
     expect(screen.queryByText("Loading packs…")).not.toBeInTheDocument();
   });
 
   // GAP-DESIGNER-LIBRARY-01: retry button refetches packs.
   it("shows Try again button on error that refetches when clicked", async () => {
-    const failFetch = stubFetch({ ok: false, status: 500 });
-    vi.stubGlobal("fetch", failFetch);
-    render(<PackLibraryClient domainPacks={[domain]} />);
+    // Start with an initialPacksFailed error (server loader failed).
+    render(<PackLibraryClient domainPacks={[domain]} initialPacksFailed />);
 
     await waitFor(() => expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument());
 
-    // Now stub success and click retry.
+    // Stub a successful fetch for the client-side retry.
     vi.stubGlobal("fetch", stubFetch({ ok: true, data: [okPack] }));
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
 
@@ -90,7 +91,8 @@ describe("PackLibraryClient", () => {
 
   // GAP-DESIGNER-LIBRARY-04: Clear filters and result count.
   it("shows result count and Clear filters button", async () => {
-    render(<PackLibraryClient domainPacks={[domain]} />);
+    // GAP-DESIGNER-LIBRARY-05: packs are pre-loaded by the server and passed as initialPacks.
+    render(<PackLibraryClient domainPacks={[domain]} initialPacks={[okPack]} />);
 
     await waitFor(() => expect(screen.getByText("Trade License")).toBeInTheDocument());
     expect(screen.getByText(/1 of 1 pack/)).toBeInTheDocument();
@@ -100,7 +102,8 @@ describe("PackLibraryClient", () => {
   });
 
   it("shows Clear filters when a filter is active and clears on click", async () => {
-    render(<PackLibraryClient domainPacks={[domain]} />);
+    // GAP-DESIGNER-LIBRARY-05: packs are pre-loaded by the server and passed as initialPacks.
+    render(<PackLibraryClient domainPacks={[domain]} initialPacks={[okPack]} />);
 
     await waitFor(() => expect(screen.getByText("Trade License")).toBeInTheDocument());
 
@@ -127,7 +130,8 @@ describe("PackLibraryClient", () => {
 
   // GAP-DESIGNER-LIBRARY-02: preview uses dialog role (Modal).
   it("preview opens in a dialog with aria-modal", async () => {
-    render(<PackLibraryClient domainPacks={[domain]} />);
+    // GAP-DESIGNER-LIBRARY-05: packs are pre-loaded by the server and passed as initialPacks.
+    render(<PackLibraryClient domainPacks={[domain]} initialPacks={[okPack]} />);
 
     await waitFor(() => expect(screen.getByText("Trade License")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Preview" }));
