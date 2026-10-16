@@ -54,6 +54,8 @@ export function HearingsConsole({
   const [hearings, setHearings] = useState<Hearing[]>(initialHearings);
   const [source, setSource] = useState<"api" | "error">(hearingsSource);
   const [toast, setToast] = useState<string | null>(null);
+  // GAP-COURT-HEARINGS-04: sort by scheduledDate, newest first by default.
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const reload = useCallback(async () => {
     try {
@@ -108,19 +110,46 @@ export function HearingsConsole({
             <EmptyState icon="📅" title="No hearings yet" message="Schedule the first hearing above." />
           )
         ) : (
-          <div style={{ display: "grid", gap: 10 }}>
-            {hearings.map((h) => (
-              <HearingRow
-                key={h.id}
-                hearing={h}
-                caseId={caseId}
-                caseLabel={caseLabel(caseSummary)}
-                onDone={async (msg) => {
-                  flash(msg);
-                  await reload();
-                }}
-              />
-            ))}
+          <div style={{ overflowX: "auto" }}>
+            {/* GAP-COURT-HEARINGS-04: table layout with sortable Date/Status columns */}
+            <table className="tbl tbl--stack">
+              <thead>
+                <tr>
+                  <th
+                    scope="col"
+                    style={{ cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+                    onClick={() => setSortDir((d) => (d === "desc" ? "asc" : "desc"))}
+                    aria-sort={sortDir === "desc" ? "descending" : "ascending"}
+                  >
+                    Date {sortDir === "desc" ? "▼" : "▲"}
+                  </th>
+                  <th scope="col">Purpose</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Next date</th>
+                  <th scope="col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...hearings]
+                  .sort((a, b) => {
+                    const ta = a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0;
+                    const tb = b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0;
+                    return sortDir === "desc" ? tb - ta : ta - tb;
+                  })
+                  .map((h) => (
+                    <HearingRow
+                      key={h.id}
+                      hearing={h}
+                      caseId={caseId}
+                      caseLabel={caseLabel(caseSummary)}
+                      onDone={async (msg) => {
+                        flash(msg);
+                        await reload();
+                      }}
+                    />
+                  ))}
+              </tbody>
+            </table>
           </div>
         )}
       </Card>
@@ -271,35 +300,26 @@ function HearingRow({
   const rowLabel = `hearing on ${fmtDateTime(hearing.scheduledDate)} for ${caseLabel} (#${formatShortId(hearing.id)})`;
 
   return (
-    <div style={{ border: "1px solid var(--line2)", borderRadius: 10, padding: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontWeight: 600 }}>
-            {fmtDateTime(hearing.scheduledDate)}
-            {hearing.purpose && (
-              <span style={{ color: "var(--ink2)", fontWeight: 400 }}> · {humanize(hearing.purpose)}</span>
-            )}
-          </div>
-          {hearing.nextDate && (
-            <div style={{ fontSize: 12.5, color: "var(--ink2)", ...mono }}>
-              Next date: {fmtDate(hearing.nextDate)}
-            </div>
-          )}
-          {hearing.adjournmentReason && (
-            <div style={{ fontSize: 12.5, color: "var(--ink2)" }}>
-              Adjourned: {hearing.adjournmentReason}
-            </div>
-          )}
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+    <>
+      {/* GAP-COURT-HEARINGS-04: each hearing is a table row; expandable action
+          panels sit in a full-width second row beneath their parent. */}
+      <tr>
+        <td style={mono}>{fmtDateTime(hearing.scheduledDate)}</td>
+        <td>{hearing.purpose ? humanize(hearing.purpose) : <span style={{ color: "var(--ink2)" }}>—</span>}</td>
+        <td>
           <StatusPill status={hearingPillStatus(hearing.status)} label={hearingStatusLabel(hearing.status)} />
+        </td>
+        <td style={mono}>
+          {hearing.nextDate ? fmtDate(hearing.nextDate) : <span style={{ color: "var(--ink2)" }}>—</span>}
+        </td>
+        <td>
           {canAct && (
-            <>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <Button
                 variant="ghost"
                 size="sm"
                 aria-label={`Adjourn the ${rowLabel}`}
-                onClick={() => setShowAdjourn(true)}
+                onClick={() => setShowAdjourn((v) => !v)}
               >
                 Adjourn
               </Button>
@@ -307,33 +327,38 @@ function HearingRow({
                 variant="ghost"
                 size="sm"
                 aria-label={`Record outcome for the ${rowLabel}`}
-                onClick={() => setShowOutcome(true)}
+                onClick={() => setShowOutcome((v) => !v)}
               >
                 Record outcome
               </Button>
-            </>
+            </div>
           )}
-        </div>
-      </div>
-
-      {showAdjourn && (
-        <AdjournDialog
-          hearing={hearing}
-          caseId={caseId}
-          rowLabel={rowLabel}
-          onClose={() => setShowAdjourn(false)}
-          onDone={onDone}
-        />
+        </td>
+      </tr>
+      {(showAdjourn || showOutcome) && (
+        <tr>
+          <td colSpan={5} style={{ padding: "0 0 8px", background: "var(--surface2, var(--bg2))" }}>
+            {showAdjourn && (
+              <AdjournDialog
+                hearing={hearing}
+                caseId={caseId}
+                rowLabel={rowLabel}
+                onClose={() => setShowAdjourn(false)}
+                onDone={onDone}
+              />
+            )}
+            {showOutcome && (
+              <OutcomeDialog
+                hearing={hearing}
+                rowLabel={rowLabel}
+                onClose={() => setShowOutcome(false)}
+                onDone={onDone}
+              />
+            )}
+          </td>
+        </tr>
       )}
-      {showOutcome && (
-        <OutcomeDialog
-          hearing={hearing}
-          rowLabel={rowLabel}
-          onClose={() => setShowOutcome(false)}
-          onDone={onDone}
-        />
-      )}
-    </div>
+    </>
   );
 }
 

@@ -212,4 +212,61 @@ describe("HearingsConsole", () => {
     await waitFor(() => expect(scheduleHearingMock).toHaveBeenCalledTimes(2));
     expect(adjournHearingMock).toHaveBeenCalledTimes(1);
   });
+
+describe("HearingsConsole — table layout (GAP-COURT-HEARINGS-04)", () => {
+  it("renders column headers: Date, Purpose, Status, Next date, Actions", () => {
+    render(
+      <HearingsConsole
+        caseId="case-1"
+        caseSummary={caseSummary}
+        initialHearings={[scheduledHearing]}
+        hearingsSource="api"
+      />,
+    );
+    expect(screen.getByRole("columnheader", { name: /date/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /purpose/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /status/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /next date/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /actions/i })).toBeInTheDocument();
+  });
+
+  it("sorts newest hearing first by default (desc)", () => {
+    const older: Hearing = {
+      ...scheduledHearing,
+      id: "hearing-older",
+      scheduledDate: "2099-01-01T10:00:00.000Z",
+      status: "held",
+    };
+    const newer: Hearing = {
+      ...scheduledHearing,
+      id: "hearing-newer",
+      scheduledDate: "2099-06-01T10:00:00.000Z",
+    };
+    render(
+      <HearingsConsole
+        caseId="case-1"
+        caseSummary={caseSummary}
+        initialHearings={[older, newer]}
+        hearingsSource="api"
+      />,
+    );
+    const rows = screen.getAllByRole("row").filter((r) => !r.querySelector("th"));
+    // newer (June) should come before older (Jan) in desc order
+    expect(rows[0]).toHaveTextContent(/Jun 2099|6.*2099/i);
+  });
+
+  it("toggles sort to asc when Date header is clicked", () => {
+    render(
+      <HearingsConsole
+        caseId="case-1"
+        caseSummary={caseSummary}
+        initialHearings={[scheduledHearing]}
+        hearingsSource="api"
+      />,
+    );
+    const dateHeader = screen.getByRole("columnheader", { name: /date/i });
+    expect(dateHeader).toHaveAttribute("aria-sort", "descending");
+    fireEvent.click(dateHeader);
+    expect(dateHeader).toHaveAttribute("aria-sort", "ascending");
+  });
 });
