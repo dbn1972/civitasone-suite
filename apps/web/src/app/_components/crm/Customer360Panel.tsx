@@ -112,12 +112,12 @@ export function Customer360Panel({ subjectType, subjectId }: Props) {
       </div>
       <div className="pad" style={{ display: "grid", gap: 16 }}>
         <StatGrid>
-          <StatCard icon="📋" iconBg="#eef2ff" label="Activities" value={count(source, v?.activities.length ?? 0)} />
-          <StatCard icon="💬" iconBg="#fce7ee" label="Communications" value={count(source, v?.communications.total ?? 0)} />
-          <StatCard icon="💼" iconBg="#ecfdf5" label="Deals" value={count(source, v?.deals.length ?? 0)} />
+          <StatCard icon="📋" tone="neutral" label="Activities" value={count(source, v?.activities.length ?? 0)} />
+          <StatCard icon="💬" tone="bad" label="Communications" value={count(source, v?.communications.total ?? 0)} />
+          <StatCard icon="💼" tone="good" label="Deals" value={count(source, v?.deals.length ?? 0)} />
           <StatCard
             icon="⭐"
-            iconBg="#fef3c7"
+            tone="warn"
             label="Score"
             value={source === "loading" ? "…" : isError || v?.score === null || v?.score === undefined ? "—" : String(v.score)}
           />

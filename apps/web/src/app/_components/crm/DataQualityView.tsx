@@ -117,9 +117,9 @@ export function DataQualityView() {
       </div>
 
       <StatGrid>
-        <StatCard icon="🕳️" iconBg="#fef3c7" label="Missing data" value={isLoading ? "…" : statValue(source, counts.missing)} />
-        <StatCard icon="🚫" iconBg="#fee2e2" label="Invalid format" value={isLoading ? "…" : statValue(source, counts.invalid)} />
-        <StatCard icon="🕰️" iconBg="#e0e7ff" label="Stale records" value={isLoading ? "…" : statValue(source, counts.stale)} />
+        <StatCard icon="🕳️" tone="warn" label="Missing data" value={isLoading ? "…" : statValue(source, counts.missing)} />
+        <StatCard icon="🚫" tone="bad" label="Invalid format" value={isLoading ? "…" : statValue(source, counts.invalid)} />
+        <StatCard icon="🕰️" tone="neutral" label="Stale records" value={isLoading ? "…" : statValue(source, counts.stale)} />
       </StatGrid>
 
       <Card title="Completeness distribution">
