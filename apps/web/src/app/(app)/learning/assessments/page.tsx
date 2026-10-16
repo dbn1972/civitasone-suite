@@ -1,8 +1,9 @@
+import { PageHeader, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import Link from "next/link";
-import { PageHeader, DataTable, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 import { getAssessments } from "../_data";
+import { AssessmentsTable } from "./_components/AssessmentsTable";
 
 type Row = { id: string; title: string; passing: string; duration: string; attempts: number; status: string; courseRef: string };
 
@@ -43,37 +44,7 @@ export default async function Page() {
         ) : rows.length === 0 ? (
           <EmptyState icon="📝" title="No assessments available" message="Published assessments will appear here to attempt." />
         ) : (
-          <DataTable<Row>
-            columns={[
-              { key: "title", label: "Assessment" },
-              { key: "passing", label: "Passing score", align: "right" },
-              { key: "duration", label: "Duration", align: "right" },
-              { key: "attempts", label: "Max attempts", align: "right" },
-              { key: "status", label: "Status", cellType: "status" },
-              // GAP-LEARNING-ASSESSMENTS-03: courseRef was unused; now shown as a link.
-              {
-                key: "courseRef",
-                label: "Course",
-                sortable: false,
-                render: (r: Row) =>
-                  r.courseRef ? (
-                    <Link href={"/learning/courses/" + r.courseRef} className="btn ghost" style={{ fontSize: "0.8125rem", padding: "2px 10px" }}>
-                      View course
-                    </Link>
-                  ) : (
-                    <span style={{ color: "var(--ink2)" }}>—</span>
-                  ),
-              },
-            ]}
-            rows={rows}
-            rowLinkKey="id"
-            rowLinkPrefix="/learning/assessments/"
-            identifyingColumnKey="title"
-            sortable
-            filterable
-            filterPlaceholder="Filter assessments…"
-            pageSize={15}
-          />
+          <AssessmentsTable rows={rows} />
         )}
       </div>
     </>
