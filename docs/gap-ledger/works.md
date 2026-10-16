@@ -2356,7 +2356,7 @@ Counts: ACTION 164, BACKEND-VERIFY 36
 
 ### GAP-WORKS-PROPOSALS-DETAIL-04  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W2 works part 1 closed by PRNUM: UUID guards already in ProposalExtActions.tsx:465-474; added acceptance tests: non-UUID sub-division/section blocks submit with inline error, no confirm opened, no POST sent)
+- [x] **Status** (W2 works part 1: closed by #2075; UUID guards already in ProposalExtActions.tsx:465-474; added acceptance tests: non-UUID sub-division/section blocks submit with inline error, no confirm opened, no POST sent)
 - **W2 works part 2 note (#2047):** Sub-Division/Section have no master and the API has no reason field. INTERIM, owner decision. (NEEDS OWNER DECISION: Sub-Division/Section masters)
 - **W2 works note (#2039):** Division is now an EntityPicker with its name in the confirm; Sub-Division/Section have no master (UUID inputs kept with guard) and the API has no reason field. INTERIM, owner decision.
 - **W0 note:** partly fixed by #1867 — Done: UUID regex validation, ConfirmDialog with review summary for office and COA mapping. Remains: Division/Sub-division/Section still raw UUID text inputs (no EntityPicker), COA format validation not added, no mandatory reason field
