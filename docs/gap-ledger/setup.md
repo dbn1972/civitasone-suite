@@ -14,7 +14,7 @@ Counts: ACTION 7
 
 ### GAP-SETUP-HOME-01  ·  HIGH  ·  partly  ·  theme MODULEGATE (was DEADROUTE)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1925, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W2 re-confirmed: closed by #1925; departments step has moduleKey='hrms' at setupSteps.ts:102 and entryHref='/hr/departments'; allRequiredComplete takes visible keys)
 - **First-pass claim:** Required step 'Set up departments' is evaluated from GET /api/v1/hrms/org-chart (progress.ts:77-82) but has no moduleKey (setupSteps.ts:72-81), so it always shows. A tenant with HR turned off can never complete it, so allRequiredComplete() never returns true and the 'Your office is ready' card is unreachable.
 - **Verified evidence:** Confirmed: apps/web/src/lib/setupSteps.ts:71-81 'departments' is required:true with no moduleKey, evaluated in apps/web/src/app/(app)/setup/progress.ts:77-82 from /api/v1/hrms/org-chart, and page.tsx:32 only hides steps with a moduleKey. allRequiredComplete (setupSteps.ts:157) needs it complete. Not verifiable: whether the gateway returns an error when HR is off (would give 'unknown', never complete). Additionally the signal is wrong even with HR on: the org-chart route (hrms-service/src/modules/orgchart/routes.ts) is a people hierarchy, and a real departments endpoint exists (/api/v1/hrms/departments, used by (app)/hr/departments/page.tsx:32), contradicting the comment at progress.ts:78.
 - **Files to change:** `apps/web/src/lib/setupSteps.ts`, `apps/web/src/app/(app)/setup/progress.ts`
@@ -31,7 +31,7 @@ Counts: ACTION 7
 
 ### GAP-SETUP-HOME-02  ·  HIGH  ·  confirmed  ·  theme OTHER (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1925, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W2 re-confirmed: closed by #1925; setupSteps.ts has 'skipped' StepStatus, SkipStepButton persists to tenant settings, firstIncompleteIndex ignores skipped steps)
 - **First-pass claim:** 'Do it later' links to /dashboard and records nothing (SetupWizard.tsx:143-146): the step stays 'To do', stays the resume target on every visit and keeps counting against progress, while the label implies a deferral was saved.
 - **Verified evidence:** apps/web/src/app/(app)/setup/SetupWizard.tsx:143-147 'Do it later' shows only for non-required, non-complete steps and is a plain Link to /dashboard; nothing is recorded. Resume target is firstIncompleteIndex (setupSteps.ts:162-165), which includes optional steps, and progress counts them in totalCount (page.tsx:44,58), so the step stays 'To do'. The button only navigates away. Theme I18N is wrong (behaviour/copy).
 - **Files to change:** `apps/web/src/app/(app)/setup/SetupWizard.tsx`, `apps/web/src/lib/setupSteps.ts`, `apps/web/src/app/(app)/setup/page.tsx`
@@ -77,7 +77,7 @@ Counts: ACTION 7
 
 ### GAP-SETUP-HOME-05  ·  MEDIUM  ·  partly  ·  theme ERRORS (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1925, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W2 re-confirmed: closed by #1925; SampleDataControls.tsx uses Promise.allSettled and reports per-source partial failures; clearSamples keeps dialog open on partial error)
 - **First-pass claim:** Sample-data controls fire two POST/DELETE calls (locations + finance bills) with no per-call result; a partial failure is reported as a single message (SampleDataControls.tsx:24-43). Clear is behind a ConfirmDialog; Add runs immediately.
 - **Verified evidence:** apps/web/src/app/(app)/setup/SampleDataControls.tsx:24-28 posts to locations and finance in Promise.all and throws only if BOTH fail (`!locRes.ok && !finRes.ok`); if only one fails, the user is told 'Example offices and bills added'. Same for clear (:41-45): a half failure closes the dialog and reports success. So the problem is worse than the observation (partial failure reported as success, not as a single message). Add has no confirmation (true); Clear uses ConfirmDialog (:88).
 - **Files to change:** `apps/web/src/app/(app)/setup/SampleDataControls.tsx`
@@ -108,7 +108,7 @@ Counts: ACTION 7
 
 ### GAP-SETUP-HOME-07  ·  LOW  ·  confirmed  ·  theme THEMING (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1925, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W2 re-confirmed: closed by #1925; grep of setup/ for hex literals (#92400e, #4f46e5) returns zero matches; SetupWizard.tsx and SampleDataControls.tsx use var(--warn), var(--good), var(--badbg) tokens throughout)
 - **First-pass claim:** Outline colour for the resume card uses a hard-coded fallback #4f46e5 and warning text #92400e instead of tokens (SetupWizard.tsx:93, 123).
 - **Verified evidence:** apps/web/src/app/(app)/setup/SetupWizard.tsx:93 and :149 use color #92400e; :123 outline uses var(--primary, #4f46e5) (token with hard-coded fallback); the sample-data message colours in SampleDataControls.tsx:79-81 are also hard-coded hex. Only the fallback is arguably harmless. Line refs :93,123 are right; :149 is a third instance.
 - **Files to change:** `apps/web/src/app/(app)/setup/SetupWizard.tsx`, `apps/web/src/app/(app)/setup/SampleDataControls.tsx`

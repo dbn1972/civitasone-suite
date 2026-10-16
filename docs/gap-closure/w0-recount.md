@@ -1,18 +1,16 @@
 # W0-08: recount after Wave 0 reconciliation
 
-Total: **410 open**, 4216 closed, 25 blocked or obsolete.
+Total: **366 open**, 4241 closed, 44 blocked or obsolete.
 
-Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed module items).
+Priority queue: 10 open, 208 closed (0 entries ticked by W0-07 to match closed module items).
 
 | Module | Open | Closed | Blocked/obsolete |
 |---|---|---|---|
-| revenue | 23 | 56 | 0 |
 | procurement | 22 | 194 | 0 |
-| designer | 20 | 50 | 0 |
 | legal | 18 | 34 | 0 |
-| stock | 17 | 28 | 1 |
 | crm | 16 | 343 | 0 |
 | helpdesk | 15 | 52 | 0 |
+| revenue | 15 | 64 | 0 |
 | tenant-admin | 15 | 180 | 0 |
 | audit | 13 | 62 | 0 |
 | projects | 13 | 72 | 0 |
@@ -31,6 +29,7 @@ Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | workflow | 8 | 34 | 2 |
 | catalogue | 7 | 24 | 0 |
 | install | 7 | 30 | 0 |
+| stock | 7 | 33 | 6 |
 | telephony | 7 | 26 | 0 |
 | tenant | 7 | 66 | 0 |
 | visitor | 7 | 17 | 0 |
@@ -39,7 +38,6 @@ Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | platform-admin | 6 | 39 | 0 |
 | ai | 5 | 40 | 0 |
 | journeys | 5 | 11 | 0 |
-| contact | 4 | 2 | 0 |
 | inspection | 4 | 19 | 0 |
 | learning | 4 | 42 | 0 |
 | municipal | 4 | 16 | 0 |
@@ -49,14 +47,13 @@ Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | policy | 3 | 21 | 0 |
 | pricing | 3 | 4 | 0 |
 | analytics | 2 | 77 | 0 |
-| domains | 2 | 4 | 0 |
 | help | 2 | 7 | 0 |
 | identity | 2 | 32 | 0 |
 | metadata | 2 | 21 | 0 |
 | reports | 2 | 36 | 0 |
 | settings | 2 | 5 | 0 |
 | dashboard | 1 | 10 | 0 |
-| developer-portal | 1 | 5 | 0 |
+| designer | 1 | 59 | 10 |
 | fleet | 1 | 8 | 0 |
 | library | 1 | 4 | 0 |
 | offline | 1 | 4 | 0 |
@@ -65,7 +62,10 @@ Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | approvals | 0 | 8 | 0 |
 | assets | 0 | 151 | 0 |
 | citizen | 0 | 125 | 9 |
+| contact | 0 | 3 | 3 |
+| developer-portal | 0 | 6 | 0 |
 | docs | 0 | 14 | 0 |
+| domains | 0 | 5 | 1 |
 | establishment | 0 | 4 | 0 |
 | finance | 0 | 311 | 0 |
 | hr | 0 | 527 | 0 |
