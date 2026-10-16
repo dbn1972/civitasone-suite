@@ -213,3 +213,32 @@ describe("TradeLicenseCreateForm fee entry (GAP-REVENUE-TRADE-LICENSES-01)", () 
     });
   });
 });
+
+describe("TradeLicensesTable — DataTable (GAP-REVENUE-TRADE-LICENSES-05)", () => {
+  it("renders column headers for all 10 columns via DataTable", async () => {
+    const row = makeRow({});
+    mockFetchRows([row]);
+    render(<TradeLicensesPage />);
+    await waitFor(() => expect(screen.queryByLabelText("Loading licenses…")).not.toBeInTheDocument());
+    expect(screen.getByRole("columnheader", { name: /license no/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /business/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /status/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /expiry/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /fee/i })).toBeInTheDocument();
+  });
+
+  it("renders an active license with 'Active' status pill (tone good)", async () => {
+    mockFetchRows([makeRow({ status: "active", businessName: "Green Store" })]);
+    render(<TradeLicensesPage />);
+    await waitFor(() => expect(screen.getByText("Green Store")).toBeInTheDocument());
+    expect(screen.getByText("Active")).toBeInTheDocument();
+  });
+
+  it("renders a cancelled license with a distinct bad-tone pill", async () => {
+    mockFetchRows([makeRow({ status: "cancelled", businessName: "Red Market" })]);
+    render(<TradeLicensesPage />);
+    await waitFor(() => expect(screen.getByText("Red Market")).toBeInTheDocument());
+    const pill = screen.getByText("Cancelled");
+    expect(pill.closest(".pill")).toHaveClass("bad");
+  });
+});
