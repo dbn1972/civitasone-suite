@@ -1536,7 +1536,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-NEW-06  ·  LOW  ·  confirmed  ·  theme COPY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: closed by #N, W2 crm: closed by #N)
 - **First-pass claim:** Placeholders come from another state: "Asha Rao", "Bengaluru", "560001", GSTIN 29ABCDE1234F1Z5 (a Karnataka code); an Odisha tenant sees wrong examples (app/(app)/crm/contacts/new/page.tsx:244).
 - **Verified evidence:** new/page.tsx placeholders: 'e.g. Asha Rao' (l.212), GSTIN '29ABCDE1234F1Z5' (l.244; 29 = Karnataka), city 'Bengaluru' (l.266), PIN '560001' (l.274), phone 9900000000. They are placeholders, not saved data.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/new/page.tsx`

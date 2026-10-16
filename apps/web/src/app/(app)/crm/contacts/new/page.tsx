@@ -300,7 +300,7 @@ export default function NewContactPage() {
                 value={form.phone}
                 onChange={(e) => setDedupField({ phone: e.target.value })}
                 onBlur={() => void runDuplicateCheck()}
-                placeholder="9900000000"
+                placeholder="98765 43210"
                 style={inputStyle}
                 aria-invalid={fieldErrors.phone ? true : undefined}
                 aria-describedby={describedBy("phone")}
