@@ -7,7 +7,7 @@ import { Button, PageHeader } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { todayIST } from "@/lib/formatters";
-import { RTI_PUBLIC_AUTHORITIES, normaliseAuthority } from "../rtiAuthorities";
+import { RTI_PUBLIC_AUTHORITIES, canonicaliseAuthority } from "../rtiAuthorities"; // GAP-CRM-RTI-NEW-04: use canonical folding
 
 const RTI_SECTIONS = [
   { value: "s.6",  labelKey: "section6" },
@@ -98,7 +98,7 @@ export default function NewRtiPage() {
     const body = {
       section:          fd.get("section"),
       // GAP-CRM-RTI-NEW-04: normalise the authority so spelling variants fold.
-      departmentRef:    normaliseAuthority(String(fd.get("departmentRef") ?? "")),
+      departmentRef:    canonicaliseAuthority(String(fd.get("departmentRef") ?? "")), // GAP-CRM-RTI-NEW-04: fold to canonical casing
       applicantName:    fd.get("applicantName"),
       applicantContact: contactRaw.trim() || undefined,
       subject:          fd.get("subject"),
