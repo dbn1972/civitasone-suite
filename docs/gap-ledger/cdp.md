@@ -14,7 +14,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-HOME-01  ·  HIGH  ·  confirmed  ·  theme COPY (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD — tile reads "View audience segments…"; cdp/page.test.tsx verifies text and hrefs)
 - **First-pass claim:** Hub tile 'Segments' promises 'Create and manage audience segments for campaigns' (page.tsx:8) but /cdp/segments is a read-only ModuleListPage with no create/edit control (segments/page.tsx:14-21) — the primary CDP job is unreachable from the UI.
 - **Verified evidence:** cdp/page.tsx:8 'Create and manage audience segments'; segments/page.tsx:16 is ModuleListPage 'Audience segments for campaigns.' with no create/edit control; no segments/new or [id] route exists in cdp/segments/. Whether cdp-service has segment write endpoints cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/cdp/page.tsx`, `apps/web/src/app/(app)/cdp/segments/page.tsx`
