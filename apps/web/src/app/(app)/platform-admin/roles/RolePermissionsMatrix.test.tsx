@@ -154,6 +154,51 @@ describe("RolePermissionsMatrix (COMP-013: real per-role, real per-permission ma
   });
 });
 
+
+  // GAP-PLATFORM-ADMIN-ROLES-01: Given a PATCH that returns 422 SOD_CONFLICT,
+  // When the operator tries to save a permission set containing both submit and
+  // approve for the same financial module,
+  // Then a domain-specific, clerk-safe SoD message is shown (not a generic
+  // "save failed"), and the role remains dirty (unsaved in the baseline).
+  it("shows a clerk-safe SoD conflict message when the backend rejects with SOD_CONFLICT", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      const method = (init as RequestInit | undefined)?.method;
+      if (url === "/api/proxy/v1/admin/roles/role-hr-admin" && !method) {
+        return new Response(JSON.stringify({ id: "role-hr-admin", permissions: ["hr.read"] }), { status: 200 });
+      }
+      if (url === "/api/proxy/v1/admin/roles/role-super-admin") {
+        return new Response(JSON.stringify({ id: "role-super-admin", permissions: [] }), { status: 200 });
+      }
+      if (url === "/api/proxy/v1/admin/roles/role-hr-admin/permissions" && method === "PATCH") {
+        return new Response(JSON.stringify({ code: "SOD_CONFLICT", message: "submit and approve conflict" }), { status: 422 });
+      }
+      throw new Error(`unexpected ${url} ${method ?? "GET"}`);
+    });
+
+    render(<RolePermissionsMatrix roles={roles} permissions={permissions} source="api" />);
+    await waitFor(() => expect(screen.getAllByText("Hr").length).toBeGreaterThan(0));
+
+    const toggles = await screen.findAllByTitle(/click to grant/i);
+    toggles[0].click();
+    const saveButton = await screen.findByRole("button", { name: /save 1 change/i });
+    saveButton.click();
+    const reasonField = await screen.findByLabelText(/reason for this rbac change/i);
+    fireEvent.change(reasonField, { target: { value: "grant create" } });
+    (await screen.findByRole("button", { name: /^save changes$/i })).click();
+
+    // Must show the SoD domain message, not the generic save error.
+    await waitFor(() => {
+      const alerts = screen.getAllByRole("alert");
+      const text = alerts.map((a) => a.textContent ?? "").join(" ");
+      expect(text).toMatch(/maker.checker/i);
+      expect(text).not.toMatch(/couldn't save/i);
+      // Raw server text must never reach the user.
+      expect(text).not.toMatch(/submit and approve conflict/i);
+    });
+    // The role must remain in the failed/unsaved list.
+    expect(screen.getAllByRole("alert")[0]).toHaveTextContent(/1 failed \(HR Admin\)/i);
+  });
 describe("RolePermissionsMatrix a11y + partial-save (GAP-PLATFORM-ADMIN-ROLES-03/04)", () => {
   beforeEach(() => vi.restoreAllMocks());
 
