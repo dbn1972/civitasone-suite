@@ -485,7 +485,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-WEBAUTHN-02  ·  HIGH  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [x] **Status** (W2 PQ: closed by #TBD)
+- [x] **Status** (W2 PQ: closed by #2082)
 - **W0 note:** partly fixed by #1862 — PasskeyManager with confirm-gated remove, titled My passkeys; register shows not-available (backend 501), no rename
 - **First-pass claim:** Passkeys cannot be registered, renamed or removed here (ModuleListTable.tsx:36-56), and the list shows no owner, so it is unclear whether these are the viewer's own credentials or a tenant-wide list.
 - **Verified evidence:** webauthn/page.tsx:7-20 renders ModuleListPage read-only (ModuleListTable.tsx:57-90 no actions). Endpoint /api/v1/identity/webauthn/credentials (_data.ts:79) is unverifiable (identity-service absent); the mapper has no owner field (userId/userEmail not in key lists), so whether rows are the viewer's or tenant-wide is not shown. No other webauthn route exists (tenant-admin has no webauthn dir). Register/rename/remove needs browser WebAuthn ceremony (navigator.credentials) and endpoints not visible.
