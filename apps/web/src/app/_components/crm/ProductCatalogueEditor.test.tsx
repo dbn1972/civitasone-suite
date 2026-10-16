@@ -6,6 +6,8 @@ import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-librar
 import { ProductCatalogueEditor } from "./ProductCatalogueEditor";
 import * as qp from "@/lib/crm/quotation";
 import type { ReactElement } from "react";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 function render(ui: ReactElement) {
   return rtlRender(
@@ -256,10 +258,7 @@ describe("ProductCatalogueEditor (QP-001)", () => {
     // (The constant is not exported, so we test the rendered form.)
     // Instead of mounting the full component, assert via the module source that
     // the constant matches the WCAG 44-px touch-target requirement.
-    const src = require("fs").readFileSync(
-      require("path").join(__dirname, "ProductCatalogueEditor.tsx"),
-      "utf8",
-    );
+    const src = readFileSync(join(__dirname, "ProductCatalogueEditor.tsx"), "utf8");
     expect(src).toContain("minHeight: 44");
   });
 
