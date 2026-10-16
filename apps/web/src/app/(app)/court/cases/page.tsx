@@ -136,7 +136,7 @@ export default async function CasesListPage({
                   {query && <span>Filtered by “{query}”</span>}
                 </div>
                 <div style={{ overflowX: "auto" }}>
-                  <table className="tbl court-stack" style={{ width: "100%" }}>
+                  <table className="tbl tbl--stack" style={{ width: "100%" }}>
                     <thead>
                       <tr>
                         <th style={labelStyle}>Case</th>
