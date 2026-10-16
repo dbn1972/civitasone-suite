@@ -4,7 +4,7 @@ import { render, screen } from "@testing-library/react";
 // usePathname must be mocked before importing the component.
 import { vi } from "vitest";
 
-const mockPathname = vi.fn<[], string>(() => "/projects/42");
+const mockPathname = vi.fn(() => "/projects/42");
 vi.mock("next/navigation", () => ({
   usePathname: () => mockPathname(),
 }));
@@ -16,7 +16,7 @@ vi.mock("next/link", () => ({
   }: {
     href: string;
     children: React.ReactNode;
-    "aria-current"?: string;
+    "aria-current"?: React.AriaAttributes["aria-current"];
   }) => (
     <a href={href} aria-current={ariaCurrent}>
       {children}
