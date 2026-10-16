@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -14,10 +14,6 @@ describe("CapaRowAction", () => {
     refreshMock.mockReset();
   });
 
-  // GAP-INSPECTION-CAPA-01: Complete now opens a confirm dialog requiring
-  // closure remarks; those remarks become the evidenceOfClosure note (the
-  // hard-coded {source:"inspection-hub"} stub is gone). A bare click fires no
-  // request; an empty remark cannot be submitted.
   it("Complete requires typed closure remarks and sends them as evidenceOfClosure", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
@@ -44,8 +40,6 @@ describe("CapaRowAction", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  // GAP-INSPECTION-CAPA-02: Verify is a sign-off — it opens a confirm dialog
-  // and fires no request until confirmed (no remarks are collected: the route cannot persist them).
   it("Verify requires a confirm step before POSTing", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
@@ -62,7 +56,7 @@ describe("CapaRowAction", () => {
     expect(String(fetchSpy.mock.calls[0]![0])).toContain("/capa/capa-2/verify");
   });
 
-  it("shows Start (not Complete) for status=open, and POSTs /start with no Content-Type/body", async () => {
+  it("shows Start for status=open and POSTs /start with no Content-Type/body", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
     );
@@ -78,19 +72,44 @@ describe("CapaRowAction", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
-  it("also shows Complete (not Start) for status=overdue — overdue can complete directly", async () => {
+  it("also shows Complete (not Start) for status=overdue", async () => {
     render(<CapaRowAction id="capa-od" status="overdue" />);
     expect(screen.queryByRole("button", { name: /start/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /complete/i })).toBeInTheDocument();
   });
 
-  // GAP-INSPECTION-CAPA-03: a failing start shows catalogued clerk-safe copy,
-  // never the raw response text.
   it("shows a clerk-safe message when start fails, never the raw response text", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("boom raw error", { status: 500 }));
     render(<CapaRowAction id="capa-x" status="open" />);
     fireEvent.click(screen.getByRole("button", { name: /start/i }));
     await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
     expect(screen.queryByText(/boom raw error/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-INSPECTION-CAPA-04: after a 202, if the row state has not changed
+  // after the follow-up refresh, show an honest "still processing" warning.
+  it("shows a stale warning when status is unchanged 5s after a 202", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
+    );
+    render(<CapaRowAction id="capa-stale" status="open" />);
+
+    // Click and flush the fetch + state updates without advancing fake timers.
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /start/i }));
+    });
+
+    expect(screen.getByRole("status")).toHaveTextContent(/status will update shortly/i);
+
+    // Advance past the 5-second follow-up timer; act() flushes the React state
+    // updates (setPollDue) that the timer callback triggers.
+    await act(async () => {
+      vi.advanceTimersByTime(6000);
+    });
+
+    // router.refresh() was called a second time but status prop is still "open".
+    expect(screen.getByRole("status")).toHaveTextContent(/unchanged.*may still be processing/i);
+    vi.useRealTimers();
   });
 });
