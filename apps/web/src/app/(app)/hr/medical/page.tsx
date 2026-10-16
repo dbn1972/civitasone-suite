@@ -6,12 +6,11 @@ import { getTranslations } from "next-intl/server";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { HR_FINANCE_DECIDER_ROLES } from "@/lib/auth/workRoles";
 import { mapEmployeeOptions } from "@/lib/entityAdapters/employee";
 import type { EntityOption } from "@/app/_components/ds";
 import { MedicalClaimsTable, type MedicalClaimRow } from "./MedicalClaimsTable";
 
-// Mirrors medical/routes.ts's HR_ROLES for the approve/reject PATCH route.
-const HR_ROLES = ["hr_admin", "hr_officer", "super_admin", "finance_officer"];
 
 type ApiRow = {
   id: string;
@@ -46,7 +45,7 @@ export default async function MedicalPage() {
   // here (a Server Component, with real session data) and passed down as a
   // plain boolean, since the client table/actions components below have no
   // session access of their own.
-  const canApprove = roles.some((r) => HR_ROLES.includes(r));
+  const canApprove = roles.some((r) => HR_FINANCE_DECIDER_ROLES.includes(r));
 
   const { data: apiRows, source } = await getData();
   const errored = source === "error";

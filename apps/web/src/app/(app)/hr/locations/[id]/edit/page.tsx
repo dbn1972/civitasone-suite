@@ -1,3 +1,4 @@
+import { HR_HR_LOCATION_ADMIN_ROLES } from "@/lib/auth/workRoles";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../../_components/PermissionDenied";
 import { LoadErrorState, PageHeader } from "../../../../../_components/ds";
@@ -10,7 +11,6 @@ import { EditLocationPageClient } from "./EditLocationPageClient";
  * GAP-HR-LOCATIONS-02: edit a location. Same role set as the create page
  * (PATCH /v1/locations/:id is guarded by location-service's LOCATION_ROLES).
  */
-const LOCATION_ADMIN_ROLES = ["location_user", "location_admin", "super_admin", "admin", "hr_admin"];
 
 type Loc = {
   id: string; name: string; type: string; parentId: string | null; status?: string;
@@ -20,8 +20,8 @@ type Loc = {
 export default async function EditLocationPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("addLocationForm");
   const roles = getSessionRoles();
-  if (!roles.some((r) => LOCATION_ADMIN_ROLES.includes(r))) {
-    return <PermissionDenied module="editing a location" requiredRoles={LOCATION_ADMIN_ROLES} />;
+  if (!roles.some((r) => HR_LOCATION_ADMIN_ROLES.includes(r))) {
+    return <PermissionDenied module="editing a location" requiredRoles={HR_LOCATION_ADMIN_ROLES} />;
   }
 
   const [one, all] = await Promise.all([
@@ -40,7 +40,7 @@ export default async function EditLocationPage({ params }: { params: { id: strin
     return (
       <div className="page-main wrap">
         <PageHeader title={t("editNotFoundTitle")} back="/hr/locations" backLabel={t("pageBackLabel")} />
-        <LoadErrorState result={one} area="location" backHref="/hr/locations" requiredRoles={LOCATION_ADMIN_ROLES} />
+        <LoadErrorState result={one} area="location" backHref="/hr/locations" requiredRoles={HR_LOCATION_ADMIN_ROLES} />
       </div>
     );
   }

@@ -1,3 +1,4 @@
+import { HR_EXPENSE_DECIDE_ROLES } from "@/lib/auth/workRoles";
 import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -8,12 +9,10 @@ import { mapExpenses, type ApiExpense, type Row } from "./mapExpenses";
 import { NewExpenseClaimForm } from "./NewExpenseClaimForm";
 import { ExpensesView } from "./ExpensesView";
 
-// GAP-HR-EXPENSES-02/03: matches EXPENSE_DECIDE_ROLES on the backend exactly
 // (services/hrms-service/src/modules/social/routes.ts) -- same convention as
 // hr/advances' ADVANCE_DECIDE_ROLES. This only controls whether the
 // Approvals tab and its row actions render; the server is the real gate on
 // every PATCH .../approve, .../reject, and GET ?scope=approvals call.
-const EXPENSE_DECIDE_ROLES = ["manager", "hr_admin", "finance_officer", "super_admin"];
 
 async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/expenses", [], {
@@ -40,7 +39,7 @@ async function getApprovalsData(): Promise<LoaderResult<Row[]>> {
 export default async function ExpensesPage() {
   const t = await getTranslations("expenses");
   const roles = getSessionRoles();
-  const canDecide = roles.some((r) => EXPENSE_DECIDE_ROLES.includes(r));
+  const canDecide = roles.some((r) => HR_EXPENSE_DECIDE_ROLES.includes(r));
 
   const { data: items, source } = await getData();
   const errored = source === "error";

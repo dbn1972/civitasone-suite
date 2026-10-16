@@ -1,3 +1,5 @@
+import { PAYROLL_CONFIG_ADMIN_ROLES } from "@/lib/auth/workRoles";
+
 /**
  * GAP-PAYROLL-STATUTORY-PT-02: the sentinel paise value a slab uses for an
  * open-ended ("no upper bound") range. Shared by the version form (which
@@ -19,8 +21,10 @@ export const PT_ANNUAL_CAP_MINOR = 250_000;
  * Who may create a new slab version. Mirrors payroll-service
  * (pt-versions-routes.ts PT_ADMIN_ROLES): payroll_admin and super_admin only --
  * a payroll_officer can read the timeline but not change statutory slabs.
+ * W1 SF-09c: identical to workRoles.PAYROLL_CONFIG_ADMIN_ROLES; re-exported by
+ * name so importers see the semantic label.
  */
-export const PT_VERSION_ADMIN_ROLES = ["payroll_admin", "super_admin"];
+export const PT_VERSION_ADMIN_ROLES = PAYROLL_CONFIG_ADMIN_ROLES;
 
 /** Which employees a slab applies to (payroll-service PT_GENDERS). A slab of the employee's own gender wins over an "all" slab. */
 export const PT_GENDERS = ["all", "female", "male"] as const;

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-14",
+  "generatedAt": "2026-10-16",
   "webHrRoles": [
     "admin",
     "dept_head",
@@ -19,8 +19,8 @@
     "tenant_admin"
   ],
   "counts": {
-    "DRIFT": 10,
-    "MATCH": 864,
+    "DRIFT": 12,
+    "MATCH": 862,
     "NO_ROLE_CHECK": 19,
     "OUT_OF_SCOPE": 21,
     "DYNAMIC": 9
@@ -12037,7 +12037,7 @@
       "file": "services/hrms-service/src/modules/internal/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/internal/fnf-service-snapshot",
-      "line": 393,
+      "line": 400,
       "roleExprs": [
         "INTERNAL_ROLES"
       ],
@@ -12077,7 +12077,7 @@
       "file": "services/hrms-service/src/modules/internal/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/internal/nps-pran-last4",
-      "line": 419,
+      "line": 426,
       "roleExprs": [
         "INTERNAL_ROLES"
       ],
@@ -12117,7 +12117,7 @@
       "file": "services/hrms-service/src/modules/internal/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/internal/payroll-readiness",
-      "line": 440,
+      "line": 447,
       "roleExprs": [
         "INTERNAL_ROLES"
       ],
@@ -12157,7 +12157,7 @@
       "file": "services/hrms-service/src/modules/internal/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/internal/employees/:id/exists",
-      "line": 459,
+      "line": 466,
       "roleExprs": [
         "INTERNAL_ROLES"
       ],
@@ -12197,7 +12197,7 @@
       "file": "services/hrms-service/src/modules/internal/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/internal/employees/:id/attendance-lop-applies",
-      "line": 485,
+      "line": 492,
       "roleExprs": [
         "INTERNAL_ROLES"
       ],
@@ -12237,7 +12237,7 @@
       "file": "services/hrms-service/src/modules/internal/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/internal/leave-types/:id/lop-fraction-bps",
-      "line": 512,
+      "line": 519,
       "roleExprs": [
         "INTERNAL_ROLES"
       ],
@@ -12277,7 +12277,7 @@
       "file": "services/hrms-service/src/modules/internal/routes.ts",
       "method": "GET",
       "routePath": "/v1/hrms/internal/payroll/slip-templates/default",
-      "line": 539,
+      "line": 546,
       "roleExprs": [
         "INTERNAL_ROLES"
       ],
@@ -29118,24 +29118,12 @@
       ],
       "errors": null,
       "dynamic": false,
-      "comparator": "layout:HR_ROLES",
+      "comparator": "page:payroll/fnf (compute) (FNF_COMPUTE_ROLES)",
       "comparatorRoles": [
-        "admin",
-        "dept_head",
-        "employee",
-        "finance_admin",
         "finance_officer",
-        "hiring_manager",
         "hr_admin",
-        "hr_officer",
-        "icc_member",
-        "manager",
-        "officer",
         "payroll_admin",
-        "payroll_officer",
-        "platform_admin",
-        "super_admin",
-        "tenant_admin"
+        "super_admin"
       ],
       "extraInBackend": [],
       "extraInWeb": [],
@@ -29159,28 +29147,19 @@
       ],
       "errors": null,
       "dynamic": false,
-      "comparator": "layout:HR_ROLES",
+      "comparator": "page:payroll/fnf (read) (FNF_READ_ROLES)",
       "comparatorRoles": [
-        "admin",
-        "dept_head",
-        "employee",
-        "finance_admin",
         "finance_officer",
-        "hiring_manager",
         "hr_admin",
-        "hr_officer",
-        "icc_member",
-        "manager",
-        "officer",
         "payroll_admin",
         "payroll_officer",
-        "platform_admin",
-        "super_admin",
-        "tenant_admin"
+        "super_admin"
       ],
       "extraInBackend": [],
-      "extraInWeb": [],
-      "status": "MATCH"
+      "extraInWeb": [
+        "payroll_officer"
+      ],
+      "status": "DRIFT"
     },
     {
       "service": "payroll-service",
@@ -29201,24 +29180,13 @@
       ],
       "errors": null,
       "dynamic": false,
-      "comparator": "layout:HR_ROLES",
+      "comparator": "page:payroll/fnf (read) (FNF_READ_ROLES)",
       "comparatorRoles": [
-        "admin",
-        "dept_head",
-        "employee",
-        "finance_admin",
         "finance_officer",
-        "hiring_manager",
         "hr_admin",
-        "hr_officer",
-        "icc_member",
-        "manager",
-        "officer",
         "payroll_admin",
         "payroll_officer",
-        "platform_admin",
-        "super_admin",
-        "tenant_admin"
+        "super_admin"
       ],
       "extraInBackend": [],
       "extraInWeb": [],
@@ -29243,24 +29211,13 @@
       ],
       "errors": null,
       "dynamic": false,
-      "comparator": "layout:HR_ROLES",
+      "comparator": "page:payroll/fnf (read) (FNF_READ_ROLES)",
       "comparatorRoles": [
-        "admin",
-        "dept_head",
-        "employee",
-        "finance_admin",
         "finance_officer",
-        "hiring_manager",
         "hr_admin",
-        "hr_officer",
-        "icc_member",
-        "manager",
-        "officer",
         "payroll_admin",
         "payroll_officer",
-        "platform_admin",
-        "super_admin",
-        "tenant_admin"
+        "super_admin"
       ],
       "extraInBackend": [],
       "extraInWeb": [],
@@ -29302,28 +29259,19 @@
       ],
       "errors": null,
       "dynamic": false,
-      "comparator": "layout:HR_ROLES",
+      "comparator": "page:payroll/fnf (read) (FNF_READ_ROLES)",
       "comparatorRoles": [
-        "admin",
-        "dept_head",
-        "employee",
-        "finance_admin",
         "finance_officer",
-        "hiring_manager",
         "hr_admin",
-        "hr_officer",
-        "icc_member",
-        "manager",
-        "officer",
         "payroll_admin",
         "payroll_officer",
-        "platform_admin",
-        "super_admin",
-        "tenant_admin"
+        "super_admin"
       ],
       "extraInBackend": [],
-      "extraInWeb": [],
-      "status": "MATCH"
+      "extraInWeb": [
+        "payroll_officer"
+      ],
+      "status": "DRIFT"
     },
     {
       "service": "payroll-service",
@@ -32708,7 +32656,7 @@
       ],
       "errors": null,
       "dynamic": false,
-      "comparator": "page:payroll/pensioners (view) (PENSIONER_VIEW_ROLES)",
+      "comparator": "page:payroll/pensioners (view) (PAYROLL_READER_ROLES)",
       "comparatorRoles": [
         "finance_officer",
         "hr_admin",
@@ -32737,7 +32685,7 @@
       ],
       "errors": null,
       "dynamic": false,
-      "comparator": "page:payroll/pensioners (create) (PENSIONER_CREATE_ROLES)",
+      "comparator": "page:payroll/pensioners (create) (PAYROLL_ADMIN_ROLES)",
       "comparatorRoles": [
         "payroll_admin",
         "payroll_officer",
