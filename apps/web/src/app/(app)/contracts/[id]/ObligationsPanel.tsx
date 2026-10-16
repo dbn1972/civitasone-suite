@@ -2,7 +2,7 @@
 
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActionButton, EntityPicker } from "../../../_components/ds";
 import { searchIdentityUsers, resolveIdentityUsers } from "@/lib/entityAdapters/identityUser";
 import { formatIndianDate } from "@/lib/formatters";
@@ -16,6 +16,9 @@ export type ContractObligation = {
   ownerId?: string;
   version?: number;
 };
+
+// GAP-CONTRACTS-DETAIL-06: intervals for post-202 polling.
+const POLL_DELAYS = [5_000, 10_000];
 
 type Props = { contractId: string; obligations: ContractObligation[] };
 
@@ -31,11 +34,32 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [message, setMessage] = useState("");
+  // GAP-CONTRACTS-DETAIL-06: pending obligation writes (id -> prevStatus).
+  const [pendingMap, setPendingMap] = useState<Map<string, string>>(new Map());
+  const pollTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const [error, setError] = useState<string | undefined>();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [ownerId, setOwnerId] = useState("");
+
+  // Clear pending entries when props update (server re-render caught up).
+  useEffect(() => {
+    setPendingMap((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Map(prev);
+      let changed = false;
+      for (const [id, prevStatus] of next) {
+        const current = obligations.find((o) => o.id === id);
+        if (!current || current.status !== prevStatus) { next.delete(id); changed = true; }
+      }
+      return changed ? next : prev;
+    });
+  }, [obligations]);
+  useEffect(() => {
+    const timers = pollTimers.current;
+    return () => { for (const t of timers) clearTimeout(t); };
+  }, []);
 
   async function createObligation() {
     setCreating(true);
@@ -91,8 +115,14 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
       if (res.status !== 202 && !res.ok) {
         throw await userFacingErrorFromResponse(res, "save");
       }
+      // GAP-CONTRACTS-DETAIL-06: track as Pending and poll.
+      const prevStatus = obligations.find((o) => o.id === obligationId)?.status ?? "";
+      setPendingMap((prev) => new Map(prev).set(obligationId, prevStatus));
       setMessage(`Status change to "${STATUS_LABEL[nextStatus] ?? nextStatus}" received — it will update shortly.`);
       router.refresh();
+      for (const delay of POLL_DELAYS) {
+        pollTimers.current.push(setTimeout(() => router.refresh(), delay));
+      }
     } finally {
       setBusyId(null);
     }
@@ -118,6 +148,10 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
           {obligations.map((o) => (
             <li key={o.id} style={{ marginBottom: 8, fontSize: 13 }}>
               <strong>{o.title}</strong> — <span className="pill mut">{STATUS_LABEL[o.status] ?? o.status}</span>
+              {/* GAP-CONTRACTS-DETAIL-06: Pending pill while write propagates. */}
+              {pendingMap.has(o.id) ? (
+                <span className="pill mut" aria-label="Status update pending" style={{ marginLeft: 4 }}>Pending</span>
+              ) : null}
               {o.dueDate ? <span style={{ color: "var(--ink2)" }}> · due {formatIndianDate(o.dueDate)}</span> : null}
               {o.status !== "completed" ? (
                 <>

@@ -87,4 +87,61 @@ describe("MilestoneActions", () => {
     // formatIndianDate("2026-09-01") -> "01 Sep 2026".
     expect(screen.getByText(/due 01 Sep 2026/)).toBeInTheDocument();
   });
+
+  it("GAP-CONTRACTS-DETAIL-06: shows a Pending pill after 202 and schedules follow-up refreshes", async () => {
+    // Spy on setTimeout to verify the two follow-up polls are scheduled
+    // without fake timers (which deadlock waitFor's own polling).
+    const setTimeoutSpy = vi.spyOn(global, "setTimeout");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
+    );
+    render(
+      <MilestoneActions
+        contractId="cccccccc-dddd-4000-8000-0000000000cc"
+        milestones={[{ id: "m1", title: "Earthwork", status: "pending" }]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Complete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, mark complete" }));
+    // Wait for fetch to resolve and state to update.
+    await waitFor(() => expect(screen.getByText(/request received/i)).toBeInTheDocument());
+    // The Pending pill must appear immediately after the 202.
+    expect(screen.getByLabelText("Status update pending")).toBeInTheDocument();
+    // The message must not claim the action completed.
+    expect(screen.queryByText(/marked complete/i)).not.toBeInTheDocument();
+    // Immediate router.refresh() was called once.
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+    // Two scheduled polls exist (5 s, 10 s).
+    const pollDelays = setTimeoutSpy.mock.calls
+      .filter(([, d]) => typeof d === "number" && (d === 5_000 || d === 10_000))
+      .map(([, d]) => d)
+      .sort((a, b) => (a as number) - (b as number));
+    expect(pollDelays).toEqual([5_000, 10_000]);
+  });
+
+  it("GAP-CONTRACTS-DETAIL-06: clears the Pending pill when milestone status changes in props", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ status: "accepted" }), { status: 202 }),
+    );
+    const { rerender } = render(
+      <MilestoneActions
+        contractId="cccccccc-dddd-4000-8000-0000000000cc"
+        milestones={[{ id: "m1", title: "Earthwork", status: "pending" }]}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Complete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Yes, mark complete" }));
+    // Pill is visible while status is still "pending".
+    await waitFor(() => expect(screen.getByLabelText("Status update pending")).toBeInTheDocument());
+    // Simulate server catching up: status is now "completed".
+    rerender(
+      <MilestoneActions
+        contractId="cccccccc-dddd-4000-8000-0000000000cc"
+        milestones={[{ id: "m1", title: "Earthwork", status: "completed" }]}
+      />,
+    );
+    // Completed milestone is filtered out of actionable list, so no pill.
+    expect(screen.queryByLabelText("Status update pending")).not.toBeInTheDocument();
+  });
+
 });

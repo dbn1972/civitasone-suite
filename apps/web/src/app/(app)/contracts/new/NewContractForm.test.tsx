@@ -95,4 +95,60 @@ describe("NewContractForm", () => {
     expect(container.querySelector(".text-red-600")).toBeNull();
     expect(container.querySelector(".text-emerald-700")).toBeNull();
   });
+
+  it("GAP-CONTRACTS-NEW-05: displays a 409 duplicate-number error inline (no raw status code)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          code: "DUPLICATE_CONTRACT_NUMBER",
+          fieldErrors: [{ field: "contractNo", message: "This contract number is already in use." }],
+        }),
+        { status: 409, headers: { "content-type": "application/json" } },
+      ),
+    );
+    render(<NewContractForm vendors={vendors} />);
+    fireEvent.change(screen.getByLabelText(/contract no/i), { target: { value: "CON-DUP" } });
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: "Duplicate test" } });
+    await pickVendor(/Acme Infra/);
+    fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: "2026-01-01" } });
+    fireEvent.change(screen.getByLabelText(/expiry date/i), { target: { value: "2027-01-01" } });
+    fireEvent.change(screen.getByLabelText(/value/i), { target: { value: "100" } });
+    fireEvent.click(screen.getByRole("button", { name: /create contract/i }));
+    await waitFor(() =>
+      expect(screen.getByText("This contract number is already in use.")).toBeInTheDocument(),
+    );
+    // The error must surface as an inline field message, not a raw HTTP status.
+    expect(screen.queryByText("409")).not.toBeInTheDocument();
+  });
+
+  it("GAP-CONTRACTS-NEW-05: registers a beforeunload guard when the form is dirty", () => {
+    const addSpy = vi.spyOn(window, "addEventListener");
+    render(<NewContractForm vendors={vendors} />);
+    // Form is clean — no guard yet.
+    const beforeFirst = addSpy.mock.calls.some(([ev]) => ev === "beforeunload");
+    expect(beforeFirst).toBe(false);
+    // Dirty the form.
+    fireEvent.change(screen.getByLabelText(/contract no/i), { target: { value: "CON-1" } });
+    // Guard should now be registered.
+    expect(addSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
+  });
+
+  it("GAP-CONTRACTS-NEW-05: removes the beforeunload guard after successful submission", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "new-id" }), { status: 201 }),
+    );
+    const removeSpy = vi.spyOn(window, "removeEventListener");
+    render(<NewContractForm vendors={vendors} />);
+    fireEvent.change(screen.getByLabelText(/contract no/i), { target: { value: "CON-OK" } });
+    fireEvent.change(screen.getByLabelText(/title/i), { target: { value: "OK Contract" } });
+    await pickVendor(/Acme Infra/);
+    fireEvent.change(screen.getByLabelText(/start date/i), { target: { value: "2026-01-01" } });
+    fireEvent.change(screen.getByLabelText(/expiry date/i), { target: { value: "2027-01-01" } });
+    fireEvent.change(screen.getByLabelText(/value/i), { target: { value: "500" } });
+    fireEvent.click(screen.getByRole("button", { name: /create contract/i }));
+    await waitFor(() => expect(pushMock).toHaveBeenCalled());
+    // After success status the effect cleanup removes the listener.
+    expect(removeSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
+  });
+
 });
