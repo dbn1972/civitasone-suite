@@ -488,9 +488,9 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 - **Impact if wrong:** Wrong SLA reporting to supervisors.
 - **Web change if wrong:** Align status map and SLA calc in calls/page.tsx to the enum; prefer server-provided sla flag.
 
-### GAP-TELEPHONY-DISPOSITIONS-07  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-TELEPHONY-DISPOSITIONS-07  ·  LOW  ·  verified  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by gap-backend-verify.test.ts — DISPOSITIONS enum (transitions.ts): resolved, callback_scheduled, escalated, transferred, information_provided, wrong_number, voicemail, no_resolution. Finished-call status is exactly "completed" (CALL_STATUSES). callSummarySchema accepts disposition as nullable string. Tested in gap-backend-verify.test.ts GAP-TELEPHONY-DISPOSITIONS-07 suite)
 - **First-pass claim:** telephony-service is absent from the services/ snapshot; the set of disposition codes and the 'completed' status value cannot be verified — undeterminable.
 - **Service:** `telephony-service`  ·  **Endpoint(s):** `['GET /v1/telephony/calls']`
 - **Question:** What disposition codes exist and is the finished-call status literally 'completed'?

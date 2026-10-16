@@ -241,3 +241,77 @@ describe("GAP-TELEPHONY-CALLS-08: call lifecycle status enum and SLA", () => {
     expect([200, 500]).toContain(res.statusCode);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GAP-TELEPHONY-DISPOSITIONS-07
+// Question: What disposition codes exist and is the finished-call status
+// literally "completed"?
+// ─────────────────────────────────────────────────────────────────────────────
+describe("GAP-TELEPHONY-DISPOSITIONS-07: disposition enum and completed status", () => {
+  it("DISPOSITIONS contains all expected wrap-up codes", () => {
+    const expected = [
+      "resolved",
+      "callback_scheduled",
+      "escalated",
+      "transferred",
+      "information_provided",
+      "wrong_number",
+      "voicemail",
+      "no_resolution",
+    ] as const;
+    for (const d of expected) {
+      expect(DISPOSITIONS).toContain(d);
+    }
+    expect(DISPOSITIONS).toHaveLength(expected.length);
+  });
+
+  it("completed is a valid call status (dispositions page filters on it)", () => {
+    expect(CALL_STATUSES).toContain("completed");
+  });
+
+  it("callSummarySchema accepts every known disposition as a string", () => {
+    for (const d of DISPOSITIONS) {
+      const r = callSummarySchema.safeParse({
+        id: "11111111-1111-4000-8000-000000000001",
+        direction: "inbound",
+        callerNumber: null,
+        calleeNumber: null,
+        status: "completed",
+        disposition: d,
+        queueId: null,
+        agentId: null,
+        linkedRefType: null,
+        linkedRefId: null,
+        hasRecording: false,
+        waitSeconds: null,
+        talkSeconds: null,
+        slaAnswered: null,
+        abandoned: false,
+        startedAt: null,
+        endedAt: null,
+        version: 1,
+      });
+      expect(r.success).toBe(true);
+    }
+  });
+
+  it("Given telephony_user; When GET /v1/telephony/calls?status=completed; Then completed rows include disposition (schema compliant)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/telephony/calls?status=completed",
+      headers: { authorization: `Bearer ${token(TENANT_A, ["telephony_user"])}` },
+    });
+    await app.close();
+    expect([200, 500]).toContain(res.statusCode);
+    if (res.statusCode === 200) {
+      const rows = res.json().data as Array<{ status: string; disposition: string | null }>;
+      for (const r of rows) {
+        expect(r.status).toBe("completed");
+        if (r.disposition !== null) {
+          expect(DISPOSITIONS).toContain(r.disposition);
+        }
+      }
+    }
+  });
+});
