@@ -743,3 +743,31 @@ describe("mapStockLedgerEntries — GAP-STOCK-LEDGER-04: signedQuantity", () => 
     expect(row?.direction).toBe("in");
   });
 });
+
+describe("mapStockLedgerEntries — GAP-STOCK-LEDGER-02/03: no id fragments", () => {
+  const base = { id: "e1", itemId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee", postingDate: "2026-09-01", rateMinor: 500, voucherType: "receipt", qtyIn: 1, qtyOut: 0 };
+
+  it("GAP-STOCK-LEDGER-03: row with itemCode+itemName uses them", () => {
+    const [row] = mapStockLedgerEntries([{ ...base, itemCode: "STAT-001", itemName: "A4 Paper" }]) ?? [];
+    expect(row?.itemCode).toBe("STAT-001");
+    expect(row?.itemName).toBe("A4 Paper");
+  });
+
+  it("GAP-STOCK-LEDGER-03: row with only itemId shows — not a hex prefix", () => {
+    const [row] = mapStockLedgerEntries([{ ...base }]) ?? [];
+    expect(row?.itemCode).toBe("—");
+    expect(row?.itemName).toBe("—");
+    // Must NOT contain any hex fragment from the id
+    expect(row?.itemCode).not.toMatch(/^[0-9A-F]{8}/i);
+  });
+
+  it("GAP-STOCK-LEDGER-02: row with warehouseName exposes it via party", () => {
+    const [row] = mapStockLedgerEntries([{ ...base, warehouseName: "Main Store" }]) ?? [];
+    expect(row?.party).toBe("Main Store");
+  });
+
+  it("GAP-STOCK-LEDGER-02: row without warehouseName has party undefined", () => {
+    const [row] = mapStockLedgerEntries([{ ...base }]) ?? [];
+    expect(row?.party).toBeUndefined();
+  });
+});
