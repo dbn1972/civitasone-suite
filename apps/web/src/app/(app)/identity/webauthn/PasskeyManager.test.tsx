@@ -72,4 +72,92 @@ describe("PasskeyManager — GAP-IDENTITY-WEBAUTHN-02/03", () => {
     render(<PasskeyManager credentials={[]} />);
     expect(screen.getByText("No passkeys")).toBeInTheDocument();
   });
+
+  // GAP-IDENTITY-WEBAUTHN-02: rename tests
+  it("WEBAUTHN-02: Rename button opens an inline input pre-filled with the current device name", async () => {
+    render(<PasskeyManager credentials={[CRED]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+
+    const input = await screen.findByRole("textbox", { name: /new passkey name/i });
+    expect(input).toBeInTheDocument();
+    expect((input as HTMLInputElement).value).toBe("YubiKey 5C");
+  });
+
+  it("WEBAUTHN-02: Rename Save calls PATCH with the new deviceName and refreshes", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ id: CRED.id, deviceName: "My new key" }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+
+    render(<PasskeyManager credentials={[CRED]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+
+    const input = await screen.findByRole("textbox", { name: /new passkey name/i });
+    fireEvent.change(input, { target: { value: "My new key" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toBe(`/api/proxy/v1/identity/webauthn/credentials/${CRED.id}`);
+    expect((init as RequestInit).method).toBe("PATCH");
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body).toEqual({ deviceName: "My new key" });
+    await waitFor(() => expect(mockRefresh).toHaveBeenCalled());
+  });
+
+  it("WEBAUTHN-02: Rename Cancel dismisses the inline input without calling the API", () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<PasskeyManager credentials={[CRED]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+
+    expect(screen.getByRole("textbox", { name: /new passkey name/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("textbox", { name: /new passkey name/i })).not.toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("WEBAUTHN-02: Rename shows a human-readable error (never raw server body) on PATCH failure", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("internal postgres error", { status: 503 }),
+    );
+
+    render(<PasskeyManager credentials={[CRED]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    const input = await screen.findByRole("textbox", { name: /new passkey name/i });
+    fireEvent.change(input, { target: { value: "New name" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toBeInTheDocument(),
+    );
+    expect(screen.getByRole("alert").textContent).not.toMatch(/internal postgres error/i);
+  });
+
+  it("WEBAUTHN-02: Rename shows validation error for blank name without calling fetch", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<PasskeyManager credentials={[CRED]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    const input = await screen.findByRole("textbox", { name: /new passkey name/i });
+    fireEvent.change(input, { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert").textContent).toMatch(/must not be blank/i),
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("WEBAUTHN-02: Escape key inside rename input cancels without calling fetch", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<PasskeyManager credentials={[CRED]} />);
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    const input = await screen.findByRole("textbox", { name: /new passkey name/i });
+    fireEvent.keyDown(input, { key: "Escape" });
+
+    expect(screen.queryByRole("textbox", { name: /new passkey name/i })).not.toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });
