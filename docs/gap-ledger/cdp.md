@@ -482,7 +482,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-HOME-04  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD — cdp-service present; all 5 routes registered in app.ts; each has requireRole guard; steward uses STEWARD_ROLES (cdp_steward/cdp_admin/super_admin); cdp/page.test.tsx asserts all 5 hrefs are present)
 - **First-pass claim:** cdp-service is not in this snapshot (services/ has only hrms-service), so tile destinations' endpoints cannot be verified — undeterminable.
 - **Service:** `cdp-service`  ·  **Endpoint(s):** `['GET /api/v1/cdp/profiles', 'GET /api/v1/cdp/identity/anonymous-visitors', 'GET /api/v1/cdp/segments', 'GET /api/v1/cdp/events/taxonomy', 'GET/POST /v1/cdp/steward/queue|decide']`
 - **Question:** Do all five tile destinations map to live cdp-service routes that the tile viewer role may call?
