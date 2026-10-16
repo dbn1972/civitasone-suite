@@ -171,4 +171,23 @@ describe("InvoiceActions", () => {
       expect(screen.getByText("Show signed payload")).toBeInTheDocument();
     });
   });
+
+  // GAP-BILLING-INVOICES-DETAIL-01: canIrn=false hides both action buttons.
+  // Given: the viewer does not hold a billing role
+  // When: InvoiceActions renders with canIrn={false}
+  // Then: Generate and Cancel IRN buttons are absent; a "requires a billing role" note is shown
+  describe("canIrn role gate (GAP-BILLING-INVOICES-DETAIL-01)", () => {
+    it("hides Generate/Cancel IRN buttons when canIrn is false", () => {
+      render(<InvoiceActions invoiceId="inv-1" einvoice={null} canIrn={false} />);
+      expect(screen.queryByRole("button", { name: /generate e-invoice/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /cancel irn/i })).not.toBeInTheDocument();
+      expect(screen.getByText(/requires a billing role/i)).toBeInTheDocument();
+    });
+
+    it("shows Generate/Cancel IRN buttons when canIrn is true (default)", () => {
+      render(<InvoiceActions invoiceId="inv-1" einvoice={null} canIrn={true} />);
+      expect(screen.getByRole("button", { name: /generate e-invoice/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /cancel irn/i })).toBeInTheDocument();
+    });
+  });
 });
