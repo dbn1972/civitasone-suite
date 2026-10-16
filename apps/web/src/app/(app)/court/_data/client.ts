@@ -72,6 +72,19 @@ export async function fetchCases(status?: CaseStatus): Promise<CourtCase[]> {
   return out.items ?? [];
 }
 
+export async function fetchCase(caseId: string): Promise<CourtCase | null> {
+  try {
+    const out = await get<Record<string, unknown>>(
+      `v1/court/cases/${encodeURIComponent(caseId)}`,
+    );
+    const row = ((out as { data?: CourtCase }).data ?? out) as CourtCase;
+    return row?.id ? row : null;
+  } catch {
+    return null;
+  }
+}
+
+
 export async function fetchCaseOrders(caseId: string): Promise<CourtOrder[]> {
   const out = await get<{ items?: CourtOrder[] }>(`v1/court/cases/${caseId}/orders`);
   return out.items ?? [];
