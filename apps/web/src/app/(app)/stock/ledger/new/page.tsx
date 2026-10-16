@@ -49,6 +49,7 @@ function validateForm(form: typeof INITIAL): Record<string, string> {
     if (rupeesToMinorString(form.rate, { allowZero: true }) === null) errors.rate = "Rate must be zero or a positive amount with at most 2 decimals.";
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(form.postingDate)) errors.postingDate = "Pick a posting date.";
+  if (form.postingDate > todayIST()) errors.postingDate = "Posting date cannot be in the future.";
   return errors;
 }
 
@@ -240,6 +241,7 @@ export default function NewStockEntryPage() {
               <label className="l" htmlFor="entry-date">Posting date</label>
               <input
                 id="entry-date" type="date" required value={form.postingDate}
+                max={todayIST()}
                 onChange={(e) => setForm({ ...form, postingDate: e.target.value })}
                 style={inputStyle} {...ariaFor("postingDate", "entry-date-err")}
               />

@@ -1194,7 +1194,14 @@ export function mapStockItemSummaries(payload: unknown): StockItemSummary[] | nu
       minStockLevel,
       unitCost: parseMinor(row.unitCost),
       totalValue: parseMinor(row.totalValue),
-      isLowStock: currentStock === null ? null : currentStock <= minStockLevel,
+      isLowStock: currentStock === null ? null : (minStockLevel > 0 && currentStock <= minStockLevel),
+      // GAP-STOCK-LIST-03: separate out-of-stock from low-stock and from no-reorder-level.
+      stockStatus: ((): "out" | "low" | "ok" | "unknown" => {
+        if (currentStock === null) return "unknown";
+        if (currentStock <= 0) return "out";
+        if (minStockLevel > 0 && currentStock <= minStockLevel) return "low";
+        return "ok";
+      })(),
     });
   }
   return mapped;

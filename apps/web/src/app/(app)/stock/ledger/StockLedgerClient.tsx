@@ -10,18 +10,31 @@ interface LedgerEntry {
   itemName: string;
   party?: string | null;
   quantity: number;
+  /** qtyIn - qtyOut: positive = inbound, negative = outbound (GAP-STOCK-LEDGER-04). */
+  signedQuantity: number;
   type: string;
   balance: number;
   totalValue: number;
+  /** Short audit reference (GAP-STOCK-LEDGER-07). */
+  referenceNo?: string;
 }
 
 interface Props {
   entries: LedgerEntry[];
 }
 
-const SEG_OPTIONS = ["All", "Receipts", "Issues"];
+// GAP-STOCK-LEDGER-06: transfers and adjustments are now filterable.
+const SEG_OPTIONS = ["All", "Receipts", "Issues", "Transfers", "Adjustments"];
+
+const SEG_TYPE_MAP: Record<string, string> = {
+  Receipts: "receipt",
+  Issues: "issue",
+  Transfers: "transfer",
+  Adjustments: "adjustment",
+};
 
 const COLUMNS = [
+  { key: "ref" as const, label: "Ref" },
   { key: "date" as const, label: "Date" },
   { key: "item" as const, label: "Item" },
   { key: "warehouse" as const, label: "Warehouse" },
@@ -33,22 +46,27 @@ const COLUMNS = [
 export function StockLedgerClient({ entries }: Props) {
   const [active, setActive] = useState("All");
 
-  const segFiltered =
-    active === "Receipts"
-      ? entries.filter((e) => e.type === "receipt")
-      : active === "Issues"
-      ? entries.filter((e) => e.type === "issue")
-      : entries;
+  const filterType = SEG_TYPE_MAP[active];
+  const segFiltered = filterType
+    ? entries.filter((e) => e.type === filterType)
+    : entries;
 
-  const rows = segFiltered.map((entry) => ({
-    id: entry.id,
-    date: formatIndianDate(entry.date),
-    item: `${entry.itemCode} ${entry.itemName}`,
-    warehouse: entry.party ?? "—",
-    quantityDisplay: `${entry.type === "issue" ? "-" : "+"}${entry.quantity.toLocaleString("en-IN")}`,
-    type: entry.type,
-    balance: entry.balance.toLocaleString("en-IN"),
-  }));
+  const rows = segFiltered.map((entry) => {
+    // GAP-STOCK-LEDGER-04: derive sign from signedQuantity, not from voucher type.
+    const sign = entry.signedQuantity < 0 ? "−" : "+";
+    const absQty = Math.abs(entry.signedQuantity);
+    return {
+      id: entry.id,
+      // GAP-STOCK-LEDGER-07: show short reference for audit queries.
+      ref: entry.referenceNo ?? "—",
+      date: formatIndianDate(entry.date),
+      item: `${entry.itemCode} ${entry.itemName}`.trim(),
+      warehouse: entry.party ?? "—",
+      quantityDisplay: `${sign}${absQty.toLocaleString("en-IN")}`,
+      type: entry.type,
+      balance: entry.balance.toLocaleString("en-IN"),
+    };
+  });
 
   return (
     <div className="card" style={{ marginTop: 18 }}>

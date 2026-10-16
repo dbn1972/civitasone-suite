@@ -72,3 +72,17 @@ describe("New Stock Entry page (target of the /stock/ledger/new links)", () => {
     }
   });
 });
+
+describe("GAP-STOCK-LEDGER-NEW-06: posting date uses IST today and rejects future", () => {
+  it("rejects a date in the future before posting", async () => {
+    installFetch();
+    render(<Page />);
+    await waitFor(() => expect(screen.getByRole("option", { name: /A4 Paper/ })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Item"), { target: { value: ITEMS.data[0]!.id } });
+    fireEvent.change(screen.getByLabelText("Quantity"), { target: { value: "10" } });
+    // A date clearly in the future
+    fireEvent.change(screen.getByLabelText("Posting date"), { target: { value: "2099-01-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record entry" }));
+    expect(await screen.findByText(/cannot be in the future/i)).toBeInTheDocument();
+  });
+});
