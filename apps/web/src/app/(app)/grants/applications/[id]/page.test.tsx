@@ -109,4 +109,28 @@ describe("ApplicationDetailPage", () => {
     getApplicationByIdMock.mockResolvedValue({ data: null, source: "error", status: 404 });
     await expect(ApplicationDetailPage({ params: { id: "app-1" } })).rejects.toThrow("NEXT_NOT_FOUND");
   });
+
+  // GAP-GRANTS-APPLICATIONS-DETAIL-06: submittedBy shown when it is a display
+  // name (non-UUID); raw UUIDs are hidden as '\u2014' (em dash rendered as "—").
+  it("shows submittedBy when it is a non-UUID display name (clerk-1)", async () => {
+    // clerk-1 is a non-UUID actor code so displayActorRef returns it as-is.
+    render(await ApplicationDetailPage({ params: { id: "app-1" } }));
+    expect(screen.getByText("Submitted By")).toBeInTheDocument();
+    expect(screen.getByText("clerk-1")).toBeInTheDocument();
+  });
+
+  it("hides a UUID submittedBy and shows '—' instead of raw uuid", async () => {
+    const APP_UUID_SUBMITTER = {
+      ...APP,
+      submittedBy: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      approvedBy: "d4e5f6a7-b8c9-0123-def0-456789abcdef",
+    };
+    getApplicationByIdMock.mockResolvedValue({ data: APP_UUID_SUBMITTER, source: "api" });
+    render(await ApplicationDetailPage({ params: { id: "app-1" } }));
+    // Raw UUID must NOT appear in the rendered page.
+    expect(screen.queryByText("a1b2c3d4-e5f6-7890-abcd-ef1234567890")).not.toBeInTheDocument();
+    // Submitted By row must be present.
+    expect(screen.getByText("Submitted By")).toBeInTheDocument();
+  });
+
 });
