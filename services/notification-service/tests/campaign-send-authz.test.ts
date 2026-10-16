@@ -94,6 +94,36 @@ describe("campaign send/cancel authorization (GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL
     expect(res.statusCode).toBe(403);
   });
 
+  it("PATCH /campaigns/:id/send → 403 when actor is the campaign creator (maker-checker, GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL-01)", async () => {
+    const id = randomUUID();
+    // Seed campaign with createdBy = ACTOR (same user who will send)
+    await runWithTenant(TENANT, () =>
+      db.transaction(async (tx) => {
+        await tx.insert(notificationCampaigns).values({
+          id,
+          tenantId: TENANT,
+          templateId: randomUUID(),
+          name: "Maker checker fixture",
+          status: "draft",
+          scheduledAt: null,
+          objective: null,
+          audienceSegmentId: null,
+          budgetMinor: 0n,
+          currency: "INR",
+          createdBy: ACTOR,
+          updatedBy: ACTOR,
+        } as typeof notificationCampaigns.);
+      }),
+    );
+    const res = await app.inject({
+      method: "PATCH",
+      url: ,
+      headers: bearer(["tenant_admin"]),
+    });
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body).code).toBe("MAKER_CHECKER_SAME_ACTOR");
+  });
+
   it("PATCH /campaigns/:id/send → 202 for an admin role (tenant_admin)", async () => {
     const id = randomUUID();
     await seedCampaign(id, "draft");

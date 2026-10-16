@@ -36,6 +36,7 @@ function toCampaignView(
     currency: r.currency,
     actualCostMinor: money(r.actualCostMinor),
     version: r.version,
+    createdBy: r.createdBy,
     ...(stats ? { recipientCount: stats.recipientCount, deliveredCount: stats.deliveredCount } : {}),
   };
 }
