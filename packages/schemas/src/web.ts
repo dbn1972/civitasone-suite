@@ -2311,6 +2311,9 @@ export const LegalCaseSummarySchema = z.object({
   title: z.string(),
   court: z.string(),
   type: z.enum(["civil", "criminal", "arbitration", "tribunal", "writ", "appeal", "other"]),
+  // GAP-LEGAL-CASES-NEW-01: free-text dispute description; optional so legacy rows
+  // without a subject still parse cleanly.
+  subject: z.string().optional(),
   filedDate: z.string(),
   department: z.string().optional(),
   petitioner: z.string().optional(),
@@ -2335,6 +2338,9 @@ export const LegalCaseDetailSchema = LegalCaseSummarySchema.extend({
     id: z.string(),
     date: z.string(),
     orderNo: z.string().optional(),
+    // GAP-LEGAL-CASES-DETAIL-01: pass orderType through so the detail page can
+    // separate affidavit filings from court orders.
+    orderType: z.string().optional(),
     summary: z.string(),
     complianceRequired: z.boolean().default(false),
     complianceDeadline: z.string().optional(),

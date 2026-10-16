@@ -2316,6 +2316,8 @@ export type LegalCaseSummary = {
   title: string;
   court: string;
   type: "civil" | "criminal" | "arbitration" | "tribunal" | "writ" | "appeal" | "other";
+  /** GAP-LEGAL-CASES-NEW-01: free-text dispute description entered at registration. */
+  subject?: string;
   filedDate: string;
   department?: string;
   petitioner?: string;
@@ -2339,6 +2341,8 @@ export type LegalCaseDetail = LegalCaseSummary & {
     id: string;
     date: string;
     orderNo?: string;
+    /** GAP-LEGAL-CASES-DETAIL-01: the order kind (affidavit/order/judgment…). */
+    orderType?: string;
     summary: string;
     complianceRequired: boolean;
     complianceDeadline?: string;

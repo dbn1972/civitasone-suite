@@ -16,6 +16,8 @@ type LegalCase = {
   title: string;
   court: string;
   type: string;
+  /** GAP-LEGAL-CASES-NEW-01: typed dispute description; shown under the title when present. */
+  subject?: string | null;
   advocateName?: string | null;
   status: string;
 } & Record<string, unknown>;
@@ -88,7 +90,22 @@ export function LegalCasesTable({ items, source = "api" }: { items: LegalCase[];
       <DataTable<LegalCase>
         columns={[
           { key: "caseNo", label: "Case no.", render: (r) => <span className="mono">{r.caseNo}</span> },
-          { key: "title", label: "Title" },
+          {
+            key: "title",
+            label: "Title",
+            // GAP-LEGAL-CASES-NEW-01: show subject under the title when the
+            // registrar entered one.
+            render: (r) => (
+              <>
+                {r.title}
+                {r.subject && (
+                  <span style={{ display: "block", fontSize: "0.75rem", color: "var(--ink2)", marginTop: 2 }}>
+                    {r.subject}
+                  </span>
+                )}
+              </>
+            ),
+          },
           { key: "court", label: "Court" },
           { key: "type", label: "Case type", render: (r) => <>{caseTypeLabel(r.type)}</> },
           { key: "advocateName", label: "Counsel", render: (r) => <>{r.advocateName ?? "—"}</> },
