@@ -4,6 +4,7 @@ import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
+import { PAYROLL_EMPLOYEE_ROLES } from "@/lib/auth/workRoles";
 import { CreateFlexPlanForm } from "./CreateFlexPlanForm";
 import { ElectFlexBenefitForm } from "./ElectFlexBenefitForm";
 import { FlexElectionApprovals } from "./FlexElectionApprovals";
@@ -37,7 +38,6 @@ type PlanRow = {
  * employee). Anyone else (e.g. a manager-only account) gets a 403 from every
  * endpoint on this page.
  */
-const FLEX_ELECT_ROLES = [...PAYROLL_READER_ROLES, "employee"];
 
 async function getElections(): Promise<LoaderResult<ElectionRow[]>> {
   return fetchJson<unknown, ElectionRow[]>("/api/v1/payroll/flex-benefits/my-elections", [], {
@@ -73,13 +73,13 @@ export default async function FlexBenefitsPage() {
   const t = await getTranslations("payrollFlexBenefits");
   const roles = getSessionRoles();
   const canManagePlans = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
-  const canElect = roles.some((r) => FLEX_ELECT_ROLES.includes(r));
+  const canElect = roles.some((r) => PAYROLL_EMPLOYEE_ROLES.includes(r));
 
   if (!canElect && !canManagePlans) {
     return (
       <div className="page-main wrap">
         <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel={t("backLabel")} />
-        <PermissionDenied module="flex benefits" requiredRoles={FLEX_ELECT_ROLES} backHref="/hr/payroll" backLabel={t("backLabel")} />
+        <PermissionDenied module="flex benefits" requiredRoles={PAYROLL_EMPLOYEE_ROLES} backHref="/hr/payroll" backLabel={t("backLabel")} />
       </div>
     );
   }

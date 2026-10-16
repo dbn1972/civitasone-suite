@@ -5,12 +5,12 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getMySlips } from "../../../../_data/loaders";
 import { getSessionRoles, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
+import { PAYROLL_EMPLOYEE_ROLES } from "@/lib/auth/workRoles";
 import { toHumanError } from "@/lib/messages";
 import type { SalarySlipSummary } from "@civitasone/types";
 
 const PAGE_SIZE = 24;
 /** Mirrors payroll-service SLIP_ROLES for GET /v1/payroll/slips/mine (payroll readers + employee). */
-const MY_SLIPS_ROLES = [...PAYROLL_READER_ROLES, "employee"];
 
 type Row = SalarySlipSummary & Record<string, unknown>;
 
@@ -23,8 +23,8 @@ type Row = SalarySlipSummary & Record<string, unknown>;
 export default async function MySlipsPage({ searchParams }: { searchParams?: { page?: string } }) {
   const t = await getTranslations("mySlips");
   const roles = getSessionRoles();
-  if (!roles.some((r) => MY_SLIPS_ROLES.includes(r))) {
-    return <PermissionDenied module="my payslips" requiredRoles={MY_SLIPS_ROLES} />;
+  if (!roles.some((r) => PAYROLL_EMPLOYEE_ROLES.includes(r))) {
+    return <PermissionDenied module="my payslips" requiredRoles={PAYROLL_EMPLOYEE_ROLES} />;
   }
   const page = Math.max(1, Math.min(500, Number.parseInt(searchParams?.page ?? "1", 10) || 1));
   const { data: slips, source } = await getMySlips(PAGE_SIZE, (page - 1) * PAGE_SIZE);

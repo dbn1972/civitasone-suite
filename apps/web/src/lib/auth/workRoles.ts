@@ -691,3 +691,87 @@ export const WORKFLOW_TASK_ROLES: readonly string[] = [
 export const HR_GOALS_ROLES = [...HR_BASELINE_ROLES, "dept_head"];
 /** workforce-planning/routes.ts READER_ROLES (headcount, forecasts, KPIs, budget, diversity). */
 export const WORKFORCE_READER_ROLES = [...HR_STAFF_MANAGER_ROLES, "finance_officer"];
+
+// ── W1 SF-09c: remaining inline role literals migrated to shared constants ────
+
+/**
+ * W1 SF-09c: audit-trail reader tier (audit-service GET /audit/events).
+ * These roles are NOT in HR_ROLES: audit_officer/audit_admin have no general
+ * /hr access; the /hr/audit-log page gates itself explicitly. Keep in sync
+ * with services/audit-service/src/modules/events/routes.ts.
+ */
+export const AUDIT_LOG_READER_ROLES = [
+  "audit_officer",
+  "audit_admin",
+  "super_admin",
+  "platform_admin",
+] as const;
+
+/**
+ * W1 SF-09c: location-admin tier shared by /hr/locations/{list,new,[id]/edit}.
+ * Mirrors services/location-service location WRITE_ROLES; kept in sync by
+ * convention (see hr-role-matrix noBackendRouteFound entry GAP-HR-SF09A-018).
+ */
+export const HR_LOCATION_ADMIN_ROLES = [
+  "location_user",
+  "location_admin",
+  "super_admin",
+  "admin",
+  "hr_admin",
+] as const;
+
+/**
+ * W1 SF-09c: payroll self-service tier (my-slips, flex-benefit elections).
+ * = PAYROLL_SALARY_ADMIN_ROLES + employee. Mirrors payroll-service
+ * payroll/routes.ts READER_ROLES + self-service employee gate.
+ */
+export const PAYROLL_EMPLOYEE_ROLES = [
+  ...PAYROLL_SALARY_ADMIN_ROLES,
+  "employee",
+] as const;
+
+/**
+ * W1 SF-09c: payroll + HR reader tier for payroll-loans and reimbursements
+ * staff view (= PAYROLL_STAFF_ROLES + hr_admin).
+ */
+export const PAYROLL_HR_READER_ROLES = [
+  ...PAYROLL_STAFF_ROLES,
+  "hr_admin",
+] as const;
+
+/**
+ * W1 SF-09c: FNF compute/admin tier. Mirrors payroll-service fnf/routes.ts
+ * FNF_ROLES (the roles that may compute or manage a settlement).
+ */
+export const FNF_COMPUTE_ROLES = [
+  "payroll_admin",
+  "hr_admin",
+  "super_admin",
+  "finance_officer",
+] as const;
+
+/**
+ * W1 SF-09c: FNF read tier (FNF_COMPUTE_ROLES + payroll_officer who submits).
+ * Mirrors payroll-service fnf/routes.ts FNF_READ_ROLES.
+ */
+export const FNF_READ_ROLES = [...FNF_COMPUTE_ROLES, "payroll_officer"] as const;
+
+/** W1 SF-09c: FNF submit tier (payroll-service fnf/routes.ts SUBMIT_GATE). */
+export const FNF_SUBMIT_ROLES = ["payroll_admin", "payroll_officer"] as const;
+
+/** W1 SF-09c: FNF finance-approval tier. */
+export const FNF_FINANCE_APPROVE_ROLES = ["finance_officer", "payroll_admin"] as const;
+
+/** W1 SF-09c: FNF disburse tier. */
+export const FNF_DISBURSE_ROLES = ["payroll_admin", "super_admin"] as const;
+
+/**
+ * W1 SF-09c: expense-claim decide tier. Mirrors services/hrms-service
+ * social/routes.ts EXPENSE_DECIDE_ROLES (approve/reject/view-receipt).
+ */
+export const HR_EXPENSE_DECIDE_ROLES = [
+  "manager",
+  "hr_admin",
+  "finance_officer",
+  "super_admin",
+] as const;

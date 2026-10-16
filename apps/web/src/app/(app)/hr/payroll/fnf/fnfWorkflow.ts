@@ -1,3 +1,4 @@
+import { FNF_COMPUTE_ROLES, FNF_READ_ROLES, FNF_SUBMIT_ROLES, FNF_FINANCE_APPROVE_ROLES, FNF_DISBURSE_ROLES } from "@/lib/auth/workRoles";
 /**
  * GAP-PAYROLL-FNF-01: client-side mirror of payroll-service's
  * src/modules/fnf/workflow.ts, used ONLY to decide which buttons to show.
@@ -20,13 +21,6 @@ export type FnfWorkflowFields = {
   financeApprovedBy?: string | null;
 };
 
-export const FNF_SUBMIT_ROLES = ["payroll_admin", "payroll_officer"];
-export const FNF_FINANCE_APPROVE_ROLES = ["finance_officer", "payroll_admin"];
-export const FNF_DISBURSE_ROLES = ["payroll_admin", "super_admin"];
-/** Roles that may COMPUTE (payroll-service FNF_ROLES). */
-export const FNF_COMPUTE_ROLES = ["payroll_admin", "hr_admin", "super_admin", "finance_officer"];
-/** Roles that may READ the list (FNF_ROLES + payroll_officer, who submits). */
-export const FNF_READ_ROLES = [...FNF_COMPUTE_ROLES, "payroll_officer"];
 
 /** Server-side reference-format rule (fnf/routes.ts disburse body). */
 export const PAYMENT_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9/-]{3,63}$/;
