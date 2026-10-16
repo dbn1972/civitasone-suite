@@ -2,6 +2,8 @@
  * catalogue route-group server loaders — SCORE_LOCK F1 child pages.
  * Calls catalogue-service through the gateway via cookie-aware fetchJson.
  */
+import { catalogueProductListSchema, type CatalogueProductRow } from "@civitasone/schemas/web";
+import { catalogueProductListSchema, type CatalogueProductRow } from "@civitasone/schemas/web";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import type { ModuleRowSummary } from "@civitasone/types";
 import { formatMoney, formatIndianDate, humanizeStatus, todayIST } from "@/lib/formatters";
@@ -103,7 +105,46 @@ function moduleLoader(path: string, key: string) {
     });
 }
 
-export const getCatalogueProducts = moduleLoader("/api/v1/catalogue/products", "catalogue.products");
+// ---------------------------------------------------------------------------
+// GAP-CATALOGUE-PRODUCTS-01 (COPY/TYPED): typed mapper and loader for the
+// catalogue-service GET /v1/catalogue/products list.
+// The API returns: id, name, description, lifecycleStatus, productCode,
+// category, taxRateBps, effectiveFrom, effectiveTo. Variant count and price
+// are NOT in the flat list (require tree / rates APIs respectively — see
+// categories and rates pages which already surface those). The typed mapper
+// validates the response shape with zod so an unexpected 200 body yields
+// source:"error" rather than a junk row.
+// ---------------------------------------------------------------------------
+
+/** Format basis-point tax rate as a human string: 1200 -> "Tax 12.00%". */
+function formatTaxBps(bps: number): string | undefined {
+  if (!bps) return undefined;
+  return `Tax ${(bps / 100).toFixed(2)}%`;
+}
+
+export function mapCatalogueProductRows(payload: unknown): ModuleRowSummary[] | null {
+  const parsed = catalogueProductListSchema.safeParse(payload);
+  if (!parsed.success) return null;
+  return parsed.data.data.map((p: CatalogueProductRow) => {
+    const meta = p.productCode ?? formatTaxBps(p.taxRateBps);
+    return {
+      id: p.id,
+      label: p.name,
+      ...(p.category ? { sublabel: p.category } : p.description ? { sublabel: p.description } : {}),
+      status: p.lifecycleStatus,
+      ...(meta ? { meta } : {}),
+      ...(p.productCode ? { code: p.productCode } : {}),
+    };
+  });
+}
+
+/** Typed product list loader (GAP-CATALOGUE-PRODUCTS-01). */
+export function getCatalogueProducts(): Promise<LoaderResult<ModuleRowSummary[]>> {
+  return fetchJson<unknown, ModuleRowSummary[]>("/api/v1/catalogue/products", [] as ModuleRowSummary[], {
+    telemetryKey: "catalogue.products",
+    mapResponse: mapCatalogueProductRows,
+  });
+}
 
 // ---------------------------------------------------------------------------
 // GAP-CATALOGUE-BUNDLES-01 (OTHER): the generic mapper showed a bundle only as

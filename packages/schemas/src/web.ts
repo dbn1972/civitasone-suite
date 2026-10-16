@@ -3265,3 +3265,30 @@ export const FinanceVendorSummarySchema = z.object({
   ratingDisplay: z.string(),
 });
 export const FinanceVendorSummaryListSchema = z.array(FinanceVendorSummarySchema);
+
+// ---------------------------------------------------------------------------
+// GAP-CATALOGUE-PRODUCTS-01: typed zod schema for the catalogue-service
+// GET /v1/catalogue/products list response.
+// Fields match catalogue-service/src/modules/products/schema.ts exactly.
+// Variant count and price are NOT in the flat list — those require the tree
+// and rates APIs respectively (surfaced in categories and rates pages).
+// ---------------------------------------------------------------------------
+export const catalogueProductRowSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable().optional(),
+  lifecycleStatus: z.string(),
+  productCode: z.string().nullable().optional(),
+  category: z.string().nullable().optional(),
+  /** Tax rate in basis points: 1200 = 12.00%. Zero = exempt / not set. */
+  taxRateBps: z.number().int().default(0),
+  effectiveFrom: z.string().nullable().optional(),
+  effectiveTo: z.string().nullable().optional(),
+});
+
+export const catalogueProductListSchema = z.object({
+  data: z.array(catalogueProductRowSchema),
+  meta: z.object({ page: z.number(), pageSize: z.number(), total: z.number() }).optional(),
+});
+
+export type CatalogueProductRow = z.infer<typeof catalogueProductRowSchema>;
