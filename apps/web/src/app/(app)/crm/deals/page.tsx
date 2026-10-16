@@ -1,6 +1,5 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader } from "../../../_components/ds";
-import { getTranslations } from "next-intl/server";
 import { getDeals } from "../../../_data/loaders";
 import { DealsTable } from "./DealsTable";
 
