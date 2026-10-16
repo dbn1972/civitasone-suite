@@ -59,6 +59,22 @@ describe("mapVehicles", () => {
     expect(none[0]!.driver).toBe("Unassigned");
   });
 
+  // GAP-FLEET-VEHICLES-03: driver name resolved from backend driverName field.
+  it("shows the driver name when the API provides driverName", () => {
+    const rows = mapVehicles([raw({ assignedDriverId: "abc-driver-id", driverName: "Ramesh Kumar" })])!;
+    expect(rows[0]!.driver).toBe("Ramesh Kumar");
+  });
+
+  it("falls back to id tag when driverName is absent", () => {
+    const rows = mapVehicles([raw({ assignedDriverId: "abcdef12-0000-0000-0000-000000000000", driverName: undefined })])!;
+    expect(rows[0]!.driver).toBe("Assigned (abcdef12)");
+  });
+
+  it("ignores a blank driverName and uses id tag instead", () => {
+    const rows = mapVehicles([raw({ assignedDriverId: "abcdef12-0000-0000-0000-000000000000", driverName: "   " })])!;
+    expect(rows[0]!.driver).toBe("Assigned (abcdef12)");
+  });
+
   // GAP-FLEET-VEHICLES-04: fuel enum is humanised.
   it("humanises the fuel enum", () => {
     expect(mapVehicles([raw({ fuelType: "diesel" })])![0]!.fuelType).toBe("Diesel");
