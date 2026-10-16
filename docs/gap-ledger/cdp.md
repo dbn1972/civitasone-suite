@@ -135,7 +135,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-IDENTITY-02  ·  MEDIUM  ·  confirmed  ·  theme CAP (was UUID)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD — view-only subtitle, no raw-id column, status not duplicated; identity/page.test.tsx covers all three)
 - **First-pass claim:** Rows are labelled by visitorRef, with an 8-char raw id in the ID column and the status repeated as Detail and Status (mapper ladder, _data.ts:59-76); there is no action to resolve an identity from this page although the description says 'pending identity resolution'.
 - **Verified evidence:** mapRows (_data.ts:41-97): id=row.id, label falls to visitorRef (l.67), sublabel = description ?? status (l.69-71) and status = row.status (l.78), so the same value renders in Detail and Status columns; ModuleListTable.tsx:50 prints id.slice(0,8) in an ID column. The table is read-only: no resolve/link action exists although description (identity/page.tsx:16) says 'pending identity resolution'. EntityPicker fix does not apply (visitors are anonymous, no name).
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/cdp/_data.ts`, `apps/web/src/app/(app)/cdp/identity/page.tsx`
