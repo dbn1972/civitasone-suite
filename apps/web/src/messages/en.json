@@ -14575,7 +14575,8 @@
     "dismissDescription": "This pair will not surface again as a duplicate. You can note why below.",
     "dismissConfirm": "Dismiss pair",
     "dismissReasonLabel": "Reason (optional)",
-    "dismissFailed": "Dismiss failed"
+    "dismissFailed": "Dismiss failed",
+    "page": "Page {page} of {total}"
   },
   "crmDocumentRegister": {
     "missingMandatory": "Missing mandatory",

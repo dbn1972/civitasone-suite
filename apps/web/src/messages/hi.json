@@ -14069,7 +14069,8 @@
     "dismissDescription": "यह जोड़ी दोबारा डुप्लिकेट के रूप में नहीं दिखाई देगी। आप नीचे कारण लिख सकते हैं।",
     "dismissConfirm": "जोड़ी खारिज करें",
     "dismissReasonLabel": "कारण (वैकल्पिक)",
-    "dismissFailed": "खारिज करना विफल रहा"
+    "dismissFailed": "खारिज करना विफल रहा",
+    "page": "पृष्ठ {page} / {total}"
   },
   "crmDocumentRegister": {
     "missingMandatory": "अनिवार्य दस्तावेज़ अनुपलब्ध",

@@ -212,6 +212,10 @@ export default function DedupCandidatesPage() {
   // paging yet; the list is sorted highest-confidence first so the strongest
   // matches are reviewed first and a long queue can be narrowed).
   const [minConfidence, setMinConfidence] = useState(0);
+  // GAP-CRM-DEDUP-CANDIDATES-04: client-side pagination so a large queue does
+  // not render hundreds of full cards at once.
+  const PAGE_SIZE = 15;
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Merge confirm state
   const [mergeTarget, setMergeTarget] = useState<DedupPair | null>(null);
@@ -299,6 +303,12 @@ export default function DedupCandidatesPage() {
   // Highest-confidence first (GAP-CRM-DEDUP-CANDIDATES-04), then apply the filter.
   const sortedPairs = [...pairs].sort((a, b) => b.confidence - a.confidence);
   const visiblePairs = sortedPairs.filter((p) => p.confidence >= minConfidence);
+  const totalPages = Math.max(1, Math.ceil(visiblePairs.length / PAGE_SIZE));
+  // Reset to page 1 when filter changes (handled implicitly: currentPage is
+  // clamped below so no useEffect needed for simple cases).
+  const safePage = Math.min(currentPage, totalPages);
+  const pageStart = (safePage - 1) * PAGE_SIZE;
+  const paginatedPairs = visiblePairs.slice(pageStart, pageStart + PAGE_SIZE);
 
   const mergeKeepName = mergeTarget
     ? (swapped[mergeTarget.pairId] ? mergeTarget.right : mergeTarget.left).name ?? t("primaryContact")
@@ -345,7 +355,7 @@ export default function DedupCandidatesPage() {
             <span>{t("minConfidence")}</span>
             <select
               value={String(minConfidence)}
-              onChange={(e) => setMinConfidence(Number(e.target.value))}
+              onChange={(e) => { setMinConfidence(Number(e.target.value)); setCurrentPage(1); }}
             >
               <option value="0">{t("confidenceAll")}</option>
               <option value="60">60%+</option>
@@ -386,7 +396,7 @@ export default function DedupCandidatesPage() {
           role="list"
           aria-label={t("listAria", { countText: String(visiblePairs.length), n: visiblePairs.length })}
         >
-          {visiblePairs.map((pair) => (
+          {paginatedPairs.map((pair) => (
             <div key={pair.pairId} role="listitem">
               <PairCard
                 pair={pair}
@@ -399,6 +409,30 @@ export default function DedupCandidatesPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {!loading && totalPages > 1 && (
+        <nav aria-label="Dedup pairs pagination" style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: 12, margin: "16px 0", fontSize: 14 }}>
+          <button
+            className="btn ghost"
+            disabled={safePage <= 1}
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            aria-label="Previous page"
+          >
+            ← Prev
+          </button>
+          <span aria-live="polite">
+            {t("page", { page: safePage, total: totalPages })}
+          </span>
+          <button
+            className="btn ghost"
+            disabled={safePage >= totalPages}
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            aria-label="Next page"
+          >
+            Next →
+          </button>
+        </nav>
       )}
 
       <ConfirmDialog
