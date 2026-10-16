@@ -59,7 +59,9 @@ export default async function DefinitionDetailPage({ params }: { params: { id: s
       </StatGrid>
 
       <div style={{ marginTop: 18 }}>
-        <Card title="Process graph" padding>
+        {/* GAP-WORKFLOW-DEFINITIONS-DETAIL-05 — renamed from "Process graph": renders steps and
+             transitions as an ordered list, not a diagram. */}
+        <Card title="Steps and transitions" padding>
           {def.nodes.length === 0 ? ( // ux-001-ok: `def` is only reachable past the earlier `if (!def) return` guard above (source==="error" implies a null def per the loader contract) -- this is a genuinely node-free definition, never a masked fetch failure
             <EmptyState icon="◻" title="No nodes" message="This definition has no nodes yet." />
           ) : (

@@ -90,3 +90,62 @@ describe("TaskActions approveBlockedReason — GAP-WORKFLOW-INSTANCES-DETAIL-02"
     expect(refreshMock).not.toHaveBeenCalled();
   });
 });
+
+describe("TaskActions isMaker — GAP-WORKFLOW-INSTANCES-DETAIL-05", () => {
+  beforeEach(() => { refreshMock.mockReset(); vi.restoreAllMocks(); });
+
+  it("Given isMaker=true, Approve is disabled with a maker-checker explanation", () => {
+    // Given: task assigned to me, but I am the maker (requesterId == me)
+    render(
+      <TaskActions
+        taskId="t1"
+        status="pending"
+        assigneeId={ME}
+        currentUserId={ME}
+        compact
+        isMaker
+      />,
+    );
+    // When: rendering the action buttons
+    const approve = screen.getByRole("button", { name: "Approve" });
+    // Then: Approve is disabled with the maker-checker message
+    expect(approve).toBeDisabled();
+    expect(screen.getByText(/submitted this request/i)).toBeInTheDocument();
+    // Return and Reject remain enabled
+    expect(screen.getByRole("button", { name: "Return" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Reject" })).toBeEnabled();
+  });
+
+  it("Given isMaker=false, Approve is enabled as normal", () => {
+    // Given: task assigned to me, and I am NOT the maker
+    render(
+      <TaskActions
+        taskId="t1"
+        status="pending"
+        assigneeId={ME}
+        currentUserId={ME}
+        compact
+        isMaker={false}
+      />,
+    );
+    // When: rendering the action buttons
+    // Then: Approve is enabled
+    expect(screen.getByRole("button", { name: "Approve" })).not.toBeDisabled();
+  });
+
+  it("isMaker disabled Approve takes precedence over approveBlockedReason=null", () => {
+    // Given: isMaker + no doc gate
+    render(
+      <TaskActions
+        taskId="t1"
+        status="pending"
+        assigneeId={ME}
+        currentUserId={ME}
+        compact
+        isMaker
+        approveBlockedReason={null}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Approve" })).toBeDisabled();
+  });
+});

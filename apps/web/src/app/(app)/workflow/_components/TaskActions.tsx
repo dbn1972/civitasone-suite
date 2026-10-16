@@ -129,9 +129,16 @@ export interface TaskActionsProps {
    * the authority (409 MANDATORY_DOCUMENTS_MISSING).
    */
   approveBlockedReason?: string | null;
+  /**
+   * GAP-WORKFLOW-INSTANCES-DETAIL-05 — when true, the signed-in user is the
+   * maker (submitter) of this workflow instance and must not self-approve.
+   * Approve is disabled with an explanatory tooltip. The server remains the
+   * authority (403 SELF_APPROVAL_DENIED); this is defence-in-depth + UX.
+   */
+  isMaker?: boolean;
 }
 
-export function TaskActions({ taskId, status, assigneeId = null, currentUserId = null, compact = false, approveBlockedReason = null }: TaskActionsProps) {
+export function TaskActions({ taskId, status, assigneeId = null, currentUserId = null, compact = false, approveBlockedReason = null, isMaker = false }: TaskActionsProps) {
   const router = useRouter();
   const tGate = useTranslations("workflowApproveGate");
   const { announce, node, banner } = useToast();
@@ -150,6 +157,12 @@ export function TaskActions({ taskId, status, assigneeId = null, currentUserId =
   const mineOrUnknown = currentUserId == null || assigneeId === currentUserId;
   const claimedByOther = !unassigned && currentUserId != null && assigneeId !== currentUserId;
   const canDecide = isPending && (unassigned ? false : mineOrUnknown);
+  // GAP-WORKFLOW-INSTANCES-DETAIL-05 — maker-checker pre-check: the submitter
+  // of this workflow instance may not self-approve. The server enforces this
+  // with 403 SELF_APPROVAL_DENIED; this disables Approve in the UI before the
+  // round-trip (convenience only — never the sole gate).
+  const makerBlockedReason = isMaker ? "You submitted this request and can’t approve it yourself (maker-checker)." : null;
+  const effectiveApproveBlockedReason = makerBlockedReason ?? approveBlockedReason;
 
   const complete = useCallback(
     async (decision: "approve" | "reject" | "return", reason?: string) => {
@@ -213,7 +226,7 @@ export function TaskActions({ taskId, status, assigneeId = null, currentUserId =
       )}
       {canDecide && (
         <>
-          {approveBlockedReason ? (
+          {effectiveApproveBlockedReason ? (
             <>
               <button
                 type="button"
@@ -230,7 +243,7 @@ export function TaskActions({ taskId, status, assigneeId = null, currentUserId =
                 className="pill warn np"
                 style={{ fontSize: 11, whiteSpace: "normal" }}
               >
-                {approveBlockedReason}
+                {effectiveApproveBlockedReason}
               </span>
             </>
           ) : (

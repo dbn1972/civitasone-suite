@@ -3,7 +3,6 @@ import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState, Sk
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { toHumanError } from "@/lib/messages";
 import { getSessionUserId } from "@/lib/auth/roleGuard";
-import { Breadcrumbs } from "../_components/Breadcrumbs";
 import { TasksTable } from "../_components/TasksTable";
 import { resolveUsers } from "@/lib/directory/resolveUsers";
 import { getTasks } from "../_data/workflowData";
@@ -60,7 +59,6 @@ export default async function MyTasksPage() {
 
   return (
     <>
-      <Breadcrumbs items={[{ label: "Workflow", href: "/workflow" }, { label: "My tasks" }]} />
       <PageHeader
         title="My tasks"
         subtitle="Your task inbox. Claim an unassigned task, then approve, return or reject it. Decisions are recorded in the immutable transition history (maker-checker)."
