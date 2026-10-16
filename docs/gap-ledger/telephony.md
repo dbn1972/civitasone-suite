@@ -144,7 +144,7 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 
 ### GAP-TELEPHONY-AGENTS-05  ·  MEDIUM  ·  partly  ·  theme FEATURE (was ROLEGATE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 PQ: blocked — NEEDS OWNER DECISION. Backend ready: POST /v1/telephony/agents/:id/status exists (agents/routes.ts) and allows agents to set own presence and supervisors to set anyone’s. Web page is intentionally read-only (no unsafe control to hide). Feature requires product sign-off to determine UI scope for presence override and queue reassignment controls, plus audit events design. No code change made.)
 - **First-pass claim:** Read-only board: no way to change presence, reassign a queue or open the agent's current call; no role check separates a supervisor from a line agent (ModuleGate only, layout.tsx:5).
 - **Verified evidence:** Page is read-only (agents/page.tsx:82, no actions) and telephony/layout.tsx:5-7 only wraps ModuleGate, so no supervisor/agent distinction - true as observed. Whether the API exposes presence/reassign endpoints or role claims for it cannot be verified (telephony-service absent), so it is a missing feature/decision, not a defect in existing code.
 - **Files to change:** `apps/web/src/app/(app)/telephony/agents/page.tsx`
