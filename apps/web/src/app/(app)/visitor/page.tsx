@@ -77,7 +77,7 @@ export default async function VisitorHomePage() {
       )}
       <StatGrid>
         <StatCard icon="🕓" tone="warn" label={t("statAwaiting")} value={pendingValue} />
-        <StatCard icon="📅" tone="info" label={t("statExpectedToday")} value={expectedToday} />
+        <StatCard icon="📅" tone="good" label={t("statExpectedToday")} value={expectedToday} />
         <StatCard icon="✅" tone="good" label={t("statUpcoming")} value={upcoming} />
       </StatGrid>
 

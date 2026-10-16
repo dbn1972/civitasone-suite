@@ -88,7 +88,7 @@ export default async function CampaignsPage() {
         </div>
       )}
       <StatGrid>
-        <StatCard icon="📣" tone="info" label="Campaigns Tracked" value={totals.campaigns.toLocaleString("en-IN")} />
+        <StatCard icon="📣" tone="neutral" label="Campaigns Tracked" value={totals.campaigns.toLocaleString("en-IN")} />
         <StatCard
           icon="💸"
           tone="bad"

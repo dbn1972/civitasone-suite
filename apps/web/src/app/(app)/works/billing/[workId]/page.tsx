@@ -117,7 +117,7 @@ export default async function BillingDetailPage({
       />
 
       {focusBill ? (
-        <div role="note" style={{ background: "var(--info-bg)", color: "var(--info)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
+        <div role="note" style={{ background: "var(--info-bg, #eff6ff)", color: "var(--info, #1e40af)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
           {t("openedFromRegister", { billNo: focusBill.billNo || "—" })}
         </div>
       ) : null}
@@ -125,7 +125,7 @@ export default async function BillingDetailPage({
       <StatGrid>
         <StatCard
           icon="💰"
-          tone="info"
+          tone="neutral"
           label="Total Bills"
           value={bills.length}
         />

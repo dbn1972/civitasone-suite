@@ -286,14 +286,14 @@ export function ScheduledJobsManager({ initialJobs, source, targets = null }: { 
       <DataSourceBadge source={source} />
       {notice && <div role="status" style={{ marginBottom: 14, fontSize: 13, color: "var(--mut)" }}>{notice}</div>}
       {error && (
-        <div role="alert" style={{ background: "var(--badbg)", color: "var(--bad)", border: "1px solid var(--badbg)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
+        <div role="alert" style={{ background: "#fef2f2", color: "#b42318", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
           {error}
         </div>
       )}
       <StatGrid>
-        <StatCard icon="⏰" tone="info" label="Total Jobs" value={jobs.length} />
+        <StatCard icon="⏰" tone="neutral" label="Total Jobs" value={jobs.length} />
         <StatCard icon="✅" tone="good" label="Enabled" value={enabledCount} />
-        <StatCard icon="🔄" tone="info" label="Running" value={runningCount} />
+        <StatCard icon="🔄" tone="neutral" label="Running" value={runningCount} />
         <StatCard icon="❌" tone="bad" label="Failed" value={failedCount} />
       </StatGrid>
 
@@ -391,14 +391,14 @@ export function ScheduledJobsManager({ initialJobs, source, targets = null }: { 
                 <label htmlFor="job-name">Name</label>
                 <input id="job-name" name="name" type="text" className="input" placeholder="Daily Backup" required />
                 {formError.fieldError("name") && (
-                  <span role="alert" style={{ display: "block", fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{formError.fieldError("name")}</span>
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("name")}</span>
                 )}
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="job-desc">Description</label>
                 <textarea id="job-desc" name="description" className="input" placeholder="What does this job do?" />
                 {formError.fieldError("description") && (
-                  <span role="alert" style={{ display: "block", fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{formError.fieldError("description")}</span>
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("description")}</span>
                 )}
               </div>
               <div style={{ marginBottom: 12 }}>
@@ -408,7 +408,7 @@ export function ScheduledJobsManager({ initialJobs, source, targets = null }: { 
                   {CRON_PRESETS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                 </datalist>
                 {formError.fieldError("cronExpression") && (
-                  <span role="alert" style={{ display: "block", fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{formError.fieldError("cronExpression")}</span>
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("cronExpression")}</span>
                 )}
               </div>
               <div style={{ marginBottom: 12 }}>
@@ -419,7 +419,7 @@ export function ScheduledJobsManager({ initialJobs, source, targets = null }: { 
                   {serviceOptions.map((o) => <option key={o.service} value={o.service} disabled={!o.schedulable}>{o.schedulable ? o.service : `${o.service} (allow-list required)`}</option>)}
                 </select>
                 {formError.fieldError("targetService") && (
-                  <span role="alert" style={{ display: "block", fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{formError.fieldError("targetService")}</span>
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("targetService")}</span>
                 )}
               </div>
               <div style={{ marginBottom: 12 }}>
@@ -428,16 +428,16 @@ export function ScheduledJobsManager({ initialJobs, source, targets = null }: { 
                 <small id="job-command-hint" style={{ display: "block", color: "var(--mut)", marginTop: 4 }}>
                   Lower-case, dot separated, starting with the service&apos;s own prefix. Destructive commands (delete, purge, wipe…) cannot be scheduled.
                 </small>
-                {commandError && <span role="alert" style={{ display: "block", fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{commandError}</span>}
+                {commandError && <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{commandError}</span>}
                 {formError.fieldError("targetCommand") && (
-                  <span role="alert" style={{ display: "block", fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{formError.fieldError("targetCommand")}</span>
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("targetCommand")}</span>
                 )}
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="job-payload">Payload (JSON)</label>
                 <textarea id="job-payload" name="payload" className="input" defaultValue="{}" rows={3} style={{ fontFamily: "monospace" }} />
                 {formError.fieldError("payload") && (
-                  <span role="alert" style={{ display: "block", fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{formError.fieldError("payload")}</span>
+                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("payload")}</span>
                 )}
               </div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -461,7 +461,7 @@ export function ScheduledJobsManager({ initialJobs, source, targets = null }: { 
             {historyLoading ? (
               <p style={{ color: "var(--mut)", textAlign: "center", marginTop: 48 }}>Loading…</p>
             ) : historyError ? (
-              <div role="alert" style={{ marginTop: 32, textAlign: "center", color: "var(--bad)", fontSize: 13 }}>
+              <div role="alert" style={{ marginTop: 32, textAlign: "center", color: "#b42318", fontSize: 13 }}>
                 <p style={{ margin: "0 0 12px" }}>{historyError}</p>
                 <Button variant="ghost" size="sm" onClick={() => { if (historyJobId) void openHistory(historyJobId); }}>Retry</Button>
               </div>
@@ -479,7 +479,7 @@ export function ScheduledJobsManager({ initialJobs, source, targets = null }: { 
                       <td>{formatIndianDateTime(rec.startedAt)}</td>
                       <td>{rec.durationMs ? `${(rec.durationMs / 1000).toFixed(1)}s` : "—"}</td>
                       <td>{getStatusBadge(rec.status)}</td>
-                      <td style={{ color: "var(--bad)", fontSize: 12 }}>{rec.errorMessage ?? "—"}</td>
+                      <td style={{ color: "#dc2626", fontSize: 12 }}>{rec.errorMessage ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>

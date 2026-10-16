@@ -55,7 +55,7 @@ export default function TenantProvisionPage() {
       {/* GAP-ADMIN-ONBOARDING-07: opened from a queue row (?requestId=), shows which request this visit is for. */}
       <ProvisionRequestFromUrl />
       <StatGrid>
-        <StatCard icon="🚀" tone="info" label="Total Steps" value={PROVISIONING_STEPS.length} />
+        <StatCard icon="🚀" tone="neutral" label="Total Steps" value={PROVISIONING_STEPS.length} />
         <StatCard icon="✅" tone="good" label="Required" value={required} />
         <StatCard icon="⚙️" tone="warn" label="Optional" value={optional} />
       </StatGrid>

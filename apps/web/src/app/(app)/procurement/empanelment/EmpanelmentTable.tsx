@@ -92,7 +92,7 @@ export function EmpanelmentTable({ vendors, source = "api", serverTotal = null }
   return (
     <>
       <StatGrid>
-        <StatCard icon="🏢" tone="info" label="Total Empanelled" value={total} />
+        <StatCard icon="🏢" tone="neutral" label="Total Empanelled" value={total} />
         <StatCard icon="✅" tone="good" label="Active" value={active} />
         <StatCard icon="⏰" tone="warn" label="Expiring Soon" value={expiring} />
         <StatCard icon="⭐" tone="bad" label="Avg. Rating (active)" value={avgRating} />

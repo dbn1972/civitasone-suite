@@ -29,7 +29,7 @@ export default async function LegalHearingsPage() {
         <StatCard icon="🗓️" tone="neutral" label="Hearings (wk)" value={thisWeek} />
         <StatCard icon="⏰" tone="warn" label="Tomorrow" value={tmrw} />
         <StatCard icon="✍️" tone="bad" label="Prep Pending" value={prepPending} />
-        <StatCard icon="👨‍⚖️" tone="info" label="Courts" value={counsels} />
+        <StatCard icon="👨‍⚖️" tone="neutral" label="Courts" value={counsels} />
       </div>
       {/* GAP-LEGAL-HEARINGS-04: pass IST today to the client component so
           the filter/countdown match the server-rendered stats without a

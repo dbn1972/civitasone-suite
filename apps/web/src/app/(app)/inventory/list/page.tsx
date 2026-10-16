@@ -70,7 +70,7 @@ export default async function InventoryListPage() {
         <StatGrid>
           <StatCard icon="📦" tone="neutral" label="Total SKUs" value={stats.total} />
           <StatCard icon="⚠️" tone="bad" label="Low Stock" value={stats.lowStock} />
-          <StatCard icon="💰" tone="info" label={stats.valueLabel} value={stats.valueText} />
+          <StatCard icon="💰" tone="neutral" label={stats.valueLabel} value={stats.valueText} />
         </StatGrid>
 
         {pendingFailed ? (

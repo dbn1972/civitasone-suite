@@ -107,7 +107,7 @@ export default async function AdminOperationsPage() {
             when PM2 is not reporting), not an opaque n/10. */}
         <StatCard icon="🏆" tone="neutral" label="Checks passing" value={`${passing}/${evaluated.length}`} />
         <StatCard icon="💚" tone="good" label="PM2 Online" value={`${ops.summary.onlineProcesses}/${ops.summary.totalProcesses}`} />
-        <StatCard icon="⚙️" tone="info" label="Workers Online" value={`${ops.summary.workersOnline}/${ops.summary.workersTotal}`} />
+        <StatCard icon="⚙️" tone="neutral" label="Workers Online" value={`${ops.summary.workersOnline}/${ops.summary.workersTotal}`} />
         {/* GAP-TENANT-ADMIN-OPERATIONS-03: derived from totals, matches the incident wording. */}
         <StatCard icon="🚨" tone="bad" label="Processes Not Online" value={notOnline} />
       </div>

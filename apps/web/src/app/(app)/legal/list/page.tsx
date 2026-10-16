@@ -33,7 +33,7 @@ export default async function LegalCasesListPage() {
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="📁" tone="neutral" label="Active Cases" value={active} />
-        <StatCard icon="🏛️" tone="info" label="Courts / Fora" value={courts} />
+        <StatCard icon="🏛️" tone="neutral" label="Courts / Fora" value={courts} />
         {/* GAP-LEGAL-LIST-02: all-time disposed; no FY disposal date on the
             summary payload to filter on, so the card is labelled honestly. */}
         <StatCard icon="✅" tone="good" label="Disposed" value={disposed} />

@@ -45,8 +45,8 @@ export default async function LibraryPage() {
       {/* Counts below are computed from `books`, which is [] whenever the fetch
           errored — never render them as authoritative facts in that case. */}
       <StatGrid>
-        <StatCard icon="📚" tone="info" label="Titles" value={errored ? "—" : totalTitles.toLocaleString("en-IN")} />
-        <StatCard icon="📦" tone="info" label="Total Copies" value={errored ? "—" : totalCopies.toLocaleString("en-IN")} />
+        <StatCard icon="📚" tone="neutral" label="Titles" value={errored ? "—" : totalTitles.toLocaleString("en-IN")} />
+        <StatCard icon="📦" tone="neutral" label="Total Copies" value={errored ? "—" : totalCopies.toLocaleString("en-IN")} />
         <StatCard icon="✅" tone="good" label="Copies Available" value={errored ? "—" : totalAvailable.toLocaleString("en-IN")} />
         <StatCard icon="🚫" tone="bad" label="Titles Out of Stock" value={errored ? "—" : outOfStock.toLocaleString("en-IN")} />
       </StatGrid>

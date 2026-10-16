@@ -65,7 +65,7 @@ export default async function ControlTowerPage() {
         backLabel="CRM"
       />
       <StatGrid>
-        <StatCard icon="🗺️" tone="info" label="Regions" value={regions.length.toLocaleString("en-IN")} />
+        <StatCard icon="🗺️" tone="neutral" label="Regions" value={regions.length.toLocaleString("en-IN")} />
         {/*
           GAP-CRM-CONTROL-TOWER-05: this is the sum of each exception
           category's count, not a distinct record count — one account can be

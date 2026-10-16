@@ -69,7 +69,7 @@ export default async function CdpProfilesPage() {
       <StatGrid>
         {/* GAP-CDP-PROFILES-02: on a load failure these must read "—", not a
             fabricated "0" that a steward could take as "zero profiles exist". */}
-        <StatCard icon="👤" tone="info" label="Total Profiles" value={errored ? "—" : total.toLocaleString("en-IN")} />
+        <StatCard icon="👤" tone="neutral" label="Total Profiles" value={errored ? "—" : total.toLocaleString("en-IN")} />
         <StatCard icon="🔗" tone="good" label="With Identity" value={errored ? "—" : withIdentity.toLocaleString("en-IN")} />
         <StatCard icon="🛰️" tone="warn" label="Multi-Source" value={errored ? "—" : multiSource.toLocaleString("en-IN")} />
         <StatCard icon="📊" tone="bad" label="Avg Attributes (loaded)" value={errored ? "—" : avgAttributes} />

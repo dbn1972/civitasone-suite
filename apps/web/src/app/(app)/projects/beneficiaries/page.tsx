@@ -23,7 +23,7 @@ export default async function BeneficiariesPage() {
     <div className="page-main wrap">
       <PageHeader title="Beneficiaries" subtitle="Track project beneficiaries, verification status and disbursements." back="/projects" />
       <StatGrid>
-        <StatCard icon="👥" tone="info" label="Total Beneficiaries" value={total ?? "—"} />
+        <StatCard icon="👥" tone="neutral" label="Total Beneficiaries" value={total ?? "—"} />
         <StatCard icon="✅" tone="good" label="Verified" value={verified ?? "—"} />
         <StatCard icon="⏳" tone="warn" label="Pending Verification" value={pending ?? "—"} />
         <StatCard icon="🚫" tone="bad" label="Rejected" value={rejected ?? "—"} />

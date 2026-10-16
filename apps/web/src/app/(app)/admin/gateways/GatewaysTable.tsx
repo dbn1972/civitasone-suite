@@ -18,7 +18,7 @@ export function GatewaysTable({ gateways, source = "api", unavailable = false }:
         const s = raw ? summarizeGateways(raw.map(toGatewayRow)) : null;
         return (
           <>
-            <StatCard icon="📡" tone="info" label="Total Gateways" value={s?.total ?? null} />
+            <StatCard icon="📡" tone="neutral" label="Total Gateways" value={s?.total ?? null} />
             <StatCard icon="✅" tone="good" label="Active" value={s?.active ?? null} />
             <StatCard icon="⚠️" tone="warn" label="Degraded" value={s?.degraded ?? null} />
             <StatCard icon="📨" tone="neutral" label="Standby" value={s?.standby ?? null} />

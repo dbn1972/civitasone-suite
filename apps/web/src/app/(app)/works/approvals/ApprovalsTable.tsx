@@ -104,7 +104,7 @@ export function ApprovalsTable({
   return (
     <div>
       <StatGrid>
-        <StatCard icon="📋" tone="info" label="Total AA" value={statValue(aaLive, aaData.length > 0, aaTrueTotal)} />
+        <StatCard icon="📋" tone="neutral" label="Total AA" value={statValue(aaLive, aaData.length > 0, aaTrueTotal)} />
         <StatCard icon="⏳" tone="warn" label={aaTruncated ? "Pending AA (shown)" : "Pending AA"} value={statValue(aaLive, aaData.length > 0, pendingCount(aaData))} />
         <StatCard icon="📑" tone="good" label="Total TS" value={statValue(tsLive, tsData.length > 0, tsTrueTotal)} />
         <StatCard icon="⏳" tone="bad" label={tsTruncated ? "Pending TS (shown)" : "Pending TS"} value={statValue(tsLive, tsData.length > 0, pendingCount(tsData))} />

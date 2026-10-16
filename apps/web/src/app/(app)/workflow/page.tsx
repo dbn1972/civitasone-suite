@@ -28,12 +28,12 @@ export default async function WorkflowHubPage() {
       ) : (
         <>
           <StatGrid>
-            <StatCard icon="🧩" tone="info" label="Total instances" value={a.totalInstances} />
+            <StatCard icon="🧩" tone="neutral" label="Total instances" value={a.totalInstances} />
             <StatCard icon="⏳" tone="warn" label="In progress" value={pendingInstances} />
             <StatCard icon="✅" tone="good" label="Completed" value={a.completedCount} />
             <StatCard
               icon="⏱"
-              tone="neutral"
+              tone="info"
               label="Avg cycle time"
               value={formatDuration(a.avgCycleTimeSeconds)}
             />

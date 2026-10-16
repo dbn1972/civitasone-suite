@@ -143,7 +143,7 @@ export default async function InsuranceClaimsPage({
         <LoadErrorState result={claimsRes} area="insurance claims" backHref="/assets/insurance" backLabel="Asset Insurance" />
       ) : (
         <StatGrid>
-          <StatCard icon="📋" tone="info" label="Total Claims" value={claims.length} />
+          <StatCard icon="📋" tone="neutral" label="Total Claims" value={claims.length} />
           <StatCard icon="⏳" tone="warn" label="Pending" value={pendingClaims} />
           <StatCard icon="✅" tone="good" label="Settled" value={settledClaims} />
           <StatCard icon="🗂️" tone="neutral" label="Closed" value={closedClaims} />

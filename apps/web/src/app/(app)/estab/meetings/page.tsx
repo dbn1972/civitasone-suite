@@ -92,7 +92,7 @@ export default async function MeetingsPage({
         <StatCard icon="📅" tone="good" label="Upcoming Meetings" value={errored ? "—" : upcoming.toLocaleString("en-IN")} />
         {/* GAP-ESTAB-MEETINGS-03: "In Progress" instead of "MOM Pending" */}
         <StatCard icon="📝" tone="warn" label="In Progress" value={errored ? "—" : inProgress.toLocaleString("en-IN")} />
-        <StatCard icon="✅" tone="info" label="Action Items" value={errored ? "—" : totalActionItems.toLocaleString("en-IN")} />
+        <StatCard icon="✅" tone="neutral" label="Action Items" value={errored ? "—" : totalActionItems.toLocaleString("en-IN")} />
         {/* GAP-ESTAB-MEETINGS-03: "Meetings held" instead of "Compliance" to
             avoid confusion with the Compliance page's distinct formula */}
         <StatCard icon="📊" tone="good" label="Meetings Held" value={errored ? "—" : completed > 0 ? `${completed}` : "—"} />

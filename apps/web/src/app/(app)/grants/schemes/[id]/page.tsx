@@ -82,7 +82,7 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
 
       <StatGrid>
         <StatCard icon="💰" tone="good" label="Total Budget" value={formatMoney(scheme.budgetMinor)} />
-        <StatCard icon="📤" tone="info" label="Disbursed" value={formatMoney(scheme.disbursedMinor)} />
+        <StatCard icon="📤" tone="neutral" label="Disbursed" value={formatMoney(scheme.disbursedMinor)} />
         <StatCard icon="🧮" tone="neutral" label="Remaining" value={formatMoney(remainingMinor)} />
         <StatCard icon="📈" tone="warn" label="Utilisation" value={formatPercent(utilisationPct)} />
       </StatGrid>

@@ -135,7 +135,7 @@ export default async function InventoryReconcilePage({
       ) : (
         <>
           {note ? (
-            <p role="note" style={{ fontSize: 13, color: "var(--warn)", margin: "0 0 8px" }}>
+            <p role="note" style={{ fontSize: 13, color: "#92400e", margin: "0 0 8px" }}>
               {note} Narrow the date range to see the rest; the totals below cover only the movements listed.
             </p>
           ) : null}
@@ -143,13 +143,13 @@ export default async function InventoryReconcilePage({
             <StatCard icon="📥" tone="good" label="Total In (Qty)" value={totalIn.toLocaleString("en-IN")} />
             <StatCard icon="📤" tone="bad" label="Total Out (Qty)" value={totalOut.toLocaleString("en-IN")} />
             <StatCard icon="🔧" tone="warn" label="Adjustments" value={adjustments.length.toLocaleString("en-IN")} />
-            <StatCard icon="🔁" tone="info" label="Transfers" value={transfers.length.toLocaleString("en-IN")} />
+            <StatCard icon="🔁" tone="neutral" label="Transfers" value={transfers.length.toLocaleString("en-IN")} />
             {unclassified.length > 0 ? (
               <StatCard icon="❔" tone="neutral" label="Unclassified rows" value={unclassified.length.toLocaleString("en-IN")} />
             ) : null}
             <StatCard
               icon="⚖️"
-              tone="info"
+              tone="neutral"
               label="Net Movement (Qty)"
               value={netQty.toLocaleString("en-IN")}
               up={netQty >= 0}

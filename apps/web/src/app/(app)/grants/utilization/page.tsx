@@ -33,7 +33,7 @@ export default async function GrantUtilizationPage() {
         <StatGrid>
           <StatCard icon="📋" tone="neutral" label="Total" value={failed ? dash : ucs.length} />
           <StatCard icon="✅" tone="good" label="Verified" value={failed ? dash : verified} />
-          <StatCard icon="📄" tone="info" label="Submitted" value={failed ? dash : submitted} />
+          <StatCard icon="📄" tone="neutral" label="Submitted" value={failed ? dash : submitted} />
           <StatCard icon="⏳" tone="warn" label="Pending" value={failed ? dash : pending} />
         </StatGrid>
         <Card title="Utilisation Certificates">

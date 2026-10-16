@@ -250,7 +250,7 @@ export default async function WorkProposalDetailPage({
         />
         <StatCard
           icon="🗂"
-          tone="info"
+          tone="neutral"
           label="Category"
           value={humanize(proposal.category)}
         />
@@ -262,7 +262,7 @@ export default async function WorkProposalDetailPage({
         />
         <StatCard
           icon="🏛"
-          tone="neutral"
+          tone="info"
           label="District"
           value={proposal.district}
         />

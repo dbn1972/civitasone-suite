@@ -42,10 +42,10 @@ export function EditionsTable({
     <>
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <StatGrid>
-        <StatCard icon="📦" tone="info" label="Total Editions" value={stat(c.total)} />
+        <StatCard icon="📦" tone="neutral" label="Total Editions" value={stat(c.total)} />
         <StatCard icon="✅" tone="good" label="Active" value={stat(c.active)} />
         <StatCard icon="🏢" tone="warn" label="Total Tenants" value={stat(c.tenants)} />
-        <StatCard icon="🗄️" tone="info" label="Deprecated" value={stat(c.deprecated)} />
+        <StatCard icon="🗄️" tone="neutral" label="Deprecated" value={stat(c.deprecated)} />
         <StatCard icon="📝" tone="neutral" label="Draft / other" value={stat(c.other)} />
       </StatGrid>
       <Card title="Editions">

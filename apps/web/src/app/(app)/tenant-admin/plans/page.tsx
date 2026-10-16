@@ -12,9 +12,9 @@ export default async function PlansPage() {
       <PageHeader title="Plans & Subscription" subtitle="Compare plans, upgrade, or manage your subscription." />
 
       <StatGrid>
-        <StatCard icon="📋" tone="info" label="Current Plan" value={currentPlan?.name ?? "—"} />
+        <StatCard icon="📋" tone="neutral" label="Current Plan" value={currentPlan?.name ?? "—"} />
         <StatCard icon="👥" tone="good" label="Max Users" value={currentPlan?.maxUsers?.toLocaleString("en-IN") ?? "—"} />
-        <StatCard icon="💾" tone="info" label="Storage" value={currentPlan ? `${currentPlan.storageGb} GB` : "—"} />
+        <StatCard icon="💾" tone="neutral" label="Storage" value={currentPlan ? `${currentPlan.storageGb} GB` : "—"} />
         {/* GAP-TENANT-ADMIN-PLANS-06: one shared paise formatter (formatMoney),
             no duplicated paise/100 float division. */}
         <StatCard icon="💰" tone="warn" label="Monthly Cost" value={currentPlan ? formatMoney(currentPlan.pricePerMonth) : "—"} />

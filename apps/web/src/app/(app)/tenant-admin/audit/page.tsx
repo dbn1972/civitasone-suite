@@ -57,7 +57,7 @@ export default async function TenantAuditPage({ searchParams }: { searchParams?:
         <StatCard icon="📋" tone="neutral" label={t("last24h")} value={errored ? t("noValue") : actionFilter ? last24h : summaryUnavailable ? t("noValue") : serverSummary!.last24h} />
         <StatCard icon="✅" tone="good" label={t("success")} value={errored ? t("noValue") : actionFilter ? successes : summaryUnavailable ? t("noValue") : serverSummary!.success} />
         <StatCard icon="❌" tone="bad" label={t("failures")} value={errored ? t("noValue") : actionFilter ? failures : summaryUnavailable ? t("noValue") : serverSummary!.failures} />
-        <StatCard icon="👥" tone="info" label={t("loaded")} value={errored ? t("noValue") : loaded} />
+        <StatCard icon="👥" tone="neutral" label={t("loaded")} value={errored ? t("noValue") : loaded} />
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
       {actionFilter && !errored && (

@@ -46,7 +46,7 @@ export default async function BoqPage() {
         }
       />
       <StatGrid>
-        <StatCard icon="📐" tone="info" label="Total Items" value={total} />
+        <StatCard icon="📐" tone="neutral" label="Total Items" value={total} />
         <StatCard icon="💰" tone="good" label="Total Amount" value={totalAmount} />
         <StatCard icon="📊" tone="warn" label="Scopes (shown)" value={scopes} />
         <StatCard

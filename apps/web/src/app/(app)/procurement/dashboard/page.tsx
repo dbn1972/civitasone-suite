@@ -58,7 +58,7 @@ export default async function ProcurementDashboardPage() {
           when the load errored — a "—" tile has nothing to act on. */}
       <StatGrid>
         <StatCard icon="📋" tone="info" label="Pending Indents" value={errored ? "—" : dashboard.pendingIndents} href={errored ? undefined : "/procurement/indents?status=pending"} />
-        <StatCard icon="📦" tone="info" label="Active POs" value={errored ? "—" : dashboard.activePOs} href={errored ? undefined : "/procurement/orders?status=active"} />
+        <StatCard icon="📦" tone="neutral" label="Active POs" value={errored ? "—" : dashboard.activePOs} href={errored ? undefined : "/procurement/orders?status=active"} />
         {/* GAP-PROCUREMENT-DASHBOARD-05: label the window so the KPI is not
             ambiguous - accepted GRNs received in the current IST calendar month. */}
         <StatCard icon="✅" tone="good" label="GRNs (MTD)" hint={t("grnsMtdHint")} value={errored ? "—" : dashboard.grnsThisMonth} href={errored ? undefined : "/procurement/grn"} />

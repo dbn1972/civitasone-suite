@@ -41,7 +41,7 @@ export default async function UnlinkedItemsPage() {
       <StatGrid>
         <StatCard icon="📦" tone="neutral" label={t("report.inventoryTotal")} value={num(c.inventoryTotal)} />
         <StatCard icon="🔗" tone="warn" label={t("report.inventoryUnlinked")} value={num(c.inventoryUnlinked)} />
-        <StatCard icon="🏬" tone="info" label={t("report.stockUnlinked")} value={num(c.stockUnlinked)} />
+        <StatCard icon="🏬" tone="neutral" label={t("report.stockUnlinked")} value={num(c.stockUnlinked)} />
         <StatCard icon="✅" tone="good" label={t("report.suggestions")} value={num(c.suggestions)} />
         <StatCard icon="🔍" tone="bad" label={t("report.ambiguous")} value={num(c.ambiguous)} />
       </StatGrid>

@@ -27,7 +27,7 @@ export default async function DelayAnalysisPage() {
     <div className="page-main wrap">
       <PageHeader title="Delay Analysis" subtitle="RAG dashboard — identify at-risk and delayed projects with root causes." back="/projects" />
       <StatGrid>
-        <StatCard icon="📋" tone="info" label="Total Projects" value={total ?? "—"} />
+        <StatCard icon="📋" tone="neutral" label="Total Projects" value={total ?? "—"} />
         <StatCard icon="🟢" tone="good" label="On Track" value={onTrack ?? "—"} />
         <StatCard icon="🟡" tone="warn" label="At Risk" value={atRisk ?? "—"} />
         <StatCard icon="🔴" tone="bad" label="Delayed" value={delayed ?? "—"} />

@@ -31,7 +31,7 @@ export default async function AnalyticsDashboardsPage() {
         <StatGrid>
           <StatCard icon="📊" tone="neutral" label="Total" value={errored ? "—" : dashboards.length} />
           <StatCard icon="✅" tone="good" label="Active" value={errored ? "—" : active} />
-          <StatCard icon="🔗" tone="info" label="Shared" value={errored ? "—" : shared} />
+          <StatCard icon="🔗" tone="neutral" label="Shared" value={errored ? "—" : shared} />
         </StatGrid>
         <Card title="Dashboards">
           {/* GAP-ANALYTICS-DASHBOARDS-02: on a failed load, show a retryable

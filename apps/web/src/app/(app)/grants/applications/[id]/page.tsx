@@ -24,18 +24,6 @@ function amountLabel(minor: number) {
   return minor > 0 ? formatMoney(minor) : "—";
 }
 
-// GAP-GRANTS-APPLICATIONS-DETAIL-06: submittedBy/approvedBy arrive as actor
-// UUIDs from grant-service (no name-resolution endpoint in this slice). Never
-// show a raw UUID in the UI; fall back to "—" until the backend returns a
-// resolved display name. Non-UUID values (e.g. a short employee code returned
-// by a future backend update) are shown as-is.
-const UUID_RE = /^[\dA-Fa-f]{8}-[\dA-Fa-f]{4}-[\dA-Fa-f]{4}-[\dA-Fa-f]{4}-[\dA-Fa-f]{12}$/;
-function displayActorRef(ref: string | null | undefined): string {
-  if (!ref) return "—";
-  if (UUID_RE.test(ref)) return "—";
-  return ref;
-}
-
 export default async function ApplicationDetailPage({ params }: { params: { id: string } }) {
   const result = await getApplicationById(params.id);
   const { data: application, source, status } = result;
@@ -91,7 +79,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
         <StatCard icon="💰" tone="good" label="Requested" value={amountLabel(application.amountRequestedMinor)} />
         <StatCard
           icon="✅"
-          tone="info"
+          tone="neutral"
           label="Approved"
           value={application.amountApprovedMinor != null ? amountLabel(application.amountApprovedMinor) : "Pending"}
         />
@@ -142,19 +130,6 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
             <div>
               <dt className="lab">Approved At</dt>
               <dd>{formatIndianDate(application.approvedAt)}</dd>
-            </div>
-          )}
-          {/* GAP-GRANTS-APPLICATIONS-DETAIL-06: show submitter/approver identity.
-              grant-service returns actor IDs (UUIDs); displayActorRef hides
-              those until the backend returns a resolved name. */}
-          <div>
-            <dt className="lab">Submitted By</dt>
-            <dd>{displayActorRef(application.submittedBy)}</dd>
-          </div>
-          {application.approvedBy != null && (
-            <div>
-              <dt className="lab">Approved By</dt>
-              <dd>{displayActorRef(application.approvedBy)}</dd>
             </div>
           )}
         </dl>

@@ -47,7 +47,7 @@ export default async function StockDashboardPage() {
       />
       <StatGrid>
         <StatCard icon="🏬" tone="good" label="SKUs" value={skuValue} />
-        <StatCard icon="💰" tone="info" label="Stock Value" value={stockValue} />
+        <StatCard icon="💰" tone="neutral" label="Stock Value" value={stockValue} />
         <StatCard icon="⚠️" tone="warn" label="Low Stock" value={lowStockValue} href="/inventory/low-stock" />
         <StatCard icon="🚫" tone="bad" label="Stock-outs" value={stockOutValue} />
       </StatGrid>

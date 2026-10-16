@@ -69,12 +69,12 @@ export default async function DevicesPage() {
       />
 
       <StatGrid>
-        <StatCard icon="📱" tone="info" label="Total Devices" value={items.length} />
+        <StatCard icon="📱" tone="neutral" label="Total Devices" value={items.length} />
         <StatCard icon="✅" tone="good" label="Trusted" value={trusted} />
         <StatCard icon="⚠️" tone="warn" label="Flagged" value={flagged} />
         <StatCard icon="🚫" tone="bad" label="Blocked" value={blocked} />
         <StatCard icon="🤖" tone="neutral" label="Android" value={android} />
-        <StatCard icon="🍎" tone="neutral" label="iOS" value={ios} />
+        <StatCard icon="🍎" tone="info" label="iOS" value={ios} />
         <StatCard icon="🌐" tone="neutral" label="Web / other" value={other} />
       </StatGrid>
 

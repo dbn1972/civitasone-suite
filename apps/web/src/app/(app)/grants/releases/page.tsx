@@ -55,7 +55,7 @@ export default async function GrantReleasesPage() {
               meaning is explicit. */}
           <StatCard
             icon="💰"
-            tone="info"
+            tone="neutral"
             label="Total Released"
             value={formatMoney(totalReleased)}
             hint="Processed + credited releases only (excludes pending)."

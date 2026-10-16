@@ -39,7 +39,7 @@ export default async function NotificationPrefsPage() {
         <>
           <div className="grid g-4" style={{ marginBottom: 18 }}>
             <StatCard icon="🔔" tone="neutral" label="Event Types" value="—" />
-            <StatCard icon="📧" tone="info" label="Email On" value="—" />
+            <StatCard icon="📧" tone="neutral" label="Email On" value="—" />
             <StatCard icon="📧" tone="bad" label="Email Off" value="—" />
             <StatCard icon="🖥️" tone="warn" label="In-App On" value="—" />
           </div>
@@ -51,7 +51,7 @@ export default async function NotificationPrefsPage() {
         <>
           <div className="grid g-4" style={{ marginBottom: 18 }}>
             <StatCard icon="🔔" tone="neutral" label="Event Types" value={total} />
-            <StatCard icon="📧" tone="info" label="Email On" value={emailEnabled} />
+            <StatCard icon="📧" tone="neutral" label="Email On" value={emailEnabled} />
             <StatCard icon="📧" tone="bad" label="Email Off" value={emailOff} />
             <StatCard icon="🖥️" tone="warn" label="In-App On" value={inAppEnabled} />
           </div>

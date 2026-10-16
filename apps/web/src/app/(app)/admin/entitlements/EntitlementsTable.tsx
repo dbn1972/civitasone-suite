@@ -30,11 +30,11 @@ export function EntitlementsTable({ entitlements, source = "api", unavailable = 
         const s = raw ? summarizeEntitlements(raw.map(toEntitlementRow)) : null;
         return (
           <>
-            <StatCard icon="🔑" tone="info" label="Total Entitlements" value={s?.total ?? null} />
+            <StatCard icon="🔑" tone="neutral" label="Total Entitlements" value={s?.total ?? null} />
             <StatCard icon="✅" tone="good" label="Active" value={s?.active ?? null} />
             <StatCard icon="⛔" tone="warn" label="Revoked" value={s?.revoked ?? null} />
             <StatCard icon="⏸️" tone="neutral" label="Other inactive" value={s?.otherInactive ?? null} />
-            <StatCard icon="📦" tone="info" label="Editions" value={s?.editions ?? null} />
+            <StatCard icon="📦" tone="neutral" label="Editions" value={s?.editions ?? null} />
             <StatCard icon="⚠️" tone="bad" label="At / over limit" value={s?.atLimit ?? null} />
           </>
         );

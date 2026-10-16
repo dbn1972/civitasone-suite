@@ -97,7 +97,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
         }
       />
       <StatGrid>
-        <StatCard icon="📦" tone="info" label="Modules Enabled" value={enabledCount} />
+        <StatCard icon="📦" tone="neutral" label="Modules Enabled" value={enabledCount} />
         <StatCard icon="👥" tone="good" label="Module seats in use" value={seats ?? "—"} />
         <StatCard icon="🏢" tone="warn" label="Edition" value={tenant.edition} />
         <StatCard icon="🔒" tone={tenantStatCardTone(tenant.status)} label="Status" value={statusLabel} />

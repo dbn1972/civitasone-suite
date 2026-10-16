@@ -20,10 +20,10 @@ export default async function DomainPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🌐" tone="info" label="Total Domains" value={domains.length} />
+        <StatCard icon="🌐" tone="neutral" label="Total Domains" value={domains.length} />
         <StatCard icon="✅" tone="good" label="Active" value={activeDomains} />
         <StatCard icon="⏳" tone="warn" label="Pending" value={pendingDomains} />
-        <StatCard icon="🔒" tone="info" label="SSL Issued" value={domains.filter((d) => d.sslStatus === "issued").length} />
+        <StatCard icon="🔒" tone="neutral" label="SSL Issued" value={domains.filter((d) => d.sslStatus === "issued").length} />
       </StatGrid>
 
       <DomainClient domains={domains} source={source} />

@@ -59,6 +59,7 @@ export default async function MyTasksPage() {
 
   return (
     <>
+      <Breadcrumbs items={[{ label: "Workflow", href: "/workflow" }, { label: "My tasks" }]} />
       <PageHeader
         title="My tasks"
         subtitle="Your task inbox. Claim an unassigned task, then approve, return or reject it. Decisions are recorded in the immutable transition history (maker-checker)."
@@ -67,7 +68,7 @@ export default async function MyTasksPage() {
       />
 
       <StatGrid>
-        <StatCard icon="📥" tone="info" label="Open tasks" value={open} />
+        <StatCard icon="📥" tone="neutral" label="Open tasks" value={open} />
         <StatCard icon="🙋" tone="warn" label="Unassigned" value={unassigned} />
         <StatCard
           icon="✋"

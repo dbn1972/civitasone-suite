@@ -65,7 +65,7 @@ export default async function WorkflowInstancesPage({
       />
 
       <StatGrid>
-        <StatCard icon="🧩" tone="info" label="Total" value={filtered ? instances.length : total} />
+        <StatCard icon="🧩" tone="neutral" label="Total" value={filtered ? instances.length : total} />
         <StatCard icon="⏳" tone="warn" label="In progress" value={filtered ? null : active} />
         <StatCard icon="✅" tone="good" label="Completed" value={filtered ? null : completed} />
         <StatCard icon="🚫" tone="bad" label="Cancelled" value={filtered ? null : cancelled} />

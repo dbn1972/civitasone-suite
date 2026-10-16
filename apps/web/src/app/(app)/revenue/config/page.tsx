@@ -107,7 +107,7 @@ export default async function RateConfigPage({
       ) : (
         <>
           <StatGrid>
-            <StatCard icon="🏷️" tone="info" label="Rate Heads" value={rateHeads.length} />
+            <StatCard icon="🏷️" tone="neutral" label="Rate Heads" value={rateHeads.length} />
             <StatCard icon="✅" tone="good" label="Active Rate Heads" value={activeHeads} />
             <StatCard
               icon="📶"

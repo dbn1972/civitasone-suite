@@ -57,7 +57,7 @@ export default async function ProjectsDashboardPage() {
       />
       <StatGrid>
         <StatCard icon="🏛️" tone="info" label="Schemes" value={anyError ? "—" : schemes.length} />
-        <StatCard icon="📁" tone="info" label="Projects" value={anyError ? "—" : data.totalProjects.toLocaleString("en-IN")} />
+        <StatCard icon="📁" tone="neutral" label="Projects" value={anyError ? "—" : data.totalProjects.toLocaleString("en-IN")} />
         <StatCard
           icon="💰"
           tone="good"
@@ -91,7 +91,7 @@ export default async function ProjectsDashboardPage() {
         ) : (
           <>
             {countsDiffer && (
-              <p role="note" style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 8px" }}>
+              <p role="note" style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
                 Dashboard counts all {data.totalProjects.toLocaleString("en-IN")} projects across every
                 status; the table below lists {rows.length.toLocaleString("en-IN")}.
               </p>

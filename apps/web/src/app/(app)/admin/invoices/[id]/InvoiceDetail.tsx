@@ -45,7 +45,7 @@ export function InvoiceDetail({ state }: { state: InvoiceDetailState }) {
         <Button type="button" variant="ghost" size="sm" onClick={() => window.print()}>{t("print")}</Button>
       </div>
       <StatGrid>
-        <StatCard icon="🧾" tone="info" label={t("total")} value={money(inv.totalMinor)} />
+        <StatCard icon="🧾" tone="neutral" label={t("total")} value={money(inv.totalMinor)} />
         <StatCard icon="✅" tone="good" label={t("paid")} value={money(inv.paidMinor)} />
         <StatCard icon="⏳" tone="warn" label={t("outstanding")} value={money(inv.outstandingMinor)} />
         <StatCard icon="🧮" tone="neutral" label={t("tax")} value={money(inv.taxMinor)} />

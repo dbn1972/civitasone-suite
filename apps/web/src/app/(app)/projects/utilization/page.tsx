@@ -33,7 +33,7 @@ export default function UtilizationPage() {
     <div className="page-main wrap">
       <PageHeader title="Fund Utilization" subtitle="Track allocation, releases and utilization across all projects." back="/projects" />
       <StatGrid>
-        <StatCard icon="💰" tone="info" label="Total Allocated" value={hasData ? formatCrore(totals.allocatedMinor) : "—"} />
+        <StatCard icon="💰" tone="neutral" label="Total Allocated" value={hasData ? formatCrore(totals.allocatedMinor) : "—"} />
         <StatCard icon="📊" tone="good" label="Utilized" value={hasData ? formatCrore(totals.utilisedMinor) : "—"} />
         <StatCard icon="📈" tone="warn" label="Utilization % (of allocated)" value={hasData ? formatPercent(totals.utilisationPct) : "—"} />
         <StatCard icon="🏦" tone="neutral" label="Unspent Balance" value={hasData ? formatCrore(totals.unspentMinor) : "—"} />

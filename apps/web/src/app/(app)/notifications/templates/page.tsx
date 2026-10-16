@@ -127,7 +127,7 @@ export default function NotificationTemplatesPage() {
       />
       {!error ? <DataSourceBadge provenance={provenance} cachedAt={cachedAt} offline={offline} /> : null}
       <StatGrid>
-        <StatCard icon="📝" tone="info" label="Templates" value={stat(templateCount)} />
+        <StatCard icon="📝" tone="neutral" label="Templates" value={stat(templateCount)} />
         <StatCard icon="✅" tone="good" label="Active" value={stat(active)} />
         <StatCard icon="🗂" tone="neutral" label="Superseded" value={stat(superseded)} />
       </StatGrid>

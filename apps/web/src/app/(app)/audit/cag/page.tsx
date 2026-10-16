@@ -34,7 +34,7 @@ export default async function CagPage() {
       />
 
       <StatGrid>
-        <StatCard icon="📜" tone="info" label="Paragraphs" value={totalParas ?? "—"} />
+        <StatCard icon="📜" tone="neutral" label="Paragraphs" value={totalParas ?? "—"} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled" value={settled ?? "—"} />
         <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={pending ?? "—"} />
         {unrecognised !== null && unrecognised > 0 ? (

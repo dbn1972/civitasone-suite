@@ -34,7 +34,7 @@ export default async function AdminSessionsPage() {
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="🖥️" tone="neutral" label="Active Sessions" value={errored ? "—" : active} />
-        <StatCard icon="📍" tone="info" label="Distinct networks" value={errored ? "—" : distinctNetworks} />
+        <StatCard icon="📍" tone="neutral" label="Distinct networks" value={errored ? "—" : distinctNetworks} />
         <StatCard icon="🔐" tone="good" label="MFA Verified" value={errored ? "—" : mfaVerified} />
         <StatCard icon="⚠️" tone="bad" label="Active without MFA" value={errored ? "—" : activeWithoutMfa} />
       </div>

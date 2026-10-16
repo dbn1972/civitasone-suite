@@ -60,7 +60,7 @@ export function BillingRegister({
   return (
     <>
       <StatGrid>
-        <StatCard icon="💰" tone="info" label="Total Bills" value={trueTotal} />
+        <StatCard icon="💰" tone="neutral" label="Total Bills" value={trueTotal} />
         <StatCard icon="📝" tone="neutral" label={truncated ? "Draft (shown)" : "Draft"} value={draft} />
         <StatCard icon="⏳" tone="warn" label={truncated ? "Pending (shown)" : "Pending"} value={pending} />
         <StatCard icon="✅" tone="good" label={truncated ? "Finalized (shown)" : "Finalized"} value={finalized} />

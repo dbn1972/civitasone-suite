@@ -22,8 +22,6 @@ function badge(color: string, text: string) {
 const inp: React.CSSProperties = { width: "100%", padding: "7px 10px", borderRadius: 7, border: "1px solid var(--line)", fontSize: 13, fontFamily: "inherit", color: "var(--ink)", boxSizing: "border-box" as const };
 
 /* ─── Editable org-level list ───────────────────────────────────────── */
-// COMP-014: real per-tenant org-hierarchy-levels taxonomy (admin-service
-// GET/PUT /v1/admin/org-hierarchy-levels). See git history for rationale.
 export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLevel[]; source: "api" | "error" }) {
   const [levels, setLevels] = useState<OrgLevel[]>(initialLevels);
   const [editId, setEditId] = useState<string | null>(null);
@@ -140,12 +138,12 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
     <div>
       <DataSourceBadge source={source} message="Couldn't load the org hierarchy configuration — showing nothing" />
       {notice ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12.5, color: "var(--good)", marginBottom: 12, padding: "8px 12px", background: "var(--goodbg)", borderRadius: 8 }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 12.5, color: "var(--good, #027a48)", marginBottom: 12, padding: "8px 12px", background: "var(--goodbg, #ecfdf3)", borderRadius: 8 }}>
           {notice}
         </p>
       ) : null}
       {error ? (
-        <p role="alert" style={{ fontSize: 12.5, color: "var(--bad)", marginBottom: 12 }}>{error}</p>
+        <p role="alert" style={{ fontSize: 12.5, color: "var(--bad, #b42318)", marginBottom: 12 }}>{error}</p>
       ) : null}
 
       {/* Hierarchy table */}
@@ -171,7 +169,7 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13.5 }}>
             <thead>
-              <tr style={{ background: "var(--line2)", borderBottom: "1px solid var(--line)" }}>
+              <tr style={{ background: "var(--line2, #f8fafc)", borderBottom: "1px solid var(--line)" }}>
                 <th style={{ padding: "10px 16px", textAlign: "start", fontWeight: 650, fontSize: 12, color: "var(--ink2)", width: 96 }}>Reorder</th>
                 <th style={{ padding: "10px 16px", textAlign: "start", fontWeight: 650, fontSize: 12, color: "var(--ink2)" }}>Level</th>
                 <th style={{ padding: "10px 16px", textAlign: "start", fontWeight: 650, fontSize: 12, color: "var(--ink2)" }}>Name</th>
@@ -196,7 +194,7 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
                     onDragEnd={onDragEnd}
                     style={{
                       borderBottom: "1px solid var(--line)",
-                      background: isDragging ? "var(--line2)" : isDragOver ? "var(--primary-light)" : "transparent",
+                      background: isDragging ? "var(--line2, #f8fafc)" : isDragOver ? "var(--primary-light, #eff6ff)" : "transparent",
                       opacity: isDragging ? 0.5 : 1,
                       transition: "background 0.1s",
                     }}
@@ -232,7 +230,7 @@ export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLev
                       {isEditing ? (
                         <>
                           <input style={inp} value={draft?.label ?? ""} onChange={(e) => setDraft((d) => d ? { ...d, label: e.target.value } : d)} aria-label="Level name" aria-invalid={!!draftError} aria-describedby={draftError ? `org-draft-error-${level.id}` : undefined} />
-                          {draftError && <span id={`org-draft-error-${level.id}`} role="alert" style={{ display: "block", fontSize: 11.5, color: "var(--bad)", marginTop: 4 }}>{draftError}</span>}
+                          {draftError && <span id={`org-draft-error-${level.id}`} role="alert" style={{ display: "block", fontSize: 11.5, color: "var(--bad, #b42318)", marginTop: 4 }}>{draftError}</span>}
                         </>
                       ) : (
                         <span style={{ fontWeight: 600 }}>{level.label}</span>

@@ -244,10 +244,10 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
       </Card>
 
       <StatGrid>
-        <StatCard icon="📅" tone="info" label="Expected Today" value={expectedHere.length.toLocaleString("en-IN")} />
+        <StatCard icon="📅" tone="good" label="Expected Today" value={expectedHere.length.toLocaleString("en-IN")} />
         <StatCard icon="🟢" tone="good" label="Inside Now" value={rosterState === "ok" ? roster.length.toLocaleString("en-IN") : "—"} />
         <StatCard icon="⏰" tone="bad" label="Overstays" value={rosterState === "ok" ? overstays.toLocaleString("en-IN") : "—"} />
-        <StatCard icon="✔️" tone="info" label="Verified (session)" value={verifiedToday.toLocaleString("en-IN")} />
+        <StatCard icon="✔️" tone="neutral" label="Verified (session)" value={verifiedToday.toLocaleString("en-IN")} />
       </StatGrid>
 
       {/* Verify pass */}
@@ -272,11 +272,11 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
         </form>
 
         {verifyError && (
-          <p role="alert" style={{ marginTop: 10, fontSize: 13, color: "var(--bad)" }}>⚠ {verifyError}</p>
+          <p role="alert" style={{ marginTop: 10, fontSize: 13, color: "#b91c1c" }}>⚠ {verifyError}</p>
         )}
 
         {verifyResult && (
-          <div style={{ marginTop: 14, padding: 14, borderRadius: 10, border: "1px solid var(--line)", background: verifyResult.valid ? "var(--primary-soft)" : "var(--badbg)" }}>
+          <div style={{ marginTop: 14, padding: 14, borderRadius: 10, border: "1px solid var(--line)", background: verifyResult.valid ? "var(--primary-soft)" : "#fef2f2" }}>
             {verifyResult.valid ? (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
@@ -325,7 +325,7 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
           <EmptyState icon="📅" title="No approved visitors expected today" message="Approved visit requests scheduled for today will appear here." />
         ) : (
           <div className="tbl-wrap">
-            <table className="tbl tbl--stack">
+            <table className="tbl" style={{ width: "100%" }}>
               <thead>
                 <tr>
                   <th style={labelStyle}>Visitor</th>
@@ -338,7 +338,7 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
               <tbody>
                 {expectedHere.map((v) => (
                   <tr key={v.id}>
-                    <td data-label="Visitor">
+                    <td>
                       <div style={{ fontWeight: 600 }}>{v.visitorName}</div>
                       {/* GAP-VISITOR-GUARD-03 (DPDP): visitor phone is masked
                           for every guard viewer; no reveal here (no audited
@@ -361,7 +361,7 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
 
       {/* Inside now */}
       {actionError && (
-        <div className="alert" role="alert" style={{ borderColor: "var(--badbd)", color: "var(--bad)" }}>⚠ {actionError}</div>
+        <div className="alert" role="alert" style={{ borderColor: "#fca5a5", color: "var(--bad)" }}>⚠ {actionError}</div>
       )}
       <Card
         title={`Inside now (${rosterState === "ok" ? roster.length : "—"})`}
@@ -386,7 +386,7 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
         )}
         {rosterState === "ok" && roster.length > 0 && (
           <div className="tbl-wrap">
-            <table className="tbl tbl--stack">
+            <table className="tbl" style={{ width: "100%" }}>
               <thead>
                 <tr>
                   <th style={labelStyle}>Visitor</th>

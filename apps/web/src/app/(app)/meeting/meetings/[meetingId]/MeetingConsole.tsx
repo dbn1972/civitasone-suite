@@ -36,14 +36,6 @@ import {
 
 type Src = "api" | "error";
 
-/** GAP-MEETING-MEETINGS-MEETINGID-03: caller-scoped permissions derived from session roles. */
-type ViewerPermissions = {
-  canTransition: boolean;
-  canCheckIn: boolean;
-  canCast: boolean;
-  canConclude: boolean;
-};
-
 type Props = {
   meeting: Meeting;
   agenda: AgendaItem[];
@@ -52,8 +44,6 @@ type Props = {
   attendanceSource: Src;
   initialActiveVotes: ActiveVote[];
   activeVotesSource: Src;
-  /** GAP-MEETING-MEETINGS-MEETINGID-03: session-derived permissions. */
-  viewerPermissions: ViewerPermissions;
 };
 
 const labelStyle: React.CSSProperties = {
@@ -153,13 +143,13 @@ function TallyBar({
         }}
         aria-hidden
       >
-        <div style={{ width: `${pct(votesFor)}%`, background: "var(--good)" }} />
-        <div style={{ width: `${pct(votesAgainst)}%`, background: "var(--bad)" }} />
-        <div style={{ width: `${pct(votesAbstain)}%`, background: "var(--mut)" }} />
+        <div style={{ width: `${pct(votesFor)}%`, background: "#16a34a" }} />
+        <div style={{ width: `${pct(votesAgainst)}%`, background: "#dc2626" }} />
+        <div style={{ width: `${pct(votesAbstain)}%`, background: "#9ca3af" }} />
       </div>
       <div style={{ display: "flex", gap: 14, marginTop: 6, fontSize: 12.5, ...monoStyle }}>
-        <span style={{ color: "var(--good)" }}>For {votesFor}</span>
-        <span style={{ color: "var(--bad)" }}>Against {votesAgainst}</span>
+        <span style={{ color: "#16a34a" }}>For {votesFor}</span>
+        <span style={{ color: "#dc2626" }}>Against {votesAgainst}</span>
         <span style={{ color: "var(--ink2)" }}>Abstain {votesAbstain}</span>
         <span style={{ color: "var(--ink2)", marginLeft: "auto" }}>Total {total}</span>
       </div>
@@ -175,7 +165,6 @@ export function MeetingConsole({
   attendanceSource,
   initialActiveVotes,
   activeVotesSource,
-  viewerPermissions,
 }: Props) {
   const router = useRouter();
   const [status, setStatus] = useState(meeting.status);
@@ -329,7 +318,7 @@ export function MeetingConsole({
         </div>
       )}
       {error && (
-        <div className="alert" role="alert" style={{ borderColor: "var(--badbd)", color: "var(--bad)" }}>
+        <div className="alert" role="alert" style={{ borderColor: "#fca5a5", color: "#b91c1c" }}>
           ⚠ {error}
         </div>
       )}
@@ -365,26 +354,24 @@ export function MeetingConsole({
             )}
           </div>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {/* GAP-MEETING-MEETINGS-MEETINGID-03: lifecycle buttons only for transition-authorised roles */}
-            {viewerPermissions.canTransition &&
-              transitions.map((t) => (
-                <button
-                  key={t.toState}
-                  type="button"
-                  className={t.danger ? "btn danger" : "btn primary"}
-                  disabled={busy !== null}
-                  onClick={() => {
-                    if (t.danger) {
-                      setTransitionErr(undefined);
-                      setPendingTransition({ toState: t.toState, label: t.label });
-                    } else {
-                      void onTransition(t.toState);
-                    }
-                  }}
-                >
-                  {busy === `transition:${t.toState}` ? "…" : t.label}
-                </button>
-              ))}
+            {transitions.map((t) => (
+              <button
+                key={t.toState}
+                type="button"
+                className={t.danger ? "btn danger" : "btn primary"}
+                disabled={busy !== null}
+                onClick={() => {
+                  if (t.danger) {
+                    setTransitionErr(undefined);
+                    setPendingTransition({ toState: t.toState, label: t.label });
+                  } else {
+                    void onTransition(t.toState);
+                  }
+                }}
+              >
+                {busy === `transition:${t.toState}` ? "…" : t.label}
+              </button>
+            ))}
             <Link className="btn ghost" href={`/meeting/meetings/${meeting.id}/minutes`}>
               Minutes →
             </Link>
@@ -392,57 +379,35 @@ export function MeetingConsole({
         </div>
       </Card>
 
-      {/* GAP-MEETING-MEETINGS-MEETINGID-07: in-page anchor nav for narrow screens.
-          At ≤375px a long single-column console is unreachable without scrolling;
-          these skip-links let users jump directly to the section they need. */}
-      <nav
-        aria-label="Jump to section"
-        style={{
-          display: "flex",
-          gap: 8,
-          flexWrap: "wrap",
-          fontSize: 13,
-          marginBottom: 4,
-        }}
-      >
-        <a href="#section-stats" className="lnk" style={{ fontSize: 13 }}>Stats</a>
-        <span aria-hidden="true" style={{ color: "var(--ink3)" }}>·</span>
-        <a href="#section-agenda" className="lnk" style={{ fontSize: 13 }}>Agenda</a>
-        <span aria-hidden="true" style={{ color: "var(--ink3)" }}>·</span>
-        <a href="#section-attendance" className="lnk" style={{ fontSize: 13 }}>Attendance</a>
-        <span aria-hidden="true" style={{ color: "var(--ink3)" }}>·</span>
-        <a href="#section-voting" className="lnk" style={{ fontSize: 13 }}>Voting</a>
-      </nav>
-
-      <div id="section-stats"><StatGrid>
+      <StatGrid>
         <StatCard
           icon={meeting.quorumEstablished ? "✅" : "⚠️"}
-          iconBg={meeting.quorumEstablished ? "var(--goodbg)" : "var(--warnbg)"}
+          iconBg={meeting.quorumEstablished ? "#ecfdf5" : "#fff7ed"}
           label="Quorum"
           value={meeting.quorumEstablished ? "Established" : "Not met"}
         />
         <StatCard
           icon="🟢"
-          tone="info"
+          tone="good"
           label="Present (for quorum)"
           value={attState === "api" ? present.toLocaleString("en-IN") : "—"}
         />
         <StatCard
           icon="📋"
-          tone="info"
+          tone="neutral"
           label="Agenda items"
           value={agendaSource === "api" ? agenda.length.toLocaleString("en-IN") : "—"}
         />
         <StatCard
           icon="🗳️"
-          tone="neutral"
+          tone="info"
           label="Open votes"
           value={votesState === "api" ? votes.length.toLocaleString("en-IN") : "—"}
         />
-      </StatGrid></div>
+      </StatGrid>
 
       {/* Voting panel */}
-      <div id="section-voting"><Card
+      <Card
         title={`Live voting (${votesState === "api" ? votes.length : "—"} open)`}
         link={
           <button type="button" className="btn ghost sm" onClick={() => void refreshVotes()}>
@@ -475,8 +440,6 @@ export function MeetingConsole({
                 onVoted={(position) =>
                   setMyVotes((prev) => ({ ...prev, [v.resolutionId]: position }))
                 }
-                canCast={viewerPermissions.canCast}
-                canConclude={viewerPermissions.canConclude}
               />
             ))}
           </div>
@@ -491,10 +454,10 @@ export function MeetingConsole({
           setToast={setToast}
           onCreated={refreshVotes}
         />
-      </Card></div>
+      </Card>
 
       {/* Agenda */}
-      <div id="section-agenda"><Card title={`Agenda (${agendaSource === "api" ? agenda.length : "—"})`} padding>
+      <Card title={`Agenda (${agendaSource === "api" ? agenda.length : "—"})`} padding>
         {agendaSource === "error" ? (
           // Agenda has no dedicated client-side refetch (unlike attendance/votes
           // below) — router.refresh() re-runs the server component that loads
@@ -555,10 +518,10 @@ export function MeetingConsole({
               ))}
           </div>
         )}
-      </Card></div>
+      </Card>
 
       {/* Attendance / quorum */}
-      <div id="section-attendance"><Card
+      <Card
         title="Attendance & quorum"
         link={
           <span style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>
@@ -646,7 +609,7 @@ export function MeetingConsole({
                             </div>
                           )}
                           {p.isMandatory && (
-                            <span style={{ fontSize: 11, color: "var(--warn)" }}>Mandatory</span>
+                            <span style={{ fontSize: 11, color: "#b45309" }}>Mandatory</span>
                           )}
                         </td>
                         <td>{humanize(p.role)}</td>
@@ -661,8 +624,7 @@ export function MeetingConsole({
                         </td>
                         <td style={monoStyle}>{fmtTime(p.checkInAt)}</td>
                         <td style={{ textAlign: "right" }}>
-                          {/* GAP-MEETING-MEETINGS-MEETINGID-03: check-in/out for authorised roles only */}
-                          {viewerPermissions.canCheckIn && (inRoom ? (
+                          {inRoom ? (
                             <button
                               type="button"
                               className="btn ghost sm"
@@ -680,7 +642,7 @@ export function MeetingConsole({
                             >
                               {busy === `checkin:${p.participantId}` ? "…" : "Check in"}
                             </button>
-                          ))}
+                          )}
                         </td>
                       </tr>
                     );
@@ -690,7 +652,7 @@ export function MeetingConsole({
             </div>
           </>
         )}
-      </Card></div>
+      </Card>
 
       <ConfirmDialog
         open={pendingTransition !== null}
@@ -727,8 +689,6 @@ function VotePanel({
   onChanged,
   myPosition,
   onVoted,
-  canCast,
-  canConclude,
 }: PanelCtl & {
   meetingId: string;
   vote: ActiveVote;
@@ -736,9 +696,6 @@ function VotePanel({
   /** This browser's own recorded position for this resolution, if any (Req 7). */
   myPosition?: VotePosition;
   onVoted: (position: VotePosition) => void;
-  /** GAP-MEETING-MEETINGS-MEETINGID-03: session permissions. */
-  canCast: boolean;
-  canConclude: boolean;
 }) {
   const secret = vote.voteType === "secret_ballot";
   // Cast is gated behind a confirmation: a ballot can't be changed once cast
@@ -825,7 +782,7 @@ function VotePanel({
             style={{
               fontSize: 12.5,
               fontWeight: 700,
-              color: "var(--good)",
+              color: "#16a34a",
               display: "inline-flex",
               alignItems: "center",
               gap: 6,
@@ -833,7 +790,7 @@ function VotePanel({
           >
             ✓ You voted: {humanize(myPosition)}
           </span>
-        ) : canCast ? (
+        ) : (
           <>
             <button
               type="button"
@@ -869,22 +826,19 @@ function VotePanel({
               Cast: Abstain
             </button>
           </>
-        ) : null}
-        {/* GAP-MEETING-MEETINGS-MEETINGID-03: conclude only for authorised roles */}
-        {canConclude && (
-          <button
-            type="button"
-            className="btn primary sm"
-            disabled={busy !== null}
-            onClick={() => {
-              setConcludeErr(undefined);
-              setConcludeConfirm(true);
-            }}
-            style={{ marginLeft: "auto" }}
-          >
-            {busy === `conclude:${vote.resolutionId}` ? "…" : "Conclude vote"}
-          </button>
         )}
+        <button
+          type="button"
+          className="btn primary sm"
+          disabled={busy !== null}
+          onClick={() => {
+            setConcludeErr(undefined);
+            setConcludeConfirm(true);
+          }}
+          style={{ marginLeft: "auto" }}
+        >
+          {busy === `conclude:${vote.resolutionId}` ? "…" : "Conclude vote"}
+        </button>
       </div>
       {secret && (
         <p style={{ fontSize: 12, color: "var(--ink2)", marginTop: 8 }}>

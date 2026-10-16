@@ -70,7 +70,7 @@ export default async function KnowledgeRecordsPage() {
 
       <StatGrid>
         <StatCard icon="🗃️" tone="warn" label="Record Series" value={errored ? "—" : total.toLocaleString("en-IN")} />
-        <StatCard icon="📅" tone="info" label="Due for review (30d)" value={errored ? "—" : reviewDueCount.toLocaleString("en-IN")} />
+        <StatCard icon="📅" tone="neutral" label="Due for review (30d)" value={errored ? "—" : reviewDueCount.toLocaleString("en-IN")} />
         <StatCard icon="🗑️" tone="bad" label="Overdue for weeding" value={errored ? "—" : weedingDueCount.toLocaleString("en-IN")} />
         <StatCard icon="🔒" tone="good" label="Permanent" value={errored ? "—" : permanent.toLocaleString("en-IN")} />
       </StatGrid>

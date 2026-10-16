@@ -55,7 +55,7 @@ export default async function ReadinessPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="🎯" tone="info" label="Overall Readiness" value={errored || !hasReadiness ? "—" : `${overallPct}%`} />
+        <StatCard icon="🎯" tone="neutral" label="Overall Readiness" value={errored || !hasReadiness ? "—" : `${overallPct}%`} />
         <StatCard icon="✅" tone="good" label="Passed" value={errored || !hasReadiness ? "—" : `${passed} of ${total}`} />
         <StatCard icon="❌" tone="bad" label="Failed" value={errored || !hasReadiness ? "—" : failed} />
         <StatCard icon="🚀" tone="warn" label="Go-live" value={errored || !hasReadiness ? "—" : readiness!.productionReady ? "Ready" : "Not ready"} />
@@ -91,7 +91,7 @@ export default async function ReadinessPage() {
                 <span>{overallPct}%</span>
               </div>
               {/* GAP-TENANT-ADMIN-READINESS-05: labelled, screen-reader announceable. */}
-              <ProgressBar value={overallPct} color="var(--good)" label="Overall completion" />
+              <ProgressBar value={overallPct} color="#16a34a" label="Overall completion" />
             </div>
           </Card>
 
@@ -103,7 +103,7 @@ export default async function ReadinessPage() {
                 {gates.map((gate) => {
                   const meta = GATE_META[gate.key] ?? { label: humaniseKey(gate.key), description: "" };
                   return (
-                    <li key={gate.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--border)" }}>
+                    <li key={gate.key} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid var(--border, #e2e8f0)" }}>
                       <div style={{ flex: 1 }}>
                         <p style={{ margin: 0, fontWeight: 500, fontSize: 14 }}>{meta.label}</p>
                         {meta.description && <p style={{ margin: "2px 0 0", fontSize: 12, color: "var(--ink2)" }}>{meta.description}</p>}

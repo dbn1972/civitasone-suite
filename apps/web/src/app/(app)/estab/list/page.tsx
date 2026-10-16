@@ -90,7 +90,7 @@ export default async function EstabFilesListPage() {
       <div
         className="banner"
         style={{
-          background: "var(--goodbg)",
+          background: "#e6f7f5",
           border: "1px solid #99e6da",
           color: "#0f766e",
           borderRadius: 12,
@@ -108,7 +108,7 @@ export default async function EstabFilesListPage() {
         <StatCard icon="⏱" tone="warn" label="Avg Pendency" value={errored ? "—" : avgPendencyDisplay} />
         <StatCard icon="🟡" tone="warn" label="Pending" value={errored ? "—" : pending.toLocaleString("en-IN")} />
         {/* GAP-ESTAB-LIST-02: label "Closed", not "Closed (MTD)" */}
-        <StatCard icon="✅" tone="info" label="Closed" value={errored ? "—" : closed.toLocaleString("en-IN")} />
+        <StatCard icon="✅" tone="neutral" label="Closed" value={errored ? "—" : closed.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         {errored ? (

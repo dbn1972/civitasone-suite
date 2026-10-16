@@ -15,14 +15,14 @@ export default async function WebhooksPage() {
           disagree with the client's own cache state (UX-002's pattern). */}
       <PageHeader title="Outbound Webhooks" subtitle="Configure HTTP callbacks for domain events with HMAC-SHA256 signatures." />
 
-      <div style={{ background: "var(--goodbg)", border: "1px solid var(--goodbg)", borderRadius: 8, padding: 16, marginBottom: 24 }}>
-        <p style={{ margin: 0, fontSize: 14, color: "var(--good)" }}>
+      <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: 16, marginBottom: 24 }}>
+        <p style={{ margin: 0, fontSize: 14, color: "#166534" }}>
           🔐 <strong>Security:</strong> We sign every payload with HMAC-SHA256. Verify the <code>X-CivitasOne-Signature</code> header in your endpoint.
         </p>
       </div>
 
       <StatGrid>
-        <StatCard icon="🔗" tone="info" label="Total Webhooks" value={webhooks.length} />
+        <StatCard icon="🔗" tone="neutral" label="Total Webhooks" value={webhooks.length} />
         <StatCard icon="✅" tone="good" label="Active" value={activeCount} />
         <StatCard icon="⏸️" tone="neutral" label="Paused" value={webhooks.filter((w) => !w.active).length} />
         <StatCard icon="❌" tone="bad" label="Failed (Last)" value={failedCount} />

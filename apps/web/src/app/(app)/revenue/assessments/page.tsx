@@ -129,10 +129,10 @@ export default async function AssessmentsPage() {
       />
 
       <StatGrid>
-        <StatCard icon="📊" tone="info" label="Total Assessments" value={isError ? null : assessments.length} />
+        <StatCard icon="📊" tone="neutral" label="Total Assessments" value={isError ? null : assessments.length} />
         <StatCard icon="✅" tone="good" label="Active" value={isError ? null : activeCount} />
         <StatCard icon="✏️" tone="warn" label="Revised" value={isError ? null : revisedCount} />
-        <StatCard icon="🔒" tone="info" label="Closed" value={isError ? null : closedCount} />
+        <StatCard icon="🔒" tone="neutral" label="Closed" value={isError ? null : closedCount} />
       </StatGrid>
 
       <AssessmentCreateForm assessees={assessees} rateHeads={rateHeads} />

@@ -32,7 +32,7 @@ export default async function ClosurePage() {
         }
       />
       <StatGrid>
-        <StatCard icon="🔒" tone="info" label="Total" value={total} />
+        <StatCard icon="🔒" tone="neutral" label="Total" value={total} />
         <StatCard icon="✅" tone="good" label="Closed" value={closed} />
         <StatCard icon="❌" tone="bad" label="Dropped" value={dropped} />
         <StatCard icon="📋" tone="good" label="Completion List" value={completion} />

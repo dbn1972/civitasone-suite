@@ -190,7 +190,7 @@ export default async function TsDetailPage({
         />
         <StatCard
           icon="📑"
-          tone="info"
+          tone="neutral"
           label="Status"
           value={humanize(ts.status)}
         />

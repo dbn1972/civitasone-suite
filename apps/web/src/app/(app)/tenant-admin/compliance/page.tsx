@@ -26,7 +26,7 @@ export default async function ComplianceDashboardPage() {
       <StatGrid>
         {/* GAP-TENANT-ADMIN-COMPLIANCE-03: "—" for a missing/errored score (null),
             never a fabricated "0%" or "undefined%"; a real 0 shows "0.0%". */}
-        <StatCard icon="📋" tone="info" label="DPDP Score" value={errored ? "—" : formatPercent(overview.dpdpScore)} />
+        <StatCard icon="📋" tone="neutral" label="DPDP Score" value={errored ? "—" : formatPercent(overview.dpdpScore)} />
         <StatCard icon="🛡️" tone="good" label="CERT-In Readiness" value={errored ? "—" : formatPercent(overview.certInReadiness)} />
         <StatCard icon="🗄️" tone="neutral" label="Data Retention" value={errored ? "—" : overview.retentionStatus} />
         <StatCard icon="✅" tone="good" label="Checks Passed" value={errored ? "—" : `${overview.checks.filter((c) => c.result === "pass").length}/${overview.checks.length}`} />

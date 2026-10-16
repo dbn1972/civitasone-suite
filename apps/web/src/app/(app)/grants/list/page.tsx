@@ -49,7 +49,7 @@ export default async function GrantsListPage() {
           <StatCard icon="🎁" tone="good" label="Total" value={grants.length} />
           <StatCard icon="✅" tone="good" label="Active" value={active} />
           <StatCard icon="💰" tone="neutral" label="Sanctioned" value={formatMoney(totalSanctioned)} />
-          <StatCard icon="📤" tone="info" label="Disbursed" value={formatMoney(totalDisbursed)} />
+          <StatCard icon="📤" tone="neutral" label="Disbursed" value={formatMoney(totalDisbursed)} />
         </StatGrid>
         <Card title="Grants List">
           <GrantsTable grants={grants} source={source} canViewGranteeName={canViewGranteeName} />

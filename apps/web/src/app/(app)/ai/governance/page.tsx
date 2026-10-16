@@ -60,7 +60,7 @@ export default async function Page({ searchParams }: { searchParams?: { blocked?
       <StatGrid>
         <StatCard
           icon="🤖"
-          tone="info"
+          tone="neutral"
           label="AI Invocations"
           value={haveCounters ? counters.data!.totalInvocations.toLocaleString("en-IN") : null}
         />
@@ -70,10 +70,10 @@ export default async function Page({ searchParams }: { searchParams?: { blocked?
           label="Blocked Actions"
           value={haveCounters ? counters.data!.blockedCount.toLocaleString("en-IN") : null}
         />
-        <StatCard icon="📉" tone="info" label="Block Rate" value={haveCounters ? `${blockRatePct}%` : null} />
+        <StatCard icon="📉" tone="neutral" label="Block Rate" value={haveCounters ? `${blockRatePct}%` : null} />
         <StatCard
           icon="⚡"
-          tone="info"
+          tone="neutral"
           label="Active Agents"
           value={haveCounters ? counters.data!.activeAgents.toLocaleString("en-IN") : null}
         />
@@ -107,7 +107,7 @@ export default async function Page({ searchParams }: { searchParams?: { blocked?
               <div className="pad">
                 {/* GAP-AI-GOVERNANCE-03: label the scope — these reasons are
                     computed from the latest 100 audit rows, not the counters. */}
-                <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 10px" }}>
+                <p style={{ fontSize: 12, color: "var(--muted, #667085)", margin: "0 0 10px" }}>
                   From the latest 100 audit entries.
                 </p>
                 <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>

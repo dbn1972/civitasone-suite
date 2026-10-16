@@ -46,15 +46,15 @@ export default async function GrantsDashboardPage() {
         />
         {/* GAP-GRANTS-DASHBOARD-01: honest label; no FY filter exists. */}
         <StatCard icon="💰" tone="neutral" label="Total Sanctioned" value={sanctionedTotal === null ? "—" : formatMoney(sanctionedTotal)} hint="Sum of sanctioned amounts across all grants" />
-        <StatCard icon="📤" tone="info" label="Disbursed" value={disbursedTotal === null ? "—" : formatMoney(disbursedTotal)} hint="Sum of the Disbursed column below" />
+        <StatCard icon="📤" tone="neutral" label="Disbursed" value={disbursedTotal === null ? "—" : formatMoney(disbursedTotal)} hint="Sum of the Disbursed column below" />
         {/* GAP-GRANTS-DASHBOARD-02: real utilisation KPI. */}
-        <StatCard icon="📈" tone="neutral" label="Utilisation" value={formatPercent(utilisationPct)} hint="Disbursed ÷ Sanctioned" />
+        <StatCard icon="📈" tone="info" label="Utilisation" value={formatPercent(utilisationPct)} hint="Disbursed ÷ Sanctioned" />
       </StatGrid>
       {/* GAP-GRANTS-DASHBOARD-02: surface the fetched-but-unrendered figures,
           and link UC Pending to the UC tracking page (GAP-GRANTS-DASHBOARD-04). */}
       <StatGrid>
         <StatCard icon="🗂️" tone="neutral" label="Total Grants" value={anyError ? "—" : data.totalGrants} />
-        <StatCard icon="👥" tone="info" label="Grantees" value={anyError ? "—" : data.totalGrantees} />
+        <StatCard icon="👥" tone="neutral" label="Grantees" value={anyError ? "—" : data.totalGrantees} />
         <StatCard icon="📋" tone="warn" label="UC Pending" value={anyError ? "—" : data.pendingUCs} href="/grants/utilization" />
       </StatGrid>
       <Card title="Grants">

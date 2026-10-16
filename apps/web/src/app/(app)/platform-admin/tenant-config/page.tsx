@@ -48,7 +48,7 @@ export default async function TenantConfigPage() {
       ) : (
         <>
           <div className="grid g-4" style={{ marginBottom: 18 }}>
-            <StatCard icon="🏢" tone="info" label="Tenant" value={statusLabel} />
+            <StatCard icon="🏢" tone="neutral" label="Tenant" value={statusLabel} />
             {isPlatformAdmin && config.dbSchema && (
               <StatCard icon="🗄️" tone="good" label="DB schema" value="Isolated" />
             )}

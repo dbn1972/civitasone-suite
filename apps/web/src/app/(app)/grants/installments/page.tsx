@@ -71,9 +71,9 @@ export default async function GrantInstallmentsPage({
         <StatGrid>
           <StatCard icon="📋" tone="neutral" label="Total" value={installments.length} />
           <StatCard icon="✅" tone="good" label="Released" value={released} />
-          <StatCard icon="📈" tone="info" label="Utilised" value={utilised} />
+          <StatCard icon="📈" tone="neutral" label="Utilised" value={utilised} />
           <StatCard icon="⏳" tone="warn" label="Pending" value={pending} />
-          <StatCard icon="💰" tone="info" label="Total Amount" value={formatMoney(totalAmount)} />
+          <StatCard icon="💰" tone="neutral" label="Total Amount" value={formatMoney(totalAmount)} />
         </StatGrid>
         <Card title="Installments">
           <InstallmentsTable installments={installments} source={source} canRelease={canRelease} />

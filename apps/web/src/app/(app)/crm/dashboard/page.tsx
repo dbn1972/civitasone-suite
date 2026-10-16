@@ -41,10 +41,10 @@ export default async function Page() {
       <StatGrid>
         {/* GAP-CRM-DASHBOARD-04: stat cards drill into their lists. Interactions
             Today opens the activities "Today" segment the table already supports. */}
-        <StatCard icon="▣" tone="info" label="Contacts / Stakeholders" value={stat(dash.totalContacts)} href="/crm/contacts" />
+        <StatCard icon="▣" tone="neutral" label="Contacts / Stakeholders" value={stat(dash.totalContacts)} href="/crm/contacts" />
         <StatCard icon="◉" tone="good" label="Active Engagements" value={stat(dash.openDeals)} href="/crm/deals" />
         <StatCard icon="◈" tone="warn" label="Interactions Today" value={stat(dash.activitiesToday)} href="/crm/activities?segment=Today" />
-        <StatCard icon="△" tone="neutral" label="Active Engagement Value" value={money} href="/crm/deals" />
+        <StatCard icon="△" tone="info" label="Active Engagement Value" value={money} href="/crm/deals" />
       </StatGrid>
       <Card title="Quick links">
         <div style={{ display: "flex", gap: "12px", padding: "12px 16px", flexWrap: "wrap" }}>
