@@ -47,3 +47,15 @@ describe("CDP identity page (GAP-CDP-IDENTITY-01/02)", () => {
     expect(screen.getByLabelText("Next page")).toHaveAttribute("aria-disabled", "true");
   });
 });
+
+// GAP-CDP-PROFILES-DETAIL-05: each CDP child page must show exactly one back
+// link to /cdp (via PageHeader back="/cdp") and no hand-written duplicate nav.
+describe("CDP identity back navigation (GAP-CDP-PROFILES-DETAIL-05)", () => {
+  it("renders exactly one Customer Data Platform back link to /cdp", async () => {
+    mocked.mockResolvedValue({ data: { rows: [], total: 0, limit: 50 }, source: "api" } as never);
+    render(await Page({ searchParams: {} }));
+    const backLinks = screen.getAllByRole("link", { name: /Customer Data Platform/i });
+    expect(backLinks).toHaveLength(1);
+    expect(backLinks[0]).toHaveAttribute("href", "/cdp");
+  });
+});

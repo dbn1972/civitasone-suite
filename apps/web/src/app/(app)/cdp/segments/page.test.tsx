@@ -42,3 +42,15 @@ describe("CDP segments page (GAP-CDP-SEGMENTS-02/03)", () => {
     expect(screen.queryByText("0")).not.toBeInTheDocument();
   });
 });
+
+// GAP-CDP-PROFILES-DETAIL-05: segments page must show exactly one back link
+// to /cdp — no hand-written duplicate nav above PageHeader.
+describe("CDP segments back navigation (GAP-CDP-PROFILES-DETAIL-05)", () => {
+  it("renders exactly one Customer Data Platform back link to /cdp", async () => {
+    mocked.mockResolvedValue({ data: { rows: [], total: 0, limit: 25 }, source: "api" } as never);
+    render(await Page({ searchParams: {} }));
+    const backLinks = screen.getAllByRole("link", { name: /Customer Data Platform/i });
+    expect(backLinks).toHaveLength(1);
+    expect(backLinks[0]).toHaveAttribute("href", "/cdp");
+  });
+});
