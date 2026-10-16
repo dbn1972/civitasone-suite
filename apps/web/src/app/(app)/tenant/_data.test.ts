@@ -189,7 +189,7 @@ describe("mapCodeListRows (GAP-TENANT-CODE-LISTS-01)", () => {
 });
 
 describe("mapPlanRows (GAP-TENANT-PLANS-01)", () => {
-  it("price renders as paise-correct money (no float math); shows module count", () => {
+  it("price renders as paise-correct money (no float math); shows module names not count", () => {
     const [row] = mapPlanRows({
       data: [{ id: "p1", code: "PSU", name: "PSU Plan", edition: "psu", priceMinor: 149900, billingCycle: "annual", enabledModules: ["hrms", "finance", "procurement"] }],
     });
@@ -197,7 +197,20 @@ describe("mapPlanRows (GAP-TENANT-PLANS-01)", () => {
     expect(row.sublabel).toMatch(/₹1,499/);
     expect(row.sublabel).toContain("/ annual");
     expect(row.status).toBe("Psu");
-    expect(row.meta).toBe("3 modules");
+    // GAP-TENANT-PLANS-01: module names shown, not just a count
+    expect(row.meta).toContain("hrms");
+    expect(row.meta).toContain("finance");
+    expect(row.meta).toContain("procurement");
+    expect(row.meta).not.toBe("3 modules");
+  });
+
+  it("GAP-TENANT-PLANS-01: plans with > 5 modules show first 5 names and +N more suffix", () => {
+    const mods = ["a", "b", "c", "d", "e", "f", "g"];
+    const [row] = mapPlanRows({
+      data: [{ id: "p3", name: "Big Plan", enabledModules: mods }],
+    });
+    expect(row.meta).toContain("a, b, c, d, e");
+    expect(row.meta).toMatch(/\+2 more/);
   });
 
   it("never divides money by a float (paise are integer)", () => {

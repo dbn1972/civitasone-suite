@@ -21,6 +21,7 @@ export default async function Page() {
         backLabel={t("backLabel")}
         errorArea={t("errorArea")}
         cacheKey="module.field-offline-sync"
+        showId={false}
       >
         {/* GAP2-FIELD-SYNC-WINDOW-01: state the window/cap so a capped slice is
             never presented as the full pending set. */}

@@ -67,7 +67,7 @@ function mapRows(payload: unknown): ModuleRowSummary[] {
     const metaPoints =
       typeof row.points === "number" ? `${row.points} pts` : typeof row.balance === "number" ? `bal ${row.balance}` : undefined;
     const meta = metaText ?? metaDate ?? metaPoints;
-    const metaKind: "date" | "text" | undefined = metaText ? "text" : metaDate ? "date" : undefined;
+    const metaKind: "date" | "datetime" | "text" | undefined = metaText ? "text" : metaDate ? "datetime" : undefined;
     mapped.push({
       id,
       label,

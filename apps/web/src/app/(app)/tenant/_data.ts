@@ -449,8 +449,9 @@ export function mapPlanRows(payload: unknown): ModuleRowSummary[] {
       p.priceMinor !== null && p.priceMinor !== undefined
         ? `${formatMoney(typeof p.priceMinor === "bigint" ? p.priceMinor.toString() : p.priceMinor)}${p.billingCycle ? ` / ${p.billingCycle}` : ""}`
         : undefined;
+    // GAP-TENANT-PLANS-01: show module names not just a count.
     const moduleCount = p.enabledModules.length;
-    const modules = moduleCount > 0 ? `${moduleCount} module${moduleCount === 1 ? "" : "s"}` : undefined;
+    const modules = moduleCount > 0 ? p.enabledModules.slice(0, 5).join(", ") + (moduleCount > 5 ? ` +${moduleCount - 5} more` : "") : undefined;
     mapped.push({
       id: p.id ?? p.code ?? `row-${index + 1}`,
       label: p.name ?? p.code ?? `Plan ${index + 1}`,

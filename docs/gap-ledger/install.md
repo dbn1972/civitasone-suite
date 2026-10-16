@@ -285,7 +285,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-MODULES-01  ·  HIGH  ·  partly  ·  theme FORMAT (was MONEY)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed — showId={false} added to install/modules/page.tsx to hide UUID fragment column (GAP-INSTALL-MODULES-01))
 - **W0 note:** partly fixed by #1923 — meta dates are now formatted (metaKind) but a UUID id is still shown as an 8-character fragment in ModuleListTable (full id only in the title)
 - **First-pass claim:** Generic ID/Name/Detail/Status/Meta columns come from a heuristic mapper (_data.ts:26-79): ID is a raw id truncated to 8 chars and Meta prints whatever of code|currency|updatedAt|createdAt exists, i.e. a raw ISO timestamp, not a formatted date (ModuleListTable.tsx:56-62).
 - **Verified evidence:** No money is involved: _data.ts mapRows (lines 26-79) builds ModuleRowSummary generically; ModuleListTable.tsx:50 prints row.id.slice(0, 8) in a mono span and :54 prints row.meta verbatim. meta = code ?? currency ?? updatedAt ?? createdAt (_data.ts:57-63), so it is a raw ISO string only when the row has no code/currency; points/balance are printed as 'N pts'/'bal N' without formatting. The MONEY tag/fix is wrong; the real issues are an 8-char id fragment and an unformatted timestamp.
@@ -378,7 +378,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-SILOS-01  ·  HIGH  ·  partly  ·  theme FORMAT (was MONEY)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed — showId={false} added to install/silos/page.tsx to hide UUID fragment column (GAP-INSTALL-SILOS-01))
 - **W0 note:** partly fixed by #1923 — meta dates are now formatted (metaKind) but a UUID id is still shown as an 8-character fragment in ModuleListTable (full id only in the title)
 - **First-pass claim:** Generic ID/Name/Detail/Status/Meta columns come from a heuristic mapper (_data.ts:26-79): ID is a raw id truncated to 8 chars and Meta prints whatever of code|currency|updatedAt|createdAt exists, i.e. a raw ISO timestamp, not a formatted date (ModuleListTable.tsx:56-62).
 - **Verified evidence:** No money is involved: _data.ts mapRows (lines 26-79) builds ModuleRowSummary generically; ModuleListTable.tsx:50 prints row.id.slice(0, 8) in a mono span and :54 prints row.meta verbatim. meta = code ?? currency ?? updatedAt ?? createdAt (_data.ts:57-63), so it is a raw ISO string only when the row has no code/currency; points/balance are printed as 'N pts'/'bal N' without formatting. The MONEY tag/fix is wrong; the real issues are an 8-char id fragment and an unformatted timestamp.
@@ -469,7 +469,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-STAGES-01  ·  HIGH  ·  partly  ·  theme FORMAT (was MONEY)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed — showId={false} added to install/stages/page.tsx to hide UUID fragment column (GAP-INSTALL-STAGES-01))
 - **W0 note:** partly fixed by #1923 — meta dates are now formatted (metaKind) but a UUID id is still shown as an 8-character fragment in ModuleListTable (full id only in the title)
 - **First-pass claim:** Generic ID/Name/Detail/Status/Meta columns come from a heuristic mapper (_data.ts:26-79): ID is a raw id truncated to 8 chars and Meta prints whatever of code|currency|updatedAt|createdAt exists, i.e. a raw ISO timestamp, not a formatted date (ModuleListTable.tsx:56-62).
 - **Verified evidence:** No money is involved: _data.ts mapRows (lines 26-79) builds ModuleRowSummary generically; ModuleListTable.tsx:50 prints row.id.slice(0, 8) in a mono span and :54 prints row.meta verbatim. meta = code ?? currency ?? updatedAt ?? createdAt (_data.ts:57-63), so it is a raw ISO string only when the row has no code/currency; points/balance are printed as 'N pts'/'bal N' without formatting. The MONEY tag/fix is wrong; the real issues are an 8-char id fragment and an unformatted timestamp.
@@ -561,7 +561,7 @@ Counts: ACTION 37
 
 ### GAP-INSTALL-STEPS-01  ·  HIGH  ·  partly  ·  theme FORMAT (was MONEY)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: ALREADY-FIXED — install/steps/page.tsx uses InstallStepsLog typed component (stepNo/title/isRequired/status columns); no UUID column exists so UUID-hide fix is inapplicable (GAP-INSTALL-STEPS-01))
 - **W0 note:** partly fixed by #1923 — meta dates are now formatted (metaKind) but a UUID id is still shown as an 8-character fragment in ModuleListTable (full id only in the title)
 - **First-pass claim:** Generic ID/Name/Detail/Status/Meta columns come from a heuristic mapper (_data.ts:26-79): ID is a raw id truncated to 8 chars and Meta prints whatever of code|currency|updatedAt|createdAt exists, i.e. a raw ISO timestamp, not a formatted date (ModuleListTable.tsx:56-62).
 - **Verified evidence:** No money is involved: _data.ts mapRows (lines 26-79) builds ModuleRowSummary generically; ModuleListTable.tsx:50 prints row.id.slice(0, 8) in a mono span and :54 prints row.meta verbatim. meta = code ?? currency ?? updatedAt ?? createdAt (_data.ts:57-63), so it is a raw ISO string only when the row has no code/currency; points/balance are printed as 'N pts'/'bal N' without formatting. The MONEY tag/fix is wrong; the real issues are an 8-char id fragment and an unformatted timestamp.

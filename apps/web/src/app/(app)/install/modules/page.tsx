@@ -19,6 +19,7 @@ export default async function Page() {
         back="/install/console"
         backLabel="Install console"
         errorArea="install modules"
+        showId={false}
       />
     </div>
   );

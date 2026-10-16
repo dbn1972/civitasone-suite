@@ -218,19 +218,19 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
         <fieldset
           aria-describedby={scopeError ? scopeErrId : scopesId}
           aria-invalid={scopeError ? true : undefined}
-          style={{ border: 0, padding: 0, margin: "0 0 8px" }}
+          className="ta-fieldset-bare"
         >
           <legend className="ta-lbl">{t("scopesLabel")}</legend>
-          <p id={scopesId} style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 6px" }}>{t("scopesHint")}</p>
+          <p id={scopesId} className="ta-hint">{t("scopesHint")}</p>
           {catalogueFailed ? (
             <p role="alert" className="ta-field-err">{t("scopesLoadFailed")}</p>
           ) : catalogue === null ? (
-            <p role="status" style={{ fontSize: 12.5, color: "var(--mut)" }}>{t("scopesLoading")}</p>
+            <p role="status" className="ta-muted-sm">{t("scopesLoading")}</p>
           ) : catalogue.length === 0 ? (
-            <p style={{ fontSize: 12.5, color: "var(--mut)" }}>{t("scopesNone")}</p>
+            <p className="ta-muted-sm">{t("scopesNone")}</p>
           ) : (
             catalogue.map((scope) => (
-              <label key={scope} style={{ display: "flex", alignItems: "center", gap: 8, minHeight: 32, fontSize: 13 }}>
+              <label key={scope} className="ta-scope-row">
                 <input
                   type="checkbox"
                   checked={selected.includes(scope)}
@@ -264,26 +264,26 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
       </form>
 
       {okMessage ? (
-        <p role="status" aria-live="polite" className="ta-field-ok" style={{ fontSize: 12.5, padding: "0 16px 8px" }}>{okMessage}</p>
+        <p role="status" aria-live="polite" className="ta-field-ok">{okMessage}</p>
       ) : null}
 
       {createdKey ? (
-        <div className="pad" style={{ paddingTop: 0 }}>
-          <code style={{ display: "block", overflowWrap: "anywhere", background: "var(--surface-2, #f8fafc)", padding: 10, borderRadius: 8, border: "1px solid var(--line)" }}>{createdKey}</code>
-          <Button variant="ghost" size="sm" style={{ marginTop: 8 }} onClick={() => void copyKey()}>
+        <div className="pad ta-key-section">
+          <code className="ta-key-code">{createdKey}</code>
+          <Button variant="ghost" size="sm" className="ta-key-copy-btn" onClick={() => void copyKey()}>
             {copied ? "Copied ✓" : "Copy secret"}
           </Button>
         </div>
       ) : null}
 
-      <div className="pad" style={{ paddingTop: createdKey ? 8 : 0 }}>
+      <div className={"pad" + (createdKey ? " ta-key-section--gap" : "") }>
         {activeKeys.length === 0 ? (
-          <p style={{ fontSize: 12.5, color: "var(--mut)", margin: 0 }}>No active keys to manage.</p>
+          <p className="ta-muted-sm">No active keys to manage.</p>
         ) : (
           activeKeys.map((key) => (
-            <div key={key.id} className="prefrow" style={prefRow}>
-              <span style={{ fontSize: 13, fontWeight: 500 }}>{key.keyName}</span>
-              <span style={{ display: "inline-flex", gap: 8 }}>
+            <div key={key.id} className="prefrow">
+              <span className="ta-key-name">{key.keyName}</span>
+              <span className="ta-action-row">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -306,7 +306,7 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
         )}
       </div>
 
-      {message ? <p role="alert" style={{ color: "var(--bad)", fontSize: 12, padding: "0 16px 16px" }}>{message}</p> : null}
+      {message ? <p role="alert" className="ta-msg-err">{message}</p> : null}
 
       <ConfirmDialog
         open={pending !== null}
@@ -334,4 +334,4 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
   );
 }
 
-const prefRow: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--line2)" };
+// prefRow inline style removed — .prefrow CSS class covers it (GAP-TENANT-ADMIN-API-KEYS-06).

@@ -234,6 +234,27 @@ describe("ModuleListTable", () => {
     expect(screen.getByText("3")).toBeInTheDocument();
   });
 
+  // GAP-FIELD-SYNC-03: datetime-typed meta uses formatIndianDateTime, which
+  // includes the date AND the IST time portion.
+  it("formats datetime-typed meta with time, never the raw ISO string", () => {
+    const dtRows = [
+      {
+        id: "d-1",
+        label: "Sync change #1",
+        meta: "2026-09-27T09:14:00.000Z",
+        metaKind: "datetime" as const,
+      },
+    ];
+    mockedHook.mockReturnValue({ data: dtRows, fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
+    render(<ModuleListTable cacheKey="test" rows={dtRows} source="api" />);
+    // formatIndianDateTime renders a date+time string (IST); the raw ISO must not appear.
+    expect(screen.queryByText("2026-09-27T09:14:00.000Z")).not.toBeInTheDocument();
+    // The rendered cell should contain at least the date portion.
+    const cell = screen.getByText(/27 Sep 2026/i);
+    expect(cell).toBeInTheDocument();
+  });
+
+
   // GAP-TENANT-{CODE-LISTS-05, CONSENT-EXCHANGE-05, DATA-MIGRATION-05,
   // ORG-HIERARCHY-05, OVERVIEW-06, PLANS-05}: Status renders through StatusPill.
   it("renders status through StatusPill, not raw snake_case text", () => {

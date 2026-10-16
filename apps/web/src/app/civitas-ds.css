@@ -560,6 +560,60 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .ta-field-ok {
   color: var(--good);
 }
+/* GAP-TENANT-ADMIN-API-KEYS-06: replace inline style={{}} objects in
+   APIKeyActions with token-based CSS classes. */
+.ta-fieldset-bare {
+  border: 0;
+  padding: 0;
+  margin: 0 0 8px;
+}
+.ta-hint {
+  font-size: 12px;
+  color: var(--ink2);
+  margin: 0 0 6px;
+}
+.ta-muted-sm {
+  font-size: 12.5px;
+  color: var(--ink2);
+}
+.ta-scope-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  font-size: 13px;
+}
+.ta-key-code {
+  display: block;
+  overflow-wrap: anywhere;
+  background: var(--surface-2, var(--surface, #f8fafc));
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+.ta-key-copy-btn {
+  margin-top: 8px;
+}
+.ta-key-section {
+  padding: 0 16px;
+}
+.ta-key-section--gap {
+  padding-top: 8px;
+}
+.ta-key-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+.ta-action-row {
+  display: inline-flex;
+  gap: 8px;
+}
+.ta-msg-err {
+  color: var(--bad);
+  font-size: 12px;
+  padding: 0 16px 16px;
+}
+
 
 /* GAP-WORKS-MASTERS-06: masters registry two-column layout. Was inline styles
    (width:220 flex column) with no media query, so on a phone the nav ate ~60%
