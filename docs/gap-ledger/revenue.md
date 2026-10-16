@@ -1069,7 +1069,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-WAIVERS-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 revenue: added pending waivers list to waivers/page.tsx, decide route already existed at waivers/[id]/decide; closed by this PR)
 - **W0 note:** partly fixed by #1868 — waivers/[id]/decide route + WaiverDecideForm exist with maker!=checker and pending-status gating, and the hub tile text is now accurate; remaining: nothing in the UI links to or lists pending waivers (no pending list, lookup form or post-submit link), so a checker still needs the URL/id from the maker.
 - **First-pass claim:** Hub tile promises "Raise and decide penalty/interest waivers" but the tree has no waivers/[id]/decide route and no list endpoint — checker step is not reachable from the UI (revenue/page.tsx:22 vs revenue/waivers/ contents).
 - **Verified evidence:** revenue/page.tsx:22 tile: 'Raise and decide penalty/interest waivers (maker-checker)'. The revenue/waivers directory contains only page.tsx, loading.tsx and error.tsx; there is no waivers/[id]/decide route and the page has no lookup form (unlike refunds/write-offs). The comment at waivers/page.tsx:5 says no list endpoint yet. Whether revenue-service has a waiver decide endpoint is cannot-verify (service absent from snapshot).
