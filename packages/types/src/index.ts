@@ -2316,6 +2316,8 @@ export type LegalCaseSummary = {
   title: string;
   court: string;
   type: "civil" | "criminal" | "arbitration" | "tribunal" | "writ" | "appeal" | "other";
+  /** GAP-LEGAL-CASES-NEW-01: free-text dispute description entered at registration. */
+  subject?: string;
   filedDate: string;
   department?: string;
   petitioner?: string;

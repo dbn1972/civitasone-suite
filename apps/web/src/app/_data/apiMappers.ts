@@ -809,6 +809,9 @@ export function mapLegalCaseSummaries(payload: unknown): LegalCaseSummary[] | nu
       // future DTO provides it.
       advocateName: toText(row.counselRef) ?? toText(row.counsel_ref) ?? toText(row.advocateName) ?? undefined,
       nextHearingDate: toText(row.nextDate) ?? toText(row.nextHearingDate) ?? undefined,
+      // GAP-LEGAL-CASES-NEW-01: map the free-text dispute description so it can
+      // be displayed in the list alongside the case type.
+      subject: toText(row.subject) ?? undefined,
       status,
     });
   }
