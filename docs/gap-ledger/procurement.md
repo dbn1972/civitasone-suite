@@ -101,8 +101,8 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-APPROVALS-02  ·  HIGH  ·  confirmed  ·  theme DATA-CONSISTENCY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-- **W2 PQ-A note (#2037):** workflow queue now shows Approve/Reject only for tasks the viewer role may complete (workflow-service roleRef check) and the register vs queue sources are labelled. Needs owner decision: single source of truth for stats and queue.
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — mapApprovals fix (return [] for empty array) done in #2037; reconciling the two approval sources (register vs workflow queue) into a single source of truth requires product decision on workflow-inbox-only vs hybrid; stats now derived from whichever source is active per W2 PQ-A note)
+- **W2 PQ-A note (#2037): workflow queue now shows Approve/Reject only for tasks the viewer role may complete (workflow-service roleRef check) and the register vs queue sources are labelled. Needs owner decision: single source of truth for stats and queue.
 - **W0 note:** partly fixed by #1866 — mapApprovals returns [] when empty (loaders.ts); Action Required card replaced by distinct metrics; two sources (approvals table vs workflow panel) still unreconciled
 - **First-pass claim:** Two unreconciled approval sources on one page: the stat cards and top table count /procurement/approvals (page.tsx:41-44) while the actionable queue reads workflow tasks; an approver can see "Pending Approvals 0" above a non-empty queue, or vice-versa. "Action Required" repeats the same number as "Pending Approvals" (page.tsx:41,44).
 - **Verified evidence:** page.tsx:16,41,44 stats and the top DataTable come from getProcurementApprovals (/api/v1/procurement/approvals); the actionable queue in ProcurementApprovalsPanel comes from /v1/workflow/tasks - separate sources, no reconciliation. 'Pending Approvals' (l.41) and 'Action Required' (l.44) both = approvals.length. Extra finding: loaders.ts:625 mapApprovals returns null for an empty list, which apiClient.ts:155-158 treats as invalid_payload, so a genuinely empty approvals list renders the load ErrorState instead of 'No pending approvals'.
@@ -305,7 +305,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-BID-EVALUATION-04  ·  MEDIUM  ·  confirmed  ·  theme MISSING-ACTION (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — scores/L1/tie badges already correct; award/recommend action needs SoD+audit design and a backend endpoint before any UI is added; no safe interim exists beyond showing status as read-only, which is already the case)
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** Re-verified on main: scores 2dp right-aligned, L1 and tie badges present (BidEvaluationTable.tsx). Still open: technical threshold / weightage marking needs the API to return them, and the award / recommend action needs an owner decision (SoD + audit). No UI added without an API.
 - **W0 note:** partly fixed by #1866 — scores formatted 2dp right-aligned, L1 and tie badges; no threshold/weightage marking and no recommend/award action (needs API)
 - **First-pass claim:** Scores print as String(number) with no decimals, weightage or pass/fail threshold (Table:34-36); rank is a bare number with no tie or L1 cue; there is no action to recommend or award — status is read-only (Table:67-75).
@@ -617,7 +617,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-EMD-BG-05  ·  MEDIUM  ·  confirmed  ·  theme MISSING-FEATURE (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — expiry filter and expiry chip already present (#2041); release/extend/forfeit require a maker-checker + audit design and a procurement-service endpoint before any button can be added; page subtitle already says read-only register)
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** W2 #2041 added the expiring-within-30-days filter (with a clear empty state) on top of the existing dd Mon yyyy + expiry chip + read-only subtitle. Still open: release / extend / forfeit actions need a product decision (maker-checker + audit design, money-adjacent) - no buttons added.
 - **W0 note:** partly fixed by #1866 — formatIndianDate + expiry label chip and read-only subtitle; no expiring-within-30-days sort/filter, no release/extend/forfeit (decision)
 - **First-pass claim:** Register is read-only with no expiry warning: Valid Until is a raw string, no days-remaining cue, and no release / extend / forfeit action or audit trail although Forfeited is a tracked status (Table:65-72).
@@ -811,7 +811,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-02  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — truncation notice and partial-stats label already present; server-side pagination with a total and status-count summary needs the procurement-service GRN list endpoint to return {data, total, statusCounts}, not started; blocked on backend decision)
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** Re-verified: the interim 500-row truncation notice and partial-stats label exist (grn/page.tsx). A real fix is server-side pagination with a total and status-count summary (backend + loader + page), not started - scoped for part 2.
 - **W0 note:** partly fixed by #1866 — interim truncation notice at 500-row cap only; no server-side pagination/total/summary counts
 - **First-pass claim:** Hard cap: getProcurementGRNs({ limit: 500 }) (page.tsx:29) with client-side paging and no "showing first 500" cue; stats are computed from the same truncated list (page.tsx:31-34).
@@ -1225,7 +1225,8 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-INDENTS-01  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (W2 procurement #2056 re-check REOPENED: acceptance says the stat totals match the server total, not the slice length, but indents/page.tsx has no total (the list API returns none); was W0 PROVISIONAL: closed by #1866)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — pagination (limit/offset from URL), truncation notice, prev/next links and honest stat label ("On this page") are all present; stat card counts reflect the current page slice since the list API returns no server total; a true total requires a backend /procurement/indents summary endpoint or a {data,total} envelope; left open until backend decision)
+- **W2 p2 REOPENED note: acceptance says the stat totals match the server total, not the slice length, but indents/page.tsx has no total (the list API returns none); was W0 PROVISIONAL: closed by #1866)
 - **First-pass claim:** Hard cap: limit 500 with client-side paging and stats computed on that slice (page.tsx:31,33-35); no truncation cue for a busy department.
 - **Verified evidence:** indents/page.tsx:31 getProcurementIndents({limit:500}); stats at l.33-35 and indents.length (l.64) are computed on that slice; DataTable is client-side pageSize 10 (l.89) with client filter; no cue when 500 rows returned. Loader supports limit/offset/q (loaders.ts:2408-2425) but page never passes them.
 - **Files to change:** `apps/web/src/app/(app)/procurement/indents/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -1365,7 +1366,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-INDENTS-NEW-01  ·  MEDIUM  ·  confirmed  ·  theme DEFAULT (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — department field already defaults to empty and submit is blocked on empty value (#1866); a department picker needs a source (session org-unit claim vs a procurement-readable /departments endpoint); GET /v1/hrms/departments is HR-role-gated so procurement officers cannot read it; source decision needed before building the picker)
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** Re-verified: department defaults to empty and is required (CreateIndentForm.tsx). A department picker needs a source of the caller's org units: GET /v1/hrms/departments is HR-role-gated, so procurement officers cannot read it. Decide the source (session org unit claim or a procurement-readable endpoint) before building it.
 - **W0 note:** partly fixed by #1866 — CreateIndentForm.tsx:32 department default now empty and required with per-field error (:91), but still a free-text input; no department picker/session-home default (cf. planning/new EntityPicker)
 - **First-pass claim:** Wrong-department default: Department is a free-text input pre-filled "Finance" (CreateIndentForm.tsx:17) — a Housing & Urban Development officer who does not overwrite it raises the indent under Finance, which drives routing and reporting.
@@ -1532,7 +1533,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-ORDERS-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme APPROVAL_PATH (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — CreatePOForm success message updated in #2037; the procurement_po_approval workflow instance is still enqueued on create AND the eOffice RaiseEOfficeNote is still offered; deduplicating the two approval paths (workflow inbox vs eOffice) is a product architecture decision; no UI change is safe without a decision on which path is authoritative)
 - **W2 PQ-A note (#2037):** CreatePOForm no longer says the PO was submitted for workflow approval (i18n en+hi). The procurement_po_approval workflow instance still enqueued on create is untouched. Needs owner decision: single release path (workflow inbox vs eOffice).
 - **W0-10 note:** review found the W0 tick partly — Page side done (APPROVAL_RAISABLE_STATUSES draft/pending page.tsx:23,164; Approval card; status-aware dispatch hint; tests). But second path still live: PO create still enqueues a workflow-inbox instance (services/procurement-service/src/modules/po/consumer.ts:229-243 procurement_po_approval) while page says release path is eOffice, and CreatePOForm.tsx:140 still says 'PO submitted for workflow approval.' Pending PO still has two approval mechanisms; no evidence of product-owner decision/dedupe
 - **First-pass claim:** Two competing approval paths on one screen: the PO enters the workflow inbox on create (CreatePOForm "submitted for workflow approval"), yet RaiseEOfficeNote (page.tsx) offers a second, eOffice approval for any status including approved and dispatched, and DispatchPOActions tells the user to "Approve via workflow inbox" (DispatchPOActions.tsx). An officer cannot tell which decision actually releases the PO.
@@ -2523,7 +2524,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-TENDERS-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme PII (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — display masking (Bidder N) applied in UI while tender is published (#1866); the authoritative fix (API omitting vendorName before opening, role-limited to bid-opening committee) requires a procurement-policy decision and backend change; left open)
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** Names are masked ('Bidder N') only in the UI while the tender is published. Who may see the bidder register before opening, and having the API omit vendorName, is a vigilance decision. Left open.**
 - **W0 note:** partly fixed by #1866 — tenders/[id]/page.tsx:72-75 shows Bidder N while published (display masking only); API still returns vendorName, no role gate or audited reveal
 - **First-pass claim:** Bidder names are shown while bids are sealed (page.tsx): only the amount is hidden; before the opening date the register of who bid is visible to any module user, weakening bid confidentiality.
@@ -2564,7 +2565,8 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-TENDERS-DETAIL-DOCUMENTS-01  ·  HIGH  ·  confirmed  ·  theme ROLEGATE
 
-- [ ] **Status** (W2 procurement #2056 re-check REOPENED: acceptance says voiding a corrigendum keeps the row visible as Superseded, but there is no void command and no Superseded label (docs-consumer has create and republish only); the 'POST returns 403' claim was also false until #2056 added an error handler to the documents plugin (it returned 500). Needs a product decision on corrigendum void; was W0 PROVISIONAL: closed by #1866)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — upload role gate and 500→400/403/404 error handling added in #2056; corrigendum void/supersede action (keeping row visible as Superseded) requires a product decision on the corrigendum workflow: issue no., revised closing date, notify-bidders, approver; not invented without that decision)
+- **W2 p2 REOPENED note: acceptance says voiding a corrigendum keeps the row visible as Superseded, but there is no void command and no Superseded label (docs-consumer has create and republish only); the 'POST returns 403' claim was also false until #2056 added an error handler to the documents plugin (it returned 500). Needs a product decision on corrigendum void; was W0 PROVISIONAL: closed by #1866)
 - **First-pass claim:** Corrigendum has no special handling: it is just another docType (page.tsx) with no version number, no effect on the bid closing date and no notice to bidders — the legally binding amendment of a live tender is a file in a list. Anyone with module access can upload it (no role gate) and there is no delete/replace/void action.
 - **Verified evidence:** documents/page.tsx: DOC_TYPES (line 18-25) lists 'corrigendum' as one option; handleSave (120-165) posts only {docType,title,storageRef}. No version/effective date, no update of bid closing date, no notify-bidders call. Upload form is rendered unconditionally (lines 194-277); table Actions column only has Download (365); no delete/replace/void. Layout only has ModuleGate moduleKey='procurement' (procurement/layout.tsx), so any procurement user sees upload. Server-side role enforcement and any corrigendum endpoint are cannot-verify (procurement-service absent).
 - **Files to change:** `apps/web/src/app/(app)/procurement/tenders/[id]/documents/page.tsx`, `apps/web/src/app/(app)/procurement/tenders/[id]/page.tsx`, `services/procurement-service (absent from snapshot)`
@@ -2762,7 +2764,8 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-02  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [ ] **Status** (W2 procurement #2055 re-check REOPENED: acceptance says an authorised role can reveal the masked value, but no reveal exists (PAN and phone stay masked, fail closed); it needs an audited reveal endpoint; was W0 PROVISIONAL: closed by #1866)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — phone is now masked via maskPhone() in VendorsTable.tsx (contact: v.contactPerson ?? maskPhone(v.phone)) so no raw number is shown; PAN and bank account are masked in the detail page; audited reveal endpoint (POST /vendors/:id/reveal) needs a backend and role-gate design decision before a reveal control can be added; fail-closed until then)
+- **W2 p2 REOPENED note: acceptance says an authorised role can reveal the masked value, but no reveal exists (PAN and phone stay masked, fail closed); it needs an audited reveal endpoint; was W0 PROVISIONAL: closed by #1866)
 - **First-pass claim:** DPDP: the Contact column falls back to the raw phone number (contact: v.contactPerson ?? v.phone ?? "—", Table) for every module user; contact persons of proprietorship vendors are natural persons, and no masking or role gate applies.
 - **Verified evidence:** apps/web/src/app/(app)/procurement/vendors/VendorsTable.tsx:228 sets contact: v.contactPerson ?? v.phone ?? '—' and l.268 shows the Contact column to every module user; the search filter also indexes it. No masking or role gate. Whether contact persons are natural persons is domain fact (plausible for proprietorships).
 - **Files to change:** `apps/web/src/app/(app)/procurement/vendors/VendorsTable.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`
@@ -2778,7 +2781,8 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-03  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (W2 procurement #2055: PARTIAL, stays open for W2 — server total/counts and q filter landed, but the table is still client-paged over the first 500, so with 600 vendors paging does not reach all; needs server pagination)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — server total/counts and q filter landed in #2055; the table is still client-paged over the first 500 (with a truncation notice when cap is hit); server pagination requires the procurement-service vendors list to return {data, total} which it does not yet; blocked on backend)
+- **W2 p2 PARTIAL note: stays open for W2 — server total/counts and q filter landed, but the table is still client-paged over the first 500, so with 600 vendors paging does not reach all; needs server pagination)
 - **W0 note:** partly fixed by #1866 — vendors/page.tsx:14 + VendorsTable.tsx:121 truncation notice when cap 500 hit (interim step); no server total/counts or server pagination
 - **First-pass claim:** limit=500 with a client-side DataTable: vendor masters above 500 are silently truncated, and stat tiles are computed from the same truncated set (page.tsx).
 - **Verified evidence:** apps/web/src/app/(app)/procurement/vendors/page.tsx:142 getProcurementVendors({limit:500}); tiles (l.144-146,163) computed from that array; VendorsTable.tsx does client-side filter/paging (pageSize 10, l.251). q filtering in loaders.ts:2462-2469 is also client-side after the fetch. No truncation indicator. Total count from the API is cannot-verify (envelope unknown).
@@ -2812,7 +2816,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-05  ·  LOW  ·  partly  ·  theme CONSISTENCY (was VALIDATION)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — list column now labelled "Buyer rating (/5)", tiles reconcile (#2055); choosing one rating scale across list, profile and scorecard is an owner decision (separate /5 buyer rating vs /100 performance score; recommend /100 everywhere but needs confirmation))
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** The list column is now labelled 'Buyer rating (/5)' and the tiles reconcile to the server total (#2055). A single rating scale across list, profile and scorecard is a decision (see VENDORS-DETAIL-05). Left open.**
 - **W0 note:** partly fixed by #1866 — Not Empanelled tile added so tiles reconcile (VendorsTable.tsx:71); table Rating column still n/5 vs scorecard /100 (only detail relabelled Buyer rating)
 - **First-pass claim:** Rating "n/5" here but the scorecard scores 0–100 (vendors/[id]/scorecard/page.tsx) — two scales for the same vendor; GSTIN prints unvalidated as returned; empanelment set uses "Not Empanelled" that the stat tiles do not count.
@@ -2872,8 +2876,8 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme MISSING-FEATURE (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
-- **W2 procurement note (partly fixed in #2055):** the profile now shows the empanelment validity (Expired / expires-in-N-days pill) and the vendor's purchase orders (GET /orders?vendorId=, per-section error state). Still open: GRNs, contracts and EMD/BG tabs need a vendorId filter on their list endpoints.**
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — empanelment validity pill and PO tab added in #2055; GRNs, contracts and EMD/BG tabs need a vendorId filter on their list endpoints which the procurement-service does not currently expose; blocked on backend endpoint decision)
+- **W2 procurement note (partly fixed in #2055): the profile now shows the empanelment validity (Expired / expires-in-N-days pill) and the vendor's purchase orders (GET /orders?vendorId=, per-section error state). Still open: GRNs, contracts and EMD/BG tabs need a vendorId filter on their list endpoints.**
 - **First-pass claim:** Profile has no history: orders, GRN acceptances, contracts, EMD/BG or empanelment expiry for the vendor are not shown, so an officer cannot judge the record without opening five other screens.
 - **Verified evidence:** apps/web/src/app/(app)/procurement/vendors/[id]/page.tsx renders only two cards: Vendor details (l.50-113) and Bank details (115-132) plus a 'View scorecard' link (l.44). VendorDetail (apiMappers.ts:126-159, 270-283) has no orders, GRN, contract, EMD/BG or empanelment-expiry field. Sibling lists exist (orders, grn, contracts, emd-bg, empanelment pages) but whether their list APIs accept a vendorId filter cannot be verified (procurement-service absent).
 - **Files to change:** `apps/web/src/app/(app)/procurement/vendors/[id]/page.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/procurement/vendors/[id]/VendorHistoryTabs.tsx (new)`
@@ -2892,7 +2896,8 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-DETAIL-05  ·  LOW  ·  confirmed  ·  theme CONSISTENCY (was VALIDATION)
 
-- [ ] **Status** (W2 procurement #2055 re-check REOPENED: acceptance says list, detail and scorecard show the same rating scale, but the list and detail show the buyer rating (n/5) and the scorecard scores out of 100; only relabelled. Needs the single-scale decision (see VENDORS-05); was W0 PROVISIONAL: closed by #1866)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — relabelled to "Buyer rating n/5" in #2055; scorecard still uses /100; choosing one scale is a product decision (see VENDORS-05 dependency); empanelment status shown once (header only, details card field removed); left open for scale decision)
+- **W2 p2 REOPENED note: acceptance says list, detail and scorecard show the same rating scale, but the list and detail show the buyer rating (n/5) and the scorecard scores out of 100; only relabelled. Needs the single-scale decision (see VENDORS-05); was W0 PROVISIONAL: closed by #1866)
 - **First-pass claim:** Rating pill duplicates the scorecard on a /5 scale while the scorecard uses /100; empanelment status appears twice (header pill and details card).
 - **Verified evidence:** apps/web/src/app/(app)/procurement/vendors/[id]/page.tsx:41-43 shows a rating pill '{rating}/5'; scorecard/page.tsx:116 shows 'Overall score ... /100' from overallRating, so two scales. Empanelment status is rendered twice: header StatusPill (l.40) and details card (l.60-63). Nothing to do with form validation (theme wrong).
 - **Files to change:** `apps/web/src/app/(app)/procurement/vendors/[id]/page.tsx`, `apps/web/src/app/(app)/procurement/vendors/VendorsTable.tsx`, `apps/web/src/app/(app)/procurement/vendors/[id]/scorecard/page.tsx`
@@ -2944,7 +2949,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-DETAIL-SCORECARD-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — legend and band colours aligned to backend (A>=85, B 70-84, C 50-69, D<50) in #2041; single scale (/100 vs /5) across list, profile and scorecard is an owner decision (see VENDORS-05); formatVendorRating helper will follow the decision)
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** W2 #2041 aligned the legend and band colours to the backend (A >= 85, B 70-84, C 50-69, D below 50; unrated shows a dash). Still open: picking ONE scale (/100 vs /5) across list, profile and scorecard is an owner decision.
 - **W0 note:** partly fixed by #1866 — Band legend + note that /100 performance score is separate from /5 buyer rating added; no single scale or shared formatVendorRating helper. Legend uses excellent/good/average/poor (>=90/75/50) but API ratingBand is A/B/C/D (>=85/70/50, scorecard-domain.ts) so legend and BAND_COLOR keys do not match backend.
 - **First-pass claim:** Scale mismatch: the scorecard shows "Overall score 86/100" (page.tsx) but the vendor list and profile show rating "n/5" (VendorsTable.tsx, vendors/[id]/page.tsx); ratingBand is server-supplied and not derived from the visible scores, and the thresholds (excellent/good/average/poor) are not explained.
@@ -3051,7 +3056,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-VENDORS-NEW-04  ·  MEDIUM  ·  partly  ·  theme DARKMODE (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — inline #fff backgrounds and hard-coded colours removed in #2055 (dark mode fix done); GSTIN/PAN fields already labelled "format checked only, not verified"; optional KYC document upload needs a backend storage endpoint and ACL decision before FileUpload can be wired; left open)
 - **W2 procurement note (partly fixed in #2055):** GSTIN and PAN now say 'format checked only, not verified'. Still open: the optional KYC document upload (needs a backend attach endpoint and storage ACL) and a real GSTN/PAN verification integration.**
 - **W0 note:** partly fixed by #1866 — Inline white backgrounds and hard-coded colours removed. Remaining: no optional KYC document upload (FileUpload) and no GSTN/PAN verification or not-verified label.
 - **First-pass claim:** Inline backgrounds (#fff) on every field wrapper (Form) break dark mode; no GST-portal or PAN verification, no attachment of registration documents or KYC.
@@ -3089,7 +3094,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-APPROVALS-ESCALATION-01  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — page says "Reference only" (#2056); loading thresholds from workflow-service depends on the single-approvals-source decision; no safe code change possible without the workflow routing config)
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** No source of the real thresholds exists to compare against: the bands are developer-maintained and nothing reads the workflow routing config. #2056 makes the page say 'Reference only' (not live routing). Loading them from workflow-service depends on the single-approvals-source decision. Left open.**
 - **First-pass claim:** Thresholds are hard-coded in the page (ESCALATION_ROWS, page.tsx:13-17) while real routing lives in the workflow service (page.tsx:25-28): the reference can silently drift from actual behaviour, and per-tenant delegation of powers cannot differ. Workflow service is not in the snapshot — the true thresholds are undeterminable.
 - **Service:** `workflow-service`  ·  **Endpoint(s):** `['(none; ESCALATION_ROWS hard-coded in page)', 'approval routing config']`
@@ -3124,7 +3129,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-CONTRACTS-NEW-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — duplicate-number 409 and audit done in #1928; poRef validation against procurement-service needs an internal-client pattern decision; blocked on architecture decision)
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** poRef validation against procurement-service needs a cross-service client in contract-service (none exists); duplicate-number 409 + audit are already done (#1928). Needs a decision on the internal-client pattern before building.
 - **W0 note:** partly fixed by #1928 — Audit event and duplicate contractNo 409 (DUPLICATE_NUMBER) done. Remaining: poRef is optional free text, not validated against an existing PO.
 - **First-pass claim:** Mutation goes to the contract service (/v1/contract/contracts, Form:65) while vendors come from procurement; audit trail, uniqueness and PO linkage (poRef) cannot be determined — services absent from snapshot.
@@ -3161,7 +3166,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-EMD-BG-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — forfeit/release/refund role-gated and audited; PFMS/treasury reference field needs a field-model decision before it can be captured or displayed)
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** Re-verified on main: forfeit / release / refund are role-gated, audited and post GL entries. Capturing a PFMS / treasury reference needs a decision on the field model and who supplies it; not invented here.
 - **W0 note:** partly fixed by main — emd/pbg forfeit/release/refund are role-gated (procurement roles, not finance-only), audited, and post GL entries. Remaining: no PFMS/treasury reference captured or shown.
 - **First-pass claim:** /procurement/emd and /pbg are not in the snapshot: forfeiture workflow, PFMS/treasury linkage and audit undeterminable.
@@ -3197,7 +3202,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-GRN-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — per-store GRN visibility cannot be enforced until the store/department model is added to procurement_grns (neither column exists); blocked on schema/architecture decision)
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** There is no store / department assignment on GRNs (grn.procurement_grns has neither column), so per-store visibility cannot be enforced. Needs an owner decision on the store model first.
 - **W0 note:** partly fixed by main — GRN list is tenant-scoped and role-limited, but there is no store/department assignment scoping (store A vs B).
 - **First-pass claim:** GET /procurement/grns not in snapshot: visibility scoping per store / department undeterminable.
@@ -3354,7 +3359,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-ORDERS-NEW-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — empanelment-validity check (EMPANELMENT_EXPIRED) and blacklisted-vendor check done in #2041; whether a PO may go to a vendor with NO empanelment record (tender winner) is a procurement-policy decision; blocked)
 - **W2 procurement note (INTERIM - NEEDS OWNER DECISION):** W2 #2041 enforces the empanelment-VALIDITY half server-side (EMPANELMENT-05: lapsed empanelment -> 422 EMPANELMENT_EXPIRED on POST /pos and /purchase-orders, and in the consumer). Whether a PO may go to a vendor with NO empanelment record (e.g. a tender winner) is a procurement-policy decision, so it is not enforced.
 - **W0 note:** partly fixed by #34 — Blacklisted/debarred vendors rejected in PO consumer, poNo server-issued, audited. Remaining: no check that vendor is empanelled / empanelment valid.
 - **First-pass claim:** POST /procurement/pos, vendor status validation and audit are undeterminable (services/procurement-service absent).
@@ -3510,7 +3515,7 @@ Counts: ACTION 172, BACKEND-VERIFY 44
 
 ### GAP-PROCUREMENT-TENDERS-DETAIL-DOCUMENTS-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 p2 INTERIM NEEDS OWNER DECISION — 50 MiB cap, MIME allowlist and executable/script block added in #2056; no malware scan or quarantine in procurement-service; scan/quarantine needs an upload-service architecture decision before implementation)
 - **W2 procurement note (partly fixed in #2056):** document registration now enforces a 50 MiB cap, a MIME allowlist and an executable/script extension block, and the documents routes return 400/403/404 instead of a bare 500. Still open: no malware scan or quarantine anywhere in procurement-service (needs an upload-service decision).**
 - **W0 note:** partly fixed by main — Documents add/list role-gated and audited. Remaining: only a storageRef is registered; no size/type limits and no malware scan or quarantine anywhere in procurement-service.
 - **First-pass claim:** Presigned upload/download service (admin uploads), malware scanning and the documents endpoints are not in the snapshot — undeterminable.

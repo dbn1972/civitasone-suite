@@ -105,3 +105,56 @@ describe("ApprovalChainBuilder B4 round-trip UX", () => {
     expect(screen.getByRole("button", { name: /open visual editor \(advanced\)/i })).toBeInTheDocument();
   });
 });
+
+describe("ApprovalChainBuilder B4-02 per-lane escalation warning", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows an inline warning in the LaneCard when SLA is set but escalation designation is empty", async () => {
+    const initial = emptyWorkflowDesign("Trade Licence");
+    // Set a non-zero SLA on the inspection lane (slaDays=5) with no escalation designation;
+    // all other lanes also get an escalation designation to isolate the assertion.
+    const withSla = {
+      ...initial,
+      lanes: initial.lanes.map((l) =>
+        l.key === "inspection"
+          ? { ...l, enabled: true, designationId: "pos-1", slaDays: 5, escalationDesignationId: "" }
+          : { ...l, escalationDesignationId: "pos-9", escalationDesignationLabel: "Superior" },
+      ),
+    };
+    render(<ApprovalChainBuilder serviceName="Trade Licence" initial={withSla} />);
+
+    // Multiple Escalation designation selects exist, one per action lane.
+    await screen.findAllByLabelText("Escalation designation");
+
+    // GAP-DESIGNER-DETAIL-B4-02: the per-lane inline warning should appear
+    // under the escalation select of the Inspection LaneCard.
+    const warnings = screen.getAllByText(/SLA is 5 day/i);
+    expect(warnings.length).toBeGreaterThanOrEqual(1);
+    expect(warnings[0]).toBeInTheDocument();
+  });
+
+  it("clears the inline escalation warning when both SLA and escalation designation are set", async () => {
+    const initial = emptyWorkflowDesign("Trade Licence");
+    // Set escalation designation on ALL action lanes so none produce a warning.
+    const withBoth = {
+      ...initial,
+      lanes: initial.lanes.map((l) => ({
+        ...l,
+        designationId: "pos-1",
+        designationLabel: "Licensing Officer",
+        escalationDesignationId: "pos-2",
+        escalationDesignationLabel: "Superior",
+      })),
+    };
+    render(<ApprovalChainBuilder serviceName="Trade Licence" initial={withBoth} />);
+
+    // Wait for escalation selects to render.
+    await screen.findAllByLabelText("Escalation designation");
+
+    // GAP-DESIGNER-DETAIL-B4-02: no missing_escalation warning should appear
+    // when all lanes have an escalation designation set.
+    expect(screen.queryByText(/but no escalation designation is set/i)).not.toBeInTheDocument();
+  });
+});
