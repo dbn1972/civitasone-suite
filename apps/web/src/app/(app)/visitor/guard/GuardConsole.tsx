@@ -325,7 +325,7 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
           <EmptyState icon="📅" title="No approved visitors expected today" message="Approved visit requests scheduled for today will appear here." />
         ) : (
           <div className="tbl-wrap">
-            <table className="tbl" style={{ width: "100%" }}>
+            <table className="tbl tbl--stack">
               <thead>
                 <tr>
                   <th style={labelStyle}>Visitor</th>
@@ -338,7 +338,7 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
               <tbody>
                 {expectedHere.map((v) => (
                   <tr key={v.id}>
-                    <td>
+                    <td data-label="Visitor">
                       <div style={{ fontWeight: 600 }}>{v.visitorName}</div>
                       {/* GAP-VISITOR-GUARD-03 (DPDP): visitor phone is masked
                           for every guard viewer; no reveal here (no audited
@@ -386,7 +386,7 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
         )}
         {rosterState === "ok" && roster.length > 0 && (
           <div className="tbl-wrap">
-            <table className="tbl" style={{ width: "100%" }}>
+            <table className="tbl tbl--stack">
               <thead>
                 <tr>
                   <th style={labelStyle}>Visitor</th>

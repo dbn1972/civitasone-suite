@@ -1,19 +1,17 @@
 # W0-08: recount after Wave 0 reconciliation
 
-Total: **410 open**, 4216 closed, 25 blocked or obsolete.
+Total: **361 open**, 4250 closed, 40 blocked or obsolete.
 
-Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed module items).
+Priority queue: 10 open, 208 closed (0 entries ticked by W0-07 to match closed module items).
 
 | Module | Open | Closed | Blocked/obsolete |
 |---|---|---|---|
-| revenue | 23 | 56 | 0 |
 | procurement | 22 | 194 | 0 |
-| designer | 20 | 50 | 0 |
 | legal | 18 | 34 | 0 |
-| stock | 17 | 28 | 1 |
 | crm | 16 | 343 | 0 |
 | helpdesk | 15 | 52 | 0 |
-| tenant-admin | 15 | 180 | 0 |
+| revenue | 15 | 64 | 0 |
+| tenant-admin | 14 | 181 | 0 |
 | audit | 13 | 62 | 0 |
 | projects | 13 | 72 | 0 |
 | billing | 12 | 42 | 4 |
@@ -22,7 +20,6 @@ Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | cdp | 10 | 25 | 0 |
 | themes | 10 | 21 | 0 |
 | estab | 9 | 153 | 1 |
-| field | 9 | 17 | 0 |
 | grants | 9 | 77 | 0 |
 | knowledge | 9 | 60 | 0 |
 | loyalty | 9 | 11 | 0 |
@@ -30,15 +27,16 @@ Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | meeting | 8 | 25 | 0 |
 | workflow | 8 | 34 | 2 |
 | catalogue | 7 | 24 | 0 |
-| install | 7 | 30 | 0 |
+| stock | 7 | 33 | 6 |
 | telephony | 7 | 26 | 0 |
-| tenant | 7 | 66 | 0 |
-| visitor | 7 | 17 | 0 |
 | auth | 6 | 12 | 0 |
 | notifications | 6 | 44 | 0 |
 | platform-admin | 6 | 39 | 0 |
+| tenant | 6 | 67 | 0 |
 | ai | 5 | 40 | 0 |
+| field | 5 | 21 | 0 |
 | journeys | 5 | 11 | 0 |
+| visitor | 5 | 19 | 0 |
 | contact | 4 | 2 | 0 |
 | inspection | 4 | 19 | 0 |
 | learning | 4 | 42 | 0 |
@@ -46,6 +44,7 @@ Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | change | 3 | 20 | 0 |
 | contracts | 3 | 20 | 0 |
 | documents | 3 | 18 | 0 |
+| install | 3 | 34 | 0 |
 | policy | 3 | 21 | 0 |
 | pricing | 3 | 4 | 0 |
 | analytics | 2 | 77 | 0 |
@@ -56,6 +55,7 @@ Priority queue: 11 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | reports | 2 | 36 | 0 |
 | settings | 2 | 5 | 0 |
 | dashboard | 1 | 10 | 0 |
+| designer | 1 | 59 | 10 |
 | developer-portal | 1 | 5 | 0 |
 | fleet | 1 | 8 | 0 |
 | library | 1 | 4 | 0 |

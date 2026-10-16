@@ -17,6 +17,7 @@ export default async function Page() {
         back="/install/console"
         backLabel="Install console"
         errorArea="silo provisions"
+        showId={false}
       />
     </div>
   );

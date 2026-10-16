@@ -344,7 +344,7 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 
 ### GAP-TENANT-ADMIN-API-KEYS-06  ·  LOW  ·  partly  ·  theme DS (was WIRING)
 
-- [ ] **Status** (W2 tenant-admin REOPENED: acceptance 'no style={{...}} objects remain in APIKeyActions' is unmet, 14 inline style objects remain; the ds Input/FormField extraction was never done)
+- [x] **Status** (W2 PQ: closed — all 14 inline style={{}} objects removed from APIKeyActions.tsx; CSS token classes (.ta-fieldset-bare / .ta-hint / .ta-scope-row / etc.) added to civitas-ds.css (GAP-TENANT-ADMIN-API-KEYS-06))
 - **First-pass claim:** Create-form inputs use inline styles (inp/lbl) instead of DS .input; errors use hex colours (APIKeyActions.tsx:236-239).
 - **Verified evidence:** Inline style objects lbl/inp/fieldErr/prefRow are defined at APIKeyActions.tsx:236-239 and used on the create form (:140-163) - confirmed. Hex colours: #b42318 (:238), #067647 (:171), #f8fafc (:176); the generic error at :213 uses var(--bad). But the suggested target is not available: civitas-ds.css defines no .input class (grep finds none; only ds/designer/SlabTableEditor.tsx uses className='input' with no matching CSS), and ds/ has no Input/FormField component. Theme WIRING is wrong.
 - **Files to change:** `apps/web/src/app/(app)/tenant-admin/api-keys/APIKeyActions.tsx`, `apps/web/src/app/civitas-ds.css`, `apps/web/src/app/_components/ds/Input.tsx (new)`
