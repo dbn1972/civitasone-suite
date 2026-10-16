@@ -32,7 +32,14 @@ export function PaymentPanel({
   const t = useTranslations("citizenPayments");
   const router = useRouter();
   const [scheduleId, setScheduleId] = useState(schedules[0]?.id ?? "");
+  // GAP-CITIZEN-PAYMENTS-06: replace hand-typed UUID with a tracking-number
+  // resolver. The clerk enters the tracking number (e.g. TRK-2026-0001) from
+  // the intake receipt; we resolve it to the applicationId via the intake
+  // track endpoint (same pattern as IntakePanel).
+  const [trackingNo, setTrackingNo] = useState("");
   const [applicationId, setApplicationId] = useState("");
+  const [resolving, setResolving] = useState(false);
+  const [resolveError, setResolveError] = useState("");
   const [paymentMode, setPaymentMode] = useState<PaymentMode>("cash");
   const [instrumentRef, setInstrumentRef] = useState("");
   const [payerName, setPayerName] = useState("");
@@ -109,8 +116,42 @@ export function PaymentPanel({
           {schedules.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
 
-        <label htmlFor="pay-app" style={labelStyle}>{t("applicationIdLabel")}</label>
-        <input id="pay-app" value={applicationId} onChange={(e) => setApplicationId(e.target.value)} style={inputStyle} placeholder="00000000-0000-4000-8000-000000000000" />
+        {/* GAP-CITIZEN-PAYMENTS-06: resolve tracking number → applicationId */}
+        <label htmlFor="pay-track" style={labelStyle}>{t("trackingNoLabel")}</label>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <input
+            id="pay-track"
+            value={trackingNo}
+            onChange={(e) => { setTrackingNo(e.target.value); setApplicationId(""); setResolveError(""); }}
+            style={{ ...inputStyle, flex: 1, marginBottom: 0 }}
+            placeholder={t("trackingNoPlaceholder")}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            style={{ minHeight: 44, whiteSpace: "nowrap" }}
+            disabled={resolving || !trackingNo.trim()}
+            onClick={async () => {
+              setResolving(true);
+              setResolveError("");
+              setApplicationId("");
+              try {
+                const res = await fetch(`/api/proxy/v1/citizen/intake/track/${encodeURIComponent(trackingNo.trim())}`);
+                if (!res.ok) throw await userFacingErrorFromResponse(res, "load");
+                const body = await res.json() as { applicationId: string };
+                setApplicationId(body.applicationId ?? "");
+              } catch (e) {
+                setResolveError(e instanceof Error ? e.message : t("resolveError"));
+              } finally {
+                setResolving(false);
+              }
+            }}
+          >
+            {resolving ? t("resolving") : t("resolveTracking")}
+          </Button>
+        </div>
+        {resolveError ? <p role="alert" aria-live="assertive" style={{ color: "#b42318", fontSize: 13, marginBottom: 8 }}>{resolveError}</p> : null}
+        {applicationId ? <p role="status" style={{ fontSize: 12, color: "var(--good)", marginBottom: 8 }}>{t("resolvedApplication", { applicationId })}</p> : null}
 
         <label htmlFor="pay-mode" style={labelStyle}>{t("paymentModeLabel")}</label>
         <select id="pay-mode" value={paymentMode} onChange={(e) => setPaymentMode(e.target.value as PaymentMode)} style={inputStyle}>
