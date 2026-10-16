@@ -403,10 +403,10 @@ describe("DataTable", () => {
       expect(screen.getAllByText("—").length).toBe(2);
     });
 
-    it("passes an unparseable date string through unchanged, matching formatIndianDate's own fallback", () => {
+    it("renders em-dash for an unparseable date string (formatIndianDate returns — for invalid input)", () => {
       const dateRows: DateRow[] = [{ id: "1", label: "Bad", when: "not-a-date" }];
       render(<DataTable columns={dateColumns} rows={dateRows} />);
-      expect(screen.getByText("not-a-date")).toBeInTheDocument();
+      expect(screen.getByText("—")).toBeInTheDocument();
     });
 
     it("exports the date cellType via CSV using the same formatting", async () => {

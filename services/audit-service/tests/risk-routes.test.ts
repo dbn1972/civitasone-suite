@@ -19,6 +19,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
+import { relayOnce } from "@civitasone/outbox";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";

@@ -112,12 +112,12 @@ describe("campaign send/cancel authorization (GAP-NOTIFICATIONS-CAMPAIGNS-DETAIL
           currency: "INR",
           createdBy: ACTOR,
           updatedBy: ACTOR,
-        } as typeof notificationCampaigns.);
+        } as typeof notificationCampaigns.$inferInsert);
       }),
     );
     const res = await app.inject({
       method: "PATCH",
-      url: ,
+      url: `/notifications/campaigns/${id}/send`,
       headers: bearer(["tenant_admin"]),
     });
     expect(res.statusCode).toBe(403);

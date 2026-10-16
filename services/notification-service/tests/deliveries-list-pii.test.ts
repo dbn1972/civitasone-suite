@@ -91,12 +91,12 @@ describe("GAP-NOTIFICATIONS-DELIVERIES-03 — attemptCount consistent between li
     const listRes = await app.inject({
       method: "GET",
       url: "/notifications/deliveries",
-      headers: { authorization:  },
+      headers: { authorization: `Bearer ${adminToken()}` },
     });
     const detailRes = await app.inject({
       method: "GET",
-      url: ,
-      headers: { authorization:  },
+      url: `/notifications/deliveries/${DELIVERY_ID}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
 

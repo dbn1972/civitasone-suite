@@ -48,6 +48,7 @@ describe("citizen loaders", () => {
       status: "open",
       departmentRef: "Sanitation Dept",
       assignedTo: null,
+      requestNo: null,
       createdAt: "2024-01-01T00:00:00Z",
       updatedAt: "2024-01-02T00:00:00Z",
       actions: [{ id: "ga1", actionType: "acknowledged", note: "noted", createdAt: "2024-01-02T00:00:00Z" }],
