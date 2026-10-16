@@ -14,7 +14,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-HOME-01  ·  HIGH  ·  confirmed  ·  theme COPY (was DEADROUTE)
 
-- [x] **Status** (W2 PQ: closed by #TBD — tile reads "View audience segments…"; cdp/page.test.tsx verifies text and hrefs)
+- [x] **Status** (W2 PQ: closed by #2089 — tile reads "View audience segments…"; cdp/page.test.tsx verifies text and hrefs)
 - **First-pass claim:** Hub tile 'Segments' promises 'Create and manage audience segments for campaigns' (page.tsx:8) but /cdp/segments is a read-only ModuleListPage with no create/edit control (segments/page.tsx:14-21) — the primary CDP job is unreachable from the UI.
 - **Verified evidence:** cdp/page.tsx:8 'Create and manage audience segments'; segments/page.tsx:16 is ModuleListPage 'Audience segments for campaigns.' with no create/edit control; no segments/new or [id] route exists in cdp/segments/. Whether cdp-service has segment write endpoints cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/cdp/page.tsx`, `apps/web/src/app/(app)/cdp/segments/page.tsx`
@@ -135,7 +135,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-IDENTITY-02  ·  MEDIUM  ·  confirmed  ·  theme CAP (was UUID)
 
-- [x] **Status** (W2 PQ: closed by #TBD — view-only subtitle, no raw-id column, status not duplicated; identity/page.test.tsx covers all three)
+- [x] **Status** (W2 PQ: closed by #2089 — view-only subtitle, no raw-id column, status not duplicated; identity/page.test.tsx covers all three)
 - **First-pass claim:** Rows are labelled by visitorRef, with an 8-char raw id in the ID column and the status repeated as Detail and Status (mapper ladder, _data.ts:59-76); there is no action to resolve an identity from this page although the description says 'pending identity resolution'.
 - **Verified evidence:** mapRows (_data.ts:41-97): id=row.id, label falls to visitorRef (l.67), sublabel = description ?? status (l.69-71) and status = row.status (l.78), so the same value renders in Detail and Status columns; ModuleListTable.tsx:50 prints id.slice(0,8) in an ID column. The table is read-only: no resolve/link action exists although description (identity/page.tsx:16) says 'pending identity resolution'. EntityPicker fix does not apply (visitors are anonymous, no name).
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/(app)/cdp/_data.ts`, `apps/web/src/app/(app)/cdp/identity/page.tsx`
@@ -340,7 +340,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-PROFILES-DETAIL-05  ·  LOW  ·  partly  ·  theme NAVUX
 
-- [x] **Status** (W2 PQ: closed by #TBD — all CDP child pages use PageHeader back="/cdp"; identity+segments page.test.tsx each assert exactly one back link)
+- [x] **Status** (W2 PQ: closed by #2089 — all CDP child pages use PageHeader back="/cdp"; identity+segments page.test.tsx each assert exactly one back link)
 - **First-pass claim:** Detail route has no breadcrumb nav (only PageHeader back) unlike sibling children; layout uses .grid.g-main and .fields classes (page.tsx:115,193) not in ds.
 - **Verified evidence:** Detail page does have PageHeader back='/cdp/profiles' with label (page.tsx:92-97), so a back link exists; there is no multi-level breadcrumb. The claim that .grid.g-main and .fields are not in the design system is wrong: both are defined in app/civitas-ds.css (l.104, 218). Siblings identity/segments/steward hand-roll a duplicate <nav class='back'> above PageHeader, so the inconsistency runs the other way. Tables are wrapped in .tbl-wrap (horizontal scroll) but have no card transform on mobile.
 - **Files to change:** `apps/web/src/app/(app)/cdp/identity/page.tsx`, `apps/web/src/app/(app)/cdp/segments/page.tsx`, `apps/web/src/app/(app)/cdp/steward/page.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -393,7 +393,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-SEGMENTS-03  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [x] **Status** (W2 PQ: closed by #TBD — ModuleListTable rebuilt on DataTable (sortable/filterable/showId prop); segments page uses CdpListTable with no id column; segments/page.test.tsx covers Members+Rule columns)
+- [x] **Status** (W2 PQ: closed by #2089 — ModuleListTable rebuilt on DataTable (sortable/filterable/showId prop); segments page uses CdpListTable with no id column; segments/page.test.tsx covers Members+Rule columns)
 - **First-pass claim:** ModuleListTable prints the raw record id truncated to 8 chars in an 'ID' column (ModuleListTable.tsx:44) and a generic 'Detail'/'Meta' pair, so a steward sees hash-like fragments instead of business labels; no sort, filter or pagination for lists that can hold many rows.
 - **Verified evidence:** ModuleListTable.tsx:50 prints row.id.slice(0,8) in the ID column; headers Detail/Meta generic (l.42,44); plain <table> with no sort, filter or pagination (l.37-58). Shared by every ModuleListPage route so the same defect exists across modules.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -482,7 +482,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-HOME-04  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 PQ: closed by #TBD — cdp-service present; all 5 routes registered in app.ts; each has requireRole guard; steward uses STEWARD_ROLES (cdp_steward/cdp_admin/super_admin); cdp/page.test.tsx asserts all 5 hrefs are present)
+- [x] **Status** (W2 PQ: closed by #2089 — cdp-service present; all 5 routes registered in app.ts; each has requireRole guard; steward uses STEWARD_ROLES (cdp_steward/cdp_admin/super_admin); cdp/page.test.tsx asserts all 5 hrefs are present)
 - **First-pass claim:** cdp-service is not in this snapshot (services/ has only hrms-service), so tile destinations' endpoints cannot be verified — undeterminable.
 - **Service:** `cdp-service`  ·  **Endpoint(s):** `['GET /api/v1/cdp/profiles', 'GET /api/v1/cdp/identity/anonymous-visitors', 'GET /api/v1/cdp/segments', 'GET /api/v1/cdp/events/taxonomy', 'GET/POST /v1/cdp/steward/queue|decide']`
 - **Question:** Do all five tile destinations map to live cdp-service routes that the tile viewer role may call?
@@ -493,7 +493,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-EVENTS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 PQ: closed by #TBD — taxonomy-repo.ts toView() returns {eventName, category, schemaJson, status, version, createdAt, updatedAt}; _data.ts mapRows uses toText(row.description)?? toText(row.category) so both are handled; _data.test.ts "labels an event-taxonomy row from eventName" confirms shape)
+- [x] **Status** (W2 PQ: closed by #2089 — taxonomy-repo.ts toView() returns {eventName, category, schemaJson, status, version, createdAt, updatedAt}; _data.ts mapRows uses toText(row.description)?? toText(row.category) so both are handled; _data.test.ts "labels an event-taxonomy row from eventName" confirms shape)
 - **First-pass claim:** Taxonomy is fetched from cdp-service GET /v1/cdp/events/taxonomy — service is absent from this snapshot; row shape (eventName, description, status) is inferred from the mapper comment only (_data.ts:57-58): undeterminable.
 - **Service:** `cdp-service`  ·  **Endpoint(s):** `['GET /api/v1/cdp/events/taxonomy']`
 - **Question:** Does taxonomy return rows shaped {eventName, description, status} inside a {data} envelope with status limited to a fixed enum?
@@ -504,7 +504,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-IDENTITY-04  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 PQ: closed by #TBD — visitor-routes.ts listQuery has limit: z.coerce.number().int().min(1).max(200) — mandatory, capped; web loader sends ?limit=50; cdp-visitor-stitch.test.ts "400 — limit is mandatory" covers the 400 path)
+- [x] **Status** (W2 PQ: closed by #2089 — visitor-routes.ts listQuery has limit: z.coerce.number().int().min(1).max(200) — mandatory, capped; web loader sends ?limit=50; cdp-visitor-stitch.test.ts "400 — limit is mandatory" covers the 400 path)
 - **First-pass claim:** Visitor row shape (visitorRef, lastSeenAt, firstSeenAt) is described only in mapper comments; cdp-service absent from snapshot (limit mandatory, per _data.ts:106-112 comment) — undeterminable.
 - **Service:** `cdp-service`  ·  **Endpoint(s):** `['GET /api/v1/cdp/identity/anonymous-visitors?limit=']`
 - **Question:** Does anonymous-visitors require and cap limit, and return {visitorRef, firstSeenAt, lastSeenAt} only?
@@ -528,7 +528,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-PROFILES-DETAIL-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 PQ: closed by #TBD — profiles/routes.ts GET /:id returns {data} envelope; returns 404 for unknown id (cdp-routes.test.ts "404 — profile not found"); getCdpProfile(_data.ts) returns null on 404; detail page shows "Profile not found" for null — page.test.tsx:77 covers it)
+- [x] **Status** (W2 PQ: closed by #2089 — profiles/routes.ts GET /:id returns {data} envelope; returns 404 for unknown id (cdp-routes.test.ts "404 — profile not found"); getCdpProfile(_data.ts) returns null on 404; detail page shows "Profile not found" for null — page.test.tsx:77 covers it)
 - **First-pass claim:** cdp-service (profiles, identity, timeline) absent from snapshot — response envelope {data} known only from schemas import; undeterminable.
 - **Service:** `cdp-service`  ·  **Endpoint(s):** `['GET /api/v1/cdp/profiles/:id', 'GET /api/v1/cdp/identity/:id (encoded)']`
 - **Question:** Does profile/identity/timeline return a {data} envelope matching @civitasone/schemas CDPProfile, with 404 for unknown id and 403 for unauthorized viewers?
@@ -539,7 +539,7 @@ Counts: ACTION 27, BACKEND-VERIFY 8, REFUTED 2
 
 ### GAP-CDP-SEGMENTS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 PQ: closed by #TBD — segments/routes.ts: GET uses CDP_ROLES; POST/PATCH/DELETE use ADMIN_ROLES (cdp_admin/super_admin); mutations publish to CQRS queue (commands.ts); cdp-routes.test.ts "403 — insufficient role (non-admin)" for POST segment covers role gate)
+- [x] **Status** (W2 PQ: closed by #2089 — segments/routes.ts: GET uses CDP_ROLES; POST/PATCH/DELETE use ADMIN_ROLES (cdp_admin/super_admin); mutations publish to CQRS queue (commands.ts); cdp-routes.test.ts "403 — insufficient role (non-admin)" for POST segment covers role gate)
 - **First-pass claim:** Segments endpoint shape and mutation endpoints are not present in this snapshot (cdp-service absent): undeterminable.
 - **Service:** `cdp-service`  ·  **Endpoint(s):** `['GET /api/v1/cdp/segments']`
 - **Question:** What is the segment response shape and are create/update/delete endpoints present, role-gated and audited?
