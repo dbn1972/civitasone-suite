@@ -57,8 +57,8 @@ const TAXABILITY_LABEL_KEYS: Record<Taxability, string> = {
 };
 
 const TYPE_BADGE: Record<string, { bg: string; fg: string }> = {
-  earning: { bg: "var(--infobg, #eff6ff)", fg: "#1d4ed8" },
-  allowance: { bg: "var(--infobg, #eff6ff)", fg: "#1d4ed8" },
+  earning: { bg: "var(--infobg)", fg: "var(--info)" },
+  allowance: { bg: "var(--infobg)", fg: "var(--info)" },
   deduction: { bg: "var(--badbg)", fg: "var(--bad)" },
   employer_contribution: { bg: "var(--goodbg)", fg: "var(--good)" },
   reimbursement: { bg: "var(--warnbg)", fg: "var(--warn)" },
@@ -169,8 +169,8 @@ function FormulaTooltip({ code, rule }: { code: string; rule: ComponentRule }) {
             bottom: "calc(100% + 6px)",
             insetInlineStart: "50%",
             transform: "translateX(-50%)",
-            background: "var(--ink, #1e293b)",
-            color: "var(--bg, #f1f5f9)",
+            background: "var(--ink)",
+            color: "var(--bg)",
             fontSize: 12,
             padding: "8px 12px",
             borderRadius: 8,

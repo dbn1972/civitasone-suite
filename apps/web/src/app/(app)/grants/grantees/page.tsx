@@ -72,10 +72,10 @@ export default async function GranteesPage() {
           same useSeededResource call that produces its rows. */}
       <div aria-label="Grantees">
         <StatGrid>
-          <StatCard icon="👤" iconBg="#f1f5f9" label="Total" value={grantees.length} />
-          <StatCard icon="🏢" iconBg="#faf5ff" label="Societies & missions" value={societiesAndMissions} />
-          <StatCard icon="🎁" iconBg="#dcfce7" label="Active Grants" value={totalActiveGrants} />
-          <StatCard icon="📋" iconBg="#fef3c7" label="Avg UC compliance" value={avgCompliance} />
+          <StatCard icon="👤" tone="neutral" label="Total" value={grantees.length} />
+          <StatCard icon="🏢" tone="neutral" label="Societies & missions" value={societiesAndMissions} />
+          <StatCard icon="🎁" tone="good" label="Active Grants" value={totalActiveGrants} />
+          <StatCard icon="📋" tone="warn" label="Avg UC compliance" value={avgCompliance} />
         </StatGrid>
         <Card title="Grantees">
           <GranteesTable grantees={grantees} source={source} canViewRegistration={canViewRegistration} />

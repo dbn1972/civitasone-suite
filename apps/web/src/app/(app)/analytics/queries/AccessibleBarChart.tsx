@@ -39,7 +39,7 @@ export function AccessibleBarChart({
 
   if (data.length === 0) {
     return (
-      <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#475569" }}>
+      <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--ink2)" }}>
         No data points to chart for {title}.
       </p>
     );
@@ -58,7 +58,7 @@ export function AccessibleBarChart({
             <span style={{ flex: "0 0 140px", fontSize: 13, color: "#334155", textAlign: "right" }}>
               {d.label}
             </span>
-            <span style={{ flex: 1, background: "#e2e8f0", borderRadius: 4, overflow: "hidden" }}>
+            <span style={{ flex: 1, background: "var(--line)", borderRadius: 4, overflow: "hidden" }}>
               <span
                 style={{
                   display: "block",
@@ -66,11 +66,11 @@ export function AccessibleBarChart({
                   minWidth: 2,
                   height: 18,
                   // DS token blue — meets AA contrast against the white card.
-                  background: "#1d4ed8",
+                  background: "var(--info)",
                 }}
               />
             </span>
-            <span style={{ flex: "0 0 90px", fontSize: 13, color: "#0f172a" }}>
+            <span style={{ flex: "0 0 90px", fontSize: 13, color: "var(--ink)" }}>
               {fmt(d.value)}
             </span>
           </div>

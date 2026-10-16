@@ -71,12 +71,12 @@ export function ActivationView({
   return (
     <>
       <StatGrid>
-        <StatCard icon="⏱" iconBg="#e7edfd" label="Time to first transaction (median)" value={ttfrtDisplay} />
+        <StatCard icon="⏱" tone="info" label="Time to first transaction (median)" value={ttfrtDisplay} />
         {platform ? (
           <>
-            <StatCard icon="🏢" iconBg="#eff6ff" label="Offices signed in" value={officesSignedIn} />
-            <StatCard icon="✅" iconBg="#ecfdf3" label="Offices activated" value={agg.activatedOffices} />
-            <StatCard icon="📈" iconBg="#fffaeb" label="Activation rate" value={`${Math.round(agg.activationRate * 100)}%`} />
+            <StatCard icon="🏢" tone="info" label="Offices signed in" value={officesSignedIn} />
+            <StatCard icon="✅" tone="good" label="Offices activated" value={agg.activatedOffices} />
+            <StatCard icon="📈" tone="warn" label="Activation rate" value={`${Math.round(agg.activationRate * 100)}%`} />
           </>
         ) : (
           <>
@@ -85,13 +85,13 @@ export function ActivationView({
                 setup progress (steps completed of the golden path) instead. */}
             <StatCard
               icon="🪜"
-              iconBg="#eff6ff"
+              tone="info"
               label="Setup progress"
               value={`${FUNNEL_STEPS.filter((s) => (stageByStep.get(s)?.reached ?? 0) > 0).length}/${FUNNEL_STEPS.length} steps`}
             />
             <StatCard
               icon="✅"
-              iconBg="#ecfdf3"
+              tone="good"
               label="First transaction"
               value={(stageByStep.get("first_transaction")?.reached ?? 0) > 0 ? "Done" : "Not yet"}
             />

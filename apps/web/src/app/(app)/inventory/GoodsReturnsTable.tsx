@@ -63,9 +63,9 @@ export function GoodsReturnsTable({
   return (
     <div aria-label="Inventory goods returns">
       <StatGrid>
-          <StatCard icon="↩️" iconBg="#fee2e2" label="Returns" value={statValue(provenance, rows.length)} />
-          <StatCard icon="🔎" iconBg="#fef3c7" label="Pending QC" value={statValue(provenance, pendingQc)} />
-          <StatCard icon="⏳" iconBg="#f1f5f9" label="Oldest Pending QC (days)" value={oldestPendingDays} />
+          <StatCard icon="↩️" tone="bad" label="Returns" value={statValue(provenance, rows.length)} />
+          <StatCard icon="🔎" tone="warn" label="Pending QC" value={statValue(provenance, pendingQc)} />
+          <StatCard icon="⏳" tone="neutral" label="Oldest Pending QC (days)" value={oldestPendingDays} />
       </StatGrid>
       <Card title="Goods Returns">
         <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="goods returns" capNote={capNote(rows.length, INVENTORY_LIST_LIMIT, "goods returns")}>

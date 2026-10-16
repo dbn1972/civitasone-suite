@@ -17,13 +17,13 @@ export type LifecycleEvent = {
 };
 
 const EVENT_CONFIG: Record<LifecycleEvent["type"], { icon: string; color: string; bg: string }> = {
-  join:         { icon: "🎉", color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)" },
-  transfer:     { icon: "🔄", color: "var(--info, #2563eb)", bg: "var(--infobg, #eff6ff)" },
-  promotion:    { icon: "⬆️", color: "var(--violet, #7c3aed)", bg: "var(--primary-soft, #f5f3ff)" },
-  deputation:   { icon: "🏛️", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)" },
-  confirmation: { icon: "✅", color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)" },
-  separation:   { icon: "📤", color: "var(--bad, #dc2626)", bg: "var(--badbg, #fef2f2)" },
-  other:        { icon: "📌", color: "var(--mut, #64748b)", bg: "var(--bg, #f8fafc)" },
+  join:         { icon: "🎉", color: "var(--good)", bg: "var(--goodbg)" },
+  transfer:     { icon: "🔄", color: "var(--info)", bg: "var(--infobg)" },
+  promotion:    { icon: "⬆️", color: "var(--violet)", bg: "var(--primary-soft)" },
+  deputation:   { icon: "🏛️", color: "var(--info)", bg: "var(--infobg)" },
+  confirmation: { icon: "✅", color: "var(--good)", bg: "var(--goodbg)" },
+  separation:   { icon: "📤", color: "var(--bad)", bg: "var(--badbg)" },
+  other:        { icon: "📌", color: "var(--mut)", bg: "var(--bg)" },
 };
 
 interface Props {
@@ -57,7 +57,7 @@ export function LifecycleTimeline({ events }: Props) {
           top: 20,
           bottom: 20,
           width: 2,
-          background: "var(--line, #e2e8f0)",
+          background: "var(--line)",
           borderRadius: 2,
         }}
       />

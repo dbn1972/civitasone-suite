@@ -84,7 +84,7 @@ export function SessionsTable({ sessions, currentUserId }: { sessions: Session[]
         </div>
       </div>
       {notice ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12.5, color: "#067647", margin: 0, padding: "8px 16px 0" }}>{notice}</p>
+        <p role="status" aria-live="polite" style={{ fontSize: 12.5, color: "var(--good)", margin: 0, padding: "8px 16px 0" }}>{notice}</p>
       ) : null}
       <DataTable<Session>
         caption="Active and recent sessions"

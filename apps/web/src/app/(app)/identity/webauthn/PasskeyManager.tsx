@@ -70,7 +70,7 @@ export function PasskeyManager({ credentials }: { credentials: WebauthnCredentia
       </p>
 
       {notice ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12.5, color: "#067647", margin: 0, padding: "8px 16px 0" }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 12.5, color: "var(--good)", margin: 0, padding: "8px 16px 0" }}>
           {notice}
         </p>
       ) : null}

@@ -28,7 +28,7 @@ export default function NewDocumentPage({ searchParams }: { searchParams: { cate
       {isSchedule && (
         <div
           className="banner"
-          style={{ background: "var(--warn-bg, #fffaeb)", border: "1px solid var(--warn-border, #fde68a)", color: "var(--warn, #92400e)", borderRadius: 12, padding: "11px 14px", margin: "0 0 16px", fontSize: 13, maxWidth: 820 }}
+          style={{ background: "var(--warn-bg)", border: "1px solid var(--warn-border)", color: "var(--warn)", borderRadius: 12, padding: "11px 14px", margin: "0 0 16px", fontSize: 13, maxWidth: 820 }}
         >
           <span aria-hidden="true">ℹ️</span> Records are projected from documents — the knowledge service has no separate
           records-schedule command, so the schedule is created as a categorised document.

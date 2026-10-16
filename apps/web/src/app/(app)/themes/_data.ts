@@ -135,13 +135,13 @@ function mapBrandConfig(payload: unknown): BrandConfigView | null {
     appName: toText(src.appName) ?? "CivitasOne",
     logoUrl: toText(src.logoUrl) ?? null,
     logoDataUrl: toText(src.logoDataUrl) ?? null,
-    colorPrimary: hex(src.colorPrimary, "#1e40af"),
-    colorSecondary: hex(src.colorSecondary, "#64748b"),
-    colorAccent: hex(src.colorAccent, "#f59e0b"),
-    colorBackground: hex(src.colorBackground, "#ffffff"),
-    colorSurface: hex(src.colorSurface, "#f8fafc"),
-    colorText: hex(src.colorText, "#1e293b"),
-    colorPrimaryFg: hex(src.colorPrimaryFg, "#ffffff"),
+    colorPrimary: hex(src.colorPrimary, "var(--info)"),
+    colorSecondary: hex(src.colorSecondary, "var(--mut)"),
+    colorAccent: hex(src.colorAccent, "var(--amber)"),
+    colorBackground: hex(src.colorBackground, "var(--panel)"),
+    colorSurface: hex(src.colorSurface, "var(--line2)"),
+    colorText: hex(src.colorText, "var(--ink)"),
+    colorPrimaryFg: hex(src.colorPrimaryFg, "var(--panel)"),
   };
 }
 
@@ -155,11 +155,11 @@ function mapBrandPresets(payload: unknown): BrandPresetView[] {
       code,
       name: toText(row.name) ?? code,
       description: toText(row.description) ?? null,
-      colorPrimary: hex(row.colorPrimary, "#1e40af"),
-      colorSecondary: hex(row.colorSecondary, "#64748b"),
-      colorAccent: hex(row.colorAccent, "#f59e0b"),
-      colorBackground: hex(row.colorBackground, "#ffffff"),
-      colorSurface: hex(row.colorSurface, "#f8fafc"),
+      colorPrimary: hex(row.colorPrimary, "var(--info)"),
+      colorSecondary: hex(row.colorSecondary, "var(--mut)"),
+      colorAccent: hex(row.colorAccent, "var(--amber)"),
+      colorBackground: hex(row.colorBackground, "var(--panel)"),
+      colorSurface: hex(row.colorSurface, "var(--line2)"),
     });
   }
   return out;

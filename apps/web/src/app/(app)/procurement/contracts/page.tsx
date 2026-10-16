@@ -77,10 +77,10 @@ export default async function ProcurementContractsPage({
       <StatGrid>
         {/* GAP-PROCUREMENT-CONTRACTS-04: show '—' on a failed load, never a
             fabricated 0 under the error state below. */}
-        <StatCard icon="📄" iconBg="#e7edfd" label="Total Contracts" value={errored ? "—" : contracts.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={errored ? "—" : active} />
-        <StatCard icon="⏰" iconBg="#fffaeb" label="Expiring Soon" value={errored ? "—" : expiring} href={errored ? undefined : "/procurement/contracts?status=expiring"} />
-        <StatCard icon="🔒" iconBg="#f1f5f9" label="Expired" value={errored ? "—" : expired} />
+        <StatCard icon="📄" tone="info" label="Total Contracts" value={errored ? "—" : contracts.length} />
+        <StatCard icon="✅" tone="good" label="Active" value={errored ? "—" : active} />
+        <StatCard icon="⏰" tone="warn" label="Expiring Soon" value={errored ? "—" : expiring} href={errored ? undefined : "/procurement/contracts?status=expiring"} />
+        <StatCard icon="🔒" tone="neutral" label="Expired" value={errored ? "—" : expired} />
       </StatGrid>
 
       <Card title="Contracts list">

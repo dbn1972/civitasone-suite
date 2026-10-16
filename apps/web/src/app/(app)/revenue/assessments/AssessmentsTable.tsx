@@ -100,7 +100,7 @@ function FieldPanel({
       <div>
         <div className="pad" style={{ display: "grid", gap: 10 }}>
           <label htmlFor={`${titleId}-input`} style={{ fontSize: 13, fontWeight: 600 }}>
-            {label} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+            {label} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
           </label>
           <input
             id={`${titleId}-input`}
@@ -114,7 +114,7 @@ function FieldPanel({
             style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
           />
           {hint && <p style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>{hint}</p>}
-          {error && <p id={`${titleId}-err`} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{error}</p>}
+          {error && <p id={`${titleId}-err`} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{error}</p>}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
             <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
             <Button type="button" onClick={onContinue}>Continue</Button>

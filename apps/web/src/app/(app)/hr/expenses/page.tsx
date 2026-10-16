@@ -58,10 +58,10 @@ export default async function ExpensesPage() {
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="🧾" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalClaimsLabel")} value={errored ? null : items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statApprovedLabel")} value={errored ? null : approved} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPendingLabel")} value={errored ? null : pending} />
-        <StatCard icon="❌" iconBg="var(--badbg, #fff0f0)" label={t("statRejectedLabel")} value={errored ? null : rejected} />
+        <StatCard icon="🧾" iconBg="var(--infobg)" label={t("statTotalClaimsLabel")} value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApprovedLabel")} value={errored ? null : approved} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPendingLabel")} value={errored ? null : pending} />
+        <StatCard icon="❌" iconBg="var(--badbg)" label={t("statRejectedLabel")} value={errored ? null : rejected} />
       </StatGrid>
 
       <NewExpenseClaimForm />

@@ -56,23 +56,23 @@ export default async function ProjectsDashboardPage() {
         back="/projects"
       />
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="#eef0fe" label="Schemes" value={anyError ? "—" : schemes.length} />
-        <StatCard icon="📁" iconBg="#eff6ff" label="Projects" value={anyError ? "—" : data.totalProjects.toLocaleString("en-IN")} />
+        <StatCard icon="🏛️" tone="info" label="Schemes" value={anyError ? "—" : schemes.length} />
+        <StatCard icon="📁" tone="info" label="Projects" value={anyError ? "—" : data.totalProjects.toLocaleString("en-IN")} />
         <StatCard
           icon="💰"
-          iconBg="#ecfdf3"
+          tone="good"
           label="Total outlay"
           value={anyError ? "—" : formatCrore(data.totalOutlay)}
         />
         <StatCard
           icon="✅"
-          iconBg="#f0fdf4"
+          tone="good"
           label="On Track"
           value={anyError ? "—" : formatPercent(data.onTrackPct)}
         />
         <StatCard
           icon="🔴"
-          iconBg="#fef3f2"
+          tone="bad"
           label="Delayed (Red)"
           value={anyError ? "—" : data.delayed.toLocaleString("en-IN")}
         />
@@ -91,7 +91,7 @@ export default async function ProjectsDashboardPage() {
         ) : (
           <>
             {countsDiffer && (
-              <p role="note" style={{ fontSize: 12, color: "#6b7280", margin: "0 0 8px" }}>
+              <p role="note" style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 8px" }}>
                 Dashboard counts all {data.totalProjects.toLocaleString("en-IN")} projects across every
                 status; the table below lists {rows.length.toLocaleString("en-IN")}.
               </p>

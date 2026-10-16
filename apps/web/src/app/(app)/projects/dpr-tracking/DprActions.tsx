@@ -99,7 +99,7 @@ export function DprActions({ projectId, dprId, dprNo, status }: DprActionsProps)
       ))}
 
       {success && (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", margin: 0 }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--good)", margin: 0 }}>
           {success}
         </p>
       )}

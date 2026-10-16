@@ -274,7 +274,7 @@ export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: 
       render: (row) => {
         const href = refLink(row._task);
         return href ? (
-          <Link href={href} className="mono" style={{ color: "#4f46e5" }}>{row.refId}</Link>
+          <Link href={href} className="mono" style={{ color: "var(--indigo)" }}>{row.refId}</Link>
         ) : (
           <span className="mono">{row.refId}</span>
         );
@@ -319,10 +319,10 @@ export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: 
     <div className="card" style={{ marginTop: 18 }}>
       <div className="card-h">
         <h3>Workflow approval queue</h3>
-        {cacheNote ? <span style={{ fontSize: 12, color: "#92400e" }}>{cacheNote}</span> : null}
+        {cacheNote ? <span style={{ fontSize: 12, color: "var(--warn)" }}>{cacheNote}</span> : null}
       </div>
       {message ? (
-        <p className="pad" role="status" aria-live="polite" style={{ color: "#047857", fontSize: "0.875rem", paddingBottom: 0 }}>{message}</p>
+        <p className="pad" role="status" aria-live="polite" style={{ color: "var(--good)", fontSize: "0.875rem", paddingBottom: 0 }}>{message}</p>
       ) : null}
 
       {loading && tasks.length === 0 ? (
@@ -337,7 +337,7 @@ export function ProcurementApprovalsPanel({ viewerRoles = [] }: { viewerRoles?: 
             <p
               className="pad"
               role="status"
-              style={{ color: "#92400e", fontSize: "0.8125rem", paddingBottom: 0 }}
+              style={{ color: "var(--warn)", fontSize: "0.8125rem", paddingBottom: 0 }}
             >
               Showing the first {TASKS_LIMIT} pending tasks — more may exist and are not loaded here.
             </p>

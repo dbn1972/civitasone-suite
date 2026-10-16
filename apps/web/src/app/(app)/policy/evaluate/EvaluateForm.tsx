@@ -96,7 +96,7 @@ export function EvaluateForm({ canEvaluateOthers = false }: { canEvaluateOthers?
             aria-label="Evaluate as user"
             placeholder="Me (default) — search to pick a user…"
           />
-          <p style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: "4px 0 0" }}>
+          <p style={{ fontSize: 12, color: "var(--mut)", margin: "4px 0 0" }}>
             Leave empty to check your own permissions.
           </p>
         </Field>
@@ -110,7 +110,7 @@ export function EvaluateForm({ canEvaluateOthers = false }: { canEvaluateOthers?
           minLength={3}
           aria-describedby="eval-key-hint"
         />
-        <p id="eval-key-hint" style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: "4px 0 0" }}>
+        <p id="eval-key-hint" style={{ fontSize: 12, color: "var(--mut)", margin: "4px 0 0" }}>
           Format: service.resource.action, e.g. finance.journal.create
         </p>
       </Field>
@@ -123,7 +123,7 @@ export function EvaluateForm({ canEvaluateOthers = false }: { canEvaluateOthers?
           style={{ fontFamily: "ui-monospace, monospace" }}
           aria-describedby="eval-resource-hint"
         />
-        <p id="eval-resource-hint" style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: "4px 0 0" }}>
+        <p id="eval-resource-hint" style={{ fontSize: 12, color: "var(--mut)", margin: "4px 0 0" }}>
           Optional, e.g. {'{"department":"IT"}'}
         </p>
       </Field>
@@ -132,7 +132,7 @@ export function EvaluateForm({ canEvaluateOthers = false }: { canEvaluateOthers?
       </button>
 
       {error && (
-        <p role="alert" style={{ color: "#b91c1c" }}>
+        <p role="alert" style={{ color: "var(--bad)" }}>
           {error}
         </p>
       )}
@@ -161,7 +161,7 @@ export function EvaluateForm({ canEvaluateOthers = false }: { canEvaluateOthers?
               <strong>Matched rule:</strong>{" "}
               {/* GAP-POLICY-EVALUATE-02: deep-link to the matched ABAC rule. */}
               <Link href={`/policy/abac#rule-${matchedRuleId}`}>View rule</Link>{" "}
-              <code style={{ fontSize: 12, color: "var(--mut, #64748b)" }}>{matchedRuleId}</code>
+              <code style={{ fontSize: 12, color: "var(--mut)" }}>{matchedRuleId}</code>
             </p>
           )}
         </div>

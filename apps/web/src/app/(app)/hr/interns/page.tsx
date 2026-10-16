@@ -105,10 +105,10 @@ export default async function InternsPage() {
         <p role="status" className="pill warn" style={{ margin: "0 0 12px" }}>{t("cappedNotice", { count: INTERNS_PAGE_LIMIT })}</p>
       )}
       <StatGrid>
-        <StatCard icon="🎓" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statActiveLabel")} value={active ?? "—"} />
-        <StatCard icon="📚" iconBg="var(--warnbg, #fffbe6)" label={t("statInternsLabel")} value={internsCount ?? "—"} />
-        <StatCard icon="🔧" iconBg="var(--bg, #f5f5f5)" label={t("statApprenticesLabel")} value={apprentices ?? "—"} />
+        <StatCard icon="🎓" iconBg="var(--infobg)" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statActiveLabel")} value={active ?? "—"} />
+        <StatCard icon="📚" iconBg="var(--warnbg)" label={t("statInternsLabel")} value={internsCount ?? "—"} />
+        <StatCard icon="🔧" iconBg="var(--bg)" label={t("statApprenticesLabel")} value={apprentices ?? "—"} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (

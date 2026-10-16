@@ -80,7 +80,7 @@ export function LetterheadForm({ initial }: Props) {
   const text = (id: string, label: string, value: string, set: (v: string) => void, max: number, required = false) => (
     <div style={{ display: "grid", gap: 6 }}>
       <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
-        {label} {required && <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>}
+        {label} {required && <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>}
       </label>
       <input
         id={id}

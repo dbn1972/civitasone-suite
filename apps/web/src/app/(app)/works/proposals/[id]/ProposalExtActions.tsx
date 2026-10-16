@@ -151,16 +151,16 @@ function SplitProposalForm({
       <div style={formPad}>
         <div
           style={{
-            background: "#ecfdf3",
+            background: "var(--goodbg)",
             borderRadius: 10,
             padding: "14px 16px",
             marginBottom: 12,
           }}
         >
-          <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 6, color: "#166534" }}>
+          <p style={{ fontWeight: 600, fontSize: 14, marginBottom: 6, color: "var(--good)" }}>
             ✅ Split created
           </p>
-          <p style={{ fontSize: 13, color: "#166534", marginBottom: 10 }}>
+          <p style={{ fontSize: 13, color: "var(--good)", marginBottom: 10 }}>
             Child work{splitResult.workNumber ? ` ${splitResult.workNumber}` : ""} is
             now active. The new work ID is{" "}
             <code style={{ fontSize: 12 }}>{formatShortId(splitResult.id)}…</code>
@@ -197,7 +197,7 @@ function SplitProposalForm({
               fontSize: 13,
               color: "var(--ink)",
               padding: "8px 10px",
-              background: "#f5f5f5",
+              background: "var(--line2)",
               borderRadius: 8,
             }}
           >
@@ -206,7 +206,7 @@ function SplitProposalForm({
         </div>
         <div style={fieldGroup}>
           <label htmlFor="proposal-split-description" style={labelStyle}>
-            Description <span style={{ color: "#b42318" }}>*</span>
+            Description <span style={{ color: "var(--bad)" }}>*</span>
           </label>
           <textarea
             id="proposal-split-description"
@@ -343,7 +343,7 @@ function MapCOAForm({
       <form onSubmit={handleSubmit}>
         <div style={fieldGroup}>
           <label htmlFor="coa-majorHead" style={labelStyle}>
-            Major Head <span style={{ color: "#b42318" }}>*</span>
+            Major Head <span style={{ color: "var(--bad)" }}>*</span>
           </label>
           <input
             id="coa-majorHead"
@@ -369,7 +369,7 @@ function MapCOAForm({
         <SubmitBtn busy={busy} label="Map COA" />
       </form>
       {localError ? (
-        <p role="alert" style={{ fontSize: 12, color: "var(--bad, #b42318)", marginTop: 8 }}>
+        <p role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 8 }}>
           {localError}
         </p>
       ) : null}
@@ -482,7 +482,7 @@ function MapOfficeForm({
       <form onSubmit={handleSubmit}>
         <div style={fieldGroup}>
           <label htmlFor="office-map-division-id" style={labelStyle}>
-            Division <span style={{ color: "#b42318" }}>*</span>
+            Division <span style={{ color: "var(--bad)" }}>*</span>
           </label>
           {/* GAP-WORKS-PROPOSALS-DETAIL-04: pick the division by name from the
               division master instead of pasting a UUID into an append-only record. */}
@@ -542,7 +542,7 @@ function MapOfficeForm({
         <SubmitBtn busy={busy} label="Map Office" />
       </form>
       {localError ? (
-        <p role="alert" style={{ fontSize: 12, color: "var(--bad, #b42318)", marginTop: 8 }}>
+        <p role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 8 }}>
           {localError}
         </p>
       ) : null}

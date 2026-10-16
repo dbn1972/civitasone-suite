@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { z } from "zod";
-import { Button, ConfirmDialog } from "../../../_components/ds";
+import { Button, ConfirmDialog, Field, Input, Select } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type KeyRow = { id: string; keyName: string; status: string };
@@ -58,10 +58,7 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
   const [dialogBusy, setDialogBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>(undefined);
 
-  const nameId = useId();
   const scopesId = useId();
-  const expiryId = useId();
-  const nameErrId = useId();
   const scopeErrId = useId();
 
   useEffect(() => {
@@ -202,18 +199,13 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
     <div className="card">
       <div className="card-h"><h3>Key Operations</h3></div>
       <form className="pad" onSubmit={createKey} noValidate>
-        <label htmlFor={nameId} className="ta-lbl">Key name</label>
-        <input
-          id={nameId}
-          required
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Reporting service"
-          aria-invalid={nameError ? true : undefined}
-          aria-describedby={nameError ? nameErrId : undefined}
-          className="ta-input"
-        />
-        {nameError ? <p id={nameErrId} className="ta-field-err" role="alert">{nameError}</p> : null}
+        <Field label="Key name" required error={nameError || undefined}>
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Reporting service"
+          />
+        </Field>
 
         <fieldset
           aria-describedby={scopeError ? scopeErrId : scopesId}
@@ -246,17 +238,16 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
         {/* GAP-TENANT-ADMIN-API-KEYS-04: a required expiry (identity-service
             accepts an optional ISO expiresAt). Defaults to 90 days — a
             least-privilege default rather than a never-expiring key. */}
-        <label htmlFor={expiryId} className="ta-lbl">Expiry</label>
-        <select
-          id={expiryId}
-          value={expiryDays == null ? "" : String(expiryDays)}
-          onChange={(e) => setExpiryDays(e.target.value === "" ? null : Number(e.target.value))}
-          className="ta-input"
-        >
-          {EXPIRY_OPTIONS.map((o) => (
-            <option key={o.label} value={o.days == null ? "" : String(o.days)}>{o.label}</option>
-          ))}
-        </select>
+        <Field label="Expiry">
+          <Select
+            value={expiryDays == null ? "" : String(expiryDays)}
+            onChange={(e) => setExpiryDays(e.target.value === "" ? null : Number(e.target.value))}
+          >
+            {EXPIRY_OPTIONS.map((o) => (
+              <option key={o.label} value={o.days == null ? "" : String(o.days)}>{o.label}</option>
+            ))}
+          </Select>
+        </Field>
 
         <Button type="submit" disabled={busy} aria-busy={busy}>
           {busy ? "Issuing…" : "Create API Key"}
@@ -269,7 +260,7 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
 
       {createdKey ? (
         <div className="pad" style={{ paddingTop: 0 }}>
-          <code style={{ display: "block", overflowWrap: "anywhere", background: "var(--surface-2, #f8fafc)", padding: 10, borderRadius: 8, border: "1px solid var(--line)" }}>{createdKey}</code>
+          <code style={{ display: "block", overflowWrap: "anywhere", background: "var(--surface-2)", padding: 10, borderRadius: 8, border: "1px solid var(--line)" }}>{createdKey}</code>
           <Button variant="ghost" size="sm" style={{ marginTop: 8 }} onClick={() => void copyKey()}>
             {copied ? "Copied ✓" : "Copy secret"}
           </Button>

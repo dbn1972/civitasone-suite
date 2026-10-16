@@ -105,7 +105,7 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
       </div>
       <ContactToolbar canExport={canExport} exportQuery={exportQuery} initialSearch={searchParams?.search ?? ""} initialSegment={initialSegment} />
       {searchParams?.accountId ? (
-        <div role="status" style={{ display: "inline-flex", alignItems: "center", gap: 8, margin: "8px 0", padding: "6px 12px", borderRadius: 999, background: "#eef2ff", fontSize: 13 }}>
+        <div role="status" style={{ display: "inline-flex", alignItems: "center", gap: 8, margin: "8px 0", padding: "6px 12px", borderRadius: 999, background: "var(--infobg)", fontSize: 13 }}>
           <span>{searchParams.accountName ? t("filteredToAccountNamed", { name: searchParams.accountName }) : t("filteredToAccount")}</span>
           <a href="/crm/contacts" aria-label={t("clearAccountFilterAria")} style={{ fontWeight: 600 }}>{t("clearAccountFilter")}</a>
         </div>
@@ -123,14 +123,14 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
       />
       {mergeOptions.length >= 2 ? <MergeButton entity="contacts" options={mergeOptions} label="Merge duplicate contacts" /> : null}
       <StatGrid>
-        <StatCard icon="▣" iconBg="#eef2ff" label="Total Contacts" value={stat(contacts.length)} />
-        <StatCard icon="△" iconBg="#fef2f2" label="Priority Contacts" value={stat(contacts.filter(c => c.priority === "high").length)} />
+        <StatCard icon="▣" tone="info" label="Total Contacts" value={stat(contacts.length)} />
+        <StatCard icon="△" tone="bad" label="Priority Contacts" value={stat(contacts.filter(c => c.priority === "high").length)} />
         {/* Distinct from "Priority Contacts" above: any classification priority set
             (high/medium/low), not just high. These previously used the identical
             `priority === "high"` expression, so the two cards always showed the same
             number — this one now counts what its label says. */}
-        <StatCard icon="◉" iconBg="#fffbeb" label="With Priority Tag" value={stat(contacts.filter(c => Boolean(c.priority)).length)} />
-        <StatCard icon="◈" iconBg="#eef2ff" label="Reachable by Email" value={stat(contacts.filter(c => c.email).length)} />
+        <StatCard icon="◉" tone="warn" label="With Priority Tag" value={stat(contacts.filter(c => Boolean(c.priority)).length)} />
+        <StatCard icon="◈" tone="info" label="Reachable by Email" value={stat(contacts.filter(c => c.email).length)} />
       </StatGrid>
       <ContactsTable contacts={safeContacts} source={source} filtered={filtered} />
     </>

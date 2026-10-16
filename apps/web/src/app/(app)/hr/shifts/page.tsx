@@ -116,15 +116,15 @@ export default async function ShiftsPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🕐" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalShifts")} value={errored ? "—" : items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statActive")} value={errored ? "—" : active} />
+        <StatCard icon="🕐" iconBg="var(--infobg)" label={t("statTotalShifts")} value={errored ? "—" : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statActive")} value={errored ? "—" : active} />
         {/* GAP-HR-SHIFTS-03: this used to count comma-split applicableTo
             substrings, but the API has only ever returned the literal
             constant "All" (no shift-to-department assignment data model
             exists) — the stat was always 1 (or 0), never real. Removed
             until a real assignment exists, rather than keep showing a
             number with no data behind it. */}
-        <StatCard icon="⏰" iconBg="var(--bg, #f5f5f5)" label={t("statStdHours")} value={t("stdHoursValue")} />
+        <StatCard icon="⏰" iconBg="var(--bg)" label={t("statStdHours")} value={t("stdHoursValue")} />
       </StatGrid>
 
       {canManage && !errored && (

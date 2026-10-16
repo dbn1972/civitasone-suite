@@ -117,7 +117,7 @@ export function AddBookForm({ existingAccessions = [] }: { existingAccessions?: 
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={accessionId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Accession No. <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              Accession No. <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={accessionId}
@@ -130,7 +130,7 @@ export function AddBookForm({ existingAccessions = [] }: { existingAccessions?: 
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
             {fieldErrors.accessionNo && (
-              <p id={accessionErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={accessionErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.accessionNo}
               </p>
             )}
@@ -138,7 +138,7 @@ export function AddBookForm({ existingAccessions = [] }: { existingAccessions?: 
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={titleId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Title <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              Title <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={titleId}
@@ -151,7 +151,7 @@ export function AddBookForm({ existingAccessions = [] }: { existingAccessions?: 
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
             {fieldErrors.title && (
-              <p id={titleErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={titleErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.title}
               </p>
             )}
@@ -189,7 +189,7 @@ export function AddBookForm({ existingAccessions = [] }: { existingAccessions?: 
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={copiesId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Copies <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              Copies <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <input
               id={copiesId}
@@ -205,7 +205,7 @@ export function AddBookForm({ existingAccessions = [] }: { existingAccessions?: 
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
             {fieldErrors.copiesTotal && (
-              <p id={copiesErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              <p id={copiesErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                 {fieldErrors.copiesTotal}
               </p>
             )}

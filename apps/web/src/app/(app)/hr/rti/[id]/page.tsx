@@ -90,7 +90,7 @@ export default async function RtiDetailPage({ params }: { params: { id: string }
             <dt style={{ fontWeight: 700, color: "var(--muted)" }}>Due date</dt>
             <dd style={{ margin: 0 }}>
               {formatIndianDate(detail.dueDate)}
-              {detail.overdue && <span style={{ color: "var(--danger, #b91c1c)", marginInlineStart: 8 }}>({t("slaOverdueByDays", { days: Math.abs(detail.daysToDue) })})</span>}
+              {detail.overdue && <span style={{ color: "var(--danger)", marginInlineStart: 8 }}>({t("slaOverdueByDays", { days: Math.abs(detail.daysToDue) })})</span>}
             </dd>
             <dt style={{ fontWeight: 700, color: "var(--muted)" }}>Request</dt>
             <dd style={{ margin: 0, whiteSpace: "pre-wrap" }}>{detail.requestText}</dd>

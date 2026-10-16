@@ -318,7 +318,7 @@ export function IntegrationDrawer({
                 />
                 {f.help && <span style={{ fontSize: 11.5, color: "var(--mut)" }}>{f.help}</span>}
                 {formError.fieldError(f.key) && (
-                  <span role="alert" style={{ fontSize: 11.5, color: "var(--bad, #b42318)" }}>{formError.fieldError(f.key)}</span>
+                  <span role="alert" style={{ fontSize: 11.5, color: "var(--bad)" }}>{formError.fieldError(f.key)}</span>
                 )}
               </div>
             );
@@ -335,7 +335,7 @@ export function IntegrationDrawer({
               placeholder="Why is this change being made?"
               style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "9px 12px", fontSize: 13.5, background: "var(--panel)", color: "var(--ink)" }} />
             {formError.fieldError("note") && (
-              <span role="alert" style={{ fontSize: 11.5, color: "var(--bad, #b42318)" }}>{formError.fieldError("note")}</span>
+              <span role="alert" style={{ fontSize: 11.5, color: "var(--bad)" }}>{formError.fieldError("note")}</span>
             )}
           </div>
 
@@ -372,7 +372,7 @@ export function IntegrationDrawer({
 
         {/* pending maker-checker change */}
         {pending && (
-          <div className="card" style={{ boxShadow: "none", background: "var(--warnbg, #fffaeb)" }}>
+          <div className="card" style={{ boxShadow: "none", background: "var(--warnbg)" }}>
             <div className="pad" style={{ padding: 14, fontSize: 12.5 }}>
               <strong>Pending change awaiting approval</strong>
               <div style={{ color: "var(--ink2)", marginTop: 4 }}>

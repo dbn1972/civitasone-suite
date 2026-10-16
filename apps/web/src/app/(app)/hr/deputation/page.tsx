@@ -53,11 +53,11 @@ export default async function DeputationPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statActive")}            value={errored ? null : active} />
-        <StatCard icon="↩️" iconBg="var(--bg, #f5f5f5)" label={t("statRepatriated")}         value={errored ? null : repatriated} />
+        <StatCard icon="🏛️" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statActive")}            value={errored ? null : active} />
+        <StatCard icon="↩️" iconBg="var(--bg)" label={t("statRepatriated")}         value={errored ? null : repatriated} />
         {cancelled > 0 && (
-          <StatCard icon="✕" iconBg="var(--badbg, #fee2e2)" label={t("statCancelled")} value={errored ? null : cancelled} />
+          <StatCard icon="✕" iconBg="var(--badbg)" label={t("statCancelled")} value={errored ? null : cancelled} />
         )}
       </StatGrid>
 

@@ -118,25 +118,25 @@ export function DomainInsightPage({
       <StatGrid>
         <StatCard
           icon="📊"
-          iconBg="#eef2ff"
+          tone="info"
           label={statLabels?.predictions ?? "Total Predictions"}
           value={evaluation.totalPredictions.toLocaleString("en-IN")}
         />
         <StatCard
           icon="🎯"
-          iconBg="#dcfce7"
+          tone="good"
           label={statLabels?.accuracy ?? resolvedMetric.label}
           value={formatPct(evaluation.accuracy)}
         />
         <StatCard
           icon="⚠️"
-          iconBg="#fef9c3"
+          tone="warn"
           label={statLabels?.fallbackRate ?? "Fallback Rate"}
           value={formatPct(evaluation.fallbackRate)}
         />
         <StatCard
           icon="🔑"
-          iconBg="#dbeafe"
+          tone="info"
           label={statLabels?.topFactor ?? "Top Factor"}
           value={evaluation.topFactor}
         />

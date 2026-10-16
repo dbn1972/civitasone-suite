@@ -65,9 +65,9 @@ export default async function PlatformAdminPage() {
         }
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="🏛️" iconBg="#ecfdf3" label="Org Levels" value={levelCount} />
-        <StatCard icon="🔑" iconBg="#f1f5f9" label="Platform Roles" value={roleCount} />
-        <StatCard icon="📋" iconBg="#fffaeb" label="Latest audit event" value={auditValue} />
+        <StatCard icon="🏛️" tone="good" label="Org Levels" value={levelCount} />
+        <StatCard icon="🔑" tone="neutral" label="Platform Roles" value={roleCount} />
+        <StatCard icon="📋" tone="warn" label="Latest audit event" value={auditValue} />
       </div>
       <div className="sec-h" style={{ marginTop: 8, marginBottom: 12 }}>Admin Sections</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 12 }}>

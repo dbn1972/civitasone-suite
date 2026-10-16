@@ -64,7 +64,7 @@ export function BeneficiariesTable({ rows, source = "api", canExport = false }: 
 
   return (
     <>
-      {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>{cacheNote}</p>}
+      {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--warn)", margin: "0 0 8px" }}>{cacheNote}</p>}
       {/* GAP-PROJECTS-BENEFICIARIES-01 (DPDP): the one-click client-side CSV export
           downloaded all beneficiary PII + social category with no role gate and no
           audit event. It is now disabled by default (canExport=false) — a PII bulk

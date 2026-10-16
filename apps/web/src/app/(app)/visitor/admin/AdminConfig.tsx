@@ -178,7 +178,7 @@ export function AdminConfig({
   return (
     <>
       {toast && <div className="alert" role="status" style={{ borderColor: "var(--primary)" }}>✓ {toast}</div>}
-      {error && <div className="alert" role="alert" style={{ borderColor: "#fca5a5", color: "var(--bad)" }}>⚠ {error}</div>}
+      {error && <div className="alert" role="alert" style={{ borderColor: "var(--badbd)", color: "var(--bad)" }}>⚠ {error}</div>}
 
       <Card title="Vertical presets" padding>
         <p style={{ fontSize: 13.5, color: "var(--ink2)", marginBottom: 12 }}>
@@ -280,7 +280,7 @@ export function AdminConfig({
                         <div style={{ marginTop: 4 }}>
                           {isSet ? <StatusPill status="active" label={`v${entry?.version}`} /> : <StatusPill status="draft" label={`Default · ${field.default}${field.unit ? " " + field.unit : ""}`} />}
                           {/* GAP-VISITOR-ADMIN-04: unsaved-change hint. */}
-                          {dirty && !invalid && <span style={{ marginInlineStart: 8, fontSize: 11.5, color: "#b45309" }}>unsaved change</span>}
+                          {dirty && !invalid && <span style={{ marginInlineStart: 8, fontSize: 11.5, color: "var(--warn)" }}>unsaved change</span>}
                         </div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

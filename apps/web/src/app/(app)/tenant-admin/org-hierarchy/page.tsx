@@ -56,7 +56,7 @@ function maxDepth(nodes: OrgHierarchyNode[], depth = 1): number {
 function TreeNode({ node }: { node: OrgHierarchyNode }) {
   return (
     <li style={{ listStyle: "none" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--border, #e2e8f0)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--border)" }}>
         <span aria-hidden="true" style={{ fontSize: 14, width: 20, textAlign: "center" }}>{node.children && node.children.length > 0 ? "📂" : "📄"}</span>
         <span style={{ flex: 1, fontWeight: 400, fontSize: 14 }}>{node.name}</span>
         {typeof node.headCount === "number" && (
@@ -106,10 +106,10 @@ export default async function OrgHierarchyPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="#eff6ff" label="Units" value={errored ? "—" : totalUnits} />
-        <StatCard icon="👥" iconBg="#ecfdf3" label="Total Staff" value={errored || totalStaff === null ? "—" : totalStaff} />
-        <StatCard icon="📊" iconBg="#f1f5f9" label="Levels" value={errored ? "—" : levels} />
-        <StatCard icon="🌳" iconBg="#ecfdf3" label="Root Org" value={errored ? "—" : rootName} />
+        <StatCard icon="🏛️" tone="info" label="Units" value={errored ? "—" : totalUnits} />
+        <StatCard icon="👥" tone="good" label="Total Staff" value={errored || totalStaff === null ? "—" : totalStaff} />
+        <StatCard icon="📊" tone="neutral" label="Levels" value={errored ? "—" : levels} />
+        <StatCard icon="🌳" tone="good" label="Root Org" value={errored ? "—" : rootName} />
       </StatGrid>
 
       {errored ? (

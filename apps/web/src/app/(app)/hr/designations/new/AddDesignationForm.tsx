@@ -149,11 +149,11 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
                 padding: "10px 14px",
                 borderRadius: 8,
                 fontSize: 14,
-                background: tone === "success" ? "var(--goodbg, #dcfce7)" : "#fee2e2",
+                background: tone === "success" ? "var(--goodbg)" : "var(--badbg)",
                 border: `1px solid ${
-                  tone === "success" ? "var(--goodbd, #86efac)" : "var(--badbd, #fca5a5)"
+                  tone === "success" ? "var(--goodbd)" : "var(--badbd)"
                 }`,
-                color: tone === "success" ? "var(--good, #166534)" : "var(--bad, #b91c1c)",
+                color: tone === "success" ? "var(--good)" : "var(--bad)",
               }}
             >
               {tone === "success" ? "✅" : "⚠️"} {message}
@@ -218,7 +218,7 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
             {/* GAP-HR-DESIGNATIONS-NEW-03: blank used to silently become
                 level 0 ("unclassified" everywhere it's read back) with
                 nothing on this form saying so. */}
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut, #64748b)" }}>{t("levelHint")}</p>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut)" }}>{t("levelHint")}</p>
           </div>
 
           {/* Pay Grade */}
@@ -235,7 +235,7 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
                 maxLength={30}
               />
             </Field>
-            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut, #64748b)" }}>{t("payGradeHint")}</p>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut)" }}>{t("payGradeHint")}</p>
           </div>
         </div>
 

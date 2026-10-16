@@ -57,14 +57,14 @@ export function QcPolicyToggle({ initial }: { initial: boolean }) {
           <label htmlFor="qc-maker-checker">
             <strong>Require a different person to record the QC verdict on a goods return</strong>
           </label>
-          <p id="qc-maker-checker-help" style={{ margin: "4px 0 0", fontSize: "0.875rem", color: "#475569" }}>
+          <p id="qc-maker-checker-help" style={{ margin: "4px 0 0", fontSize: "0.875rem", color: "var(--ink2)" }}>
             When on, the user who recorded a goods return cannot inspect it. Turn this off only for stores
             where a single person handles both steps. Every change is recorded in the audit log.
           </p>
         </div>
       </div>
       <div role="status" aria-live="polite">
-        {message ? <p role="alert" style={{ marginTop: 12, fontSize: "0.875rem", color: "#b91c1c" }}>{message}</p> : null}
+        {message ? <p role="alert" style={{ marginTop: 12, fontSize: "0.875rem", color: "var(--bad)" }}>{message}</p> : null}
       </div>
     </section>
   );

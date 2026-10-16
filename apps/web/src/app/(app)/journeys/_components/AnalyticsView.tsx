@@ -38,11 +38,11 @@ function StatusBreakdownChart({ data }: { data: Array<{ status: string; count: n
         const label = human.length > 10 ? human.slice(0, 9) + "…" : human;
         return (
           <g key={cat.status}>
-            <rect x={x} y={y} width={barW} height={barH} rx={4} fill="#4f46e5" opacity={opacity} />
-            <text x={x + barW / 2} y={chartH - barH - 3} textAnchor="middle" fontSize={9} fill="#101828">
+            <rect x={x} y={y} width={barW} height={barH} rx={4} fill="var(--indigo)" opacity={opacity} />
+            <text x={x + barW / 2} y={chartH - barH - 3} textAnchor="middle" fontSize={9} fill="var(--ink)">
               {cat.count}
             </text>
-            <text x={x + barW / 2} y={BAR_H - 2} textAnchor="middle" fontSize={9} fill="#667085">
+            <text x={x + barW / 2} y={BAR_H - 2} textAnchor="middle" fontSize={9} fill="var(--mut)">
               {label}
             </text>
           </g>

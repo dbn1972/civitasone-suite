@@ -99,7 +99,7 @@ export function ExecutionActions({ workId, canManage = true, openIssues = null }
       ) : (
         <>
           {typeof openIssues === "number" && openIssues > 0 && (
-            <div role="alert" style={{ padding: "10px 14px", borderRadius: 8, background: "#fffaeb", border: "1px solid #fde68a", color: "#92400e", fontSize: 13 }}>
+            <div role="alert" style={{ padding: "10px 14px", borderRadius: 8, background: "var(--warnbg)", border: "1px solid #fde68a", color: "var(--warn)", fontSize: 13 }}>
               ⚠️ This work has {openIssues} open issue{openIssues === 1 ? "" : "s"}. Resolve them before closing the work.
             </div>
           )}

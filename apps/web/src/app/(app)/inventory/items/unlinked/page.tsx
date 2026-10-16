@@ -39,11 +39,11 @@ export default async function UnlinkedItemsPage() {
     <>
       <PageHeader title={t("report.title")} subtitle={t("report.subtitle")} back="/inventory/items" backLabel={t("report.back")} />
       <StatGrid>
-        <StatCard icon="📦" iconBg="#f1f5f9" label={t("report.inventoryTotal")} value={num(c.inventoryTotal)} />
-        <StatCard icon="🔗" iconBg="#fef3c7" label={t("report.inventoryUnlinked")} value={num(c.inventoryUnlinked)} />
-        <StatCard icon="🏬" iconBg="#eff6ff" label={t("report.stockUnlinked")} value={num(c.stockUnlinked)} />
-        <StatCard icon="✅" iconBg="#dcfce7" label={t("report.suggestions")} value={num(c.suggestions)} />
-        <StatCard icon="🔍" iconBg="#fee2e2" label={t("report.ambiguous")} value={num(c.ambiguous)} />
+        <StatCard icon="📦" tone="neutral" label={t("report.inventoryTotal")} value={num(c.inventoryTotal)} />
+        <StatCard icon="🔗" tone="warn" label={t("report.inventoryUnlinked")} value={num(c.inventoryUnlinked)} />
+        <StatCard icon="🏬" tone="info" label={t("report.stockUnlinked")} value={num(c.stockUnlinked)} />
+        <StatCard icon="✅" tone="good" label={t("report.suggestions")} value={num(c.suggestions)} />
+        <StatCard icon="🔍" tone="bad" label={t("report.ambiguous")} value={num(c.ambiguous)} />
       </StatGrid>
       <UnmatchedReportClient
         report={report}

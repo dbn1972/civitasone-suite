@@ -45,10 +45,10 @@ export default async function LibraryPage() {
       {/* Counts below are computed from `books`, which is [] whenever the fetch
           errored — never render them as authoritative facts in that case. */}
       <StatGrid>
-        <StatCard icon="📚" iconBg="#e6f0ff" label="Titles" value={errored ? "—" : totalTitles.toLocaleString("en-IN")} />
-        <StatCard icon="📦" iconBg="#eff6ff" label="Total Copies" value={errored ? "—" : totalCopies.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Copies Available" value={errored ? "—" : totalAvailable.toLocaleString("en-IN")} />
-        <StatCard icon="🚫" iconBg="#fef2f2" label="Titles Out of Stock" value={errored ? "—" : outOfStock.toLocaleString("en-IN")} />
+        <StatCard icon="📚" tone="info" label="Titles" value={errored ? "—" : totalTitles.toLocaleString("en-IN")} />
+        <StatCard icon="📦" tone="info" label="Total Copies" value={errored ? "—" : totalCopies.toLocaleString("en-IN")} />
+        <StatCard icon="✅" tone="good" label="Copies Available" value={errored ? "—" : totalAvailable.toLocaleString("en-IN")} />
+        <StatCard icon="🚫" tone="bad" label="Titles Out of Stock" value={errored ? "—" : outOfStock.toLocaleString("en-IN")} />
       </StatGrid>
 
       {/* GAP-ESTAB-LIBRARY-01: while the catalogue failed to load we cannot

@@ -15,7 +15,7 @@ const inputStyle: React.CSSProperties = {
   minHeight: 44,
   borderRadius: 8,
   border: "1px solid var(--line)",
-  background: "var(--surface, #fff)",
+  background: "var(--surface)",
   color: "var(--ink)",
   fontSize: 14,
 };
@@ -198,8 +198,8 @@ export default function AccountCompilePage() {
           <div
             role="status"
             style={{
-              background: "#ecfdf3",
-              color: "#166534",
+              background: "var(--goodbg)",
+              color: "var(--good)",
               padding: "12px 16px",
               borderRadius: 8,
               fontSize: 14,
@@ -232,8 +232,8 @@ export default function AccountCompilePage() {
           <div
             role="alert"
             style={{
-              background: "#fef2f2",
-              color: "#b42318",
+              background: "var(--badbg)",
+              color: "var(--bad)",
               padding: "12px 16px",
               borderRadius: 8,
               fontSize: 14,
@@ -247,8 +247,8 @@ export default function AccountCompilePage() {
           <div
             role="status"
             style={{
-              background: "#fffaeb",
-              color: "#92400e",
+              background: "var(--warnbg)",
+              color: "var(--warn)",
               padding: "12px 16px",
               borderRadius: 8,
               fontSize: 13,
@@ -270,7 +270,7 @@ export default function AccountCompilePage() {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
               <div>
                 <label style={labelStyle} htmlFor="month">
-                  Month <span style={{ color: "#b42318" }}>*</span>
+                  Month <span style={{ color: "var(--bad)" }}>*</span>
                 </label>
                 <select
                   id="month"
@@ -289,7 +289,7 @@ export default function AccountCompilePage() {
 
               <div>
                 <label style={labelStyle} htmlFor="year">
-                  Year <span style={{ color: "#b42318" }}>*</span>
+                  Year <span style={{ color: "var(--bad)" }}>*</span>
                 </label>
                 <select
                   id="year"
@@ -313,7 +313,7 @@ export default function AccountCompilePage() {
 
             <div>
               <label style={labelStyle} htmlFor="submittedTo">
-                Submitted To <span style={{ color: "#b42318" }}>*</span>
+                Submitted To <span style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id="submittedTo"

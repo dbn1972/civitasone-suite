@@ -145,7 +145,7 @@ export function CreateInstalmentPlanForm({
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={countId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Number of Instalments{" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -164,7 +164,7 @@ export function CreateInstalmentPlanForm({
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
               {fieldErrors.count && (
-                <p id={countErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={countErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.count}
                 </p>
               )}
@@ -173,7 +173,7 @@ export function CreateInstalmentPlanForm({
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={startId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Start Date{" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -189,7 +189,7 @@ export function CreateInstalmentPlanForm({
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
               {fieldErrors.start && (
-                <p id={startErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={startErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.start}
                 </p>
               )}

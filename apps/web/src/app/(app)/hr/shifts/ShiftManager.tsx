@@ -84,7 +84,7 @@ export function ShiftManager({ shifts }: { shifts: ManagedShift[] }) {
       >
         <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
           {err.message && (
-            <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad, #b91c1c)" }}>{err.message}</p>
+            <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad)" }}>{err.message}</p>
           )}
           <Field id="shift-name" label={t("fieldName")} error={err.fieldError("name")} required>
             <Input required maxLength={80} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />

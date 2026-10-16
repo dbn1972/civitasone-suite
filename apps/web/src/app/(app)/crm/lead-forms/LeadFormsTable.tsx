@@ -204,14 +204,14 @@ export function LeadFormsTable({ rows }: { rows: CRMLeadCaptureForm[] }) {
       </div>
 
       {message ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: "0 0 12px" }}>{message}</p>
+        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: "0 0 12px" }}>{message}</p>
       ) : null}
       {error ? (
-        <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", margin: "0 0 12px" }}>{error}</p>
+        <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad)", margin: "0 0 12px" }}>{error}</p>
       ) : null}
 
       {newKey ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: "0 0 12px" }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: "0 0 12px" }}>
           {t.rich("registered", {
             path: publicSubmitPath(newKey),
             code: (chunks) => <code>{chunks}</code>,

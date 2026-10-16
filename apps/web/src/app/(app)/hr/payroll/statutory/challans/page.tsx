@@ -149,13 +149,13 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
         <div
           role="alert"
           style={{
-            background: "var(--badbg, #fdecea)",
-            border: "1px solid var(--bad, #c0392b)",
+            background: "var(--badbg)",
+            border: "1px solid var(--bad)",
             borderRadius: 10,
             padding: "12px 16px",
             marginBottom: 16,
             fontSize: 13,
-            color: "var(--bad, #c0392b)",
+            color: "var(--bad)",
           }}
         >
           <strong>{t("filingBlockedHeading", { formType })}</strong>
@@ -171,7 +171,7 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
         <StatCard icon="🧾" iconBg="var(--infobg)" label={t("statChallansForPeriod")} value={errored ? "—" : challans.length} />
         <StatCard
           icon={reconciliationMatched ? "✅" : "⚠️"}
-          iconBg={reconciliationMatched ? "var(--goodbg, #e6f7f0)" : "var(--badbg, #fdecea)"}
+          iconBg={reconciliationMatched ? "var(--goodbg)" : "var(--badbg)"}
           label={t("statReconciliationStatus")}
           value={errored ? "—" : reconcileStatusLabel}
         />

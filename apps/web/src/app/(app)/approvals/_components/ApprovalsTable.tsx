@@ -81,7 +81,7 @@ export function ApprovalsTable({ initialData, source }: ApprovalsTableProps) {
   return (
     <>
       {fromCache && (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#64748b", marginBottom: 8 }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--mut)", marginBottom: 8 }}>
           {offline ? "You're offline." : ""} Showing cached data{cachedAt ? ` from ${new Date(cachedAt).toLocaleString("en-IN")}` : ""}.
         </p>
       )}
@@ -99,7 +99,7 @@ export function ApprovalsTable({ initialData, source }: ApprovalsTableProps) {
             label: "Task",
             sortable: true,
             render: (row: ApprovalRow) => (
-              <Link href={row.link} style={{ color: "var(--primary, #4f46e5)", textDecoration: "none", fontWeight: 500 }}>
+              <Link href={row.link} style={{ color: "var(--primary)", textDecoration: "none", fontWeight: 500 }}>
                 {row.instanceName}
               </Link>
             ),
@@ -113,8 +113,8 @@ export function ApprovalsTable({ initialData, source }: ApprovalsTableProps) {
                 style={{
                   fontSize: 11,
                   fontWeight: 500,
-                  background: "var(--badge-bg, #e2e8f0)",
-                  color: "var(--badge-text, #475569)",
+                  background: "var(--badge-bg)",
+                  color: "var(--badge-text)",
                   borderRadius: 4,
                   padding: "2px 6px",
                 }}
@@ -136,7 +136,7 @@ export function ApprovalsTable({ initialData, source }: ApprovalsTableProps) {
             sortable: true,
             csv: (row: ApprovalRow) => row.dueDateDisplay as string,
             render: (row: ApprovalRow) => (
-              <span style={{ color: row.isOverdue ? "#ef4444" : "inherit", fontWeight: row.isOverdue ? 600 : 400 }}>
+              <span style={{ color: row.isOverdue ? "var(--bad)" : "inherit", fontWeight: row.isOverdue ? 600 : 400 }}>
                 {row.dueDateDisplay as string}
                 {Boolean(row.isOverdue) && (
                   <>

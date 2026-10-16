@@ -36,9 +36,9 @@ type Translator = Awaited<ReturnType<typeof getTranslations>>;
 
 function readinessConfig(t: Translator): Record<Readiness, { label: string; color: string; bg: string; order: number }> {
   return {
-    ready_now:        { label: t("readyNow"),       color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)", order: 0 },
-    one_two_years:    { label: t("oneTwoYears"),     color: "var(--warn, #d97706)", bg: "var(--warnbg, #fffbeb)", order: 1 },
-    three_five_years: { label: t("threeFiveYears"),  color: "var(--mut, #6b7280)", bg: "var(--bg, #f3f4f6)", order: 2 },
+    ready_now:        { label: t("readyNow"),       color: "var(--good)", bg: "var(--goodbg)", order: 0 },
+    one_two_years:    { label: t("oneTwoYears"),     color: "var(--warn)", bg: "var(--warnbg)", order: 1 },
+    three_five_years: { label: t("threeFiveYears"),  color: "var(--mut)", bg: "var(--bg)", order: 2 },
   };
 }
 
@@ -54,9 +54,9 @@ function displayName(s: Successor, t: Translator): string {
 
 function riskConfig(t: Translator): Record<string, { label: string; color: string; bg: string }> {
   return {
-    high:   { label: t("highRisk"),   color: "var(--bad, #dc2626)", bg: "var(--badbg, #fef2f2)" },
-    medium: { label: t("mediumRisk"), color: "var(--warn, #b45309)", bg: "var(--warnbg, #fffbeb)" },
-    low:    { label: t("lowRisk"),    color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)" },
+    high:   { label: t("highRisk"),   color: "var(--bad)", bg: "var(--badbg)" },
+    medium: { label: t("mediumRisk"), color: "var(--warn)", bg: "var(--warnbg)" },
+    low:    { label: t("lowRisk"),    color: "var(--good)", bg: "var(--goodbg)" },
   };
 }
 
@@ -153,7 +153,7 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
           <span>
             {t("successorCount", { count: post.successors.length })}
           </span>
-          <span style={{ color: readyNow > 0 ? "var(--good, #16a34a)" : "var(--bad, #dc2626)", fontWeight: 600 }}>
+          <span style={{ color: readyNow > 0 ? "var(--good)" : "var(--bad)", fontWeight: 600 }}>
             {readyNow > 0 ? t("readyNowCount", { count: readyNow }) : t("noneReadyNow")}
           </span>
         </div>
@@ -173,7 +173,7 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
           <div
             style={{
               padding: "14px 16px", fontSize: "0.875rem",
-              color: "var(--bad, #dc2626)", background: "var(--badbg, #fef2f2)",
+              color: "var(--bad)", background: "var(--badbg)",
               margin: "8px 16px", borderRadius: 8,
             }}
           >
@@ -190,7 +190,7 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
                   style={{
                     display: "flex", alignItems: "flex-start", gap: 12,
                     padding: "9px 16px",
-                    borderTop: "1px solid var(--line, #f1f5f9)",
+                    borderTop: "1px solid var(--line)",
                   }}
                 >
                   {/* Avatar */}
@@ -244,7 +244,7 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
                             key={g}
                             style={{
                               padding: "1px 7px", borderRadius: 10,
-                              background: "var(--warnbg, #fef3c7)", color: "var(--warn, #92400e)",
+                              background: "var(--warnbg)", color: "var(--warn)",
                               fontSize: "0.6875rem",
                             }}
                           >
@@ -260,10 +260,10 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
                     <a
                       href={s.devPlanUrl}
                       style={{
-                        fontSize: "0.75rem", color: "var(--info, #2563eb)",
+                        fontSize: "0.75rem", color: "var(--info)",
                         textDecoration: "none", flexShrink: 0,
                         padding: "3px 9px", borderRadius: 5,
-                        background: "var(--infobg, #eff6ff)", whiteSpace: "nowrap",
+                        background: "var(--infobg)", whiteSpace: "nowrap",
                       }}
                       aria-label={t("devPlanAriaLabel", { name: displayName(s, t) })}
                     >

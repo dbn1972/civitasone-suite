@@ -87,17 +87,17 @@ export default async function ShiftRequestsPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🔄" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPendingLabel")} value={errored ? "—" : pending} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statApprovedLabel")} value={errored ? "—" : approved} />
-        <StatCard icon="❌" iconBg="var(--badbg, #fff0f0)" label={t("statRejectedLabel")} value={errored ? "—" : rejected} />
+        <StatCard icon="🔄" iconBg="var(--infobg)" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPendingLabel")} value={errored ? "—" : pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApprovedLabel")} value={errored ? "—" : approved} />
+        <StatCard icon="❌" iconBg="var(--badbg)" label={t("statRejectedLabel")} value={errored ? "—" : rejected} />
       </StatGrid>
 
       {(() => {
         const formCard = (
           <Card title={t("cardNewRequest")}>
             {noLinkedProfile ? (
-              <div role="alert" style={{ padding: "20px 24px", fontSize: 13, color: "var(--warn-text, #92400e)" }}>
+              <div role="alert" style={{ padding: "20px 24px", fontSize: 13, color: "var(--warn-text)" }}>
                 {t("noLinkedProfileMessage")}
               </div>
             ) : (

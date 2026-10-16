@@ -127,7 +127,7 @@ export function PageViewer({ page, pageCount, view, onViewChange, activeWord, on
       >
         <div
           style={{
-            position: "absolute", insetInlineStart: "50%", top: "50%", width: pageSize.w, height: pageSize.h, background: "#fff",
+            position: "absolute", insetInlineStart: "50%", top: "50%", width: pageSize.w, height: pageSize.h, background: "var(--panel)",
             transform: `translate(calc(-50% + ${view.panX}px), calc(-50% + ${view.panY}px)) scale(${view.zoom}) rotate(${view.rotation}deg)`,
           }}
           data-testid="page-surface"

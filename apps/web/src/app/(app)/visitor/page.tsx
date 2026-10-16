@@ -76,9 +76,9 @@ export default async function VisitorHomePage() {
         />
       )}
       <StatGrid>
-        <StatCard icon="🕓" iconBg="#fff7ed" label={t("statAwaiting")} value={pendingValue} />
-        <StatCard icon="📅" iconBg="#ecfeff" label={t("statExpectedToday")} value={expectedToday} />
-        <StatCard icon="✅" iconBg="#ecfdf5" label={t("statUpcoming")} value={upcoming} />
+        <StatCard icon="🕓" tone="warn" label={t("statAwaiting")} value={pendingValue} />
+        <StatCard icon="📅" tone="info" label={t("statExpectedToday")} value={expectedToday} />
+        <StatCard icon="✅" tone="good" label={t("statUpcoming")} value={upcoming} />
       </StatGrid>
 
       <div className="grid" style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))", marginTop: 18 }}>

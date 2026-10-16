@@ -53,10 +53,10 @@ export default async function OrgChartPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="👥" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalEmployees")} value={errored ? null : totalCount} />
-        <StatCard icon="🏢" iconBg="var(--goodbg, #e6f7f0)" label={t("statDepartments")} value={errored ? null : uniqueDepts} />
-        <StatCard icon="💼" iconBg="var(--warnbg, #fff7e6)" label={t("statManagers")} value={errored ? null : managers} />
-        <StatCard icon="🌟" iconBg="var(--bg, #f5f5f5)" label={t("statRootHeads")} value={errored ? null : roots} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statTotalEmployees")} value={errored ? null : totalCount} />
+        <StatCard icon="🏢" iconBg="var(--goodbg)" label={t("statDepartments")} value={errored ? null : uniqueDepts} />
+        <StatCard icon="💼" iconBg="var(--warnbg)" label={t("statManagers")} value={errored ? null : managers} />
+        <StatCard icon="🌟" iconBg="var(--bg)" label={t("statRootHeads")} value={errored ? null : roots} />
       </StatGrid>
       <Card padding>
         {errored ? (

@@ -41,10 +41,10 @@ export default async function GuesthousePage() {
       {/* On a failed load the counts are computed from an empty list — show "—"
           rather than a fabricated 0 / 0%. */}
       <StatGrid>
-        <StatCard icon="🏨" iconBg="#e6f7f5" label="Bookings" value={errored ? "—" : total.toLocaleString("en-IN")} />
-        <StatCard icon="🛏️" iconBg="#eff6ff" label="Checked in" value={errored ? "—" : occupied.toLocaleString("en-IN")} />
-        <StatCard icon="📋" iconBg="#fffaeb" label="Awaiting check-in" value={errored ? "—" : pendingApproval.toLocaleString("en-IN")} />
-        <StatCard icon="🧹" iconBg="#ecfdf3" label="Upcoming" value={errored ? "—" : upcoming.toLocaleString("en-IN")} />
+        <StatCard icon="🏨" tone="good" label="Bookings" value={errored ? "—" : total.toLocaleString("en-IN")} />
+        <StatCard icon="🛏️" tone="info" label="Checked in" value={errored ? "—" : occupied.toLocaleString("en-IN")} />
+        <StatCard icon="📋" tone="warn" label="Awaiting check-in" value={errored ? "—" : pendingApproval.toLocaleString("en-IN")} />
+        <StatCard icon="🧹" tone="good" label="Upcoming" value={errored ? "—" : upcoming.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h">

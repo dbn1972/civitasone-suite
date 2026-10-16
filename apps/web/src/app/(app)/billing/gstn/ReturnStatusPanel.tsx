@@ -76,7 +76,7 @@ export function ReturnStatusPanel({ initialRef = "" }: { initialRef?: string } =
       </p>
       <div style={{ display: "grid", gap: 6 }}>
         <label htmlFor={refId} style={{ fontSize: 13, fontWeight: 600 }}>
-          Return Reference ID <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+          Return Reference ID <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
         </label>
         <input
           id={refId}
@@ -89,7 +89,7 @@ export function ReturnStatusPanel({ initialRef = "" }: { initialRef?: string } =
           style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
         />
         {fieldError && (
-          <p id={refErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+          <p id={refErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
             {fieldError}
           </p>
         )}

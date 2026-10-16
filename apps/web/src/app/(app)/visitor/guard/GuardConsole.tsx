@@ -244,10 +244,10 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
       </Card>
 
       <StatGrid>
-        <StatCard icon="📅" iconBg="#ecfeff" label="Expected Today" value={expectedHere.length.toLocaleString("en-IN")} />
-        <StatCard icon="🟢" iconBg="#ecfdf5" label="Inside Now" value={rosterState === "ok" ? roster.length.toLocaleString("en-IN") : "—"} />
-        <StatCard icon="⏰" iconBg="#fef2f2" label="Overstays" value={rosterState === "ok" ? overstays.toLocaleString("en-IN") : "—"} />
-        <StatCard icon="✔️" iconBg="#eef2ff" label="Verified (session)" value={verifiedToday.toLocaleString("en-IN")} />
+        <StatCard icon="📅" tone="info" label="Expected Today" value={expectedHere.length.toLocaleString("en-IN")} />
+        <StatCard icon="🟢" tone="good" label="Inside Now" value={rosterState === "ok" ? roster.length.toLocaleString("en-IN") : "—"} />
+        <StatCard icon="⏰" tone="bad" label="Overstays" value={rosterState === "ok" ? overstays.toLocaleString("en-IN") : "—"} />
+        <StatCard icon="✔️" tone="info" label="Verified (session)" value={verifiedToday.toLocaleString("en-IN")} />
       </StatGrid>
 
       {/* Verify pass */}
@@ -272,11 +272,11 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
         </form>
 
         {verifyError && (
-          <p role="alert" style={{ marginTop: 10, fontSize: 13, color: "#b91c1c" }}>⚠ {verifyError}</p>
+          <p role="alert" style={{ marginTop: 10, fontSize: 13, color: "var(--bad)" }}>⚠ {verifyError}</p>
         )}
 
         {verifyResult && (
-          <div style={{ marginTop: 14, padding: 14, borderRadius: 10, border: "1px solid var(--line)", background: verifyResult.valid ? "var(--primary-soft)" : "#fef2f2" }}>
+          <div style={{ marginTop: 14, padding: 14, borderRadius: 10, border: "1px solid var(--line)", background: verifyResult.valid ? "var(--primary-soft)" : "var(--badbg)" }}>
             {verifyResult.valid ? (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
@@ -361,7 +361,7 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
 
       {/* Inside now */}
       {actionError && (
-        <div className="alert" role="alert" style={{ borderColor: "#fca5a5", color: "var(--bad)" }}>⚠ {actionError}</div>
+        <div className="alert" role="alert" style={{ borderColor: "var(--badbd)", color: "var(--bad)" }}>⚠ {actionError}</div>
       )}
       <Card
         title={`Inside now (${rosterState === "ok" ? roster.length : "—"})`}

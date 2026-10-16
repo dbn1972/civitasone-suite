@@ -135,21 +135,21 @@ export default async function InventoryReconcilePage({
       ) : (
         <>
           {note ? (
-            <p role="note" style={{ fontSize: 13, color: "#92400e", margin: "0 0 8px" }}>
+            <p role="note" style={{ fontSize: 13, color: "var(--warn)", margin: "0 0 8px" }}>
               {note} Narrow the date range to see the rest; the totals below cover only the movements listed.
             </p>
           ) : null}
           <StatGrid>
-            <StatCard icon="📥" iconBg="#ecfdf5" label="Total In (Qty)" value={totalIn.toLocaleString("en-IN")} />
-            <StatCard icon="📤" iconBg="#fef2f2" label="Total Out (Qty)" value={totalOut.toLocaleString("en-IN")} />
-            <StatCard icon="🔧" iconBg="#fffbeb" label="Adjustments" value={adjustments.length.toLocaleString("en-IN")} />
-            <StatCard icon="🔁" iconBg="#eff6ff" label="Transfers" value={transfers.length.toLocaleString("en-IN")} />
+            <StatCard icon="📥" tone="good" label="Total In (Qty)" value={totalIn.toLocaleString("en-IN")} />
+            <StatCard icon="📤" tone="bad" label="Total Out (Qty)" value={totalOut.toLocaleString("en-IN")} />
+            <StatCard icon="🔧" tone="warn" label="Adjustments" value={adjustments.length.toLocaleString("en-IN")} />
+            <StatCard icon="🔁" tone="info" label="Transfers" value={transfers.length.toLocaleString("en-IN")} />
             {unclassified.length > 0 ? (
-              <StatCard icon="❔" iconBg="#f1f5f9" label="Unclassified rows" value={unclassified.length.toLocaleString("en-IN")} />
+              <StatCard icon="❔" tone="neutral" label="Unclassified rows" value={unclassified.length.toLocaleString("en-IN")} />
             ) : null}
             <StatCard
               icon="⚖️"
-              iconBg="#eff6ff"
+              tone="info"
               label="Net Movement (Qty)"
               value={netQty.toLocaleString("en-IN")}
               up={netQty >= 0}

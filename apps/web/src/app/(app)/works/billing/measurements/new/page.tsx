@@ -27,8 +27,8 @@ const labelStyle = {
 } as const;
 
 const errBanner = {
-  background: "#fef2f2",
-  color: "#b42318",
+  background: "var(--badbg)",
+  color: "var(--bad)",
   padding: 12,
   borderRadius: 12,
   marginBottom: 16,
@@ -36,7 +36,7 @@ const errBanner = {
 } as const;
 
 const okBanner = {
-  background: "#ecfdf3",
+  background: "var(--goodbg)",
   padding: 12,
   borderRadius: 12,
   marginBottom: 16,
@@ -395,7 +395,7 @@ function RecordMeasurementForm() {
               </div>
             )}
             {mismatch && (
-              <p role="status" style={{ fontSize: 12, color: "#92400e", marginTop: 6 }}>
+              <p role="status" style={{ fontSize: 12, color: "var(--warn)", marginTop: 6 }}>
                 ⚠️ Entered quantity differs from the computed value — add a remark explaining why,
                 or use the computed value.
               </p>

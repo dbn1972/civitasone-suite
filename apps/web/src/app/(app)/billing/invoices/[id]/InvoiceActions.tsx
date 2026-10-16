@@ -34,8 +34,8 @@ function SignedQr({ value, size = 160 }: { value: string; size?: number }) {
       aria-label="E-invoice signed QR code"
       shapeRendering="crispEdges"
     >
-      <rect width={dim} height={dim} fill="#fff" />
-      <path d={d} fill="#000" />
+      <rect width={dim} height={dim} fill="var(--panel)" />
+      <path d={d} fill="var(--ink)" />
     </svg>
   );
 }

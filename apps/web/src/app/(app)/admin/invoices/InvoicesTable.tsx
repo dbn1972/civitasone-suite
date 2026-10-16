@@ -33,11 +33,11 @@ export function InvoicesTable({
       errorStatus={errorStatus}
       errorMessage={errorMessage}
       stats={[
-        { icon: "🧾", iconBg: "#eef2ff", label: "Total Invoices", value: s.total },
-        { icon: "✅", iconBg: "#ecfdf3", label: "Paid", value: s.paid },
-        { icon: "⏳", iconBg: "#fffaeb", label: "Pending", value: s.pending },
-        { icon: "⚠️", iconBg: "#fce7ee", label: "Overdue", value: s.overdue },
-        { icon: "📄", iconBg: "#f1f5f9", label: "Draft / waived / cancelled", value: s.other, onlyWhenPositive: true },
+        { icon: "🧾", iconBg: "var(--infobg)", label: "Total Invoices", value: s.total },
+        { icon: "✅", iconBg: "var(--goodbg)", label: "Paid", value: s.paid },
+        { icon: "⏳", iconBg: "var(--warnbg)", label: "Pending", value: s.pending },
+        { icon: "⚠️", iconBg: "var(--badbg)", label: "Overdue", value: s.overdue },
+        { icon: "📄", iconBg: "var(--line2)", label: "Draft / waived / cancelled", value: s.other, onlyWhenPositive: true },
       ]}
     >
       <DataTable<InvoiceRow>

@@ -60,9 +60,9 @@ export function ApplyTemplateCard({ employeeId, hasTasks }: { employeeId: string
     <div style={{ marginTop: 16, textAlign: "left", maxWidth: 420, marginInline: "auto" }}>
       <AcceptedNotice {...accepted.noticeProps} />
       <h3 style={{ fontSize: 14, margin: "0 0 4px" }}>{hasTasks ? t("titleTopUp") : t("title")}</h3>
-      <p style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: "0 0 8px" }}>{hasTasks ? t("hintTopUp") : t("hint")}</p>
+      <p style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 8px" }}>{hasTasks ? t("hintTopUp") : t("hint")}</p>
       {loadFailed ? (
-        <p role="alert" style={{ fontSize: 12, color: "var(--bad, #dc2626)" }}>{t("loadFailed")}</p>
+        <p role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{t("loadFailed")}</p>
       ) : (
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <Field label={t("templateLabel")} style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -76,8 +76,8 @@ export function ApplyTemplateCard({ employeeId, hasTasks }: { employeeId: string
           <Button type="button" onClick={() => void apply()} disabled={busy || !templates}>{busy ? t("applying") : t("apply")}</Button>
         </div>
       )}
-      {notice ? <p role="status" style={{ margin: "8px 0 0", fontSize: 12, color: "var(--good, #067647)", fontWeight: 500 }}>{notice}</p> : null}
-      {error ? <p role="alert" style={{ margin: "8px 0 0", fontSize: 12, color: "var(--bad, #dc2626)", fontWeight: 500 }}>{error}</p> : null}
+      {notice ? <p role="status" style={{ margin: "8px 0 0", fontSize: 12, color: "var(--good)", fontWeight: 500 }}>{notice}</p> : null}
+      {error ? <p role="alert" style={{ margin: "8px 0 0", fontSize: 12, color: "var(--bad)", fontWeight: 500 }}>{error}</p> : null}
     </div>
   );
 }

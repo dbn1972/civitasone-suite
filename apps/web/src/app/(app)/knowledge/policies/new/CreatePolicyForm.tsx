@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button } from "@/app/_components/ds";
+import { Button, Field, Input, Select, Textarea } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 /**
@@ -58,27 +58,44 @@ export function CreatePolicyForm() {
   return (
     <form onSubmit={(e) => void handleSubmit(e)} className="card pad" style={{ maxWidth: 820 }} noValidate>
       <div className="fields">
-        <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
-          <label className="label" htmlFor="title">Title *</label>
-          <input id="title" className="inp" value={title} onChange={(e) => setTitle(e.target.value)} required style={{ minHeight: 44 }} placeholder="e.g. Travel &amp; Tour Policy 2026" />
+        <div style={{ gridColumn: "1 / -1" }}>
+          <Field label="Title" required error={status === "error" && message === "Title is required." ? message : undefined}>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              style={{ minHeight: 44 }}
+              placeholder="e.g. Travel &amp; Tour Policy 2026"
+            />
+          </Field>
         </div>
-        <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
-          <label className="label" htmlFor="docType">Type</label>
-          <select id="docType" className="inp" value={docType} onChange={(e) => setDocType(e.target.value as "sop" | "policy" | "circular")} style={{ minHeight: 44 }}>
+        <Field label="Type">
+          <Select
+            value={docType}
+            onChange={(e) => setDocType(e.target.value as "sop" | "policy" | "circular")}
+            style={{ minHeight: 44 }}
+          >
             <option value="sop">SOP</option>
             <option value="policy">Policy</option>
             <option value="circular">Circular</option>
-          </select>
-        </div>
-        <div className="field" style={{ gridColumn: "1 / -1", background: "#fff", padding: "13px 16px" }}>
-          <label className="label" htmlFor="body">Body</label>
-          <textarea id="body" className="inp" value={body} onChange={(e) => setBody(e.target.value)} rows={10} style={{ minHeight: 180, resize: "vertical" }} placeholder="Document contents…" />
+          </Select>
+        </Field>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <Field label="Body">
+            <Textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={10}
+              style={{ minHeight: 180, resize: "vertical" }}
+              placeholder="Document contents…"
+            />
+          </Field>
         </div>
       </div>
 
       <div role="status" aria-live="polite">
-        {message ? (
-          <p role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, color: status === "error" ? "var(--bad)" : "var(--good)", fontSize: "0.875rem" }}>
+        {message && status === "error" && message !== "Title is required." ? (
+          <p role="alert" style={{ marginTop: 12, color: "var(--bad)", fontSize: "0.875rem" }}>
             {message}
           </p>
         ) : null}

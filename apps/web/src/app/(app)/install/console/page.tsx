@@ -77,7 +77,7 @@ export default async function Page() {
           />
           <StatCard
             icon="⚠️"
-            iconBg={failed > 0 ? "#fee2e2" : "#eef2ff"}
+            iconBg={failed > 0 ? "var(--badbg)" : "var(--infobg)"}
             label="Failed steps"
             value={failed}
           />

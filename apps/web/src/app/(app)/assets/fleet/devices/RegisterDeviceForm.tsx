@@ -118,7 +118,7 @@ export function RegisterDeviceForm() {
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={vehicleIdId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Vehicle ID <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Vehicle ID <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={vehicleIdId}
@@ -130,12 +130,12 @@ export function RegisterDeviceForm() {
                 aria-describedby={errors.vehicleId ? vehicleIdErrId : undefined}
                 style={inputStyle}
               />
-              {errors.vehicleId && <p id={vehicleIdErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.vehicleId}</p>}
+              {errors.vehicleId && <p id={vehicleIdErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.vehicleId}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={deviceImeiId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Device IMEI <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Device IMEI <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={deviceImeiId}
@@ -149,7 +149,7 @@ export function RegisterDeviceForm() {
                 aria-describedby={errors.deviceImei ? deviceImeiErrId : undefined}
                 style={inputStyle}
               />
-              {errors.deviceImei && <p id={deviceImeiErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.deviceImei}</p>}
+              {errors.deviceImei && <p id={deviceImeiErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.deviceImei}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -179,7 +179,7 @@ export function RegisterDeviceForm() {
                 aria-describedby={errors.simIccid ? simIccidErrId : undefined}
                 style={inputStyle}
               />
-              {errors.simIccid && <p id={simIccidErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.simIccid}</p>}
+              {errors.simIccid && <p id={simIccidErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.simIccid}</p>}
             </div>
           </div>
 

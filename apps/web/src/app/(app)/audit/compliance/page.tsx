@@ -56,7 +56,7 @@ export default async function AuditCompliancePage() {
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="📜" iconBg="var(--infobg)" label="Compliance Score" value={scoreValue} hint="Share of actionable requirements that are complied (excludes planned / N-A)." />
-        <StatCard icon="🔏" iconBg="#e6f7f0" label="Controls Complied" value={compliedValue} />
+        <StatCard icon="🔏" tone="good" label="Controls Complied" value={compliedValue} />
         {/* GAP-AUDIT-COMPLIANCE-04: no hard-coded "6-hr reporting" delta — that
             was static copy, not data. The overdue count is a real figure. */}
         <StatCard icon="🛡️" iconBg="var(--infobg)" label="CERT-In Directions" value={certInValue} />

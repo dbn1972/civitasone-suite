@@ -52,11 +52,11 @@ export function ExpenseReceiptLink({ id, hasReceipt }: { id: string; hasReceipt:
         onClick={openReceipt}
         disabled={busy}
         className="link-button"
-        style={{ background: "none", border: "none", padding: 0, color: "var(--accent, #2563eb)", textDecoration: "underline", cursor: busy ? "default" : "pointer", fontSize: 13 }}
+        style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", textDecoration: "underline", cursor: busy ? "default" : "pointer", fontSize: 13 }}
       >
         {busy ? t("receiptLoading") : t("receiptView")}
       </button>
-      {error && <p role="alert" style={{ color: "var(--bad, #b91c1c)", fontSize: 12, margin: "2px 0 0" }}>{error}</p>}
+      {error && <p role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: "2px 0 0" }}>{error}</p>}
     </div>
   );
 }

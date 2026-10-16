@@ -68,12 +68,12 @@ export default async function Page({ searchParams }: { searchParams?: { filter?:
       />
       {source === "error" && <DataSourceBadge source={source} />}
       <StatGrid>
-        <StatCard icon="📘" iconBg="#eef2ff" label="Total documents" value={errored ? "—" : policies.length.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf5" label="Published" value={errored ? "—" : published.toLocaleString("en-IN")} />
-        <StatCard icon="🕓" iconBg="#fffbeb" label="In review / approved" value={errored ? "—" : inReview.toLocaleString("en-IN")} />
+        <StatCard icon="📘" tone="info" label="Total documents" value={errored ? "—" : policies.length.toLocaleString("en-IN")} />
+        <StatCard icon="✅" tone="good" label="Published" value={errored ? "—" : published.toLocaleString("en-IN")} />
+        <StatCard icon="🕓" tone="warn" label="In review / approved" value={errored ? "—" : inReview.toLocaleString("en-IN")} />
         <StatCard
           icon="🔁"
-          iconBg="#fef2f2"
+          tone="bad"
           label="Review due"
           value={reviewDueSource === "error" ? "—" : reviewDue.length.toLocaleString("en-IN")}
           href="/knowledge/policies?filter=review-due"

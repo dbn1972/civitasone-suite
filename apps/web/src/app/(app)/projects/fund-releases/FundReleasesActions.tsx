@@ -84,7 +84,7 @@ export function DisburseButton({ schemeId, releaseId, releaseNo, amount, project
       </Button>
 
       {success && (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", margin: "4px 0 0" }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--good)", margin: "4px 0 0" }}>
           {success}
         </p>
       )}
@@ -123,7 +123,7 @@ export function DisburseButton({ schemeId, releaseId, releaseNo, amount, project
             placeholder="e.g. PFMS-2026-000123"
           />
           {pfmsRef.length > 0 && !pfmsValid && (
-            <p style={{ fontSize: 12, color: "#b42318", margin: "4px 0 0" }}>
+            <p style={{ fontSize: 12, color: "var(--bad)", margin: "4px 0 0" }}>
               Enter a valid PFMS reference (6–40 letters/digits, - / _).
             </p>
           )}

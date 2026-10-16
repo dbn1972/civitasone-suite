@@ -77,16 +77,16 @@ export default async function TrainingNominationsPage() {
         {/* GAP-HR-TRAINING-NOMINATIONS-04: a genuine total (never data.length
             capped at 500), and "—" (not a fabricated 0) when the load
             itself failed. */}
-        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={isError ? "—" : total} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={isError ? "—" : total} />
         {/* GAP-HR-TRAINING-NOMINATIONS-01: a freshly created nomination is
             stored as 'nominated', not 'pending' -- this used to always read
             0. */}
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPending")} value={isError ? "—" : rows.filter((r) => r.status === "nominated").length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statApproved")} value={isError ? "—" : rows.filter((r) => r.status === "approved").length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={isError ? "—" : rows.filter((r) => r.status === "nominated").length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApproved")} value={isError ? "—" : rows.filter((r) => r.status === "approved").length} />
         {/* GAP-HR-TRAINING-NOMINATIONS-05: distinct by trainingId, not by
             program-title text (two programmes that happen to share a title
             used to merge into one). */}
-        <StatCard icon="📚" iconBg="var(--bg, #f5f5f5)" label={t("statPrograms")} value={isError ? "—" : new Set(rows.map((r) => r.trainingId)).size} />
+        <StatCard icon="📚" iconBg="var(--bg)" label={t("statPrograms")} value={isError ? "—" : new Set(rows.map((r) => r.trainingId)).size} />
       </StatGrid>
       {truncated && !isError && (
         <p className="text-xs text-amber-700" style={{ marginBottom: 8 }}>

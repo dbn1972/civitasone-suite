@@ -126,7 +126,7 @@ export function WriteOffCreateForm({
         <div style={{ display: "grid", gap: 14 }}>
           {/* GAP-REVENUE-WRITE-OFFS-01: show the arrears the write-off reduces. */}
           {dcbUnavailable ? (
-            <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--bad, #c0392b)" }}>
+            <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--bad)" }}>
               We couldn't load this assessee's outstanding balance, so a write-off can't be raised safely right now.
               Try again in a moment.
             </p>
@@ -166,7 +166,7 @@ export function WriteOffCreateForm({
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={amountId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Amount (₹){" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -185,7 +185,7 @@ export function WriteOffCreateForm({
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
               {fieldErrors.amount && (
-                <p id={amountErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={amountErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.amount}
                 </p>
               )}
@@ -194,7 +194,7 @@ export function WriteOffCreateForm({
             <div style={{ display: "grid", gap: 6, gridColumn: "1 / -1" }}>
               <label htmlFor={reasonId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Reason{" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -211,7 +211,7 @@ export function WriteOffCreateForm({
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)" }}
               />
               {fieldErrors.reason && (
-                <p id={reasonErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={reasonErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.reason}
                 </p>
               )}

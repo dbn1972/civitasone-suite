@@ -122,13 +122,13 @@ export function CreatePenaltyRuleForm({ rateHeadId, rateHeadLabel }: CreatePenal
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
       <Card title="Create Penalty Rule" padding>
         <div style={{ display: "grid", gap: 14 }}>
-          <p style={{ fontSize: 13, color: "var(--muted, #64748b)", margin: 0 }}>
+          <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
             For rate head <strong>{rateHeadLabel}</strong>.
           </p>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={typeId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Interest Type <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Interest Type <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <select
                 id={typeId}
@@ -145,7 +145,7 @@ export function CreatePenaltyRuleForm({ rateHeadId, rateHeadLabel }: CreatePenal
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={rateId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Annual Interest Rate (%) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Annual Interest Rate (%) <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={rateId}
@@ -167,7 +167,7 @@ export function CreatePenaltyRuleForm({ rateHeadId, rateHeadLabel }: CreatePenal
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={graceId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Grace Days <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Grace Days <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={graceId}
@@ -201,7 +201,7 @@ export function CreatePenaltyRuleForm({ rateHeadId, rateHeadLabel }: CreatePenal
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={roundingId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Rounding Mode <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Rounding Mode <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <select
                 id={roundingId}

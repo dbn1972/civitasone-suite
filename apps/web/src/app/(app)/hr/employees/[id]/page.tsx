@@ -309,7 +309,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
           <Link
             href={`/hr/retirement?empId=${params.id}`}
             className="btn ghost"
-            style={{ fontSize: 13, color: "var(--bad, #b91c1c)", borderColor: "var(--bad, #b91c1c)" }}
+            style={{ fontSize: 13, color: "var(--bad)", borderColor: "var(--bad)" }}
           >
             {t("actionInitiateSeparation")}
           </Link>
@@ -318,7 +318,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
 
       {!serving && !onLeave && (
         <Card padding>
-          <p style={{ margin: 0, color: "var(--mut, #64748b)", fontSize: 13 }}>
+          <p style={{ margin: 0, color: "var(--mut)", fontSize: 13 }}>
             {exited ? t("actionsUnavailableExited") : t("actionsUnavailableOther", { status: employee.status })}
           </p>
         </Card>

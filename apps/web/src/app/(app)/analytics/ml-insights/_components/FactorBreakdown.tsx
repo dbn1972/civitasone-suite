@@ -46,7 +46,7 @@ export function FactorBreakdown({ factors }: FactorBreakdownProps) {
                   className="h-full rounded"
                   style={{
                     width: `${widthPct}%`,
-                    backgroundColor: isPositive ? "#3b82f6" : "#ef4444",
+                    backgroundColor: isPositive ? "var(--info)" : "var(--bad)",
                   }}
                 />
               </div>

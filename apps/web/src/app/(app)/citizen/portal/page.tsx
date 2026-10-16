@@ -24,28 +24,28 @@ export default async function CitizenPortalPage() {
       <StatGrid>
         <StatCard
           icon="🗂️"
-          iconBg="#eef2ff"
+          tone="info"
           label={t("statPublishedServices")}
           href="/citizen/catalogue"
           value={errored ? "—" : metrics.totalServices.toLocaleString("en-IN")}
         />
         <StatCard
           icon="📋"
-          iconBg="#ecfdf3"
+          tone="good"
           label={t("statActiveRequests")}
           href="/citizen/requests"
           value={errored ? "—" : metrics.activeRequests.toLocaleString("en-IN")}
         />
         <StatCard
           icon="✅"
-          iconBg="#fffaeb"
+          tone="warn"
           label={t("statResolvedThisMonth")}
           href="/citizen/requests"
           value={errored ? "—" : metrics.resolvedThisMonth.toLocaleString("en-IN")}
         />
         <StatCard
           icon="⏱️"
-          iconBg="#fce7ee"
+          tone="bad"
           label={t("statAvgResolutionDays")}
           value={errored ? "—" : metrics.avgResolutionDays.toLocaleString("en-IN", { maximumFractionDigits: 1 })}
         />

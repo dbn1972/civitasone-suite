@@ -39,10 +39,10 @@ function buildChartData(components: ComponentItem[], t: (key: string, values?: R
   );
 
   return [
-    { label: t("chartEarningsLabel", { count: earnings.length }), value: earnings.length, color: "var(--indigo, #4f46e5)" },
-    { label: t("chartDeductionsLabel", { count: deductions.length }), value: deductions.length, color: "var(--bad, #ef4444)" },
-    { label: t("chartEmployerLabel", { count: employer.length }), value: employer.length, color: "var(--good, #10b981)" },
-    { label: t("chartOtherLabel", { count: other.length }), value: other.length, color: "var(--warn, #f59e0b)" },
+    { label: t("chartEarningsLabel", { count: earnings.length }), value: earnings.length, color: "var(--indigo)" },
+    { label: t("chartDeductionsLabel", { count: deductions.length }), value: deductions.length, color: "var(--bad)" },
+    { label: t("chartEmployerLabel", { count: employer.length }), value: employer.length, color: "var(--good)" },
+    { label: t("chartOtherLabel", { count: other.length }), value: other.length, color: "var(--warn)" },
   ].filter((d) => d.value > 0);
 }
 
@@ -62,7 +62,7 @@ export function SalaryStructureCard({ name, isDefault, status, components, compo
     <div
       style={{
         background: "var(--panel)",
-        border: `1.5px solid ${isDefault ? "var(--accent, #4f46e5)" : "var(--line)"}`,
+        border: `1.5px solid ${isDefault ? "var(--accent)" : "var(--line)"}`,
         borderRadius: 14,
         padding: "20px 24px",
         position: "relative",
@@ -74,8 +74,8 @@ export function SalaryStructureCard({ name, isDefault, status, components, compo
             position: "absolute",
             top: 12,
             insetInlineEnd: 12,
-            background: "var(--accent, #4f46e5)",
-            color: "#fff",
+            background: "var(--accent)",
+            color: "var(--panel)",
             fontSize: 11,
             fontWeight: 600,
             padding: "2px 10px",
@@ -92,7 +92,7 @@ export function SalaryStructureCard({ name, isDefault, status, components, compo
             width: 9,
             height: 9,
             borderRadius: "50%",
-            background: isActive ? "var(--good, #10b981)" : "var(--mut, #94a3b8)",
+            background: isActive ? "var(--good)" : "var(--mut)",
             flexShrink: 0,
           }}
         />

@@ -81,7 +81,7 @@ export function ResendAction({
         }}
       />
       {done ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", margin: "8px 0 0" }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--good)", margin: "8px 0 0" }}>
           Resend queued. The new delivery will appear in{" "}
           <a href="/notifications/deliveries">Deliveries</a> once the send is processed.
         </p>

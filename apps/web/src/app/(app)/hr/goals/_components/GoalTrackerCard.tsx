@@ -27,18 +27,18 @@ export interface GoalTrackerCardProps {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  on_track:  { label: "On Track",  bg: "#e6f7f0", color: "var(--good, #15803d)" },
-  active:    { label: "On Track",  bg: "#e6f7f0", color: "var(--good, #15803d)" },
-  at_risk:   { label: "At Risk",   bg: "#fff7e6", color: "var(--warn, #d97706)" },
-  behind:    { label: "Behind",    bg: "#fee2e2", color: "var(--bad, #dc2626)" },
-  achieved:  { label: "Achieved",  bg: "var(--infobg, #eff6ff)", color: "var(--info, #1d4ed8)" },
-  completed: { label: "Achieved",  bg: "var(--infobg, #eff6ff)", color: "var(--info, #1d4ed8)" },
+  on_track:  { label: "On Track",  bg: "var(--goodbg)", color: "var(--good)" },
+  active:    { label: "On Track",  bg: "var(--goodbg)", color: "var(--good)" },
+  at_risk:   { label: "At Risk",   bg: "#fff7e6", color: "var(--warn)" },
+  behind:    { label: "Behind",    bg: "var(--badbg)", color: "var(--bad)" },
+  achieved:  { label: "Achieved",  bg: "var(--infobg)", color: "var(--info)" },
+  completed: { label: "Achieved",  bg: "var(--infobg)", color: "var(--info)" },
 };
 
 const CASCADE_CONFIG: Record<CascadeLevel, { label: string; bg: string }> = {
-  org:        { label: "Org",        bg: "var(--infobg, #e0e7ff)" },
-  dept:       { label: "Dept",       bg: "var(--primary-soft, #fce7f3)" },
-  individual: { label: "Individual", bg: "var(--goodbg, #f0fdf4)" },
+  org:        { label: "Org",        bg: "var(--infobg)" },
+  dept:       { label: "Dept",       bg: "var(--primary-soft)" },
+  individual: { label: "Individual", bg: "var(--goodbg)" },
 };
 
 function daysLeft(dateStr: string): number {
@@ -50,8 +50,8 @@ function DueDateChip({ dueDate }: { dueDate: string }) {
   const days = daysLeft(dueDate);
   const overdue  = days < 0;
   const urgent   = days >= 0 && days <= 7;
-  const bg    = overdue ? "var(--badbg, #fee2e2)" : urgent ? "#fff7e6" : "var(--bg, #f1f5f9)";
-  const color = overdue ? "var(--bad, #dc2626)" : urgent ? "var(--warn, #d97706)" : "#475569";
+  const bg    = overdue ? "var(--badbg)" : urgent ? "#fff7e6" : "var(--bg)";
+  const color = overdue ? "var(--bad)" : urgent ? "var(--warn)" : "var(--ink2)";
   const label = overdue
     ? `${Math.abs(days)}d overdue`
     : days === 0
@@ -157,9 +157,9 @@ export function GoalTrackerCard({
   return (
     <div
       style={{
-        border: "1px solid var(--line, #e2e8f0)",
+        border: "1px solid var(--line)",
         borderRadius: 10,
-        background: "var(--panel, #fff)",
+        background: "var(--panel)",
         padding: "14px 16px",
         display: "flex",
         flexDirection: "column",
@@ -175,29 +175,29 @@ export function GoalTrackerCard({
             {cascadeLevel !== "org" && (
               <>
                 <span style={{ fontSize: 11, color: "var(--mut)" }}>Org</span>
-                <span style={{ fontSize: 11, color: "var(--line, #cbd5e1)" }}>→</span>
+                <span style={{ fontSize: 11, color: "var(--line)" }}>→</span>
               </>
             )}
             {cascadeLevel === "individual" && (
               <>
                 <span style={{ fontSize: 11, color: "var(--mut)" }}>Dept</span>
-                <span style={{ fontSize: 11, color: "var(--line, #cbd5e1)" }}>→</span>
+                <span style={{ fontSize: 11, color: "var(--line)" }}>→</span>
               </>
             )}
             <span style={{ fontSize: 11, fontWeight: 600, background: cc.bg, borderRadius: 4, padding: "1px 5px" }}>
               {cc.label}
             </span>
             <span style={{
-              fontSize: 11, fontWeight: 500, background: "var(--bg, #f1f5f9)", color: "var(--ink2, #475569)",
+              fontSize: 11, fontWeight: 500, background: "var(--bg)", color: "var(--ink2)",
               borderRadius: 4, padding: "1px 5px", marginInlineStart: 2,
             }}>{category}</span>
           </div>
 
-          <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: "var(--ink, #1e293b)", lineHeight: 1.3 }}>
+          <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: "var(--ink)", lineHeight: 1.3 }}>
             {title}
           </p>
           {description && (
-            <p style={{ margin: "3px 0 0", fontSize: 12, color: "var(--mut, #64748b)", lineHeight: 1.4 }}>{description}</p>
+            <p style={{ margin: "3px 0 0", fontSize: 12, color: "var(--mut)", lineHeight: 1.4 }}>{description}</p>
           )}
           {parentGoalTitle && (
             <p style={{ margin: "3px 0 0", fontSize: 11, color: "var(--mut)" }}>
@@ -216,18 +216,18 @@ export function GoalTrackerCard({
 
       {/* Target metric */}
       {targetMetric && (
-        <div style={{ fontSize: 12, color: "var(--ink2, #475569)" }}>
-          <span style={{ fontWeight: 600, color: "var(--ink, #1e293b)" }}>{t("targetLabel")}</span> {targetMetric}
+        <div style={{ fontSize: 12, color: "var(--ink2)" }}>
+          <span style={{ fontWeight: 600, color: "var(--ink)" }}>{t("targetLabel")}</span> {targetMetric}
         </div>
       )}
 
       {/* Progress bar */}
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-          <span style={{ fontSize: 12, color: "var(--mut, #64748b)" }}>{t("progressLabel")}</span>
+          <span style={{ fontSize: 12, color: "var(--mut)" }}>{t("progressLabel")}</span>
           <span style={{ fontSize: 12, fontWeight: 700, color: trackColor }}>{pct}%</span>
         </div>
-        <div style={{ height: 6, background: "var(--line, #e2e8f0)", borderRadius: 99, overflow: "hidden" }}>
+        <div style={{ height: 6, background: "var(--line)", borderRadius: 99, overflow: "hidden" }}>
           <div
             style={{
               height: "100%",
@@ -259,8 +259,8 @@ export function GoalTrackerCard({
       {showCheckin && (
         <div
           style={{
-            marginTop: 4, padding: 10, background: "var(--bg, #f8fafc)", borderRadius: 8,
-            border: "1px solid var(--line, #e2e8f0)", display: "flex", flexDirection: "column", gap: 8,
+            marginTop: 4, padding: 10, background: "var(--bg)", borderRadius: 8,
+            border: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 8,
           }}
         >
           <Field label={t("newProgressLabel")} required error={fieldErrors.progress ?? formError.fieldError("progress")}>
@@ -282,7 +282,7 @@ export function GoalTrackerCard({
             />
           </Field>
           {checkinError && (
-            <p role="alert" style={{ margin: 0, fontSize: 12, color: "var(--bad, #dc2626)" }}>{checkinError}</p>
+            <p role="alert" style={{ margin: 0, fontSize: 12, color: "var(--bad)" }}>{checkinError}</p>
           )}
           <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
             <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setShowCheckin(false); setCheckinError(""); setFieldErrors({}); }}>

@@ -100,7 +100,7 @@ export default async function InventoryMovementDetailPage({ params }: { params: 
       </Card>
       <Card title="Lines" padding>
         {movement.lines.length === 0 ? (
-          <p style={{ fontSize: 13, color: "#475569" }}>This movement has no recorded lines.</p>
+          <p style={{ fontSize: 13, color: "var(--ink2)" }}>This movement has no recorded lines.</p>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>

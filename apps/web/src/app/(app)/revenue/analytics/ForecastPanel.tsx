@@ -111,7 +111,7 @@ export function ForecastPanel({ defaultGranularity }: { defaultGranularity: stri
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={horizonId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Horizon (periods){" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -127,7 +127,7 @@ export function ForecastPanel({ defaultGranularity }: { defaultGranularity: stri
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
               {fieldErrors.horizon && (
-                <p id={horizonErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={horizonErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.horizon}
                 </p>
               )}
@@ -136,7 +136,7 @@ export function ForecastPanel({ defaultGranularity }: { defaultGranularity: stri
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={paramId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Window / cycle length{" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -152,7 +152,7 @@ export function ForecastPanel({ defaultGranularity }: { defaultGranularity: stri
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
               {fieldErrors.param && (
-                <p id={paramErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={paramErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.param}
                 </p>
               )}
@@ -179,7 +179,7 @@ export function ForecastPanel({ defaultGranularity }: { defaultGranularity: stri
           </div>
 
           {serverError && (
-            <p id={serverErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+            <p id={serverErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
               {serverError}
             </p>
           )}

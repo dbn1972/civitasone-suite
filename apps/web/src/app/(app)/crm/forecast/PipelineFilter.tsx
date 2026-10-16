@@ -26,11 +26,11 @@ export function PipelineFilter({ pipelines, pipelinesFailed = false }: { pipelin
   if (pipelinesFailed) {
     return (
       <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-        <span style={{ fontSize: 13, color: "#475569" }}>{t("pipelineLabel")}</span>
+        <span style={{ fontSize: 13, color: "var(--ink2)" }}>{t("pipelineLabel")}</span>
         <select disabled aria-label={t("pipelineFilterAria")} aria-describedby="pipeline-filter-note">
           <option>{t("pipelinesUnavailable")}</option>
         </select>
-        <span id="pipeline-filter-note" role="note" style={{ fontSize: 12, color: "#b45309" }}>
+        <span id="pipeline-filter-note" role="note" style={{ fontSize: 12, color: "var(--warn)" }}>
           {t("pipelinesLoadFailedNote")}
         </span>
       </label>
@@ -40,7 +40,7 @@ export function PipelineFilter({ pipelines, pipelinesFailed = false }: { pipelin
   // Genuinely empty (loaded, but no pipelines configured): say so rather than hide.
   if (pipelines.length === 0) {
     return (
-      <p role="note" style={{ fontSize: 12, color: "#64748b", marginBottom: 16 }}>
+      <p role="note" style={{ fontSize: 12, color: "var(--mut)", marginBottom: 16 }}>
         {t("noPipelinesNote")}
       </p>
     );
@@ -58,7 +58,7 @@ export function PipelineFilter({ pipelines, pipelinesFailed = false }: { pipelin
 
   return (
     <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-      <span style={{ fontSize: 13, color: "#475569" }}>Pipeline</span>
+      <span style={{ fontSize: 13, color: "var(--ink2)" }}>Pipeline</span>
       <select
         value={selected}
         disabled={pending}
@@ -70,7 +70,7 @@ export function PipelineFilter({ pipelines, pipelinesFailed = false }: { pipelin
           <option key={p.id} value={p.id}>{p.name}</option>
         ))}
       </select>
-      {pending && <span style={{ fontSize: 12, color: "#64748b" }}>Recalculating…</span>}
+      {pending && <span style={{ fontSize: 12, color: "var(--mut)" }}>Recalculating…</span>}
     </label>
   );
 }

@@ -76,20 +76,20 @@ export default async function Page() {
           <StatGrid>
             <StatCard
               icon={allComplete ? "✅" : "⏳"}
-              iconBg={allComplete ? "#dcfce7" : "#fef3c7"}
+              iconBg={allComplete ? "var(--goodbg)" : "var(--warnbg)"}
               label="Status"
               value={allComplete ? "Complete" : "In progress"}
             />
             <StatCard icon="📋" label="Total steps" value={total} />
             <StatCard
               icon="✔️"
-              iconBg="#dcfce7"
+              tone="good"
               label="Required complete"
               value={`${completedRequired}/${totalRequired}`}
             />
             <StatCard
               icon="⚠️"
-              iconBg={failed > 0 ? "#fee2e2" : "#eef2ff"}
+              iconBg={failed > 0 ? "var(--badbg)" : "var(--infobg)"}
               label="Failed steps"
               value={failed}
             />

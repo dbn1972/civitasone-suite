@@ -88,8 +88,8 @@ export default function HalfDayLeaveSettings() {
           {t("shortLeaveLabel")}
         </label>
         </fieldset>
-        {err.message && <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--bad, #b91c1c)" }}>{err.message}</p>}
-        {note && <p role="status" style={{ margin: 0, fontSize: 13, color: "var(--good, #15803d)" }}>{note}</p>}
+        {err.message && <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--bad)" }}>{err.message}</p>}
+        {note && <p role="status" style={{ margin: 0, fontSize: 13, color: "var(--good)" }}>{note}</p>}
         <div>
           <Button onClick={() => void save()} disabled={!dirty || busy}>{busy ? t("halfDaySaving") : t("halfDaySave")}</Button>
         </div>

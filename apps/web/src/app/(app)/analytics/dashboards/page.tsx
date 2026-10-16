@@ -29,9 +29,9 @@ export default async function AnalyticsDashboardsPage() {
           disagree with the table's own cache state (UX-002's pattern). */}
       <div aria-label="Analytics dashboards">
         <StatGrid>
-          <StatCard icon="📊" iconBg="#f1f5f9" label="Total" value={errored ? "—" : dashboards.length} />
-          <StatCard icon="✅" iconBg="#dcfce7" label="Active" value={errored ? "—" : active} />
-          <StatCard icon="🔗" iconBg="#dbeafe" label="Shared" value={errored ? "—" : shared} />
+          <StatCard icon="📊" tone="neutral" label="Total" value={errored ? "—" : dashboards.length} />
+          <StatCard icon="✅" tone="good" label="Active" value={errored ? "—" : active} />
+          <StatCard icon="🔗" tone="info" label="Shared" value={errored ? "—" : shared} />
         </StatGrid>
         <Card title="Dashboards">
           {/* GAP-ANALYTICS-DASHBOARDS-02: on a failed load, show a retryable

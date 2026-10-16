@@ -32,7 +32,7 @@ const inputStyle: React.CSSProperties = {
   fontSize: 14,
   border: "1px solid var(--line)",
   borderRadius: 10,
-  background: "var(--surface, #fff)",
+  background: "var(--surface)",
   color: "var(--ink)",
   minHeight: 44,
 };
@@ -174,9 +174,9 @@ function ProposalEditForm({
               padding: "10px 14px",
               borderRadius: 8,
               fontSize: 14,
-              background: msg.ok ? "#dcfce7" : "#fee2e2",
-              border: `1px solid ${msg.ok ? "#86efac" : "#fca5a5"}`,
-              color: msg.ok ? "#166534" : "#b91c1c",
+              background: msg.ok ? "var(--goodbg)" : "var(--badbg)",
+              border: `1px solid ${msg.ok ? "var(--goodbd)" : "var(--badbd)"}`,
+              color: msg.ok ? "var(--good)" : "var(--bad)",
             }}
           >
             {msg.ok ? "✅" : "⚠️"} {msg.text}
@@ -190,7 +190,7 @@ function ProposalEditForm({
 
         <div style={fieldWrap}>
           <label htmlFor={`${formId}-desc`} style={labelStyle}>
-            Description <span style={{ color: "#b42318" }}>*</span>
+            Description <span style={{ color: "var(--bad)" }}>*</span>
           </label>
           <textarea
             id={`${formId}-desc`}

@@ -11,9 +11,9 @@ import { searchWorkProposals, resolveWorkProposals, DAO_FINALIZED } from "@/lib/
 import { searchIdentityUsers, resolveIdentityUsers } from "@/lib/entityAdapters/identityUser";
 
 // Token-based banner styles (no hard-coded hex).
-const okBanner: React.CSSProperties = { background: "var(--good-bg, #ecfdf3)", color: "var(--good, #166534)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 };
-const errBanner: React.CSSProperties = { background: "var(--bad-bg, #fef2f2)", color: "var(--bad, #b42318)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 };
-const infoBanner: React.CSSProperties = { background: "var(--info-bg, #eff6ff)", color: "var(--info, #1e40af)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 };
+const okBanner: React.CSSProperties = { background: "var(--good-bg)", color: "var(--good)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 };
+const errBanner: React.CSSProperties = { background: "var(--bad-bg)", color: "var(--bad)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 };
+const infoBanner: React.CSSProperties = { background: "var(--info-bg)", color: "var(--info)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 };
 
 // Upper bound: ₹999,99,99,999.99 (just under 1,000 crore) in paise.
 const MAX_AMOUNT_MINOR = 99999999999n;

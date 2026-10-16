@@ -39,7 +39,7 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
   return (
     <div style={{ display: "grid", gap: 16 }}>
       {!channelOk ? (
-        <p role="alert" style={{ margin: 0, fontSize: 14, color: "var(--bad-fg, #b42318)" }}>
+        <p role="alert" style={{ margin: 0, fontSize: 14, color: "var(--bad-fg)" }}>
           {channelDisabledMessage(channel, service.channels)}
         </p>
       ) : null}

@@ -109,7 +109,7 @@ export function CreateRateHeadForm({ categories = [] }: { categories?: string[] 
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={codeId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Code <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Code <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={codeId}
@@ -130,7 +130,7 @@ export function CreateRateHeadForm({ categories = [] }: { categories?: string[] 
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={nameId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Name <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Name <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={nameId}
@@ -151,7 +151,7 @@ export function CreateRateHeadForm({ categories = [] }: { categories?: string[] 
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={categoryId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Category <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Category <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={categoryId}

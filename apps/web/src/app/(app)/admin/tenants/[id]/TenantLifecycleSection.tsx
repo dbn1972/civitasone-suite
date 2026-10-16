@@ -147,7 +147,7 @@ export function TenantLifecycleSection({
         ) : (
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 12 }}>
             {requests.map((r) => (
-              <li key={r.id} style={{ border: "1px solid var(--line, #e5e7eb)", borderRadius: 8, padding: 12 }}>
+              <li key={r.id} style={{ border: "1px solid var(--line)", borderRadius: 8, padding: 12 }}>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   <strong>{t(`kind.${kindKey(r.kind)}`)}</strong>
                   <span className={`pill ${requestTone(r.status)}`}>{t(`requestStatus.${requestStatusKey(r.status)}`)}</span>

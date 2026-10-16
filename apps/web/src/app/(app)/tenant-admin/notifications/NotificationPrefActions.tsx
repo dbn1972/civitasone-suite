@@ -181,7 +181,7 @@ export function NotificationPrefActions({ prefs }: { prefs: Pref[] }) {
         {modules.length > 0 ? (
           modules.map((mod) => (
             <div key={mod}>
-              <div style={{ fontWeight: 600, fontSize: 12, color: "#667085", textTransform: "uppercase", letterSpacing: "0.05em", padding: "10px 0 6px" }}>
+              <div style={{ fontWeight: 600, fontSize: 12, color: "var(--mut)", textTransform: "uppercase", letterSpacing: "0.05em", padding: "10px 0 6px" }}>
                 {mod.replace(/_/g, " ")}
               </div>
               {(byModule[mod] ?? []).map((pref) => {
@@ -207,7 +207,7 @@ export function NotificationPrefActions({ prefs }: { prefs: Pref[] }) {
         ) : (
           <EmptyState icon="⚙️" title="No channels" message="Channel settings will appear here." />
         )}
-        <div role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", marginTop: 8 }}>{status}</div>
+        <div role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--good)", marginTop: 8 }}>{status}</div>
         <div role="alert" aria-live="assertive" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{error}</div>
       </div>
 

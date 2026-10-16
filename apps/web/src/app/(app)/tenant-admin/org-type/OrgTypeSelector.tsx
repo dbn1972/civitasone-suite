@@ -89,7 +89,7 @@ export function OrgTypeSelector({
               // buttons are not invalid nested interactive elements.
               style={{
                 textAlign: "left", padding: "16px 18px", borderRadius: 12,
-                border: isCurrent ? "2px solid var(--accent, #2563eb)" : "1px solid var(--line)",
+                border: isCurrent ? "2px solid var(--accent)" : "1px solid var(--line)",
                 background: "var(--surface)", color: "var(--ink)", cursor: busy || !tenantId ? "default" : "pointer",
               }}
             >
@@ -125,7 +125,7 @@ export function OrgTypeSelector({
         </p>
       )}
 
-      <div role="status" aria-live="polite" style={{ fontSize: 13, color: "#067647", marginTop: 10 }}>{status}</div>
+      <div role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", marginTop: 10 }}>{status}</div>
 
       <ConfirmDialog
         open={confirmOpen}

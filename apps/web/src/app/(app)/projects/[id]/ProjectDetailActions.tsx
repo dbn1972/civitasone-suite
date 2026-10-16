@@ -77,7 +77,7 @@ export function ProjectDetailActions({ projectId, milestones, canComplete }: Pro
   // No control for viewers (canComplete=false) or when nothing is pending.
   if (!canComplete || !next) {
     return message ? (
-      <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>
+      <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>
         {message}
       </p>
     ) : null;
@@ -96,7 +96,7 @@ export function ProjectDetailActions({ projectId, milestones, canComplete }: Pro
         Complete next milestone: {next.title}
       </Button>
       {message ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>
           {message}
         </p>
       ) : null}

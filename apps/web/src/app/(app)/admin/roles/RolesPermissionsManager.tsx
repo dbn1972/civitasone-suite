@@ -177,14 +177,14 @@ export function RolesPermissionsManager({
       />
       <DataSourceBadge source={source} message="Couldn't load roles or permissions — showing nothing" />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="🔑" iconBg="#f1f5f9" label="Assignable roles" value={assignableRoles.length} />
-        <StatCard icon="🛡️" iconBg="#eff6ff" label={truncated ? "Loaded permissions" : "Total permissions"} value={permissions.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Granted to selected role" value={selectedRole && !showLoading && !loadError ? totalPermissionsGranted : null} />
-        <StatCard icon="🔒" iconBg="#fffbeb" label="System roles (read-only)" value={roles.filter((r) => r.isSystem).length} />
+        <StatCard icon="🔑" tone="neutral" label="Assignable roles" value={assignableRoles.length} />
+        <StatCard icon="🛡️" tone="info" label={truncated ? "Loaded permissions" : "Total permissions"} value={permissions.length} />
+        <StatCard icon="✅" tone="good" label="Granted to selected role" value={selectedRole && !showLoading && !loadError ? totalPermissionsGranted : null} />
+        <StatCard icon="🔒" tone="warn" label="System roles (read-only)" value={roles.filter((r) => r.isSystem).length} />
       </div>
 
       {truncated && (
-        <p role="status" style={{ margin: "0 0 12px", fontSize: 12.5, color: "#92400e" }}>
+        <p role="status" style={{ margin: "0 0 12px", fontSize: 12.5, color: "var(--warn)" }}>
           Showing the first {PERMISSIONS_PAGE_LIMIT} permissions. More may exist than are listed here.
         </p>
       )}
@@ -214,8 +214,8 @@ export function RolesPermissionsManager({
             </select>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {saveState === "saved" && <span role="status" style={{ fontSize: 12, color: "#027a48" }}>Saved.</span>}
-            {saveState === "error" && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{saveError}</span>}
+            {saveState === "saved" && <span role="status" style={{ fontSize: 12, color: "var(--good)" }}>Saved.</span>}
+            {saveState === "error" && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{saveError}</span>}
             <Button
               type="button"
               size="sm"
@@ -235,7 +235,7 @@ export function RolesPermissionsManager({
             <SkeletonRow /><SkeletonRow /><SkeletonRow />
           </div>
         ) : loadError ? (
-          <p role="alert" style={{ padding: 24, color: "#b42318", fontSize: 13 }}>{loadError}</p>
+          <p role="alert" style={{ padding: 24, color: "var(--bad)", fontSize: 13 }}>{loadError}</p>
         ) : permissions.length === 0 ? (
           <p style={{ padding: 24, color: "var(--mut)", fontSize: 13 }}>No permissions are defined for this tenant yet.</p>
         ) : (

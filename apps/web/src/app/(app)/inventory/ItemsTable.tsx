@@ -64,10 +64,10 @@ export function ItemsTable({
   return (
     <div aria-label="Inventory item master">
       <StatGrid>
-          <StatCard icon="📦" iconBg="#f1f5f9" label="Total Items" value={statValue(provenance, rows.length)} />
-          <StatCard icon="✅" iconBg="#dcfce7" label="Active" value={statValue(provenance, active)} />
-          <StatCard icon="🧴" iconBg="#faf5ff" label="Consumables" value={statValue(provenance, consumables)} />
-          <StatCard icon="🔔" iconBg="#fef3c7" label="Reorder Tracked" value={statValue(provenance, tracked)} />
+          <StatCard icon="📦" tone="neutral" label="Total Items" value={statValue(provenance, rows.length)} />
+          <StatCard icon="✅" tone="good" label="Active" value={statValue(provenance, active)} />
+          <StatCard icon="🧴" tone="neutral" label="Consumables" value={statValue(provenance, consumables)} />
+          <StatCard icon="🔔" tone="warn" label="Reorder Tracked" value={statValue(provenance, tracked)} />
       </StatGrid>
       <Card title="Items">
         <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="item master" capNote={capNote(rows.length, INVENTORY_LIST_LIMIT, "items")}>

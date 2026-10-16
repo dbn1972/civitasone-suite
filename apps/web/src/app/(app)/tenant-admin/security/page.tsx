@@ -21,10 +21,10 @@ export default async function SecurityCenterPage() {
           with the table's own cache state (UX-002's pattern). */}
 
       <StatGrid>
-        <StatCard icon="🖥️" iconBg="#eff6ff" label="Active Sessions" value={errored ? "—" : overview.activeSessions} href={errored ? undefined : "/tenant-admin/sessions"} />
-        <StatCard icon="🚫" iconBg="#fef3f2" label="Failed Logins (24h)" value={errored ? "—" : overview.failedLogins24h} href={errored ? undefined : "/tenant-admin/audit"} />
-        <StatCard icon="🔐" iconBg="#ecfdf3" label="MFA Adoption" value={errored ? "—" : `${overview.mfaAdoptionRate}%`} href={errored ? undefined : "/tenant-admin/mfa"} />
-        <StatCard icon="📱" iconBg="#f1f5f9" label="Trusted Devices" value={errored ? "—" : overview.trustedDevices} />
+        <StatCard icon="🖥️" tone="info" label="Active Sessions" value={errored ? "—" : overview.activeSessions} href={errored ? undefined : "/tenant-admin/sessions"} />
+        <StatCard icon="🚫" tone="bad" label="Failed Logins (24h)" value={errored ? "—" : overview.failedLogins24h} href={errored ? undefined : "/tenant-admin/audit"} />
+        <StatCard icon="🔐" tone="good" label="MFA Adoption" value={errored ? "—" : `${overview.mfaAdoptionRate}%`} href={errored ? undefined : "/tenant-admin/mfa"} />
+        <StatCard icon="📱" tone="neutral" label="Trusted Devices" value={errored ? "—" : overview.trustedDevices} />
       </StatGrid>
 
       {errored ? (

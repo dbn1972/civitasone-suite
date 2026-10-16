@@ -42,10 +42,10 @@ export function JoineeCard({
     <div
       data-testid={`joinee-card-${id}`}
       style={{
-        border: `1px solid ${isOverdue ? "var(--warnbd, #fde68a)" : "var(--border, #e2e8f0)"}`,
+        border: `1px solid ${isOverdue ? "var(--warnbd)" : "var(--border)"}`,
         borderRadius: 10,
         padding: 16,
-        background: isOverdue ? "var(--warnbg, #fffcf0)" : "var(--card-bg, #fff)",
+        background: isOverdue ? "var(--warnbg)" : "var(--card-bg)",
         display: "flex",
         flexDirection: "column",
         gap: 12,
@@ -61,22 +61,22 @@ export function JoineeCard({
             width: 38,
             height: 38,
             borderRadius: "50%",
-            background: "linear-gradient(135deg,var(--indigo, #6366f1),var(--violet, #8b5cf6))",
+            background: "linear-gradient(135deg,var(--indigo),var(--violet))",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             fontSize: 13,
             fontWeight: 700,
-            color: "#fff",
+            color: "var(--panel)",
           }}
         >
           {initials(employee)}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--heading, #1e293b)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--heading)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {employee}
           </div>
-          <div style={{ fontSize: 11, color: "var(--muted, #64748b)" }}>{department}</div>
+          <div style={{ fontSize: 11, color: "var(--muted)" }}>{department}</div>
         </div>
         <StatusPill status={status} />
       </div>
@@ -87,22 +87,22 @@ export function JoineeCard({
           display: "flex",
           gap: 16,
           fontSize: 11,
-          color: "var(--muted, #64748b)",
+          color: "var(--muted)",
           flexWrap: "wrap",
         }}
       >
-        <span>Joining: <strong style={{ color: "var(--body, #334155)" }}>{formatIndianDate(joiningDate)}</strong></span>
-        <span>Steps: <strong style={{ color: "var(--body, #334155)" }}>{stepsCompleted}/{totalSteps}</strong></span>
+        <span>Joining: <strong style={{ color: "var(--body)" }}>{formatIndianDate(joiningDate)}</strong></span>
+        <span>Steps: <strong style={{ color: "var(--body)" }}>{stepsCompleted}/{totalSteps}</strong></span>
         {isOverdue && (
           <span
             data-testid={`overdue-badge-${id}`}
             style={{
               padding: "1px 7px",
               borderRadius: 99,
-              background: "var(--warnbg, #fef3c7)",
-              color: "var(--warn, #92400e)",
+              background: "var(--warnbg)",
+              color: "var(--warn)",
               fontWeight: 700,
-              border: "1px solid var(--warnbd, #fde68a)",
+              border: "1px solid var(--warnbd)",
             }}
           >
             ⚠ {overdue} overdue
@@ -112,11 +112,11 @@ export function JoineeCard({
 
       {/* Progress bar */}
       <div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--muted, #64748b)", marginBottom: 4 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "var(--muted)", marginBottom: 4 }}>
           <span>Progress</span>
-          <span style={{ fontWeight: 700, color: pct === 100 ? "var(--good, #067647)" : "var(--body, #334155)" }}>{pct}%</span>
+          <span style={{ fontWeight: 700, color: pct === 100 ? "var(--good)" : "var(--body)" }}>{pct}%</span>
         </div>
-        <ProgressBar value={pct} color={isOverdue ? "var(--warn, #d97706)" : undefined} />
+        <ProgressBar value={pct} color={isOverdue ? "var(--warn)" : undefined} />
       </div>
 
       {/* View detail link */}
@@ -125,7 +125,7 @@ export function JoineeCard({
         style={{
           fontSize: 12,
           fontWeight: 600,
-          color: "var(--indigo, #4f46e5)",
+          color: "var(--indigo)",
           textDecoration: "none",
           display: "inline-flex",
           alignItems: "center",

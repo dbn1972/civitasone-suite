@@ -112,10 +112,10 @@ export default async function RetirementPage({
 
       {/* KPI strip */}
       <StatGrid>
-        <StatCard icon="👴" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")}     value={errored ? null : items.length} />
-        <StatCard icon="📅" iconBg="var(--warnbg, #fffbe6)" label={t("statUpcoming")} value={errored ? null : upcoming} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statInitiated")} value={errored ? null : initiatedCount} />
-        <StatCard icon="📝" iconBg="var(--bg, #f5f5f5)" label={t("statVrs")}          value={errored ? null : vrs} />
+        <StatCard icon="👴" iconBg="var(--infobg)" label={t("statTotal")}     value={errored ? null : items.length} />
+        <StatCard icon="📅" iconBg="var(--warnbg)" label={t("statUpcoming")} value={errored ? null : upcoming} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statInitiated")} value={errored ? null : initiatedCount} />
+        <StatCard icon="📝" iconBg="var(--bg)" label={t("statVrs")}          value={errored ? null : vrs} />
       </StatGrid>
 
       {/* Card grid + wizard, bound to the same selected retiree */}

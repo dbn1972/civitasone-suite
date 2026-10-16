@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "../../../_components/ds";
+import { Button, Input } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 // GAP-TENANT-ADMIN-PLATFORM-CONFIG-01: real editor for cache TTL per module.
@@ -82,7 +82,7 @@ export function CacheTtlEditor({ cacheTtl }: { cacheTtl: Record<string, number> 
               <tr key={mod}>
                 <td>{moduleLabel(mod)}</td>
                 <td style={{ textAlign: "end" }}>
-                  <input
+                  <Input
                     type="number"
                     inputMode="numeric"
                     min={TTL_MIN}
@@ -92,7 +92,7 @@ export function CacheTtlEditor({ cacheTtl }: { cacheTtl: Record<string, number> 
                     aria-invalid={bad || undefined}
                     aria-label={`${moduleLabel(mod)} cache TTL in seconds`}
                     onChange={(e) => { setValues((prev) => ({ ...prev, [mod]: e.target.value })); setSaved(false); }}
-                    style={{ width: 90, padding: "6px 8px", borderRadius: 6, border: `1px solid ${bad ? "var(--bad)" : "var(--line)"}`, textAlign: "end" }}
+                    style={{ width: 90, textAlign: "end" }}
                   />
                 </td>
               </tr>

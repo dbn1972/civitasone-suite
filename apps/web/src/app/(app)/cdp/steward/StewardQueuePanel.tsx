@@ -96,7 +96,7 @@ function ProfileCell({ id, summary }: { id: string; summary: ProfileSummary | nu
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 160 }}>
       <strong style={{ fontSize: "0.85rem" }}>{profileDisplayName(summary, id)}</strong>
-      <span style={{ fontSize: "0.72rem", color: "var(--muted, #6b7280)" }}>
+      <span style={{ fontSize: "0.72rem", color: "var(--muted)" }}>
         {unavailable ? "details unavailable" : summary?.profileType ?? "—"}
       </span>
       {email && (
@@ -135,10 +135,10 @@ function MergeComparison({
         const phone = summaryAttr(who.summary, "phone");
         const city = summaryAttr(who.summary, "city");
         return (
-          <div key={label} style={{ border: "1px solid var(--line, #e5e7eb)", borderRadius: 8, padding: 8 }}>
-            <div style={{ fontSize: "0.7rem", color: "var(--muted, #6b7280)", textTransform: "uppercase" }}>{label}</div>
+          <div key={label} style={{ border: "1px solid var(--line)", borderRadius: 8, padding: 8 }}>
+            <div style={{ fontSize: "0.7rem", color: "var(--muted)", textTransform: "uppercase" }}>{label}</div>
             <div style={{ fontWeight: 600 }}>{profileDisplayName(who.summary, who.id)}</div>
-            <div style={{ fontSize: "0.72rem", color: "var(--muted, #6b7280)" }}>
+            <div style={{ fontSize: "0.72rem", color: "var(--muted)" }}>
               {who.summary === null ? "details unavailable" : who.summary?.profileType ?? "—"}
             </div>
             {email && (
@@ -152,7 +152,7 @@ function MergeComparison({
               </div>
             )}
             {city && <div style={{ fontSize: "0.72rem" }}>City: {city}</div>}
-            <div className="mono" style={{ fontSize: "0.68rem", color: "var(--muted, #6b7280)" }}>{who.id.slice(0, 8)}…</div>
+            <div className="mono" style={{ fontSize: "0.68rem", color: "var(--muted)" }}>{who.id.slice(0, 8)}…</div>
           </div>
         );
       })}
@@ -273,7 +273,7 @@ export function StewardQueuePanel({ canDecide = false }: { canDecide?: boolean }
   // ternary so an empty queue can still be re-polled.
   const toolbar = source !== "error" && !loading && (
     <div className="pad" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-      <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--muted, #6b7280)" }}>
+      <p style={{ margin: 0, fontSize: "0.8rem", color: "var(--muted)" }}>
         {pendingCount} awaiting decision
       </p>
       <button type="button" className="btn ghost" onClick={() => void load()}>Refresh</button>
@@ -363,7 +363,7 @@ export function StewardQueuePanel({ canDecide = false }: { canDecide?: boolean }
                   const actionable = canDecide && row.status === "pending" && !submittedIds.has(row.id);
                   if (!actionable) {
                     return (
-                      <span className="mono" style={{ fontSize: "0.75rem", color: "var(--muted, #6b7280)" }}>
+                      <span className="mono" style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
                         {row.decisionReason ?? "—"}
                       </span>
                     );

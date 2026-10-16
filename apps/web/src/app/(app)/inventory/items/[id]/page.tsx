@@ -80,7 +80,7 @@ export default async function InventoryItemDetailPage({ params }: { params: { id
                   <Link href={`/inventory/${detail.link.stockItemId}`}>{t("detail.openStock")}</Link>
                 </p>
                 {!detail.stockAvailable ? (
-                  <p role="status" style={{ margin: 0, fontSize: "0.875rem", color: "#92400e" }}>{t("detail.stockUnavailable")}</p>
+                  <p role="status" style={{ margin: 0, fontSize: "0.875rem", color: "var(--warn)" }}>{t("detail.stockUnavailable")}</p>
                 ) : totals ? (
                   <>
                     <div className="fields">

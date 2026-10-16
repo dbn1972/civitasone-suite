@@ -128,7 +128,7 @@ export function RegisterVehicleForm() {
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={registrationId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Registration No. <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Registration No. <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={registrationId}
@@ -144,12 +144,12 @@ export function RegisterVehicleForm() {
                 style={inputStyle}
               />
               <p id={registrationHintId} style={{ fontSize: 12, margin: 0, color: "var(--ink2)" }}>{REGISTRATION_HINT}</p>
-              {errors.registrationNo && <p id={registrationErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.registrationNo}</p>}
+              {errors.registrationNo && <p id={registrationErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.registrationNo}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={makeId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Make <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Make <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={makeId}
@@ -162,12 +162,12 @@ export function RegisterVehicleForm() {
                 aria-describedby={errors.make ? makeErrId : undefined}
                 style={inputStyle}
               />
-              {errors.make && <p id={makeErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.make}</p>}
+              {errors.make && <p id={makeErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.make}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={modelId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Model <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Model <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={modelId}
@@ -180,12 +180,12 @@ export function RegisterVehicleForm() {
                 aria-describedby={errors.model ? modelErrId : undefined}
                 style={inputStyle}
               />
-              {errors.model && <p id={modelErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.model}</p>}
+              {errors.model && <p id={modelErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.model}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={yearId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Year <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Year <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={yearId}
@@ -198,7 +198,7 @@ export function RegisterVehicleForm() {
                 aria-describedby={errors.year ? yearErrId : undefined}
                 style={inputStyle}
               />
-              {errors.year && <p id={yearErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.year}</p>}
+              {errors.year && <p id={yearErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.year}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>

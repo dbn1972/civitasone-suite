@@ -131,7 +131,7 @@ export function ModuleToggleActions({ modules }: { modules: ModuleRow[] }) {
                   <div style={{ fontSize: 12, color: "var(--mut)" }}><span className="mono">{mod.moduleKey}</span></div>
                 </div>
                 <div style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 12.5, color: on ? "#067647" : "var(--mut)", minWidth: 56, textAlign: "right" }}>
+                  <span style={{ fontSize: 12.5, color: on ? "var(--good)" : "var(--mut)", minWidth: 56, textAlign: "right" }}>
                     {on ? "Enabled" : "Disabled"}
                   </span>
                   <button
@@ -144,13 +144,13 @@ export function ModuleToggleActions({ modules }: { modules: ModuleRow[] }) {
                     className="switch"
                     style={{
                       position: "relative", width: 40, height: 22, borderRadius: 11,
-                      border: "1px solid var(--line)", background: on ? "#12b76a" : "#e4e7ec",
+                      border: "1px solid var(--line)", background: on ? "#12b76a" : "var(--line)",
                       cursor: busy ? "default" : "pointer", transition: "background .15s", padding: 0,
                     }}
                   >
                     <span aria-hidden="true" style={{
                       position: "absolute", top: 2, left: on ? 20 : 2, width: 16, height: 16,
-                      borderRadius: "50%", background: "#fff", transition: "left .15s",
+                      borderRadius: "50%", background: "var(--panel)", transition: "left .15s",
                       boxShadow: "0 1px 2px rgba(0,0,0,.2)",
                     }} />
                   </button>
@@ -161,7 +161,7 @@ export function ModuleToggleActions({ modules }: { modules: ModuleRow[] }) {
         ) : (
           <EmptyState icon="🧩" title="No modules" message="Modules will appear here once configured." />
         )}
-        <div role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", marginTop: 8 }}>{status}</div>
+        <div role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--good)", marginTop: 8 }}>{status}</div>
         <div role="alert" aria-live="assertive" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{error}</div>
       </div>
 

@@ -21,14 +21,14 @@ export interface LearningPathCardProps {
 }
 
 const PRIORITY_CONFIG = {
-  high:   { label: "High Priority",   bg: "var(--badbg, #fef2f2)", border: "var(--badbd, #fca5a5)", pill: "var(--bad, #dc2626)", icon: "🔴" },
-  medium: { label: "Medium Priority", bg: "#fffbeb", border: "#fcd34d", pill: "var(--warn, #d97706)", icon: "🟡" },
-  low:    { label: "Low Priority",    bg: "var(--goodbg, #f0fdf4)", border: "var(--goodbd, #86efac)", pill: "var(--good, #15803d)", icon: "🟢" },
+  high:   { label: "High Priority",   bg: "var(--badbg)", border: "var(--badbd)", pill: "var(--bad)", icon: "🔴" },
+  medium: { label: "Medium Priority", bg: "var(--warnbg)", border: "var(--warnbd)", pill: "var(--warn)", icon: "🟡" },
+  low:    { label: "Low Priority",    bg: "var(--goodbg)", border: "var(--goodbd)", pill: "var(--good)", icon: "🟢" },
 };
 
 const MODE_STYLE = {
-  Mandatory:   { bg: "#dbeafe", color: "var(--info, #1d4ed8)" },
-  Recommended: { bg: "var(--bg, #f1f5f9)", color: "var(--ink2, #475569)" },
+  Mandatory:   { bg: "var(--infobg)", color: "var(--info)" },
+  Recommended: { bg: "var(--bg)", color: "var(--ink2)" },
 };
 
 function LevelBar({ current, required }: { current: number; required: number }) {
@@ -45,14 +45,14 @@ function LevelBar({ current, required }: { current: number; required: number }) 
             key={i}
             style={{
               width: 14, height: 14, borderRadius: 3,
-              background: filled ? "var(--good, #10b981)" : isGap ? "var(--badbd, #fca5a5)" : "var(--line, #e2e8f0)",
-              border: `1px solid ${filled ? "var(--good, #10b981)" : isGap ? "#f87171" : "var(--line, #e2e8f0)"}`,
+              background: filled ? "var(--good)" : isGap ? "var(--badbd)" : "var(--line)",
+              border: `1px solid ${filled ? "var(--good)" : isGap ? "var(--bad)" : "var(--line)"}`,
             }}
             title={filled ? `Level ${idx} (achieved)` : isGap ? `Level ${idx} (gap)` : ""}
           />
         );
       })}
-      <span style={{ fontSize: 11, color: "var(--mut, #64748b)", marginInlineStart: 4 }}>{current}/{required}</span>
+      <span style={{ fontSize: 11, color: "var(--mut)", marginInlineStart: 4 }}>{current}/{required}</span>
     </div>
   );
 }
@@ -80,16 +80,16 @@ export function LearningPathCard({
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontSize: 13 }}>{pc.icon}</span>
-            <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "var(--ink, #1e293b)" }}>{skillGap}</p>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "var(--ink)" }}>{skillGap}</p>
           </div>
-          <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--mut, #64748b)" }}>
+          <p style={{ margin: "2px 0 0", fontSize: 11, color: "var(--mut)" }}>
             Skill gap identified — {gapPoints} level{gapPoints !== 1 ? "s" : ""} below requirement
           </p>
         </div>
         <span
           style={{
             flexShrink: 0, fontSize: 10, fontWeight: 700, textTransform: "uppercase",
-            background: pc.pill, color: "#fff", borderRadius: 20, padding: "2px 8px",
+            background: pc.pill, color: "var(--panel)", borderRadius: 20, padding: "2px 8px",
             letterSpacing: "0.06em",
           }}
         >
@@ -99,7 +99,7 @@ export function LearningPathCard({
 
       {/* Level bar */}
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span style={{ fontSize: 11, color: "var(--ink2, #475569)", fontWeight: 600, minWidth: 80 }}>Proficiency</span>
+        <span style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, minWidth: 80 }}>Proficiency</span>
         <LevelBar current={currentLevel} required={requiredLevel} />
       </div>
 
@@ -116,8 +116,8 @@ export function LearningPathCard({
               <div
                 key={prog.id}
                 style={{
-                  background: "var(--panel, #fff)",
-                  border: "1px solid var(--line, #e2e8f0)",
+                  background: "var(--panel)",
+                  border: "1px solid var(--line)",
                   borderRadius: 7,
                   padding: "8px 12px",
                   display: "flex",
@@ -129,7 +129,7 @@ export function LearningPathCard({
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontWeight: 600, fontSize: 12, color: "var(--ink, #1e293b)" }}>{prog.name}</span>
+                    <span style={{ fontWeight: 600, fontSize: 12, color: "var(--ink)" }}>{prog.name}</span>
                     <span
                       style={{
                         fontSize: 10, fontWeight: 700, background: ms.bg, color: ms.color,
@@ -139,14 +139,14 @@ export function LearningPathCard({
                       {prog.mode}
                     </span>
                   </div>
-                  <span style={{ fontSize: 11, color: "var(--mut, #64748b)" }}>Duration: {prog.duration}</span>
+                  <span style={{ fontSize: 11, color: "var(--mut)" }}>Duration: {prog.duration}</span>
                 </div>
                 <a
                   href={prog.enrollUrl ?? "#"}
                   onClick={(e) => { if (prog.onEnroll) { e.preventDefault(); prog.onEnroll(prog.id); } }}
                   style={{
                     flexShrink: 0, fontSize: 12, fontWeight: 700, padding: "5px 12px",
-                    border: "none", borderRadius: 6, background: "var(--info, #1d4ed8)", color: "#fff",
+                    border: "none", borderRadius: 6, background: "var(--info)", color: "var(--panel)",
                     cursor: "pointer", textDecoration: "none", display: "inline-block",
                   }}
                 >

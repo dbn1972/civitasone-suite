@@ -150,10 +150,10 @@ export default async function DpcPage() {
       )}
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statEligible")}       value={eligibilityErrored ? null : eligibleCount} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statNotYetEligible")} value={eligibilityErrored ? null : ineligibleCount} />
-        <StatCard icon="📅" iconBg="var(--bg, #f5f5f5)" label={t("statAsOnDate")}       value={eligibilityErrored ? null : formatIndianDate(asOf)} />
-        <StatCard icon="👥" iconBg="var(--goodbg, #e6f7f0)" label={t("statTotalOfficers")}  value={eligibilityErrored ? null : totalOfficers} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statEligible")}       value={eligibilityErrored ? null : eligibleCount} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statNotYetEligible")} value={eligibilityErrored ? null : ineligibleCount} />
+        <StatCard icon="📅" iconBg="var(--bg)" label={t("statAsOnDate")}       value={eligibilityErrored ? null : formatIndianDate(asOf)} />
+        <StatCard icon="👥" iconBg="var(--goodbg)" label={t("statTotalOfficers")}  value={eligibilityErrored ? null : totalOfficers} />
       </StatGrid>
 
       {/* Eligible Officers seniority list */}

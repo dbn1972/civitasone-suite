@@ -31,11 +31,11 @@ export function MeteringTable({
       errorStatus={errorStatus}
       errorMessage={errorMessage}
       stats={[
-        { icon: "📊", iconBg: "#eef2ff", label: "Billing periods", value: s.total },
-        { icon: "✅", iconBg: "#ecfdf3", label: "Billed", value: s.billed },
-        { icon: "⏳", iconBg: "#fffaeb", label: "Pending", value: s.pending },
-        { icon: "⚠️", iconBg: "#fce7ee", label: "Overdue", value: s.overdue },
-        { icon: "❔", iconBg: "#f1f5f9", label: "Other status", value: s.other, onlyWhenPositive: true },
+        { icon: "📊", iconBg: "var(--infobg)", label: "Billing periods", value: s.total },
+        { icon: "✅", iconBg: "var(--goodbg)", label: "Billed", value: s.billed },
+        { icon: "⏳", iconBg: "var(--warnbg)", label: "Pending", value: s.pending },
+        { icon: "⚠️", iconBg: "var(--badbg)", label: "Overdue", value: s.overdue },
+        { icon: "❔", iconBg: "var(--line2)", label: "Other status", value: s.other, onlyWhenPositive: true },
       ]}
     >
       <DataTable<MeterRow>

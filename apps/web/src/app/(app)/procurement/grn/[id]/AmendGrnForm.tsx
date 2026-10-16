@@ -119,7 +119,7 @@ export function AmendGrnForm({ grnId, items }: {
   return (
     <form className="card pad" onSubmit={(e) => void handleSubmit(e)} noValidate>
       {skipped.length > 0 ? (
-        <p role="alert" style={{ marginBottom: 12, fontSize: "0.875rem", color: "#b45309" }}>
+        <p role="alert" style={{ marginBottom: 12, fontSize: "0.875rem", color: "var(--warn)" }}>
           {skipped.length} line{skipped.length > 1 ? "s" : ""} cannot be amended because they have no
           saved line id: {skipped.join(", ")}.
         </p>
@@ -175,7 +175,7 @@ export function AmendGrnForm({ grnId, items }: {
 
       <div role="status" aria-live="polite">
         {message ? (
-          <p role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, fontSize: "0.875rem", color: status === "error" ? "#b91c1c" : "#047857" }}>{message}</p>
+          <p role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, fontSize: "0.875rem", color: status === "error" ? "var(--bad)" : "var(--good)" }}>{message}</p>
         ) : null}
       </div>
 

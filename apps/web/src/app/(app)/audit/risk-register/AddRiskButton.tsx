@@ -106,9 +106,9 @@ export function AddRiskButton() {
                   </select>
                 </div>
               </div>
-              <div style={{ fontSize: 13, color: "#344054", marginTop: 2 }} aria-live="polite">
+              <div style={{ fontSize: 13, color: "var(--ink2)", marginTop: 2 }} aria-live="polite">
                 Risk score (likelihood × impact): <strong>{riskScore(likelihood, impact)}</strong> — {BAND_LABEL[band(riskScore(likelihood, impact))]}
-                <span style={{ color: "#667085" }}>. Recomputed and stored server-side.</span>
+                <span style={{ color: "var(--mut)" }}>. Recomputed and stored server-side.</span>
               </div>
               <label className="lbl" htmlFor="rk-owner">Owner (optional)</label>
               <input id="rk-owner" className="inp" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="CFO Office" />

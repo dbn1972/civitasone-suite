@@ -69,7 +69,7 @@ export function AccessibilityPreview({
       <section aria-labelledby="a11y-heading" style={panel}>
         <h2 id="a11y-heading" style={heading}>Accessibility &amp; GIGW</h2>
         {/* Say the check did not run. Silence here would read as "no problems". */}
-        <p style={{ ...muted, color: "#b42318" }} role="status">
+        <p style={{ ...muted, color: "var(--bad)" }} role="status">
           {error ?? "Could not run the accessibility preview."}
         </p>
       </section>
@@ -144,15 +144,15 @@ export function AccessibilityPreview({
 }
 
 const panel: React.CSSProperties = {
-  border: "1px solid #e4e7ec",
+  border: "1px solid var(--line)",
   borderRadius: 8,
   padding: 16,
-  background: "#fff",
+  background: "var(--panel)",
 };
 const heading: React.CSSProperties = { fontSize: 16, fontWeight: 600, margin: 0 };
 const subheading: React.CSSProperties = { fontSize: 13, fontWeight: 600, margin: "14px 0 6px" };
-const muted: React.CSSProperties = { color: "#475467", fontSize: 14, margin: "8px 0 0" };
-const meta: React.CSSProperties = { color: "#667085", fontSize: 12 };
+const muted: React.CSSProperties = { color: "var(--ink2)", fontSize: 14, margin: "8px 0 0" };
+const meta: React.CSSProperties = { color: "var(--mut)", fontSize: 12 };
 const list: React.CSSProperties = { listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 8 };
 const rowBase: React.CSSProperties = {
   display: "grid",
@@ -161,13 +161,13 @@ const rowBase: React.CSSProperties = {
   borderRadius: 6,
   fontSize: 14,
 };
-const rowError: React.CSSProperties = { ...rowBase, background: "#fef3f2", border: "1px solid #fda29b" };
-const rowWarn: React.CSSProperties = { ...rowBase, background: "#fffaeb", border: "1px solid #fec84b" };
+const rowError: React.CSSProperties = { ...rowBase, background: "var(--badbg)", border: "1px solid var(--badbd)" };
+const rowWarn: React.CSSProperties = { ...rowBase, background: "var(--warnbg)", border: "1px solid #fec84b" };
 const badgeBase: React.CSSProperties = {
   fontSize: 12,
   fontWeight: 600,
   padding: "3px 10px",
   borderRadius: 999,
 };
-const badgePass: React.CSSProperties = { ...badgeBase, background: "#ecfdf3", color: "#027a48" };
-const badgeFail: React.CSSProperties = { ...badgeBase, background: "#fef3f2", color: "#b42318" };
+const badgePass: React.CSSProperties = { ...badgeBase, background: "var(--goodbg)", color: "var(--good)" };
+const badgeFail: React.CSSProperties = { ...badgeBase, background: "var(--badbg)", color: "var(--bad)" };

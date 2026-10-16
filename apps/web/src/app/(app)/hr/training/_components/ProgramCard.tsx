@@ -63,7 +63,7 @@ export function ProgramCard({ program }: ProgramCardProps) {
 
   return (
     <div className="rounded-xl border shadow-sm p-4 flex flex-col gap-3 hover:shadow-md transition-shadow"
-      style={{ background: "var(--panel, #fff)", borderColor: "var(--line, #e2e8f0)" }}>
+      style={{ background: "var(--panel)", borderColor: "var(--line)" }}>
       {/* Title + status */}
       <div className="flex items-start justify-between gap-2">
         <p className="font-semibold text-slate-800 text-sm leading-snug">{program.title}</p>

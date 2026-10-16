@@ -103,7 +103,7 @@ function APARCard({ record }: { record: AparRecord }) {
           <span
             style={{
               padding: "2px 10px", borderRadius: 12,
-              background: "var(--infobg, #e6f0ff)", color: "var(--info, #1d4ed8)",
+              background: "var(--infobg)", color: "var(--info)",
               fontSize: "0.75rem", fontWeight: 700,
             }}
           >
@@ -128,7 +128,7 @@ function APARCard({ record }: { record: AparRecord }) {
           style={{
             position: "absolute", top: 16,
             insetInlineStart: "calc(50% / 5)", insetInlineEnd: "calc(50% / 5)",
-            height: 2, background: "var(--line, #e2e8f0)", zIndex: 0,
+            height: 2, background: "var(--line)", zIndex: 0,
           }}
         />
 
@@ -157,31 +157,31 @@ function APARCard({ record }: { record: AparRecord }) {
                 style={{
                   width: 34, height: 34, borderRadius: "50%",
                   background: isAttention
-                    ? "var(--warnbg, #fffbeb)"
+                    ? "var(--warnbg)"
                     : isDone
-                    ? "var(--goodbg, #f0fdf4)"
+                    ? "var(--goodbg)"
                     : isActive
-                    ? "var(--primary, #2563eb)"
-                    : "var(--bg2, #f1f5f9)",
+                    ? "var(--primary)"
+                    : "var(--bg2)",
                   border: `2px solid ${
                     isAttention
-                      ? "var(--warn, #b45309)"
+                      ? "var(--warn)"
                       : isDone
-                      ? "var(--good, #16a34a)"
+                      ? "var(--good)"
                       : isActive
-                      ? "var(--primary, #2563eb)"
-                      : "var(--line, #e2e8f0)"
+                      ? "var(--primary)"
+                      : "var(--line)"
                   }`,
                   color: isAttention
-                    ? "var(--warn, #b45309)"
+                    ? "var(--warn)"
                     : isDone
-                    ? "var(--good, #16a34a)"
+                    ? "var(--good)"
                     : isActive
-                    ? "var(--panel, #fff)"
+                    ? "var(--panel)"
                     : "var(--mut)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 15,
-                  boxShadow: isActive ? "0 0 0 4px var(--infobg, #dbeafe)" : "none",
+                  boxShadow: isActive ? "0 0 0 4px var(--infobg)" : "none",
                   transition: "all 0.2s",
                 }}
                 aria-label={t("stageBubbleAriaLabel", { stage: t(group.labelKey), state: stageState })}
@@ -194,9 +194,9 @@ function APARCard({ record }: { record: AparRecord }) {
                 style={{
                   fontSize: "0.625rem", textAlign: "center", lineHeight: 1.3,
                   color: isActive
-                    ? "var(--primary, #1d4ed8)"
+                    ? "var(--primary)"
                     : isDone
-                    ? "var(--good, #16a34a)"
+                    ? "var(--good)"
                     : "var(--mut)",
                   fontWeight: isActive ? 600 : 400,
                   maxWidth: 66,
@@ -213,14 +213,14 @@ function APARCard({ record }: { record: AparRecord }) {
       <div
         style={{
           padding: "8px 16px 12px",
-          borderTop: "1px solid var(--line, #e2e8f0)",
+          borderTop: "1px solid var(--line)",
           display: "flex", justifyContent: "space-between", alignItems: "center",
           fontSize: "0.75rem", color: "var(--mut)",
         }}
       >
         <span>
           {t("stagePrefix")}&nbsp;
-          <strong style={{ color: isRepresentation ? "var(--warn, #b45309)" : "var(--ink)" }}>
+          <strong style={{ color: isRepresentation ? "var(--warn)" : "var(--ink)" }}>
             {isRepresentation
               ? t("statusRepresentation")
               : isClosed
@@ -233,7 +233,7 @@ function APARCard({ record }: { record: AparRecord }) {
           {dl && (
             <span
               data-testid="apar-deadline"
-              style={{ marginInlineStart: 8, fontWeight: 600, color: dl.kind === "overdue" ? "var(--bad, #b91c1c)" : dl.kind === "today" ? "var(--warn, #b45309)" : "var(--ink2)" }}
+              style={{ marginInlineStart: 8, fontWeight: 600, color: dl.kind === "overdue" ? "var(--bad)" : dl.kind === "today" ? "var(--warn)" : "var(--ink2)" }}
             >
               <span aria-hidden="true">{dl.kind === "overdue" ? "⚠ " : "⏰ "}</span>
               {dl.kind === "overdue" ? t("deadlineOverdue", { days: dl.days }) : dl.kind === "today" ? t("deadlineToday") : t("deadlineDueIn", { days: dl.days })}

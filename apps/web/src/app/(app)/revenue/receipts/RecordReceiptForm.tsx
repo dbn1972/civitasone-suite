@@ -144,7 +144,7 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={demandSelId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Demand{" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -166,7 +166,7 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
                 ))}
               </select>
               {fieldErrors.demand && (
-                <p id={demandErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={demandErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.demand}
                 </p>
               )}
@@ -175,7 +175,7 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={amountId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Amount (₹){" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -194,7 +194,7 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
               {fieldErrors.amount && (
-                <p id={amountErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={amountErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.amount}
                 </p>
               )}
@@ -203,7 +203,7 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={channelId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Channel{" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -225,7 +225,7 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={referenceId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Reference / UTR{" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -241,7 +241,7 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
               {fieldErrors.reference && (
-                <p id={referenceErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={referenceErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.reference}
                 </p>
               )}
@@ -251,7 +251,7 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={instrumentId} style={{ fontSize: 13, fontWeight: 600 }}>
                   Instrument No.{" "}
-                  <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                  <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                     *
                   </span>
                 </label>
@@ -266,7 +266,7 @@ export function RecordReceiptForm({ assesseeId, demands }: { assesseeId: string;
                   style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
                 />
                 {fieldErrors.instrument && (
-                  <p id={`${instrumentId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                  <p id={`${instrumentId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                     {fieldErrors.instrument}
                   </p>
                 )}

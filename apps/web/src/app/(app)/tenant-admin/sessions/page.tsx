@@ -33,10 +33,10 @@ export default async function AdminSessionsPage() {
         actions={<PrintExportButton label="Export" style={{ minHeight: 44 }} documentTitle="Active Sessions" />}
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="🖥️" iconBg="#f1f5f9" label="Active Sessions" value={errored ? "—" : active} />
-        <StatCard icon="📍" iconBg="#eff6ff" label="Distinct networks" value={errored ? "—" : distinctNetworks} />
-        <StatCard icon="🔐" iconBg="#ecfdf3" label="MFA Verified" value={errored ? "—" : mfaVerified} />
-        <StatCard icon="⚠️" iconBg="#fef3f2" label="Active without MFA" value={errored ? "—" : activeWithoutMfa} />
+        <StatCard icon="🖥️" tone="neutral" label="Active Sessions" value={errored ? "—" : active} />
+        <StatCard icon="📍" tone="info" label="Distinct networks" value={errored ? "—" : distinctNetworks} />
+        <StatCard icon="🔐" tone="good" label="MFA Verified" value={errored ? "—" : mfaVerified} />
+        <StatCard icon="⚠️" tone="bad" label="Active without MFA" value={errored ? "—" : activeWithoutMfa} />
       </div>
       {errored ? (
         <Card title="Session log">

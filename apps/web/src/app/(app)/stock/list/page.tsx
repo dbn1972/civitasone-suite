@@ -28,10 +28,10 @@ export default async function StockListPage() {
         }
       />
       <StatGrid>
-        <StatCard icon="🏬" iconBg="#e6f7f5" label="SKUs" value={errored ? "—" : items.length.toLocaleString("en-IN")} />
-        <StatCard icon="💰" iconBg="#eff6ff" label="Stock Value" value={totalValue === null ? "—" : formatMoney(totalValue)} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label="Low Stock" value={lowStockCount === null ? "—" : lowStockCount.toLocaleString("en-IN")} />
-        <StatCard icon="📦" iconBg="#ecfdf3" label="Categories" value={categories === null ? "—" : categories.toLocaleString("en-IN")} />
+        <StatCard icon="🏬" tone="good" label="SKUs" value={errored ? "—" : items.length.toLocaleString("en-IN")} />
+        <StatCard icon="💰" tone="info" label="Stock Value" value={totalValue === null ? "—" : formatMoney(totalValue)} />
+        <StatCard icon="⚠️" tone="warn" label="Low Stock" value={lowStockCount === null ? "—" : lowStockCount.toLocaleString("en-IN")} />
+        <StatCard icon="📦" tone="good" label="Categories" value={categories === null ? "—" : categories.toLocaleString("en-IN")} />
       </StatGrid>
       {errored ? (
         <div className="card" style={{ marginTop: 18 }}>

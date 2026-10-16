@@ -37,14 +37,14 @@ export default async function MfaManagementPage() {
       />
 
       <StatGrid>
-        <StatCard icon="👥" iconBg="#f1f5f9" label="Total Users" value={errored ? "—" : totalUsers} />
-        <StatCard icon="🔐" iconBg="#ecfdf3" label="Enrolled" value={errored ? "—" : enrolled} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={errored ? "—" : pending} />
+        <StatCard icon="👥" tone="neutral" label="Total Users" value={errored ? "—" : totalUsers} />
+        <StatCard icon="🔐" tone="good" label="Enrolled" value={errored ? "—" : enrolled} />
+        <StatCard icon="⏳" tone="warn" label="Pending" value={errored ? "—" : pending} />
         {/* GAP-TENANT-ADMIN-MFA-02: a real "Not enrolled" count (the users at
             risk) replaces the opaque "Enrollment %" headline; the percentage
             is still shown as supporting text inside the Enrolled card label is
             not possible, so it's surfaced here honestly. */}
-        <StatCard icon="🚫" iconBg="#fef2f2" label={`Not enrolled (${errored ? "—" : `${100 - enrollmentPct}%`})`} value={errored ? "—" : notEnrolled} />
+        <StatCard icon="🚫" tone="bad" label={`Not enrolled (${errored ? "—" : `${100 - enrollmentPct}%`})`} value={errored ? "—" : notEnrolled} />
       </StatGrid>
 
       {errored ? (

@@ -9,8 +9,8 @@ import { useFormError } from "@/lib/useFormError";
 import { searchWorkProposals, resolveWorkProposals } from "@/lib/entityAdapters/workProposal";
 
 
-const okBanner: React.CSSProperties = { background: "var(--good-bg, #ecfdf3)", color: "var(--good, #166534)", padding: 12, borderRadius: 12, fontSize: 13, marginBottom: 16 };
-const errBanner: React.CSSProperties = { background: "var(--bad-bg, #fef2f2)", color: "var(--bad, #b42318)", padding: 12, borderRadius: 12, fontSize: 13, marginBottom: 16 };
+const okBanner: React.CSSProperties = { background: "var(--good-bg)", color: "var(--good)", padding: 12, borderRadius: 12, fontSize: 13, marginBottom: 16 };
+const errBanner: React.CSSProperties = { background: "var(--bad-bg)", color: "var(--bad)", padding: 12, borderRadius: 12, fontSize: 13, marginBottom: 16 };
 
 // GAP-WORKS-CLOSURE-01: closureType mirrors the backend closeWorkSchema enum
 // exactly (execution/validators.ts). closedDate is NOT part of that contract,

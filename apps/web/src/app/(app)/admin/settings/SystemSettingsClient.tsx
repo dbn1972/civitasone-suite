@@ -133,7 +133,7 @@ function SaveButton({
   const t = useTranslations("adminSettings");
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      {dirty && <span title={t("unsavedChangesTitle")} aria-label={t("unsavedChangesTitle")} style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#f59e0b" }} />}
+      {dirty && <span title={t("unsavedChangesTitle")} aria-label={t("unsavedChangesTitle")} style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "var(--amber)" }} />}
       <Button
         type="button"
         size="sm"
@@ -144,10 +144,10 @@ function SaveButton({
         {saveState === "saving" ? t("saving") : saveState === "saved" ? t("saved") : t("saveChanges")}
       </Button>
       {saveState === "error" && (
-        <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{errorMessage}</span>
+        <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{errorMessage}</span>
       )}
       {saveState === "saved" && (
-        <span role="status" style={{ fontSize: 12, color: "#027a48" }}>{t("changesSaved")}</span>
+        <span role="status" style={{ fontSize: 12, color: "var(--good)" }}>{t("changesSaved")}</span>
       )}
     </div>
   );
@@ -169,10 +169,10 @@ function FieldRow({
   return (
     <div style={{ display: "grid", gap: 6 }}>
       <label htmlFor={htmlFor} style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink2)" }}>
-        {label}{required && <span aria-hidden="true" style={{ color: "#b42318", marginInlineStart: 2 }}>*</span>}
+        {label}{required && <span aria-hidden="true" style={{ color: "var(--bad)", marginInlineStart: 2 }}>*</span>}
       </label>
       {children}
-      {error && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{error}</span>}
+      {error && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{error}</span>}
     </div>
   );
 }
@@ -292,7 +292,7 @@ function LogoField({ initial }: { initial: AdminSettings["logo"] }) {
       <label htmlFor={`${id}-logo`} style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink2)" }}>{t("logo")}</label>
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
         {preview ? (
-          <img src={preview} alt={t("logoAlt")} style={{ maxHeight: 56, maxWidth: 160, objectFit: "contain", border: "1px solid var(--line)", borderRadius: 8, padding: 6, background: "#fff" }} />
+          <img src={preview} alt={t("logoAlt")} style={{ maxHeight: 56, maxWidth: 160, objectFit: "contain", border: "1px solid var(--line)", borderRadius: 8, padding: 6, background: "var(--panel)" }} />
         ) : (
           <span style={{ fontSize: 12.5, color: "var(--mut)" }}>{present ? t("logoSaved") : t("logoNone")}</span>
         )}
@@ -301,7 +301,7 @@ function LogoField({ initial }: { initial: AdminSettings["logo"] }) {
       </div>
       <span id={`${id}-logo-hint`} style={{ fontSize: 12, color: "var(--mut)" }}>{t("logoHint", { kb: Math.floor(LOGO_MAX_BYTES / 1000) })}</span>
       {busy && <span role="status" style={{ fontSize: 12, color: "var(--mut)" }}>{t("logoWorking")}</span>}
-      {problem && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{problem}</span>}
+      {problem && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{problem}</span>}
       <ConfirmDialog
         open={removeOpen}
         danger
@@ -454,10 +454,10 @@ function EmailSection({ settings, onDirtyChange }: { settings: AdminSettings; on
             </Button>
           </div>
           <span style={{ fontSize: 12, color: "var(--mut)" }}>{t("testExplain")}</span>
-          {testStatus === "queued" && <span role="status" style={{ fontSize: 12, color: "#027a48" }}>{t("testQueued", { recipient: testRecipient.trim() })}</span>}
-          {testStatus === "not-configured" && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{t("testNotConfigured")}</span>}
-          {testStatus === "rate-limited" && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{t("testRateLimited")}</span>}
-          {testStatus === "fail" && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{t("testFailed")}</span>}
+          {testStatus === "queued" && <span role="status" style={{ fontSize: 12, color: "var(--good)" }}>{t("testQueued", { recipient: testRecipient.trim() })}</span>}
+          {testStatus === "not-configured" && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{t("testNotConfigured")}</span>}
+          {testStatus === "rate-limited" && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{t("testRateLimited")}</span>}
+          {testStatus === "fail" && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{t("testFailed")}</span>}
         </div>
       </div>
     </Card>
@@ -733,7 +733,7 @@ export function SystemSettingsClient({ tenant, settings }: { tenant: TenantConfi
               {tabLabel(tab)}
               {dirtyTabs.has(tab) && (
                 <>
-                  <span aria-hidden="true" style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#f59e0b", marginInlineStart: 6 }} />
+                  <span aria-hidden="true" style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "var(--amber)", marginInlineStart: 6 }} />
                   <span className="sr-only"> ({t("unsavedChanges")})</span>
                 </>
               )}

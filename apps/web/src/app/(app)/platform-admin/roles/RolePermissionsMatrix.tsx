@@ -102,10 +102,10 @@ function ToggleCell({ granted, provisioned, sod, editable, label, sodDescId, onT
     );
   }
 
-  let bg = granted ? "var(--goodbg, #ecfdf3)" : "var(--line2, #f8fafc)";
-  let color = granted ? "var(--good, #027a48)" : "var(--ink2)";
-  let border = granted ? "1px solid var(--goodbd, #abefc6)" : "1px solid var(--line)";
-  if (sod) { bg = "var(--warnbg, #fffaeb)"; color = "var(--warn, #b54708)"; border = "1px solid var(--warnbd, #fec84b)"; }
+  let bg = granted ? "var(--goodbg)" : "var(--line2)";
+  let color = granted ? "var(--good)" : "var(--ink2)";
+  let border = granted ? "1px solid var(--goodbd)" : "1px solid var(--line)";
+  if (sod) { bg = "var(--warnbg)"; color = "var(--warn)"; border = "1px solid var(--warnbd)"; }
 
   // GAP-PLATFORM-ADMIN-ROLES-04: give each toggle a context-rich accessible
   // name ("<module> <action>: granted/not granted"), and for an SoD cell use
@@ -301,15 +301,15 @@ export function RolePermissionsMatrix({
         </div>
 
         {notice ? (
-          <p role="status" aria-live="polite" style={{ fontSize: 12.5, color: "var(--good, #027a48)", margin: 0, padding: "6px 16px 0" }}>{notice}</p>
+          <p role="status" aria-live="polite" style={{ fontSize: 12.5, color: "var(--good)", margin: 0, padding: "6px 16px 0" }}>{notice}</p>
         ) : null}
         {saveError ? (
-          <p role="alert" style={{ fontSize: 12.5, color: "var(--bad, #b42318)", margin: 0, padding: "6px 16px 0" }}>{saveError}</p>
+          <p role="alert" style={{ fontSize: 12.5, color: "var(--bad)", margin: 0, padding: "6px 16px 0" }}>{saveError}</p>
         ) : null}
 
         <div style={{ padding: "8px 16px", display: "flex", gap: 16, flexWrap: "wrap", fontSize: 12, color: "var(--ink2)", borderTop: "1px solid var(--line)", marginTop: 8 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-            <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "var(--warnbg, #fffaeb)", color: "var(--warn, #b54708)", border: "1px solid var(--warnbd, #fec84b)" }}>SoD</span>
+            <span style={{ padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 700, background: "var(--warnbg)", color: "var(--warn)", border: "1px solid var(--warnbd)" }}>SoD</span>
             <span>Segregation of Duty violation — submit + approve on the same financial module (GFR 2017 compliant). Super Admin and Platform Admin are exempt.</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -343,13 +343,13 @@ export function RolePermissionsMatrix({
                   </div>
                 </div>
                 {loadError ? (
-                  <p role="alert" style={{ padding: "12px 16px", color: "#b42318", fontSize: 12.5 }}>{loadError}</p>
+                  <p role="alert" style={{ padding: "12px 16px", color: "var(--bad)", fontSize: 12.5 }}>{loadError}</p>
                 ) : (
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5, minWidth: 580 }}>
                       <thead>
-                        <tr style={{ background: "var(--line2, #f8fafc)", borderBottom: "1px solid var(--line)" }}>
-                          <th style={{ padding: "8px 14px", textAlign: "start", fontSize: 11.5, fontWeight: 650, color: "var(--ink2)", position: "sticky", insetInlineStart: 0, background: "var(--line2, #f8fafc)", zIndex: 1 }}>Module</th>
+                        <tr style={{ background: "var(--line2)", borderBottom: "1px solid var(--line)" }}>
+                          <th style={{ padding: "8px 14px", textAlign: "start", fontSize: 11.5, fontWeight: 650, color: "var(--ink2)", position: "sticky", insetInlineStart: 0, background: "var(--line2)", zIndex: 1 }}>Module</th>
                           {actions.map((a) => (
                             <th key={a} style={{ padding: "8px 10px", textAlign: "center", fontSize: 11, fontWeight: 650, color: "var(--ink2)", letterSpacing: 0.4 }}>{keyLabel(a)}</th>
                           ))}
@@ -358,7 +358,7 @@ export function RolePermissionsMatrix({
                       <tbody>
                         {modules.map((mod) => (
                           <tr key={mod} style={{ borderBottom: "1px solid var(--line)" }}>
-                            <td style={{ padding: "8px 14px", position: "sticky", insetInlineStart: 0, background: "var(--card, #fff)", zIndex: 1, boxShadow: "1px 0 0 var(--line)" }}>
+                            <td style={{ padding: "8px 14px", position: "sticky", insetInlineStart: 0, background: "var(--card)", zIndex: 1, boxShadow: "1px 0 0 var(--line)" }}>
                               <span style={{ fontWeight: 600 }}>{keyLabel(mod)}</span>
                             </td>
                             {actions.map((action) => {

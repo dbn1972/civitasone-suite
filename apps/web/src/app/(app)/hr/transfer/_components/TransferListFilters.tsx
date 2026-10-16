@@ -105,7 +105,7 @@ export function TransferListFilters({ transfers }: Props) {
       <div
         style={{
           display: "flex", flexWrap: "wrap", gap: 10, padding: "14px 20px",
-          background: "var(--panel, #f8fafc)", borderRadius: 12,
+          background: "var(--panel)", borderRadius: 12,
           border: "1px solid var(--line)", marginBottom: 16,
         }}
       >
@@ -157,7 +157,7 @@ export function TransferListFilters({ transfers }: Props) {
           {tr("exportBtn")}
         </Button>
       </div>
-      {exportError && <p role="alert" style={{ color: "var(--danger, #b42318)", fontSize: 13, margin: "0 0 8px" }}>{exportError}</p>}
+      {exportError && <p role="alert" style={{ color: "var(--danger)", fontSize: 13, margin: "0 0 8px" }}>{exportError}</p>}
 
       {/* Result count */}
       <p style={{ fontSize: "0.8125rem", color: "var(--ink3)", margin: "0 0 12px" }}>

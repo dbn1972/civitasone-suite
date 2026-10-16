@@ -99,7 +99,7 @@ export function PayGroupCard({
               width: 9,
               height: 9,
               borderRadius: "50%",
-              background: isActive ? "var(--good, #10b981)" : "var(--mut, #94a3b8)",
+              background: isActive ? "var(--good)" : "var(--mut)",
               flexShrink: 0,
             }}
           />
@@ -118,7 +118,7 @@ export function PayGroupCard({
       >
         <div
           style={{
-            background: "var(--infobg, #eff6ff)",
+            background: "var(--infobg)",
             borderRadius: 8,
             padding: "10px 12px",
           }}
@@ -136,7 +136,7 @@ export function PayGroupCard({
         </div>
         <div
           style={{
-            background: "var(--goodbg, #f0fdf4)",
+            background: "var(--goodbg)",
             borderRadius: 8,
             padding: "10px 12px",
           }}
@@ -148,7 +148,7 @@ export function PayGroupCard({
         </div>
         <div
           style={{
-            background: "var(--warnbg, #fffbeb)",
+            background: "var(--warnbg)",
             borderRadius: 8,
             padding: "10px 12px",
           }}

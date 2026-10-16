@@ -133,8 +133,8 @@ function ApproveAction({ id, trainingId, onDone }: { id: string; trainingId: str
             </Select>
           </Field>
         )}
-        {makerCheckerError && <p role="alert" style={{ color: "#b91c1c", marginTop: 8 }}>{t("makerCheckerError")}</p>}
-        {formError.message && <p role="alert" style={{ color: "#b91c1c", marginTop: 8 }}>{formError.message}</p>}
+        {makerCheckerError && <p role="alert" style={{ color: "var(--bad)", marginTop: 8 }}>{t("makerCheckerError")}</p>}
+        {formError.message && <p role="alert" style={{ color: "var(--bad)", marginTop: 8 }}>{formError.message}</p>}
         <div style={{ display: "flex", gap: 10, marginTop: 16, justifyContent: "flex-end" }}>
           <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy}>{t("cancel")}</Button>
           <Button variant="primary" onClick={() => void handleConfirm()} disabled={busy || !sessionId} aria-busy={busy}>
@@ -227,7 +227,7 @@ function CompleteAction({ id, onDone }: { id: string; onDone: () => void }) {
             <Input type="number" min={0} max={100} step={1} value={score} onChange={(e) => setScore(e.target.value)} disabled={busy} />
           </Field>
         </div>
-        {formError.message && <p role="alert" style={{ color: "#b91c1c", marginTop: 8 }}>{formError.message}</p>}
+        {formError.message && <p role="alert" style={{ color: "var(--bad)", marginTop: 8 }}>{formError.message}</p>}
         <div style={{ display: "flex", gap: 10, marginTop: 16, justifyContent: "flex-end" }}>
           <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy}>{t("cancel")}</Button>
           <Button variant="primary" onClick={() => void handleConfirm()} disabled={busy || !completedDate} aria-busy={busy}>

@@ -104,10 +104,10 @@ export function ApprovalsTable({
   return (
     <div>
       <StatGrid>
-        <StatCard icon="📋" iconBg="#eff6ff" label="Total AA" value={statValue(aaLive, aaData.length > 0, aaTrueTotal)} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label={aaTruncated ? "Pending AA (shown)" : "Pending AA"} value={statValue(aaLive, aaData.length > 0, pendingCount(aaData))} />
-        <StatCard icon="📑" iconBg="#ecfdf3" label="Total TS" value={statValue(tsLive, tsData.length > 0, tsTrueTotal)} />
-        <StatCard icon="⏳" iconBg="#fef2f2" label={tsTruncated ? "Pending TS (shown)" : "Pending TS"} value={statValue(tsLive, tsData.length > 0, pendingCount(tsData))} />
+        <StatCard icon="📋" tone="info" label="Total AA" value={statValue(aaLive, aaData.length > 0, aaTrueTotal)} />
+        <StatCard icon="⏳" tone="warn" label={aaTruncated ? "Pending AA (shown)" : "Pending AA"} value={statValue(aaLive, aaData.length > 0, pendingCount(aaData))} />
+        <StatCard icon="📑" tone="good" label="Total TS" value={statValue(tsLive, tsData.length > 0, tsTrueTotal)} />
+        <StatCard icon="⏳" tone="bad" label={tsTruncated ? "Pending TS (shown)" : "Pending TS"} value={statValue(tsLive, tsData.length > 0, pendingCount(tsData))} />
       </StatGrid>
 
       {/* GAP-WORKS-APPROVALS-04: replace the hand-rolled role=tab buttons with

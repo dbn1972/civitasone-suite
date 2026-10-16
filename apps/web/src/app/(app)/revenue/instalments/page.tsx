@@ -236,8 +236,8 @@ export default async function InstalmentsPage({
       ) : (
         <>
           <StatGrid>
-            <StatCard icon="📆" iconBg="#e6f0ff" label="Plans" value={plans.length} />
-            <StatCard icon="✅" iconBg="#e6f7f0" label="Active Plans" value={activePlans} />
+            <StatCard icon="📆" tone="info" label="Plans" value={plans.length} />
+            <StatCard icon="✅" tone="good" label="Active Plans" value={activePlans} />
           </StatGrid>
 
           <CreateInstalmentPlanForm

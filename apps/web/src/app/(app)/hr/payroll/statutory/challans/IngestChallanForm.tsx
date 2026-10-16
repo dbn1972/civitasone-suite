@@ -167,7 +167,7 @@ export function IngestChallanForm({ period }: { period: string }) {
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={periodId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("periodLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("periodLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={periodId}
@@ -180,7 +180,7 @@ export function IngestChallanForm({ period }: { period: string }) {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={bsrId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("bsrCodeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("bsrCodeLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={bsrId}
@@ -196,7 +196,7 @@ export function IngestChallanForm({ period }: { period: string }) {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={serialId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("challanSerialLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("challanSerialLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={serialId}
@@ -211,7 +211,7 @@ export function IngestChallanForm({ period }: { period: string }) {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={dateId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("depositDateLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("depositDateLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={dateId}
@@ -225,7 +225,7 @@ export function IngestChallanForm({ period }: { period: string }) {
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
               {showDepositDateWarning && (
-                <p id={`${dateId}-warning`} style={{ margin: 0, fontSize: 11, color: "var(--warn, #92400e)" }}>
+                <p id={`${dateId}-warning`} style={{ margin: 0, fontSize: 11, color: "var(--warn)" }}>
                   {t("depositDateWarning", { period: challanPeriod })}
                 </p>
               )}
@@ -236,7 +236,7 @@ export function IngestChallanForm({ period }: { period: string }) {
                 id={formTypeId}
                 value={formType}
                 onChange={(e) => setFormType(e.target.value as "24Q" | "26Q")}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "#fff" }}
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "var(--panel)" }}
               >
                 <option value="24Q">{t("formType24qOption")}</option>
                 <option value="26Q">{t("formType26qOption")}</option>
@@ -244,7 +244,7 @@ export function IngestChallanForm({ period }: { period: string }) {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={amtId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("tdsAmountLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("tdsAmountLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={amtId}

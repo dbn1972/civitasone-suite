@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { EmptyState } from "@/app/_components/ds";
+import { EmptyState, Input, Select } from "@/app/_components/ds";
 
 type FaqItem = {
   id: string;
@@ -42,26 +42,22 @@ export function FaqBrowser({ faqs }: { faqs: FaqItem[] }) {
   return (
     <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <input
+        <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search FAQs…"
-          aria-label="Search FAQs"
-          className="inp"
-          style={{ flex: "1 1 240px", minHeight: 40 }}
+          aria-label="Search FAQs" style={{ flex: "1 1 240px", minHeight: 40 }}
         />
-        <select
+        <Select
           value={catFilter}
           onChange={(e) => setCatFilter(e.target.value)}
-          aria-label="Filter by category"
-          className="inp"
-          style={{ minHeight: 40, minWidth: 160 }}
+          aria-label="Filter by category" style={{ minHeight: 40, minWidth: 160 }}
         >
           <option value="">All categories</option>
           {categories.map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
-        </select>
+        </Select>
         {(search || catFilter) && (
           <button
             type="button"
@@ -78,13 +74,13 @@ export function FaqBrowser({ faqs }: { faqs: FaqItem[] }) {
         <EmptyState icon="❓" title="No FAQs match" message="Try different keywords or clear the filters." />
       ) : (
         filtered.map((f) => (
-          <details key={f.id} style={{ border: "1px solid var(--line, #e2e8f0)", borderRadius: 10, padding: "12px 14px" }}>
-            <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--ink, #0f172a)" }}>
+          <details key={f.id} style={{ border: "1px solid var(--line)", borderRadius: 10, padding: "12px 14px" }}>
+            <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--ink)" }}>
               {f.question}
               {/* GAP-KNOWLEDGE-FAQS-05: always show category label, including "General" */}
               <span style={{ marginInlineStart: 8, fontSize: 12, color: "var(--mut)" }}>· {f.category}</span>
             </summary>
-            <p style={{ marginTop: 8, marginBottom: 0, lineHeight: 1.6, color: "var(--ink2, #475569)", whiteSpace: "pre-wrap" }}>{f.answer}</p>
+            <p style={{ marginTop: 8, marginBottom: 0, lineHeight: 1.6, color: "var(--ink2)", whiteSpace: "pre-wrap" }}>{f.answer}</p>
           </details>
         ))
       )}

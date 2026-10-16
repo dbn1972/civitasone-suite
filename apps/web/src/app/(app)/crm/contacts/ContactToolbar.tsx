@@ -129,8 +129,8 @@ export function ContactToolbar({ canExport = false, exportQuery = {}, initialSea
         ) : null}
         <a className="btn ghost" href="/crm/contacts/import" style={{ minHeight: 44, display: "inline-flex", alignItems: "center" }}>Import</a>
       </div>
-      {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", margin: 0 }}>{message}</p> : null}
-      {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", margin: 0 }}>{error}</p> : null}
+      {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", margin: 0 }}>{message}</p> : null}
+      {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad)", margin: 0 }}>{error}</p> : null}
 
       <ConfirmDialog
         open={exportOpen}

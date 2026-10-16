@@ -153,10 +153,10 @@ export default async function DisciplinaryListPage({
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-<StatCard icon="⚖️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : major + minor} />
-        <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label={t("statMajor")} value={errored ? null : major} />
-        <StatCard icon="🟡" iconBg="var(--warnbg, #fffbe6)" label={t("statMinor")} value={errored ? null : minor} />
-        <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)" label={t("statOpen")} value={errored ? null : open} />
+<StatCard icon="⚖️" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : major + minor} />
+        <StatCard icon="🔴" iconBg="var(--badbg)" label={t("statMajor")} value={errored ? null : major} />
+        <StatCard icon="🟡" iconBg="var(--warnbg)" label={t("statMinor")} value={errored ? null : minor} />
+        <StatCard icon="📋" iconBg="var(--bg)" label={t("statOpen")} value={errored ? null : open} />
       </StatGrid>
       {/* GAP-HR-DISCIPLINARY-01 (PII/DPDP): purpose/confidentiality notice
           above the table -- mirrors the styling of the existing DPDP notice

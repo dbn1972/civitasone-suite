@@ -129,7 +129,7 @@ export function ElectFlexBenefitForm({ plans }: { plans: FlexPlan[] }) {
           ) : (
             <div style={{ display: "grid", gap: 6, maxWidth: 420 }}>
               <label htmlFor={planField} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("planLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("planLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <select
                 id={planField}
@@ -177,7 +177,7 @@ export function ElectFlexBenefitForm({ plans }: { plans: FlexPlan[] }) {
                         style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40, maxWidth: 240 }}
                       />
                       {problem && (showErrors || problem === "overMax") && (
-                        <span id={`${amtId}-err`} role="alert" style={{ fontSize: 12, color: "var(--bad, #c0392b)" }}>
+                        <span id={`${amtId}-err`} role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>
                           {problem === "overMax" ? t("overMaxError", { max: formatMoney(c.maxMinor) }) : t("amountInvalidError")}
                         </span>
                       )}
@@ -189,7 +189,7 @@ export function ElectFlexBenefitForm({ plans }: { plans: FlexPlan[] }) {
           )}
 
           {plan && check && (
-            <p id={budgetId} style={{ fontSize: 13, color: check.overBudget ? "var(--bad, #c0392b)" : "var(--ink2)" }}>
+            <p id={budgetId} style={{ fontSize: 13, color: check.overBudget ? "var(--bad)" : "var(--ink2)" }}>
               {t.rich("totalAgainstBudgetText", {
                 amount: formatMoney(check.totalMinor),
                 budget: formatMoney(plan.totalBudgetMinor),

@@ -96,7 +96,7 @@ export function ChangeActions({ id, status, hasRollbackPlan }: { id: string; sta
     <div className="card">
       <div className="card-h"><h3>Actions</h3></div>
       <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-        {error && <div role="alert" style={{ color: "#b42318", fontSize: 13 }}>{error}</div>}
+        {error && <div role="alert" style={{ color: "var(--bad)", fontSize: 13 }}>{error}</div>}
 
         {status === "draft" && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -148,7 +148,7 @@ export function ChangeActions({ id, status, hasRollbackPlan }: { id: string; sta
               reasonLabel="Rejection reason"
               onConfirm={(reason) => runConfirmed(() => post(`requests/${id}/reject`, { reason }))}
             />
-            <div style={{ fontSize: 12, color: "#667085", flexBasis: "100%" }}>
+            <div style={{ fontSize: 12, color: "var(--mut)", flexBasis: "100%" }}>
               Maker-checker enforced server-side: the approver must differ from the requester, and a rollback plan is required.
             </div>
           </div>
@@ -179,8 +179,8 @@ export function ChangeActions({ id, status, hasRollbackPlan }: { id: string; sta
                 windowEnd: new Date(endMs).toISOString(),
               }))}
             />
-            {windowError && <div role="alert" style={{ color: "#b42318", fontSize: 12, flexBasis: "100%" }}>{windowError}</div>}
-            <div style={{ fontSize: 12, color: "#667085", flexBasis: "100%" }}>
+            {windowError && <div role="alert" style={{ color: "var(--bad)", fontSize: 12, flexBasis: "100%" }}>{windowError}</div>}
+            <div style={{ fontSize: 12, color: "var(--mut)", flexBasis: "100%" }}>
               Scheduling is blocked if the window overlaps a change freeze.
             </div>
           </div>
@@ -227,7 +227,7 @@ export function ChangeActions({ id, status, hasRollbackPlan }: { id: string; sta
         )}
 
         {["completed", "rejected", "rolled_back"].includes(status) && (
-          <div style={{ color: "#667085", fontSize: 14 }}>This change has reached a terminal state ({status.replace(/_/g, " ")}). No further actions.</div>
+          <div style={{ color: "var(--mut)", fontSize: 14 }}>This change has reached a terminal state ({status.replace(/_/g, " ")}). No further actions.</div>
         )}
       </div>
     </div>

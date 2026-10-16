@@ -51,7 +51,7 @@ export function DelayAnalysisTable({ rows, source = "api" }: { rows: DelayRow[];
 
   return (
     <>
-      {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>{cacheNote}</p>}
+      {cacheNote && <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--warn)", margin: "0 0 8px" }}>{cacheNote}</p>}
       <DataTable<DelayRow>
         columns={COLUMNS}
         rows={data}

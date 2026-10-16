@@ -105,7 +105,7 @@ export function GiveKudosButton({ label }: { label: string }) {
               aria-label="Colleague to give kudos to"
             />
             {fieldErrors.receiverId ? (
-              <span role="alert" style={{ fontSize: 12, color: "var(--danger, #b91c1c)" }}>
+              <span role="alert" style={{ fontSize: 12, color: "var(--danger)" }}>
                 {fieldErrors.receiverId}
               </span>
             ) : null}
@@ -144,13 +144,13 @@ export function GiveKudosButton({ label }: { label: string }) {
               aria-describedby={fieldErrors.message ? "kudos-message-err" : undefined}
             />
             {fieldErrors.message ? (
-              <span id="kudos-message-err" role="alert" style={{ fontSize: 12, color: "var(--danger, #b91c1c)" }}>
+              <span id="kudos-message-err" role="alert" style={{ fontSize: 12, color: "var(--danger)" }}>
                 {fieldErrors.message}
               </span>
             ) : null}
           </div>
           {error ? (
-            <p role="alert" aria-live="assertive" style={{ fontSize: 12, color: "var(--danger, #b91c1c)", margin: 0 }}>
+            <p role="alert" aria-live="assertive" style={{ fontSize: 12, color: "var(--danger)", margin: 0 }}>
               {error}
             </p>
           ) : null}

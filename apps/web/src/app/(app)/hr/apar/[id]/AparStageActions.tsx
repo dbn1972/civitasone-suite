@@ -121,15 +121,15 @@ export function AparStageActions({ appraisalId, status, actions }: Props) {
             role="note"
             style={{
               padding: "8px 12px", borderRadius: 8,
-              background: "var(--warnbg, #fffbeb)", border: "1px solid var(--warn, #b45309)",
-              color: "var(--warn, #92400e)", fontSize: 13, fontWeight: 600,
+              background: "var(--warnbg)", border: "1px solid var(--warn)",
+              color: "var(--warn)", fontSize: 13, fontWeight: 600,
             }}
           >
             ⚠ {t("overrideNotice")}
           </div>
         )}
         {formError.message && (
-          <p role="alert" style={{ color: "var(--red, #c00)", fontSize: 13, margin: 0 }}>
+          <p role="alert" style={{ color: "var(--red)", fontSize: 13, margin: 0 }}>
             {formError.message}
           </p>
         )}
@@ -276,7 +276,7 @@ function ReportingForm({
             {t("addKraBtn")}
           </Button>
         </div>
-        <p style={{ margin: 0, fontSize: 13, color: weightsOk ? "var(--good, #16a34a)" : "var(--warn, #b45309)" }}>
+        <p style={{ margin: 0, fontSize: 13, color: weightsOk ? "var(--good)" : "var(--warn)" }}>
           {t("weightSumLabel", { sum: totalWeight })}
           {!weightsOk && ` — ${t("weightSumError")}`}
         </p>

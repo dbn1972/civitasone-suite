@@ -137,7 +137,7 @@ export function PayBillForm({ assessees = [] }: PayBillFormProps) {
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={identifierId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Assessee Identifier{" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -172,7 +172,7 @@ export function PayBillForm({ assessees = [] }: PayBillFormProps) {
                 />
               )}
               {fieldErrors.assesseeIdentifier && (
-                <p id={identifierErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={identifierErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.assesseeIdentifier}
                 </p>
               )}
@@ -181,7 +181,7 @@ export function PayBillForm({ assessees = [] }: PayBillFormProps) {
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={amountId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Amount (₹){" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -199,7 +199,7 @@ export function PayBillForm({ assessees = [] }: PayBillFormProps) {
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
               {fieldErrors.amount && (
-                <p id={amountErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={amountErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.amount}
                 </p>
               )}
@@ -208,7 +208,7 @@ export function PayBillForm({ assessees = [] }: PayBillFormProps) {
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={txnId} style={{ fontSize: 13, fontWeight: 600 }}>
                 BBPS Transaction ID{" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -224,7 +224,7 @@ export function PayBillForm({ assessees = [] }: PayBillFormProps) {
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
               {fieldErrors.bbpsTxnId && (
-                <p id={txnErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                <p id={txnErrorId} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad)" }}>
                   {fieldErrors.bbpsTxnId}
                 </p>
               )}
@@ -233,7 +233,7 @@ export function PayBillForm({ assessees = [] }: PayBillFormProps) {
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={channelId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Channel{" "}
-                <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>
+                <span aria-hidden="true" style={{ color: "var(--bad)" }}>
                   *
                 </span>
               </label>
@@ -283,7 +283,7 @@ export function PayBillForm({ assessees = [] }: PayBillFormProps) {
                 </Link>
               )}
               {status.status === "failed" && (
-                <span role="alert" style={{ color: "var(--bad, #c0392b)" }}>
+                <span role="alert" style={{ color: "var(--bad)" }}>
                   {status.failureReason || "The payment could not be processed."} You can submit it again.
                 </span>
               )}

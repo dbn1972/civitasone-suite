@@ -131,7 +131,7 @@ export default async function GoodsReturnDetailPage({ params }: { params: { id: 
       </Card>
 
       {blockedAsMaker ? (
-        <p role="note" style={{ fontSize: 13, color: "#92400e", margin: "16px 0 0" }}>
+        <p role="note" style={{ fontSize: 13, color: "var(--warn)", margin: "16px 0 0" }}>
           You recorded this return, so a different person must record its QC verdict.
         </p>
       ) : null}

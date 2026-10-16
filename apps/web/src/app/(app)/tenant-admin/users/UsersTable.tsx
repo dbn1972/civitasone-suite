@@ -1,10 +1,10 @@
 "use client";
 
 import { UserFacingError } from "@/lib/userFacingError";
-import { useId, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, StatusPill, Segmented, ConfirmDialog, DataTable, useToast } from "../../../_components/ds";
+import { Button, Field, Input, StatusPill, Segmented, ConfirmDialog, DataTable, useToast } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { useFormError } from "@/lib/useFormError";
@@ -206,9 +206,6 @@ function InviteUserDialog({ open, onClose, onCreated }: { open: boolean; onClose
   const [error, setError] = useState<string | undefined>(undefined);
   const formError = useFormError("invitation");
 
-  const nameId = useId();
-  const emailId = useId();
-  const empId = useId();
 
   function reset() {
     setName(""); setEmail(""); setEmpCode("");
@@ -247,23 +244,15 @@ function InviteUserDialog({ open, onClose, onCreated }: { open: boolean; onClose
       title="Invite a user"
       description={
         <div style={{ display: "grid", gap: 12, marginTop: 4 }}>
-          <div>
-            <label htmlFor={nameId} style={dlgLbl}>Full name</label>
-            <input id={nameId} value={name} onChange={(e) => setName(e.target.value)}
-              aria-invalid={nameErr ? true : undefined} placeholder="Asha Verma" style={dlgInp} />
-            {nameErr ? <p role="alert" style={dlgErr}>{nameErr}</p> : null}
-          </div>
-          <div>
-            <label htmlFor={emailId} style={dlgLbl}>Email</label>
-            <input id={emailId} type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-              aria-invalid={emailErr ? true : undefined} placeholder="asha@gov.in" style={dlgInp} />
-            {emailErr ? <p role="alert" style={dlgErr}>{emailErr}</p> : null}
-          </div>
-          <div>
-            <label htmlFor={empId} style={dlgLbl}>Employee code <span style={{ fontWeight: 400, color: "var(--mut)" }}>(optional)</span></label>
-            <input id={empId} value={empCode} onChange={(e) => setEmpCode(e.target.value)}
-              placeholder="EMP-00123" style={dlgInp} />
-          </div>
+          <Field label="Full name" required error={nameErr || undefined}>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Asha Verma" />
+          </Field>
+          <Field label="Email" required error={emailErr || undefined}>
+            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="asha@gov.in" />
+          </Field>
+          <Field label={<>Employee code <span style={{ fontWeight: 400, color: "var(--mut)" }}>(optional)</span></>}>
+            <Input value={empCode} onChange={(e) => setEmpCode(e.target.value)} placeholder="EMP-00123" />
+          </Field>
         </div>
       }
       confirmLabel="Send invite"
@@ -288,4 +277,4 @@ function InviteUserDialog({ open, onClose, onCreated }: { open: boolean; onClose
 
 const dlgLbl: React.CSSProperties = { display: "block", fontSize: 12.5, fontWeight: 650, color: "var(--ink2)", marginBottom: 5 };
 const dlgInp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13.5, fontFamily: "inherit", color: "var(--ink)" };
-const dlgErr: React.CSSProperties = { color: "#b42318", fontSize: 12, margin: "4px 0 0" };
+const dlgErr: React.CSSProperties = { color: "var(--bad)", fontSize: 12, margin: "4px 0 0" };
