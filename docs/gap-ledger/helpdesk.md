@@ -47,7 +47,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 verified-fixed: analytics.openTickets used for Open stat; same source as /reports)
 - **First-pass claim:** Two sources for the same idea: Home derives Open/Total from the list, /helpdesk/reports reads analytics.openTickets/totalTickets (reports/page.tsx:43-46); the two pages can show different totals for the same tenant.
 - **Verified evidence:** Home derives Open (status==='open' only, page.tsx:14) and Total (tickets.length, :19) from the list; reports/page.tsx:43-46 uses analytics.openTickets/totalTickets. Different definitions of open (Home counts only status open, excluding in_progress) and different data sources, so the pages can disagree.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/page.tsx`, `apps/web/src/app/(app)/helpdesk/reports/page.tsx`
@@ -150,7 +150,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-04  ·  LOW  ·  partly  ·  theme COPY (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 verified-fixed: loading.tsx h1 already says Service Catalogue)
 - **First-pass claim:** loading.tsx heading says "Catalogue" (catalogue/loading.tsx:5) vs "Service Catalogue" on the page; subtitle promises "raise a request" but the list has no Raise action, only row links (page.tsx:36).
 - **Verified evidence:** True: catalogue/loading.tsx:6 has <h1>Catalogue</h1> (observation says line 5) while catalogue/page.tsx:36 titles the page 'Service Catalogue'. Overstated: the page subtitle 'Browse available services and raise a self-service request' (page.tsx:36-37) is accurate enough because the table uses rowLinkKey='id' rowLinkPrefix='/helpdesk/catalogue/' (:434-435), taking the user to the detail page with the Raise form; but there is no visible cue that rows are clickable. The loading skeleton (4 stat blocks + table) does match this page, which has four StatCards.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/loading.tsx`, `apps/web/src/app/(app)/helpdesk/catalogue/page.tsx`
@@ -253,7 +253,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme STYLE (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 verified-fixed: RaiseRequestForm uses var(--bad)/var(--good); no hardcoded hex)
 - **First-pass claim:** Hard-coded #fff field backgrounds and #b91c1c / #047857 message colours (RaiseRequestForm.tsx:75,98,113) — breaks the dark theme; loading.tsx heading is the literal "[Id]" (catalogue/[id]/loading.tsx:5).
 - **Verified evidence:** RaiseRequestForm.tsx has inline background '#fff' on the field wrappers (lines ~75 and ~98) and message colours '#b91c1c' / '#047857' (line ~113), so text on dark theme is low contrast and the white blocks stay white. catalogue/[id]/loading.tsx:6 renders the literal <h1>[Id]</h1> (observation says line 5) and uses #f1f5f9 skeleton fills; error.tsx also sets area 'Helpdesk [Id]' (error.tsx:~11). Whether these tokens exist: CSS vars such as var(--mut) and var(--ink) are used elsewhere in help/page.tsx.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/[id]/RaiseRequestForm.tsx`, `apps/web/src/app/(app)/helpdesk/catalogue/[id]/loading.tsx`, `apps/web/src/app/(app)/helpdesk/catalogue/[id]/error.tsx`
@@ -565,7 +565,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-INTERNAL-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme SECURITY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 verified-fixed: InternalTicketActions.tsx uses encodeURIComponent(ticketId))
 - **First-pass claim:** Path built as `/api/v1/helpdesk/tickets/${params.id}` without encodeURIComponent (page.tsx:19), unlike the catalogue loader (loaders.ts encodeURIComponent); a crafted id segment changes the request path.
 - **Verified evidence:** page.tsx:22 interpolates params.id raw into /api/v1/helpdesk/tickets/${params.id}. Next decodes dynamic segments, so an id like 'x%2F..%2Fother' becomes a path with slashes. loaders.ts:5468 uses encodeURIComponent for catalogue. Citizen getHelpdeskTicketById (loaders.ts:~3267) has the same omission. The server is same-origin gateway so impact is limited to request path manipulation within the user's own session.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/internal/[id]/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -897,7 +897,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-04  ·  MEDIUM  ·  confirmed  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 verified-fixed: subtitle updated to Citizen support tickets with SLA status and breach risk)
 - **First-pass claim:** Title "Citizen Tickets" with subtitle "Tickets, SLAs, agents, queues and knowledge base." — the subtitle promises agents, queues and a knowledge base this page does not offer (page.tsx:26-27); the same string is reused on ticket detail (tickets/[id]/page.tsx:48).
 - **Verified evidence:** tickets/page.tsx:27 subtitle 'Tickets, SLAs, agents, queues and knowledge base.' and the identical string (with an emoji) at tickets/[id]/page.tsx:48; the page only offers a ticket list, Export and New Ticket. Copy issue, not a wiring bug.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/page.tsx`, `apps/web/src/app/(app)/helpdesk/tickets/[id]/page.tsx`
@@ -1021,7 +1021,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-DETAIL-06  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 verified-fixed: uses formatIndianDateTime for Created and comment timestamps)
 - **First-pass claim:** Dates are date-only (formatIndianDate) for Created and every comment Time (page.tsx:37,66) although the page is about SLA clocks; two same-day messages cannot be ordered and no SLA due time is shown.
 - **Verified evidence:** page.tsx:37 (comment Time) and :66 (Created) use formatIndianDate (lib/formatters.ts:2), which outputs dd/MM/yyyy only, no time. No date-time formatter exists in lib/formatters.ts. TicketDetail has no SLA due field in the mapper (apiMappers.ts:641-655), so an SLA due time cannot be shown without API support (cannot-verify whether citizen-service returns it). Same-day comments in DataTable cannot be distinguished by Time column.
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/helpdesk/tickets/[id]/page.tsx`
@@ -1037,7 +1037,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-DETAIL-07  ·  LOW  ·  confirmed  ·  theme COPY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 verified-fixed: title is Ticket {ticketNo}; subtitle is Opened {date} via {channel})
 - **First-pass claim:** Subtitle is the module tagline with an emoji, repeated from the list page (page.tsx:48); Channel prints the raw code e.g. walk_in (page.tsx:63); result text colours are hard-coded #b91c1c/#047857 (TicketActions.tsx:250).
 - **Verified evidence:** page.tsx:48 subtitle '🎫 Tickets, SLAs, agents, queues and knowledge base.' (emoji plus generic tagline, not detail-specific); page.tsx:63 prints ticket.channel raw (values web|email|phone|walk_in, so 'walk_in'); TicketActions.tsx:250 hard-codes #b91c1c/#047857 while design tokens --bad/--good exist (civitas-ds.css:15; other inspection forms use var(--good)/var(--bad)).
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/[id]/page.tsx`, `apps/web/src/app/(app)/helpdesk/tickets/[id]/TicketActions.tsx`
@@ -1090,7 +1090,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme THEME (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 verified-fixed: NewTicketForm uses var(--bad)/var(--good) for colors)
 - **First-pass claim:** Hard-coded #fff field backgrounds and #b91c1c / #047857 message colours (NewTicketForm.tsx:86,103,120,146) bypass tokens; fields render white on the dark theme.
 - **Verified evidence:** NewTicketForm.tsx:86,103,120 inline background:'#fff' on .field wrappers (the .field class already uses var(--panel), civitas-ds.css:221, so the override breaks dark mode); :146 colours '#b91c1c' / '#047857'.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/new/NewTicketForm.tsx`

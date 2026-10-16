@@ -41,7 +41,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-HOME-03  ·  LOW  ·  confirmed  ·  theme LAYOUT (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 batch11+: code already fixed on main — columns=three for 5 tiles (already in main at PR #2068))
 - **First-pass claim:** Five tiles in a 'four' column grid leave an orphan tile on desktop (page.tsx:17).
 - **Verified evidence:** ai/page.tsx:443 columns='four' -> .g-4 four-column grid (civitas-ds.css:101); 5 tiles wrap 4+1 on desktop. Not a dead route.
 - **Files to change:** `apps/web/src/app/(app)/ai/page.tsx`
@@ -108,7 +108,7 @@ Counts: ACTION 44, BACKEND-VERIFY 1
 
 ### GAP-AI-AGENTS-03  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 batch11+: code already fixed on main — AgentsTable uses formatIndianDateTime; typed loader getAiAgentRows (already in main))
 - **First-pass claim:** Raw ISO timestamps or codes are printed in Meta (e.g. 2026-09-24T09:12:40.000Z) — no date formatting in mapRows/ModuleListTable (ai/_data.ts:69-77).
 - **Verified evidence:** _data.ts mapRows meta (line ~69-77) passes toText(row.updatedAt) / createdAt straight through; ModuleListTable.tsx renders {row.meta ?? '—'} with no formatting. Only reached when row.code and row.currency are absent. lib/formatters.ts has formatIndianDate (line 2) but no ISO date-time formatter was found there.
 - **Files to change:** `apps/web/src/app/(app)/ai/_data.ts`, `apps/web/src/lib/formatters.ts`

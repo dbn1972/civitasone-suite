@@ -138,7 +138,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-06  ·  LOW  ·  confirmed  ·  theme OTHER (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 verified-fixed: percentOfMinor/formatPercent for Spent% added)
 - **W0 note:** partly fixed by #1869 — 'Spent %' added; the Card of three <Link className='btn'> buttons is still there, no route-based Tabs / [id]/layout.tsx.
 - **First-pass claim:** Expenditure is shown beside Budget without a consumption percentage or comparison to Completion %; sub-page links are plain buttons rather than tabs (page.tsx:61-71).
 - **Verified evidence:** page.tsx:55-57 show Budget, Expenditure, Completion % as separate fields with no utilisation %; :60-71 sub-pages are three <Link className='btn'> buttons in a Card, while ds/Tabs.tsx exists. Theme DATEFMT is wrong.
@@ -771,7 +771,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-FUND-RELEASES-04  ·  MEDIUM  ·  partly  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 verified-fixed: FUND_STATUS_VARIANT local override in FundReleasesTable)
 - **W0 note:** partly fixed by #1869 — table pills now carry scoped tones (sanctioned warn, released/utilized good); remaining: 'utilized' shares released's colour, Released tile still counts status==='released' only (excludes utilized) and totals still use JS-number reduce on paise.
 - **First-pass claim:** StatusPill has no keys for released, sanctioned or utilized, so all three render identical neutral “info” blue (ds/StatusPill.tsx:6-38); tiles are exclusive status buckets, so a utilized release drops out of “Released”.
 - **Verified evidence:** StatusPill.tsx:5-38 has no 'released', 'sanctioned' or 'utilized' keys, so all fall to variant 'info' (:53). True. Tiles (page.tsx:14-16) filter by exclusive status equality, so if a release moves released->utilized it leaves the Released sum; whether 'utilized' is a status of the same record or a separate state is not verifiable (types package absent). Also sums use JS number reduce on paise.
