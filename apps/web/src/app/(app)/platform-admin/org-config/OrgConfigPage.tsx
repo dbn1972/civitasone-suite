@@ -22,9 +22,8 @@ function badge(color: string, text: string) {
 const inp: React.CSSProperties = { width: "100%", padding: "7px 10px", borderRadius: 7, border: "1px solid var(--line)", fontSize: 13, fontFamily: "inherit", color: "var(--ink)", boxSizing: "border-box" as const };
 
 /* ─── Editable org-level list ───────────────────────────────────────── */
-// COMP-014: levels are the tenant's REAL configured hierarchy-level taxonomy
-// from GET /v1/admin/org-hierarchy-levels (admin-service), saved via the
-// matching PUT with res.ok checked. See git history for the full rationale.
+// COMP-014: real per-tenant org-hierarchy-levels taxonomy (admin-service
+// GET/PUT /v1/admin/org-hierarchy-levels). See git history for rationale.
 export function OrgConfigPage({ initialLevels, source }: { initialLevels: OrgLevel[]; source: "api" | "error" }) {
   const [levels, setLevels] = useState<OrgLevel[]>(initialLevels);
   const [editId, setEditId] = useState<string | null>(null);
