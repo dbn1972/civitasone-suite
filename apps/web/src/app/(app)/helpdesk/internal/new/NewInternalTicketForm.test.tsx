@@ -70,4 +70,42 @@ describe("NewInternalTicketForm (staff-facing)", () => {
     expect(html).not.toContain("#b91c1c");
     expect(html).not.toContain("#047857");
   });
+
+  // GAP-HELPDESK-INTERNAL-NEW-02: zod-backed per-field validation.
+  it("shows inline error for empty subject and does not submit", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<NewInternalTicketForm />);
+    // Leave subject blank; fill description only
+    fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "Some description here." } });
+    fireEvent.click(screen.getByRole("button", { name: "Create ticket" }));
+
+    await waitFor(() => expect(screen.getByText("Subject is required.")).toBeInTheDocument());
+    expect(fetchSpy).not.toHaveBeenCalled();
+    // Field must be marked invalid for a11y
+    expect(screen.getByLabelText(/subject/i)).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("shows inline error for empty description and does not submit", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<NewInternalTicketForm />);
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Valid subject" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create ticket" }));
+
+    await waitFor(() => expect(screen.getByText("Description is required.")).toBeInTheDocument());
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/description/i)).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("shows inline error for subject over 200 chars and does not submit", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<NewInternalTicketForm />);
+    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "x".repeat(201) } });
+    fireEvent.change(screen.getByLabelText(/description/i), { target: { value: "Valid description." } });
+    fireEvent.click(screen.getByRole("button", { name: "Create ticket" }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Subject must be 200 characters or fewer.")).toBeInTheDocument(),
+    );
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });

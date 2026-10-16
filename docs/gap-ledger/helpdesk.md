@@ -47,7 +47,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified ALREADY-FIXED on main — both pages use getTicketAnalytics(); home comment references HOME-03 fix)
 - **First-pass claim:** Two sources for the same idea: Home derives Open/Total from the list, /helpdesk/reports reads analytics.openTickets/totalTickets (reports/page.tsx:43-46); the two pages can show different totals for the same tenant.
 - **Verified evidence:** Home derives Open (status==='open' only, page.tsx:14) and Total (tickets.length, :19) from the list; reports/page.tsx:43-46 uses analytics.openTickets/totalTickets. Different definitions of open (Home counts only status open, excluding in_progress) and different data sources, so the pages can disagree.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/page.tsx`, `apps/web/src/app/(app)/helpdesk/reports/page.tsx`
@@ -150,7 +150,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-04  ·  LOW  ·  partly  ·  theme COPY (was LOADING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified ALREADY-FIXED on main — loading.tsx h1 is "Service Catalogue"; page subtitle already says "select one to raise a request")
 - **First-pass claim:** loading.tsx heading says "Catalogue" (catalogue/loading.tsx:5) vs "Service Catalogue" on the page; subtitle promises "raise a request" but the list has no Raise action, only row links (page.tsx:36).
 - **Verified evidence:** True: catalogue/loading.tsx:6 has <h1>Catalogue</h1> (observation says line 5) while catalogue/page.tsx:36 titles the page 'Service Catalogue'. Overstated: the page subtitle 'Browse available services and raise a self-service request' (page.tsx:36-37) is accurate enough because the table uses rowLinkKey='id' rowLinkPrefix='/helpdesk/catalogue/' (:434-435), taking the user to the detail page with the Raise form; but there is no visible cue that rows are clickable. The loading skeleton (4 stat blocks + table) does match this page, which has four StatCards.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/loading.tsx`, `apps/web/src/app/(app)/helpdesk/catalogue/page.tsx`
@@ -253,7 +253,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme STYLE (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified ALREADY-FIXED on main — RaiseRequestForm uses msg err/ok classes; loading.tsx uses SkeletonBar/Card; error.tsx area fixed)
 - **First-pass claim:** Hard-coded #fff field backgrounds and #b91c1c / #047857 message colours (RaiseRequestForm.tsx:75,98,113) — breaks the dark theme; loading.tsx heading is the literal "[Id]" (catalogue/[id]/loading.tsx:5).
 - **Verified evidence:** RaiseRequestForm.tsx has inline background '#fff' on the field wrappers (lines ~75 and ~98) and message colours '#b91c1c' / '#047857' (line ~113), so text on dark theme is low contrast and the white blocks stay white. catalogue/[id]/loading.tsx:6 renders the literal <h1>[Id]</h1> (observation says line 5) and uses #f1f5f9 skeleton fills; error.tsx also sets area 'Helpdesk [Id]' (error.tsx:~11). Whether these tokens exist: CSS vars such as var(--mut) and var(--ink) are used elsewhere in help/page.tsx.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/[id]/RaiseRequestForm.tsx`, `apps/web/src/app/(app)/helpdesk/catalogue/[id]/loading.tsx`, `apps/web/src/app/(app)/helpdesk/catalogue/[id]/error.tsx`
@@ -365,7 +365,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-MY-REQUESTS-02  ·  MEDIUM  ·  confirmed  ·  theme MISSING-FEATURE (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified ALREADY-FIXED on main — detail page at /catalogue/requests/[id] exists with rejection reason + stage history; rowLinkKey wired; cancel requires backend (NEEDS OWNER DECISION))
 - **First-pass claim:** Rows are not links and no request-detail or cancel route exists in helpdesk/catalogue/** although status includes "cancelled" and "rejected" (page.tsx:15-23): a rejected request shows no reason and a pending one cannot be withdrawn.
 - **Verified evidence:** my-requests/page.tsx STATUS_LABEL (lines ~15-23) includes rejected and cancelled, but the DataTable has no rowLinkKey (~47-60) so rows are not links. helpdesk/catalogue/** contains only page, [id] (an offering id), breaches and my-requests, so there is no request detail route, no cancel action, and no rejection-reason field in ServiceRequestSummary (loaders.ts ~5437-5446). Cancel/withdraw endpoints in helpdesk-service cannot be verified (service absent from snapshot).
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/requests/[id]/page.tsx`, `apps/web/src/app/(app)/helpdesk/catalogue/my-requests/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -415,7 +415,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-CATALOGUE-MY-REQUESTS-05  ·  LOW  ·  partly  ·  theme LOGIC (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified ALREADY-FIXED on main — CLOSED_STATUSES const with comment; "In Progress" label with hint)
 - **First-pass claim:** Open count excludes only fulfilled/rejected/cancelled (page.tsx:30), so "approved" counts as open even when nothing is pending — unlabelled logic.
 - **Verified evidence:** my-requests/page.tsx:~30 (variable `open`) counts every request whose status is not fulfilled, rejected or cancelled, so pending_approval, approved, pending_fulfilment and in_fulfilment all count as Open. That is a defensible definition because 'approved' is an intermediate state before fulfilment (STATUS_LABEL lists it beside pending_fulfilment), so the claim that it is wrong is overstated; the true issue is that the rule is undocumented and the stat card label is just 'Open'. The exact backend state machine is not visible (cannot verify whether 'approved' is ever terminal for auto-approved offerings with no stages).
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/catalogue/my-requests/page.tsx`
@@ -565,7 +565,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-INTERNAL-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme SECURITY (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified ALREADY-FIXED on main — getInternalHelpdeskTicketById and getHelpdeskTicketById both use encodeURIComponent(id))
 - **First-pass claim:** Path built as `/api/v1/helpdesk/tickets/${params.id}` without encodeURIComponent (page.tsx:19), unlike the catalogue loader (loaders.ts encodeURIComponent); a crafted id segment changes the request path.
 - **Verified evidence:** page.tsx:22 interpolates params.id raw into /api/v1/helpdesk/tickets/${params.id}. Next decodes dynamic segments, so an id like 'x%2F..%2Fother' becomes a path with slashes. loaders.ts:5468 uses encodeURIComponent for catalogue. Citizen getHelpdeskTicketById (loaders.ts:~3267) has the same omission. The server is same-origin gateway so impact is limited to request path manipulation within the user's own session.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/internal/[id]/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -620,7 +620,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-INTERNAL-NEW-02  ·  MEDIUM  ·  partly  ·  theme VALIDATION
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: closed by PR w2/helpdesk-part-1 — zod schema, per-field FieldErrors state, aria-invalid/aria-describedby, generic summary message; 6 tests pass)
 - **First-pass claim:** Near-duplicate of NewTicketForm with only the endpoint, casing and labels changed; no assignee, category or due-date field for an operations queue (NewInternalTicketForm.tsx:47-51).
 - **Verified evidence:** NewInternalTicketForm.tsx has subject, description, priority only (:277-328); no assignee, category or due date, although the detail page displays dueDate and assignee (internal/[id]/page.tsx:39-41), so the service likely has them (cannot-verify create schema). Validation is hand-rolled (:227-236), no zod, though submit is disabled while pending (:351). Duplication with NewTicketForm is not verified line by line and is a smell not a defect.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/internal/new/NewInternalTicketForm.tsx`
@@ -690,7 +690,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-REPORTS-01  ·  MEDIUM  ·  confirmed  ·  theme REPORTING (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified ALREADY-FIXED on main — ReportPeriodNav period control, exportable tables, period labels on all stat cards)
 - **First-pass claim:** No period control, no export/print: "Resolved (MTD)" is fixed to the month and every other figure is all-time with no label (page.tsx:42-47); a reviewer cannot report on a quarter.
 - **Verified evidence:** reports/page.tsx:42-47 shows Total/Open/SLA Breached (no period stated) and 'Resolved (MTD)'; getTicketAnalytics() (loaders.ts:~3319) takes no params. No period selector; DataTable has no exportable prop on these tables (:56-64, :74-82). Nothing PII here. Whether the analytics endpoint supports a period param is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/reports/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -720,7 +720,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-REPORTS-03  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified ALREADY-FIXED on main — title "Citizen Ticket Reports" with scoped subtitle)
 - **First-pass claim:** Analytics endpoint is citizen-service only (loaders.ts:3326): "Helpdesk Reports" excludes internal tickets and catalogue requests that live in helpdesk-service, so totals differ from /helpdesk/internal and /helpdesk/catalogue/breaches.
 - **Verified evidence:** getTicketAnalytics hits /api/v1/citizen/tickets/analytics (loaders.ts:~3327), the citizen-service; internal tickets are read from /api/v1/helpdesk/tickets (loaders.ts:738-744). So web-side, the report clearly does not combine sources. Whether citizen-service analytics include catalogue requests is cannot-verify (helpdesk-service, citizen-service absent).
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/reports/page.tsx`, `apps/web/src/app/(app)/helpdesk/page.tsx`
@@ -882,7 +882,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified ALREADY-FIXED on main — StatCards show "Not available" with explanatory hint for First Response and CSAT)
 - **First-pass claim:** First Response and CSAT are permanently "—" (page.tsx:18-21); two of four headline cards carry no data and no explanation to the user.
 - **Verified evidence:** page.tsx:16-21 hard-sets firstResponseDisplay='—' and csatDisplay='—' with code comments explaining no data source; StatCards at 43,45 show them with no tooltip or note. Does not fabricate values, but the reason is invisible to users. helpdesk/page.tsx uses getTicketAnalytics (avgResolutionHours) so an analytics loader exists but no first-response/CSAT field was verified.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/page.tsx`
@@ -897,7 +897,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-04  ·  MEDIUM  ·  confirmed  ·  theme COPY (was WIRING)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified ALREADY-FIXED on main — tickets/page.tsx subtitle scoped; tickets/[id] subtitle shows channel and datetime)
 - **First-pass claim:** Title "Citizen Tickets" with subtitle "Tickets, SLAs, agents, queues and knowledge base." — the subtitle promises agents, queues and a knowledge base this page does not offer (page.tsx:26-27); the same string is reused on ticket detail (tickets/[id]/page.tsx:48).
 - **Verified evidence:** tickets/page.tsx:27 subtitle 'Tickets, SLAs, agents, queues and knowledge base.' and the identical string (with an emoji) at tickets/[id]/page.tsx:48; the page only offers a ticket list, Export and New Ticket. Copy issue, not a wiring bug.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/page.tsx`, `apps/web/src/app/(app)/helpdesk/tickets/[id]/page.tsx`
@@ -1004,7 +1004,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-DETAIL-05  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified ALREADY-FIXED on main — <Masked kind="email"> component used; requesterEmail not yet in mapper (safe))
 - **First-pass claim:** Requester email printed unmasked to anyone who can open the ticket (page.tsx:93) — DPDP-sensitive contact data without role gate or masking.
 - **Verified evidence:** page.tsx:93 prints ticket.requesterEmail unmasked with no role gate. However the loader actually used, getHelpdeskTicketById -> mapHelpdeskTicketDetail -> mapSingleHelpdeskTicket (app/_data/apiMappers.ts:604-655), does not copy requesterEmail into the result (only loaders.ts:3239 mapTicketDetails does, and that feeds the SLA queue), so today the Email row is effectively never shown. The exposure becomes real as soon as the mapper is fixed. No shared <Masked> component exists in the repo.
 - **Files to change:** `apps/web/src/app/_components/ds/Masked.tsx`, `apps/web/src/app/_components/ds/index.ts`, `apps/web/src/app/(app)/helpdesk/tickets/[id]/page.tsx`
@@ -1021,7 +1021,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-DETAIL-06  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified ALREADY-FIXED on main — formatIndianDateTime used for both comment Time and Created fields)
 - **First-pass claim:** Dates are date-only (formatIndianDate) for Created and every comment Time (page.tsx:37,66) although the page is about SLA clocks; two same-day messages cannot be ordered and no SLA due time is shown.
 - **Verified evidence:** page.tsx:37 (comment Time) and :66 (Created) use formatIndianDate (lib/formatters.ts:2), which outputs dd/MM/yyyy only, no time. No date-time formatter exists in lib/formatters.ts. TicketDetail has no SLA due field in the mapper (apiMappers.ts:641-655), so an SLA due time cannot be shown without API support (cannot-verify whether citizen-service returns it). Same-day comments in DataTable cannot be distinguished by Time column.
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/helpdesk/tickets/[id]/page.tsx`
@@ -1037,7 +1037,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-DETAIL-07  ·  LOW  ·  confirmed  ·  theme COPY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified ALREADY-FIXED on main — subtitle uses formatIndianDateTime+humanizeStatus; channel via humanizeStatus; TicketActions uses var(--bad)/var(--good))
 - **First-pass claim:** Subtitle is the module tagline with an emoji, repeated from the list page (page.tsx:48); Channel prints the raw code e.g. walk_in (page.tsx:63); result text colours are hard-coded #b91c1c/#047857 (TicketActions.tsx:250).
 - **Verified evidence:** page.tsx:48 subtitle '🎫 Tickets, SLAs, agents, queues and knowledge base.' (emoji plus generic tagline, not detail-specific); page.tsx:63 prints ticket.channel raw (values web|email|phone|walk_in, so 'walk_in'); TicketActions.tsx:250 hard-codes #b91c1c/#047857 while design tokens --bad/--good exist (civitas-ds.css:15; other inspection forms use var(--good)/var(--bad)).
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/[id]/page.tsx`, `apps/web/src/app/(app)/helpdesk/tickets/[id]/TicketActions.tsx`
@@ -1090,7 +1090,7 @@ Counts: ACTION 66, BACKEND-VERIFY 1
 
 ### GAP-HELPDESK-TICKETS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme THEME (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 2026-10-16: verified ALREADY-FIXED on main — NewTicketForm uses var(--bad)/var(--good); no background:#fff)
 - **First-pass claim:** Hard-coded #fff field backgrounds and #b91c1c / #047857 message colours (NewTicketForm.tsx:86,103,120,146) bypass tokens; fields render white on the dark theme.
 - **Verified evidence:** NewTicketForm.tsx:86,103,120 inline background:'#fff' on .field wrappers (the .field class already uses var(--panel), civitas-ds.css:221, so the override breaks dark mode); :146 colours '#b91c1c' / '#047857'.
 - **Files to change:** `apps/web/src/app/(app)/helpdesk/tickets/new/NewTicketForm.tsx`
