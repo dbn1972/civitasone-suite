@@ -6,7 +6,8 @@ import { ComputeFnfForm } from "./ComputeFnfForm";
 import { FnFSettlementCards, type FnFCardRow } from "./FnFSettlementCard";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
-import { FNF_READ_ROLES, FNF_COMPUTE_ROLES, fnfStatusBucket } from "./fnfWorkflow";
+import { FNF_READ_ROLES, FNF_COMPUTE_ROLES } from "@/lib/auth/workRoles";
+import { fnfStatusBucket } from "./fnfWorkflow";
 import { getTranslations } from "next-intl/server";
 
 // GAP-PAYROLL-FNF-02: mirrors payroll-service's F&F read gate (fnf/routes.ts

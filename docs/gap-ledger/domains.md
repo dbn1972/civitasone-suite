@@ -75,7 +75,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 
 ### GAP-DOMAINS-NEW-06  ·  LOW  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD, GAP-DOMAINS-NEW-06: caret bug fixed — onChange stores raw text, onBlur lowercases; page.tsx uses Input/Select DS components; zod schema lowercases in output)
 - **W0 note:** partly fixed by #1925 — Per-keystroke lowercasing removed (lowercase on blur/submit); state select still has no tenant-state default
 - **First-pass claim:** State / UT is a native select element of 36 items with no default of the tenant's state; domain name is lower-cased on every keystroke (page.tsx:109), which moves the caret in the middle of the text.
 - **Verified evidence:** State select has 36 options (INDIAN_STATES :12-20, 28 states + 8 UTs) with placeholder '— Select state / UT —' (:187); a tenant default is not verifiable (no tenant-state source seen in the page). Lowercasing on each keystroke at :109 is real: controlled input value differs from typed text when an uppercase char is entered mid-string, so React resets the caret to the end. A native select of 36 is acceptable; the caret bug is the real defect.
@@ -94,7 +94,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 
 ### GAP-DOMAINS-NEW-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** INTERIM — domain-service is absent from the snapshot; layout.tsx has a requireAnyRole gate and DPDP notice is present. NEEDS OWNER DECISION: verify domain-service POST handler enforces role, validates with zod, and emits audit event (server absent, cannot verify).
 - **W0 note:** partly fixed by #1925 — DPDP purpose notice added and layout.tsx requireAnyRole admin gate; server enforcement/audit unverifiable (no backend)
 - **First-pass claim:** Contact email and phone are personal data (DPDP) collected with no purpose or consent note and no indication of an audit entry for the create; backend absent — undeterminable. No module gate: any authenticated user reaches the form (no layout.tsx).
 - **Service:** `domain-service`  ·  **Endpoint(s):** `['POST /api/v1/domains']`

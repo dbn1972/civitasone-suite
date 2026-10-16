@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { PageHeader, Card, EmptyState } from "../../../_components/ds";
 import { HELP_MODULES, getHelpModule, defineTerm } from "@/lib/helpContent";
 import { getEnabledModules, isModuleEnabled } from "@/lib/moduleVisibility";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 export function generateStaticParams() {
   return HELP_MODULES.map((m) => ({ module: m.slug }));
@@ -21,11 +22,8 @@ export function generateMetadata({ params }: { params: { module: string } }) {
  * the same policy as the hub, so a guide for a module the office has turned off
  * is not served by direct URL. (This makes the route dynamic, overriding
  * generateStaticParams — kept so a static export of the common case still
- * works, with the enablement check applied at request time.) We deliberately do
- * NOT pass session roles into isModuleEnabled here: no caller (hub, ModuleGate,
- * setup wizard) passes roles today, so the hub and this page agree, and wiring
- * the admin bypass in one place only would let admins reach guides ModuleGate
- * then blocks (see GAP-HELP-HOME-03 decision).
+ * Session roles are now passed so super_admin / platform_admin bypass module
+ * gating here, matching ModuleGate.tsx and the hub (GAP-HELP-HOME-03 closed).
  *
  * GAP-HELP-MODULE-04: the module emoji is rendered in an aria-hidden span and
  * the h1 title is the plain module name, so a screen reader announces "Grants",
@@ -36,7 +34,8 @@ export default async function HelpModulePage({ params }: { params: { module: str
   if (!mod) notFound();
 
   const enabled = await getEnabledModules();
-  if (!isModuleEnabled(enabled, mod.moduleKey)) {
+  const roles = getSessionRoles();
+  if (!isModuleEnabled(enabled, mod.moduleKey, roles)) {
     return (
       <section className="page-main wrap" aria-labelledby="page-heading">
         <p style={{ margin: "0 0 6px", fontSize: 13 }}>

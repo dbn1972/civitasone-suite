@@ -4,6 +4,7 @@ import { AuditLogTable } from "./AuditLogTable";
 import { getHrAuditLog } from "@/app/_data/loaders";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { AUDIT_LOG_READER_ROLES } from "@/lib/auth/workRoles";
 import { PermissionDenied } from "@/app/_components/PermissionDenied";
 import { humanizeStatus } from "@/lib/formatters";
 import { HR_AUDIT_RESOURCE_TYPES, resourceHref, resourceLabel } from "./auditResource";
@@ -16,7 +17,7 @@ import { HR_AUDIT_RESOURCE_TYPES, resourceHref, resourceLabel } from "./auditRes
  * admin has neither audit_officer nor audit_admin and would get a 403 from
  * the backend despite this page otherwise rendering fine for them.
  */
-const AUDIT_LOG_ROLES = ["audit_officer", "audit_admin", "super_admin", "platform_admin"];
+
 
 export const dynamic = "force-dynamic";
 
@@ -39,9 +40,9 @@ function parseDateEnd(v: string | undefined): string | undefined {
 
 export default async function HrAuditLogPage({ searchParams }: { searchParams?: SearchParams }) {
   const roles = getSessionRoles();
-  const canAccess = roles.some((r) => AUDIT_LOG_ROLES.includes(r));
+  const canAccess = roles.some((r) => AUDIT_LOG_READER_ROLES.includes(r));
   if (!canAccess) {
-    return <PermissionDenied module="the audit log" requiredRoles={AUDIT_LOG_ROLES} />;
+    return <PermissionDenied module="the audit log" requiredRoles={AUDIT_LOG_READER_ROLES} />;
   }
 
   const t = await getTranslations("hrAuditLog");
@@ -138,7 +139,7 @@ export default async function HrAuditLogPage({ searchParams }: { searchParams?: 
               result={{ status, errorMessage }}
               area="audit log"
               backHref="/hr"
-              requiredRoles={AUDIT_LOG_ROLES}
+              requiredRoles={AUDIT_LOG_READER_ROLES}
             />
           </div>
         ) : (

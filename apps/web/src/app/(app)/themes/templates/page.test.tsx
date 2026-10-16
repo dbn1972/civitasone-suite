@@ -40,3 +40,19 @@ describe("Themes templates page (GAP-THEMES-TEMPLATES-05)", () => {
     expect(within(body).queryByText("Template 2")).not.toBeInTheDocument();
   });
 });
+
+// GAP-THEMES-TEMPLATES-02: showId={false} — ID column must not appear on the
+// templates list; truncated UUID prefixes are meaningless to clerks.
+describe("Themes templates page — showId (GAP-THEMES-TEMPLATES-02)", () => {
+  it("does NOT render an ID column header", async () => {
+    render(await Page());
+    expect(screen.queryByRole("columnheader", { name: /^id$/i })).not.toBeInTheDocument();
+  });
+
+  it("rows are identified by Name, not truncated ID", async () => {
+    render(await Page());
+    const body = document.querySelector("tbody") as HTMLElement;
+    expect(within(body).getByText("Zenith template")).toBeInTheDocument();
+    expect(within(body).queryByText("tpl-01")).not.toBeInTheDocument();
+  });
+});

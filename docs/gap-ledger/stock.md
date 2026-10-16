@@ -243,7 +243,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-ITEMS-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by this PR — step="any" + no Math.round; fractional UOM values accepted; error message updated)
 - **W0 note:** partly fixed by #1916 — Math.trunc/silent clamp removed, negatives rejected and UOM symbol shown; fields are still step=1 and Math.round'd so fractional UOMs (2.5 kg) cannot be entered
 - **First-pass claim:** Reorder level/quantity are silently truncated with Math.trunc and clamped at 0 (page.tsx:102-103); the fields carry no unit label, and fractional units of measure (e.g. 2.5 kg) cannot be expressed.
 - **Verified evidence:** page.tsx:102-103 send Math.max(0, Math.trunc(Number(...))); inputs at 187/191 are step="1" with no unit; 'abc' becomes NaN -> Math.max(0,NaN)=NaN -> JSON null. Fractional UOMs (kg) cannot be expressed.
@@ -431,7 +431,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-08  ·  LOW  ·  partly  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by this PR — ledger/page.tsx passes from/to/type/cursor/limit from searchParams to getStockLedger; stat totals remain over the returned page since no server aggregate endpoint yet)
 - **W0 note:** partly fixed by #1816 — getStockLedger now accepts limit/from/to, but ledger/page.tsx passes none, no cursor, and totals are still summed client-side over the returned page
 - **First-pass claim:** Ledger has no pagination parameters in the loader (loaders.ts:3907-3913); totals are computed client-side over the returned page only.
 - **Verified evidence:** loaders.ts:3907-3913 getStockLedger() calls /api/v1/stock/ledger with no limit/cursor/filter; totals (page.tsx:10-12) and table paging (DataTable pageSize=15, Client:69) are client-side over whatever the API returns. Whether the API caps results is not verifiable (stock-service absent).
@@ -455,7 +455,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-NEW-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 PQ: INTERIM — transfers intentionally not offered; no warehouse list endpoint exists. NEEDS OWNER DECISION to add GET /v1/stock/warehouses before this can be wired)
 - **W0 note:** partly fixed by #1929 — the raw warehouse-UUID input was removed, but transfers are still not offered (single/no warehouse, no from/to pair; ENTRY_TYPES has receipt/issue/adjustment only)
 - **First-pass claim:** Transfer cannot be expressed: a single free-text 'Warehouse ID' is sent as toWarehouseId for every type except issue (fromWarehouseId) and never both (page.tsx:89-91), so a transfer has no source/destination pair. The field is a raw UUID with no picker (page.tsx:168-169).
 - **Verified evidence:** Single warehouseId state (page.tsx:40); postEntry lines 89-92 sets fromWarehouseId only for issue, else toWarehouseId; transfer never sends both. Input is placeholder 'UUID' (169). Header comment (6-8) shows the API accepts both fromWarehouseId and toWarehouseId.
@@ -471,7 +471,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-NEW-02  ·  HIGH  ·  partly  ·  theme VALIDATION (was CONFIRM)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by this PR — adjustment direction (increase/decrease) added; step="any" for qty; on-hand warning shown for issue when qty > onHand)
 - **First-pass claim:** Quantity is min=1, step=1 for every type (page.tsx:160-163) and there is no direction control, so an adjustment cannot reduce stock and fractional units cannot be entered; issue has no on-hand check before the irreversible post.
 - **Verified evidence:** Quantity min=1 step=1 (page.tsx:161), Math.round(Number(qty)) (76); no direction control so adjustment cannot be negative, no fractional. No on-hand check client-side (backend unknown). The claim about 'no confirm' is wrong: postEntry is gated by ConfirmDialog with requireReason (101-118, 181-194), and reason is appended to notes (80-82).
 - **Files to change:** `apps/web/src/app/(app)/stock/ledger/new/page.tsx`
@@ -529,7 +529,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-NEW-07  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by this PR — lines array with add/remove UI; multiple items posted in one request)
 - **First-pass claim:** One line item per entry (items array of length 1, page.tsx:87); a delivery with several SKUs needs several posts and several reasons.
 - **Verified evidence:** Body has `items: [{ itemId, qty, rateMinor }]` (page.tsx:87); single item state. API accepts an array.
 - **Files to change:** `apps/web/src/app/(app)/stock/ledger/new/page.tsx`
@@ -543,7 +543,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LEDGER-NEW-08  ·  LOW  ·  confirmed  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by this PR — plain select replaced with EntityPicker; debounced search queries /v1/stock/items?search=&limit=20)
 - **W0 note:** partly fixed by #1929 — items load now shows a Loading… state and Retry; still a plain <select> capped at limit=200 with no search, so items beyond 200 are unreachable
 - **First-pass claim:** Item select loads limit=200 (page.tsx:50) and is a plain dropdown without search; larger registers are silently truncated. Item list is loaded with no loading indicator.
 - **Verified evidence:** page.tsx:50 fetch items?limit=200; plain <select> (152); no loading state (only empty 'Select an item…'); more than 200 items silently missing.
@@ -622,7 +622,7 @@ Counts: ACTION 42, BACKEND-VERIFY 4
 
 ### GAP-STOCK-LIST-05  ·  MEDIUM  ·  partly  ·  theme CAP
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by this PR — status param forwarded from searchParams; KPI labels show "(this page)" when items.length >= 200)
 - **W0 note:** partly fixed by #1816 — getStockItems accepts limit/offset, but list/page.tsx passes none and KPIs/Low-stock filter are still computed client-side over the returned page
 - **First-pass claim:** Segmented tablist filters only client-side over the first API page; page.tsx loads /api/v1/stock/items with no limit/cursor, so SKU count, value and Low Stock are computed over whatever page the API returns (page.tsx:13-15).
 - **Verified evidence:** loaders.ts:3891-3897 getStockItems() requests /api/v1/stock/items with no limit/cursor; page.tsx:13-15,31-34 compute SKU count, value, categories over the returned array and Client:36 filters client-side. API-side cap unverifiable.

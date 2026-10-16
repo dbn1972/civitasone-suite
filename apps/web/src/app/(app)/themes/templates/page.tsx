@@ -18,6 +18,7 @@ export default async function Page() {
         back="/themes"
         backLabel="Themes"
         errorArea="theme templates"
+        showId={false}
       />
     </div>
   );

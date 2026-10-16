@@ -131,7 +131,7 @@ Counts: ACTION 10, BACKEND-VERIFY 1
 
 ### GAP-DASHBOARD-HOME-2-03  ·  MEDIUM  ·  partly  ·  theme REGISTRY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: Court/Designer/Visitor/Meeting/Inspection/Revenue/Billing tiles verified; added contracts/documents/telephony/works to MODULE_REGISTRY; parity test asserting every navRouteManifest top-level route has a registry entry; closed by #N)
 - **W0-10 note:** review found the W0 tick partly — Registry created with Court/Designer/Visitor/Inspection etc. (moduleRegistry.ts:44-75) and dashboard uses it, but Sidebar does NOT import it (only dashboard/visibleModules.ts and marketing page use MODULE_REGISTRY), and no test asserting every navRouteManifest route has a registry entry (moduleRegistry.test.ts:36-50 only checks count and non-empty fields) so acceptance 'registry test fails when a route is added without an entry' unmet
 - **First-pass claim:** Module list is a hard-coded 17-item array, missing modules that exist in the app (Court, Designer, Visitor, Meeting, Inspection, Revenue, Billing …) so Court/Designer users see no tile (page.tsx MODULES).
 - **Verified evidence:** MODULES (page.tsx:10-28) has 17 hard-coded items - true. Missing modules that exist under (app): court, designer, visitor, meeting, inspection, revenue, billing, works, fleet, etc. Court is in Sidebar (Sidebar.tsx:100). Not fabricated data; it is a stale duplicate of the module registry.

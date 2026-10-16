@@ -66,7 +66,7 @@ export default async function Page() {
           visible at a glance rather than discovered after it ships. */}
       <ThemeContrastPanel tokens={themeTokens} />
 
-      <ThemeActions />
+      <ThemeActions tokens={themeTokens} />
 
       <Card title="Token palette">
         <div className="pad">

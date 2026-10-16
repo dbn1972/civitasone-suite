@@ -21,6 +21,14 @@ export type MunicipalServiceConfig = {
   resourceLabel: string;
   /** Fields tried in order for the primary table/detail title */
   titleFields: string[];
+  /**
+   * GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-04: true when the titleFields include
+   * a personal name (e.g. ownerName, applicantName, deceasedName) so the
+   * applications list masks the Subject column with maskName. Services whose
+   * primary title is an organisation name, vehicle number, address or complaint
+   * type do not set this.
+   */
+  titleIsPerson?: boolean;
   /** Fields tried in order for reference / tracking number column */
   numberFields: string[];
   /**

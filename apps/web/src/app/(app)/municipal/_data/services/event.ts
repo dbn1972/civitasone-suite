@@ -17,5 +17,8 @@ export const eventService: MunicipalServiceConfig = {
   // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
   // event-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
   displayFields: ["organiserName", "organiserOrg", "eventType", "venueName", "venueAddress", "expectedAttendance", "temporaryStructures", "soundPermission"],
+  // GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-03: status leads, then
+  // the service's natural reference + subject fields, rest alphabetical.
+  fieldOrder: ["status", "applicationNumber", "venueName", "organiserName"],
   sec5: true,
 };

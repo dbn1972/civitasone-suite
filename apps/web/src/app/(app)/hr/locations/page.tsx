@@ -1,3 +1,4 @@
+import { HR_LOCATION_ADMIN_ROLES } from "@/lib/auth/workRoles";
 import Link from "next/link";
 import { PageHeader, Card, EmptyState, StatGrid, StatCard, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
@@ -11,11 +12,10 @@ import { LocationsTable, type Location } from "./LocationsTable";
 // (departments, designations, jd-templates, training, pensioners), which
 // only show their own create button to roles that can actually complete it.
 // A non-admin clicking through landed on /hr/locations/new only to be
-// turned away by that page's own LOCATION_ADMIN_ROLES gate (its POST
+// turned away by that page's own HR_LOCATION_ADMIN_ROLES gate (its POST
 // /v1/locations guard, owned by location-service). Mirrors that list
 // exactly, checked here before rendering the button and the row actions
 // (GAP-HR-LOCATIONS-02: archive is the same admin-only action).
-const LOCATION_ADMIN_ROLES = ["location_user", "location_admin", "super_admin", "admin", "hr_admin"];
 
 
 async function getLocations(): Promise<LoaderResult<Location[]>> {
@@ -75,7 +75,7 @@ const newBtnStyle: React.CSSProperties = {
 export default async function LocationsPage() {
   const t = await getTranslations("locations");
   const roles = getSessionRoles();
-  const canManage = roles.some((r) => LOCATION_ADMIN_ROLES.includes(r));
+  const canManage = roles.some((r) => HR_LOCATION_ADMIN_ROLES.includes(r));
   const { data: rawLocations, source, status, errorMessage } = await getLocations();
 
   const errored = source === "error";

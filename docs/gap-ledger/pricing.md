@@ -30,7 +30,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 ### GAP-PRICING-HOME-02  ·  HIGH  ·  partly  ·  theme COPY (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by this PR; FAQ answer now reads 'designed to support GFR 2017... These are design goals, not a claim of formal certification' — apps/web/src/app/(marketing)/pricing/page.tsx:81-82 verified)
 - **W0 note:** partly fixed by #1925 — FAQ rewritten to 'design goals, not a claim of certification'; legal approval of the wording is not recorded.
 - **First-pass claim:** Unqualified compliance claim in the FAQ: "CivitasOne is built to meet GFR 2017 procurement norms, DPDP Act data protection requirements, and CERT-In security guidelines" (page.tsx:75-76) is stated as fact on a public page with no certification or scope; a procurement officer will quote it.
 - **Verified evidence:** apps/web/src/app/(marketing)/pricing/page.tsx:81-82 FAQ answer states 'Yes. CivitasOne is built to meet GFR 2017 procurement norms, DPDP Act data protection requirements, and CERT-In security guidelines.' Confirmed as unqualified public claim. Whether the product meets them is not verifiable from this page; CLAUDE.md/docs/SECURITY.md reference DPDP/CERT-In as design targets, not certifications. Theme PII is wrong.
@@ -60,7 +60,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 ### GAP-PRICING-HOME-05  ·  MEDIUM  ·  partly  ·  theme THEME (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 PQ: INTERIM — NEEDS OWNER DECISION: whether marketing routes follow the app design-system tokens or keep their own light-only Tailwind palette is a product/design call. The explicit color-scheme:light declaration in the marketing layout is already in place. Flagged in PR body under NEEDS OWNER DECISION)
 - **W0 note:** partly fixed by #1925 — marketing layout is now explicitly light-only (color-scheme: light); pricing CTA still uses hard-coded gray-900 Tailwind classes, not a brand colour token.
 - **First-pass claim:** Page is styled with hard-coded Tailwind grays and gray-900 buttons (page.tsx:84-160), not the design-system tokens the app uses, so it has no dark mode and its highlight/CTA colours differ from the product brand.
 - **Verified evidence:** Pricing page uses hard-coded Tailwind classes (bg-white, text-gray-900, bg-gray-900; lines 90-168) rather than design tokens. Marketing site uses Tailwind classes throughout (landing page identical style), so it is a consistent marketing style, not a token bypass unique to pricing; dark mode absence is true (no dark: variants; (marketing)/layout.tsx has none). Theme FABRICATED is wrong.
@@ -110,7 +110,7 @@ Counts: ACTION 6, BACKEND-VERIFY 1
 
 ### GAP-PRICING-HOME-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: verified — billing-service present; GET /v1/billing/plans carries only price+code, not module count/users/storage/SLA; pricing.ts documents the decision: marketing numbers are reviewed static copy. Contract test deferred to billing-service team (different PR scope))
 - **First-pass claim:** Hard-coded facts that should come from entitlements: "All 33" modules, 25/500 users, 10/100 GB, 99.5%/99.9% SLA (page.tsx:17-43); the Government plan modules line reads "All 33 + dedicated support", mixing a module count with a support tier. Undeterminable whether billing plans (/billing/plans) match: billing-service not in snapshot.
 - **Service:** `billing-service`  ·  **Endpoint(s):** `['GET /api/v1/billing/plans']`
 - **Question:** Do billing plans return module count, user limit, storage and SLA matching the marketing figures (33 modules, 25/500 users, 10/100 GB, 99.5/99.9%)?

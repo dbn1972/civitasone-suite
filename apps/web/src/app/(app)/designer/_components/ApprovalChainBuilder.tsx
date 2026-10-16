@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { SkeletonBar } from "@/app/_components/ds/Skeleton";
-import { narrateWorkflow, validateChain, type WorkflowDesignState, type WorkflowLane } from "../_data/workflowConstants";
+import { narrateWorkflow, validateChain, type ChainWarning, type WorkflowDesignState, type WorkflowLane } from "../_data/workflowConstants";
 import { fetchTenantPositions, persistWorkflowDesign } from "../_data/workflowBuilderApi";
 import {
   cloneLanes,
@@ -226,6 +226,7 @@ export function ApprovalChainBuilder({
                 onChange={updateLane}
                 onToggleOptional={lane.optional ? () => toggleOptionalLane(lane.id) : undefined}
                 disabled={guidedLocked}
+                laneWarnings={chainWarnings.filter((w) => w.laneId === lane.id)}
               />
             ))}
             <LaneCard
@@ -367,6 +368,7 @@ function LaneCard({
   onToggleOptional,
   locked = false,
   disabled = false,
+  laneWarnings = [],
 }: {
   lane: WorkflowLane;
   positions: { id: string; label: string }[];
@@ -374,6 +376,8 @@ function LaneCard({
   onToggleOptional?: () => void;
   locked?: boolean;
   disabled?: boolean;
+  /** GAP-DESIGNER-DETAIL-B4-02: per-lane chain-validation warnings surfaced inline. */
+  laneWarnings?: ChainWarning[];
 }) {
   return (
     <div
@@ -443,6 +447,10 @@ function LaneCard({
                 });
               }}
               aria-label="Escalation designation"
+              // GAP-DESIGNER-DETAIL-B4-02: aria-describedby points at the per-lane
+              // inline warning so screen-reader users hear the warning when the
+              // select is focused.
+              aria-describedby={laneWarnings.some((w) => w.kind === "missing_escalation") ? `${lane.id}-escalation-warn` : undefined}
               // Locked in custom mode like every other guided control (B4).
               disabled={disabled}
             >
@@ -452,6 +460,20 @@ function LaneCard({
               ))}
             </select>
           </label>
+          {/* GAP-DESIGNER-DETAIL-B4-02: per-lane inline warnings under the escalation
+              select for missing_escalation and zero_sla. The central warning list in the
+              narration area lists all lanes; here each card shows only its own warning,
+              so the designer sees the issue where it occurs. */}
+          {laneWarnings.filter((w) => w.kind === "missing_escalation" || w.kind === "zero_sla").map((w) => (
+            <p
+              key={w.kind}
+              id={w.kind === "missing_escalation" ? `${lane.id}-escalation-warn` : undefined}
+              role="note"
+              style={{ margin: "0 0 4px", fontSize: 11, color: "var(--warn, #a15c00)" }}
+            >
+              {w.message}
+            </p>
+          ))}
           {onToggleOptional ? (
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
               <input

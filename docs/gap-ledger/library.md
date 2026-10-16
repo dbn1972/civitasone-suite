@@ -46,7 +46,7 @@ Counts: ACTION 5
 
 ### GAP-LIBRARY-HOME-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #PRNUM)
 - **W0 note:** partly fixed by #1925 — gated to PLATFORM_ADMIN_ROLES, but the catalogue still lives in the tenant app UI; not moved to developer docs
 - **First-pass claim:** Tenant-facing page lists internal engineering gaps in plain terms (for example 'Missing CSRF protection on state-changing APIs', page.tsx:82); the page says it is the same for every tenant and maintained by developers (page.tsx:161-163), so it belongs in developer docs, not the product UI.
 - **Verified evidence:** library/page.tsx:82 has 'Missing CSRF protection on state-changing APIs' and l.160-163 states it is the same for every tenant and maintained by developers. It is dev-facing content shown in the tenant product UI.

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useId, useMemo, useState } from "react";
 import { ActionButton } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import type { ThemeTokenSummary } from "@civitasone/types";
+import { contrastPairs } from "./ThemeContrastPanel";
 
 /**
  * Publishes a new tenant theme revision. Publishing is irreversible — it
@@ -15,13 +17,16 @@ import { formatIndianDate } from "@/lib/formatters";
  * server remains the authority). It does NOT enforce maker != checker: the
  * confirmation dialog here is the only second step.
  */
-export function ThemeActions({ disabled = false }: { disabled?: boolean }) {
+export function ThemeActions({ disabled = false, tokens = [] }: { disabled?: boolean; tokens?: ThemeTokenSummary[] }) {
   const router = useRouter();
   const nameId = useId();
   // GAP-THEMES-TOKENS-07: a dated default ("Theme 29 Sep 2026") rather than the
   // same constant "Published tenant theme" every time, so successive revisions
   // are distinguishable in history.
   const defaultName = useMemo(() => `Theme ${formatIndianDate(new Date().toISOString())}`, []);
+  // GAP-THEMES-TOKENS-03: warn the publisher if any key colour pair fails WCAG
+  // AA so inaccessible palettes are caught before they ship tenant-wide.
+  const failingPairs = useMemo(() => contrastPairs(tokens).filter((p) => !p.passes), [tokens]);
   const [name, setName] = useState(defaultName);
   const [status, setStatus] = useState("");
 
@@ -67,6 +72,15 @@ export function ThemeActions({ disabled = false }: { disabled?: boolean }) {
             <>
               This promotes <strong>“{name.trim() || "the revision"}”</strong> to every tenant
               surface and cannot be undone. Provide a reason for the audit trail.
+              {failingPairs.length > 0 && (
+                <span
+                  role="alert"
+                  style={{ display: "block", marginTop: 8, color: "var(--bad, #dc2626)", fontWeight: 600, fontSize: 13 }}
+                >
+                  ⚠ {failingPairs.length} colour pair{failingPairs.length > 1 ? "s" : ""} fail WCAG AA
+                  contrast ({failingPairs.map((p) => p.label).join(", ")}). Review before publishing.
+                </span>
+              )}
             </>
           }
           confirmLabel="Publish"

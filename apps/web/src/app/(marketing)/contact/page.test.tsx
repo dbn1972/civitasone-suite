@@ -92,4 +92,16 @@ describe("Contact page content (GAP-CONTACT-HOME-01/02/03)", () => {
     // The misleading "do not open a public issue" absolutist line is gone.
     expect(screen.queryByText(/Please do not open a public issue\./)).toBeNull();
   });
+
+  it("shows disclosure policy section: scope, safe harbour, and CERT-In reference (GAP-CONTACT-HOME-03)", async () => {
+    render(await ContactPage({}));
+    // scope
+    expect(screen.getByText(/covers security vulnerabilities in CivitasOne-operated services/i)).toBeInTheDocument();
+    // safe harbour
+    expect(screen.getByText(/good-faith research/i)).toBeInTheDocument();
+    // CERT-In
+    const certIn = screen.getByRole("link", { name: /CERT-In/i });
+    expect(certIn).toHaveAttribute("href", "https://www.cert-in.org.in");
+    expect(certIn).toHaveAttribute("rel", "noopener noreferrer");
+  });
 });

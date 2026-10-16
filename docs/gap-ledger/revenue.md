@@ -992,7 +992,7 @@ Counts: ACTION 69, BACKEND-VERIFY 10
 
 ### GAP-REVENUE-TRADE-LICENSES-05  ·  MEDIUM  ·  confirmed  ·  theme TABLE (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0 note:** partly fixed by #1868 — status pills now have distinct tones and expiry renders via formatIndianDate; remaining: still a hand-rolled <table> with no sort, filter/search or paging (no ds/DataTable).
 - **First-pass claim:** Table is a plain <table> in a bare div: no sort, filter or paging, expiry printed as raw ISO (or "—") and status pills only distinguish good/warn/bad (page.tsx:40-70).
 - **Verified evidence:** page.tsx:35-74 is a hand-styled <table> inside overflow div with 9 fixed columns; no sort, filter, search or paging. Expiry is printed as l.expiryDate ?? '—' (raw ISO string, l.65). Status pill maps only active->good, pending->warn, everything else bad (l.59), so expired, cancelled, suspended look identical. ds/DataTable exists (used in tenant-admin/page.tsx). Note formatIndianDate (formatters.ts:2) outputs dd/mm/yyyy, not 'dd Mon yyyy'.

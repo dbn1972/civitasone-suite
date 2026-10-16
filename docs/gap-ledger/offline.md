@@ -72,7 +72,7 @@ Counts: ACTION 4, BACKEND-VERIFY 1
 
 ### GAP-OFFLINE-HOME-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #PRNUM)
 - **First-pass claim:** The page promises "your queued changes are saved on this device and will sync automatically" (page.tsx) but shows no count, list or last-sync time, and no service worker source or registration was found in the snapshot (only message listeners in SyncProvider.tsx / ConnectionStatus.tsx), so neither the fallback routing nor the sync promise is verifiable; for a govt user with queued approvals this is an unverifiable data-safety claim.
 - **Service:** `service worker / sync layer (no backend service)`  ·  **Endpoint(s):** `['service worker fetch handler', 'POST queued mutations via lib/sync/requestQueue.ts']`
 - **Question:** Is a service worker registered that serves /offline and replays queued mutations idempotently on reconnect?

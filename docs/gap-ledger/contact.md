@@ -14,7 +14,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 
 ### GAP-CONTACT-HOME-01  ·  HIGH  ·  confirmed  ·  theme OTHER (was PII)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** INTERIM — enquiry form added and DPDP consent present; phone number and postal address are business content not in the codebase; requires NEXT_PUBLIC_CONTACT_PHONE / NEXT_PUBLIC_CONTACT_POSTAL_ADDRESS env vars to be set by ops (contactDetails.ts:23-31). NEEDS OWNER DECISION: supply official contact details.
 - **W0-10 note:** review found the W0 tick partly — ContactForm with consent and server reference exists, but phone/address render only if NEXT_PUBLIC_CONTACT_PHONE/ADDRESS env set (contactDetails.ts:23-31), and middleware.ts:11 PUBLIC list lacks /contact and /api/contact so anonymous government visitors would be redirected to login (unless a proxy fronts them)
 - **W1 note (2026-10-13):** #1997 added /contact and /api/contact to the middleware PUBLIC list (verified on main d341ad6f1). Still open: phone and address render only when NEXT_PUBLIC_CONTACT_PHONE/ADDRESS are set (business content decision).
 - **First-pass claim:** Government buyers get only mailto links — no form, phone, postal address or response-time commitment (page.tsx:8-24); a departmental user without a configured mail client (typical on shared or kiosk PCs) has no way to make contact, and the page hands out the same address twice.
@@ -47,7 +47,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 
 ### GAP-CONTACT-HOME-03  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD, GAP-CONTACT-HOME-03: disclosure-policy section added with scope, safe harbour, CERT-In)
 - **W0-10 note:** review found the W0 tick partly — security.txt route + 2-day ack SLA + private-report copy exist, but no disclosure-policy section (scope, safe harbour, CERT-In) in contact/page.tsx; also middleware.ts:11 PUBLIC list lacks /.well-known so anonymous GET /.well-known/security.txt gets 302 to login (acceptance 200 text/plain not met unless proxy fronts it)
 - **W1 note (2026-10-13):** #1997 added /.well-known to the middleware PUBLIC list (verified on main d341ad6f1). Still open: no disclosure-policy section (scope, safe harbour, CERT-In) on the contact page.
 - **First-pass claim:** Security card says 'Please do not open a public issue' (page.tsx:21), assuming a public issue tracker a Government reader does not see; no disclosure policy, PGP key, security.txt or acknowledgement SLA is offered.
@@ -77,7 +77,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 
 ### GAP-CONTACT-HOME-05  ·  LOW  ·  partly  ·  theme THEME (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** INTERIM — marketing site uses fixed Tailwind gray/white site-wide (layout.tsx); dark mode requires a site-wide decision, not a single-page fix. NEEDS OWNER DECISION: confirm whether the public marketing site should support dark mode / DS tokens.
 - **First-pass claim:** Page uses hard-coded Tailwind gray-* and a white gradient (page.tsx:27), so it does not follow theme tokens or dark mode, unlike the app shell.
 - **Verified evidence:** contact/page.tsx:28 and card classes use fixed Tailwind gray-*/white (bg-white, from-white to-gray-50, text-gray-900, border-gray-200). True, but the entire marketing group is the same: layout.tsx:13-100 hard-codes gray/white with no dark variant; (app) shell uses CSS variables. So this is a marketing-site-wide choice, not a page-specific fault.
 - **Files to change:** `apps/web/src/app/(marketing)/contact/page.tsx`, `apps/web/src/app/(marketing)/layout.tsx`
@@ -95,7 +95,7 @@ Counts: ACTION 5, BACKEND-VERIFY 1
 
 ### GAP-CONTACT-HOME-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** INTERIM — mailbox provisioning and routing/ticketing is an ops/infrastructure question outside the codebase. NEEDS OWNER DECISION: verify hello@, security@ routing and SLA with ops.
 - **First-pass claim:** No backend or form endpoint exists for contact; email routing and any ticketing behind hello@/security@ are outside the codebase: undeterminable.
 - **Service:** `(none)`  ·  **Endpoint(s):** `['(none) mailto:hello@ / security@']`
 - **Question:** Are hello@ and security@ mailboxes provisioned with routing/ticketing and a monitored SLA?

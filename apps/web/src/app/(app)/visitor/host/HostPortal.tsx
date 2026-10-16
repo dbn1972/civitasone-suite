@@ -218,7 +218,7 @@ export function HostPortal({ pending, pendingSource, expectedToday, expectedToda
           <EmptyState icon="📅" title="No visitors expected today" message="Your approved visitors scheduled for today will appear here." />
         ) : (
           <div className="tbl-wrap">
-            <table className="tbl" style={{ width: "100%" }}>
+            <table className="tbl tbl--stack">
               <thead>
                 <tr>
                   <th style={labelStyle}>Visitor</th>
@@ -231,11 +231,11 @@ export function HostPortal({ pending, pendingSource, expectedToday, expectedToda
               <tbody>
                 {expectedToday.map((v) => (
                   <tr key={v.id}>
-                    <td style={{ fontWeight: 600 }}>{v.visitorName}</td>
-                    <td style={{ maxWidth: 280 }}>{v.purpose ?? "—"}</td>
-                    <td>{premisesLabel(v) ?? "—"}</td>
-                    <td style={monoStyle}>{fmtTime(v.scheduledAt)}</td>
-                    <td>
+                    <td data-label="Visitor" style={{ fontWeight: 600 }}>{v.visitorName}</td>
+                    <td data-label="Purpose" style={{ maxWidth: 280 }}>{v.purpose ?? "—"}</td>
+                    <td data-label="Premises">{premisesLabel(v) ?? "—"}</td>
+                    <td data-label="Scheduled" style={monoStyle}>{fmtTime(v.scheduledAt)}</td>
+                    <td data-label="Zone">
                       {v.permittedAreas.length > 0 ? (
                         <StatusPill
                           status="pending"

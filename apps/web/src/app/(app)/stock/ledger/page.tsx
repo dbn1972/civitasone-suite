@@ -6,8 +6,14 @@ import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { StockLedgerClient } from "./StockLedgerClient";
 
-export default async function StockLedgerPage() {
-  const { data: entries, source } = await getStockLedger();
+export default async function StockLedgerPage({ searchParams }: { searchParams?: { from?: string; to?: string; type?: string; cursor?: string } } = {}) {
+  // GAP-STOCK-LEDGER-08: pass date-range, type, and cursor from searchParams
+  // so the server can filter/paginate rather than returning the full unbounded set.
+  const { from, to, type, cursor } = searchParams ?? {};
+  const loaderOpts = Object.fromEntries(
+    Object.entries({ from, to, type, cursor, limit: 200 }).filter(([, v]) => v != null) as [string, string | number][]
+  );
+  const { data: entries, source } = await getStockLedger(loaderOpts);
   // GAP-STOCK-LEDGER-01: a failed load must not render as an empty ledger with
   // zero totals. Totals are unknown (null -> "—") when the load errored.
   const errored = source === "error";

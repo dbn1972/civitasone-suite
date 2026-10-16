@@ -12,7 +12,7 @@
  */
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, PageHeader, StatGrid, StatCard, Card, ErrorState, ConfirmDialog } from "@/app/_components/ds";
+import { Button, DataTable, PageHeader, StatGrid, StatCard, Card, ErrorState, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
@@ -40,63 +40,56 @@ export type TradeLicenseRow = {
 
 // ── Table ────────────────────────────────────────────────────────────────────
 
+// GAP-REVENUE-TRADE-LICENSES-05: replace hand-rolled <table> with ds/DataTable
+// so the list gets sorting, filtering, pagination, and accessible column roles.
+// Status tones are distinct so expired/cancelled/suspended are no longer all "bad".
+const LICENSE_STATUS_TONES: Record<string, "good" | "warn" | "bad"> = {
+  active: "good",
+  pending: "warn",
+  expired: "warn",
+  suspended: "warn",
+  cancelled: "bad",
+  rejected: "bad",
+};
+
 function TradeLicensesTable({ licenses }: { licenses: TradeLicenseRow[] }) {
-  if (licenses.length === 0) { // ux-001-ok: only rendered by the parent's `!loading && !fetchError` branch below -- a fetch failure never reaches this component
-    return <p style={{ color: "var(--ink2)", fontSize: 14, margin: 0 }}>No trade licenses found.</p>;
-  }
-  // GAP-REVENUE-TRADE-LICENSES-05: map each known status to a distinct pill tone
-  // so expired/cancelled/suspended no longer all look like a generic "bad".
-  const pillClass = (status: string): string => {
-    switch (status) {
-      case "active":
-        return "good";
-      case "pending":
-        return "warn";
-      case "expired":
-      case "suspended":
-        return "warn";
-      case "cancelled":
-      case "rejected":
-        return "bad";
-      default:
-        return "";
-    }
-  };
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-        <thead>
-          <tr style={{ borderBottom: "2px solid var(--line)" }}>
-            {["License No.", "Business", "Proprietor", "Type", "Cat.", "Status", "Expiry", "Renewals", "Fee", "Paid"].map((h) => (
-              <th key={h} style={{ padding: "8px 10px", textAlign: "start", fontWeight: 600, color: "var(--ink2)", whiteSpace: "nowrap" }}>{h}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {licenses.map((l) => (
-            <tr key={l.id} style={{ borderBottom: "1px solid var(--line)" }}>
-              <td style={{ padding: "8px 10px", fontFamily: "monospace", whiteSpace: "nowrap" }}>{l.licenseNo}</td>
-              <td style={{ padding: "8px 10px" }}>{l.businessName}</td>
-              <td style={{ padding: "8px 10px" }}>{l.proprietorName}</td>
-              <td style={{ padding: "8px 10px", textTransform: "capitalize" }}>{l.businessType}</td>
-              <td style={{ padding: "8px 10px" }}>{l.category}</td>
-              <td style={{ padding: "8px 10px" }}>
-                <span
-                  className={`pill ${pillClass(l.status)}`}
-                  style={{ fontSize: 11, textTransform: "capitalize" }}
-                >
-                  {l.status}
-                </span>
-              </td>
-              <td style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>{formatIndianDate(l.expiryDate)}</td>
-              <td style={{ padding: "8px 10px", textAlign: "end" }} className="tabular-nums">{l.renewalCount}</td>
-              <td style={{ padding: "8px 10px", textAlign: "end" }} className="tabular-nums">{formatMoney(l.feeMinor)}</td>
-              <td style={{ padding: "8px 10px", textAlign: "end" }} className="tabular-nums">{formatMoney(l.feePaidMinor)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable<TradeLicenseRow>
+      columns={[
+        {
+          key: "licenseNo",
+          label: "License No.",
+          render: (r) => (
+            <span style={{ fontFamily: "ui-monospace, monospace", whiteSpace: "nowrap" }}>{r.licenseNo}</span>
+          ),
+        },
+        { key: "businessName", label: "Business" },
+        { key: "proprietorName", label: "Proprietor" },
+        {
+          key: "businessType",
+          label: "Type",
+          render: (r) => <span style={{ textTransform: "capitalize" }}>{r.businessType}</span>,
+        },
+        { key: "category", label: "Cat." },
+        {
+          key: "status",
+          label: "Status",
+          cellType: "status",
+          statusTones: LICENSE_STATUS_TONES,
+        },
+        { key: "expiryDate", label: "Expiry", cellType: "date" },
+        { key: "renewalCount", label: "Renewals", align: "right" },
+        { key: "feeMinor", label: "Fee", align: "right", cellType: "amount" },
+        { key: "feePaidMinor", label: "Paid", align: "right", cellType: "amount" },
+      ]}
+      rows={licenses}
+      sortable
+      filterKeys={["businessName", "licenseNo", "proprietorName", "businessType", "category", "status"]}
+      pageSize={20}
+      emptyIcon="📋"
+      emptyTitle="No trade licenses found"
+      emptyMessage="Issued licenses will appear here."
+    />
   );
 }
 

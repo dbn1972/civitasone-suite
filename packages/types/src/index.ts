@@ -558,7 +558,8 @@ export interface ModuleRowSummary {
    * keeps the existing verbatim rendering. Additive and optional, so every
    * existing loader/consumer of ModuleRowSummary is unaffected.
    */
-  metaKind?: "date" | "text";
+  /** GAP-FIELD-SYNC-03: "datetime" uses formatIndianDateTime (date+IST time). */
+  metaKind?: "date" | "datetime" | "text";
 }
 
 export interface PurchaseOrderSummary {
