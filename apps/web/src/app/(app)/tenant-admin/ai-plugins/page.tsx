@@ -110,14 +110,14 @@ export default async function AiPluginsPage() {
       <DataSourceBadge source={errored ? "error" : "api"} />
 
       <StatGrid>
-        <StatCard icon="🤖" iconBg="#e6f0ff" label="Total Models" value={errored ? "—" : summary.totalPlugins} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={errored ? "—" : summary.activePlugins} />
+        <StatCard icon="🤖" tone="info" label="Total Models" value={errored ? "—" : summary.totalPlugins} />
+        <StatCard icon="✅" tone="good" label="Active" value={errored ? "—" : summary.activePlugins} />
         {/* GAP-TENANT-ADMIN-AI-PLUGINS-06: this is a rolling 24h window, not a
             calendar day — label it accurately. */}
-        <StatCard icon="📈" iconBg="#fffbe6" label="Predictions (24h)" value={errored ? "—" : summary.predictionsToday} />
-        <StatCard icon="📊" iconBg="#f5f5f5" label="Last 30 Days" value={errored ? "—" : summary.predictions30d} />
+        <StatCard icon="📈" tone="warn" label="Predictions (24h)" value={errored ? "—" : summary.predictionsToday} />
+        <StatCard icon="📊" tone="neutral" label="Last 30 Days" value={errored ? "—" : summary.predictions30d} />
         {/* GAP-TENANT-ADMIN-AI-PLUGINS-04: `!= null` so a real 0 renders "0%". */}
-        <StatCard icon="🎯" iconBg="#fef2f2" label="Avg Confidence" value={errored || num(summary.avgConfidence7d) == null ? "—" : `${num(summary.avgConfidence7d)}%`} />
+        <StatCard icon="🎯" tone="bad" label="Avg Confidence" value={errored || num(summary.avgConfidence7d) == null ? "—" : `${num(summary.avgConfidence7d)}%`} />
       </StatGrid>
 
       {errored ? (

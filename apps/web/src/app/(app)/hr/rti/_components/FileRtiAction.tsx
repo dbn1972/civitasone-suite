@@ -75,7 +75,7 @@ export function FileRtiAction() {
       <Modal open={open} onClose={() => !busy && setOpen(false)} title="File a new RTI request" size="lg">
         <form onSubmit={submit} style={{ display: "grid", gap: 14 }}>
           {err.message && (
-            <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--danger, #b91c1c)" }}>
+            <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--danger)" }}>
               {err.message}
             </p>
           )}

@@ -220,11 +220,11 @@ export function HandoverPanel() {
         </div>
         <div className="pad" style={{ paddingTop: 0 }}>
           {fileCount === 0 && form.fromOfficerId ? (
-            <p role="status" style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: "0 0 8px" }}>
+            <p role="status" style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 8px" }}>
               This officer has no active files on their desk.
             </p>
           ) : fileCount !== null && form.fromOfficerId ? (
-            <p role="status" style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: "0 0 8px" }}>
+            <p role="status" style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 8px" }}>
               {fileCount} file{fileCount === 1 ? "" : "s"} will be reassigned.
             </p>
           ) : null}

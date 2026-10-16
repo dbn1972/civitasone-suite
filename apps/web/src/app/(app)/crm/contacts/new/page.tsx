@@ -19,7 +19,7 @@ import { humanErrorFromFailure } from "@/lib/messages";
 
 const inputStyle = { width: "100%", padding: 8, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)" } as const;
 const labelStyle = { display: "block", fontSize: 12, color: "var(--muted)", marginBottom: 4, fontWeight: 600 } as const;
-const errStyle = { fontSize: 12, color: "#b42318", marginTop: 4 } as const;
+const errStyle = { fontSize: 12, color: "var(--bad)", marginTop: 4 } as const;
 
 type FieldErrors = Partial<Record<ValidatedField, string>>;
 
@@ -271,10 +271,10 @@ export default function NewContactPage() {
     <>
       <PageHeader title="New Contact" subtitle="Lead capture with duplicate detection and consent tracking." back="/crm/contacts" backLabel="Contacts" />
       {message ? (
-        <div role="status" aria-live="polite" className="banner" style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
+        <div role="status" aria-live="polite" className="banner" style={{ background: "var(--goodbg)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
       ) : null}
       {error ? (
-        <div role="alert" aria-live="assertive" className="banner" style={{ background: "#fef2f2", color: "#b42318", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{error}</div>
+        <div role="alert" aria-live="assertive" className="banner" style={{ background: "var(--badbg)", color: "var(--bad)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{error}</div>
       ) : null}
       <div className="card">
         <form onSubmit={submit} className="pad">

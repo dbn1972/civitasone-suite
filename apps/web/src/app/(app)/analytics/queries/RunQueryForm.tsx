@@ -244,7 +244,7 @@ export function RunQueryForm() {
   // ── Render: catalog loading / error states ─────────────────────────────────
   if (catalogError) {
     return (
-      <div role="alert" style={{ color: "#b91c1c", padding: "12px 0", fontSize: 14 }}>
+      <div role="alert" style={{ color: "var(--bad)", padding: "12px 0", fontSize: 14 }}>
         ⚠️ Could not load query catalog: {catalogError}
       </div>
     );
@@ -252,7 +252,7 @@ export function RunQueryForm() {
 
   if (!catalog) {
     return (
-      <p aria-live="polite" style={{ color: "#64748b", fontSize: 14, padding: "12px 0" }}>
+      <p aria-live="polite" style={{ color: "var(--mut)", fontSize: 14, padding: "12px 0" }}>
         Loading catalog…
       </p>
     );
@@ -274,12 +274,12 @@ export function RunQueryForm() {
           role="status"
           aria-live="polite"
           style={{
-            background: "#dcfce7",
-            border: "1px solid #86efac",
+            background: "var(--goodbg)",
+            border: "1px solid var(--goodbd)",
             borderRadius: 6,
             padding: "10px 14px",
             fontSize: 14,
-            color: "#166534",
+            color: "var(--good)",
             margin: 0,
           }}
         >
@@ -292,12 +292,12 @@ export function RunQueryForm() {
         <p
           role="alert"
           style={{
-            background: "#fee2e2",
-            border: "1px solid #fca5a5",
+            background: "var(--badbg)",
+            border: "1px solid var(--badbd)",
             borderRadius: 6,
             padding: "10px 14px",
             fontSize: 14,
-            color: "#b91c1c",
+            color: "var(--bad)",
             margin: 0,
           }}
         >
@@ -308,7 +308,7 @@ export function RunQueryForm() {
       {/* ── Query name ─────────────────────────────────────────────────────── */}
       <div style={{ display: "grid", gap: 4 }}>
         <label htmlFor={`${formId}-queryName`} style={labelStyle}>
-          Query name <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+          Query name <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
         </label>
         <input
           id={`${formId}-queryName`}
@@ -325,7 +325,7 @@ export function RunQueryForm() {
       {/* ── Metric ─────────────────────────────────────────────────────────── */}
       <div style={{ display: "grid", gap: 4 }}>
         <label htmlFor={`${formId}-metric`} style={labelStyle}>
-          Metric <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+          Metric <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
         </label>
         <select
           id={`${formId}-metric`}
@@ -347,7 +347,7 @@ export function RunQueryForm() {
       <fieldset style={fieldsetStyle}>
         <legend style={legendStyle}>
           Dimensions{" "}
-          <span style={{ fontWeight: 400, color: "#64748b" }}>(select up to 3)</span>
+          <span style={{ fontWeight: 400, color: "var(--mut)" }}>(select up to 3)</span>
         </legend>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 20px", marginTop: 8 }}>
           {catalog.dimensions.map((dim) => {
@@ -361,7 +361,7 @@ export function RunQueryForm() {
                   alignItems: "center",
                   gap: 6,
                   fontSize: 14,
-                  color: disabled ? "var(--mut)" : "#0f172a",
+                  color: disabled ? "var(--mut)" : "var(--ink)",
                   cursor: disabled ? "not-allowed" : "pointer",
                 }}
               >
@@ -379,7 +379,7 @@ export function RunQueryForm() {
           })}
         </div>
         {dimensions.length >= 3 && (
-          <p style={{ fontSize: 12, color: "#b45309", margin: "6px 0 0" }}>
+          <p style={{ fontSize: 12, color: "var(--warn)", margin: "6px 0 0" }}>
             Maximum of 3 dimensions selected.
           </p>
         )}
@@ -390,7 +390,7 @@ export function RunQueryForm() {
         <legend style={legendStyle}>Filters</legend>
 
         {filterRows.length === 0 && (
-          <p style={{ fontSize: 13, color: "#64748b", margin: "6px 0 10px" }}>
+          <p style={{ fontSize: 13, color: "var(--mut)", margin: "6px 0 10px" }}>
             No filters added. Click "+ Add Filter" to narrow results.
           </p>
         )}
@@ -474,13 +474,13 @@ export function RunQueryForm() {
                         placeholder={inputType === "text" ? "e.g. Finance" : undefined}
                         aria-invalid={hasError || undefined}
                         aria-describedby={hasError ? `${formId}-filter-val-err-${row.id}` : undefined}
-                        style={hasError ? { ...inputStyle, borderColor: "#ef4444" } : inputStyle}
+                        style={hasError ? { ...inputStyle, borderColor: "var(--bad)" } : inputStyle}
                       />
                       {hasError && (
                         <span
                           id={`${formId}-filter-val-err-${row.id}`}
                           role="alert"
-                          style={{ fontSize: 12, color: "#b91c1c" }}
+                          style={{ fontSize: 12, color: "var(--bad)" }}
                         >
                           Enter a value or remove this filter.
                         </span>
@@ -509,11 +509,11 @@ export function RunQueryForm() {
           style={{
             marginTop: filterRows.length > 0 ? 10 : 4,
             background: "none",
-            border: "1px dashed #94a3b8",
+            border: "1px dashed var(--mut)",
             borderRadius: 6,
             padding: "6px 14px",
             fontSize: 13,
-            color: "#1d4ed8",
+            color: "var(--info)",
             cursor: "pointer",
           }}
         >
@@ -525,7 +525,7 @@ export function RunQueryForm() {
       <fieldset style={fieldsetStyle}>
         <legend style={legendStyle}>
           Date range{" "}
-          <span style={{ fontWeight: 400, color: "#64748b" }}>(optional)</span>
+          <span style={{ fontWeight: 400, color: "var(--mut)" }}>(optional)</span>
         </legend>
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 8 }}>
           <div style={{ display: "grid", gap: 4, flex: "1 1 180px" }}>
@@ -572,7 +572,7 @@ export function RunQueryForm() {
           aria-describedby={`${formId}-limit-hint`}
           style={inputStyle}
         />
-        <span id={`${formId}-limit-hint`} style={{ fontSize: 12, color: "#64748b" }}>
+        <span id={`${formId}-limit-hint`} style={{ fontSize: 12, color: "var(--mut)" }}>
           Maximum 1 000 rows.
         </span>
       </div>
@@ -598,7 +598,7 @@ export function RunQueryForm() {
 const labelStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
-  color: "#0f172a",
+  color: "var(--ink)",
 };
 
 const smallLabelStyle: React.CSSProperties = {
@@ -612,10 +612,10 @@ const inputStyle: React.CSSProperties = {
   boxSizing: "border-box",
   padding: "7px 10px",
   fontSize: 14,
-  border: "1px solid #cbd5e1",
+  border: "1px solid var(--line)",
   borderRadius: 6,
-  background: "#fff",
-  color: "#0f172a",
+  background: "var(--panel)",
+  color: "var(--ink)",
 };
 
 const selectStyle: React.CSSProperties = {
@@ -624,7 +624,7 @@ const selectStyle: React.CSSProperties = {
 };
 
 const fieldsetStyle: React.CSSProperties = {
-  border: "1px solid #e2e8f0",
+  border: "1px solid var(--line)",
   borderRadius: 8,
   padding: "12px 16px",
   margin: 0,
@@ -633,17 +633,17 @@ const fieldsetStyle: React.CSSProperties = {
 const legendStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
-  color: "#0f172a",
+  color: "var(--ink)",
   padding: "0 4px",
 };
 
 const clearBtnStyle: React.CSSProperties = {
   padding: "7px 12px",
   fontSize: 13,
-  border: "1px solid #fca5a5",
+  border: "1px solid var(--badbd)",
   borderRadius: 6,
   background: "#fff1f2",
-  color: "#b91c1c",
+  color: "var(--bad)",
   cursor: "pointer",
   alignSelf: "flex-end",
   whiteSpace: "nowrap",

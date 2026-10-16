@@ -159,7 +159,7 @@ export default async function HrAuditLogPage({ searchParams }: { searchParams?: 
               }}
             />
             {pageEvents.length > 0 && (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, fontSize: 13, color: "var(--mut,#64748b)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, fontSize: 13, color: "var(--mut)" }}>
                 <span>{t("showingRange", { from: offset + 1, to: offset + pageEvents.length })}</span>
                 <div style={{ display: "flex", gap: 8 }}>
                   {pageNum > 1 && <Link href={pageHref(pageNum - 1)} className="btn ghost">{t("prevPage")}</Link>}

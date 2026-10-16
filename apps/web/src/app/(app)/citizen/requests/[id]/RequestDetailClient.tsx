@@ -178,7 +178,7 @@ export function RequestDetailClient({
       <>
         <PageHeader title={t("detailTitle")} back="/citizen/requests" backLabel={t("detailBack")} />
         <div className="card"><div className="pad">
-          <p role="alert" aria-live="assertive" style={{ color: "#b42318" }}>{loadError}</p>
+          <p role="alert" aria-live="assertive" style={{ color: "var(--bad)" }}>{loadError}</p>
           <Button variant="ghost" style={{ minHeight: 44 }} onClick={() => void load()}>{t("tryAgain")}</Button>
         </div></div>
       </>
@@ -300,7 +300,7 @@ export function RequestDetailClient({
                 <textarea id="grievance-action-note" value={actionForm.note} onChange={(e) => setActionForm({ ...actionForm, note: e.target.value })} placeholder={t("notePlaceholder")} rows={3} style={{ ...inputStyle, minHeight: 88 }} />
                 <Button type="submit" variant="primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? "Saving…" : "Save action"}</Button>
                 <Button type="button" variant="ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setShowAction(false)}>{t("cancel")}</Button>
-                {formError ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", marginTop: 8 }}>{formError}</p> : null}
+                {formError ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad)", marginTop: 8 }}>{formError}</p> : null}
               </form>
             </div>
           )}

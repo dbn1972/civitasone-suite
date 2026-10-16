@@ -137,7 +137,7 @@ export function CreateProjectForm({ schemes = [] }: { schemes?: SchemeOption[] }
         aria-busy={status === "submitting"}
       >
         <div className="fields">
-          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
             <label className="label" htmlFor="code">Project code *</label>
             <input
               id="code"
@@ -153,10 +153,10 @@ export function CreateProjectForm({ schemes = [] }: { schemes?: SchemeOption[] }
               style={{ minHeight: 44 }}
               placeholder="e.g. PRJ-2024-001"
             />
-            {fieldErrors.code && <p id="code-err" style={{ color: "#b91c1c", fontSize: "0.8rem", marginTop: 4 }}>{fieldErrors.code}</p>}
+            {fieldErrors.code && <p id="code-err" style={{ color: "var(--bad)", fontSize: "0.8rem", marginTop: 4 }}>{fieldErrors.code}</p>}
           </div>
 
-          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
             <label className="label" htmlFor="projectName">Project name *</label>
             <input
               id="projectName"
@@ -171,10 +171,10 @@ export function CreateProjectForm({ schemes = [] }: { schemes?: SchemeOption[] }
               style={{ minHeight: 44 }}
               placeholder="e.g. NH-48 Widening Phase II"
             />
-            {fieldErrors.projectName && <p id="projectName-err" style={{ color: "#b91c1c", fontSize: "0.8rem", marginTop: 4 }}>{fieldErrors.projectName}</p>}
+            {fieldErrors.projectName && <p id="projectName-err" style={{ color: "var(--bad)", fontSize: "0.8rem", marginTop: 4 }}>{fieldErrors.projectName}</p>}
           </div>
 
-          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
             <label className="label" htmlFor="schemeId">Scheme</label>
             <select
               id="schemeId"
@@ -192,7 +192,7 @@ export function CreateProjectForm({ schemes = [] }: { schemes?: SchemeOption[] }
             </select>
           </div>
 
-          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
             <label className="label" htmlFor="agencyRef">Implementing agency / department</label>
             <input
               id="agencyRef"
@@ -204,7 +204,7 @@ export function CreateProjectForm({ schemes = [] }: { schemes?: SchemeOption[] }
             />
           </div>
 
-          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
             <label className="label" htmlFor="startDate">Start date</label>
             <input
               id="startDate"
@@ -216,7 +216,7 @@ export function CreateProjectForm({ schemes = [] }: { schemes?: SchemeOption[] }
             />
           </div>
 
-          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
             <label className="label" htmlFor="endDate">End date</label>
             <input
               id="endDate"
@@ -229,10 +229,10 @@ export function CreateProjectForm({ schemes = [] }: { schemes?: SchemeOption[] }
               aria-describedby={fieldErrors.endDate ? "endDate-err" : undefined}
               style={{ minHeight: 44 }}
             />
-            {fieldErrors.endDate && <p id="endDate-err" style={{ color: "#b91c1c", fontSize: "0.8rem", marginTop: 4 }}>{fieldErrors.endDate}</p>}
+            {fieldErrors.endDate && <p id="endDate-err" style={{ color: "var(--bad)", fontSize: "0.8rem", marginTop: 4 }}>{fieldErrors.endDate}</p>}
           </div>
 
-          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
             <label className="label" htmlFor="sanctionedRupees">Sanctioned amount (₹)</label>
             <input
               id="sanctionedRupees"
@@ -248,11 +248,11 @@ export function CreateProjectForm({ schemes = [] }: { schemes?: SchemeOption[] }
               placeholder="e.g. 5000000"
             />
             {fieldErrors.sanctionedRupees
-              ? <p id="sanctionedRupees-err" style={{ color: "#b91c1c", fontSize: "0.8rem", marginTop: 4 }}>{fieldErrors.sanctionedRupees}</p>
+              ? <p id="sanctionedRupees-err" style={{ color: "var(--bad)", fontSize: "0.8rem", marginTop: 4 }}>{fieldErrors.sanctionedRupees}</p>
               : sanctionedEcho && <p id="sanctionedRupees-echo" style={{ color: "var(--muted)", fontSize: "0.8rem", marginTop: 4 }}>{sanctionedEcho}</p>}
           </div>
 
-          <div className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+          <div className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
             <label className="label" htmlFor="dprCostRupees">DPR cost (₹)</label>
             <input
               id="dprCostRupees"
@@ -268,7 +268,7 @@ export function CreateProjectForm({ schemes = [] }: { schemes?: SchemeOption[] }
               placeholder="e.g. 250000"
             />
             {fieldErrors.dprCostRupees
-              ? <p id="dprCostRupees-err" style={{ color: "#b91c1c", fontSize: "0.8rem", marginTop: 4 }}>{fieldErrors.dprCostRupees}</p>
+              ? <p id="dprCostRupees-err" style={{ color: "var(--bad)", fontSize: "0.8rem", marginTop: 4 }}>{fieldErrors.dprCostRupees}</p>
               : dprEcho && <p id="dprCostRupees-echo" style={{ color: "var(--muted)", fontSize: "0.8rem", marginTop: 4 }}>{dprEcho}</p>}
           </div>
         </div>
@@ -279,7 +279,7 @@ export function CreateProjectForm({ schemes = [] }: { schemes?: SchemeOption[] }
               role={status === "error" ? "alert" : undefined}
               style={{
                 marginTop: 12,
-                color: status === "error" ? "#b91c1c" : "#047857",
+                color: status === "error" ? "var(--bad)" : "var(--good)",
                 fontSize: "0.875rem",
               }}
             >

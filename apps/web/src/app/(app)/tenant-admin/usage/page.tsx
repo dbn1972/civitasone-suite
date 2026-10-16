@@ -39,10 +39,10 @@ export default async function UsagePage() {
       <PageHeader title="Usage & Quotas" subtitle="Monitor your resource consumption and plan upgrades." />
 
       <StatGrid>
-        <StatCard icon="📊" iconBg="#eef2ff" label="Total Resources" value={tileValue(bounded.length)} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label={`Under ${WARN_PCT}%`} value={tileValue(bounded.filter((r) => usageBand(r.percent) === "ok").length)} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label={`Warning (${WARN_PCT}-${CRIT_PCT}%)`} value={tileValue(bounded.filter((r) => usageBand(r.percent) === "warning").length)} />
-        <StatCard icon="🚨" iconBg="#fce7ee" label={`Critical (${CRIT_PCT}%+)`} value={tileValue(bounded.filter((r) => usageBand(r.percent) === "critical").length)} />
+        <StatCard icon="📊" tone="info" label="Total Resources" value={tileValue(bounded.length)} />
+        <StatCard icon="✅" tone="good" label={`Under ${WARN_PCT}%`} value={tileValue(bounded.filter((r) => usageBand(r.percent) === "ok").length)} />
+        <StatCard icon="⚠️" tone="warn" label={`Warning (${WARN_PCT}-${CRIT_PCT}%)`} value={tileValue(bounded.filter((r) => usageBand(r.percent) === "warning").length)} />
+        <StatCard icon="🚨" tone="bad" label={`Critical (${CRIT_PCT}%+)`} value={tileValue(bounded.filter((r) => usageBand(r.percent) === "critical").length)} />
       </StatGrid>
 
       <UsageDisplay resources={enriched} anyWarning={anyWarning} source={source} />

@@ -58,17 +58,17 @@ export default async function CopilotTurnPage({ params }: PageProps) {
         backLabel="Back to copilot"
       />
       <StatGrid>
-        <StatCard icon={answered ? "✅" : "⏳"} iconBg={answered ? "#dcfce7" : "#fef3c7"} label="State" value={answered ? "Answered" : "Awaiting"} />
-        <StatCard icon="🤖" iconBg="#e0f2fe" label="Model" value={turn.model ?? "—"} />
+        <StatCard icon={answered ? "✅" : "⏳"} iconBg={answered ? "var(--goodbg)" : "var(--warnbg)"} label="State" value={answered ? "Answered" : "Awaiting"} />
+        <StatCard icon="🤖" tone="info" label="Model" value={turn.model ?? "—"} />
         <StatCard
           icon="⚡"
-          iconBg="#fce7f3"
+          tone="bad"
           label="Latency"
           value={turn.latencyMs === null ? "—" : `${turn.latencyMs.toLocaleString("en-IN")} ms${turn.latencyBucket ? ` (${turn.latencyBucket})` : ""}`}
         />
         <StatCard
           icon="🔢"
-          iconBg="#fef3c7"
+          tone="warn"
           label="Tokens"
           value={turn.tokens === null ? "—" : turn.tokens.toLocaleString("en-IN")}
         />
@@ -125,7 +125,7 @@ export default async function CopilotTurnPage({ params }: PageProps) {
                     // GAP-AI-COPILOT-DETAIL-05: show a readable percentage, with
                     // the raw score as a tooltip.
                     <span
-                      style={{ color: "var(--muted, #64748b)", marginInlineStart: 8, fontSize: 12 }}
+                      style={{ color: "var(--muted)", marginInlineStart: 8, fontSize: 12 }}
                       title={`Relevance score ${citation.score.toFixed(2)}`}
                     >
                       {Math.round(citation.score * 100)}% match

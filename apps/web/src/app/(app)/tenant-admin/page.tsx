@@ -5,7 +5,7 @@ import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 const KPI_ICONS = ["👥", "🧩", "💚", "🎯"];
-const KPI_BG = ["#eff6ff", "#ecfdf3", "#ecfdf3", "#f1f5f9"];
+const KPI_BG = ["var(--infobg)", "var(--goodbg)", "var(--goodbg)", "var(--line2)"];
 
 // GAP-TENANT-ADMIN-HOME-05: quick-nav tiles now carry an optional `roles`
 // filter. A tile with `roles` is only shown when the current session has one
@@ -89,7 +89,7 @@ export default async function TenantAdminPage({ searchParams }: { searchParams?:
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         {kpis.slice(0, 4).map((kpi, i) => (
-          <StatCard key={kpi.label} icon={KPI_ICONS[i] ?? "📊"} iconBg={KPI_BG[i] ?? "#f1f5f9"} label={kpi.label} value={errored ? "—" : kpi.value} />
+          <StatCard key={kpi.label} icon={KPI_ICONS[i] ?? "📊"} iconBg={KPI_BG[i] ?? "var(--line2)"} label={kpi.label} value={errored ? "—" : kpi.value} />
         ))}
       </div>
       {source === "error" && <DataSourceBadge source={source} />}

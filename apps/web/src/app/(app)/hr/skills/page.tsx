@@ -81,10 +81,10 @@ export default async function SkillsPage() {
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🎯" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? "—" : total} />
-        <StatCard icon="👤" iconBg="var(--bg, #f5f5f5)" label={t("statEmployees")} value={errored ? "—" : employees} />
-        <StatCard icon="⭐" iconBg="var(--warnbg, #fffbe6)" label={t("statExpert")} value={errored ? "—" : expert} />
-        <StatCard icon="📚" iconBg="var(--badbg, #fff1f0)" label={t("statBeginner")} value={errored ? "—" : beginner} />
+        <StatCard icon="🎯" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? "—" : total} />
+        <StatCard icon="👤" iconBg="var(--bg)" label={t("statEmployees")} value={errored ? "—" : employees} />
+        <StatCard icon="⭐" iconBg="var(--warnbg)" label={t("statExpert")} value={errored ? "—" : expert} />
+        <StatCard icon="📚" iconBg="var(--badbg)" label={t("statBeginner")} value={errored ? "—" : beginner} />
       </StatGrid>
 
       <Card title={t("cardTitle")}>
@@ -94,7 +94,7 @@ export default async function SkillsPage() {
           ) : matrixRecords.length === 0 ? (
             <div style={{ padding: 32, textAlign: "center", color: "var(--mut)" }}>
               <p style={{ fontSize: 32, margin: "0 0 8px" }}>🎯</p>
-              <p style={{ fontWeight: 600, color: "var(--ink2, #475569)", margin: 0 }}>{t("emptyTitle")}</p>
+              <p style={{ fontWeight: 600, color: "var(--ink2)", margin: 0 }}>{t("emptyTitle")}</p>
               <p style={{ fontSize: 13, margin: "4px 0 0" }}>{t("emptyMessage")}</p>
             </div>
           ) : (

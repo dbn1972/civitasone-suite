@@ -40,10 +40,10 @@ function StatutoryClock({ deadline, closed, isOverdue }: { deadline: string; clo
   const overdue = isOverdue ?? days < 0;
   if (overdue) {
     const by = days < 0 ? Math.abs(days) : 0;
-    return <strong style={{ color: "#b42318" }}>{t("overdueBreach", { count: by })}</strong>;
+    return <strong style={{ color: "var(--bad)" }}>{t("overdueBreach", { count: by })}</strong>;
   }
-  if (days === 0) return <strong style={{ color: "#b42318" }}>{t("dueToday")}</strong>;
-  const color = days <= 5 ? "#b54708" : "#067647";
+  if (days === 0) return <strong style={{ color: "var(--bad)" }}>{t("dueToday")}</strong>;
+  const color = days <= 5 ? "var(--warn)" : "var(--good)";
   return <strong style={{ color }}>{t("daysRemaining", { count: days })}</strong>;
 }
 
@@ -162,7 +162,7 @@ export function RTIDetailClient({
       <>
         <PageHeader title={t("detailTitle")} back="/citizen/rti" backLabel={t("detailBack")} />
         <div className="card"><div className="pad">
-          <p role="alert" aria-live="assertive" style={{ color: "#b42318" }}>{loadError}</p>
+          <p role="alert" aria-live="assertive" style={{ color: "var(--bad)" }}>{loadError}</p>
           <Button variant="ghost" style={{ minHeight: 44 }} onClick={() => void load()}>{t("tryAgain")}</Button>
         </div></div>
       </>
@@ -240,7 +240,7 @@ export function RTIDetailClient({
                 <textarea id="rti-appeal-grounds" required value={appeal.grounds} onChange={(e) => setAppeal({ ...appeal, grounds: e.target.value })} placeholder={t("appealGroundsPlaceholder")} rows={4} style={{ ...inputStyle, minHeight: 100 }} />
                 <Button type="submit" variant="primary" disabled={busy} style={{ minHeight: 44 }}>{busy ? t("submitting") : t("submitAppeal")}</Button>
                 <Button type="button" variant="ghost" style={{ marginLeft: 8, minHeight: 44 }} onClick={() => setShowAppeal(false)}>{t("cancel")}</Button>
-                {formError ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", marginTop: 8 }}>{formError}</p> : null}
+                {formError ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad)", marginTop: 8 }}>{formError}</p> : null}
               </form>
             </div>
           )}

@@ -141,11 +141,14 @@ Hard-coded #fff/#b91c1c banners break .dark; add Alert/Banner component and use 
 - Example ids: GAP-PROCUREMENT-VENDORS-DETAIL-SCORECARD-02, GAP-ADMIN-CONFIG-05, GAP-DOMAINS-NEW-04, GAP-GRANTS-APPLICATIONS-04, GAP-HELPDESK-INTERNAL-NEW-03, GAP-NOTIFICATIONS-HOME-02, GAP-OFFLINE-HOME-03, GAP-PROCUREMENT-VENDORS-NEW-04
 - Full id list: `gaps/gaps.json` filter by evidence match, or grep this pattern in the module files.
 - W1 SF-13c (#2031): remaining finance dirs (expenditure, accounting, audit-paras, dashboard, fiscal-years, period-close, opening-balances, reconciliation, recurring-entries; 42 files) moved onto Alert/tone/tokens; guard widened; --chart-* got .dark values. Finance now has no quoted hex. No finance ledger item newly closed; none carried a PROVISIONAL tick.
+- W1 SF-13d (this PR): 761 files across 46 additional modules replaced iconBg hex→tone, var() fallback hex stripped, standalone hex in style props→token; guard extended to cover ai, approvals, audit, billing, catalogue, cdp, change, contracts, court, dashboard, developer-portal, documents, domains, establishment, field, fleet, grants, help, helpdesk, identity, inspection, install, inventory, journeys, learning, legal, library, locations, loyalty, meeting, metadata, municipal, notifications, policy, procurement, projects, reports, revenue, settings, setup, stock, telephony, tenant, themes, visitor, workflow (71 guard entries, all green).
 
 
 ## SF-14 Field/Input/Form primitives + useFormError + zod client validation
 
 No DS Field/Input; ad-hoc validation; raw res.text() errors; double submit.
+
+- W1 SF-14a (this PR): 19 files across tenant-admin (ChannelForm, DomainClient, APIKeyActions, DataExportClient, PluginConfigControls, RolesTable, EditRoleButton, UsersTable, WebhooksClient, CacheTtlEditor), knowledge (CreateDocumentForm, CreatePolicyForm, PolicyActions, AssistantClient, SearchClient, FaqBrowser), notifications (CampaignList, compose/page, templates/new/page) converted to Field+Input/Select/Textarea; guard formPrimitives.ta-kn-nt.guard.test.ts 19/19 green.
 
 - Items touched: **265** across **45** modules (top: hr 29, finance 24, estab 17, payroll 16, tenant-admin 15, citizen 14, assets 12, crm 12)
 - Example ids: GAP-ADMIN-INTEGRATIONS-02, GAP-ADMIN-SETTINGS-03, GAP-ADMIN-TENANTS-DETAIL-01, GAP-ADMIN-USERS-01, GAP-AI-AGENTS-01, GAP-AI-CHAT-01, GAP-AI-COPILOT-DETAIL-01, GAP-AI-COPILOT-01

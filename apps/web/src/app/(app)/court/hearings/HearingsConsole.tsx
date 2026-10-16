@@ -34,7 +34,7 @@ const mono: React.CSSProperties = {
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
   fontVariantNumeric: "tabular-nums",
 };
-const errStyle: React.CSSProperties = { color: "var(--bad, #c0392b)", fontSize: 12, margin: "4px 0 0" };
+const errStyle: React.CSSProperties = { color: "var(--bad)", fontSize: 12, margin: "4px 0 0" };
 
 function caseLabel(caseSummary: { title: string | null; cnrNumber: string | null }): string {
   return caseSummary.title || caseSummary.cnrNumber || "this case";

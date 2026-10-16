@@ -49,7 +49,7 @@ function TrendChart({
 }) {
   if (data.length < 2) {
     return (
-      <p style={{ color: 'var(--muted, #64748b)', fontSize: 13, padding: '16px 0' }}>
+      <p style={{ color: 'var(--muted)', fontSize: 13, padding: '16px 0' }}>
         {t('trendNotAvailable')}
       </p>
     )
@@ -106,7 +106,7 @@ function TrendChart({
               y1={py(tick)}
               x2={W - PAD.right}
               y2={py(tick)}
-              stroke="var(--border, #e2e8f0)"
+              stroke="var(--border)"
               strokeWidth={1}
               strokeDasharray="4 3"
             />
@@ -115,7 +115,7 @@ function TrendChart({
               y={py(tick) + 4}
               textAnchor="end"
               fontSize={10}
-              fill="var(--muted, #64748b)"
+              fill="var(--muted)"
             >
               {tick}
             </text>
@@ -123,10 +123,10 @@ function TrendChart({
         ))}
 
         {/* Area fill */}
-        <path d={areaPath} fill="var(--primary, #00439C)" fillOpacity={0.08} />
+        <path d={areaPath} fill="var(--primary)" fillOpacity={0.08} />
 
         {/* Line */}
-        <path d={linePath} fill="none" stroke="var(--primary, #00439C)" strokeWidth={2} strokeLinejoin="round" />
+        <path d={linePath} fill="none" stroke="var(--primary)" strokeWidth={2} strokeLinejoin="round" />
 
         {/* Data points */}
         {data.map((d, i) => (
@@ -135,8 +135,8 @@ function TrendChart({
               cx={px(i)}
               cy={py(d.headcount)}
               r={4}
-              fill="var(--primary, #00439C)"
-              stroke="var(--panel, #fff)"
+              fill="var(--primary)"
+              stroke="var(--panel)"
               strokeWidth={1.5}
               aria-label={`${d.month}: ${d.headcount}`}
             />
@@ -153,7 +153,7 @@ function TrendChart({
               y={H - 6}
               textAnchor="middle"
               fontSize={10}
-              fill="var(--muted, #64748b)"
+              fill="var(--muted)"
             >
               {d.month}
             </text>
@@ -196,15 +196,15 @@ function GenderBar({ female, male, t }: { female: number; male: number; t: Analy
       */}
       <div style={{ display: 'flex', height: 18, borderRadius: 4, overflow: 'hidden' }}>
         <div style={{ width: `${fPct}%`, background: 'var(--violet)', transition: 'width 0.3s' }} aria-hidden />
-        <div style={{ width: `${mPct}%`, background: 'var(--primary, #00439C)', transition: 'width 0.3s' }} aria-hidden />
+        <div style={{ width: `${mPct}%`, background: 'var(--primary)', transition: 'width 0.3s' }} aria-hidden />
       </div>
-      <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--muted, #64748b)' }}>
+      <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--muted)' }}>
         <span>
           <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: 'var(--violet)', marginInlineEnd: 4 }} aria-hidden />
           {t('genderFemaleLabel', { pct: fPct })}
         </span>
         <span>
-          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: 'var(--primary, #00439C)', marginInlineEnd: 4 }} aria-hidden />
+          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: 'var(--primary)', marginInlineEnd: 4 }} aria-hidden />
           {t('genderMaleLabel', { pct: mPct })}
         </span>
       </div>
@@ -263,13 +263,13 @@ export default async function WorkforceAnalyticsPage() {
   const kpiCards = [
     {
       icon: '👥',
-      iconBg: 'var(--infobg, #e6f0ff)',
+      iconBg: 'var(--infobg)',
       label: t('statTotalHeadcount'),
       value: hcErrored ? null : totalHeadcount,
     },
     {
       icon: '📅',
-      iconBg: 'var(--goodbg, #e6f7f0)',
+      iconBg: 'var(--goodbg)',
       label: t('statAvgTenure'),
       value:
         kpisErrored || analytics.avgTenureYears === null
@@ -342,12 +342,12 @@ export default async function WorkforceAnalyticsPage() {
                 // GAP-HR-WORKFORCE-ANALYTICS-02: neutral colour on error --
                 // a `0` rendered in the SUCCESS green when the fetch actually
                 // failed read as "confirmed zero risk", not "unknown".
-                color: rtErrored ? 'var(--muted, #64748b)' : retiringSoon > 0 ? 'var(--bad, #cf1322)' : 'var(--good, #1a6d3c)',
+                color: rtErrored ? 'var(--muted)' : retiringSoon > 0 ? 'var(--bad)' : 'var(--good)',
               }}
             >
               {rtErrored ? '—' : retiringSoon}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--muted, #64748b)' }}>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
               {t('retiringWithin6')}
             </div>
           </div>
@@ -356,12 +356,12 @@ export default async function WorkforceAnalyticsPage() {
               style={{
                 fontSize: 28,
                 fontWeight: 800,
-                color: rtErrored ? 'var(--muted, #64748b)' : retiring12 > 0 ? 'var(--warn, #d46b08)' : 'var(--good, #1a6d3c)',
+                color: rtErrored ? 'var(--muted)' : retiring12 > 0 ? 'var(--warn)' : 'var(--good)',
               }}
             >
               {rtErrored ? '—' : retiring12}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--muted, #64748b)' }}>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
               {t('retiringWithin12')}
             </div>
           </div>

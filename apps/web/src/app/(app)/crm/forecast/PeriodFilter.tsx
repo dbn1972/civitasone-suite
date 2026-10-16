@@ -30,7 +30,7 @@ export function PeriodFilter() {
 
   return (
     <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-      <span style={{ fontSize: 13, color: "#475569" }}>{t("period")}</span>
+      <span style={{ fontSize: 13, color: "var(--ink2)" }}>{t("period")}</span>
       <select
         value={selected}
         disabled={pending}
@@ -42,7 +42,7 @@ export function PeriodFilter() {
           <option key={p.key} value={p.key}>{localizedPeriodLabel(p, (k, v) => t(k, v))}</option>
         ))}
       </select>
-      {pending && <span style={{ fontSize: 12, color: "#64748b" }}>{t("recalculating")}</span>}
+      {pending && <span style={{ fontSize: 12, color: "var(--mut)" }}>{t("recalculating")}</span>}
     </label>
   );
 }

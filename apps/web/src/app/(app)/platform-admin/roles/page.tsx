@@ -32,8 +32,8 @@ export default async function PlatformAdminRolesPage() {
         subtitle="Per-role permission matrix with SoD enforcement (GFR 2017). Toggle cells to grant or revoke. System roles are read-only."
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="🔑" iconBg="#eff6ff" label="Platform roles" value={roles.length} />
-        <StatCard icon="🛡️" iconBg="#fffaeb" label="SoD constraints" value="Active" />
+        <StatCard icon="🔑" tone="info" label="Platform roles" value={roles.length} />
+        <StatCard icon="🛡️" tone="warn" label="SoD constraints" value="Active" />
       </div>
       <RolePermissionsMatrix roles={roles} permissions={permissions} source={source} />
     </div>

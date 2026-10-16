@@ -230,7 +230,7 @@ export default function AparNewForm() {
           </Field>
 
           {msg && (
-            <p role="alert" style={{ color: "var(--red, #c00)", fontSize: 13 }}>
+            <p role="alert" style={{ color: "var(--red)", fontSize: 13 }}>
               {msg}
             </p>
           )}

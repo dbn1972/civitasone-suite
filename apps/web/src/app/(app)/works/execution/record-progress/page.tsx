@@ -8,8 +8,8 @@ import { useFormError } from "@/lib/useFormError";
 import { browserFetch } from "@/lib/api/browserClient";
 import { searchWorkOptions, resolveWorkOptions } from "../../_data/worksPicker";
 
-const errBanner = { background: "#fef2f2", color: "#b42318", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 } as const;
-const okBanner = { background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 } as const;
+const errBanner = { background: "var(--badbg)", color: "var(--bad)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 } as const;
+const okBanner = { background: "var(--goodbg)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 } as const;
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -275,7 +275,7 @@ function RecordProgressForm() {
           {scopesLoading ? (
             <p style={{ fontSize: 11, color: "var(--muted)", marginTop: -8 }}>Loading scopes…</p>
           ) : scopesError ? (
-            <p role="alert" style={{ fontSize: 12, color: "#b42318", marginTop: -8 }}>
+            <p role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: -8 }}>
               Couldn&apos;t load this work&apos;s scopes.{" "}
               <button type="button" className="btn ghost sm" onClick={() => setReloadKey((k) => k + 1)}>
                 Retry
@@ -292,7 +292,7 @@ function RecordProgressForm() {
               {targetNum != null ? ` of target ${targetNum}` : ""}
               {unit ? ` ${unit}` : ""}
               {Number.isFinite(addend) && form.currentAchievement ? (
-                <> — new total <strong style={{ color: overTarget ? "#b42318" : "inherit" }}>{newTotal}</strong></>
+                <> — new total <strong style={{ color: overTarget ? "var(--bad)" : "inherit" }}>{newTotal}</strong></>
               ) : null}
             </div>
           )}
@@ -329,24 +329,24 @@ function RecordProgressForm() {
           </div>
 
           {futurePeriod && (
-            <p role="alert" style={{ fontSize: 12, color: "#b42318" }}>A future reporting period cannot be recorded.</p>
+            <p role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>A future reporting period cannot be recorded.</p>
           )}
           {duplicatePeriod && (
-            <p role="note" data-testid="duplicate-period-warning" style={{ fontSize: 12, color: "#92400e" }}>
+            <p role="note" data-testid="duplicate-period-warning" style={{ fontSize: 12, color: "var(--warn)" }}>
               {duplicateWarning}
             </p>
           )}
           {!futurePeriod && backDated && (
-            <p style={{ fontSize: 12, color: "#92400e" }}>Back-dated entry — recording for an earlier period.</p>
+            <p style={{ fontSize: 12, color: "var(--warn)" }}>Back-dated entry — recording for an earlier period.</p>
           )}
           {overTarget && (
-            <p style={{ fontSize: 12, color: "#b42318" }}>
+            <p style={{ fontSize: 12, color: "var(--bad)" }}>
               New total {newTotal} exceeds the scope target {targetNum}.
             </p>
           )}
 
           <div style={{
-            background: "var(--surface-raised, #f8fafc)", border: "1px solid var(--line)", borderRadius: 10,
+            background: "var(--surface-raised)", border: "1px solid var(--line)", borderRadius: 10,
             padding: "10px 14px", fontSize: 12, color: "var(--muted)", lineHeight: 1.5,
           }}>
             Enter the <strong>quantity of work done in this period only</strong> — it is added to the running

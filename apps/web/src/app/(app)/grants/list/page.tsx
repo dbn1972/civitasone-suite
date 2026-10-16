@@ -46,10 +46,10 @@ export default async function GrantsListPage() {
       <div aria-label="Grants list">
         <p style={{ color: "var(--ink2)", marginBottom: 8, fontSize: 13 }}>As of {asOf}</p>
         <StatGrid>
-          <StatCard icon="🎁" iconBg="#dcfce7" label="Total" value={grants.length} />
-          <StatCard icon="✅" iconBg="#f0fdf4" label="Active" value={active} />
-          <StatCard icon="💰" iconBg="#f1f5f9" label="Sanctioned" value={formatMoney(totalSanctioned)} />
-          <StatCard icon="📤" iconBg="#dbeafe" label="Disbursed" value={formatMoney(totalDisbursed)} />
+          <StatCard icon="🎁" tone="good" label="Total" value={grants.length} />
+          <StatCard icon="✅" tone="good" label="Active" value={active} />
+          <StatCard icon="💰" tone="neutral" label="Sanctioned" value={formatMoney(totalSanctioned)} />
+          <StatCard icon="📤" tone="info" label="Disbursed" value={formatMoney(totalDisbursed)} />
         </StatGrid>
         <Card title="Grants List">
           <GrantsTable grants={grants} source={source} canViewGranteeName={canViewGranteeName} />

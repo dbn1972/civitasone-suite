@@ -94,10 +94,10 @@ export default async function GrievancePage({ searchParams }: { searchParams?: {
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalCasesLabel")} value={statValue(data.counts.total)} />
-        <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label={t("statOpenLabel")} value={statValue(data.counts.open)} />
-        <StatCard icon="🔍" iconBg="var(--warnbg, #fffbe6)" label={t("statUnderInquiryLabel")} value={statValue(data.counts.underInquiry)} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statDisposedLabel")} value={statValue(data.counts.disposed)} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotalCasesLabel")} value={statValue(data.counts.total)} />
+        <StatCard icon="🔴" iconBg="var(--badbg)" label={t("statOpenLabel")} value={statValue(data.counts.open)} />
+        <StatCard icon="🔍" iconBg="var(--warnbg)" label={t("statUnderInquiryLabel")} value={statValue(data.counts.underInquiry)} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statDisposedLabel")} value={statValue(data.counts.disposed)} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (

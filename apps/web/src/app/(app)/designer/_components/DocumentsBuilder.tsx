@@ -107,8 +107,8 @@ function CitizenUploadPreview({
                 fontSize: 11,
                 fontWeight: 600,
                 color: "var(--warn)",
-                background: "var(--warn-bg, #fff7ed)",
-                border: "1px solid var(--warn-border, #fdba74)",
+                background: "var(--warn-bg)",
+                border: "1px solid var(--warn-border)",
                 borderRadius: 999,
                 padding: "1px 8px",
               }}
@@ -274,8 +274,8 @@ export function DocumentsBuilder({
           style={{
             padding: "10px 12px",
             borderRadius: "var(--r-sm)",
-            background: "var(--warn-bg, #fff7ed)",
-            border: "1px solid var(--warn-border, #fdba74)",
+            background: "var(--warn-bg)",
+            border: "1px solid var(--warn-border)",
             color: "var(--warn)",
             fontSize: 13,
           }}
@@ -292,8 +292,8 @@ export function DocumentsBuilder({
           style={{
             padding: "8px 12px",
             borderRadius: "var(--r-sm)",
-            background: "var(--info-bg, #eff6ff)",
-            border: "1px solid var(--info-border, #bfdbfe)",
+            background: "var(--info-bg)",
+            border: "1px solid var(--info-border)",
             color: "var(--ink)",
             fontSize: 12,
           }}

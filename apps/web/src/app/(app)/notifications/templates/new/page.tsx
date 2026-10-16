@@ -1,9 +1,9 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button, PageHeader, Card, ConfirmDialog } from "../../../../_components/ds";
+import { Button, Field, Input, PageHeader, Card, ConfirmDialog, Select, Textarea } from "../../../../_components/ds";
 import { channelLabel } from "../../_components/channelLabel";
 import { useFormError } from "@/lib/useFormError";
 
@@ -30,10 +30,6 @@ function unbalancedPlaceholders(text: string): boolean {
 export default function NewTemplatePage() {
   const router = useRouter();
   const formError = useFormError("template");
-  const nameId = useId();
-  const channelId = useId();
-  const subjectId = useId();
-  const bodyId = useId();
 
   const [channel, setChannel] = useState<string>("email");
   const [name, setName] = useState("");
@@ -93,41 +89,32 @@ export default function NewTemplatePage() {
               if (canSave) setConfirmOpen(true);
             }}
           >
-            <div className="field" style={{ marginBottom: 14 }}>
-              <label htmlFor={nameId} style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Name</label>
-              <input id={nameId} type="text" value={name} required aria-required="true" maxLength={128}
-                onChange={(e) => setName(e.target.value)} style={inputStyle} />
-            </div>
+            <Field label="Name" required style={{ marginBottom: 14 }}>
+              <Input type="text" value={name} maxLength={128} onChange={(e) => setName(e.target.value)} />
+            </Field>
 
-            <div className="field" style={{ marginBottom: 14 }}>
-              <label htmlFor={channelId} style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Channel</label>
-              <select id={channelId} value={channel} onChange={(e) => setChannel(e.target.value)} style={inputStyle}>
+            <Field label="Channel" style={{ marginBottom: 14 }}>
+              <Select value={channel} onChange={(e) => setChannel(e.target.value)}>
                 {CHANNELS.map((c) => (
                   <option key={c} value={c}>{channelLabel(c)}</option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </Field>
 
-            <div className="field" style={{ marginBottom: 14 }}>
-              <label htmlFor={subjectId} style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                Subject <span className="muted">(optional)</span>
-              </label>
-              <input id={subjectId} type="text" value={subject} maxLength={256}
-                onChange={(e) => setSubject(e.target.value)} style={inputStyle} />
-            </div>
+            <Field label={<>Subject <span className="muted">(optional)</span></>} style={{ marginBottom: 14 }}>
+              <Input type="text" value={subject} maxLength={256} onChange={(e) => setSubject(e.target.value)} />
+            </Field>
 
-            <div className="field" style={{ marginBottom: 14 }}>
-              <label htmlFor={bodyId} style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Body</label>
-              <textarea id={bodyId} value={body} required aria-required="true" rows={8}
-                onChange={(e) => setBody(e.target.value)}
-                style={{ ...inputStyle, minHeight: 160, fontFamily: "monospace" }} />
+            <Field label="Body" required style={{ marginBottom: 14 }}>
+              <Textarea value={body} rows={8} onChange={(e) => setBody(e.target.value)}
+                style={{ minHeight: 160, fontFamily: "monospace" }} />
               <p className="muted" style={{ fontSize: 11, margin: "4px 0 0" }}>
                 Use <code>{"{{placeholder}}"}</code> tokens for dynamic values.
               </p>
-            </div>
+            </Field>
 
             {placeholderWarning ? (
-              <p role="alert" style={{ fontSize: 12, color: "#b42318", margin: "0 0 12px" }}>
+              <p role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: "0 0 12px" }}>
                 A placeholder looks unclosed — every <code>{"{{"}</code> needs a matching <code>{"}}"}</code> before you can save.
               </p>
             ) : null}

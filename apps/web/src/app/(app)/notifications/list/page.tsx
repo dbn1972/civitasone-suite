@@ -108,10 +108,10 @@ export default function NotificationsListPage() {
       />
       {!error ? <DataSourceBadge provenance={provenance} cachedAt={cachedAt} offline={offline} /> : null}
       <StatGrid>
-        <StatCard icon="🔔" iconBg="#eef2ff" label="Total" value={stat(counts.total)} />
-        <StatCard icon="✅" iconBg="#ecfdf5" label="Delivered" value={stat(counts.delivered)} />
-        <StatCard icon="❌" iconBg="#fef2f2" label="Failed" value={stat(counts.failed)} />
-        <StatCard icon="⏳" iconBg="#fffbeb" label="In progress" value={stat(counts.inProgress)} />
+        <StatCard icon="🔔" tone="info" label="Total" value={stat(counts.total)} />
+        <StatCard icon="✅" tone="good" label="Delivered" value={stat(counts.delivered)} />
+        <StatCard icon="❌" tone="bad" label="Failed" value={stat(counts.failed)} />
+        <StatCard icon="⏳" tone="warn" label="In progress" value={stat(counts.inProgress)} />
       </StatGrid>
       <div className="card">
         <div className="card-h">

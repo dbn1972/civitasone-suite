@@ -113,7 +113,7 @@ export function EscalationActions({ projectId, escalationId, status, severity, i
       ))}
 
       {success && (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", margin: 0 }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--good)", margin: 0 }}>
           {success}
         </p>
       )}
@@ -157,7 +157,7 @@ export function EscalationActions({ projectId, escalationId, status, severity, i
                 placeholder="e.g. Chief Engineer"
               />
               {assignee.length > 0 && !assigneeValid && (
-                <p style={{ fontSize: 12, color: "#b42318", margin: "4px 0 0" }}>Enter the new owner (at least 2 characters).</p>
+                <p style={{ fontSize: 12, color: "var(--bad)", margin: "4px 0 0" }}>Enter the new owner (at least 2 characters).</p>
               )}
             </div>
           )}

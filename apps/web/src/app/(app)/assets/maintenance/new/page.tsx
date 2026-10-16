@@ -201,7 +201,7 @@ function NewWorkOrderForm() {
                   aria-describedby={dateError ? "wo-date-err" : undefined}
                   style={inputStyle}
                 />
-                {dateError ? <p id="wo-date-err" role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: "4px 0 0" }}>{dateError}</p> : null}
+                {dateError ? <p id="wo-date-err" role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: "4px 0 0" }}>{dateError}</p> : null}
               </div>
               <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
                 <label className="l" htmlFor="wo-notes">Notes</label>

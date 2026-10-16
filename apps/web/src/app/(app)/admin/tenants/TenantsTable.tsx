@@ -20,10 +20,10 @@ export function TenantsTable({ tenants, source = "api" }: { tenants: Row[]; sour
           badge from the raw `source` prop — removed). */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <StatGrid>
-        <StatCard icon="🏢" iconBg="#eef2ff" label="Total Tenants" value={summary.total} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={summary.active} />
-        <StatCard icon="🧪" iconBg="#fffaeb" label="Trial" value={summary.trial} />
-        <StatCard icon="⛔" iconBg="#fce7ee" label="Suspended" value={summary.suspended} />
+        <StatCard icon="🏢" tone="info" label="Total Tenants" value={summary.total} />
+        <StatCard icon="✅" tone="good" label="Active" value={summary.active} />
+        <StatCard icon="🧪" tone="warn" label="Trial" value={summary.trial} />
+        <StatCard icon="⛔" tone="bad" label="Suspended" value={summary.suspended} />
       </StatGrid>
       <Card title="Tenant Directory">
       <DataTable<Row>

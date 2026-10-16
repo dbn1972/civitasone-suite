@@ -43,7 +43,7 @@ export function EmployeeFyLookup({ employeeId, fy }: { employeeId: string; fy: s
         <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div style={{ display: "grid", gap: 6, minWidth: 260 }}>
             <label id={`${errId}-emp-label`} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("employeeIdLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("employeeIdLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <EntityPicker
               value={empId}
@@ -56,13 +56,13 @@ export function EmployeeFyLookup({ employeeId, fy }: { employeeId: string; fy: s
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 600 }}>
-              {t("financialYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("financialYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </label>
             <select
               id={fyId}
               value={fyValue}
               onChange={(e) => setFyValue(e.target.value)}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "#fff" }}
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "var(--panel)" }}
             >
               {fyOptions.map((opt) => (
                 <option key={opt} value={opt}>{opt}</option>

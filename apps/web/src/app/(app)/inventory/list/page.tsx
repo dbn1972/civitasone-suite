@@ -68,9 +68,9 @@ export default async function InventoryListPage() {
       />
       <div aria-label="Inventory stock items">
         <StatGrid>
-          <StatCard icon="📦" iconBg="#f1f5f9" label="Total SKUs" value={stats.total} />
-          <StatCard icon="⚠️" iconBg="#fee2e2" label="Low Stock" value={stats.lowStock} />
-          <StatCard icon="💰" iconBg="#eff6ff" label={stats.valueLabel} value={stats.valueText} />
+          <StatCard icon="📦" tone="neutral" label="Total SKUs" value={stats.total} />
+          <StatCard icon="⚠️" tone="bad" label="Low Stock" value={stats.lowStock} />
+          <StatCard icon="💰" tone="info" label={stats.valueLabel} value={stats.valueText} />
         </StatGrid>
 
         {pendingFailed ? (

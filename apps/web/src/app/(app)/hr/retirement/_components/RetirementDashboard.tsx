@@ -58,10 +58,10 @@ function typeLabel(separationType: string | undefined, t: Translator, tType: Tra
 }
 
 function borderColor(days: number): string {
-  if (days < 0) return "var(--bad, #dc2626)";
-  if (days <= 30) return "var(--bad, #dc2626)";
-  if (days <= 90) return "var(--warn, #f59e0b)";
-  return "var(--info, #2563eb)";
+  if (days < 0) return "var(--bad)";
+  if (days <= 30) return "var(--bad)";
+  if (days <= 90) return "var(--warn)";
+  return "var(--info)";
 }
 
 interface Props {
@@ -111,7 +111,7 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
             style={{
               marginBottom: 0,
               borderInlineStart: `4px solid ${borderColor(days)}`,
-              outline: selected ? "2px solid var(--primary, #2563eb)" : "none",
+              outline: selected ? "2px solid var(--primary)" : "none",
               outlineOffset: -1,
             }}
             aria-label={t("cardAriaLabel", { name: row.employee })}
@@ -122,7 +122,7 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
                 aria-hidden="true"
                 style={{
                   width: 42, height: 42, borderRadius: "50%",
-                  background: "var(--infobg, #e6f0ff)",
+                  background: "var(--infobg)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 20, flexShrink: 0,
                 }}
@@ -140,7 +140,7 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
             </div>
 
             {overdueRow && (
-              <div style={{ margin: "10px 16px 0", padding: "6px 10px", borderRadius: 6, background: "var(--badbg, #fef2f2)", fontSize: "0.75rem", fontWeight: 600, color: "var(--bad, #dc2626)" }}>
+              <div style={{ margin: "10px 16px 0", padding: "6px 10px", borderRadius: 6, background: "var(--badbg)", fontSize: "0.75rem", fontWeight: 600, color: "var(--bad)" }}>
                 {t("overdueLabel")}
               </div>
             )}
@@ -148,7 +148,7 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
             <dl style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px", margin: "12px 16px 0", padding: 0, fontSize: "0.8125rem" }}>
               <div>
                 <dt style={{ color: "var(--mut)", marginBottom: 2 }}>{t("colRetirementDate")}</dt>
-                <dd style={{ margin: 0, fontWeight: 600, color: days <= 30 ? "var(--bad, #dc2626)" : "var(--ink)" }}>
+                <dd style={{ margin: 0, fontWeight: 600, color: days <= 30 ? "var(--bad)" : "var(--ink)" }}>
                   {formatIndianDate(row.superannuationDate)}
                 </dd>
               </div>
@@ -156,7 +156,7 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
                 <dt style={{ color: "var(--mut)", marginBottom: 2 }}>{t("colDaysRemaining")}</dt>
                 {/* GAP-HR-RETIREMENT-07: urgency is now also conveyed in
                     text (not colour alone), and pluralised via ICU. */}
-                <dd style={{ margin: 0, fontWeight: 600, color: days <= 30 ? "var(--bad, #dc2626)" : days <= 90 ? "var(--warn, #b45309)" : "var(--ink)" }}>
+                <dd style={{ margin: 0, fontWeight: 600, color: days <= 30 ? "var(--bad)" : days <= 90 ? "var(--warn)" : "var(--ink)" }}>
                   {overdueRow ? t("overdueByDays", { count: Math.abs(days) }) : t("daysRemaining", { count: days })}
                   {days >= 0 && days <= 30 && <span> · {t("urgentLabel")}</span>}
                 </dd>

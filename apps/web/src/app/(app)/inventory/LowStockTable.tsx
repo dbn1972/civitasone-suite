@@ -59,8 +59,8 @@ export function LowStockTable({ rows: initial, source = "api" }: { rows: Invento
   return (
     <div aria-label="Inventory low stock and reorder">
       <StatGrid>
-          <StatCard icon="⚠️" iconBg="#fee2e2" label="Items Low" value={statValue(provenance, rows.length)} />
-          <StatCard icon="🛒" iconBg="#fef3c7" label="Total Suggested Reorder" value={statValue(provenance, totalSuggested)} />
+          <StatCard icon="⚠️" tone="bad" label="Items Low" value={statValue(provenance, rows.length)} />
+          <StatCard icon="🛒" tone="warn" label="Total Suggested Reorder" value={statValue(provenance, totalSuggested)} />
       </StatGrid>
       <Card title="Low Stock Items">
         <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="low-stock alerts">

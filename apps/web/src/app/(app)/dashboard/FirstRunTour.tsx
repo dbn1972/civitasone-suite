@@ -117,7 +117,7 @@ export function FirstRunTour() {
       <div>
         <div style={{ padding: "6px 0 8px" }}>
           <div aria-hidden="true" style={{ fontSize: 34, marginBottom: 6 }}>{current.icon}</div>
-          <p id="tour-body" style={{ margin: 0, color: "var(--ink2, #475569)", lineHeight: 1.55, fontSize: 14.5 }}>
+          <p id="tour-body" style={{ margin: 0, color: "var(--ink2)", lineHeight: 1.55, fontSize: 14.5 }}>
             {current.body}
           </p>
         </div>
@@ -129,7 +129,7 @@ export function FirstRunTour() {
               key={i}
               style={{
                 height: 6, flex: 1, borderRadius: 3,
-                background: i <= step ? "var(--primary, #4f46e5)" : "var(--line, #e2e8f0)",
+                background: i <= step ? "var(--primary)" : "var(--line)",
               }}
             />
           ))}

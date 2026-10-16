@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, EmptyState, ConfirmDialog, Modal } from "@/app/_components/ds";
+import { Button, EmptyState, ConfirmDialog, Field, Input, Modal, Select } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { useFormError } from "@/lib/useFormError";
@@ -208,17 +208,15 @@ export function DomainClient({ domains: initialDomains, source }: { domains: Cus
       >
           <div style={{ color: "var(--ink)" }}>
             <form onSubmit={handleAddDomain}>
-              <div style={{ marginBottom: 12 }}>
-                <label htmlFor="domain-name">Domain Name</label>
-                <input id="domain-name" type="text" className="ta-input" value={newDomain} onChange={(e) => setNewDomain(e.target.value)} placeholder="erp.yourorg.gov.in" required />
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <label htmlFor="verify-method">Verification Method</label>
-                <select id="verify-method" className="ta-input" value={verificationMethod} onChange={(e) => setVerificationMethod(e.target.value as "dns_txt" | "dns_cname")}>
+              <Field label="Domain Name" required style={{ marginBottom: 12 }}>
+                <Input type="text" value={newDomain} onChange={(e) => setNewDomain(e.target.value)} placeholder="erp.yourorg.gov.in" />
+              </Field>
+              <Field label="Verification Method" style={{ marginBottom: 12 }}>
+                <Select value={verificationMethod} onChange={(e) => setVerificationMethod(e.target.value as "dns_txt" | "dns_cname")}>
                   <option value="dns_txt">DNS TXT Record</option>
                   <option value="dns_cname">DNS CNAME Record</option>
-                </select>
-              </div>
+                </Select>
+              </Field>
               <div role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad)", minHeight: 18 }}>{addError.message}</div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <Button type="button" variant="ghost" onClick={() => { setShowAddModal(false); addError.clear(); }}>Cancel</Button>
@@ -237,7 +235,7 @@ export function DomainClient({ domains: initialDomains, source }: { domains: Cus
         >
           <div style={{ color: "var(--ink)" }}>
             <p style={{ color: "var(--ink2)", margin: "8px 0 16px" }}>Add the following record to your DNS configuration:</p>
-            <div style={{ background: "var(--surface2, #f1f5f9)", color: "var(--ink)", padding: 16, borderRadius: 6, fontFamily: "monospace", fontSize: 13 }}>
+            <div style={{ background: "var(--surface2)", color: "var(--ink)", padding: 16, borderRadius: 6, fontFamily: "monospace", fontSize: 13 }}>
               {instructionDomain.verificationMethod === "dns_txt" ? (
                 <>
                   <div><strong>Type:</strong> TXT</div>

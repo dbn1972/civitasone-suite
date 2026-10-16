@@ -26,7 +26,7 @@ export function BindingRowActions({
   const formError = useFormError("role binding");
   const [error, setError] = useState("");
 
-  if (status !== "active") return <span style={{ color: "var(--mut, #64748b)" }}>—</span>;
+  if (status !== "active") return <span style={{ color: "var(--mut)" }}>—</span>;
 
   async function revoke(reason?: string) {
     setBusy(true);

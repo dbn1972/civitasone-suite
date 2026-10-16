@@ -89,13 +89,13 @@ export default async function MeetingsPage({
       />
       <StatGrid>
         {/* GAP-ESTAB-MEETINGS-01: all four stats show '—' when errored */}
-        <StatCard icon="📅" iconBg="#e6f7f5" label="Upcoming Meetings" value={errored ? "—" : upcoming.toLocaleString("en-IN")} />
+        <StatCard icon="📅" tone="good" label="Upcoming Meetings" value={errored ? "—" : upcoming.toLocaleString("en-IN")} />
         {/* GAP-ESTAB-MEETINGS-03: "In Progress" instead of "MOM Pending" */}
-        <StatCard icon="📝" iconBg="#fffaeb" label="In Progress" value={errored ? "—" : inProgress.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#eff6ff" label="Action Items" value={errored ? "—" : totalActionItems.toLocaleString("en-IN")} />
+        <StatCard icon="📝" tone="warn" label="In Progress" value={errored ? "—" : inProgress.toLocaleString("en-IN")} />
+        <StatCard icon="✅" tone="info" label="Action Items" value={errored ? "—" : totalActionItems.toLocaleString("en-IN")} />
         {/* GAP-ESTAB-MEETINGS-03: "Meetings held" instead of "Compliance" to
             avoid confusion with the Compliance page's distinct formula */}
-        <StatCard icon="📊" iconBg="#ecfdf3" label="Meetings Held" value={errored ? "—" : completed > 0 ? `${completed}` : "—"} />
+        <StatCard icon="📊" tone="good" label="Meetings Held" value={errored ? "—" : completed > 0 ? `${completed}` : "—"} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         {errored ? (

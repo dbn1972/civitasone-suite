@@ -31,10 +31,10 @@ export default async function GrantUtilizationPage() {
       />
       <div aria-label="Utilisation certificates">
         <StatGrid>
-          <StatCard icon="📋" iconBg="#f1f5f9" label="Total" value={failed ? dash : ucs.length} />
-          <StatCard icon="✅" iconBg="#dcfce7" label="Verified" value={failed ? dash : verified} />
-          <StatCard icon="📄" iconBg="#dbeafe" label="Submitted" value={failed ? dash : submitted} />
-          <StatCard icon="⏳" iconBg="#fef3c7" label="Pending" value={failed ? dash : pending} />
+          <StatCard icon="📋" tone="neutral" label="Total" value={failed ? dash : ucs.length} />
+          <StatCard icon="✅" tone="good" label="Verified" value={failed ? dash : verified} />
+          <StatCard icon="📄" tone="info" label="Submitted" value={failed ? dash : submitted} />
+          <StatCard icon="⏳" tone="warn" label="Pending" value={failed ? dash : pending} />
         </StatGrid>
         <Card title="Utilisation Certificates">
           <UtilizationTable ucs={ucs} source={source} canVerify={canVerify} />

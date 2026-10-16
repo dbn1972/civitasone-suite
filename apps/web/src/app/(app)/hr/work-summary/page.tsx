@@ -149,10 +149,10 @@ export default async function WorkSummaryPage({
       />
       {!errored ? <DataSourceBadge source={source} /> : null}
       <StatGrid>
-        <StatCard icon="📝" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : total} />
-        <StatCard icon="👤" iconBg="var(--bg, #f5f5f5)" label={t("statEmployees")} value={errored ? null : employees} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statReviewed")} value={errored ? null : reviewed} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPending")} value={errored ? null : pending} />
+        <StatCard icon="📝" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : total} />
+        <StatCard icon="👤" iconBg="var(--bg)" label={t("statEmployees")} value={errored ? null : employees} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statReviewed")} value={errored ? null : reviewed} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={errored ? null : pending} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (

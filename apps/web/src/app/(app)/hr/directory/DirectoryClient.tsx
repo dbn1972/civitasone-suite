@@ -23,11 +23,11 @@ interface DirectoryClientProps {
 }
 
 const GRID_PAGE_SIZE = 20
-const ASHOKA_BLUE = '#00439C'
+const ASHOKA_BLUE = 'var(--primary)'
 const SEARCH_DEBOUNCE_MS = 350
 
 function EmployeeCard({ emp, onClick, t }: { emp: Employee; onClick: (id: string) => void; t: (key: string) => string }) {
-  const avatarColors = [ASHOKA_BLUE, '#1a6d3c', '#7c2d12', '#4c1d95', '#064e3b', '#831843', '#92400e']
+  const avatarColors = [ASHOKA_BLUE, '#1a6d3c', '#7c2d12', '#4c1d95', '#064e3b', '#831843', 'var(--warn)']
   const color = avatarColors[(emp.name.charCodeAt(0) ?? 0) % avatarColors.length]
 
   return (
@@ -42,8 +42,8 @@ function EmployeeCard({ emp, onClick, t }: { emp: Employee; onClick: (id: string
       // literal string "undefined" to a screen reader.
       aria-label={emp.designation ? `${t('viewDetailsFor')} ${emp.name}, ${emp.designation}` : `${t('viewDetailsFor')} ${emp.name}`}
       style={{
-        background: 'var(--surface, #fff)',
-        border: '1.5px solid var(--border, #e2e8f0)',
+        background: 'var(--surface)',
+        border: '1.5px solid var(--border)',
         borderRadius: 10,
         padding: 16,
         cursor: 'pointer',
@@ -58,7 +58,7 @@ function EmployeeCard({ emp, onClick, t }: { emp: Employee; onClick: (id: string
         ;(e.currentTarget as HTMLElement).style.boxShadow = '0 2px 12px rgba(0,67,156,0.12)'
       }}
       onMouseLeave={(e) => {
-        ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--border, #e2e8f0)'
+        ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'
         ;(e.currentTarget as HTMLElement).style.boxShadow = 'none'
       }}
     >
@@ -69,7 +69,7 @@ function EmployeeCard({ emp, onClick, t }: { emp: Employee; onClick: (id: string
             style={{
               fontWeight: 700,
               fontSize: 14,
-              color: 'var(--fg, #0f172a)',
+              color: 'var(--fg)',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               whiteSpace: 'nowrap',
@@ -93,7 +93,7 @@ function EmployeeCard({ emp, onClick, t }: { emp: Employee; onClick: (id: string
           )}
         </div>
       </div>
-      <div style={{ fontSize: 12, color: 'var(--muted, #64748b)', display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', flexDirection: 'column', gap: 3 }}>
         {emp.department && (
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <span aria-hidden>🏢</span>
@@ -124,7 +124,7 @@ function EmployeeDetailModal({
   canViewProfiles: boolean
   t: (key: string) => string
 }) {
-  const avatarColors = [ASHOKA_BLUE, '#1a6d3c', '#7c2d12', '#4c1d95', '#064e3b', '#831843', '#92400e']
+  const avatarColors = [ASHOKA_BLUE, '#1a6d3c', '#7c2d12', '#4c1d95', '#064e3b', '#831843', 'var(--warn)']
   const color = avatarColors[(emp.name.charCodeAt(0) ?? 0) % avatarColors.length]
 
   // SF-19: ds/Modal owns the focus trap, inert background, Escape and focus
@@ -151,8 +151,8 @@ function EmployeeDetailModal({
             .filter((f) => f.value)
             .map(({ label, value }) => (
               <div key={label} style={{ display: 'flex', gap: 8 }}>
-                <dt style={{ fontWeight: 700, color: 'var(--muted, #64748b)', minWidth: 90 }}>{label}</dt>
-                <dd style={{ margin: 0, color: 'var(--fg, #0f172a)', wordBreak: 'break-word' }}>
+                <dt style={{ fontWeight: 700, color: 'var(--muted)', minWidth: 90 }}>{label}</dt>
+                <dd style={{ margin: 0, color: 'var(--fg)', wordBreak: 'break-word' }}>
                   {label === t('fieldEmail') ? (
                     <a href={`mailto:${value}`} style={{ color: ASHOKA_BLUE }}>
                       {value}
@@ -258,7 +258,7 @@ export function DirectoryClient({ employees, initialQuery, canViewProfiles }: Di
             padding: 0,
             font: 'inherit',
             fontWeight: 600,
-            color: 'var(--fg, #0f172a)',
+            color: 'var(--fg)',
             cursor: 'pointer',
             textAlign: 'left',
             minHeight: 44,
@@ -277,7 +277,7 @@ export function DirectoryClient({ employees, initialQuery, canViewProfiles }: Di
     <div>
       {/* GAP-HR-DIRECTORY-04: visible DPDP purpose notice (was previously
           undocumented -- see docs/SECURITY.md's Directory Fields policy). */}
-      <p role="note" style={{ fontSize: 12, color: 'var(--muted, #64748b)', marginBottom: 12 }}>
+      <p role="note" style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
         {t('dpdpNotice')}
       </p>
 
@@ -296,7 +296,7 @@ export function DirectoryClient({ employees, initialQuery, canViewProfiles }: Di
             onChange={(e) => handleSearchChange(e.target.value)}
             aria-label={t('searchAriaLabel')}
             style={{
-              border: '1.5px solid var(--border, #e2e8f0)',
+              border: '1.5px solid var(--border)',
               borderRadius: 6,
               padding: '8px 12px',
               fontSize: 13,
@@ -315,10 +315,10 @@ export function DirectoryClient({ employees, initialQuery, canViewProfiles }: Di
               aria-label={mode === 'grid' ? t('viewCards') : t('viewTable')}
               style={{
                 border: '1.5px solid',
-                borderColor: viewMode === mode ? ASHOKA_BLUE : 'var(--border, #e2e8f0)',
+                borderColor: viewMode === mode ? ASHOKA_BLUE : 'var(--border)',
                 borderRadius: 6,
-                background: viewMode === mode ? '#e6f0ff' : 'var(--surface, #fff)',
-                color: viewMode === mode ? ASHOKA_BLUE : 'var(--fg, #0f172a)',
+                background: viewMode === mode ? 'var(--infobg)' : 'var(--surface)',
+                color: viewMode === mode ? ASHOKA_BLUE : 'var(--fg)',
                 fontWeight: 600,
                 fontSize: 12,
                 padding: '8px 14px',
@@ -337,7 +337,7 @@ export function DirectoryClient({ employees, initialQuery, canViewProfiles }: Di
       <p
         aria-live="polite"
         aria-atomic="true"
-        style={{ fontSize: 12, color: 'var(--muted, #64748b)', marginBottom: 12 }}
+        style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}
       >
         {t('employeeCount', { count: employees.length })}
         {viewMode === 'grid' && totalGridPages > 1 && ` — ${tCommon('page')} ${gridPage} ${tCommon('of')} ${totalGridPages}`}
@@ -346,7 +346,7 @@ export function DirectoryClient({ employees, initialQuery, canViewProfiles }: Di
       {employees.length === 0 ? (
         <div
           role="status"
-          style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted, #64748b)', fontSize: 14 }}
+          style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted)', fontSize: 14 }}
         >
           <div style={{ fontSize: 32, marginBottom: 8 }} aria-hidden>👥</div>
           <div style={{ fontWeight: 600 }}>{t('noResultsTitle')}</div>
@@ -414,7 +414,7 @@ export function DirectoryClient({ employees, initialQuery, canViewProfiles }: Di
                 style={{
                   ...paginationBtn(false),
                   background: pg === gridPage ? ASHOKA_BLUE : undefined,
-                  color: pg === gridPage ? '#fff' : undefined,
+                  color: pg === gridPage ? 'var(--panel)' : undefined,
                   borderColor: pg === gridPage ? ASHOKA_BLUE : undefined,
                   fontWeight: pg === gridPage ? 700 : undefined,
                 }}
@@ -443,10 +443,10 @@ export function DirectoryClient({ employees, initialQuery, canViewProfiles }: Di
 
 function paginationBtn(disabled: boolean): React.CSSProperties {
   return {
-    border: '1.5px solid var(--border, #e2e8f0)',
+    border: '1.5px solid var(--border)',
     borderRadius: 6,
-    background: 'var(--surface, #fff)',
-    color: disabled ? 'var(--muted, #64748b)' : 'var(--fg, #0f172a)',
+    background: 'var(--surface)',
+    color: disabled ? 'var(--muted)' : 'var(--fg)',
     fontSize: 12,
     fontWeight: 600,
     padding: '6px 12px',

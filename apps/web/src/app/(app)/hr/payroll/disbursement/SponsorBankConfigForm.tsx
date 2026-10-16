@@ -108,7 +108,7 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
       <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
         <div style={{ display: "grid", gap: 6 }}>
           <label htmlFor={codeId} style={{ fontSize: 13, fontWeight: 600 }}>
-            {t("sponsorCodeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+            {t("sponsorCodeLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
           </label>
           <input
             id={codeId}
@@ -127,7 +127,7 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
         </div>
         <div style={{ display: "grid", gap: 6 }}>
           <label htmlFor={ifscId} style={{ fontSize: 13, fontWeight: 600 }}>
-            {t("sponsorIfscLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+            {t("sponsorIfscLabel")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
           </label>
           <input
             id={ifscId}
@@ -146,7 +146,7 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
         </div>
         <div style={{ display: "grid", gap: 6 }}>
           <label htmlFor={acctId} style={{ fontSize: 13, fontWeight: 600 }}>
-            {t("sponsorAccountLabel")} {!initial && <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>}
+            {t("sponsorAccountLabel")} {!initial && <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>}
           </label>
           <input
             id={acctId}

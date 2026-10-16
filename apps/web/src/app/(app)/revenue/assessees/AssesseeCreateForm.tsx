@@ -118,7 +118,7 @@ export function AssesseeCreateForm() {
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={typeId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Assessee Type <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Assessee Type <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <select
                 id={typeId}
@@ -135,12 +135,12 @@ export function AssesseeCreateForm() {
                   <option key={t.value} value={t.value}>{t.label}</option>
                 ))}
               </select>
-              {errors.assesseeType && <p id={typeErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.assesseeType}</p>}
+              {errors.assesseeType && <p id={typeErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.assesseeType}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={identifierId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Identifier No. (Property ID / Connection No.) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Identifier No. (Property ID / Connection No.) <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={identifierId}
@@ -153,12 +153,12 @@ export function AssesseeCreateForm() {
                 aria-describedby={errors.identifierNo ? identifierErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.identifierNo && <p id={identifierErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.identifierNo}</p>}
+              {errors.identifierNo && <p id={identifierErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.identifierNo}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ownerId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Owner / Holder Name <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Owner / Holder Name <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={ownerId}
@@ -171,12 +171,12 @@ export function AssesseeCreateForm() {
                 aria-describedby={errors.ownerName ? ownerErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.ownerName && <p id={ownerErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.ownerName}</p>}
+              {errors.ownerName && <p id={ownerErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.ownerName}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={addressId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Address <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Address <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={addressId}
@@ -189,7 +189,7 @@ export function AssesseeCreateForm() {
                 aria-describedby={errors.address ? addressErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.address && <p id={addressErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.address}</p>}
+              {errors.address && <p id={addressErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.address}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -226,7 +226,7 @@ export function AssesseeCreateForm() {
                 aria-describedby={errors.contactEmail ? emailErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.contactEmail && <p id={emailErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.contactEmail}</p>}
+              {errors.contactEmail && <p id={emailErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.contactEmail}</p>}
             </div>
           </div>
 

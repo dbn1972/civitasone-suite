@@ -28,10 +28,10 @@ export default async function APIKeysPage() {
         subtitle="Service-to-service and external API access keys."
       />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="🔑" iconBg="#f1f5f9" label="Total Keys" value={errored ? "—" : total} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={errored ? "—" : active} />
-        <StatCard icon="⏰" iconBg="#fffaeb" label="Expired" value={errored ? "—" : expired} />
-        <StatCard icon="🚫" iconBg="#fef3f2" label="Never Used" value={errored ? "—" : neverUsed} />
+        <StatCard icon="🔑" tone="neutral" label="Total Keys" value={errored ? "—" : total} />
+        <StatCard icon="✅" tone="good" label="Active" value={errored ? "—" : active} />
+        <StatCard icon="⏰" tone="warn" label="Expired" value={errored ? "—" : expired} />
+        <StatCard icon="🚫" tone="bad" label="Never Used" value={errored ? "—" : neverUsed} />
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
       {errored ? (

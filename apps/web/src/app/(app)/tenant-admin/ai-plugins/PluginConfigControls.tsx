@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { z } from "zod";
-import { Button, ConfirmDialog } from "../../../_components/ds";
+import { Button, ConfirmDialog, Field, Input, Select } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 /**
@@ -141,19 +141,18 @@ export function PluginConfigControls({
   return (
     <div className="space-y-2 pt-2 border-t" style={{ borderColor: "var(--line)" }}>
       <div className="flex items-center justify-between gap-2">
-        <label htmlFor={modeId} className="text-xs font-semibold">Mode</label>
-        <select
-          id={modeId}
-          value={mode}
-          disabled={busy}
-          onChange={(e) => void run({ mode: e.target.value as (typeof MODES)[number] }, `"${pluginName}" set to ${e.target.value}.`)}
-          className="text-xs border rounded px-2 py-1"
-          style={{ minHeight: 32 }}
-        >
-          {MODES.map((m) => (
-            <option key={m} value={m}>{m}</option>
-          ))}
-        </select>
+        <Field label="Mode" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <Select
+            value={mode}
+            disabled={busy}
+            onChange={(e) => void run({ mode: e.target.value as (typeof MODES)[number] }, `"${pluginName}" set to ${e.target.value}.`)}
+            style={{ minHeight: 32 }}
+          >
+            {MODES.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </Select>
+        </Field>
       </div>
 
       <div className="flex items-center justify-between gap-2">
@@ -174,23 +173,19 @@ export function PluginConfigControls({
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <label htmlFor={thresholdId} className="text-xs font-semibold">Confidence threshold</label>
-        <input
-          id={thresholdId}
-          type="number"
-          min={0}
-          max={100}
-          value={thresholdInput}
-          disabled={busy}
-          onChange={(e) => setThresholdInput(e.target.value)}
-          onBlur={onThresholdCommit}
-          aria-invalid={thresholdError ? true : undefined}
-          aria-describedby={thresholdError ? thresholdErrId : undefined}
-          className="text-xs border rounded px-2 py-1 w-20"
-          style={{ minHeight: 32 }}
-        />
+        <Field label="Confidence threshold" error={thresholdError || undefined} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            value={thresholdInput}
+            disabled={busy}
+            onChange={(e) => setThresholdInput(e.target.value)}
+            onBlur={onThresholdCommit}
+            style={{ minHeight: 32, width: 80 }}
+          />
+        </Field>
       </div>
-      {thresholdError ? <p id={thresholdErrId} role="alert" className="text-xs" style={{ color: "var(--bad)" }}>{thresholdError}</p> : null}
 
       {!autoAction && (
         <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setMessage(""); setDialogError(undefined); setAutoActionPending(true); }}>
@@ -198,7 +193,7 @@ export function PluginConfigControls({
         </Button>
       )}
 
-      {okMessage ? <p role="status" aria-live="polite" className="text-xs" style={{ color: "#067647" }}>{okMessage}</p> : null}
+      {okMessage ? <p role="status" aria-live="polite" className="text-xs" style={{ color: "var(--good)" }}>{okMessage}</p> : null}
       {message ? <p role="alert" className="text-xs" style={{ color: "var(--bad)" }}>{message}</p> : null}
 
       <ConfirmDialog

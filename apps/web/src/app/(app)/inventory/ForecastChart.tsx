@@ -42,7 +42,7 @@ export function ForecastChart({ itemName, data, totalDemand, confidence }: Forec
       ) : null}
       {confidence !== undefined && confidence > 0 ? (
         <div style={{ maxWidth: 280 }}>
-          <span style={{ fontSize: 12, color: "var(--mut, #475569)" }}>
+          <span style={{ fontSize: 12, color: "var(--mut)" }}>
             Forecast confidence: {Math.round(Math.min(1, confidence) * 100)}%
           </span>
           <ConfidenceBar value={confidence} />

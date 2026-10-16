@@ -61,7 +61,7 @@ export default async function CycleCountDetailPage({ params }: { params: { id: s
     (cycleCount.status === "approved" || cycleCount.status === "auto_posted") && Boolean(cycleCount.adjustmentId);
 
   const varianceLabel = cycleCount.variance > 0 ? `+${cycleCount.variance}` : String(cycleCount.variance);
-  const varianceColor = cycleCount.variance === 0 ? "#475569" : cycleCount.variance > 0 ? "#16a34a" : "#b91c1c";
+  const varianceColor = cycleCount.variance === 0 ? "var(--ink2)" : cycleCount.variance > 0 ? "var(--good)" : "var(--bad)";
 
   return (
     <>
@@ -80,7 +80,7 @@ export default async function CycleCountDetailPage({ params }: { params: { id: s
       />
 
       {cycleCount.status === "pending_approval" && isApprover && isMaker ? (
-        <p role="note" style={{ fontSize: 13, color: "#92400e", margin: "0 0 12px" }}>
+        <p role="note" style={{ fontSize: 13, color: "var(--warn)", margin: "0 0 12px" }}>
           You recorded this count, so a different approver must approve or reject it.
         </p>
       ) : null}

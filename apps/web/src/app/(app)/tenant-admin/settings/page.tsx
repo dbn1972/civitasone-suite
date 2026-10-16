@@ -34,9 +34,9 @@ export default async function TenantSettingsPage() {
           "Configured" tile was always == Total Modules, carrying no
           information, so it is removed (three honest tiles). */}
       <div className="grid g-3" style={{ marginBottom: 18 }}>
-        <StatCard icon="🧩" iconBg="#f1f5f9" label="Total Modules" value={errored ? "—" : total} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Enabled" value={errored ? "—" : enabled} />
-        <StatCard icon="⏸️" iconBg="#fffaeb" label="Disabled" value={errored ? "—" : disabled} />
+        <StatCard icon="🧩" tone="neutral" label="Total Modules" value={errored ? "—" : total} />
+        <StatCard icon="✅" tone="good" label="Enabled" value={errored ? "—" : enabled} />
+        <StatCard icon="⏸️" tone="warn" label="Disabled" value={errored ? "—" : disabled} />
       </div>
       {errored ? (
         <Card title="Module toggles">

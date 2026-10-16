@@ -131,7 +131,7 @@ export default async function PODetailPage({ params }: { params: { id: string } 
             <StatusPill status={po.status} label={approval.label} />
           </div>
         </div>
-        {approval.detail ? <p style={{ margin: "8px 0 0", color: "#64748b", fontSize: "0.875rem" }}>{approval.detail}</p> : null}
+        {approval.detail ? <p style={{ margin: "8px 0 0", color: "var(--mut)", fontSize: "0.875rem" }}>{approval.detail}</p> : null}
       </Card>
 
       <Card title="PO details" padding>

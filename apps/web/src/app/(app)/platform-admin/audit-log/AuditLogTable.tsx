@@ -49,8 +49,8 @@ function Diff({ before, after }: { before?: Record<string, unknown>; after?: Rec
   const keys = Array.from(new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})]));
   if (keys.length === 0) return null;
   return (
-    <div style={{ marginTop: 8, fontSize: 12, background: "var(--line2, #f8fafc)", borderRadius: 6, overflow: "hidden", border: "1px solid var(--line)" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", background: "var(--line, #e2e8f0)", fontSize: 11, fontWeight: 700, color: "var(--ink2)" }}>
+    <div style={{ marginTop: 8, fontSize: 12, background: "var(--line2)", borderRadius: 6, overflow: "hidden", border: "1px solid var(--line)" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", background: "var(--line)", fontSize: 11, fontWeight: 700, color: "var(--ink2)" }}>
         <div style={{ padding: "4px 10px" }}>Before</div>
         <div style={{ padding: "4px 10px", borderInlineStart: "1px solid var(--line)" }}>After</div>
       </div>
@@ -60,10 +60,10 @@ function Diff({ before, after }: { before?: Record<string, unknown>; after?: Rec
         const changed = bv !== av;
         return (
           <div key={k} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", borderTop: "1px solid var(--line)" }}>
-            <div style={{ padding: "4px 10px", color: changed ? "var(--bad, #b42318)" : "var(--ink2)", fontFamily: "monospace" }}>
+            <div style={{ padding: "4px 10px", color: changed ? "var(--bad)" : "var(--ink2)", fontFamily: "monospace" }}>
               <span style={{ fontWeight: 600, color: "var(--ink2)" }}>{k}: </span>{bv}
             </div>
-            <div style={{ padding: "4px 10px", borderInlineStart: "1px solid var(--line)", color: changed ? "var(--good, #027a48)" : "var(--ink2)", fontFamily: "monospace" }}>
+            <div style={{ padding: "4px 10px", borderInlineStart: "1px solid var(--line)", color: changed ? "var(--good)" : "var(--ink2)", fontFamily: "monospace" }}>
               <span style={{ fontWeight: 600, color: "var(--ink2)" }}>{k}: </span>{av}
             </div>
           </div>
@@ -134,7 +134,7 @@ export function AuditLogTable({ events, canExport = true }: { events: PlatformAu
           </Button>
         )}
       </div>
-      {exportError && <p role="alert" style={{ color: "var(--danger, #b42318)", fontSize: 13, margin: "6px 16px" }}>{exportError}</p>}
+      {exportError && <p role="alert" style={{ color: "var(--danger)", fontSize: 13, margin: "6px 16px" }}>{exportError}</p>}
 
       {/* Filters */}
       <div style={{ padding: "12px 16px", display: "flex", flexWrap: "wrap", gap: 10, borderBottom: "1px solid var(--line)" }}>
@@ -175,7 +175,7 @@ export function AuditLogTable({ events, canExport = true }: { events: PlatformAu
       <div style={{ overflowX: "auto" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }} aria-labelledby="platform-audit-heading">
           <thead>
-            <tr style={{ background: "var(--line2, #f8fafc)", borderBottom: "1px solid var(--line)" }}>
+            <tr style={{ background: "var(--line2)", borderBottom: "1px solid var(--line)" }}>
               {["Timestamp", "Actor", "Action type", "Action", "Target", "IP", "Result"].map((h) => (
                 <th key={h} style={{ padding: "10px 14px", textAlign: "start", fontSize: 11.5, fontWeight: 650, color: "var(--ink2)", whiteSpace: "nowrap" }}>{h}</th>
               ))}
@@ -205,7 +205,7 @@ export function AuditLogTable({ events, canExport = true }: { events: PlatformAu
                     <td style={{ padding: "10px 14px", whiteSpace: "nowrap", fontSize: 12.5, color: "var(--ink2)" }}>{formatIndianDateTime(e.timestamp)}</td>
                     <td style={{ padding: "10px 14px" }}>
                       <div className="who">
-                        <div className="av" aria-hidden="true" style={{ fontSize: 10, width: 28, height: 28, borderRadius: "50%", background: "var(--primary-light, #eff6ff)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary-d)", fontWeight: 700, flexShrink: 0 }}>
+                        <div className="av" aria-hidden="true" style={{ fontSize: 10, width: 28, height: 28, borderRadius: "50%", background: "var(--primary-light)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--primary-d)", fontWeight: 700, flexShrink: 0 }}>
                           {e.actor.slice(0, 2).toUpperCase()}
                         </div>
                         <div>
@@ -250,7 +250,7 @@ export function AuditLogTable({ events, canExport = true }: { events: PlatformAu
                     </td>
                   </tr>
                   {expanded && hasDiff && (
-                    <tr id={`diff-${e.id}`} style={{ background: "var(--line2, #f8fafc)" }}>
+                    <tr id={`diff-${e.id}`} style={{ background: "var(--line2)" }}>
                       <td colSpan={8} style={{ padding: "0 14px 12px 56px" }}>
                         <Diff before={e.before} after={e.after} />
                       </td>

@@ -35,8 +35,8 @@ export function MonthOverMonthCards({
   const cardStyle: React.CSSProperties = {
     flex: "1 1 180px",
     minWidth: 160,
-    background: "var(--panel,#f8fafc)",
-    border: "1px solid var(--line,#e2e8f0)",
+    background: "var(--panel)",
+    border: "1px solid var(--line)",
     borderRadius: 10,
     padding: "14px 16px",
   };
@@ -46,14 +46,14 @@ export function MonthOverMonthCards({
     fontWeight: 600,
     textTransform: "uppercase",
     letterSpacing: "0.5px",
-    color: "var(--mut,#64748b)",
+    color: "var(--mut)",
     marginBottom: 4,
   };
 
   const valueStyle: React.CSSProperties = {
     fontSize: 20,
     fontWeight: 700,
-    color: "var(--fg,#0f172a)",
+    color: "var(--fg)",
     lineHeight: 1.2,
   };
 
@@ -75,7 +75,7 @@ export function MonthOverMonthCards({
               marginTop: 4,
               fontSize: 12,
               fontWeight: 600,
-              color: isUp ? "var(--success,#16a34a)" : "var(--danger,#dc2626)",
+              color: isUp ? "var(--success)" : "var(--danger)",
             }}
           >
             {t("vsPreviousPeriod", { arrow: isUp ? "↑" : "↓", pct: Math.abs(pct).toFixed(1), period: previousPeriod })}
@@ -87,7 +87,7 @@ export function MonthOverMonthCards({
       <div style={cardStyle}>
         <div style={labelStyle}>{t("netToGrossRatioLabel")}</div>
         <div style={valueStyle}>{ratio}{ratio !== "—" ? "%" : ""}</div>
-        <div style={{ marginTop: 4, fontSize: 11, color: "var(--mut,#64748b)" }}>
+        <div style={{ marginTop: 4, fontSize: 11, color: "var(--mut)" }}>
           {t("netOfGrossSummary", { net: formatRupees(currentNet), gross: formatRupees(currentGross) })}
         </div>
       </div>

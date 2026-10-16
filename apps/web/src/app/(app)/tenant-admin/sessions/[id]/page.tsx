@@ -25,7 +25,7 @@ function maskIp(ip?: string): string {
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "10px 0", borderBottom: "1px solid var(--border, #e2e8f0)" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 2, padding: "10px 0", borderBottom: "1px solid var(--border)" }}>
       <dt style={{ fontSize: 12, color: "var(--ink2)", fontWeight: 500 }}>{label}</dt>
       <dd style={{ margin: 0, fontSize: 14, fontWeight: 400 }}>{value}</dd>
     </div>

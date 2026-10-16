@@ -41,11 +41,11 @@ export default async function AssesseesPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🧾" iconBg="#eff6ff" label="Registered Assessees" value={isError ? null : assessees.length} />
-        <StatCard icon="🏠" iconBg="#fffaeb" label="Property Assessees" value={isError ? null : propertyCount} />
-        <StatCard icon="🚰" iconBg="#eef2ff" label="Water-Connection Assessees" value={isError ? null : waterCount} />
-        <StatCard icon="🏪" iconBg="#f3e8ff" label="Trade & Other" value={isError ? null : otherCount} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={isError ? null : activeCount} />
+        <StatCard icon="🧾" tone="info" label="Registered Assessees" value={isError ? null : assessees.length} />
+        <StatCard icon="🏠" tone="warn" label="Property Assessees" value={isError ? null : propertyCount} />
+        <StatCard icon="🚰" tone="info" label="Water-Connection Assessees" value={isError ? null : waterCount} />
+        <StatCard icon="🏪" tone="neutral" label="Trade & Other" value={isError ? null : otherCount} />
+        <StatCard icon="✅" tone="good" label="Active" value={isError ? null : activeCount} />
       </StatGrid>
 
       <AssesseeCreateForm />

@@ -45,7 +45,7 @@ export function CertificateVerify() {
     }
   }
 
-  const color = result?.validity === "valid" ? "#ecfdf3" : result?.validity === "expired" ? "#fffaeb" : "#fef3f2";
+  const color = result?.validity === "valid" ? "var(--goodbg)" : result?.validity === "expired" ? "var(--warnbg)" : "var(--badbg)";
 
   return (
     <div className="card">
@@ -56,7 +56,7 @@ export function CertificateVerify() {
         <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={busy || !token}>
           {busy ? t("verifying") : t("verify")}
         </Button>
-        {error ? <p role="alert" style={{ color: "#b42318", fontSize: 13 }}>{error}</p> : null}
+        {error ? <p role="alert" style={{ color: "var(--bad)", fontSize: 13 }}>{error}</p> : null}
       </form>
 
       {result ? (

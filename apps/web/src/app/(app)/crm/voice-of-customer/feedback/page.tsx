@@ -123,7 +123,7 @@ function StarRating({
               padding: "0 2px",
               // `--muted` (#667085, 4.97:1 on white) for the unselected state —
               // the same token ContractorRatingForm.tsx uses.
-              color: selected ? "#f59e0b" : "var(--muted)",
+              color: selected ? "var(--amber)" : "var(--muted)",
               transition: "color 0.1s",
             }}
           >
@@ -209,10 +209,10 @@ export default function CitizenFeedbackPage() {
               gap: 10,
               marginBottom: 16,
               padding: "10px 14px",
-              background: "#ecfdf5",
+              background: "var(--goodbg)",
               border: "1px solid #a7f3d0",
               borderRadius: "var(--r)",
-              color: "#047857",
+              color: "var(--good)",
               fontSize: 13,
             }}
           >
@@ -229,10 +229,10 @@ export default function CitizenFeedbackPage() {
               gap: 10,
               marginBottom: 16,
               padding: "10px 14px",
-              background: "#fef2f2",
-              border: "1px solid #fecaca",
+              background: "var(--badbg)",
+              border: "1px solid var(--badbg)",
               borderRadius: "var(--r)",
-              color: "#b91c1c",
+              color: "var(--bad)",
               fontSize: 13,
             }}
           >

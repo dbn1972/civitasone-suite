@@ -84,10 +84,10 @@ export default async function AdvancesPage() {
           what actually failed. */}
       <DataSourceBadge source={source} message="Couldn't load the advances list — you can still submit a new request below" />
       <StatGrid>
-<StatCard icon="💰" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : items.length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPending")} value={errored ? null : pending} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statApproved")} value={errored ? null : approved} />
-        <StatCard icon="❌" iconBg="var(--badbg, #fdecea)" label={t("statRejected")} value={errored ? null : rejected} />
+<StatCard icon="💰" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={errored ? null : pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApproved")} value={errored ? null : approved} />
+        <StatCard icon="❌" iconBg="var(--badbg)" label={t("statRejected")} value={errored ? null : rejected} />
       </StatGrid>
 
       {canRequestAdvance ? (
@@ -98,7 +98,7 @@ export default async function AdvancesPage() {
         // "employee" role to self-file) -- an explanatory note instead of a
         // form that can only ever 403, same pattern as transfer/page.tsx's
         // view-only note for roles outside TRANSFER_ROLES.
-        <p role="note" style={{ fontSize: 13, color: "var(--mut,#64748b)", margin: "0 0 16px" }}>
+        <p role="note" style={{ fontSize: 13, color: "var(--mut)", margin: "0 0 16px" }}>
           {t("viewOnlyNoDirectoryAccess")}
         </p>
       )}

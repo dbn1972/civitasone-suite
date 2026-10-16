@@ -51,9 +51,9 @@ export function ReservationsTable({
   return (
     <div aria-label="Inventory stock reservations">
       <StatGrid>
-          <StatCard icon="🔒" iconBg="#fef3c7" label="Reservations" value={statValue(provenance, rows.length)} />
-          <StatCard icon="✅" iconBg="#dcfce7" label="Active" value={statValue(provenance, active)} />
-          <StatCard icon="🔢" iconBg="#f1f5f9" label="Qty Held (active)" value={statValue(provenance, totalQty)} />
+          <StatCard icon="🔒" tone="warn" label="Reservations" value={statValue(provenance, rows.length)} />
+          <StatCard icon="✅" tone="good" label="Active" value={statValue(provenance, active)} />
+          <StatCard icon="🔢" tone="neutral" label="Qty Held (active)" value={statValue(provenance, totalQty)} />
       </StatGrid>
       <Card title="Reservations">
         <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="stock reservations">

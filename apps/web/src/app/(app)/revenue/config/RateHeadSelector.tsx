@@ -26,7 +26,7 @@ export function RateHeadSelector({ rateHeads, selectedId }: RateHeadSelectorProp
   return (
     <div style={{ display: "grid", gap: 6, marginBottom: 16, maxWidth: 360 }}>
       <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
-        Rate head <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+        Rate head <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
       </label>
       <select
         id={id}

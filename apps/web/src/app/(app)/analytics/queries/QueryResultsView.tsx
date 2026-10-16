@@ -66,7 +66,7 @@ function buildRunColumns(catalog: AnalyticsCatalogLabels | undefined): RunCol[] 
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
             verticalAlign: "bottom",
-            color: "#b91c1c",
+            color: "var(--bad)",
             fontSize: 13,
           }}
         >
@@ -234,9 +234,9 @@ export function QueryResultsView({
                     onClick={() => setSelectedId(r.id)}
                     className="btn sm"
                     style={{
-                      border: isSel ? "2px solid #1d4ed8" : "1px solid #cbd5e1",
-                      background: isSel ? "#eff6ff" : "#fff",
-                      color: "#0f172a",
+                      border: isSel ? "2px solid var(--info)" : "1px solid var(--line)",
+                      background: isSel ? "var(--infobg)" : "var(--panel)",
+                      color: "var(--ink)",
                       borderRadius: 6,
                       padding: "4px 10px",
                       cursor: "pointer",

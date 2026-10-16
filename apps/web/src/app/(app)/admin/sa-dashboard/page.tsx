@@ -63,10 +63,10 @@ export default async function SaDashboardPage() {
       {opsLoadFailed && <DataSourceBadge source="error" message="Service status could not be loaded" />}
       {pm2Unreachable && <DataSourceBadge source="error" message="Service manager not reachable" />}
       <StatGrid>
-        <StatCard icon="🏢" iconBg="#eef2ff" label="Active Tenants" value={tenants} />
-        <StatCard icon="👥" iconBg="#ecfdf3" label="Total Users" value={users} />
-        <StatCard icon="💚" iconBg={uptimeAvailable ? "#fffaeb" : "#f2f4f7"} label="Platform Uptime" value={uptime} />
-        <StatCard icon="📊" iconBg={opsUnavailable ? "#f2f4f7" : "#eff6ff"} label="Services" value={servicesLabel} />
+        <StatCard icon="🏢" tone="info" label="Active Tenants" value={tenants} />
+        <StatCard icon="👥" tone="good" label="Total Users" value={users} />
+        <StatCard icon="💚" iconBg={uptimeAvailable ? "var(--warnbg)" : "var(--line2)"} label="Platform Uptime" value={uptime} />
+        <StatCard icon="📊" iconBg={opsUnavailable ? "var(--line2)" : "var(--infobg)"} label="Services" value={servicesLabel} />
       </StatGrid>
       {notes.length > 0 && (
         <ul aria-label="Unavailable figures" style={{ margin: "0 0 14px", paddingLeft: 18, fontSize: 12.5, color: "var(--mut)" }}>

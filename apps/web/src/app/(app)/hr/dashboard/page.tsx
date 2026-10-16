@@ -78,8 +78,8 @@ type EmpRow = {
 // before), just no longer a bare-hex literal. Duplicated from
 // ActionInbox.tsx's own AVATAR_BG/FG (both flagged by the same gap) rather
 // than shared, matching this file's existing "each own copy" convention.
-const AVATAR_BG = ["var(--dash-avatar-bg-1, #dbeafe)", "var(--dash-avatar-bg-2, #fce7f3)", "var(--dash-avatar-bg-3, #d1fae5)", "var(--dash-avatar-bg-4, #fef3c7)", "var(--dash-avatar-bg-5, #e0e7ff)", "var(--dash-avatar-bg-6, #fee2e2)"];
-const AVATAR_FG = ["var(--dash-avatar-fg-1, #1e40af)", "var(--dash-avatar-fg-2, #9d174d)", "var(--dash-avatar-fg-3, #065f46)", "var(--dash-avatar-fg-4, #92400e)", "var(--dash-avatar-fg-5, #3730a3)", "var(--dash-avatar-fg-6, #991b1b)"];
+const AVATAR_BG = ["var(--dash-avatar-bg-1)", "var(--dash-avatar-bg-2)", "var(--dash-avatar-bg-3)", "var(--dash-avatar-bg-4)", "var(--dash-avatar-bg-5)", "var(--dash-avatar-bg-6)"];
+const AVATAR_FG = ["var(--dash-avatar-fg-1)", "var(--dash-avatar-fg-2)", "var(--dash-avatar-fg-3)", "var(--dash-avatar-fg-4)", "var(--dash-avatar-fg-5)", "var(--dash-avatar-fg-6)"];
 
 function payrollDaysLeft(): number {
   const now = new Date();
@@ -159,7 +159,7 @@ export default async function HRDashboardPage() {
       <div
         className="hr-dashboard-root"
         aria-labelledby="hr-dash-heading"
-        style={{ background: "var(--page-bg,#eef2f7)", minHeight: "100vh" }}
+        style={{ background: "var(--page-bg)", minHeight: "100vh" }}
       >
         <h1 id="hr-dash-heading" className="sr-only">{t("dashboard.title")}</h1>
         {anyError && <DataSourceBadge source="error" />}
@@ -286,7 +286,7 @@ export default async function HRDashboardPage() {
     <div
       className="hr-dashboard-root"
       aria-labelledby="hr-dash-heading"
-      style={{ background: "var(--page-bg,#eef2f7)", minHeight: "100vh" }}
+      style={{ background: "var(--page-bg)", minHeight: "100vh" }}
     >
       <h1 id="hr-dash-heading" className="sr-only">{t("dashboard.title")}</h1>
       {anyError && <DataSourceBadge source="error" />}
@@ -319,7 +319,7 @@ export default async function HRDashboardPage() {
       {isManagerOnlyViewer && (
         <p data-testid="dashboard-scope-note"
           className="scope-note"
-          style={{ margin: "0 24px 8px", fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted,#64748b)" }}
+          style={{ margin: "0 24px 8px", fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted)" }}
         >
           {scopedToReports ? t("dashboard.scopeDirectReports") : t("dashboard.scopeOrganisationData")}
         </p>
@@ -415,7 +415,7 @@ export default async function HRDashboardPage() {
                     </td>
                   </tr>
                 ) : recentEmployees.length === 0 ? (
-                  <tr><td colSpan={6} style={{ textAlign: "center", padding: "24px", color: "var(--muted,#64748b)" }}>No employee records found</td></tr>
+                  <tr><td colSpan={6} style={{ textAlign: "center", padding: "24px", color: "var(--muted)" }}>No employee records found</td></tr>
                 ) : (
                   recentEmployees.map((emp, idx) => {
                     const bg = AVATAR_BG[idx % AVATAR_BG.length];
@@ -454,25 +454,25 @@ export default async function HRDashboardPage() {
         .dash-body-grid { display:grid;grid-template-columns:1fr 260px 220px;gap:12px;padding:0 24px 12px; }
         .dash-col-left,.dash-col-center,.dash-col-right { min-width:0; }
         @media (max-width:900px) { .dash-body-grid { grid-template-columns:1fr;padding:0 16px 12px; } }
-        .routing-failed-alert { background:var(--badbg, #fef2f2);border:1px solid var(--badbd, #fecaca);border-inline-start:4px solid var(--bad, #dc2626);border-radius:6px;padding:10px 14px;margin-bottom:12px; }
-        .rf-head { font-size:12px;font-weight:700;color:var(--bad, #991b1b); }
-        .rf-list { margin:6px 0 0;padding-inline-start:18px;font-size:11px;color:var(--ink,#0f172a); }
+        .routing-failed-alert { background:var(--badbg);border:1px solid var(--badbd);border-inline-start:4px solid var(--bad);border-radius:6px;padding:10px 14px;margin-bottom:12px; }
+        .rf-head { font-size:12px;font-weight:700;color:var(--bad); }
+        .rf-list { margin:6px 0 0;padding-inline-start:18px;font-size:11px;color:var(--ink); }
         .rf-list li { margin-bottom:2px; }
         .emp-section { margin:0 24px 32px; }
         @media (max-width:900px) { .emp-section { margin:0 16px 24px; } }
         .emp-section-head { display:flex;align-items:center;justify-content:space-between;margin-bottom:8px; }
-        .emp-section-title { font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2, #475569); }
-        .emp-view-all { font-size:11px;color:var(--info, #2563eb);font-weight:600;text-decoration:none; }
-        .emp-table-wrap { background:var(--panel,#fff);border-radius:8px;box-shadow:0 1px 3px rgba(15,34,64,.09); }
+        .emp-section-title { font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2); }
+        .emp-view-all { font-size:11px;color:var(--info);font-weight:600;text-decoration:none; }
+        .emp-table-wrap { background:var(--panel);border-radius:8px;box-shadow:0 1px 3px rgba(15,34,64,.09); }
         .emp-table { width:100%;border-collapse:collapse;font-size:12px; }
-        .emp-table th { text-align:start;padding:9px 14px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink2, #334155);border-bottom:1px solid var(--line,#e2e8f0);background:var(--bg,#f1f5f9);white-space:nowrap; }
-        .emp-table td { padding:10px 14px;border-bottom:1px solid var(--line,#e2e8f0);vertical-align:middle; }
+        .emp-table th { text-align:start;padding:9px 14px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink2);border-bottom:1px solid var(--line);background:var(--bg);white-space:nowrap; }
+        .emp-table td { padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:middle; }
         .emp-table tr:last-child td { border-bottom:none; }
         .emp-name-cell { display:flex;align-items:center;gap:9px;text-decoration:none;color:inherit; }
         .emp-avatar { width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0; }
-        .emp-code { color:var(--muted,#64748b);font-variant-numeric:tabular-nums; }
-        .emp-date { color:var(--muted,#64748b);font-variant-numeric:tabular-nums;white-space:nowrap; }
-        .grade-pill { display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:var(--bg,#f1f5f9);color:var(--ink2,#334155);border:1px solid var(--line,#e2e8f0);letter-spacing:.04em; }
+        .emp-code { color:var(--muted);font-variant-numeric:tabular-nums; }
+        .emp-date { color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap; }
+        .grade-pill { display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:var(--bg);color:var(--ink2);border:1px solid var(--line);letter-spacing:.04em; }
       `}</style>
     </div>
   );

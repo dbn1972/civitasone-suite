@@ -78,14 +78,14 @@ export default async function GRNPage() {
       />
 
       <StatGrid>
-        <StatCard icon="📦" iconBg="#e7edfd" label="Total GRNs" value={errored ? "—" : grns.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Accepted" value={errored ? "—" : accepted} />
-        <StatCard icon="🔍" iconBg="#fffaeb" label="Awaiting inspection" value={errored ? "—" : pendingQC} />
-        <StatCard icon="❌" iconBg="#fef3f2" label="Rejected" value={errored ? "—" : rejected} />
+        <StatCard icon="📦" tone="info" label="Total GRNs" value={errored ? "—" : grns.length} />
+        <StatCard icon="✅" tone="good" label="Accepted" value={errored ? "—" : accepted} />
+        <StatCard icon="🔍" tone="warn" label="Awaiting inspection" value={errored ? "—" : pendingQC} />
+        <StatCard icon="❌" tone="bad" label="Rejected" value={errored ? "—" : rejected} />
       </StatGrid>
 
       {truncated ? (
-        <p role="status" style={{ margin: "0 0 12px", fontSize: "0.875rem", color: "var(--warn, #b45309)" }}>
+        <p role="status" style={{ margin: "0 0 12px", fontSize: "0.875rem", color: "var(--warn)" }}>
           Showing the first {LIST_LIMIT} GRNs — refine your filters to find others. The totals above
           count only the GRNs shown.
         </p>

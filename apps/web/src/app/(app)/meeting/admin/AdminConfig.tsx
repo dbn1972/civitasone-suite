@@ -137,7 +137,7 @@ export function AdminConfig({
         </div>
       )}
       {error && (
-        <div className="alert" role="alert" style={{ borderColor: "#fca5a5", color: "var(--bad)" }}>
+        <div className="alert" role="alert" style={{ borderColor: "var(--badbd)", color: "var(--bad)" }}>
           ⚠ {error}
         </div>
       )}

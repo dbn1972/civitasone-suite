@@ -39,10 +39,10 @@ export default async function AlertsPage() {
       />
 
       <StatGrid>
-        <StatCard icon="🔔" iconBg="#eef2ff" label={t("statActive")} value={active} />
-        <StatCard icon="📤" iconBg="#ecfdf3" label={t("statTotal")} value={published} />
-        <StatCard icon="⏰" iconBg="#fffaeb" label={t("statExpired")} value={expired} />
-        <StatCard icon="📝" iconBg="#fce7ee" label={t("statDrafts")} value={drafts} />
+        <StatCard icon="🔔" tone="info" label={t("statActive")} value={active} />
+        <StatCard icon="📤" tone="good" label={t("statTotal")} value={published} />
+        <StatCard icon="⏰" tone="warn" label={t("statExpired")} value={expired} />
+        <StatCard icon="📝" tone="bad" label={t("statDrafts")} value={drafts} />
       </StatGrid>
 
       {errored ? (

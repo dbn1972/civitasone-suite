@@ -67,11 +67,11 @@ export default async function MyTasksPage() {
       />
 
       <StatGrid>
-        <StatCard icon="📥" iconBg="#eef2ff" label="Open tasks" value={open} />
-        <StatCard icon="🙋" iconBg="#fffbeb" label="Unassigned" value={unassigned} />
+        <StatCard icon="📥" tone="info" label="Open tasks" value={open} />
+        <StatCard icon="🙋" tone="warn" label="Unassigned" value={unassigned} />
         <StatCard
           icon="✋"
-          iconBg="#ecfdf5"
+          tone="good"
           label="Claimed by me"
           value={claimedByMe}
           hint={currentUserId ? undefined : "Sign in to see tasks claimed by you."}

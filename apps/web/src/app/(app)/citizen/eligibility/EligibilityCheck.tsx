@@ -56,8 +56,8 @@ export function EligibilityCheck({ services }: { services: EligibilityServiceOpt
   }
 
   const badge = result
-    ? result.outcome === "eligible" ? "var(--good-bg, #ecfdf3)"
-      : result.outcome === "not_eligible" ? "var(--bad-bg, #fef3f2)" : "var(--warn-bg, #fffaeb)"
+    ? result.outcome === "eligible" ? "var(--good-bg)"
+      : result.outcome === "not_eligible" ? "var(--bad-bg)" : "var(--warn-bg)"
     : "";
   const reference = result?.id ?? result?.correlationId ?? null;
 
@@ -89,7 +89,7 @@ export function EligibilityCheck({ services }: { services: EligibilityServiceOpt
         <Button type="submit" variant="primary" style={{ minHeight: 44 }} disabled={busy || !serviceId || !jsonValid}>
           {busy ? t("checking") : t("runCheck")}
         </Button>
-        {error ? <p role="alert" style={{ color: "var(--bad, #b42318)", fontSize: 13 }}>{error}</p> : null}
+        {error ? <p role="alert" style={{ color: "var(--bad)", fontSize: 13 }}>{error}</p> : null}
       </form>
 
       {result ? (
@@ -103,7 +103,7 @@ export function EligibilityCheck({ services }: { services: EligibilityServiceOpt
           ) : null}
           <ul style={{ marginTop: 12, fontSize: 13, listStyle: "none", padding: 0 }}>
             {result.reasons.map((r) => (
-              <li key={r.ruleId} style={{ color: r.passed ? "var(--good, #067647)" : "var(--bad, #b42318)", padding: "2px 0" }}>
+              <li key={r.ruleId} style={{ color: r.passed ? "var(--good)" : "var(--bad)", padding: "2px 0" }}>
                 <strong>{r.passed ? `✔ ${t("rulePassed")}` : `✗ ${t("ruleFailed")}`}</strong> — {r.message}
               </li>
             ))}

@@ -202,7 +202,7 @@ export function MinutesPanel({
           </div>
         )}
         {error && (
-          <div className="alert" role="alert" style={{ borderColor: "#fca5a5", color: "#b91c1c" }}>
+          <div className="alert" role="alert" style={{ borderColor: "var(--badbd)", color: "var(--bad)" }}>
             ⚠ {error}
           </div>
         )}
@@ -246,7 +246,7 @@ export function MinutesPanel({
         </div>
       )}
       {error && (
-        <div className="alert" role="alert" style={{ borderColor: "#fca5a5", color: "#b91c1c" }}>
+        <div className="alert" role="alert" style={{ borderColor: "var(--badbd)", color: "var(--bad)" }}>
           ⚠ {error}
         </div>
       )}
@@ -332,7 +332,7 @@ export function MinutesPanel({
           <div
             className="alert"
             role="status"
-            style={{ borderColor: "#f59e0b", background: "var(--warnbg)", marginBottom: 12 }}
+            style={{ borderColor: "var(--amber)", background: "var(--warnbg)", marginBottom: 12 }}
           >
             <strong>
               Returned by {minutes.rejectedByName ?? "the chairperson"}
@@ -370,7 +370,7 @@ export function MinutesPanel({
               padding: 12,
               borderRadius: 8,
               border: "1px solid var(--line2)",
-              background: "var(--bg2, #fafafa)",
+              background: "var(--bg2)",
               fontSize: 13.5,
               lineHeight: 1.6,
               maxHeight: 420,
@@ -407,7 +407,7 @@ export function MinutesPanel({
                 {busy === "submit" ? "Submitting…" : "Submit for approval"}
               </button>
               {content !== minutes.content && (
-                <span style={{ fontSize: 12.5, color: "#b45309", alignSelf: "center" }}>
+                <span style={{ fontSize: 12.5, color: "var(--warn)", alignSelf: "center" }}>
                   You have unsaved edits — Submit will save them first.
                 </span>
               )}
@@ -484,7 +484,7 @@ export function MinutesPanel({
             Approving locks the minutes, seals the integrity hash chain and records you as the
             approver. This can only be done by a chairperson who did not draft them.
             {selfApproval && (
-              <p style={{ color: "#b42318", fontWeight: 600, marginTop: 8 }}>
+              <p style={{ color: "var(--bad)", fontWeight: 600, marginTop: 8 }}>
                 ⚠️ You are recorded as the drafter of these minutes. Maker-checker separation means
                 the approver must be someone other than the drafter — this will be rejected.
               </p>

@@ -117,7 +117,7 @@ export function ApprovalPolicyCard({ tenantId, policy, isDefault, pending, sourc
         </label>
       </fieldset>
       <p style={{ margin: "12px 0", fontSize: 13, color: "var(--mut)" }}>{t("policyChangeNote")}</p>
-      {formProblem && <p role="alert" style={{ margin: "0 0 8px", color: "#b42318" }}>{formProblem}</p>}
+      {formProblem && <p role="alert" style={{ margin: "0 0 8px", color: "var(--bad)" }}>{formProblem}</p>}
       <Button variant="secondary" disabled={locked || busy} onClick={review}>{t("policySubmit")}</Button>
       <div ref={noticeRef} tabIndex={-1} role="status" aria-live="polite" style={{ marginTop: notice ? 12 : 0, outline: "none" }}>{notice}</div>
 

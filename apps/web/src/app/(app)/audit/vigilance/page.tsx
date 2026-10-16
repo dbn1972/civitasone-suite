@@ -69,11 +69,11 @@ export default async function VigilancePage() {
       />
 
       <StatGrid>
-        <StatCard icon="🔍" iconBg="#eef2ff" label="Total Cases" value={totalCases ?? "—"} />
+        <StatCard icon="🔍" tone="info" label="Total Cases" value={totalCases ?? "—"} />
         <StatCard icon="⏳" iconBg="var(--goodbg)" label="Preliminary / Under Investigation" value={underInvestigation ?? "—"} />
-        <StatCard icon="📑" iconBg="#fef3c7" label="Charge Sheet Issued" value={chargeSheeted ?? "—"} />
+        <StatCard icon="📑" tone="warn" label="Charge Sheet Issued" value={chargeSheeted ?? "—"} />
         <StatCard icon="📋" iconBg="var(--warnbg)" label="Inquiry Complete" value={inquiryComplete ?? "—"} />
-        <StatCard icon="⚠️" iconBg="#fce7ee" label="Penalties Imposed" value={penaltiesImposed ?? "—"} />
+        <StatCard icon="⚠️" tone="bad" label="Penalties Imposed" value={penaltiesImposed ?? "—"} />
         {unrecognised !== null && unrecognised > 0 ? (
           <StatCard icon="❔" iconBg="var(--warnbg)" label={t("vigilanceUnrecognisedStage")} value={unrecognised} />
         ) : null}

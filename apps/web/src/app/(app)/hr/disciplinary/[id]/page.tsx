@@ -178,10 +178,10 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
       </div>
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg, #eff6ff)" label={t("statStatus")} value={humanizeStatus(status_)} />
-        <StatCard icon="⚖️" iconBg="var(--primary-soft, #faf5ff)" label={t("statProceeding")} value={proceedingTypeLabel} />
-        <StatCard icon="🔎" iconBg="var(--warnbg, #fff7ed)" label={t("statFinding")} value={findingLabel} />
-        <StatCard icon="🚫" iconBg="var(--badbg, #fef2f2)" label={t("statPenalty")} value={penaltyTypeLabel} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statStatus")} value={humanizeStatus(status_)} />
+        <StatCard icon="⚖️" iconBg="var(--primary-soft)" label={t("statProceeding")} value={proceedingTypeLabel} />
+        <StatCard icon="🔎" iconBg="var(--warnbg)" label={t("statFinding")} value={findingLabel} />
+        <StatCard icon="🚫" iconBg="var(--badbg)" label={t("statPenalty")} value={penaltyTypeLabel} />
       </StatGrid>
 
       <Card title={t("cardTitle")} padding>

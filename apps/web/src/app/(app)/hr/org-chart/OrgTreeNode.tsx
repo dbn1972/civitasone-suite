@@ -44,8 +44,8 @@ function DesignationChip({ label }: { label: string }) {
         letterSpacing: 0.3,
         padding: '2px 6px',
         borderRadius: 4,
-        background: 'var(--chip-bg, #e6f0ff)',
-        color: 'var(--chip-text, #00439C)',
+        background: 'var(--chip-bg)',
+        color: 'var(--chip-text)',
         maxWidth: 160,
         overflow: 'hidden',
         textOverflow: 'ellipsis',
@@ -121,7 +121,7 @@ export function OrgTreeNode({
     [hasChildren, isExpanded, node.id, onToggle, visibleOrder, onNavigate],
   )
 
-  const avatarColors = ['#00439C', '#1a6d3c', '#7c2d12', '#4c1d95', '#064e3b', '#831843']
+  const avatarColors = ['var(--primary)', '#1a6d3c', '#7c2d12', '#4c1d95', '#064e3b', '#831843']
   const avatarColor = avatarColors[(node.name.charCodeAt(0) ?? 0) % avatarColors.length]
 
   return (
@@ -131,7 +131,7 @@ export function OrgTreeNode({
     >
       {depth > 0 && (
         <div
-          style={{ width: 2, height: 24, background: 'var(--border, #e2e8f0)', flexShrink: 0 }}
+          style={{ width: 2, height: 24, background: 'var(--border)', flexShrink: 0 }}
           aria-hidden="true"
         />
       )}
@@ -154,8 +154,8 @@ export function OrgTreeNode({
           flexDirection: 'column',
           alignItems: 'center',
           gap: 4,
-          background: match ? '#fffbeb' : 'var(--surface, #fff)',
-          border: `2px solid ${match ? '#f59e0b' : depth === 0 ? '#00439C' : 'var(--border, #e2e8f0)'}`,
+          background: match ? 'var(--warnbg)' : 'var(--surface)',
+          border: `2px solid ${match ? 'var(--amber)' : depth === 0 ? 'var(--primary)' : 'var(--border)'}`,
           borderRadius: 8,
           padding: '10px 16px',
           minWidth: 140,
@@ -174,7 +174,7 @@ export function OrgTreeNode({
         }}
       >
         <Avatar name={node.name} color={avatarColor} size="sm" />
-        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--fg, #0f172a)', lineHeight: 1.3, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--fg)', lineHeight: 1.3, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {node.name}
         </div>
         <DesignationChip label={node.designation} />
@@ -183,7 +183,7 @@ export function OrgTreeNode({
             aria-hidden="true"
             style={{
               fontSize: 10,
-              color: 'var(--muted, #64748b)',
+              color: 'var(--muted)',
               transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
               transition: 'transform 0.2s',
               lineHeight: 1,
@@ -199,7 +199,7 @@ export function OrgTreeNode({
       {hasChildren && isExpanded && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
           <div
-            style={{ width: 2, height: 20, background: 'var(--border, #e2e8f0)' }}
+            style={{ width: 2, height: 20, background: 'var(--border)' }}
             aria-hidden="true"
           />
           {/* Horizontal connector for multiple children */}

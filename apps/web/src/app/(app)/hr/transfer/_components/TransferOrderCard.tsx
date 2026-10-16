@@ -179,9 +179,9 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
             const label = statusText(key);
             const done   = i < currentIdx;
             const active = i === currentIdx;
-            const bg  = done ? "var(--good, #16a34a)" : active ? "var(--info, #2563eb)" : "var(--line, #e2e8f0)";
-            const fg  = done || active ? "var(--panel, #fff)" : "var(--mut)";
-            const connBg = done ? "var(--good, #16a34a)" : "var(--line, #e2e8f0)";
+            const bg  = done ? "var(--good)" : active ? "var(--info)" : "var(--line)";
+            const fg  = done || active ? "var(--panel)" : "var(--mut)";
+            const connBg = done ? "var(--good)" : "var(--line)";
             return (
               <li
                 key={key}
@@ -198,14 +198,14 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
                       // GAP-HR-TRANSFER-11: a non-colour cue for the active
                       // step (colour alone previously distinguished active
                       // from upcoming; done steps already had a check mark).
-                      boxShadow: active ? "0 0 0 2px var(--panel, #fff), 0 0 0 4px var(--info, #2563eb)" : undefined,
+                      boxShadow: active ? "0 0 0 2px var(--panel), 0 0 0 4px var(--info)" : undefined,
                     }}
                   >
                     {done ? "✓" : i + 1}
                   </div>
                   <span style={{
                     fontSize: "0.625rem", marginTop: 3,
-                    color: active ? "var(--info, #2563eb)" : done ? "var(--good, #16a34a)" : "var(--ink3)",
+                    color: active ? "var(--info)" : done ? "var(--good)" : "var(--ink3)",
                     fontWeight: active ? 600 : 400,
                     whiteSpace: "nowrap", maxWidth: 56, textAlign: "center",
                   }}>
@@ -290,7 +290,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
             {tr("issueFormDesc", { name: empLabel, from: fromLabel, to: toLabel })}
           </p>
           {dialogError && (
-            <p role="alert" aria-live="assertive" style={{ margin: 0, fontSize: 13, color: "var(--bad, #b91c1c)" }}>{dialogError}</p>
+            <p role="alert" aria-live="assertive" style={{ margin: 0, fontSize: 13, color: "var(--bad)" }}>{dialogError}</p>
           )}
           <Field
             id="issue-order-no"

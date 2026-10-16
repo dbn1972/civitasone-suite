@@ -86,12 +86,12 @@ export default async function TrainingFeedbackPage() {
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel={t("backLabel")} />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={isError ? "—" : total} />
-        <StatCard icon="📚" iconBg="var(--goodbg, #e6f7f0)" label={t("statPrograms")} value={isError ? "—" : new Set(rows.map((r) => r.program)).size} />
-        <StatCard icon="👥" iconBg="var(--warnbg, #fffbe6)" label={t("statEmployees")} value={isError ? "—" : new Set(rows.map((r) => r.employee)).size} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={isError ? "—" : total} />
+        <StatCard icon="📚" iconBg="var(--goodbg)" label={t("statPrograms")} value={isError ? "—" : new Set(rows.map((r) => r.program)).size} />
+        <StatCard icon="👥" iconBg="var(--warnbg)" label={t("statEmployees")} value={isError ? "—" : new Set(rows.map((r) => r.employee)).size} />
         <StatCard
           icon="⭐"
-          iconBg="var(--bg, #f5f5f5)"
+          iconBg="var(--bg)"
           label={t("statAvgScore")}
           value={isError ? "—" : scoredRows.length > 0 ? `${(scoredRows.reduce((s, r) => s + (r.score as number), 0) / scoredRows.length).toFixed(1)}/100` : "—"}
         />

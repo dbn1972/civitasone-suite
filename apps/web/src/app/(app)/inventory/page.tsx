@@ -63,7 +63,7 @@ export default async function Page() {
         </Card>
       ) : null}
       <StatGrid>
-        <StatCard icon="⚠️" iconBg="#fee2e2" label="Items Low" value={lowFailed ? null : lowStock.length} />
+        <StatCard icon="⚠️" tone="bad" label="Items Low" value={lowFailed ? null : lowStock.length} />
       </StatGrid>
       {!lowFailed && topItem && forecastRes?.data.available ? (
         <Card title="Demand forecast — item furthest below its reorder level" padding>
@@ -76,7 +76,7 @@ export default async function Page() {
         </Card>
       ) : null}
       {forecastFailed ? (
-        <p role="status" style={{ fontSize: 13, color: "#92400e", margin: "0 0 12px" }}>
+        <p role="status" style={{ fontSize: 13, color: "var(--warn)", margin: "0 0 12px" }}>
           Forecast unavailable right now.
         </p>
       ) : null}

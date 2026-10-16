@@ -160,7 +160,7 @@ export function AmendForm({
     return (
       <div className="card pad" role="status" aria-live="polite" style={{ display: "grid", gap: 12 }}>
         <p style={{ color: "var(--good)", margin: 0 }}>Amendment submitted for approval.</p>
-        <p style={{ color: "#64748b", margin: 0, fontSize: "0.875rem" }}>
+        <p style={{ color: "var(--mut)", margin: 0, fontSize: "0.875rem" }}>
           It will be reviewed by an approver (a different officer). You can track it from the purchase order.
         </p>
         <div>
@@ -233,7 +233,7 @@ export function AmendForm({
       </div>
 
       {/* Revised total preview (AMEND-04) */}
-      <div style={{ margin: "12px 0", padding: "10px 12px", background: "var(--panel, #f8fafc)", borderRadius: 8 }}>
+      <div style={{ margin: "12px 0", padding: "10px 12px", background: "var(--panel)", borderRadius: 8 }}>
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.875rem" }}>
           <span>Current total</span><span className="mono">{formatMoney(currentTotalMinor)}</span>
         </div>

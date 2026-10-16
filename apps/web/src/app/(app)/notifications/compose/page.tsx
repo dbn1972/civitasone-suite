@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Button, PageHeader, Card, EmptyState, ErrorState, ConfirmDialog } from "../../../_components/ds";
+import { Button, Field, Input, PageHeader, Card, EmptyState, ErrorState, ConfirmDialog, Select } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { useFormError } from "@/lib/useFormError";
 import { email as emailValidator, phone as phoneValidator } from "@/lib/form-validation";
@@ -114,8 +114,6 @@ function recipientError(recipient: string, effectiveChannel: string): string | u
 
 export default function ComposeNotificationPage() {
   const templateFieldId = useId();
-  const recipientFieldId = useId();
-  const channelFieldId = useId();
 
   // GAP-NOTIFICATIONS-TEMPLATES-DETAIL-01: a "Send with this template" link from
   // a template detail page carries ?templateId=…; preselect it once the list
@@ -267,10 +265,7 @@ export default function ComposeNotificationPage() {
               if (canSend) setConfirmOpen(true);
             }}
           >
-            <div className="field" style={{ marginBottom: 14 }}>
-              <label htmlFor={templateFieldId} style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                Template
-              </label>
+            <Field label="Template" required style={{ marginBottom: 14 }}>
               {templatesError ? (
                 <ErrorState
                   error={toHumanError("load", { area: "templates" })}
@@ -284,13 +279,10 @@ export default function ComposeNotificationPage() {
                   action={<a className="btn ghost" href="/notifications/templates/new">Create a template</a>}
                 />
               ) : (
-                <select
-                  id={templateFieldId}
+                <Select
                   value={templateId}
-                  required
-                  aria-required="true"
                   onChange={(e) => setTemplateId(e.target.value)}
-                  style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 8, minHeight: 44 }}
+                  style={{ minHeight: 44 }}
                 >
                   <option value="">{templatesLoading ? "Loading templates…" : "Select a template…"}</option>
                   {templates.map((t) => (
@@ -298,22 +290,19 @@ export default function ComposeNotificationPage() {
                       {t.name} ({channelLabel(t.channel)})
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
-            </div>
+            </Field>
 
-            <div className="field" style={{ marginBottom: 14 }}>
-              <label htmlFor={recipientFieldId} style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                Recipient
-              </label>
-              <input
-                id={recipientFieldId}
+            <Field
+              label="Recipient"
+              required
+              error={recipientTouched && recipientErr ? recipientErr : undefined}
+              style={{ marginBottom: 14 }}
+            >
+              <Input
                 type="text"
                 value={recipient}
-                required
-                aria-required="true"
-                aria-invalid={recipientTouched && !!recipientErr}
-                aria-describedby={`${recipientFieldId}-help ${recipientFieldId}-error`}
                 placeholder={
                   effectiveChannel === "email"
                     ? "email address"
@@ -323,60 +312,43 @@ export default function ComposeNotificationPage() {
                 }
                 onChange={(e) => setRecipient(e.target.value)}
                 onBlur={() => setRecipientTouched(true)}
-                style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 8, minHeight: 44 }}
               />
-              <p id={`${recipientFieldId}-help`} style={{ fontSize: 11, color: "#667085", margin: "4px 0 0" }}>
+              <p style={{ fontSize: 11, color: "var(--mut)", margin: "4px 0 0" }}>
                 {effectiveChannel
                   ? `Who should receive this ${channelLabel(effectiveChannel)} notification.`
                   : "Who should receive this notification, matching the selected channel."}
               </p>
-              {recipientTouched && recipientErr ? (
-                <p id={`${recipientFieldId}-error`} role="alert" style={{ fontSize: 11, color: "#b42318", margin: "4px 0 0" }}>
-                  {recipientErr}
-                </p>
-              ) : null}
-            </div>
+            </Field>
 
-            <div className="field" style={{ marginBottom: 18 }}>
-              <label htmlFor={channelFieldId} style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                Channel
-              </label>
-              <select
-                id={channelFieldId}
+            <Field label="Channel" style={{ marginBottom: 18 }}>
+              <Select
                 value={channel}
                 onChange={(e) => setChannel(e.target.value)}
-                style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 8, minHeight: 44 }}
+                style={{ minHeight: 44 }}
               >
                 {CHANNELS.map((c) => (
                   <option key={c.value} value={c.value}>{c.label}</option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </Field>
 
             {requiredVariables.length > 0 ? (
               <fieldset style={{ border: "1px solid var(--line)", borderRadius: 8, padding: 12, marginBottom: 18 }}>
                 <legend style={{ fontSize: 12, fontWeight: 600, padding: "0 6px" }}>Template details</legend>
-                <p style={{ fontSize: 11, color: "#667085", margin: "0 0 10px" }}>
+                <p style={{ fontSize: 11, color: "var(--mut)", margin: "0 0 10px" }}>
                   This template has placeholders. Fill them in so the recipient doesn&apos;t receive a blank value.
                 </p>
                 {requiredVariables.map((name) => {
                   const fieldId = `${templateFieldId}-var-${name}`;
                   const value = variables[name] ?? "";
                   return (
-                    <div key={name} className="field" style={{ marginBottom: 10 }}>
-                      <label htmlFor={fieldId} style={{ display: "block", fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
-                        {variableLabel(name)}
-                      </label>
-                      <input
-                        id={fieldId}
+                    <Field key={name} label={variableLabel(name)} required style={{ marginBottom: 10 }}>
+                      <Input
                         type="text"
                         value={value}
-                        required
-                        aria-required="true"
                         onChange={(e) => setVariables((prev) => ({ ...prev, [name]: e.target.value }))}
-                        style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--line)", borderRadius: 8, minHeight: 44 }}
                       />
-                    </div>
+                    </Field>
                   );
                 })}
               </fieldset>
@@ -387,23 +359,23 @@ export default function ComposeNotificationPage() {
             </Button>
           </form>
 
-          <div role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", marginTop: 12 }}>{result}</div>
+          <div role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--good)", marginTop: 12 }}>{result}</div>
         </Card>
 
         <Card title="About sending" padding>
-          <p style={{ fontSize: 13, color: "#475467", lineHeight: 1.5 }}>
+          <p style={{ fontSize: 13, color: "var(--ink2)", lineHeight: 1.5 }}>
             Notifications are queued and sent shortly; track them in{" "}
             <a href="/notifications/deliveries">Deliveries</a>.
           </p>
           {selectedTemplate ? (
-            <div style={{ marginTop: 12, fontSize: 12, color: "#667085" }}>
+            <div style={{ marginTop: 12, fontSize: 12, color: "var(--mut)" }}>
               <div><strong>Selected:</strong> {selectedTemplate.name}</div>
               <div>Channel default: {channelLabel(selectedTemplate.channel)}</div>
               {selectedTemplate.subject ? <div>Subject: {selectedTemplate.subject}</div> : null}
               {selectedTemplate.body ? (
                 <div style={{ marginTop: 10 }}>
                   <strong>Preview</strong>
-                  <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", background: "var(--bg-soft, #f8fafc)", padding: 8, borderRadius: 6, marginTop: 4 }}>
+                  <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", background: "var(--bg-soft)", padding: 8, borderRadius: 6, marginTop: 4 }}>
                     {previewBody}
                   </pre>
                 </div>

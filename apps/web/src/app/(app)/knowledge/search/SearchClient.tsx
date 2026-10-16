@@ -2,7 +2,7 @@
 
 import { useState, useCallback, type ReactNode } from "react";
 import Link from "next/link";
-import { Button, DataTable, EmptyState, PageHeader, Segmented, StatusPill } from "../../../_components/ds";
+import { Button, DataTable, EmptyState, Field, Input, PageHeader, Segmented, Select, StatusPill } from "../../../_components/ds";
 import { knowledgeDocStatusLabel, knowledgeDocStatusPill } from "../_data/statusLabels";
 
 type Doc = {
@@ -149,24 +149,22 @@ export function KnowledgeSearchClient({
         <div id="advanced-filters" className="card" style={{ marginBottom: "18px" }}>
           <div className="card-h"><h3>Advanced filters</h3></div>
           <div className="pad" style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "flex-end" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <label className="label" htmlFor="filter-category">Category</label>
-              <select id="filter-category" className="inp" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} style={{ minHeight: 40 }}>
+            <Field label="Category">
+              <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} style={{ minHeight: 40 }}>
                 <option value="">All categories</option>
                 {categories.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
-              </select>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <label className="label" htmlFor="filter-status">Status</label>
-              <select id="filter-status" className="inp" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ minHeight: 40 }}>
+              </Select>
+            </Field>
+            <Field label="Status">
+              <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ minHeight: 40 }}>
                 <option value="">Any status</option>
                 {statuses.map((s) => (
                   <option key={s} value={s}>{knowledgeDocStatusLabel(s)}</option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </Field>
             {(categoryFilter || statusFilter) && (
               <Button variant="ghost" onClick={() => { setCategoryFilter(""); setStatusFilter(""); }}>
                 Clear filters
@@ -181,7 +179,7 @@ export function KnowledgeSearchClient({
           <form onSubmit={handleSubmit} role="search">
             <div className="tb-search" style={{ maxWidth: "none", fontSize: "15px", padding: "14px 16px" }}>
               <span aria-hidden="true">🔎</span>
-              <input
+              <Input
                 type="search"
                 value={query}
                 onChange={handleChange}

@@ -66,7 +66,7 @@ export default async function AnalyticsDashboardDetailPage({ params }: { params:
           <ul className="pad" style={{ margin: 0, paddingInlineStart: 18 }}>
             {dashboard.widgets.map((w) => (
               <li key={w.id}>
-                {w.title} <span style={{ color: "var(--ink2, #64748b)" }}>· {w.vizType}</span>
+                {w.title} <span style={{ color: "var(--ink2)" }}>· {w.vizType}</span>
               </li>
             ))}
           </ul>

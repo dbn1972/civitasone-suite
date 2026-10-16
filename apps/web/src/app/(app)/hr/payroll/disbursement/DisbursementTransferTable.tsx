@@ -39,7 +39,7 @@ function ProgressRing({
         <circle
           cx={44} cy={44} r={r}
           fill="none" strokeWidth={8}
-          stroke="var(--good, #27ae60)"
+          stroke="var(--good)"
           strokeDasharray={dashArray}
           strokeLinecap="round"
           transform="rotate(-90 44 44)"
@@ -192,7 +192,7 @@ export function DisbursementTransferTable({ transfers, canReveal = false }: {
                 <td style={{ padding: "10px 12px" }}>
                   <StatusPill status={tx.status} />
                   {isFailedTransfer(tx.status) && tx.failureReason ? (
-                    <div style={{ fontSize: 11, color: "var(--bad, #c0392b)", marginTop: 2 }}>{tx.failureReason}</div>
+                    <div style={{ fontSize: 11, color: "var(--bad)", marginTop: 2 }}>{tx.failureReason}</div>
                   ) : null}
                 </td>
                 <td style={{ padding: "10px 12px" }}>

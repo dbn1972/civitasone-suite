@@ -24,10 +24,10 @@ const STATUS_CONFIG: Record<
   ChecklistStep["status"],
   { icon: string; color: string; bg: string; label: string }
 > = {
-  completed:   { icon: "✓", color: "var(--good, #067647)",  bg: "var(--goodbg, #dcfce7)",  label: "Completed" },
-  in_progress: { icon: "⟳", color: "var(--indigo, #4f46e5)", bg: "var(--infobg, #ede9fe)",  label: "In progress" },
-  overdue:     { icon: "!", color: "var(--warn, #b45309)",    bg: "var(--warnbg, #fef3c7)",  label: "Overdue" },
-  pending:     { icon: "○", color: "var(--mut)",              bg: "var(--line2, #f1f5f9)",     label: "Pending" },
+  completed:   { icon: "✓", color: "var(--good)",  bg: "var(--goodbg)",  label: "Completed" },
+  in_progress: { icon: "⟳", color: "var(--indigo)", bg: "var(--infobg)",  label: "In progress" },
+  overdue:     { icon: "!", color: "var(--warn)",    bg: "var(--warnbg)",  label: "Overdue" },
+  pending:     { icon: "○", color: "var(--mut)",              bg: "var(--line2)",     label: "Pending" },
 };
 
 export function OnboardingChecklist({ steps, onComplete }: OnboardingChecklistProps) {
@@ -44,10 +44,10 @@ export function OnboardingChecklist({ steps, onComplete }: OnboardingChecklistPr
           marginBottom: 14,
         }}
       >
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--heading, #1e293b)" }}>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "var(--heading)" }}>
           Onboarding Checklist
         </h3>
-        <span style={{ fontSize: 12, color: "var(--muted, #64748b)", fontWeight: 500 }}>
+        <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 500 }}>
           {done} / {total} steps completed
         </span>
       </div>
@@ -56,7 +56,7 @@ export function OnboardingChecklist({ steps, onComplete }: OnboardingChecklistPr
       <div
         style={{
           height: 6,
-          background: "var(--border, #e2e8f0)",
+          background: "var(--border)",
           borderRadius: 99,
           marginBottom: 18,
           overflow: "hidden",
@@ -71,7 +71,7 @@ export function OnboardingChecklist({ steps, onComplete }: OnboardingChecklistPr
           style={{
             height: "100%",
             width: `${(done / total) * 100}%`,
-            background: "linear-gradient(90deg,var(--indigo, #4f46e5),var(--violet, #7c3aed))",
+            background: "linear-gradient(90deg,var(--indigo),var(--violet))",
             borderRadius: 99,
             transition: "width 0.4s ease",
           }}
@@ -117,8 +117,8 @@ export function OnboardingChecklist({ steps, onComplete }: OnboardingChecklistPr
                     height: "100%",
                     background:
                       step.status === "completed"
-                        ? "var(--goodbg, #d1fae5)"
-                        : "var(--border, #e2e8f0)",
+                        ? "var(--goodbg)"
+                        : "var(--border)",
                   }}
                 />
               )}
@@ -161,8 +161,8 @@ export function OnboardingChecklist({ steps, onComplete }: OnboardingChecklistPr
                       fontWeight: step.status === "completed" ? 500 : 600,
                       color:
                         step.status === "completed"
-                          ? "var(--muted, #64748b)"
-                          : "var(--body, #334155)",
+                          ? "var(--muted)"
+                          : "var(--body)",
                       textDecoration:
                         step.status === "completed" ? "line-through" : "none",
                     }}
@@ -182,7 +182,7 @@ export function OnboardingChecklist({ steps, onComplete }: OnboardingChecklistPr
                     {cfg.label}
                   </span>
                   {step.dueDay !== undefined && (
-                    <span style={{ fontSize: 10, color: "var(--muted, #64748b)" }}>
+                    <span style={{ fontSize: 10, color: "var(--muted)" }}>
                       Day {step.dueDay}
                     </span>
                   )}
@@ -192,7 +192,7 @@ export function OnboardingChecklist({ steps, onComplete }: OnboardingChecklistPr
                     style={{
                       margin: "2px 0 0",
                       fontSize: 12,
-                      color: "var(--muted, #64748b)",
+                      color: "var(--muted)",
                       lineHeight: 1.5,
                     }}
                   >
@@ -210,9 +210,9 @@ export function OnboardingChecklist({ steps, onComplete }: OnboardingChecklistPr
                     flexShrink: 0,
                     fontSize: 11,
                     fontWeight: 600,
-                    color: "var(--indigo, #4f46e5)",
+                    color: "var(--indigo)",
                     background: "none",
-                    border: "1px solid var(--primary-soft, #c7d2fe)",
+                    border: "1px solid var(--primary-soft)",
                     borderRadius: 6,
                     padding: "3px 8px",
                     cursor: "pointer",

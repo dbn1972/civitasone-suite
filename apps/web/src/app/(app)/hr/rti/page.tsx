@@ -109,14 +109,14 @@ export default async function RtiPage({ searchParams }: { searchParams?: Record<
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📂" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? null : summary.total} />
-        <StatCard icon="🔔" iconBg="var(--warnbg, #fffbe6)" label={t("statPendingLabel")} value={errored ? null : summary.pending} />
-        <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label={t("statOverdueLabel")} value={errored ? null : summary.overdue} />
+        <StatCard icon="📂" iconBg="var(--infobg)" label={t("statTotalLabel")} value={errored ? null : summary.total} />
+        <StatCard icon="🔔" iconBg="var(--warnbg)" label={t("statPendingLabel")} value={errored ? null : summary.pending} />
+        <StatCard icon="🔴" iconBg="var(--badbg)" label={t("statOverdueLabel")} value={errored ? null : summary.overdue} />
         {/* GAP-HR-RTI-02: "Under appeal" had no stat card at all -- first-
             appeal cases (their own statutory clock, RTI Act s.19) simply
             vanished from the summary before this. */}
-        <StatCard icon="⚖️" iconBg="var(--bg, #f5f5f5)" label={t("statAppealedLabel")} value={errored ? null : summary.appealed} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statDisposedLabel")} value={errored ? null : summary.disposed} />
+        <StatCard icon="⚖️" iconBg="var(--bg)" label={t("statAppealedLabel")} value={errored ? null : summary.appealed} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statDisposedLabel")} value={errored ? null : summary.disposed} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (

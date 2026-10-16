@@ -48,12 +48,12 @@ export default async function GranteeDetailPage({ params }: { params: { id: stri
       {grantee && (
         <>
           <StatGrid>
-            <StatCard icon="👥" iconBg="#faf5ff" label="Type" value={TYPE_LABELS[grantee.type] ?? grantee.type} />
-            <StatCard icon="📋" iconBg="#eff6ff" label="Status" value={humanizeStatus(grantee.status)} />
-            <StatCard icon="🗺️" iconBg="#f0fdf4" label="Geography" value={grantee.geography ?? "—"} />
+            <StatCard icon="👥" tone="neutral" label="Type" value={TYPE_LABELS[grantee.type] ?? grantee.type} />
+            <StatCard icon="📋" tone="info" label="Status" value={humanizeStatus(grantee.status)} />
+            <StatCard icon="🗺️" tone="good" label="Geography" value={grantee.geography ?? "—"} />
             <StatCard
               icon="₹"
-              iconBg="#ecfdf5"
+              tone="good"
               label="Annual income"
               value={grantee.incomeAnnualMinor ? formatMoney(grantee.incomeAnnualMinor) : "—"}
             />

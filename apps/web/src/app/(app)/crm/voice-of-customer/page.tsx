@@ -137,19 +137,19 @@ export default async function VoiceOfCitizenPage({
         />
         <StatCard
           icon="▣"
-          iconBg="#e0f2fe"
+          tone="info"
           label="Interactions Scored"
           value={isError ? "—" : summary.total.toLocaleString("en-IN")}
         />
         <StatCard
           icon="△"
-          iconBg="#fee2e2"
+          tone="bad"
           label="Negative Share"
           value={isError || summary.total === 0 ? "—" : `${summary.negativeShare}%`}
         />
         <StatCard
           icon="◈"
-          iconBg="#fef3c7"
+          tone="warn"
           label="Primary Concern"
           value={isError ? "—" : visibleConcern ? themeLabel(visibleConcern.theme) : "None"}
         />
@@ -167,19 +167,19 @@ export default async function VoiceOfCitizenPage({
         <StatGrid>
           <StatCard
             icon="▲"
-            iconBg="#dcfce7"
+            tone="good"
             label="Positive"
             value={isError ? "—" : `${summary.byPolarity.positive.toLocaleString("en-IN")} (${shareOf(summary, "positive")}%)`}
           />
           <StatCard
             icon="○"
-            iconBg="#fef3c7"
+            tone="warn"
             label="Neutral"
             value={isError ? "—" : `${summary.byPolarity.neutral.toLocaleString("en-IN")} (${shareOf(summary, "neutral")}%)`}
           />
           <StatCard
             icon="▽"
-            iconBg="#fee2e2"
+            tone="bad"
             label="Negative"
             value={isError ? "—" : `${summary.byPolarity.negative.toLocaleString("en-IN")} (${shareOf(summary, "negative")}%)`}
           />
@@ -196,13 +196,13 @@ export default async function VoiceOfCitizenPage({
         <StatGrid>
           <StatCard
             icon="★"
-            iconBg="#fef3c7"
+            tone="warn"
             label={t("averageRating")}
             value={ratingsSource === "error" || ratings.count === 0 ? "—" : ratings.average!.toFixed(2)}
           />
           <StatCard
             icon="▣"
-            iconBg="#e0f2fe"
+            tone="info"
             label={t("ratingsReceived")}
             value={ratingsSource === "error" ? "—" : ratings.count.toLocaleString("en-IN")}
           />

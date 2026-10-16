@@ -139,7 +139,7 @@ export function WebhookSubscriptionsBuilder({
                 ))}
               </div>
               {row.events.length === 0 ? (
-                <span style={{ ...hint, color: "#b42318" }}>
+                <span style={{ ...hint, color: "var(--bad)" }}>
                   Select at least one event — a subscription with none receives nothing.
                 </span>
               ) : null}

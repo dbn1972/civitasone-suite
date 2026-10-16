@@ -209,7 +209,7 @@ export default async function ContractorDetailPage({
           gap: 10,
           padding: "14px 18px",
           borderRadius: 12,
-          background: "var(--surface2, #f8fafc)",
+          background: "var(--surface2)",
           border: "1px solid var(--line)",
           marginBottom: 20,
           flexWrap: "wrap",
@@ -219,7 +219,7 @@ export default async function ContractorDetailPage({
           <>
             <span
               aria-label={`Rating: ${contractor.performanceRating.toFixed(1)} out of 5`}
-              style={{ fontSize: 24, letterSpacing: 3, color: "#f59e0b" }}
+              style={{ fontSize: 24, letterSpacing: 3, color: "var(--amber)" }}
             >
               {starDisplay(contractor.performanceRating)}
             </span>

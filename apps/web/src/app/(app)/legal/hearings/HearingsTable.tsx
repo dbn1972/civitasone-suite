@@ -55,18 +55,18 @@ function daysRemaining(dateStr: string | null | undefined, today: string): numbe
 
 /** Colour-coded countdown cell (red if overdue, amber ≤7, green otherwise). */
 function daysCell(n: number | null): ReactNode {
-  if (n === null) return <span style={{ color: "var(--muted, #94a3b8)" }}>—</span>;
+  if (n === null) return <span style={{ color: "var(--muted)" }}>—</span>;
   if (n < 0) {
     return (
-      <span style={{ color: "#b42318", fontWeight: 600 }}>
+      <span style={{ color: "var(--bad)", fontWeight: 600 }}>
         {`Overdue by ${Math.abs(n)} day${Math.abs(n) === 1 ? "" : "s"}`}
       </span>
     );
   }
   if (n === 0) {
-    return <span style={{ color: "#b42318", fontWeight: 600 }}>Today</span>;
+    return <span style={{ color: "var(--bad)", fontWeight: 600 }}>Today</span>;
   }
-  const color = n <= 7 ? "#b54708" : "#067647";
+  const color = n <= 7 ? "var(--warn)" : "var(--good)";
   const weight = n <= 7 ? 600 : 400;
   return (
     <span style={{ color, fontWeight: weight }}>

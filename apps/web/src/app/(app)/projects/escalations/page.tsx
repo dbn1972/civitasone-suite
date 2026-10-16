@@ -32,10 +32,10 @@ export default async function EscalationsPage() {
     <div className="page-main wrap">
       <PageHeader title="Escalations" subtitle="Project risk alerts, escalation queue and resolution tracking." back="/projects" />
       <StatGrid>
-        <StatCard icon="🚨" iconBg="#fef3f2" label="Active Escalations" value={active ?? "—"} />
-        <StatCard icon="🔴" iconBg="#fef3f2" label="Critical" value={critical ?? "—"} />
-        <StatCard icon="🟠" iconBg="#fffaeb" label="High" value={high ?? "—"} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Resolved" value={resolved ?? "—"} />
+        <StatCard icon="🚨" tone="bad" label="Active Escalations" value={active ?? "—"} />
+        <StatCard icon="🔴" tone="bad" label="Critical" value={critical ?? "—"} />
+        <StatCard icon="🟠" tone="warn" label="High" value={high ?? "—"} />
+        <StatCard icon="✅" tone="good" label="Resolved" value={resolved ?? "—"} />
       </StatGrid>
       <Card title="Escalation Queue">
         {errored ? (

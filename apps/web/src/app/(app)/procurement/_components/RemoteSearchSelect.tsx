@@ -158,8 +158,8 @@ export function RemoteSearchSelect({
           role="listbox"
           style={{
             position: "absolute", zIndex: 20, left: 0, right: 0, margin: "4px 0 0", padding: 4, listStyle: "none",
-            maxHeight: 260, overflowY: "auto", background: "var(--card, #fff)", color: "var(--ink, #111827)",
-            border: "1px solid var(--line, #d1d5db)", borderRadius: 8,
+            maxHeight: 260, overflowY: "auto", background: "var(--card)", color: "var(--ink)",
+            border: "1px solid var(--line)", borderRadius: 8,
           }}
         >
           {state === "loading" ? <li role="presentation" style={{ padding: 8 }}>{labels.loading}</li> : null}
@@ -179,7 +179,7 @@ export function RemoteSearchSelect({
               role="option"
               aria-selected={value?.id === o.id}
               onMouseDown={(e) => { e.preventDefault(); choose(o); }}
-              style={{ padding: "8px 10px", cursor: "pointer", borderRadius: 6, background: i === active ? "var(--hover, #eef2ff)" : undefined }}
+              style={{ padding: "8px 10px", cursor: "pointer", borderRadius: 6, background: i === active ? "var(--hover)" : undefined }}
             >
               {o.label}
               {o.hint ? <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>{o.hint}</span> : null}

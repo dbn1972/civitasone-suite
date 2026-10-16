@@ -62,7 +62,7 @@ function friendlyFailure(error: string | null | undefined): string {
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="prefrow" style={{ display: "flex", justifyContent: "space-between", gap: 16, padding: "10px 0", borderBottom: "1px solid var(--line)" }}>
-      <span style={{ fontSize: 12, color: "#667085" }}>{label}</span>
+      <span style={{ fontSize: 12, color: "var(--mut)" }}>{label}</span>
       <span style={{ fontSize: 13, textAlign: "right", wordBreak: "break-word" }}>{children}</span>
     </div>
   );
@@ -131,7 +131,7 @@ export function DeliveryDetail({
       <>
         <PageHeader title="Delivery" subtitle="Loading delivery details…" back="/notifications/deliveries" backLabel="Deliveries" />
         <Card padding>
-          <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#667085" }}>
+          <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--mut)" }}>
             Loading delivery details…
           </p>
         </Card>
@@ -217,7 +217,7 @@ export function DeliveryDetail({
               <Row label="Failure reason">{friendlyFailure(delivery.error)}</Row>
               {canSeeTechnicalDetail && (delivery.error || delivery.errorDetail) ? (
                 <details style={{ marginTop: 8 }}>
-                  <summary style={{ fontSize: 12, color: "#667085", cursor: "pointer" }}>Technical detail</summary>
+                  <summary style={{ fontSize: 12, color: "var(--mut)", cursor: "pointer" }}>Technical detail</summary>
                   <pre style={{ whiteSpace: "pre-wrap", fontFamily: "monospace", fontSize: 12, marginTop: 6 }}>
                     {[delivery.error, delivery.errorDetail].filter(Boolean).join("\n")}
                   </pre>
@@ -225,7 +225,7 @@ export function DeliveryDetail({
               ) : null}
             </>
           ) : (
-            <p style={{ fontSize: 12, color: "#667085", marginTop: 8 }}>No errors recorded for this delivery.</p>
+            <p style={{ fontSize: 12, color: "var(--mut)", marginTop: 8 }}>No errors recorded for this delivery.</p>
           )}
         </Card>
       </div>

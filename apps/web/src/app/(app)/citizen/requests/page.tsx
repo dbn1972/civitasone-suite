@@ -30,10 +30,10 @@ export default async function Page() {
       ) : (
         <>
           <StatGrid>
-            <StatCard icon="📨" iconBg="#e0f5fa" label={t("statOpen")} value={open.toLocaleString("en-IN")} />
-            <StatCard icon="🔴" iconBg="#fef3f2" label={t("statRejected")} value={rejected.toLocaleString("en-IN")} />
-            <StatCard icon="✅" iconBg="#ecfdf3" label={t("statResolved")} value={resolved.toLocaleString("en-IN")} />
-            <StatCard icon="📊" iconBg="#fffaeb" label={t("statTotal")} value={requests.length.toLocaleString("en-IN")} />
+            <StatCard icon="📨" tone="info" label={t("statOpen")} value={open.toLocaleString("en-IN")} />
+            <StatCard icon="🔴" tone="bad" label={t("statRejected")} value={rejected.toLocaleString("en-IN")} />
+            <StatCard icon="✅" tone="good" label={t("statResolved")} value={resolved.toLocaleString("en-IN")} />
+            <StatCard icon="📊" tone="warn" label={t("statTotal")} value={requests.length.toLocaleString("en-IN")} />
           </StatGrid>
           <CitizenRequestsClient requests={requests} />
         </>

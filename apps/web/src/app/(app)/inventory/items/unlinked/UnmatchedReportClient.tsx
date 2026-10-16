@@ -58,9 +58,9 @@ export function UnmatchedReportClient({
     <div style={{ display: "flex", flexDirection: "column", gap: 18, marginTop: 18 }}>
       <AcceptedNotice {...accepted.noticeProps} />
       {report.truncated ? <p role="status" style={{ margin: 0, fontSize: "0.875rem" }}>{t("report.truncated")}</p> : null}
-      {!report.stockAvailable ? <p role="status" style={{ margin: 0, fontSize: "0.875rem", color: "#92400e" }}>{t("report.stockUnavailable")}</p> : null}
+      {!report.stockAvailable ? <p role="status" style={{ margin: 0, fontSize: "0.875rem", color: "var(--warn)" }}>{t("report.stockUnavailable")}</p> : null}
       <div role="status" aria-live="polite">
-        {message ? <p role="alert" style={{ margin: 0, fontSize: "0.875rem", color: "#b91c1c" }}>{message}</p> : null}
+        {message ? <p role="alert" style={{ margin: 0, fontSize: "0.875rem", color: "var(--bad)" }}>{message}</p> : null}
       </div>
 
       <Card title={t("report.suggestionsHeading")}>

@@ -68,7 +68,7 @@ export function ModulesConfirmCard({
       </div>
       <div className="pad">
         <p style={{ margin: 0, fontSize: 13.5, color: "var(--mut)" }}>{confirmed ? t("doneHelp") : t("help")}</p>
-        <div role="status" aria-live="polite" style={{ fontSize: 12, color: "#067647", marginTop: 8 }}>
+        <div role="status" aria-live="polite" style={{ fontSize: 12, color: "var(--good)", marginTop: 8 }}>
           {done ? t("success") : ""}
         </div>
         <div role="alert" aria-live="assertive" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{error}</div>

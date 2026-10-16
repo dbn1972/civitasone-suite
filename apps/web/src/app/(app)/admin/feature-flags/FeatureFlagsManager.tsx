@@ -219,10 +219,10 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
         </div>
       )}
       <StatGrid>
-        <StatCard icon="🚩" iconBg="#eef2ff" label="Total Flags" value={flags.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active (100%)" value={activeCount} />
-        <StatCard icon="🔄" iconBg="#fffaeb" label="Rolling Out" value={partialCount} />
-        <StatCard icon="⛔" iconBg="#fce7ee" label="Killed" value={killedCount} />
+        <StatCard icon="🚩" tone="info" label="Total Flags" value={flags.length} />
+        <StatCard icon="✅" tone="good" label="Active (100%)" value={activeCount} />
+        <StatCard icon="🔄" tone="warn" label="Rolling Out" value={partialCount} />
+        <StatCard icon="⛔" tone="bad" label="Killed" value={killedCount} />
       </StatGrid>
 
       <div className="card" style={{ marginTop: 18 }}>

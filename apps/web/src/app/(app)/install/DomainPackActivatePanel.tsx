@@ -133,7 +133,7 @@ export function DomainPackActivatePanel({
       {loading ? (
         /* Not part of the original catalogue -- found during tranche 5
            verification: text-slate-500 (#64748b) measured 4.43:1 here
-           (this card's background is slightly off-white, #f4f7fd, not
+           (this card's background is slightly off-white, var(--line2), not
            pure white), just under 4.5:1, and only surfaced on some runs
            depending on load-state timing. var(--ink2) clears both
            backgrounds with a comfortable margin. */

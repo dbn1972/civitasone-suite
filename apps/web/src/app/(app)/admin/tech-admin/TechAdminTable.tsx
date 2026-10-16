@@ -23,11 +23,11 @@ export function TechAdminTable({ services, source = "api", fetchedAt }: { servic
       {/* UX-012: this badge is the ONLY place that reports data provenance for the rows below. */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <StatGrid>
-        <StatCard icon="⚙️" iconBg="#eef2ff" label="Services" value={summary.total} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Running" value={summary.running} />
-        <StatCard icon="❌" iconBg="#fce7ee" label="Stopped or errored" value={summary.down} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label="Degraded" value={summary.degraded} />
-        <StatCard icon="❔" iconBg="#f2f4f7" label="Unknown status" value={summary.unknown} />
+        <StatCard icon="⚙️" tone="info" label="Services" value={summary.total} />
+        <StatCard icon="✅" tone="good" label="Running" value={summary.running} />
+        <StatCard icon="❌" tone="bad" label="Stopped or errored" value={summary.down} />
+        <StatCard icon="⚠️" tone="warn" label="Degraded" value={summary.degraded} />
+        <StatCard icon="❔" tone="neutral" label="Unknown status" value={summary.unknown} />
       </StatGrid>
       <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "0 0 12px", fontSize: 12.5, color: "var(--mut)" }}>
         {fetchedAt && <span>Checked {formatIndianDateTime(fetchedAt)}</span>}

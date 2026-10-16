@@ -88,20 +88,20 @@ export default async function CampaignsPage() {
         </div>
       )}
       <StatGrid>
-        <StatCard icon="📣" iconBg="#e0f2fe" label="Campaigns Tracked" value={totals.campaigns.toLocaleString("en-IN")} />
+        <StatCard icon="📣" tone="info" label="Campaigns Tracked" value={totals.campaigns.toLocaleString("en-IN")} />
         <StatCard
           icon="💸"
-          iconBg="#fee2e2"
+          tone="bad"
           label="Total Spend"
           value={mixedCurrency ? "—" : formatMoney(totals.costMinor)}
         />
         <StatCard
           icon="💰"
-          iconBg="#dcfce7"
+          tone="good"
           label="Attributed Revenue"
           value={mixedCurrency ? "—" : formatMoney(totals.revenueMinor)}
         />
-        <StatCard icon="📈" iconBg="#fef3c7" label="Portfolio ROI" value={formatRoiPercent(portfolioRoiPercent)} />
+        <StatCard icon="📈" tone="warn" label="Portfolio ROI" value={formatRoiPercent(portfolioRoiPercent)} />
       </StatGrid>
 
       {totals.unmeasuredCampaigns > 0 && !mixedCurrency && (

@@ -126,10 +126,10 @@ export default async function EmployeeTypesPage() {
       />
 
       <StatGrid>
-        <StatCard icon="👥" iconBg="var(--infobg, #e7edfd)" label={t("statTotalTypes")} value={errored ? "—" : types.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #ecfdf3)" label={t("statActive")} value={active ?? "—"} />
-        <StatCard icon="💰" iconBg="var(--warnbg, #fffaeb)" label={t("statOnPayroll")} value={withPayroll ?? "—"} />
-        <StatCard icon="🚫" iconBg="var(--badbg, #fdecea)" label={t("statInactive")} value={inactive ?? "—"} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statTotalTypes")} value={errored ? "—" : types.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statActive")} value={active ?? "—"} />
+        <StatCard icon="💰" iconBg="var(--warnbg)" label={t("statOnPayroll")} value={withPayroll ?? "—"} />
+        <StatCard icon="🚫" iconBg="var(--badbg)" label={t("statInactive")} value={inactive ?? "—"} />
       </StatGrid>
 
       <Card title={t("cardTitle")}>

@@ -37,7 +37,7 @@ const newBtnStyle: React.CSSProperties = {
   fontWeight: 600,
   fontSize: 14,
   background: "var(--primary)",
-  color: "#fff",
+  color: "var(--panel)",
   textDecoration: "none",
 };
 
@@ -75,13 +75,13 @@ export default async function DesignationsPage() {
         }
       />
       <StatGrid>
-        <StatCard icon="🏅" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
-        <StatCard icon="💰" iconBg="var(--goodbg, #e6f7f0)" label={t("statWithPayGradeLabel")}     value={withPayGrade ?? "—"} />
+        <StatCard icon="🏅" iconBg="var(--infobg)" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statWithPayGradeLabel")}     value={withPayGrade ?? "—"} />
         {/* GAP-HR-DESIGNATIONS-05: "—" as an icon read as if the stat itself
             had failed to load; a real icon distinguishes "0 rows" from "no
             data". */}
-        <StatCard icon="⚠️" iconBg="var(--warnbg, #fff7e6)" label={t("statWithoutPayGradeLabel")}  value={withoutPayGrade ?? "—"} />
-        <StatCard icon="🎚️" iconBg="var(--bg, #f5f5f5)" label={t("statUniqueLevelsLabel")}      value={uniqueLevels ?? "—"} />
+        <StatCard icon="⚠️" iconBg="var(--warnbg)" label={t("statWithoutPayGradeLabel")}  value={withoutPayGrade ?? "—"} />
+        <StatCard icon="🎚️" iconBg="var(--bg)" label={t("statUniqueLevelsLabel")}      value={uniqueLevels ?? "—"} />
       </StatGrid>
 
       <Card title={errored ? t("title") : t("cardTitleWithCount", { count: items.length })}>

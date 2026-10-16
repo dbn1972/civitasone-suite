@@ -183,26 +183,26 @@ export default async function TenderDetailPage({
       <StatGrid>
         <StatCard
           icon="📝"
-          iconBg="#eff6ff"
+          tone="info"
           label="Total Quotations"
           value={quotations.length}
         />
         <StatCard
           icon="🏆"
-          iconBg="#f0fdf4"
+          tone="good"
           label="Awarded"
           value={awardedCount}
           href="#quotations"
         />
         <StatCard
           icon="💰"
-          iconBg="#fffaeb"
+          tone="warn"
           label="Lowest Bid"
           value={lowestBid}
         />
         <StatCard
           icon="📋"
-          iconBg="#eef2ff"
+          tone="info"
           label="Tender Status"
           value={statusView.label}
         />

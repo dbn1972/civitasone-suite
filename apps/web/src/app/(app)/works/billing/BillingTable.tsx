@@ -60,11 +60,11 @@ export function BillingRegister({
   return (
     <>
       <StatGrid>
-        <StatCard icon="💰" iconBg="#eff6ff" label="Total Bills" value={trueTotal} />
-        <StatCard icon="📝" iconBg="#f8fafc" label={truncated ? "Draft (shown)" : "Draft"} value={draft} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label={truncated ? "Pending (shown)" : "Pending"} value={pending} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label={truncated ? "Finalized (shown)" : "Finalized"} value={finalized} />
-        <StatCard icon="📤" iconBg="#f0fdf4" label={truncated ? "Submitted (shown)" : "Submitted to IFMS"} value={submitted} />
+        <StatCard icon="💰" tone="info" label="Total Bills" value={trueTotal} />
+        <StatCard icon="📝" tone="neutral" label={truncated ? "Draft (shown)" : "Draft"} value={draft} />
+        <StatCard icon="⏳" tone="warn" label={truncated ? "Pending (shown)" : "Pending"} value={pending} />
+        <StatCard icon="✅" tone="good" label={truncated ? "Finalized (shown)" : "Finalized"} value={finalized} />
+        <StatCard icon="📤" tone="good" label={truncated ? "Submitted (shown)" : "Submitted to IFMS"} value={submitted} />
       </StatGrid>
       {/* UX-012: the single provenance badge for everything shown below. */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />

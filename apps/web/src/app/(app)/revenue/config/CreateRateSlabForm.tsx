@@ -209,13 +209,13 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel, existingSlabs = 
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
       <Card title="Create Rate Slab" padding>
         <div style={{ display: "grid", gap: 14 }}>
-          <p style={{ fontSize: 13, color: "var(--muted, #64748b)", margin: 0 }}>
+          <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
             For rate head <strong>{rateHeadLabel}</strong>.
           </p>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={typeId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Slab Type <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Slab Type <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <select
                 id={typeId}
@@ -234,7 +234,7 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel, existingSlabs = 
               <>
                 <div style={{ display: "grid", gap: 6 }}>
                   <label htmlFor={bandFromId} style={{ fontSize: 13, fontWeight: 600 }}>
-                    Band From (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                    Band From (₹) <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
                   </label>
                   <input
                     id={bandFromId}
@@ -269,7 +269,7 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel, existingSlabs = 
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={rateValueId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {rateValueLabel} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {rateValueLabel} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={rateValueId}
@@ -292,7 +292,7 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel, existingSlabs = 
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={fromId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Effective From <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Effective From <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={fromId}

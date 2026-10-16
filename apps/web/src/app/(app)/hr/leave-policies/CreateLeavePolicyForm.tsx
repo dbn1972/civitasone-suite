@@ -176,7 +176,7 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
         <form onSubmit={openConfirm} noValidate>
           <Card title={t("formTitle")} padding>
             {fieldError && (
-              <p id={errId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 13, marginBottom: 12 }}>
+              <p id={errId} role="alert" style={{ color: "var(--bad)", fontSize: 13, marginBottom: 12 }}>
                 {fieldError}
               </p>
             )}

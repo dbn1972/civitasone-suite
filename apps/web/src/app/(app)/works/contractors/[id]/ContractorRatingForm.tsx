@@ -114,7 +114,7 @@ export function ContractorRatingForm({
       {recentlyRatedBySelf && (
         <p
           role="status"
-          style={{ margin: 0, fontSize: 13, color: "#92400e", background: "#fef3c7", padding: "8px 12px", borderRadius: 8 }}
+          style={{ margin: 0, fontSize: 13, color: "var(--warn)", background: "var(--warnbg)", padding: "8px 12px", borderRadius: 8 }}
         >
           You rated this contractor within the last {COOLDOWN_DAYS} days. A new rating
           will be recorded in addition to the previous one.

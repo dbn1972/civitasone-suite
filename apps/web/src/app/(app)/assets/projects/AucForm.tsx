@@ -133,7 +133,7 @@ export function AucForm({ disabledReason }: { disabledReason?: string } = {}) {
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={codeId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Project code <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Project code <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={codeId}
@@ -146,12 +146,12 @@ export function AucForm({ disabledReason }: { disabledReason?: string } = {}) {
                 aria-describedby={errors.projectCode ? codeErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.projectCode && <p id={codeErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.projectCode}</p>}
+              {errors.projectCode && <p id={codeErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.projectCode}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={nameId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Project name <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                Project name <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
               </label>
               <input
                 id={nameId}
@@ -164,7 +164,7 @@ export function AucForm({ disabledReason }: { disabledReason?: string } = {}) {
                 aria-describedby={errors.name ? nameErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.name && <p id={nameErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.name}</p>}
+              {errors.name && <p id={nameErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.name}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -191,7 +191,7 @@ export function AucForm({ disabledReason }: { disabledReason?: string } = {}) {
                 aria-describedby={errors.amount ? amountErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
-              {errors.amount && <p id={amountErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.amount}</p>}
+              {errors.amount && <p id={amountErrId} role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: 0 }}>{errors.amount}</p>}
               {!errors.amount && amount.trim() && previewMinor !== null && (
                 <p style={{ fontSize: 12, color: "var(--ink2)", margin: 0 }}>{formatMoney(previewMinor)} will be recorded as opening WIP.</p>
               )}

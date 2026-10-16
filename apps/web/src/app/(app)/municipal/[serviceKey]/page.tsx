@@ -60,8 +60,8 @@ export default async function MunicipalServiceHomePage({ params }: Props) {
       ) : null}
 
       <StatGrid>
-        <StatCard icon={config.icon} iconBg="#eef2ff" label={t("totalRecords")} value={totalValue} />
-        <StatCard icon="⏳" iconBg="#fff7ed" label={inProgressLabel} value={inProgressValue} />
+        <StatCard icon={config.icon} tone="info" label={t("totalRecords")} value={totalValue} />
+        <StatCard icon="⏳" tone="warn" label={inProgressLabel} value={inProgressValue} />
       </StatGrid>
 
       <div style={{ marginTop: 18, display: "grid", gap: 16 }}>

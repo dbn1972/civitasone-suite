@@ -62,10 +62,10 @@ export default async function GrievancesPage() {
         }
       />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#eff6ff" label={t("total")} value={total === null ? "—" : total.toLocaleString("en-IN")} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label={t("pending")} value={pending === null ? "—" : pending.toLocaleString("en-IN")} />
-        <StatCard icon="🔺" iconBg="#fef3f2" label={t("escalated")} value={escalated === null ? "—" : escalated.toLocaleString("en-IN")} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label={t("resolved")} value={resolved === null ? "—" : resolved.toLocaleString("en-IN")} />
+        <StatCard icon="📋" tone="info" label={t("total")} value={total === null ? "—" : total.toLocaleString("en-IN")} />
+        <StatCard icon="⏳" tone="warn" label={t("pending")} value={pending === null ? "—" : pending.toLocaleString("en-IN")} />
+        <StatCard icon="🔺" tone="bad" label={t("escalated")} value={escalated === null ? "—" : escalated.toLocaleString("en-IN")} />
+        <StatCard icon="✅" tone="good" label={t("resolved")} value={resolved === null ? "—" : resolved.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         {errored ? (

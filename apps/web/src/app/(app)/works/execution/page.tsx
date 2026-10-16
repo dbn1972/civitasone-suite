@@ -51,11 +51,11 @@ export default async function ExecutionPage() {
         }
       />
       <StatGrid>
-        <StatCard icon="🏗️" iconBg="#eff6ff" label="Progress Entries" value={statOrNull(progressFailed, total)} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="On Track" value={statOrNull(progressFailed, counts.onTrack)} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label="At Risk" value={statOrNull(progressFailed, counts.atRisk)} />
-        <StatCard icon="🎉" iconBg="#f0fdf4" label="Completed" value={statOrNull(progressFailed, counts.completed)} />
-        <StatCard icon="🚧" iconBg="#fef2f2" label="Open Issues" value={statOrNull(issuesFailed, openIssues)} />
+        <StatCard icon="🏗️" tone="info" label="Progress Entries" value={statOrNull(progressFailed, total)} />
+        <StatCard icon="✅" tone="good" label="On Track" value={statOrNull(progressFailed, counts.onTrack)} />
+        <StatCard icon="⚠️" tone="warn" label="At Risk" value={statOrNull(progressFailed, counts.atRisk)} />
+        <StatCard icon="🎉" tone="good" label="Completed" value={statOrNull(progressFailed, counts.completed)} />
+        <StatCard icon="🚧" tone="bad" label="Open Issues" value={statOrNull(issuesFailed, openIssues)} />
       </StatGrid>
       <Card title="Execution Progress">
         <ExecutionTable

@@ -66,7 +66,7 @@ export function EnrolButton({ courseId, employeeId, unmetPrereqs, disabled }: En
         <button className="btn primary" disabled title="Complete prerequisites first" aria-disabled="true">
           Enrol Now
         </button>
-        <p style={{ fontSize: 12, color: "var(--amber, #d97706)", margin: "4px 0 0" }}>
+        <p style={{ fontSize: 12, color: "var(--amber)", margin: "4px 0 0" }}>
           Complete first: {unmetPrereqs.join(", ")}
         </p>
       </div>
@@ -85,7 +85,7 @@ export function EnrolButton({ courseId, employeeId, unmetPrereqs, disabled }: En
         {busy ? "Enrolling…" : "Enrol Now"}
       </button>
       {error && (
-        <p role="alert" style={{ fontSize: 12, color: "var(--red, #dc2626)", margin: "4px 0 0" }}>
+        <p role="alert" style={{ fontSize: 12, color: "var(--red)", margin: "4px 0 0" }}>
           {error}
         </p>
       )}

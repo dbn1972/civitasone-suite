@@ -1,8 +1,8 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
+import { Button, Field, Input, Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Role = {
@@ -84,8 +84,6 @@ function NewRoleDialog({ open, onClose, onCreated }: { open: boolean; onClose: (
   const [error, setError] = useState<string | undefined>(undefined);
   const formError = useFormError("role");
 
-  const nameId = useId();
-  const descId = useId();
 
   if (!open) return null;
 
@@ -95,18 +93,13 @@ function NewRoleDialog({ open, onClose, onCreated }: { open: boolean; onClose: (
       title="Create a new role"
       description={
         <div style={{ display: "grid", gap: 12, marginTop: 4 }}>
-          <div>
-            <label htmlFor={nameId} style={lbl}>Role name</label>
-            <input id={nameId} value={name} onChange={(e) => setName(e.target.value)}
-              aria-invalid={nameErr ? true : undefined} placeholder="Finance Reviewer" style={inp} />
-            {nameErr ? <p role="alert" style={errSty}>{nameErr}</p> : null}
-          </div>
-          <div>
-            <label htmlFor={descId} style={lbl}>Description <span style={{ fontWeight: 400, color: "var(--mut)" }}>(optional)</span></label>
-            <input id={descId} value={description} onChange={(e) => setDescription(e.target.value)}
-              placeholder="Can review and approve vouchers" style={inp} />
-          </div>
-          <p style={{ fontSize: 12, color: "#667085", margin: 0 }}>You can assign permissions after the role is created.</p>
+          <Field label="Role name" required error={nameErr || undefined}>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Finance Reviewer" />
+          </Field>
+          <Field label={<>Description <span style={{ fontWeight: 400, color: "var(--mut)" }}>(optional)</span></>}>
+            <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Can review and approve vouchers" />
+          </Field>
+          <p style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>You can assign permissions after the role is created.</p>
         </div>
       }
       confirmLabel="Create role"
@@ -152,4 +145,4 @@ function NewRoleDialog({ open, onClose, onCreated }: { open: boolean; onClose: (
 
 const lbl: React.CSSProperties = { display: "block", fontSize: 12.5, fontWeight: 650, color: "var(--ink2)", marginBottom: 5 };
 const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13.5, fontFamily: "inherit", color: "var(--ink)" };
-const errSty: React.CSSProperties = { color: "#b42318", fontSize: 12, margin: "4px 0 0" };
+const errSty: React.CSSProperties = { color: "var(--bad)", fontSize: 12, margin: "4px 0 0" };

@@ -101,9 +101,9 @@ export default async function InstalmentPlanDetailPage({ params }: { params: { i
       />
 
       <StatGrid>
-        <StatCard icon="💰" iconBg="#e6f0ff" label="Total Due" value={formatMoney(plan.totalMinor)} />
-        <StatCard icon="📆" iconBg="#e6f7f0" label="Instalments" value={plan.instalmentCount} />
-        <StatCard icon="📅" iconBg="#fff2e6" label="Start Date" value={formatIndianDate(plan.startDate)} />
+        <StatCard icon="💰" tone="info" label="Total Due" value={formatMoney(plan.totalMinor)} />
+        <StatCard icon="📆" tone="good" label="Instalments" value={plan.instalmentCount} />
+        <StatCard icon="📅" tone="warn" label="Start Date" value={formatIndianDate(plan.startDate)} />
       </StatGrid>
 
       <Card title="Schedule">

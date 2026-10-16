@@ -38,10 +38,10 @@ export default async function NotificationPrefsPage() {
         // "—" in the KPIs, and skip the editor entirely.
         <>
           <div className="grid g-4" style={{ marginBottom: 18 }}>
-            <StatCard icon="🔔" iconBg="#f1f5f9" label="Event Types" value="—" />
-            <StatCard icon="📧" iconBg="#eff6ff" label="Email On" value="—" />
-            <StatCard icon="📧" iconBg="#fef2f2" label="Email Off" value="—" />
-            <StatCard icon="🖥️" iconBg="#fffaeb" label="In-App On" value="—" />
+            <StatCard icon="🔔" tone="neutral" label="Event Types" value="—" />
+            <StatCard icon="📧" tone="info" label="Email On" value="—" />
+            <StatCard icon="📧" tone="bad" label="Email Off" value="—" />
+            <StatCard icon="🖥️" tone="warn" label="In-App On" value="—" />
           </div>
           <Card title="Notification preferences" padding>
             <RefreshErrorState error={toHumanError("load", { area: "notification preferences" })} backHref="/tenant-admin" />
@@ -50,10 +50,10 @@ export default async function NotificationPrefsPage() {
       ) : (
         <>
           <div className="grid g-4" style={{ marginBottom: 18 }}>
-            <StatCard icon="🔔" iconBg="#f1f5f9" label="Event Types" value={total} />
-            <StatCard icon="📧" iconBg="#eff6ff" label="Email On" value={emailEnabled} />
-            <StatCard icon="📧" iconBg="#fef2f2" label="Email Off" value={emailOff} />
-            <StatCard icon="🖥️" iconBg="#fffaeb" label="In-App On" value={inAppEnabled} />
+            <StatCard icon="🔔" tone="neutral" label="Event Types" value={total} />
+            <StatCard icon="📧" tone="info" label="Email On" value={emailEnabled} />
+            <StatCard icon="📧" tone="bad" label="Email Off" value={emailOff} />
+            <StatCard icon="🖥️" tone="warn" label="In-App On" value={inAppEnabled} />
           </div>
           {/* GAP-TENANT-ADMIN-NOTIFICATIONS-04: the former left "Notification
               events" card listed every event a second time — the editor on the

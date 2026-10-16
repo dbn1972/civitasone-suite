@@ -110,7 +110,7 @@ export function RegisterRTIButton() {
                 style={inputStyle}
               />
               {listOpen && cpioResults.length > 0 ? (
-                <ul id="new-rti-cpio-list" role="listbox" aria-label={t("cpioLabel")} style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--surface, #fff)", border: "1px solid var(--line)", borderRadius: 8, zIndex: 100, listStyle: "none", padding: 0, margin: "2px 0 0", maxHeight: 240, overflow: "auto" }}>
+                <ul id="new-rti-cpio-list" role="listbox" aria-label={t("cpioLabel")} style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 8, zIndex: 100, listStyle: "none", padding: 0, margin: "2px 0 0", maxHeight: 240, overflow: "auto" }}>
                   {cpioResults.map((c) => (
                     <li
                       key={c.id}
@@ -140,7 +140,7 @@ export function RegisterRTIButton() {
         </div>
       )}
       {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", marginTop: 8 }}>{message}</p> : null}
-      {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", marginTop: 8 }}>{error}</p> : null}
+      {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad)", marginTop: 8 }}>{error}</p> : null}
     </>
   );
 }

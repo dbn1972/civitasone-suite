@@ -68,13 +68,13 @@ export default async function OvertimePage() {
         {/* GAP-HR-OVERTIME-04: was requests.length, which silently undercounted
             once the 200-row cap truncated the page; `total` is the real,
             server-side count regardless of truncation. */}
-        <StatCard icon="⏱️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : total} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPending")} value={errored ? null : pending} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statApproved")} value={errored ? null : approved} />
-        <StatCard icon="🕐" iconBg="var(--bg, #f5f5f5)" label={t("statApprovedHours")} value={errored ? null : `${approvedHrs.toFixed(2)} h`} />
+        <StatCard icon="⏱️" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : total} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={errored ? null : pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApproved")} value={errored ? null : approved} />
+        <StatCard icon="🕐" iconBg="var(--bg)" label={t("statApprovedHours")} value={errored ? null : `${approvedHrs.toFixed(2)} h`} />
       </StatGrid>
       {!errored && hasMore && (
-        <p role="status" style={{ fontSize: 13, color: "var(--mut, #6b7280)", margin: "0 0 12px" }}>
+        <p role="status" style={{ fontSize: 13, color: "var(--mut)", margin: "0 0 12px" }}>
           {t("truncatedNotice", { count: requests.length, total })}
         </p>
       )}

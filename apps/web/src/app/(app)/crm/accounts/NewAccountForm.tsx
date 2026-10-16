@@ -162,7 +162,7 @@ export function NewAccountForm({ accounts }: { accounts: CRMAccountSummary[] }) 
               />
             </Field>
             {!fieldErrors.name && duplicateName ? (
-              <p role="status" style={{ fontSize: 12, color: "#b45309", marginTop: 4 }}>
+              <p role="status" style={{ fontSize: 12, color: "var(--warn)", marginTop: 4 }}>
                 {t("duplicateName")}
               </p>
             ) : null}
@@ -207,12 +207,12 @@ export function NewAccountForm({ accounts }: { accounts: CRMAccountSummary[] }) 
         </div>
       ) : null}
       {outcome.kind === "created" ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", marginTop: 8 }}>
+        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--good)", marginTop: 8 }}>
           {t("created")}
         </p>
       ) : null}
       {outcome.kind === "parent-failed" ? (
-        <div role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b45309", marginTop: 8 }}>
+        <div role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--warn)", marginTop: 8 }}>
           <p style={{ margin: 0 }}>
             {t("parentFailed")}
           </p>
@@ -229,12 +229,12 @@ export function NewAccountForm({ accounts }: { accounts: CRMAccountSummary[] }) 
         </div>
       ) : null}
       {outcome.kind === "parent-skipped" ? (
-        <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b45309", marginTop: 8 }}>
+        <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--warn)", marginTop: 8 }}>
           {t.rich("parentSkipped", { link: (chunks) => <a href="/crm/accounts">{chunks}</a> })}
         </p>
       ) : null}
       {error ? (
-        <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", marginTop: 8 }}>{error}</p>
+        <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "var(--bad)", marginTop: 8 }}>{error}</p>
       ) : null}
     </>
   );

@@ -135,10 +135,10 @@ export default function NewStockEntryPage() {
         backLabel="Stock Ledger"
       />
       {message ? (
-        <div role={isError ? "alert" : "status"} aria-live={isError ? "assertive" : "polite"} className="banner" style={{ background: isError ? "#fef2f2" : "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
+        <div role={isError ? "alert" : "status"} aria-live={isError ? "assertive" : "polite"} className="banner" style={{ background: isError ? "var(--badbg)" : "var(--goodbg)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
       ) : null}
       {loadError ? (
-        <div role="alert" aria-live="assertive" className="banner" style={{ background: "#fef2f2", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{loadError}</div>
+        <div role="alert" aria-live="assertive" className="banner" style={{ background: "var(--badbg)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{loadError}</div>
       ) : null}
       <div className="card">
         <form onSubmit={submit} className="pad">

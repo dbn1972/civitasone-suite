@@ -67,7 +67,7 @@ const newBtnStyle: React.CSSProperties = {
   fontWeight: 600,
   fontSize: 14,
   background: "var(--primary)",
-  color: "#fff",
+  color: "var(--panel)",
   textDecoration: "none",
 };
 
@@ -108,10 +108,10 @@ export default async function LocationsPage() {
           the same reason). */}
       {!errored ? <DataSourceBadge source={source} /> : null}
       <StatGrid>
-        <StatCard icon="🌍" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? "—" : locations.length} />
-        <StatCard icon="🏛️" iconBg="var(--goodbg, #e6f7f0)" label={t("statStateLabel")}     value={errored ? "—" : stateCount} />
-        <StatCard icon="🏙️" iconBg="var(--warnbg, #fff7e6)" label={t("statDistrictLabel")}  value={errored ? "—" : districtCount} />
-        <StatCard icon="🏘️" iconBg="var(--bg, #f5f5f5)" label={t("statBlockLabel")}   value={errored ? "—" : blockCount} />
+        <StatCard icon="🌍" iconBg="var(--infobg)" label={t("statTotalLabel")} value={errored ? "—" : locations.length} />
+        <StatCard icon="🏛️" iconBg="var(--goodbg)" label={t("statStateLabel")}     value={errored ? "—" : stateCount} />
+        <StatCard icon="🏙️" iconBg="var(--warnbg)" label={t("statDistrictLabel")}  value={errored ? "—" : districtCount} />
+        <StatCard icon="🏘️" iconBg="var(--bg)" label={t("statBlockLabel")}   value={errored ? "—" : blockCount} />
       </StatGrid>
       <Card title={errored ? t("cardTitle") : t("cardTitleWithCount", { count: locations.length })}>
         {errored ? (

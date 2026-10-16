@@ -52,10 +52,10 @@ export default async function DefinitionDetailPage({ params }: { params: { id: s
       />
 
       <StatGrid>
-        <StatCard icon="🔖" iconBg="#eef2ff" label="Code" value={def.code} />
-        <StatCard icon="#️⃣" iconBg="#f5f3ff" label="Version" value={def.version} />
-        <StatCard icon="◻" iconBg="#ecfdf5" label="Nodes" value={def.nodes.length} />
-        <StatCard icon="→" iconBg="#fff7ed" label="Transitions" value={def.edges.length} />
+        <StatCard icon="🔖" tone="info" label="Code" value={def.code} />
+        <StatCard icon="#️⃣" tone="neutral" label="Version" value={def.version} />
+        <StatCard icon="◻" tone="good" label="Nodes" value={def.nodes.length} />
+        <StatCard icon="→" tone="warn" label="Transitions" value={def.edges.length} />
       </StatGrid>
 
       <div style={{ marginTop: 18 }}>

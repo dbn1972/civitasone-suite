@@ -160,7 +160,7 @@ export function QcInspectionForm({
       </fieldset>
 
       <div className="fields" style={{ marginTop: 16 }}>
-        <label className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <label className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <span className="label">Disposition</span>
           <select
             value={disposition}
@@ -174,7 +174,7 @@ export function QcInspectionForm({
               <option key={d} value={d}>{DISPOSITION_LABELS[d]}</option>
             ))}
           </select>
-          <span id="qc-disposition-hint" style={{ fontSize: "0.8125rem", color: "#475569" }}>
+          <span id="qc-disposition-hint" style={{ fontSize: "0.8125rem", color: "var(--ink2)" }}>
             {qcStatus === "failed"
               ? "A failed return can only be quarantined or scrapped, never returned to sellable stock."
               : qcStatus === "passed"
@@ -182,7 +182,7 @@ export function QcInspectionForm({
                 : "The choices depend on the verdict."}
           </span>
         </label>
-        <label className="field" style={{ background: "#fff", padding: "13px 16px" }}>
+        <label className="field" style={{ background: "var(--panel)", padding: "13px 16px" }}>
           <span className="label">
             Inspector notes{needsNotes ? ` (required, at least ${QC_NOTES_MIN_LENGTH} characters)` : ""}
           </span>
@@ -201,7 +201,7 @@ export function QcInspectionForm({
 
       <div role="status" aria-live="polite">
         {message ? (
-          <p role="alert" style={{ marginTop: 12, fontSize: "0.875rem", color: "#b91c1c" }}>{message}</p>
+          <p role="alert" style={{ marginTop: 12, fontSize: "0.875rem", color: "var(--bad)" }}>{message}</p>
         ) : null}
       </div>
       <div style={{ marginTop: 16, display: "flex", gap: 8 }}>

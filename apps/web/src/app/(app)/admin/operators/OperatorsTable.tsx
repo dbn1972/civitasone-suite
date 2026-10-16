@@ -53,11 +53,11 @@ export function OperatorsTable({
       errorStatus={errorStatus}
       errorMessage={errorMessage}
       stats={[
-        { icon: "👤", iconBg: "#eef2ff", label: "Total Operators", value: s.total },
-        { icon: "✅", iconBg: "#ecfdf3", label: "Active", value: s.active },
-        { icon: "🔐", iconBg: "#fffaeb", label: "2FA Enabled", value: s.twoFa },
-        { icon: "⛔", iconBg: "#fce7ee", label: "Suspended", value: s.suspended },
-        { icon: "❔", iconBg: "#f1f5f9", label: "Status unknown", value: s.unknown, onlyWhenPositive: true },
+        { icon: "👤", iconBg: "var(--infobg)", label: "Total Operators", value: s.total },
+        { icon: "✅", iconBg: "var(--goodbg)", label: "Active", value: s.active },
+        { icon: "🔐", iconBg: "var(--warnbg)", label: "2FA Enabled", value: s.twoFa },
+        { icon: "⛔", iconBg: "var(--badbg)", label: "Suspended", value: s.suspended },
+        { icon: "❔", iconBg: "var(--line2)", label: "Status unknown", value: s.unknown, onlyWhenPositive: true },
       ]}
     >
       <DataTable<OperatorRow>

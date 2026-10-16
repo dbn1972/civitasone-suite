@@ -320,7 +320,7 @@ export default function ImportContactsPage() {
           role="status"
           aria-live="polite"
           className="banner"
-          style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}
+          style={{ background: "var(--goodbg)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}
         >
           {message}
         </div>
@@ -330,7 +330,7 @@ export default function ImportContactsPage() {
           role="alert"
           aria-live="assertive"
           className="banner"
-          style={{ background: "#fef2f2", color: "#b42318", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}
+          style={{ background: "var(--badbg)", color: "var(--bad)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}
         >
           {error}
         </div>
@@ -355,7 +355,7 @@ export default function ImportContactsPage() {
               })}
             </p>
             {summary.rejected > 0 ? (
-              <p style={{ margin: 0, color: "#b42318" }}>
+              <p style={{ margin: 0, color: "var(--bad)" }}>
                 {t.rich("summaryRejected", {
                   n: summary.rejected,
                   countText: String(summary.rejected),
@@ -378,7 +378,7 @@ export default function ImportContactsPage() {
                     skipped: String(summary.serverRejected ?? 0),
                     hasSkipped: summary.serverRejected ? "yes" : "no",
                     strong: (chunks) => <strong>{chunks}</strong>,
-                    warn: (chunks) => <strong style={{ color: "#b42318" }}>{chunks}</strong>,
+                    warn: (chunks) => <strong style={{ color: "var(--bad)" }}>{chunks}</strong>,
                   })}
                 </p>
                 {summary.serverRejectedRows && summary.serverRejectedRows.length > 0 ? (
@@ -436,7 +436,7 @@ export default function ImportContactsPage() {
             {t("readySummary", { valid: preview.length, rejected: rejected.length })}
           </p>
           {overRowCap ? (
-            <p role="alert" style={{ fontSize: 13, color: "#b42318", margin: "6px 0 0" }}>
+            <p role="alert" style={{ fontSize: 13, color: "var(--bad)", margin: "6px 0 0" }}>
               {t("tooManyRowsAlert", { count: String(preview.length), max: String(MAX_ROWS) })}
             </p>
           ) : null}
@@ -447,7 +447,7 @@ export default function ImportContactsPage() {
           ) : null}
 
           {duplicates.length > 0 ? (
-            <div role="alert" style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: 12, marginTop: 12, fontSize: 13 }}>
+            <div role="alert" style={{ background: "var(--warnbg)", border: "1px solid #fde68a", borderRadius: 8, padding: 12, marginTop: 12, fontSize: 13 }}>
               <p style={{ margin: "0 0 8px", fontWeight: 600 }}>
                 {t("duplicatesFound", { count: duplicates.length })}
               </p>

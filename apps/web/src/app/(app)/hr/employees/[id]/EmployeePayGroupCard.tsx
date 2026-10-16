@@ -21,7 +21,7 @@ export function EmployeePayGroupCard({ result }: { result: Pick<LoaderResult<Emp
   if (result.source === "error" || !data) {
     return (
       <Card title={t("title")} padding>
-        <p role="status" style={{ margin: 0, color: "var(--mut, #64748b)" }}>{t("unavailable")}</p>
+        <p role="status" style={{ margin: 0, color: "var(--mut)" }}>{t("unavailable")}</p>
       </Card>
     );
   }

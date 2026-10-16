@@ -114,11 +114,11 @@ export default async function ContractualPage() {
         </span>
       )}
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statActiveLabel")} value={errored ? "—" : active} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statExpiringLabel")} value={errored ? "—" : expiringSoon} />
-        <StatCard icon="📁" iconBg="var(--badbg, #fee2e2)" label={t("statExpiredLabel")} value={errored ? "—" : expired} />
-        <StatCard icon="🏢" iconBg="var(--bg, #f5f5f5)" label={t("statAgenciesLabel")} value={errored ? "—" : agencies} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statActiveLabel")} value={errored ? "—" : active} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statExpiringLabel")} value={errored ? "—" : expiringSoon} />
+        <StatCard icon="📁" iconBg="var(--badbg)" label={t("statExpiredLabel")} value={errored ? "—" : expired} />
+        <StatCard icon="🏢" iconBg="var(--bg)" label={t("statAgenciesLabel")} value={errored ? "—" : agencies} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (

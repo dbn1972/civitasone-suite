@@ -307,11 +307,11 @@ export function AddLocationForm({ onCancel, onSuccess, locations = [], editing }
                 padding: "10px 14px",
                 borderRadius: 8,
                 fontSize: 14,
-                background: tone === "success" ? "var(--goodbg, #dcfce7)" : "#fee2e2",
+                background: tone === "success" ? "var(--goodbg)" : "var(--badbg)",
                 border: `1px solid ${
-                  tone === "success" ? "var(--goodbd, #86efac)" : "var(--badbd, #fca5a5)"
+                  tone === "success" ? "var(--goodbd)" : "var(--badbd)"
                 }`,
-                color: tone === "success" ? "var(--good, #166534)" : "var(--bad, #b91c1c)",
+                color: tone === "success" ? "var(--good)" : "var(--bad)",
               }}
             >
               {tone === "success" ? "✅" : "⚠️"} {message}

@@ -277,12 +277,12 @@ export function AllocateLeaveForm() {
               aria-describedby={!invalid.has("days") && overCap ? `${daysId}-cap-warn` : undefined}
             />
             {!invalid.has("days") && alreadyAllocated && (
-              <p role="status" data-testid="already-allocated-warning" style={{ color: "var(--warn-d, #92620a)", fontSize: 12, margin: "3px 0 0" }}>
+              <p role="status" data-testid="already-allocated-warning" style={{ color: "var(--warn-d)", fontSize: 12, margin: "3px 0 0" }}>
                 {t("alreadyAllocatedWarning", { typeName: selectedLeaveType?.name ?? "", fy })}
               </p>
             )}
             {!invalid.has("days") && overCap && (
-              <p id={`${daysId}-cap-warn`} role="status" style={{ color: "var(--warn-d, #92620a)", fontSize: 12, margin: "3px 0 0" }}>
+              <p id={`${daysId}-cap-warn`} role="status" style={{ color: "var(--warn-d)", fontSize: 12, margin: "3px 0 0" }}>
                 {t("overCapWarning", { maxDays: selectedTypeMaxDays, typeName: selectedLeaveType?.name ?? "" })}
               </p>
             )}

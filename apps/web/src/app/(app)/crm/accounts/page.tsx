@@ -51,12 +51,12 @@ export default async function Page() {
           "—" fallback above is unrelated and unchanged. */}
       {mergeOptions.length >= 2 ? <MergeButton entity="accounts" options={mergeOptions} label="Merge duplicate accounts" /> : null}
       <StatGrid>
-        <StatCard icon="▣" iconBg="#eef2ff" label={total !== null && truncated ? t("totalAccounts") : partialSuffix(t("totalAccounts"))} value={source === "error" ? "—" : (total !== null ? total.toLocaleString("en-IN") : stat(accounts.length))} />
-        <StatCard icon="◉" iconBg="#eef2ff" label={partialSuffix(t("subsidiaryAccounts"))} value={stat(subsidiaries)} />
-        <StatCard icon="◈" iconBg="#eef2ff" label={partialSuffix(t("linkedContacts"))} value={stat(totalContacts)} />
+        <StatCard icon="▣" tone="info" label={total !== null && truncated ? t("totalAccounts") : partialSuffix(t("totalAccounts"))} value={source === "error" ? "—" : (total !== null ? total.toLocaleString("en-IN") : stat(accounts.length))} />
+        <StatCard icon="◉" tone="info" label={partialSuffix(t("subsidiaryAccounts"))} value={stat(subsidiaries)} />
+        <StatCard icon="◈" tone="info" label={partialSuffix(t("linkedContacts"))} value={stat(totalContacts)} />
         <StatCard
           icon="△"
-          iconBg="#eef2ff"
+          tone="info"
           label={partialSuffix(t("sectorsMinistries"))}
           value={stat(new Set(accounts.map((a) => a.industry).filter(Boolean)).size)}
         />

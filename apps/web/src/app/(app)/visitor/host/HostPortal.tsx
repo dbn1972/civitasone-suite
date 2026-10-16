@@ -123,9 +123,9 @@ export function HostPortal({ pending, pendingSource, expectedToday, expectedToda
   return (
     <>
       <StatGrid>
-        <StatCard icon="🕓" iconBg="#fff7ed" label="Awaiting Your Approval" value={queue.length.toLocaleString("en-IN")} />
-        <StatCard icon="🔐" iconBg="#fef2f2" label="Restricted-zone" value={restricted.toLocaleString("en-IN")} />
-        <StatCard icon="📅" iconBg="#ecfeff" label="Expected Today" value={expectedToday.length.toLocaleString("en-IN")} />
+        <StatCard icon="🕓" tone="warn" label="Awaiting Your Approval" value={queue.length.toLocaleString("en-IN")} />
+        <StatCard icon="🔐" tone="bad" label="Restricted-zone" value={restricted.toLocaleString("en-IN")} />
+        <StatCard icon="📅" tone="info" label="Expected Today" value={expectedToday.length.toLocaleString("en-IN")} />
       </StatGrid>
 
       {toast && (
@@ -134,7 +134,7 @@ export function HostPortal({ pending, pendingSource, expectedToday, expectedToda
         </div>
       )}
       {staleNotice && (
-        <div className="alert" role="status" style={{ borderColor: "#fcd34d" }}>
+        <div className="alert" role="status" style={{ borderColor: "var(--warnbd)" }}>
           This list may be out of date.{" "}
           <button type="button" className="btn ghost sm" onClick={() => void refresh(true)}>Refresh</button>
         </div>
@@ -181,7 +181,7 @@ export function HostPortal({ pending, pendingSource, expectedToday, expectedToda
                   {r.trackingRef && <span>Ref: <span style={monoStyle}>{r.trackingRef}</span></span>}
                 </div>
                 {r.permittedAreas.length > 0 && (
-                  <p style={{ fontSize: 12.5, color: "#b45309", marginBottom: 10 }}>
+                  <p style={{ fontSize: 12.5, color: "var(--warn)", marginBottom: 10 }}>
                     ⚠ Touches a restricted zone ({r.permittedAreas.join(", ")}) — after your approval this is routed to a second approver per policy.
                   </p>
                 )}

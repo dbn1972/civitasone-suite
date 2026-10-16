@@ -241,7 +241,7 @@ export function ApprovalChainBuilder({
           {chainWarnings.length > 0 ? (
             <ul role="status" style={{ margin: "8px 0 0", padding: "0 0 0 18px", fontSize: 13 }}>
               {chainWarnings.map((w) => (
-                <li key={w.laneId + w.kind} style={{ color: "var(--warn, #a15c00)", marginBottom: 4 }}>
+                <li key={w.laneId + w.kind} style={{ color: "var(--warn)", marginBottom: 4 }}>
                   {w.message}
                 </li>
               ))}

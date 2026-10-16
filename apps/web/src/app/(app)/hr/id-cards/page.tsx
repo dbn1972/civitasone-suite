@@ -95,10 +95,10 @@ export default async function IdCardsPage({ searchParams }: { searchParams?: Rec
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="🆔" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalCardsLabel")} value={errored ? "—" : total} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statActiveLabel")} value={errored ? "—" : active} />
-        <StatCard icon="⏸️" iconBg="var(--warnbg, #fffbe6)" label={t("statSuspendedLabel")} value={errored ? "—" : suspended} />
-        <StatCard icon="👥" iconBg="var(--bg, #f5f5f5)" label={t("statVendorProjectLabel")} value={errored ? "—" : vendor} />
+        <StatCard icon="🆔" iconBg="var(--infobg)" label={t("statTotalCardsLabel")} value={errored ? "—" : total} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statActiveLabel")} value={errored ? "—" : active} />
+        <StatCard icon="⏸️" iconBg="var(--warnbg)" label={t("statSuspendedLabel")} value={errored ? "—" : suspended} />
+        <StatCard icon="👥" iconBg="var(--bg)" label={t("statVendorProjectLabel")} value={errored ? "—" : vendor} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {/* GAP-HR-ID-CARDS-05: search/status reach the whole tenant register
@@ -116,7 +116,7 @@ export default async function IdCardsPage({ searchParams }: { searchParams?: Rec
               defaultValue={q ?? ""}
               placeholder={t("filterPlaceholder")}
               aria-label={t("filterPlaceholder")}
-              style={{ minHeight: 44, borderRadius: 6, border: "1.5px solid var(--line, #e2e8f0)", padding: "8px 12px", fontSize: 13 }}
+              style={{ minHeight: 44, borderRadius: 6, border: "1.5px solid var(--line)", padding: "8px 12px", fontSize: 13 }}
             />
           </label>
           <label style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -125,7 +125,7 @@ export default async function IdCardsPage({ searchParams }: { searchParams?: Rec
               name="status"
               defaultValue={status ?? ""}
               aria-label="Filter by status"
-              style={{ minHeight: 44, borderRadius: 6, border: "1.5px solid var(--line, #e2e8f0)", padding: "8px 12px", fontSize: 13 }}
+              style={{ minHeight: 44, borderRadius: 6, border: "1.5px solid var(--line)", padding: "8px 12px", fontSize: 13 }}
             >
               {STATUS_OPTIONS.map((s) => (
                 <option key={s || "all"} value={s}>{s ? s.charAt(0).toUpperCase() + s.slice(1) : "All statuses"}</option>

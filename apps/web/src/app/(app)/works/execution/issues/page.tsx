@@ -88,8 +88,8 @@ export default async function IssuesRegisterPage() {
 
       <StatGrid>
         <StatCard icon="📋" label="Total Issues" value={response.source === "error" ? null : totalCount} />
-        <StatCard icon="⚠️" iconBg="var(--warnbg, #fef3c7)" label="Open" value={response.source === "error" ? null : openCount} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #ecfdf3)" label="Closed" value={response.source === "error" ? null : closedCount} />
+        <StatCard icon="⚠️" iconBg="var(--warnbg)" label="Open" value={response.source === "error" ? null : openCount} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Closed" value={response.source === "error" ? null : closedCount} />
       </StatGrid>
 
       {truncated && (

@@ -100,12 +100,12 @@ export function AddTaskForm({ employeeId }: AddTaskFormProps) {
         {submitting ? "Adding…" : "Add task"}
       </button>
       {success && (
-        <p role="status" style={{ margin: "8px 0 0", fontSize: 12, color: "var(--good, #067647)", fontWeight: 500 }}>
+        <p role="status" style={{ margin: "8px 0 0", fontSize: 12, color: "var(--good)", fontWeight: 500 }}>
           Task added.
         </p>
       )}
       {localError && (
-        <p role="alert" style={{ margin: "8px 0 0", fontSize: 12, color: "var(--bad, #dc2626)", fontWeight: 500 }}>
+        <p role="alert" style={{ margin: "8px 0 0", fontSize: 12, color: "var(--bad)", fontWeight: 500 }}>
           {localError}
         </p>
       )}

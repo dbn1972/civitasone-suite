@@ -126,12 +126,12 @@ export default async function LoansPage() {
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel={t("backToHr")} />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="💰" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLoansLabel")} value={errored ? null : items.length} />
-        <StatCard icon="▶️" iconBg="var(--goodbg, #e6f7f0)" label={t("statActiveLabel")} value={errored ? null : active} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPendingLabel")} value={errored ? null : pending} />
-        <StatCard icon="✅" iconBg="var(--bg, #f5f5f5)" label={t("statClosedLabel")} value={errored ? null : completed} />
+        <StatCard icon="💰" iconBg="var(--infobg)" label={t("statTotalLoansLabel")} value={errored ? null : items.length} />
+        <StatCard icon="▶️" iconBg="var(--goodbg)" label={t("statActiveLabel")} value={errored ? null : active} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPendingLabel")} value={errored ? null : pending} />
+        <StatCard icon="✅" iconBg="var(--bg)" label={t("statClosedLabel")} value={errored ? null : completed} />
         {!errored && other > 0 && (
-          <StatCard icon="❔" iconBg="var(--bg, #f5f5f5)" label={t("statOtherLabel")} value={other} />
+          <StatCard icon="❔" iconBg="var(--bg)" label={t("statOtherLabel")} value={other} />
         )}
       </StatGrid>
       <Card title={t("cardTitle")}>

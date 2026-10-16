@@ -23,9 +23,9 @@ function SlipLine({ label, value, bold }: { label: string; value: number; bold?:
       <td
         style={{
           padding: "5px 0",
-          color: bold ? "var(--fg,#0f172a)" : "var(--sub,#475569)",
+          color: bold ? "var(--fg)" : "var(--sub)",
           fontWeight: bold ? 700 : 400,
-          borderBottom: "1px solid var(--line,#f1f5f9)",
+          borderBottom: "1px solid var(--line)",
         }}
       >
         {label}
@@ -35,7 +35,7 @@ function SlipLine({ label, value, bold }: { label: string; value: number; bold?:
           padding: "5px 0",
           textAlign: "end",
           fontWeight: bold ? 700 : 400,
-          borderBottom: "1px solid var(--line,#f1f5f9)",
+          borderBottom: "1px solid var(--line)",
         }}
       >
         {formatRupees(value)}
@@ -53,10 +53,10 @@ function SlipSection({ title, children }: { title: string; children: React.React
           fontWeight: 700,
           textTransform: "uppercase",
           letterSpacing: "0.6px",
-          color: "var(--mut,#64748b)",
+          color: "var(--mut)",
           marginBottom: 4,
           paddingBottom: 4,
-          borderBottom: "1px solid var(--line,#e2e8f0)",
+          borderBottom: "1px solid var(--line)",
         }}
       >
         {title}
@@ -104,7 +104,7 @@ function SalarySlipModal({
             alignItems: "center",
           }}
         >
-          <div style={{ fontSize: 11, color: "var(--mut,#64748b)" }}>
+          <div style={{ fontSize: 11, color: "var(--mut)" }}>
             {t("indicativeSlipNotice")}
           </div>
           <button
@@ -116,7 +116,7 @@ function SalarySlipModal({
               border: "none",
               cursor: "pointer",
               fontSize: 20,
-              color: "var(--mut,#64748b)",
+              color: "var(--mut)",
               lineHeight: 1,
               padding: 4,
             }}
@@ -131,12 +131,12 @@ function SalarySlipModal({
         <div
           style={{
             padding: "10px 20px",
-            borderBottom: "1px solid var(--line,#e2e8f0)",
-            background: "var(--panel,#f8fafc)",
+            borderBottom: "1px solid var(--line)",
+            background: "var(--panel)",
           }}
         >
           <div style={{ fontWeight: 700, fontSize: 14 }}>{slip.employeeName?.trim() || tFallback("unknownEmployee")}</div>
-          <div style={{ fontSize: 11, color: "var(--mut,#64748b)", marginTop: 2 }}>
+          <div style={{ fontSize: 11, color: "var(--mut)", marginTop: 2 }}>
             {t("employeeIdPeriodLine", { period: payPeriod })}
           </div>
         </div>
@@ -152,7 +152,7 @@ function SalarySlipModal({
           </SlipSection>
 
           {!reconciles && (
-            <p role="alert" style={{ fontSize: 11.5, color: "var(--danger,#dc2626)", margin: "0 0 10px" }}>
+            <p role="alert" style={{ fontSize: 11.5, color: "var(--danger)", margin: "0 0 10px" }}>
               {t("grossNetMismatchWarning")}
             </p>
           )}
@@ -164,12 +164,12 @@ function SalarySlipModal({
               justifyContent: "space-between",
               alignItems: "center",
               padding: "12px 0 4px",
-              borderTop: "2px solid var(--primary,#2563eb)",
+              borderTop: "2px solid var(--primary)",
               marginTop: 2,
             }}
           >
             <span style={{ fontWeight: 700, fontSize: 15 }}>{t("netPayLabel")}</span>
-            <span style={{ fontWeight: 700, fontSize: 17, color: "var(--primary,#2563eb)" }}>
+            <span style={{ fontWeight: 700, fontSize: 17, color: "var(--primary)" }}>
               {formatRupees(slip.net)}
             </span>
           </div>
@@ -179,8 +179,8 @@ function SalarySlipModal({
           style={{
             padding: "6px 20px 14px",
             fontSize: 10,
-            color: "var(--mut,#94a3b8)",
-            borderTop: "1px solid var(--line,#e2e8f0)",
+            color: "var(--mut)",
+            borderTop: "1px solid var(--line)",
           }}
         >
           {t("slipFooterNotice")}
@@ -222,8 +222,8 @@ export function SalarySlipsClientTable({
     padding: "8px 12px",
     textAlign: "start",
     fontWeight: 600,
-    borderBottom: "1px solid var(--line,#e2e8f0)",
-    color: "var(--mut, #64748b)",
+    borderBottom: "1px solid var(--line)",
+    color: "var(--mut)",
     fontSize: 11,
     textTransform: "uppercase",
     letterSpacing: "0.3px",
@@ -250,7 +250,7 @@ export function SalarySlipsClientTable({
           style={{
             padding: "6px 10px",
             fontSize: 13,
-            border: "1px solid var(--line,#cbd5e1)",
+            border: "1px solid var(--line)",
             borderRadius: 8,
             minWidth: 220,
             flex: 1,
@@ -276,13 +276,13 @@ export function SalarySlipsClientTable({
           <tbody>
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={6} style={{ padding: "24px 12px", textAlign: "center", color: "var(--mut,#64748b)" }}>
+                <td colSpan={6} style={{ padding: "24px 12px", textAlign: "center", color: "var(--mut)" }}>
                   {t("noSlipsMatchFilter")}
                 </td>
               </tr>
             ) : (
               paged.map((slip) => (
-                <tr key={slip.id} style={{ borderBottom: "1px solid var(--line,#f1f5f9)" }}>
+                <tr key={slip.id} style={{ borderBottom: "1px solid var(--line)" }}>
                   <td style={{ padding: "10px 12px", fontWeight: 500 }}>{slip.employeeName?.trim() || tFallback("unknownEmployee")}</td>
                   <td style={{ padding: "10px 12px", textAlign: "end", fontVariantNumeric: "tabular-nums" }}>
                     {formatRupees(slip.gross)}

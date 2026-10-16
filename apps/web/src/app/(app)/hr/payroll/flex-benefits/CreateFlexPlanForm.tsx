@@ -209,7 +209,7 @@ export function CreateFlexPlanForm() {
 
           <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12 }}>
             <legend style={{ fontSize: 13, fontWeight: 600, padding: "0 4px" }}>
-              {t("planComponentsLegend")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("planComponentsLegend")} <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>
             </legend>
             <div style={{ display: "grid", gap: 10 }}>
               {components.map((c, idx) => {

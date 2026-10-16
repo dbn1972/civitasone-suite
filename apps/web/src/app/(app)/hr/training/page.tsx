@@ -70,10 +70,10 @@ export default async function TrainingPage() {
       ) : (
         <>
           <StatGrid>
-            <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)" label={t("statTotal")} value={total} />
-            <StatCard icon="📅" iconBg="var(--infobg, #e6f0ff)" label={t("statUpcoming")} value={upcoming} />
-            <StatCard icon="▶️" iconBg="var(--goodbg, #e6f7f0)" label={t("statOngoing")} value={ongoing} />
-            <StatCard icon="✅" iconBg="var(--warnbg, #fffbe6)" label={t("statCompleted")} value={completed} />
+            <StatCard icon="📋" iconBg="var(--bg)" label={t("statTotal")} value={total} />
+            <StatCard icon="📅" iconBg="var(--infobg)" label={t("statUpcoming")} value={upcoming} />
+            <StatCard icon="▶️" iconBg="var(--goodbg)" label={t("statOngoing")} value={ongoing} />
+            <StatCard icon="✅" iconBg="var(--warnbg)" label={t("statCompleted")} value={completed} />
           </StatGrid>
 
           {/* Upcoming Programs fast-access strip */}

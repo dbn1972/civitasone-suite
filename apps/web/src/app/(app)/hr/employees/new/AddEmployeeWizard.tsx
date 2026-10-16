@@ -295,10 +295,10 @@ export function AddEmployeeWizard({ departments, designations, employeeTypes }: 
       <div
         style={{
           padding: 24,
-          background: "var(--goodbg, #dcfce7)",
-          border: "1px solid var(--goodbd, #86efac)",
+          background: "var(--goodbg)",
+          border: "1px solid var(--goodbd)",
           borderRadius: 8,
-          color: "var(--good, #166534)",
+          color: "var(--good)",
           maxWidth: 520,
         }}
       >
@@ -342,9 +342,9 @@ export function AddEmployeeWizard({ departments, designations, employeeTypes }: 
             marginBottom: 16,
             borderRadius: 8,
             fontSize: 13,
-            background: "var(--infobg, #eff6ff)",
-            border: "1px solid var(--infobd, #bfdbfe)",
-            color: "var(--info, #1e40af)",
+            background: "var(--infobg)",
+            border: "1px solid var(--infobd)",
+            color: "var(--info)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -361,7 +361,7 @@ export function AddEmployeeWizard({ departments, designations, employeeTypes }: 
             style={{
               background: "none",
               border: "none",
-              color: "var(--info, #1e40af)",
+              color: "var(--info)",
               fontSize: 12,
               cursor: "pointer",
               textDecoration: "underline",
@@ -385,9 +385,9 @@ export function AddEmployeeWizard({ departments, designations, employeeTypes }: 
             marginBottom: 16,
             borderRadius: 8,
             fontSize: 14,
-            background: "var(--badbg, #fee2e2)",
-            border: "1px solid var(--badbd, #fca5a5)",
-            color: "var(--bad, #b91c1c)",
+            background: "var(--badbg)",
+            border: "1px solid var(--badbd)",
+            color: "var(--bad)",
           }}
         >
           {globalError}
