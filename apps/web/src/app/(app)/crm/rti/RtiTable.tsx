@@ -8,6 +8,7 @@ import { useSeededResource } from "@/lib/sync/resource";
 import type { CrmRtiRow } from "../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 import { isRtiClosed, rtiDaysLeft } from "./rtiStatus";
+import { sectionLabel as canonicalSectionLabel } from "@/lib/crm/rti"; // GAP-CRM-RTI-06
 
 // ---------------------------------------------------------------------------
 // SLA badge
@@ -75,15 +76,8 @@ function SlaBadge({ status, dueAt }: { status: string; dueAt: string | null }) {
 
 // ---------------------------------------------------------------------------
 // Section label — GAP-CRM-RTI-06: shared via @/lib/crm/rti so the table, the
-// detail page and the new-request form can never drift. The full statutory
-// label is used everywhere so all three screens read identically.
-// ---------------------------------------------------------------------------
-
-function sectionLabel(s: string, t: (key: string) => string) {
-  if (s === "s.6") return t("section6");
-  if (s === "s.11") return t("section11");
-  return s;
-}
+// GAP-CRM-RTI-06: local sectionLabel replaced with canonical import from @/lib/crm/rti
+// (see import above). The table uses the short form (second arg true) to keep cells compact.
 
 /**
  * GAP-CRM-RTI-04: an RTI applicant's name is personal data under DPDP. In the
@@ -187,7 +181,7 @@ export function RtiTable({
                   color: "var(--ink2)",
                 }}
               >
-                {sectionLabel(r.section, t)}
+                {canonicalSectionLabel(r.section, true)}
               </span>
             ),
           },

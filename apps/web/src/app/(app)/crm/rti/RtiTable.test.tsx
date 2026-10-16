@@ -159,3 +159,22 @@ describe("RtiTable empty copy (GAP-CRM-RTI-05)", () => {
     expect(screen.getByText(/match the current filters/i)).toBeInTheDocument();
   });
 });
+
+describe("RtiTable section labels (GAP-CRM-RTI-06)", () => {
+  beforeEach(() => mockedHook.mockReset());
+
+  it("shows the canonical short label '§6 Information' for an s.6 section row", () => {
+    const r = { ...row("rti-s6", "pending", "2026-11-15"), section: "s.6" };
+    seed([r]);
+    render(<RtiTable rows={[r]} />);
+    expect(screen.getByText("§6 Information")).toBeInTheDocument();
+  });
+
+  it("shows the canonical short label '§11 Third-party' for an s.11 section row", () => {
+    const r = { ...row("rti-s11", "pending", "2026-11-15"), section: "s.11" };
+    seed([r]);
+    render(<RtiTable rows={[r]} />);
+    expect(screen.getByText("§11 Third-party")).toBeInTheDocument();
+  });
+});
+
