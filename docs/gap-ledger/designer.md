@@ -389,7 +389,7 @@ Counts: ACTION 68, BACKEND-VERIFY 2, REFUTED 2
 
 ### GAP-DESIGNER-DETAIL-B4-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W2 p2: closed by #PRNUM — per-lane inline warning added to LaneCard under the Escalate select with aria-describedby; validateChain already detected missing_escalation; GWT tests in ApprovalChainBuilder.test.tsx)
+- [x] **Status** (W2 p2: closed by #2105 — per-lane inline warning added to LaneCard under the Escalate select with aria-describedby; validateChain already detected missing_escalation; GWT tests in ApprovalChainBuilder.test.tsx)
 - **First-pass claim:** Escalate-to starts at 'Select superior designation'; a lane without one has an SLA that escalates nowhere and nothing warns the designer (ApprovalChainBuilder.tsx:376-395).
 - **Verified evidence:** ApprovalChainBuilder.tsx:375-396 (line 376 label 'Escalate to (on breach)'): the select starts at value '' with '<option>Select superior designation</option>'. lanesToBindings (workflowConstants.ts:64-75) sends escalationDesignationId as undefined when empty. Nothing warns when a lane has an SLA and no escalation target. The SLA input (:365-373) accepts 0 (min 0), and slaDaysToMinutes returns null for 0, so a lane can have no SLA at all with no notice. Neither the B4 page nor the builder shows an escalation warning.
 - **Files to change:** `apps/web/src/app/(app)/designer/_data/workflowConstants.ts`, `apps/web/src/app/(app)/designer/_components/ApprovalChainBuilder.tsx`
