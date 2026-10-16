@@ -42,11 +42,13 @@ export async function insertConfig(tx: Writer, row: ConfigEntryInsert): Promise<
  */
 export async function getConfigForUpdate(
   tx: Writer, tenantId: string, id: string,
-): Promise<{ version: number; active: boolean; namespace: string } | undefined> {
+): Promise<{ version: number; active: boolean; namespace: string; configKey: string; value: unknown } | undefined> {
   const rows = await tx.select({
     version: configEntries.version,
     active: configEntries.active,
     namespace: configEntries.namespace,
+    configKey: configEntries.configKey,
+    value: configEntries.value,
   })
     .from(configEntries)
     .where(and(eq(configEntries.tenantId, tenantId), eq(configEntries.id, id)))
