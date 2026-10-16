@@ -84,12 +84,30 @@ export default async function LegalCaseDetailPage({ params }: { params: { id: st
     notes: h.nextDate ? `Next: ${formatIndianDate(h.nextDate)}` : "—",
   }));
 
-  const orderRows: OrderRow[] = (caseData.orders ?? []).map((o) => ({
-    id: o.id,
-    orderType: o.orderNo ? `Order ${o.orderNo}` : "Court order",
-    orderDate: formatIndianDate(o.date),
-    summary: o.summary,
-  }));
+  // GAP-LEGAL-CASES-DETAIL-01: split orders into court orders and affidavit
+  // filings so affidavits recorded via "Record affidavit filing" do not appear
+  // as generic "Court order" rows in the compliance table.
+  const allOrders = caseData.orders ?? [];
+  const filingRows: OrderRow[] = allOrders
+    .filter((o) => (o.orderType ?? "").toLowerCase() === "affidavit")
+    .map((o) => ({
+      id: o.id,
+      orderType: "Affidavit filing",
+      orderDate: formatIndianDate(o.date),
+      summary: o.summary,
+    }));
+  const orderRows: OrderRow[] = allOrders
+    .filter((o) => (o.orderType ?? "").toLowerCase() !== "affidavit")
+    .map((o) => {
+      const typeLabel =
+        o.orderType === "judgment" ? "Judgment"
+          : o.orderType === "interim" ? "Interim order"
+            : o.orderType === "stay" ? "Stay order"
+              : o.orderType === "direction" ? "Direction"
+                : o.orderNo ? `Order ${o.orderNo}`
+                  : "Court order";
+      return { id: o.id, orderType: typeLabel, orderDate: formatIndianDate(o.date), summary: o.summary };
+    });
 
   const STAGES = ["Filed", "Pleadings", "Arguments", "Judgment"] as const;
   const curStage = stageIndex(caseData.status);
@@ -209,6 +227,24 @@ export default async function LegalCaseDetailPage({ params }: { params: { id: st
               />
             )}
           </div>
+
+          {/* GAP-LEGAL-CASES-DETAIL-01: affidavit filings are a distinct record
+              type that must not inflate the compliance-tracked court-order count.
+              Show them in a separate card so they remain traceable without being
+              confused with court directions. */}
+          {filingRows.length > 0 && (
+            <div className="card">
+              <div className="card-h"><h3>Affidavit filings</h3></div>
+              <DataTable<OrderRow>
+                columns={[
+                  { key: "orderType", label: "Filing type" },
+                  { key: "orderDate", label: "Filing date" },
+                  { key: "summary", label: "Description" },
+                ]}
+                rows={filingRows}
+              />
+            </div>
+          )}
         </div>
 
         {/* ── Right column: lifecycle timeline ──────────── */}

@@ -2339,6 +2339,8 @@ export type LegalCaseDetail = LegalCaseSummary & {
     id: string;
     date: string;
     orderNo?: string;
+    /** GAP-LEGAL-CASES-DETAIL-01: the order kind (affidavit/order/judgment…). */
+    orderType?: string;
     summary: string;
     complianceRequired: boolean;
     complianceDeadline?: string;

@@ -2335,6 +2335,9 @@ export const LegalCaseDetailSchema = LegalCaseSummarySchema.extend({
     id: z.string(),
     date: z.string(),
     orderNo: z.string().optional(),
+    // GAP-LEGAL-CASES-DETAIL-01: pass orderType through so the detail page can
+    // separate affidavit filings from court orders.
+    orderType: z.string().optional(),
     summary: z.string(),
     complianceRequired: z.boolean().default(false),
     complianceDeadline: z.string().optional(),

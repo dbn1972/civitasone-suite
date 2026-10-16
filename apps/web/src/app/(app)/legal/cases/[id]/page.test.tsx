@@ -44,3 +44,39 @@ describe("Legal case detail lifecycle labels (GAP-LEGAL-CASES-DETAIL-04)", () =>
     expect(screen.queryByText("Raised date")).not.toBeInTheDocument();
   });
 });
+
+describe("Legal case detail order type display (GAP-LEGAL-CASES-DETAIL-01)", () => {
+  beforeEach(() => { getLegalCaseById.mockReset(); notFound.mockClear(); });
+
+  it("Given a case with an affidavit order, When rendered, Then affidavit appears in 'Affidavit filings' card, not 'Court orders'", async () => {
+    getLegalCaseById.mockResolvedValue({
+      data: {
+        ...caseData,
+        orders: [
+          { id: "o1", date: "2024-04-01", orderType: "affidavit", summary: "Affidavit of service", complianceRequired: false, status: "pending" },
+          { id: "o2", date: "2024-04-10", orderType: "order", orderNo: "123", summary: "Stay granted", complianceRequired: true, status: "pending" },
+        ],
+      },
+      source: "api",
+      status: 200,
+    });
+    render(await LegalCaseDetailPage({ params: { id: "c1" } }));
+    expect(screen.getByText("Affidavit filings")).toBeInTheDocument();
+    expect(screen.getByText("Affidavit of service")).toBeInTheDocument();
+    // The compliance court-orders table should NOT contain the affidavit summary
+    const courtOrdersHeading = screen.getByText("Court orders");
+    expect(courtOrdersHeading).toBeInTheDocument();
+    expect(screen.queryByRole("cell", { name: "Affidavit filing" })).toBeInTheDocument();
+  });
+
+  it("Given a case with only court orders, When rendered, Then 'Affidavit filings' card is absent", async () => {
+    getLegalCaseById.mockResolvedValue({
+      data: { ...caseData, orders: [{ id: "o1", date: "2024-04-10", orderType: "judgment", summary: "Judgment in favour", complianceRequired: false, status: "complied" }] },
+      source: "api",
+      status: 200,
+    });
+    render(await LegalCaseDetailPage({ params: { id: "c1" } }));
+    expect(screen.queryByText("Affidavit filings")).not.toBeInTheDocument();
+    expect(screen.getByText("Judgment")).toBeInTheDocument();
+  });
+});
