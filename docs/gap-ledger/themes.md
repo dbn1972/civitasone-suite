@@ -100,7 +100,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-BRAND-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0 note:** partly fixed by #1923 — UUID ids are still shortened to 8 characters (full id kept in a title; slug ids shown whole); the ID column is not removed or hidden
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** ModuleListTable.tsx:50 renders <span className="mono">{row.id.slice(0, 8)}</span> (file lines 37-55 hold the table). Ids come from mapper fallback chain (id/key/code/... then `row-N`), so long keys/UUIDs sharing a prefix display identically; <tr key={row.id}> at :47 would also duplicate if real ids collide.
@@ -206,7 +206,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-BRANDING-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0 note:** partly fixed by #1923 — UUID ids are still shortened to 8 characters (full id kept in a title; slug ids shown whole); the ID column is not removed or hidden
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** ModuleListTable.tsx:50 renders <span className="mono">{row.id.slice(0, 8)}</span> (file lines 37-55 hold the table). Ids come from mapper fallback chain (id/key/code/... then `row-N`), so long keys/UUIDs sharing a prefix display identically; <tr key={row.id}> at :47 would also duplicate if real ids collide.
@@ -297,7 +297,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-TEMPLATES-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0 note:** partly fixed by #1923 — UUID ids are still shortened to 8 characters (full id kept in a title; slug ids shown whole); the ID column is not removed or hidden
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** _components/ModuleListTable.tsx:50 renders `row.id.slice(0, 8)`. Because themes/_data.ts:32-41 falls back to key/code/name (and even `row-N`) when id is absent, the 'ID' may be a truncated name; UUIDs share 8-char prefixes rarely but names/codes do. This shared table is used by every ModuleListPage consumer, not just Themes.
@@ -383,7 +383,7 @@ Counts: ACTION 26, BACKEND-VERIFY 5
 
 ### GAP-THEMES-TOKENS-03  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
 - **W0-10 note:** review found the W0 tick partly — ThemeContrastPanel on tokens page, but publish dialog (ThemeActions.tsx:66-72) still has text-only confirmDescription: no changed-token old/new list, no AA fail warning/block; two acceptance points unmet
 - **First-pass claim:** No preview, diff or contrast check before publishing: the confirmation explains consequence but never shows which tokens change or whether brand.primary on surface.canvas meets WCAG contrast.
 - **Verified evidence:** ThemeActions.tsx:56-70 wraps Publish in ActionButton with confirmTitle, consequence text, requireReason and reasonLabel (so a reason dialog does exist), but the POST at lines 19-23 sends only {name, reason}; the page never shows which tokens change vs the live theme, nor a contrast check. lib/contrast.ts exports contrast(hexA, hexB) (line 24) that is not used here. Maker!=checker enforcement and the audit event are server-side and cannot be verified (theme-service absent); what /v1/themes/publish publishes (a server-held draft?) is unknown.
