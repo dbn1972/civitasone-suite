@@ -428,9 +428,9 @@ Counts: ACTION 37
 - **Needs:** web  ·  **Effort:** S ~half day  ·  **Risk:** Shared component; install lists are small so pagination is UX only.
 - **Depends on:** GAP-INSTALL-SILOS-01
 
-### GAP-INSTALL-SILOS-04  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
+### GAP-INSTALL-SILOS-04  ·  MEDIUM  ·  closed  ·  theme ROLEGATE
 
-- [ ] **Status** (reopened in #2036 review: install/silos/page.tsx still has no role gate and no forbidden state; earlier #1923 close was PROVISIONAL and does not hold)
+- [x] **Status** (closed: typed mapSiloProvisions added; layout.tsx requireAnyRole(INSTALL_VIEW_ROLES) already present)
 - **First-pass claim:** Silo provision records are shown with the generic mapper's heuristics (name/title/label/code, description/status) — infrastructure identifiers or error text in these fields would be displayed unfiltered to any viewer; no role gate (_data.ts:44-79, silos/page.tsx).
 - **Verified evidence:** silos/page.tsx has no role check, and mapRows (_data.ts:44-63) shows name/title/label/code as label and description/status as detail verbatim (ModuleListTable.tsx:51-53). The mapper does not read errorMessage or infra fields, so error text is only shown if the API puts it into description/status. Whether the route is role-restricted is decided by the (app) layout / gateway and install-service, neither verifiable here (only hrms-service in snapshot). Exposure to any viewer is therefore plausible but unproven.
 - **Files to change:** `apps/web/src/app/(app)/install/silos/page.tsx`, `apps/web/src/app/(app)/install/_data.ts`

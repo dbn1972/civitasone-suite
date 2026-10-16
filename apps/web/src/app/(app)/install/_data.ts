@@ -147,4 +147,54 @@ function installModulesLoader() {
 
 export const getInstallStages = moduleLoader("/api/v1/install/stages", "install.stages");
 export const getInstallModules = installModulesLoader;
-export const getInstallSilos = moduleLoader("/api/v1/install/silo-provisions", "install.silos");
+/**
+ * GAP-INSTALL-SILOS-04 (ROLEGATE / DSDRIFT): the generic mapRows renders every
+ * field in the API row verbatim, so an errorMessage or hostname in `description`
+ * would be shown to any viewer.  This allow-listed mapper surfaces only
+ * tenant, region and lifecycle status — no free-text infrastructure detail.
+ * The /install layout.tsx role gate (requireAnyRole(INSTALL_VIEW_ROLES)) is
+ * defence-in-depth; install-service enforces the same role check server-side.
+ */
+export function mapSiloProvisions(payload: unknown): ModuleRowSummary[] {
+  const rows = extractRows(payload);
+  const mapped: ModuleRowSummary[] = [];
+  for (const [index, row] of rows.entries()) {
+    if (!isRecord(row)) continue;
+    const id =
+      toText(row.siloId) ??
+      toText(row.id) ??
+      toText(row.code) ??
+      `silo-${index + 1}`;
+    const tenant =
+      toText(row.tenantCode) ??
+      toText(row.tenantId) ??
+      toText(row.tenant) ??
+      id;
+    const region = toText(row.region) ?? toText(row.regionCode);
+    const status =
+      toText(row.status) ??
+      toText(row.state) ??
+      toText(row.lifecycle);
+    const provisionedAt =
+      toText(row.provisionedAt) ??
+      toText(row.createdAt);
+    const meta = provisionedAt ? formatMetaValue(provisionedAt) : undefined;
+    mapped.push({
+      id,
+      label: tenant,
+      ...(region ? { sublabel: region } : {}),
+      ...(status ? { status } : {}),
+      ...(meta ? { meta } : {}),
+    });
+  }
+  return mapped;
+}
+
+function installSilosLoader() {
+  return fetchJson<unknown, ModuleRowSummary[]>("/api/v1/install/silo-provisions", [] as ModuleRowSummary[], {
+    revalidateSeconds: 30,
+    telemetryKey: "install.silos",
+    mapResponse: mapSiloProvisions,
+  });
+}
+export const getInstallSilos = installSilosLoader;
