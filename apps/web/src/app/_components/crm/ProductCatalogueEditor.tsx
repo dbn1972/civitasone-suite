@@ -46,7 +46,7 @@ import {
   type QpSource,
 } from "@/lib/crm/quotation";
 
-const inputStyle = { padding: 6, minHeight: 36, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
+const inputStyle = { padding: 6, minHeight: 44, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const; // GAP-CRM-PRODUCTS-04: 44px minimum touch target
 
 /** The standard Indian GST slabs offered as presets; anything else is "Custom". */
 const GST_SLABS = ["0", "5", "12", "18", "28"] as const;
