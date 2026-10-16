@@ -14,6 +14,7 @@ export function RequestDetailClient({
   id,
   initialGrievance = null,
   initialSource = "error",
+  isOfficer = false,
 }: {
   id: string;
   /**
@@ -26,6 +27,14 @@ export function RequestDetailClient({
   initialGrievance?: Grievance | null;
   /** "api" = trust initialGrievance (even if null -- that's a real not-found). "error" = the server loader couldn't get an answer; fall back to the original always-fetch-on-mount behavior. */
   initialSource?: "api" | "error";
+  /**
+   * GAP-CITIZEN-REQUESTS-DETAIL-01: officer actions (Resolve, Escalate, Add
+   * action) are gated server-side but must also be hidden in the UI so a
+   * citizen cannot see controls that will 403 them. Passed from page.tsx after
+   * checking the session roles. Defaults false (safe: no officer controls
+   * rendered if the prop is not provided). The backend is still authoritative.
+   */
+  isOfficer?: boolean;
 }) {
   const t = useTranslations("citizenRequests");
   const router = useRouter();
@@ -197,10 +206,16 @@ export function RequestDetailClient({
         backLabel={t("detailBack")}
         actions={
           <>
-            <Button type="button" variant="ghost" style={{ minHeight: 44 }} onClick={() => setShowAction((s) => !s)}>
-              {t("addAction")}
-            </Button>
-            {!isResolved && (
+            {/* GAP-CITIZEN-REQUESTS-DETAIL-01: officer-only actions are hidden
+                for citizens. isOfficer is resolved server-side (page.tsx) via
+                getSessionRoles; the backend is still the authority and will 403
+                on unauthorised calls. Default is false (safe). */}
+            {isOfficer && (
+              <Button type="button" variant="ghost" style={{ minHeight: 44 }} onClick={() => setShowAction((s) => !s)}>
+                {t("addAction")}
+              </Button>
+            )}
+            {isOfficer && !isResolved && (
               <ActionButton
                 label={t("resolve")}
                 requireReason
@@ -212,7 +227,7 @@ export function RequestDetailClient({
                 onSuccess={() => afterMutate("Resolution submitted.")}
               />
             )}
-            {!isResolved && (
+            {isOfficer && !isResolved && (
               <ActionButton
                 label={t("escalate")}
                 className="btn danger"
@@ -226,7 +241,7 @@ export function RequestDetailClient({
                 onSuccess={() => afterMutate("Escalation submitted.")}
               />
             )}
-            {isResolved && (
+            {!isOfficer && isResolved && (
               <ActionButton
                 label={t("reopen")}
                 requireReason
@@ -267,7 +282,7 @@ export function RequestDetailClient({
             </div>
           </div>
 
-          {showAction && (
+          {isOfficer && showAction && (
             <div className="card">
               <form onSubmit={addAction} className="pad" style={{ maxWidth: 520 }}>
                 <h4 style={{ marginTop: 0 }}>{t("recordActionTitle")}</h4>
