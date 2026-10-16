@@ -1,8 +1,8 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
+import { Button, Field, Input, Segmented, ConfirmDialog, DataTable } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 type Role = {
@@ -84,8 +84,6 @@ function NewRoleDialog({ open, onClose, onCreated }: { open: boolean; onClose: (
   const [error, setError] = useState<string | undefined>(undefined);
   const formError = useFormError("role");
 
-  const nameId = useId();
-  const descId = useId();
 
   if (!open) return null;
 
@@ -95,17 +93,12 @@ function NewRoleDialog({ open, onClose, onCreated }: { open: boolean; onClose: (
       title="Create a new role"
       description={
         <div style={{ display: "grid", gap: 12, marginTop: 4 }}>
-          <div>
-            <label htmlFor={nameId} style={lbl}>Role name</label>
-            <input id={nameId} value={name} onChange={(e) => setName(e.target.value)}
-              aria-invalid={nameErr ? true : undefined} placeholder="Finance Reviewer" style={inp} />
-            {nameErr ? <p role="alert" style={errSty}>{nameErr}</p> : null}
-          </div>
-          <div>
-            <label htmlFor={descId} style={lbl}>Description <span style={{ fontWeight: 400, color: "var(--mut)" }}>(optional)</span></label>
-            <input id={descId} value={description} onChange={(e) => setDescription(e.target.value)}
-              placeholder="Can review and approve vouchers" style={inp} />
-          </div>
+          <Field label="Role name" required error={nameErr || undefined}>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Finance Reviewer" />
+          </Field>
+          <Field label={<>Description <span style={{ fontWeight: 400, color: "var(--mut)" }}>(optional)</span></>}>
+            <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Can review and approve vouchers" />
+          </Field>
           <p style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>You can assign permissions after the role is created.</p>
         </div>
       }

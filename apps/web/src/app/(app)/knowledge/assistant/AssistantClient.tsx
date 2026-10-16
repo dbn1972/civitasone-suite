@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
-import { useId, useState } from "react";
-import { Button } from "@/app/_components/ds";
+import { useState } from "react";
+import { Button, Field, Input, Select } from "@/app/_components/ds";
 
 type Citation = { docId: string; title: string; source: string };
 type AskAnswer = { interactionId: string; answer: string; citations: Citation[]; answered: boolean; grounded: boolean };
@@ -24,7 +24,6 @@ type EscalateResponse = { id: string; status: string; correlationId: string };
  */
 export function AssistantClient() {
   const router = useRouter();
-  const inputId = useId();
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [answer, setAnswer] = useState<AskAnswer | null>(null);
@@ -95,20 +94,18 @@ export function AssistantClient() {
     <div className="card">
       <div className="card-h"><h3>Ask a question</h3></div>
       <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <label htmlFor={inputId} style={{ fontSize: 13, fontWeight: 600, color: "var(--ink2)" }}>
-          Your question
-        </label>
         {/* GAP-KNOWLEDGE-ASSISTANT-03: form wrapper for native submit semantics */}
         <form onSubmit={(e) => { e.preventDefault(); void ask(); }} style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <input
-            id={inputId}
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="e.g. How do I apply for annual leave?"
-            maxLength={1000}
-            style={{ flex: "1 1 320px", minWidth: 240, borderRadius: 8, border: "1px solid var(--line)", padding: "10px 12px", fontSize: 14, minHeight: 44 }}
-          />
+          <Field label="Your question" style={{ flex: "1 1 320px", minWidth: 240 }}>
+            <Input
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="e.g. How do I apply for annual leave?"
+              maxLength={1000}
+              style={{ minHeight: 44 }}
+            />
+          </Field>
           <Button
             type="submit"
             disabled={busy || !question.trim()}
@@ -165,20 +162,18 @@ export function AssistantClient() {
             <div style={{ marginTop: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               {/* GAP-KNOWLEDGE-ASSISTANT-04: priority select */}
               {!escalated && (
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--ink2)" }}>
-                  Priority
-                  <select
+                <Field label="Priority" style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <Select
                     value={priority}
                     onChange={(e) => setPriority(e.target.value as typeof priority)}
-                    className="inp"
-                    style={{ minHeight: 36, fontSize: 13, padding: "4px 8px", borderRadius: 6 }}
+                    style={{ minHeight: 36 }}
                   >
                     <option value="Low">Low</option>
                     <option value="Medium">Medium</option>
                     <option value="High">High</option>
                     <option value="Critical">Critical</option>
-                  </select>
-                </label>
+                  </Select>
+                </Field>
               )}
               <Button
                 onClick={() => void escalate()}

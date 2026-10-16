@@ -19,7 +19,7 @@
  */
 import { useEffect, useId, useMemo, useState } from "react";
 import Link from "next/link";
-import { Button, ConfirmDialog, ErrorState, Modal, Segmented } from "@/app/_components/ds";
+import { Button, ConfirmDialog, ErrorState, Field, Input, Modal, Select, Segmented, Textarea } from "@/app/_components/ds";
 import { StatusBadge } from "../../_components/StatusBadge";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
@@ -222,18 +222,7 @@ function CreateCampaignDialog({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const nameId = useId();
   const templateId = useId();
-  const recipientsId = useId();
-  const objectiveId = useId();
-  const budgetId = useId();
-  const segmentId = useId();
-  const scheduledId = useId();
-  const budgetErrId = useId();
-  const nameErrId = useId();
-  const templateErrId = useId();
-  const recipientsHintId = useId();
-  const recipientsErrId = useId();
   const consentNoteId = useId();
 
   const [name, setName] = useState("");
@@ -369,39 +358,18 @@ function CreateCampaignDialog({
         describedById={consentNoteId}
       >
         <div style={{ display: "grid", gap: 12 }}>
-          <div>
-            <label htmlFor={nameId} style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-              Name
-            </label>
-            <input
-              id={nameId}
+          <Field label="Name" required error={attempted && nameMissing ? "A campaign name is required." : undefined}>
+            <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              style={inputStyle}
-              aria-required="true"
-              aria-invalid={attempted && nameMissing ? true : undefined}
-              aria-describedby={attempted && nameMissing ? nameErrId : undefined}
               placeholder="Q3 renewal outreach"
             />
-            {attempted && nameMissing ? (
-              <p id={nameErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: "4px 0 0" }}>
-                A campaign name is required.
-              </p>
-            ) : null}
-          </div>
+          </Field>
 
-          <div>
-            <label htmlFor={templateId} style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-              Template
-            </label>
-            <select
-              id={templateId}
+          <Field label="Template" required error={attempted && templateMissing ? "Select a template to send." : templateSource === "error" ? "Templates could not be loaded. Try again." : undefined}>
+            <Select
               value={template}
               onChange={(e) => setTemplate(e.target.value)}
-              style={inputStyle}
-              aria-required="true"
-              aria-invalid={attempted && templateMissing ? true : undefined}
-              aria-describedby={attempted && templateMissing ? templateErrId : undefined}
             >
               <option value="">Select a template…</option>
               {templates.map((t) => (
@@ -410,130 +378,83 @@ function CreateCampaignDialog({
                   {t.channel ? ` (${t.channel})` : ""}
                 </option>
               ))}
-            </select>
-            {templateSource === "error" ? (
-              <p style={{ fontSize: 12, color: "var(--warn)", margin: "4px 0 0" }}>
-                Templates could not be loaded. Try again.
-              </p>
-            ) : null}
-            {attempted && templateMissing ? (
-              <p id={templateErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: "4px 0 0" }}>
-                Select a template to send.
-              </p>
-            ) : null}
-          </div>
+            </Select>
+          </Field>
 
-          <div>
-            <label htmlFor={recipientsId} style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-              Recipients
-            </label>
-            <textarea
-              id={recipientsId}
+          <Field
+            label="Recipients"
+            required
+            error={attempted && (recipientsMissing || recipientsInvalid)
+              ? recipientCheck.overLimit
+                ? "Reduce the number of recipients before sending."
+                : "Each recipient must be a valid email, Indian mobile number, or user handle."
+              : undefined}
+          >
+            <Textarea
               value={recipients}
               onChange={(e) => setRecipients(e.target.value)}
-              style={{ ...inputStyle, minHeight: 64, resize: "vertical" }}
+              style={{ minHeight: 64, resize: "vertical" }}
               rows={3}
-              aria-required="true"
-              aria-invalid={attempted && (recipientsMissing || recipientsInvalid) ? true : undefined}
-              aria-describedby={`${recipientsHintId} ${attempted && recipientsInvalid ? recipientsErrId : ""} ${consentNoteId}`.trim()}
               placeholder="One recipient per line, or comma-separated"
             />
-            <p
-              id={recipientsHintId}
-              style={{ fontSize: 12, color: attempted && (recipientsMissing || recipientsInvalid) ? "var(--bad)" : "var(--muted)", margin: "4px 0 0" }}
-            >
-              {recipientHelp}
-            </p>
-            {attempted && recipientsInvalid ? (
-              <p id={recipientsErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: "4px 0 0" }}>
-                {recipientCheck.overLimit
-                  ? "Reduce the number of recipients before sending."
-                  : "Each recipient must be a valid email, Indian mobile number, or user handle."}
-              </p>
-            ) : null}
-            {/* GAP-NOTIFICATIONS-CAMPAIGNS-02: DPDP consent notice beside the raw
-                personal-data field. */}
+            <p style={{ fontSize: 12, color: "var(--muted)", margin: "4px 0 0" }}>{recipientHelp}</p>
+            {/* GAP-NOTIFICATIONS-CAMPAIGNS-02: DPDP consent notice beside the raw personal-data field. */}
             <p id={consentNoteId} style={{ fontSize: 12, color: "var(--muted)", margin: "6px 0 0" }}>
               Only contact people who have consented to marketing. Recipients who have opted out or set
               Do-Not-Disturb are skipped automatically when the campaign is sent.
             </p>
-          </div>
+          </Field>
 
-          <div>
-            <label htmlFor={objectiveId} style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-              Objective <span style={{ fontWeight: 400, color: "var(--muted)" }}>(optional)</span>
-            </label>
-            <input
-              id={objectiveId}
+          <Field label={<>Objective <span style={{ fontWeight: 400, color: "var(--muted)" }}>(optional)</span></>}>
+            <Input
               value={objective}
               onChange={(e) => setObjective(e.target.value)}
-              style={inputStyle}
               placeholder="Awareness, conversion, re-engagement…"
             />
-          </div>
+          </Field>
 
-          <div>
-            <label htmlFor={budgetId} style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-              Budget (₹) <span style={{ fontWeight: 400, color: "var(--muted)" }}>(optional)</span>
-            </label>
-            <input
-              id={budgetId}
+          <Field
+            label={<>Budget (₹) <span style={{ fontWeight: 400, color: "var(--muted)" }}>(optional)</span></>}
+            error={budgetInvalid ? "Enter a positive rupee amount with at most two decimal places." : undefined}
+          >
+            <Input
               inputMode="decimal"
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
-              style={{ ...inputStyle, textAlign: "right" }}
-              aria-invalid={budgetInvalid ? true : undefined}
-              aria-describedby={budgetInvalid ? budgetErrId : undefined}
+              style={{ textAlign: "right" }}
               placeholder="50000.00"
             />
-            {budgetInvalid ? (
-              <p id={budgetErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", margin: "4px 0 0" }}>
-                Enter a positive rupee amount with at most two decimal places.
-              </p>
-            ) : null}
-          </div>
+          </Field>
 
-          <div>
-            <label htmlFor={segmentId} style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-              Audience segment <span style={{ fontWeight: 400, color: "var(--muted)" }}>(optional)</span>
-            </label>
+          <Field
+            label={<>Audience segment <span style={{ fontWeight: 400, color: "var(--muted)" }}>(optional)</span></>}
+            error={segmentSource === "error" ? "Segments could not be loaded — enter a segment id, or leave blank." : undefined}
+          >
             {segmentSource === "error" ? (
-              <>
-                <input
-                  id={segmentId}
-                  value={segment}
-                  onChange={(e) => setSegment(e.target.value)}
-                  style={inputStyle}
-                  placeholder="Segment id"
-                />
-                <p style={{ fontSize: 12, color: "var(--warn)", margin: "4px 0 0" }}>
-                  Segments could not be loaded — enter a segment id, or leave blank.
-                </p>
-              </>
+              <Input
+                value={segment}
+                onChange={(e) => setSegment(e.target.value)}
+                placeholder="Segment id"
+              />
             ) : (
-              <select id={segmentId} value={segment} onChange={(e) => setSegment(e.target.value)} style={inputStyle}>
+              <Select value={segment} onChange={(e) => setSegment(e.target.value)}>
                 <option value="">No segment</option>
                 {segments.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             )}
-          </div>
+          </Field>
 
-          <div>
-            <label htmlFor={scheduledId} style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 4 }}>
-              Scheduled at <span style={{ fontWeight: 400, color: "var(--muted)" }}>(optional)</span>
-            </label>
-            <input
-              id={scheduledId}
+          <Field label={<>Scheduled at <span style={{ fontWeight: 400, color: "var(--muted)" }}>(optional)</span></>}>
+            <Input
               type="datetime-local"
               value={scheduledAt}
               onChange={(e) => setScheduledAt(e.target.value)}
-              style={inputStyle}
             />
-          </div>
+          </Field>
         </div>
 
         <div className="cd-error" role="alert" aria-live="assertive">

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, EmptyState, StatusPill, ConfirmDialog } from "@/app/_components/ds";
+import { Button, EmptyState, Field, Input, Select, StatusPill, ConfirmDialog } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { useFormError } from "@/lib/useFormError";
@@ -110,41 +110,37 @@ export function DataExportClient({ exports: initialExports, source }: { exports:
         >
           {/* GAP-TENANT-ADMIN-DATA-EXPORT-05: responsive auto-fit grid instead of a fixed 4-col grid. */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, alignItems: "end" }}>
-            <div>
-              <label htmlFor="export-type" style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Export Type</label>
-              <select id="export-type" className="ta-input" value={exportType} onChange={(e) => setExportType(e.target.value as ExportType)}>
+            <Field label="Export Type">
+              <Select value={exportType} onChange={(e) => setExportType(e.target.value as ExportType)}>
                 <option value="full">Full Export</option>
                 <option value="module">By Module</option>
                 <option value="entity">Single Entity</option>
-              </select>
-            </div>
+              </Select>
+            </Field>
 
             {exportType === "module" && (
-              <div>
-                <label htmlFor="module-filter" style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Module</label>
-                <select id="module-filter" className="ta-input" value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}>
+              <Field label="Module">
+                <Select value={moduleFilter} onChange={(e) => setModuleFilter(e.target.value)}>
                   <option value="">Select module...</option>
                   {MODULES.map((m) => <option key={m} value={m}>{m.charAt(0).toUpperCase() + m.slice(1)}</option>)}
-                </select>
-              </div>
+                </Select>
+              </Field>
             )}
 
             {/* GAP-TENANT-ADMIN-DATA-EXPORT-03: entity export now names the entity. */}
             {exportType === "entity" && (
-              <div>
-                <label htmlFor="entity-id" style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Entity ID</label>
-                <input id="entity-id" className="ta-input" value={entityId} onChange={(e) => setEntityId(e.target.value)} placeholder="e.g. employee or invoice id" required />
-              </div>
+              <Field label="Entity ID" required>
+                <Input value={entityId} onChange={(e) => setEntityId(e.target.value)} placeholder="e.g. employee or invoice id" />
+              </Field>
             )}
 
-            <div>
-              <label htmlFor="export-format" style={{ display: "block", marginBottom: 4, fontWeight: 500 }}>Format</label>
-              <select id="export-format" className="ta-input" value={format} onChange={(e) => setFormat(e.target.value as ExportFormat)}>
+            <Field label="Format">
+              <Select value={format} onChange={(e) => setFormat(e.target.value as ExportFormat)}>
                 <option value="csv">CSV</option>
                 <option value="json">JSON</option>
                 <option value="pdf">PDF</option>
-              </select>
-            </div>
+              </Select>
+            </Field>
 
             <Button type="submit" disabled={submitting || (exportType === "module" && !moduleFilter) || (exportType === "entity" && !entityId)}>
               {submitting ? "Processing..." : "Export"}

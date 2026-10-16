@@ -3,7 +3,7 @@
 import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ActionButton } from "@/app/_components/ds";
+import { ActionButton, Field, Select } from "@/app/_components/ds";
 
 /**
  * Client-side lifecycle actions for a governed document.
@@ -107,21 +107,18 @@ export function PolicyActions({
         {canPublish && hasApproverRole && (
           <>
             {/* GAP-KNOWLEDGE-POLICIES-DETAIL-03: configurable review cycle */}
-            <label htmlFor="reviewMonths" style={{ fontSize: 13, color: "var(--ink2)" }}>
-              Review cycle
-              <select
-                id="reviewMonths"
+            <Field label="Review cycle" style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <Select
                 value={reviewMonths}
                 onChange={(e) => setReviewMonths(Number(e.target.value))}
-                className="inp"
-                style={{ marginInlineStart: 8, minHeight: 36, width: 100 }}
+                style={{ minHeight: 36, width: 100 }}
               >
                 <option value={6}>6 months</option>
                 <option value={12}>12 months</option>
                 <option value={24}>24 months</option>
                 <option value={36}>36 months</option>
-              </select>
-            </label>
+              </Select>
+            </Field>
             <ActionButton
               label="Publish"
               confirmTitle="Publish this document?"

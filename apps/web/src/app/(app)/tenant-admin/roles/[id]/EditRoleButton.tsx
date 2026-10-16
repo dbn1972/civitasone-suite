@@ -1,8 +1,8 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, ConfirmDialog } from "../../../../_components/ds";
+import { Button, ConfirmDialog, Field, Input } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 export function EditRoleButton({ roleId, name, description }: { roleId: string; name: string; description?: string }) {
@@ -15,8 +15,6 @@ export function EditRoleButton({ roleId, name, description }: { roleId: string; 
   const [error, setError] = useState<string | undefined>(undefined);
   const formError = useFormError("role");
 
-  const nameId = useId();
-  const descId = useId();
 
   return (
     <>
@@ -29,16 +27,12 @@ export function EditRoleButton({ roleId, name, description }: { roleId: string; 
           title="Edit role"
           description={
             <div style={{ display: "grid", gap: 12, marginTop: 4 }}>
-              <div>
-                <label htmlFor={nameId} style={lbl}>Role name</label>
-                <input id={nameId} value={nm} onChange={(e) => setNm(e.target.value)}
-                  aria-invalid={nameErr ? true : undefined} style={inp} />
-                {nameErr ? <p role="alert" style={errSty}>{nameErr}</p> : null}
-              </div>
-              <div>
-                <label htmlFor={descId} style={lbl}>Description</label>
-                <input id={descId} value={desc} onChange={(e) => setDesc(e.target.value)} style={inp} />
-              </div>
+              <Field label="Role name" required error={nameErr || undefined}>
+                <Input value={nm} onChange={(e) => setNm(e.target.value)} />
+              </Field>
+              <Field label="Description">
+                <Input value={desc} onChange={(e) => setDesc(e.target.value)} />
+              </Field>
             </div>
           }
           confirmLabel="Save"

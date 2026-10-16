@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, EmptyState, Modal, ConfirmDialog, StatusPill, RefreshErrorState, useToast } from "@/app/_components/ds";
+import { Button, EmptyState, Field, Input, Modal, ConfirmDialog, StatusPill, RefreshErrorState, useToast } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { useFormError } from "@/lib/useFormError";
@@ -398,15 +398,12 @@ function CreateWebhookDialog({
   return (
     <Modal open={open} onClose={() => { if (!busy) onClose(); }} title="Create Webhook" size="lg">
       <div style={{ display: "grid", gap: 12 }}>
-        <div>
-          <label htmlFor="wh-url" style={{ display: "block", fontSize: 12.5, fontWeight: 650, marginBottom: 4 }}>Endpoint URL (https)</label>
-          <input id="wh-url" value={url} onChange={(e) => setUrl(e.target.value)} type="url" className="ta-input" placeholder="https://your-server.com/webhook" aria-invalid={url.length > 0 && !isHttps ? true : undefined} />
-          {url.length > 0 && !isHttps ? <p role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: "4px 0 0" }}>The endpoint must use https.</p> : null}
-        </div>
-        <div>
-          <label htmlFor="wh-desc" style={{ display: "block", fontSize: 12.5, fontWeight: 650, marginBottom: 4 }}>Description</label>
-          <input id="wh-desc" value={description} onChange={(e) => setDescription(e.target.value)} type="text" className="ta-input" placeholder="Finance event sync" />
-        </div>
+        <Field label="Endpoint URL (https)" error={url.length > 0 && !isHttps ? "The endpoint must use https." : undefined}>
+          <Input value={url} onChange={(e) => setUrl(e.target.value)} type="url" placeholder="https://your-server.com/webhook" />
+        </Field>
+        <Field label="Description">
+          <Input value={description} onChange={(e) => setDescription(e.target.value)} type="text" placeholder="Finance event sync" />
+        </Field>
         <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
           <legend style={{ fontWeight: 650, fontSize: 12.5, marginBottom: 8 }}>Events to subscribe (at least one)</legend>
           {Object.entries(EVENT_GROUPS).map(([group, evts]) => (
