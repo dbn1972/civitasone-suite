@@ -138,7 +138,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-ASSESSMENTS-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W2 PQ: closed by #PRNUM)
+- [x] **Status** (W2 PQ: closed by #2080)
 - **First-pass claim:** Rows are not links and there is no detail (duration, question count, related course) though courseRef is loaded (_data.ts:71) and unused.
 - **Verified evidence:** learning/_data.ts:71 Assessment type includes courseRef; page.tsx:11-14 drops it; DataTable has no row link. Question count not present in the type (cannot-verify from API).
 - **Files to change:** `apps/web/src/app/(app)/learning/assessments/page.tsx`
@@ -205,7 +205,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-ASSESSMENTS-VERIFY-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** (INTERIM — NEEDS OWNER DECISION: public verification route exposes employee PII and requires security review; see PR #PRNUM body)
+- [~] **Status** (INTERIM — NEEDS OWNER DECISION: public verification route exposes employee PII and requires security review; see PR #2080 body)
 - **First-pass claim:** Route sits in the authenticated (app) group, so third parties (employers, auditors) who receive a certificate cannot verify it; a public verify page is not in the web tree.
 - **Verified evidence:** Route is under apps/web/src/app/(app)/learning/assessments/verify/ (authenticated); middleware.ts:11 PUBLIC list contains only /auth, /api/auth, /api/careers, /careers etc. The backend also requires a role (routes.ts:279). No public verify page exists.
 - **Files to change:** `apps/web/src/middleware.ts`, `(new) apps/web/src/app/verify/page.tsx`, `services/hrms-service/src/modules/assessment/routes.ts`
@@ -623,7 +623,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-MY-LEARNING-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W2 PQ: closed by #PRNUM)
+- [x] **Status** (W2 PQ: closed by #2080)
 - **W2 note:** Employee name now shown in subtitle when HR views via ?employeeId; getEmployeeById called only for privileged overrides. my-learning/page.tsx + page.test.tsx.
 - **W0-10 note:** review found the W0 tick partly — Self-view works (getMyProfile fallback, 'No employee record linked' state, server-side optional employeeId routes.ts:227) but no HR employee picker and the viewed employee's name is not shown (learning/my-learning/page.tsx:60-100 has static subtitle); acceptance 'HR with ?employeeId sees that employee, with name shown' unmet
 - **First-pass claim:** "My Learning" is not "mine": the employee is chosen by typing ?employeeId=<uuid> into the URL (page.tsx:9-17); a signed-in employee has no way to know their own hrms_employees id and the landing tiles link here without it.
@@ -675,7 +675,7 @@ Counts: ACTION 46
 
 ### GAP-LEARNING-MY-LEARNING-05  ·  LOW  ·  partly  ·  theme COPY (was OTHER)
 
-- [~] **Status** (INTERIM — NEEDS OWNER DECISION: status humanization already done (humanizeStatus in EnrolmentsTable); certificate link needs backend endpoint and IDOR risk assessment; see PR #PRNUM body)
+- [~] **Status** (INTERIM — NEEDS OWNER DECISION: status humanization already done (humanizeStatus in EnrolmentsTable); certificate link needs backend endpoint and IDOR risk assessment; see PR #2080 body)
 - **First-pass claim:** Raw enrolment status (enrolled / in progress / completed) is the only state; there is no certificate link on completed courses.
 - **Verified evidence:** True: status column shows the raw enum with underscores replaced (apps/web/src/app/(app)/learning/my-learning/page.tsx:23, cellType 'status') and there is no certificate link. Not fixable in web alone: assessment routes expose only GET /v1/hrms/assessment/certificates/verify/:token (assessment/routes.ts:277) and attempt-scoped certificate lookup (:272); enrolments are not linked to assessments/certificates and there is no list-by-employee endpoint.
 - **Files to change:** `apps/web/src/app/(app)/learning/my-learning/page.tsx`, `services/hrms-service/src/modules/learning/routes.ts`, `services/hrms-service/src/modules/assessment/routes.ts`
