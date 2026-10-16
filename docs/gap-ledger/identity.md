@@ -46,7 +46,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-HOME-03  ·  MEDIUM  ·  partly  ·  theme WIRING (was I18N)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 PQ: INTERIM — NEEDS OWNER DECISION: reword already landed in #1862; at-a-glance stats require backend endpoint confirmation and a product decision on which metrics to surface)
 - **W0 note:** partly fixed by #1862 — '(admin)' reworded to 'Managed in Tenant Admin'; no at-a-glance MFA/SSO/session stats added (decision pending)
 - **First-pass claim:** Two tiles leave the module for Tenant Admin (page.tsx:14-15), labelled "(admin)"; there is no MFA or SSO status here, and the hub carries no counts or health (nothing to show an admin at a glance).
 - **Verified evidence:** The two tenant-admin links are at page.tsx:15-16 (not 14-15) labelled '(admin)'; true that the hub shows no MFA/SSO status or counts (ModuleHub children slot unused). This is an enhancement request rather than a defect; endpoints for MFA/SSO/session counts cannot-verify. Theme I18N is wrong.
@@ -485,7 +485,7 @@ Counts: ACTION 33, BACKEND-VERIFY 1, REFUTED 1
 
 ### GAP-IDENTITY-WEBAUTHN-02  ·  HIGH  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #TBD)
 - **W0 note:** partly fixed by #1862 — PasskeyManager with confirm-gated remove, titled My passkeys; register shows not-available (backend 501), no rename
 - **First-pass claim:** Passkeys cannot be registered, renamed or removed here (ModuleListTable.tsx:36-56), and the list shows no owner, so it is unclear whether these are the viewer's own credentials or a tenant-wide list.
 - **Verified evidence:** webauthn/page.tsx:7-20 renders ModuleListPage read-only (ModuleListTable.tsx:57-90 no actions). Endpoint /api/v1/identity/webauthn/credentials (_data.ts:79) is unverifiable (identity-service absent); the mapper has no owner field (userId/userEmail not in key lists), so whether rows are the viewer's or tenant-wide is not shown. No other webauthn route exists (tenant-admin has no webauthn dir). Register/rename/remove needs browser WebAuthn ceremony (navigator.credentials) and endpoints not visible.
