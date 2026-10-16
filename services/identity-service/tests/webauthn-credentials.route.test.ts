@@ -122,6 +122,7 @@ describe.skipIf(!RUN_DB)("WebAuthn credential delete — ownership + real deleti
 
 
 // GAP-IDENTITY-WEBAUTHN-02: PATCH rename tests
+// FLAKY-SKIP: Requires live DB (RUN_DB env gate); skipped in CI sandbox. (expires: 2027-04-16)
 describe.skipIf(!RUN_DB)("WebAuthn credential rename -- ownership + real rename (GAP-IDENTITY-WEBAUTHN-02)", () => {
   let app: FastifyInstance;
   let repo: typeof import("../src/modules/webauthn/repo.js");
