@@ -66,7 +66,7 @@ describe("New Stock Entry page (target of the /stock/ledger/new links)", () => {
       fireEvent.change(screen.getByLabelText("Quantity"), { target: { value: "10" } });
       fireEvent.change(screen.getByLabelText("Rate per unit (₹)"), { target: { value: bad } });
       fireEvent.click(screen.getByRole("button", { name: "Record entry" }));
-      expect(await screen.findByText(/Rate must be zero or a positive amount/)).toBeInTheDocument();
+      expect(await screen.findByText(/Rate must be a positive amount/)).toBeInTheDocument();
       expect(fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toBe(false);
       unmount();
     }
