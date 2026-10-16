@@ -5,11 +5,17 @@ import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { rupeesToMinorString, percentToBps } from "@/lib/money";
-import type { AcceptedResponse, SlabType } from "./types";
+import type { AcceptedResponse, SlabType, RateSlabRow } from "./types";
 
 interface CreateRateSlabFormProps {
   rateHeadId: string;
   rateHeadLabel: string;
+  /**
+   * GAP-REVENUE-CONFIG-04: existing slabs for this rate head so the form can
+   * warn about overlapping bands and gaps with existing same-effective-date
+   * slabs (client-side hint; server is authoritative).
+   */
+  existingSlabs?: ReadonlyArray<RateSlabRow>;
 }
 
 const SLAB_TYPES: { value: SlabType; label: string }[] = [
@@ -35,7 +41,7 @@ function percentToBpsString(input: string): string | null {
   return bps.toString();
 }
 
-export function CreateRateSlabForm({ rateHeadId, rateHeadLabel }: CreateRateSlabFormProps) {
+export function CreateRateSlabForm({ rateHeadId, rateHeadLabel, existingSlabs = [] }: CreateRateSlabFormProps) {
   const router = useRouter();
   const [slabType, setSlabType] = useState<SlabType>("flat");
   const [bandFrom, setBandFrom] = useState("");
@@ -99,6 +105,35 @@ export function CreateRateSlabForm({ rateHeadId, rateHeadLabel }: CreateRateSlab
         setFieldErrorText("Band To (₹) must be greater than Band From (₹).");
         bandFromRef.current?.focus();
         return;
+      }
+    }
+
+    // GAP-REVENUE-CONFIG-04: warn about band overlaps with same-effective-date slabs.
+    // Client-side hint only — server remains authoritative.
+    if (slabType === "band" && existingSlabs.length > 0 && effectiveFrom) {
+      const newFrom = rupeesToPaiseString(bandFrom);
+      const newTo = bandTo.trim() !== "" ? rupeesToPaiseString(bandTo) : null;
+      const sameDateBands = existingSlabs.filter(
+        (s) => s.slabType === "band" && s.effectiveFrom === effectiveFrom,
+      );
+      for (const existing of sameDateBands) {
+        if (existing.bandFrom === null) continue;
+        const exFrom = BigInt(existing.bandFrom);
+        const exTo = existing.bandTo !== null ? BigInt(existing.bandTo) : null;
+        if (newFrom === null) continue;
+        const nFrom = BigInt(newFrom);
+        const nTo = newTo !== null ? BigInt(newTo) : null;
+        // Overlap: [nFrom, nTo) intersects [exFrom, exTo)
+        const newEndsBefore = nTo !== null && nTo <= exFrom;
+        const existingEndsBefore = exTo !== null && exTo <= nFrom;
+        if (!newEndsBefore && !existingEndsBefore) {
+          setInvalidField("bandFrom");
+          setFieldErrorText(
+            "This band overlaps an existing band for the same effective date. Adjust Band From or Band To.",
+          );
+          bandFromRef.current?.focus();
+          return;
+        }
       }
     }
 

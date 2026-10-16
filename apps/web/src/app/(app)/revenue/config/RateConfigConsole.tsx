@@ -102,7 +102,7 @@ export function RateConfigConsole({
             />
           ) : (
             <div>
-              <CreateRateSlabForm rateHeadId={selectedRateHead.id} rateHeadLabel={`${selectedRateHead.code} — ${selectedRateHead.name}`} />
+              <CreateRateSlabForm rateHeadId={selectedRateHead.id} rateHeadLabel={`${selectedRateHead.code} — ${selectedRateHead.name}`} existingSlabs={slabs} />
               {slabs.length === 0 ? (
                 slabsSource === "error" ? (
                   <DataSourceBadge source="error" />
