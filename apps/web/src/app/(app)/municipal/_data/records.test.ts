@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { maskName } from "@/app/_components/ds/Masked";
 import { getMunicipalService, MUNICIPAL_SERVICE_CATALOG } from "./services";
 import { parseListPayload, pickField, toMunicipalRecordRow, countInProgress, isInProgressStatus, detailEntries, omittedFieldCount, statusFilterOptions } from "./records";
 
@@ -280,5 +281,49 @@ describe("municipal record parsing", () => {
   it("detailEntries: address strings are identifier-masked (PQ-C r2)", () => {
     const e = detailEntries({ status: "s", venueAddress: "Hall 3, call 9876543210" }, getMunicipalService("event")!);
     expect(e.find((x) => x.key === "venueAddress")!.value).not.toContain("9876543210");
+  });
+
+  // GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-03 (DETAIL-03): every sec5 service
+  // has a fieldOrder that puts status first, so the detail panel never opens
+  // with an alphabetically-first random field on top.
+  it("detailEntries: all sec5 services have a fieldOrder with status first (DETAIL-03)", () => {
+    const sec5 = MUNICIPAL_SERVICE_CATALOG.filter((s) => s.sec5);
+    for (const cfg of sec5) {
+      expect(cfg.fieldOrder, `${cfg.serviceKey} is missing fieldOrder`).toBeDefined();
+      expect(
+        (cfg.fieldOrder as readonly string[])[0],
+        `${cfg.serviceKey} fieldOrder must start with "status"`,
+      ).toBe("status");
+    }
+  });
+
+  // GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-04: toMunicipalRecordRow masks the
+  // Subject column when titleIsPerson is true, so an ownerName / applicantName /
+  // deceasedName never appears unmasked in the application list.
+  it("toMunicipalRecordRow: masks title when titleIsPerson is true (APPLICATIONS-04)", () => {
+    const crematorium = getMunicipalService("crematorium")!;
+    expect(crematorium.titleIsPerson).toBe(true);
+    const row = toMunicipalRecordRow(
+      { id: "b1", bookingNumber: "CR-001", deceasedName: "Ramesh Kumar", status: "requested", updatedAt: "x" },
+      crematorium,
+    );
+    expect(row).not.toBeNull();
+    // The masked form starts with the first letter of each name-part.
+    expect(row!.title).toBe(maskName("Ramesh Kumar"));
+    expect(row!.title).not.toBe("Ramesh Kumar");
+    // A plain "—" fallback is never masked.
+    const noTitle = toMunicipalRecordRow({ id: "b2" }, crematorium);
+    expect(noTitle?.title).toBe("—");
+  });
+
+  // toMunicipalRecordRow must NOT mask when titleIsPerson is absent.
+  it("toMunicipalRecordRow: does not mask title when titleIsPerson is absent (APPLICATIONS-04)", () => {
+    const animal = getMunicipalService("animal")!;
+    expect(animal.titleIsPerson).toBeUndefined();
+    const row = toMunicipalRecordRow(
+      { id: "c1", complaintNumber: "AC-001", animalType: "Dog", status: "reported", updatedAt: "x" },
+      animal,
+    );
+    expect(row!.title).toBe("Dog");
   });
 });

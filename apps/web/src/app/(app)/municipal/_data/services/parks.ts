@@ -17,5 +17,8 @@ export const parksService: MunicipalServiceConfig = {
   // W2 PQ-C: service-specific record fields the officer detail panel may show (allow-list, from the
   // parks-service drizzle schema). Blobs (documents/photos), actor UUIDs and raw document numbers stay out.
   displayFields: ["requestNumber", "requestType", "treeSpecies", "inspectionReport"],
+  // GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-DETAIL-03: status leads, then
+  // the service's natural reference + subject fields, rest alphabetical.
+  fieldOrder: ["status", "requestNumber", "requestType"],
   sec5: true,
 };

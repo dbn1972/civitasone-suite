@@ -31,7 +31,17 @@ export function RecordsTable({ config, rows }: Props) {
       columns={[
         { key: "reference", label: "Reference" },
         { key: "title", label: "Subject" },
-        { key: "status", label: "Status", cellType: "status" },
+        {
+          key: "status",
+          label: "Status",
+          cellType: "status",
+          // GAP-MUNICIPAL-SERVICEKEY-APPLICATIONS-05: 'issued' is the positive terminal
+          // state (licence issued) in every municipal service, but the shared StatusPill map
+          // intentionally maps it to "info" for billing/treasury contexts. Override it here
+          // for the municipal officer list only; add the two in-progress scrutiny states
+          // that fall through to neutral "info" without an entry in the global map.
+          statusVariants: { issued: "good", under_scrutiny: "warn", inspecting: "warn" } as const,
+        },
         // GAP-...-APPLICATIONS-02: render the raw ISO timestamp as a formatted
         // IST date-time instead of printing it verbatim.
         { key: "updatedAt", label: "Updated", cellType: "datetime" },
