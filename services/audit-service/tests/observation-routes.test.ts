@@ -469,6 +469,7 @@ describe("GAP-AUDIT-OBSERVATIONS-DETAIL-07 — reply audit event + status-transi
       },
     });
     await new Promise<void>((r) => setTimeout(r, 600));
+    await relayOnce(dbInst2 as never, q, 100, "audit-service");
 
     // Submit a valid reply (status "open" → "replied")
     await q.publish("audit.observation.reply", {
@@ -481,6 +482,7 @@ describe("GAP-AUDIT-OBSERVATIONS-DETAIL-07 — reply audit event + status-transi
       },
     });
     await new Promise<void>((r) => setTimeout(r, 600));
+    await relayOnce(dbInst2 as never, q, 100, "audit-service");
     await q.stop();
 
     const { eq: eqFn } = await import("drizzle-orm");

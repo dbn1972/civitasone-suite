@@ -640,7 +640,7 @@ describe("PATCH /notifications/campaigns/:id/send", () => {
         (id, tenant_id, template_id, name, status, budget_minor, currency, created_by, updated_by)
       VALUES
         (${campaignId}::uuid, ${TENANT}::uuid, ${randomUUID()}::uuid,
-         ${send-auth-fixture}, ${draft}, 0, ${INR}, ${SYSTEM_ACTOR}::uuid, ${SYSTEM_ACTOR}::uuid)
+         'send-auth-fixture', 'draft', 0, 'INR', ${SYSTEM_ACTOR}::uuid, ${SYSTEM_ACTOR}::uuid)
     `);
     const app = await buildApp();
     const res = await app.inject({
