@@ -1,6 +1,6 @@
 # W0-08: recount after Wave 0 reconciliation
 
-Total: **329 open**, 4272 closed, 50 blocked or obsolete.
+Total: **317 open**, 4275 closed, 59 blocked or obsolete.
 
 Priority queue: 10 open, 208 closed (0 entries ticked by W0-07 to match closed module items).
 
@@ -11,7 +11,6 @@ Priority queue: 10 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | tenant-admin | 15 | 180 | 0 |
 | legal | 14 | 38 | 0 |
 | audit | 13 | 62 | 0 |
-| projects | 13 | 72 | 0 |
 | billing | 12 | 42 | 4 |
 | court | 11 | 25 | 0 |
 | works | 11 | 189 | 0 |
@@ -58,6 +57,7 @@ Priority queue: 10 open, 208 closed (0 entries ticked by W0-07 to match closed m
 | library | 1 | 4 | 0 |
 | offline | 1 | 4 | 0 |
 | plugins | 1 | 21 | 0 |
+| projects | 1 | 75 | 9 |
 | admin | 0 | 164 | 0 |
 | approvals | 0 | 8 | 0 |
 | assets | 0 | 151 | 0 |

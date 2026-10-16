@@ -138,7 +138,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-06  ·  LOW  ·  confirmed  ·  theme OTHER (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 closed by #W2-PROJECTS-1: Spent % already present from #1869; button card replaced by route-based ProjectDetailNav in [id]/layout.tsx)
 - **W0 note:** partly fixed by #1869 — 'Spent %' added; the Card of three <Link className='btn'> buttons is still there, no route-based Tabs / [id]/layout.tsx.
 - **First-pass claim:** Expenditure is shown beside Budget without a consumption percentage or comparison to Completion %; sub-page links are plain buttons rather than tabs (page.tsx:61-71).
 - **Verified evidence:** page.tsx:55-57 show Budget, Expenditure, Completion % as separate fields with no utilisation %; :60-71 sub-pages are three <Link className='btn'> buttons in a Card, while ds/Tabs.tsx exists. Theme DATEFMT is wrong.
@@ -220,7 +220,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-MEMBERS-05  ·  LOW  ·  partly  ·  theme DATEFMT
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 closed by #W2-PROJECTS-1: formatIndianDate now returns — for any non-parseable string, not the raw string; test updated)
 - **W0 note:** partly fixed by #1869 — formatIndianDate now used, but it echoes an unparseable value verbatim (not '—'), and the table is still a bare tbl-wrap (no DataTable / stacked mobile rows).
 - **First-pass claim:** Table uses a bare .tbl without a mobile card transform, and dates use toLocaleDateString("en-IN") (page.tsx:74) rather than the shared formatIndianDate.
 - **Verified evidence:** members/page.tsx:45-46 uses <div.tbl-wrap><table.tbl> (civitas-ds.css:132 gives horizontal scroll only, no card transform; DataTable has none either). Date at :74 uses toLocaleDateString('en-IN'), which yields the same dd/mm/yyyy as lib/formatters.ts:2-7 formatIndianDate; difference is helper consistency and that an invalid createdAt prints 'Invalid Date' instead of '—'. Neither helper sets timeZone IST, and neither prints 'dd Mon yyyy'.
@@ -321,7 +321,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DETAIL-TASKS-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM W2-PROJECTS-1: AddTaskForm (POST /tasks, role-gated) is present; status/progress edit UI (PATCH /tasks/:id/status) is still missing. Backend endpoint exists per W0-10 note. NEEDS OWNER DECISION: implement the full PATCH task-status form as a separate sprint item. Flagged L-effort web+backend.)
 - **W0-10 note:** review found the W0 tick partly — AddTaskForm (POST /tasks, role-gated, backend exists) and empty-state copy done, but no status/progress edit UI: no PATCH call anywhere under projects/[id]/tasks although backend PATCH /tasks/:taskId and /status exist (fix step 2)
 - **First-pass claim:** Empty state tells end users “Use the API to create tasks.” (page.tsx:56) and the page offers no add/edit control, so a project team cannot build a WBS from the UI; /projects/wbs repeats the dependency (“Create tasks in a project to see the WBS”).
 - **Verified evidence:** tasks/page.tsx:56 message 'Use the API to create tasks.'; no add/edit control on the page; wbs/page.tsx:33 says 'Create tasks in a project to see the WBS.' Backend create-task endpoint cannot be verified (copy implies one exists).
@@ -757,7 +757,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-FUND-RELEASES-03  ·  MEDIUM  ·  confirmed  ·  theme API-CONTRACT (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM W2-PROJECTS-1: URL uses r.projectId as schemeId with a code comment documenting the alias. Backend project-service is absent from the snapshot so an explicit schemeId field cannot be added. NEEDS OWNER DECISION: backend to return schemeId on FundReleaseSummary, then drop the comment.)
 - **First-pass claim:** The URL uses schemeId but is fed r.projectId (FundReleasesTable.tsx:47; FundReleasesActions.tsx:9,27): the code’s own comment concedes “backend stores schemeId as projectId”, an id-naming trap for a mutation route.
 - **Verified evidence:** FundReleasesTable.tsx:47 passes r.projectId as prop schemeId; FundReleasesActions.tsx:9 documents 'backend stores schemeId as projectId' and :27 builds /projects/schemes/${schemeId}/fund-releases/... . Functionally consistent if the comment is true, but the API contract cannot be verified here and a wrong id would hit a mutation route.
 - **Files to change:** `apps/web/src/app/(app)/projects/fund-releases/FundReleasesTable.tsx`, `apps/web/src/app/(app)/projects/fund-releases/FundReleasesActions.tsx`
@@ -771,7 +771,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-FUND-RELEASES-04  ·  MEDIUM  ·  partly  ·  theme STATUS
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 closed by #W2-PROJECTS-1: Released tile renamed Disbursed and includes released+utilized; BigInt summation for paise totals)
 - **W0 note:** partly fixed by #1869 — table pills now carry scoped tones (sanctioned warn, released/utilized good); remaining: 'utilized' shares released's colour, Released tile still counts status==='released' only (excludes utilized) and totals still use JS-number reduce on paise.
 - **First-pass claim:** StatusPill has no keys for released, sanctioned or utilized, so all three render identical neutral “info” blue (ds/StatusPill.tsx:6-38); tiles are exclusive status buckets, so a utilized release drops out of “Released”.
 - **Verified evidence:** StatusPill.tsx:5-38 has no 'released', 'sanctioned' or 'utilized' keys, so all fall to variant 'info' (:53). True. Tiles (page.tsx:14-16) filter by exclusive status equality, so if a release moves released->utilized it leaves the Released sum; whether 'utilized' is a status of the same record or a separate state is not verifiable (types package absent). Also sums use JS number reduce on paise.
@@ -1163,7 +1163,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-SCHEMES-DETAIL-05  ·  LOW  ·  partly  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM W2-PROJECTS-1: loading.tsx already uses RouteSkeleton variant='detail'. Nodal officer display (public official name) needs a product/DPDP decision before masking. NEEDS OWNER DECISION: confirm whether public-office names are exempt from DPDP masking.)
 - **W0 note:** partly fixed by #1869 — loading.tsx rebuilt to header/4 stat/details/table shape; remaining: no recorded decision on nodal-officer visibility (page.tsx still prints scheme.nodalOfficer to all viewers).
 - **First-pass claim:** Nodal officer is a named person shown to all module users (DPDP low risk); loading is a single bare .skeleton block.
 - **Verified evidence:** page.tsx:96-97 shows scheme.nodalOfficer (a person name) to every viewer; no masking. It is an official's designation-level contact, low DPDP risk, so Masked/audit reveal is disproportionate. Loading is one `.skeleton` block (schemes/[id]/loading.tsx:1-7), true.
@@ -1320,7 +1320,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-HOME-02  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM W2-PROJECTS-1: project-service absent — cannot verify canonical URL prefix. NEEDS OWNER DECISION: confirm /api/v1/project/* vs /api/v1/projects/* in gateway config.)
 - **First-pass claim:** Two API prefixes coexist for one module: typed loaders call /api/v1/project/* (singular: dashboard, projects, milestones, schemes, fund-releases; loaders.ts:3465-3527) while sub-resource loaders and mutations use /api/v1/projects/* and /api/proxy/v1/projects/* (plural; loaders.ts:5133-5284, new/CreateProjectForm.tsx:82). Backend routing cannot be checked because project-service is absent from the snapshot.
 - **Service:** `project-service`  ·  **Endpoint(s):** `['/api/v1/project/*', '/api/v1/projects/*', '/api/proxy/v1/projects/*']`
 - **Question:** Does the gateway route both /project/* and /projects/* prefixes to project-service, or is only one canonical?
@@ -1331,7 +1331,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-BENEFICIARIES-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM W2-PROJECTS-1: project-service absent — disbursement unit/schema unverifiable. NEEDS OWNER DECISION.)
 - **First-pass claim:** Disbursement is an unformatted string with the ₹ unit only in the header and no paise/lakh formatting (BeneficiariesTable.tsx:13,27); raw beneficiary ids are the first column; no schema validates the response (loaders.ts:5150-5156). Backend not in snapshot.
 - **Service:** `project-service`  ·  **Endpoint(s):** `['GET /api/v1/projects/beneficiaries']`
 - **Question:** Does the response give disbursement as integer paise (or documented unit), a beneficiary name, and a schema-validated shape?
@@ -1342,7 +1342,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DELAY-ANALYSIS-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM W2-PROJECTS-1: project-service absent — date format and delayDays unverifiable. NEEDS OWNER DECISION.)
 - **First-pass claim:** Deadlines are strings (not ISO dates) and delayDays a number computed elsewhere; sorting the deadline columns sorts text (DelayAnalysisTable.tsx:7-10). No response schema (loaders.ts:5200-5205); backend not in snapshot.
 - **Service:** `project-service`  ·  **Endpoint(s):** `['GET /api/v1/projects/delay-analysis']`
 - **Question:** Are planned/forecast deadlines ISO 8601 dates and delayDays computed server-side consistently?
@@ -1353,7 +1353,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-DPR-TRACKING-02  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM W2-PROJECTS-1: project-service absent — estimatedCost unit unverifiable. NEEDS OWNER DECISION: confirm paise vs crore.)
 - **First-pass claim:** Estimated cost is a free string in ₹ crore (DprTrackingTable.tsx:11,25) while project budgets are paise elsewhere and scheme lists are rupees; three units in one module. Backend not in snapshot to confirm.
 - **Service:** `project-service`  ·  **Endpoint(s):** `['GET /api/v1/projects/dprs']`
 - **Question:** In which unit is estimatedCost returned (paise, rupees or crore) and is it numeric?
@@ -1364,7 +1364,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-NEW-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM W2-PROJECTS-1: project-service absent — POST role-check/audit unverifiable. NEEDS OWNER DECISION.)
 - **First-pass claim:** Mutation goes straight from the browser to /api/proxy/v1/projects with no UI role gate; whether it is audited and role-checked cannot be verified because project-service is not in the snapshot (CreateProjectForm.tsx:82).
 - **Service:** `project-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/projects']`
 - **Question:** Does project creation require a role such as project_manager, validate input with zod and emit audit?
@@ -1375,7 +1375,7 @@ Counts: ACTION 79, BACKEND-VERIFY 6
 
 ### GAP-PROJECTS-WBS-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM W2-PROJECTS-1: project-service absent — WBS node projectId unverifiable. NEEDS OWNER DECISION.)
 - **First-pass claim:** Portfolio-wide endpoint /api/v1/projects/wbs takes no project id while tasks are per project (/projects/{id}/tasks); the node → project relation is not shown, so a node cannot be traced to its project (WbsTree.tsx:27-56). Backend not in snapshot.
 - **Service:** `project-service`  ·  **Endpoint(s):** `['GET /api/v1/projects/wbs']`
 - **Question:** Does each WBS node include projectId/projectCode and does the endpoint accept a projectId filter?
