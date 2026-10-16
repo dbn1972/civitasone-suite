@@ -2,7 +2,7 @@
 
 import { UserFacingError } from "@/lib/userFacingError";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ActionButton } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { formatIndianDate, todayIST } from "@/lib/formatters";
@@ -16,27 +16,59 @@ export type ContractMilestone = {
 
 type Props = { contractId: string; milestones: ContractMilestone[] };
 
+// GAP-CONTRACTS-DETAIL-06: intervals (ms) for the post-202 refresh polls.
+// The consumer typically writes the new status within a few seconds; three
+// attempts (immediate, 5 s, 10 s) cover the P99 queue latency without
+// hammering the server.
+const POLL_DELAYS = [5_000, 10_000];
+
 export function MilestoneActions({ contractId, milestones }: Props) {
   const router = useRouter();
-  // Shared per-milestone busy flag (not just each ActionButton's own internal
-  // busy state) so the *sibling* action for the same milestone is also
-  // disabled while one is in flight -- Complete and Mark late are mutually
-  // exclusive outcomes for the same row.
   const [busyId, setBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const formError = useFormError("milestone");
+
+  // GAP-CONTRACTS-DETAIL-06: track which milestone ids have a write in flight
+  // (202 accepted but consumer not yet reflected). Key = id, value = the
+  // status the milestone had *before* the action, so we can detect when the
+  // server-rendered data catches up and clear the pill automatically.
+  const [pendingMap, setPendingMap] = useState<Map<string, string>>(new Map());
+
+  // Timeouts we schedule for polling; kept in a ref so the cleanup effect can
+  // cancel them on unmount without the array itself being a dep of the effect.
+  const pollTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  // When `milestones` props change (i.e. after router.refresh() propagates),
+  // clear any pending entries whose status has changed from what it was before
+  // the action.
+  useEffect(() => {
+    setPendingMap((prev) => {
+      if (prev.size === 0) return prev;
+      const next = new Map(prev);
+      let changed = false;
+      for (const [id, prevStatus] of next) {
+        const current = milestones.find((m) => m.id === id);
+        if (!current || current.status !== prevStatus) {
+          next.delete(id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [milestones]);
+
+  // Cancel any outstanding poll timers on unmount.
+  useEffect(() => {
+    const timers = pollTimers.current;
+    return () => {
+      for (const t of timers) clearTimeout(t);
+    };
+  }, []);
 
   const actionable = milestones.filter(
     (m) => m.status !== "completed" && m.status !== "completed_late",
   );
 
-  // Both outcomes are TERMINAL -- the consumer refuses to re-apply either
-  // command once a milestone is completed/completed_late (see
-  // contracts/consumer.ts), and "late" additionally computes a real SLA
-  // penalty that reduces what's payable to the vendor. Neither should fire
-  // from a single unconfirmed click. A thrown error here is caught by
-  // ActionButton's own useConfirmAction and shown inside the still-open
-  // confirm dialog, in context, rather than in a banner below the list.
   async function act(milestoneId: string, kind: "complete" | "late", notes?: string) {
     setBusyId(milestoneId);
     setMessage("");
@@ -57,16 +89,21 @@ export function MilestoneActions({ contractId, milestones }: Props) {
       if (res.status !== 202 && !res.ok) {
         throw UserFacingError.from(await formError.fromResponse(res, "save"));
       }
-      // GAP-CONTRACTS-DETAIL-06: a 202 means the mutation was accepted onto the
-      // queue, NOT that the milestone has already changed state. router.refresh()
-      // may re-render before the async consumer has written the new status, so
-      // the copy must not claim completion — only that the request was received.
+      // GAP-CONTRACTS-DETAIL-06: mark the row Pending and schedule polls.
+      // "Request received" copy never claims the action completed — the
+      // consumer may still be processing.
+      const prevStatus = milestones.find((m) => m.id === milestoneId)?.status ?? "";
+      setPendingMap((prev) => new Map(prev).set(milestoneId, prevStatus));
       setMessage(
         kind === "late"
           ? "Late-milestone request received — the status will update shortly."
           : "Completion request received — the status will update shortly.",
       );
+      // Immediate first refresh; schedule two more at 5 s and 10 s.
       router.refresh();
+      for (const delay of POLL_DELAYS) {
+        pollTimers.current.push(setTimeout(() => router.refresh(), delay));
+      }
     } finally {
       setBusyId(null);
     }
@@ -86,6 +123,10 @@ export function MilestoneActions({ contractId, milestones }: Props) {
               <span style={{ color: "var(--ink2)" }}> · due {formatIndianDate(m.dueDate)}</span>
             ) : null}
           </span>
+          {/* GAP-CONTRACTS-DETAIL-06: Pending pill while the 202 write propagates. */}
+          {pendingMap.has(m.id) ? (
+            <span className="pill mut" aria-label="Status update pending">Pending</span>
+          ) : null}
           <ActionButton
             className="btn ghost"
             label="Complete"
