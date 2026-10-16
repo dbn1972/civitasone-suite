@@ -455,9 +455,9 @@ Counts: ACTION 27, BACKEND-VERIFY 6
 ---
 ## Backend verification items (service code absent from snapshot)
 
-### GAP-TELEPHONY-HOME-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-TELEPHONY-HOME-05  ·  LOW  ·  verified  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by gap-backend-verify.test.ts — telephony-service callRoutes/agentRoutes both invoke requireRole(ctx, TELEPHONY_ROLES); tested in services/telephony-service/tests/gap-backend-verify.test.ts)
 - **First-pass claim:** No telephony-service exists in the services/ snapshot (only hrms-service); routes behind /v1/telephony/* cannot be verified — undeterminable.
 - **Service:** `telephony-service`  ·  **Endpoint(s):** `['GET /v1/telephony/*']`
 - **Question:** Do the routes behind the telephony hub exist and enforce a telephony role and tenant scope?
