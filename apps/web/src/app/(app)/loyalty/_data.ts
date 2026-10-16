@@ -77,6 +77,17 @@ export type LoyaltyMemberRow = {
   updatedAt: string | null;
 };
 
+/** GAP-LOYALTY-MEMBERS-04: page envelope returned by the members and accruals
+ * loaders — carries the row array AND the server's total so the hub page can
+ * show "Showing x–y of n" and render a URL-driven next/prev pager. */
+export type LoyaltyMemberPage = {
+  rows: LoyaltyMemberRow[];
+  /** Exact count on the server, or null when the service omits it. */
+  total: number | null;
+};
+
+const LOYALTY_MEMBER_PAGE_EMPTY: LoyaltyMemberPage = { rows: [], total: null };
+
 // ---- Redemptions ----------------------------------------------------------
 
 const redemptionApi = z.object({
@@ -187,15 +198,18 @@ function mapEnrolment(e: z.infer<typeof enrolmentApi>): LoyaltyMemberRow {
 
 export function getLoyaltyMembers(
   params: { limit?: number; offset?: number; programId?: string } = {},
-): Promise<LoaderResult<LoyaltyMemberRow[]>> {
-  return fetchJson<z.infer<typeof enrolmentsSchema>, LoyaltyMemberRow[]>(
+): Promise<LoaderResult<LoyaltyMemberPage>> {
+  return fetchJson<z.infer<typeof enrolmentsSchema>, LoyaltyMemberPage>(
     `/api/v1/loyalty/enrolments${qs(params)}`,
-    [],
+    LOYALTY_MEMBER_PAGE_EMPTY,
     {
       revalidateSeconds: 30,
       telemetryKey: "loyalty.members",
       responseSchema: enrolmentsSchema,
-      mapResponse: (payload) => payload.data.map(mapEnrolment),
+      mapResponse: (payload) => ({
+        rows: payload.data.map(mapEnrolment),
+        total: payload.meta?.total ?? null,
+      }),
     },
   );
 }
@@ -211,15 +225,18 @@ export function getLoyaltyMembers(
  */
 export function getLoyaltyAccruals(
   params: { limit?: number; offset?: number } = {},
-): Promise<LoaderResult<LoyaltyMemberRow[]>> {
-  return fetchJson<z.infer<typeof enrolmentsSchema>, LoyaltyMemberRow[]>(
+): Promise<LoaderResult<LoyaltyMemberPage>> {
+  return fetchJson<z.infer<typeof enrolmentsSchema>, LoyaltyMemberPage>(
     `/api/v1/loyalty/enrolments${qs(params)}`,
-    [],
+    LOYALTY_MEMBER_PAGE_EMPTY,
     {
       revalidateSeconds: 30,
       telemetryKey: "loyalty.accruals",
       responseSchema: enrolmentsSchema,
-      mapResponse: (payload) => payload.data.map(mapEnrolment),
+      mapResponse: (payload) => ({
+        rows: payload.data.map(mapEnrolment),
+        total: payload.meta?.total ?? null,
+      }),
     },
   );
 }
