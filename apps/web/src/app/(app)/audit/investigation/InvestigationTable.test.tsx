@@ -33,3 +33,21 @@ describe("InvestigationTable PII masking (GAP-AUDIT-INVESTIGATION-02)", () => {
     expect(screen.getByText("Vendor overbilled by 12 lakh")).toBeInTheDocument();
   });
 });
+
+describe("InvestigationTable started date (GAP-AUDIT-INVESTIGATION-03)", () => {
+  it("renders a formatted date, and a malformed value as its raw string, never 'Invalid Date'", () => {
+    render(
+      <InvestigationTable
+        canViewDetail
+        source="api"
+        rows={[
+          { ...ROWS[0], id: "d1", caseId: "INV-D1", started: "2026-03-05" },
+          { ...ROWS[0], id: "d2", caseId: "INV-D2", started: "not-a-date" },
+        ]}
+      />,
+    );
+    expect(screen.getByText("05 Mar 2026")).toBeInTheDocument();
+    expect(screen.getByText("not-a-date")).toBeInTheDocument();
+    expect(screen.queryByText("Invalid Date")).not.toBeInTheDocument();
+  });
+});

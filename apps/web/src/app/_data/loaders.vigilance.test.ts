@@ -75,3 +75,48 @@ describe("getVigilanceCases mapResponse (GAP-AUDIT-VIGILANCE-01)", () => {
     expect(result.data[0].id).toBe("v1");
   });
 });
+
+describe("getVigilanceCases unknown stage/outcome (GAP-AUDIT-VIGILANCE-04)", () => {
+  beforeEach(() => {
+    mockGet.mockReturnValue({ value: "fake-access-token" });
+    process.env.CIVITASONE_API_BASE_URL = "http://gateway.test";
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    delete process.env.CIVITASONE_API_BASE_URL;
+  });
+
+  it("inquiryStatus 'appeal_pending' maps to 'unknown' with the raw value preserved, not preliminary_enquiry", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse(200, [{ id: "v1", caseNo: "VC-1", officer: "x", charges: "y", inquiryStatus: "appeal_pending", outcome: "pending" }])),
+    );
+    const result = await getVigilanceCases();
+    expect(result.source).toBe("api");
+    expect(result.data[0].inquiryStatus).toBe("unknown");
+    expect(result.data[0].rawInquiryStatus).toBe("appeal_pending");
+    expect(result.data[0].outcome).toBe("pending");
+  });
+
+  it("a null outcome maps to 'unknown', not 'pending'", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse(200, [{ id: "v1", caseNo: "VC-1", officer: "x", charges: "y", inquiryStatus: "under_investigation", outcome: null }])),
+    );
+    const result = await getVigilanceCases();
+    expect(result.source).toBe("api");
+    expect(result.data[0].inquiryStatus).toBe("under_investigation");
+    expect(result.data[0].outcome).toBe("unknown");
+  });
+
+  it("known stages and outcomes pass through unchanged with no raw fields", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(jsonResponse(200, [{ id: "v1", caseNo: "VC-1", officer: "x", charges: "y", inquiryStatus: "charge_sheet_issued", outcome: "major_penalty" }])),
+    );
+    const result = await getVigilanceCases();
+    expect(result.data[0]).toMatchObject({ inquiryStatus: "charge_sheet_issued", outcome: "major_penalty" });
+    expect(result.data[0].rawInquiryStatus).toBeUndefined();
+  });
+});

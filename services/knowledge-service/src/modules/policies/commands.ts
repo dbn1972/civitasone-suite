@@ -275,13 +275,15 @@ export async function acknowledgePolicy(
     if (row.status !== "published") {
       throw new LifecycleError("INVALID_STATE", "can only acknowledge a published document");
     }
-    await repo.insertAck(tx as unknown as repo.Writer, {
+    const inserted = await repo.insertAck(tx as unknown as repo.Writer, {
       id: randomUUID(),
       tenantId: ctx.tenantId,
       policyId: id,
       employeeId,
       note: body.note ?? null,
     });
+    // Already acknowledged: idempotent no-op (no duplicate event / audit row).
+    if (!inserted) return;
     await enqueue(t, {
       topic: EVENTS.policyAcknowledged, eventType: EVENTS.policyAcknowledged,
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,

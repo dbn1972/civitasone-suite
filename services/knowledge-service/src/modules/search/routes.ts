@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole } from "../../shared/context.js";
 import { searchQueryParams } from "./validators.js";
 import * as repo from "./repo.js";
+import { clearedAccessLevels } from "../documents/clearance.js";
 
 const ROLES = ["knowledge_user", "knowledge_admin", "super_admin"];
 
@@ -18,6 +19,7 @@ export async function searchRoutes(app: FastifyInstance): Promise<void> {
       tags,
       params.limit,
       params.offset,
+      clearedAccessLevels(ctx),
     );
     return reply.send(results);
   });

@@ -1,4 +1,4 @@
-import { eq, and, desc, ilike, or, lte, isNotNull } from "drizzle-orm";
+import { eq, and, desc, ilike, or, lte, isNotNull, inArray, type SQL } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
 import {
@@ -44,14 +44,35 @@ export function toView(r: PolicyRow): PolicyView {
   };
 }
 
+/**
+ * Who is reading. Approver-role callers (`privileged`) see every lifecycle
+ * state; everyone else sees only published/superseded documents plus the
+ * documents they authored or were named reviewer on, so drafts and
+ * under-review text never reach ordinary staff.
+ */
+export type Viewer = { actorId: string; privileged: boolean };
+
+const PUBLIC_STATUSES = ["published", "superseded"];
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function visibilityConds(viewer?: Viewer): SQL[] {
+  if (!viewer || viewer.privileged) return [];
+  const own: SQL[] = UUID_RE.test(viewer.actorId)
+    ? [eq(policyDocuments.authorId, viewer.actorId), eq(policyDocuments.reviewerId, viewer.actorId)]
+    : [];
+  return [or(inArray(policyDocuments.status, PUBLIC_STATUSES), ...own)!];
+}
+
 export async function listByTenant(
   tenantId: string,
   filters: { status?: string; docType?: string },
   limit: number,
   offset: number,
+  viewer?: Viewer,
 ): Promise<PolicyView[]> {
   const conds = [
     eq(policyDocuments.tenantId, tenantId),
+    ...visibilityConds(viewer),
     ...(filters.status ? [eq(policyDocuments.status, filters.status)] : []),
     ...(filters.docType ? [eq(policyDocuments.docType, filters.docType)] : []),
   ];
@@ -65,10 +86,10 @@ export async function listByTenant(
   return rows.map(toView);
 }
 
-export async function getById(tenantId: string, id: string): Promise<PolicyView | null> {
+export async function getById(tenantId: string, id: string, viewer?: Viewer): Promise<PolicyView | null> {
   const rows = await readAs(tenantId, (tx) =>
     tx.select().from(policyDocuments)
-      .where(and(eq(policyDocuments.id, id), eq(policyDocuments.tenantId, tenantId))),
+      .where(and(eq(policyDocuments.id, id), eq(policyDocuments.tenantId, tenantId), ...visibilityConds(viewer))),
   );
   return rows.length ? toView(rows[0]!) : null;
 }
@@ -127,6 +148,9 @@ export async function update(tx: Writer, id: string, data: Partial<PolicyInsert>
   await tx.update(policyDocuments).set(data).where(eq(policyDocuments.id, id));
 }
 
-export async function insertAck(tx: Writer, row: AckInsert): Promise<void> {
-  await tx.insert(policyAcknowledgements).values(row).onConflictDoNothing();
+/** Returns true when a new acknowledgement row was written (false = already acknowledged). */
+export async function insertAck(tx: Writer, row: AckInsert): Promise<boolean> {
+  const inserted = await tx.insert(policyAcknowledgements).values(row).onConflictDoNothing()
+    .returning({ id: policyAcknowledgements.id });
+  return inserted.length > 0;
 }

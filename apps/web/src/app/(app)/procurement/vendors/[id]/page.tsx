@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill, EmptyState, ErrorState, Masked } from "../../../../_components/ds";
-import { getProcurementVendorById } from "../../../../_data/loaders";
+import { getProcurementVendorById, getProcurementPOs } from "../../../../_data/loaders";
+import { getTranslations } from "next-intl/server";
+import { VendorActions } from "./VendorActions";
+import { VendorOrdersTable, type VendorPoRow } from "./VendorOrdersTable";
 import { toHumanError } from "@/lib/messages";
-import { formatIndianDate } from "@/lib/formatters";
-import { getSessionRoles, hasAnyRole, PROCUREMENT_APPROVER_ROLES } from "@/lib/auth/roleGuard";
+import { formatIndianDate, formatMoney, todayIST } from "@/lib/formatters";
+import { getSessionRoles, hasAnyRole, PROCUREMENT_APPROVER_ROLES, PROCUREMENT_WRITE_ROLES } from "@/lib/auth/roleGuard";
 
 const EMPANELMENT_LABELS: Record<string, string> = {
   empanelled: "Empanelled",
@@ -33,8 +36,21 @@ function kycLabel(status: string): string {
   );
 }
 
+/** Whole days from `today` to `isoDate` (both YYYY-MM-DD); negative once past. */
+function daysUntil(isoDate: string, today: string): number {
+  return Math.round((Date.parse(`${isoDate}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+}
+const EXPIRY_WARN_DAYS = 30;
+
 export default async function VendorDetailPage({ params, searchParams }: { params: { id: string }; searchParams?: { registered?: string } }) {
-  const { data: vendor, source } = await getProcurementVendorById(params.id);
+  const t = await getTranslations("procurement.w2.vendorDetail");
+  // GAP-PROCUREMENT-VENDORS-DETAIL-04: the vendor's own purchase orders, fetched
+  // alongside the profile. Each section reports its own failure - an error is
+  // never rendered as "no orders".
+  const [{ data: vendor, source }, orders] = await Promise.all([
+    getProcurementVendorById(params.id),
+    getProcurementPOs({ vendorId: params.id, limit: 50 }),
+  ]);
 
   if (!vendor) {
     // L3 fix: see indents/[id]/page.tsx — don't tell the officer a vendor is
@@ -62,6 +78,10 @@ export default async function VendorDetailPage({ params, searchParams }: { param
   // Reserved for the future audited-reveal wiring; referenced to avoid an
   // unused-var lint while the control itself is intentionally not rendered yet.
   void canReveal;
+  // GAP-PROCUREMENT-VENDORS-DETAIL-02: lifecycle actions for procurement writers only.
+  const canManage = hasAnyRole(getSessionRoles(), PROCUREMENT_WRITE_ROLES);
+  const today = todayIST();
+  const daysLeft = vendor.empanelmentValidTill ? daysUntil(vendor.empanelmentValidTill, today) : null;
 
   return (
     <>
@@ -76,6 +96,12 @@ export default async function VendorDetailPage({ params, searchParams }: { param
               <span className="pill info" title="Buyer rating (1–5). The scorecard shows a separate performance score out of 100.">Buyer rating {vendor.rating}/5<span aria-hidden="true"> ★</span><span className="sr-only"> buyer rating out of 5</span></span>
             )}
             <Link href={`/procurement/vendors/${vendor.id}/scorecard`} className="btn ghost">View scorecard</Link>
+            <VendorActions
+              vendorId={vendor.id}
+              empanelmentStatus={vendor.empanelmentStatus}
+              lapsed={vendor.empanelmentLapsed}
+              canManage={canManage}
+            />
             {source === "error" ? <DataSourceBadge source={source} message="Couldn't load — showing nothing" /> : null}
           </>
         }
@@ -105,6 +131,25 @@ export default async function VendorDetailPage({ params, searchParams }: { param
           </div>
           {/* GAP-...-DETAIL-05: empanelment status is already shown as the
               header StatusPill — don't duplicate it here. */}
+          {/* GAP-PROCUREMENT-VENDORS-DETAIL-04: empanelment validity with an expiry pill. */}
+          {vendor.empanelmentValidTill ? (
+            <div className="field">
+              <span className="label">{t("validTill")}</span>
+              <span>
+                {formatIndianDate(vendor.empanelmentValidTill)}{" "}
+                {vendor.empanelmentLapsed || (daysLeft !== null && daysLeft < 0)
+                  ? <span className="pill bad">{t("expired")}</span>
+                  : daysLeft !== null && daysLeft <= EXPIRY_WARN_DAYS
+                    ? <span className="pill warn">{t("expiresIn", { days: daysLeft })}</span>
+                    : null}
+              </span>
+            </div>
+          ) : vendor.empanelmentLapsed ? (
+            <div className="field">
+              <span className="label">{t("validTill")}</span>
+              <span className="pill bad">{t("expired")}</span>
+            </div>
+          ) : null}
           {vendor.gstin && (
             <div className="field">
               <span className="label">GSTIN</span>
@@ -154,6 +199,27 @@ export default async function VendorDetailPage({ params, searchParams }: { param
             </div>
           )}
         </div>
+      </Card>
+
+      {/* GAP-PROCUREMENT-VENDORS-DETAIL-04: orders history. GRNs, contracts and EMD/BG
+          are still reached from their own registers (they need a vendor filter
+          on their list endpoints). */}
+      <Card title={t("ordersTitle")} padding>
+        {orders.source === "error" ? (
+          <ErrorState error={toHumanError("load", { area: "vendor orders" })} backHref={`/procurement/vendors/${vendor.id}`} />
+        ) : orders.data.length === 0 ? (
+          <EmptyState icon="🧾" title={t("noOrders")} message={t("noOrdersHint")} />
+        ) : (
+          <VendorOrdersTable
+            rows={orders.data.map((po): VendorPoRow => ({
+              id: po.id,
+              poNo: po.poNo,
+              orderDateDisplay: po.orderDate ? formatIndianDate(po.orderDate) : "—",
+              status: po.status,
+              amountDisplay: formatMoney(po.amount),
+            }))}
+          />
+        )}
       </Card>
 
       {(vendor.bankAccountNo || vendor.ifscCode) && (

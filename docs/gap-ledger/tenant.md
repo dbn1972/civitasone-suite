@@ -14,7 +14,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-HOME-02  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1916): apps/web/src/app/(app)/tenant/page.test.tsx (cross-link to /tenant-admin), w2-layout-notfound.test.tsx (non-admin redirected before any tile renders), services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (basic user 403))
 - **First-pass claim:** Tiles duplicate the Tenant Admin area (/tenant-admin exists in the app tree with its own settings, plans, org hierarchy): two admin homes for the same concerns with no cross-link except the disabled-module fallback (ModuleGate.tsx).
 - **Verified evidence:** Both /tenant (page.tsx, ModuleHub of 11 tiles) and /tenant-admin (tenant-admin/page.tsx, own users/roles/security/plans/usage/org-hierarchy/settings/subscription screens) exist and both appear in Sidebar.tsx:141-142. True that they overlap in concern (org hierarchy, plans, quotas/usage, settings, subscription) and that tenant/page.tsx has no link to /tenant-admin; ModuleGate.tsx links to /tenant-admin only in the disabled fallback. But they hit different endpoints (/api/v1/tenant/* vs /api/v1/admin/*, /billing/*, loaders.ts:4549-4665), and tenant/page.tsx has no role guard while /tenant is only gated by ModuleGate(moduleKey='tenant'). Whether the server enforces roles cannot be verified: tenant-service is not in the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/tenant/page.tsx`, `apps/web/src/app/_components/ds/Sidebar.tsx`, `apps/web/src/app/(app)/tenant-admin/page.tsx`
@@ -31,7 +31,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-HOME-03  ·  MEDIUM  ·  partly  ·  theme EMPTYSTATE (was DEADROUTE)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9; W1 SF-11 #2025 re-confirmed only the loading-skeleton criterion, remaining criteria still PROVISIONAL)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1916): apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx ('Back to Office home' -> /tenant; tile skeleton status region))
 - **First-pass claim:** loading.tsx is a generic four-stat-and-block skeleton (loading.tsx:7-12) that does not match a tile hub; the not-found EmptyState has no link back (not-found.tsx:5-8).
 - **Verified evidence:** loading.tsx:7-12 is a generic skeleton (h-4, h-9, four h-24 stat blocks, one h-72 block) - accurate, mismatched with a tile hub (and with the list pages). not-found.tsx:5-8 renders EmptyState with title/message and no action/link - accurate. However there is no dead link or dead route here (theme DEADROUTE is wrong): all 11 hub hrefs have a page.tsx (subscriptions dir exists, others verified in tree).
 - **Files to change:** `apps/web/src/app/(app)/tenant/loading.tsx`, `apps/web/src/app/(app)/tenant/not-found.tsx`
@@ -70,7 +70,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CODE-LISTS-01  ·  HIGH  ·  confirmed  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 tenant: NOT DONE — needs a backend values endpoint (effective-dated code values) and a /tenant/code-lists/[code] page; web+backend feature build. Subtitle already limited to 'dated values' wording)
 - **W0 note:** partly fixed by #1916 — mapCodeListRows maps header fields (code, system/custom); no [code] detail route or effective dates
 - **First-pass claim:** Subtitle promises 'effective-dated values' but only list headers are shown; values, effectiveFrom/effectiveTo are not mapped (tenant/_data.ts:32-75) and there is no drill-down link, so the reference data cannot be inspected.
 - **Verified evidence:** mapTenantRows (tenant/_data.ts:32-75) flattens rows to id/label/sublabel/status/meta; it reads row.value but not a values array, effectiveFrom or effectiveTo. ModuleListTable has no link column and no [id] route exists under tenant/code-lists (only page.tsx). Payload shape from tenant-service is cannot-verify.
@@ -87,7 +87,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CODE-LISTS-02  ·  MEDIUM  ·  confirmed  ·  theme UUID (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1801, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1801): ModuleListTable.showid.test.tsx (ID column hidden on all tenant pages))
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** ModuleListTable.tsx:50 prints row.id.slice(0,8) in the ID column for every row.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -117,7 +117,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CODE-LISTS-05  ·  LOW  ·  confirmed  ·  theme CAP
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1923): apps/web/src/app/_components/ModuleListTable.test.tsx ('client search box filters rows by label match', 'clicking the Name header sorts rows alphabetically', 'renders status through StatusPill') + tenant/*/page.test.tsx)
 - **First-pass claim:** Table has no search, sort or pagination and status is unstyled text (ModuleListTable.tsx:37-55), unlike the DS DataTable used on the tokens page.
 - **Verified evidence:** ModuleListTable.tsx:37-55 is a plain <table className='tbl'> with no sort, filter or pagination; status printed as plain text (row.status ?? '—'). ds/DataTable supports sortable, filterable, pageSize.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -131,7 +131,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CODE-LISTS-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1916): w2-pages-i18n.test.tsx (heading 'Office — Code Lists' from catalogue, no banned term))
 - **First-pass claim:** Title 'Tenant — Code Lists' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Reference code lists and effective-dated values.".
 - **Verified evidence:** code-lists/page.tsx title 'Tenant — Code Lists' is a hard-coded literal (:15) though the file has no useTranslations; BANNED_CLERK_TERMS in lib/labels.ts:30 includes 'tenant'. The page's breadcrumb 'Tenant' and hub also use it. Theme is COPY/I18N, not FABRICATED (no fake figures).
 - **Files to change:** `apps/web/src/app/(app)/tenant/code-lists/page.tsx`, `apps/web/src/lib/labels.ts`
@@ -152,7 +152,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CONSENT-EXCHANGE-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 tenant INTERIM — NEEDS OWNER DECISION: page is read-only and its subtitle already says '(read-only)'; approve/reject needs a DPDP decision endpoint with audit + reviewer role that does not exist — not invented here)
 - **W0 note:** partly fixed by #1916 — mapConsentRows shows purpose/categories/expiry; page still read-only, no decision actions
 - **First-pass claim:** No way to act on a consent request from the route: read-only table despite 'awaiting decision' (consent-exchange/page.tsx:16). Requests carry no purpose or data-category text for the reviewer.
 - **Verified evidence:** consent-exchange/page.tsx is a ModuleListPage only: no action controls; subtitle 'awaiting decision' (:16). mapTenantRows carries no purpose or data-category fields. Whether a decision endpoint exists is cannot-verify (tenant-service not in snapshot).
@@ -170,7 +170,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CONSENT-EXCHANGE-02  ·  HIGH  ·  partly  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1916): w2-layout-notfound.test.tsx (non-admin gate) + w2-tenant-web-paths-authz.test.ts (consent/requests: employee 403) + _data.test.ts mapConsentRows (purpose+requester, no UUID). Gate is tenant_admin-level, not a DPO-specific role)
 - **First-pass claim:** DPDP consent requests are listed for any signed-in user (no role gate: tenant/layout.tsx:5, middleware.ts:48-59). The payload is flattened to id/label/type/status (tenant/_data.ts:32-75), so the Name column shows the full request UUID (fallback at _data.ts:44-52) and requester, purpose, data categories and expiry are never shown. Subtitle says 'awaiting decision' yet the page has no approve/reject control and the hub's 'ledger' has no endpoint call.
 - **Verified evidence:** True: tenant/layout.tsx only wraps ModuleGate (module enabled check), no role check; middleware.ts contains no role logic; mapTenantRows (_data.ts:32-75) keeps only id/label/sublabel/status/meta; the hub note mentions a 'ledger' with no loader. Name shows the UUID only when the payload lacks name/title/label/key/resource/code/domain (fallback to id, _data.ts:44-52) - payload cannot be verified. Purpose/requester are indeed not mapped.
 - **Files to change:** `apps/web/src/app/(app)/tenant/layout.tsx`, `apps/web/src/app/(app)/tenant/consent-exchange/page.tsx`, `apps/web/src/app/(app)/tenant/_data.ts`, `apps/web/src/app/(app)/tenant/page.tsx`
@@ -187,7 +187,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CONSENT-EXCHANGE-03  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [ ] **Status** (W1 SF-01a REOPENED from the W0 PROVISIONAL tick: slug ids no longer collide, but UUIDs that are time-ordered still share their leading 8 chars and formatShortId keeps the first 8; needs a distinguishing column or a different prefix, SF-01b)
+- [x] **Status** (W2 tenant: closed by #2060; apps/web ModuleListTable.showid.test.tsx (showId={false} hides the ID column; time-ordered UUIDs sharing an 8-char prefix are no longer rendered) + every tenant page passes showId={false})
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide (UUIDs share the leading 8 chars when time-ordered).
 - **Verified evidence:** ModuleListTable.tsx:50 truncates id to 8 chars. The 'collide' claim is plausible for time-ordered UUIDs but unproven.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -200,7 +200,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CONSENT-EXCHANGE-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1862, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1862): apps/web/src/app/_components/ModuleListTable.test.tsx ('shows a retryable error state ... no cache exists', 'renders empty state when no rows') + ds/RefreshErrorState.test.tsx (Retry calls router.refresh))
 - **First-pass claim:** On a failed fetch the badge says 'Couldn't load — showing nothing' but the card body reads 'No records / Nothing to show yet' (ModuleListTable.tsx:33-35), which looks like a genuinely empty tenant; no retry (ModuleListPage.tsx:28 collapses cache/fallback into 'api'/'error').
 - **Verified evidence:** ModuleListPage.tsx:28 maps source to 'error'|'api'; ModuleListTable.tsx:31-35 renders DataSourceBadge ('Couldn't load — showing nothing') and, since data is [], the EmptyState 'No records / Nothing to show yet' (:32-33 in the else branch). No retry control exists. The badge and empty text contradict each other.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`, `apps/web/src/app/_components/DataSourceBadge.tsx`
@@ -217,7 +217,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CONSENT-EXCHANGE-05  ·  LOW  ·  confirmed  ·  theme CAP
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1923): same assertions as CODE-LISTS-05)
 - **First-pass claim:** Table has no search, sort or pagination and status is unstyled text (ModuleListTable.tsx:37-55), unlike the DS DataTable used on the tokens page.
 - **Verified evidence:** Same generic ModuleListTable (no sort/filter/pagination, plain status text).
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -230,7 +230,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CONSENT-EXCHANGE-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1916): w2-pages-i18n.test.tsx (no banned term; translated heading))
 - **First-pass claim:** Title 'Tenant — Consent Exchange' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Cross-tenant consent requests awaiting decision.".
 - **Verified evidence:** consent-exchange/page.tsx title/subtitle hard-coded English; 'tenant' banned (labels.ts:30); 'Cross-tenant' also banned. Not fabricated data.
 - **Files to change:** `apps/web/src/app/(app)/tenant/consent-exchange/page.tsx`
@@ -249,7 +249,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-DATA-MIGRATION-01  ·  HIGH  ·  partly  ·  theme WIRING (was DEADROUTE)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 tenant INTERIM — NEEDS OWNER DECISION: no start/retry/error-report endpoints exist; row counts/dry-run are shown read-only. Actions are a data-integrity feature build, not invented here)
 - **W0 note:** partly fixed by #1916 — mapMigrationRows shows entities, records migrated, error count, dry-run; no start/retry/download control
 - **First-pass claim:** 'Reconciliation jobs' (data-migration/page.tsx:16) show only name and status: no progress, record counts or mismatch totals (tenant/_data.ts:32-75), and no way to start, retry or download an error report. Read-only view of a data-integrity operation.
 - **Verified evidence:** True: data-migration page is a read-only ModuleListPage of /api/v1/tenant/org/migrations mapped to id/label/status only (_data.ts). No start/retry/download control. Whether backend exposes start/retry/error-report endpoints is cannot-verify; it is a missing feature rather than a dead route.
@@ -265,7 +265,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-DATA-MIGRATION-02  ·  MEDIUM  ·  confirmed  ·  theme UUID (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1801, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1801): ModuleListTable.showid.test.tsx)
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** ModuleListTable.tsx:50 truncated id column.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -278,7 +278,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-DATA-MIGRATION-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1862, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1862): apps/web/src/app/_components/ModuleListTable.test.tsx (retry/empty) + ds/RefreshErrorState.test.tsx)
 - **First-pass claim:** On a failed fetch the badge says 'Couldn't load — showing nothing' but the card body reads 'No records / Nothing to show yet' (ModuleListTable.tsx:33-35), which looks like a genuinely empty tenant; no retry (ModuleListPage.tsx:28 collapses cache/fallback into 'api'/'error').
 - **Verified evidence:** ModuleListPage.tsx:28 maps source to 'error'|'api'; ModuleListTable.tsx:31-35 renders DataSourceBadge ('Couldn't load — showing nothing') and, since data is [], the EmptyState 'No records / Nothing to show yet' (:32-33 in the else branch). No retry control exists. The badge and empty text contradict each other.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`, `apps/web/src/app/_components/DataSourceBadge.tsx`
@@ -295,7 +295,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-DATA-MIGRATION-05  ·  LOW  ·  confirmed  ·  theme CAP
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1923): same assertions as CODE-LISTS-05)
 - **First-pass claim:** Table has no search, sort or pagination and status is unstyled text (ModuleListTable.tsx:37-55), unlike the DS DataTable used on the tokens page.
 - **Verified evidence:** Same generic ModuleListTable limits.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -308,7 +308,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-DATA-MIGRATION-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1916): w2-pages-i18n.test.tsx)
 - **First-pass claim:** Title 'Tenant — Data Migration' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Organisation data migrations and reconciliation jobs.".
 - **Verified evidence:** data-migration/page.tsx title hard-coded with banned 'Tenant' (labels.ts:30).
 - **Files to change:** `apps/web/src/app/(app)/tenant/data-migration/page.tsx`
@@ -327,7 +327,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-ORG-HIERARCHY-01  ·  HIGH  ·  partly  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 tenant: NOT DONE — still a flat indented table (mapOrgHierarchyRows depth); a real tree needs the API shape confirmed or a redirect decision to /tenant-admin/org-hierarchy)
 - **W0 note:** partly fixed by #1916 — mapOrgHierarchyRows computes depth/indent from parentId; still flat table, no tree component
 - **First-pass claim:** Hub note promises 'Organisation units and subtree views' (tenant/page.tsx:13) but the route is a flat table: parentId / children are not mapped (tenant/_data.ts:32-75), so the hierarchy — the point of the page — cannot be seen.
 - **Verified evidence:** tenant/page.tsx:13 note is 'Organisation units and subtree views'. Page renders ModuleListPage (flat table). mapTenantRows (_data.ts:32-75) reads only id/label/sublabel/status/meta - parentId, children, level are never read, so hierarchy is not shown. Payload shape of /api/v1/tenant/org/hierarchy (_data.ts:90) cannot be verified: tenant-service is absent. Note a working hierarchy screen already exists at tenant-admin/org-hierarchy/page.tsx using getOrgHierarchy (loaders.ts:4665, OrgHierarchyNode).
@@ -345,7 +345,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-ORG-HIERARCHY-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1801, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1801): ModuleListTable.showid.test.tsx + ModuleListTable.test.tsx slug-id test)
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** ModuleListTable.tsx:40 header 'ID' and :50 renders <span className="mono">{row.id.slice(0, 8)}</span>. Shared by every ModuleListPage screen; mapTenantRows (_data.ts:36-43) falls back to key/code/resource/`row-N` as id so truncation is lossy.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -362,7 +362,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-ORG-HIERARCHY-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1862, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1862): apps/web/src/app/_components/ModuleListTable.test.tsx (retry/empty) + ds/RefreshErrorState.test.tsx)
 - **First-pass claim:** On a failed fetch the badge says 'Couldn't load — showing nothing' but the card body reads 'No records / Nothing to show yet' (ModuleListTable.tsx:33-35), which looks like a genuinely empty tenant; no retry (ModuleListPage.tsx:28 collapses cache/fallback into 'api'/'error').
 - **Verified evidence:** ModuleListPage.tsx:28 maps loader source to 'error'|'api' (LoaderSource is already only those two, so the 'collapses cache/fallback' wording is loose; cache fallback happens later inside useSeededResource). ModuleListTable.tsx:33 shows DataSourceBadge ('Couldn't load — showing nothing' for provenance error-no-data, DataSourceBadge.tsx) and :34-36 shows EmptyState 'No records / Nothing to show yet' whenever data.length===0, regardless of provenance. No retry control. RefreshErrorState exists (ds/RefreshErrorState.tsx) but is unused here.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -380,7 +380,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-ORG-HIERARCHY-05  ·  LOW  ·  partly  ·  theme UX-TABLE (was CAP)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1923): same assertions as CODE-LISTS-05)
 - **First-pass claim:** Table has no search, sort or pagination and status is unstyled text (ModuleListTable.tsx:37-55), unlike the DS DataTable used on the tokens page.
 - **Verified evidence:** ModuleListTable.tsx:37-55 is a bare <table> with no search, sort or pagination and status is a plain {row.status ?? "—"} (line 53) - true. The 'capped fetch / server-side pagination' remedy is not verifiable: tenant-service is absent and tenantLoader (_data.ts:78-85) sends no limit/offset. The lists here are small reference sets, so severity is low. Also 'DS DataTable used on the tokens page' could not be pinned to a tokens page; DataTable is used in tenant-admin/settings and metadata pages.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -398,7 +398,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-ORG-HIERARCHY-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
 - **W0-10 note:** review found the W0 tick partly — banned term removed via LABELS.tenantTitle ("Office") but tenant/org-hierarchy/page.tsx:16-17 still hard-coded English, no getTranslations/next-intl keys (fix step 1, locale-switch acceptance) and no banned-term test (step 3)
 - **First-pass claim:** Title 'Tenant — Org Hierarchy' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Organisation units and hierarchy nodes.".
 - **Verified evidence:** page.tsx title="Tenant — Org Hierarchy" and description are hard-coded English; 'tenant' is banned (lib/labels.ts:30). Theme FABRICATED is wrong: no sample figures.
@@ -421,7 +421,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-OVERVIEW-01  ·  HIGH  ·  partly  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1916): apps/web/src/app/(app)/tenant/_data.test.ts mapOverviewRows (labelled name/edition/type/residency))
 - **First-pass claim:** Hub note promises 'Current tenant profile and isolation posture' (tenant/page.tsx:11) but the payload is flattened to one row: id, name, type, status, code only (tenant/_data.ts:36-64). Isolation posture, edition and residency can never be shown.
 - **Verified evidence:** tenant/page.tsx:11 note 'Current tenant profile and isolation posture'. mapTenantRows (_data.ts:32-75) flattens to id,label,sublabel(description/type/category/planName/value),status,meta(code/unit/...); edition, residency, isolation are never read. Real field names of /api/v1/tenant/current (_data.ts:87) cannot be verified - tenant-service absent - so 'can never be shown' is true of the current mapper only.
 - **Files to change:** `apps/web/src/app/(app)/tenant/overview/page.tsx`, `apps/web/src/app/(app)/tenant/_data.ts`
@@ -437,7 +437,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-OVERVIEW-02  ·  MEDIUM  ·  partly  ·  theme WIRING (was UUID)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1916): _data.test.ts mapOverviewRows ('shows Unnamed when the tenant name is absent (never the raw UUID)'))
 - **First-pass claim:** extractRows wraps any non-array object as [payload] (tenant/_data.ts:28-29), so the profile is a one-row 'list'; label falls back to the raw id when name/title are absent (_data.ts:44-52).
 - **Verified evidence:** _data.ts:28-29: object payloads that are not wrapped in data/items/etc. become [payload], so the profile is a one-row list - true and deliberate for single-object endpoints. Label falls back to raw id at _data.ts:44-52 (name, title, label, key, resource, code, domain, then id) - true but only when all of those are absent. Theme UUID is a stretch: no ids are typed by users.
 - **Files to change:** `apps/web/src/app/(app)/tenant/_data.ts`, `apps/web/src/app/(app)/tenant/overview/page.tsx`
@@ -451,7 +451,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-OVERVIEW-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1801, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1801): ModuleListTable.showid.test.tsx)
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** ModuleListTable.tsx:40 header 'ID' and :50 renders <span className="mono">{row.id.slice(0, 8)}</span>. Shared by every ModuleListPage screen; mapTenantRows (_data.ts:36-43) falls back to key/code/resource/`row-N` as id so truncation is lossy.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -468,7 +468,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-OVERVIEW-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1862, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1862): apps/web/src/app/_components/ModuleListTable.test.tsx (retry/empty) + ds/RefreshErrorState.test.tsx)
 - **First-pass claim:** On a failed fetch the badge says 'Couldn't load — showing nothing' but the card body reads 'No records / Nothing to show yet' (ModuleListTable.tsx:33-35), which looks like a genuinely empty tenant; no retry (ModuleListPage.tsx:28 collapses cache/fallback into 'api'/'error').
 - **Verified evidence:** ModuleListPage.tsx:28 maps loader source to 'error'|'api' (LoaderSource is already only those two, so the 'collapses cache/fallback' wording is loose; cache fallback happens later inside useSeededResource). ModuleListTable.tsx:33 shows DataSourceBadge ('Couldn't load — showing nothing' for provenance error-no-data, DataSourceBadge.tsx) and :34-36 shows EmptyState 'No records / Nothing to show yet' whenever data.length===0, regardless of provenance. No retry control. RefreshErrorState exists (ds/RefreshErrorState.tsx) but is unused here.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -486,7 +486,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-OVERVIEW-06  ·  LOW  ·  partly  ·  theme UX-TABLE (was CAP)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1923): same assertions as CODE-LISTS-05)
 - **First-pass claim:** Table has no search, sort or pagination and status is unstyled text (ModuleListTable.tsx:37-55), unlike the DS DataTable used on the tokens page.
 - **Verified evidence:** ModuleListTable.tsx:37-55 is a bare <table> with no search, sort or pagination and status is a plain {row.status ?? "—"} (line 53) - true. The 'capped fetch / server-side pagination' remedy is not verifiable: tenant-service is absent and tenantLoader (_data.ts:78-85) sends no limit/offset. The lists here are small reference sets, so severity is low. A single-record profile does not need search/sort/pagination at all; better solved by OVERVIEW-01.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -504,7 +504,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-OVERVIEW-07  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
 - **W0 note:** partly fixed by #1923 — Uses LABELS.tenantTitle (Office), banned term gone; title/subtitle still hard-coded English, not next-intl
 - **First-pass claim:** Title 'Tenant — Overview' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Current tenant profile from tenant-service.".
 - **Verified evidence:** page.tsx (title prop) hard-codes title="Tenant — Overview" and the description string; no useTranslations in these pages although 423 of 829 page files elsewhere use next-intl. lib/labels.ts:30 lists 'tenant' in BANNED_CLERK_TERMS (LABELS.tenant='office', lib/labels.ts:11), and the page title contains it. Subtitle 'Current tenant profile from tenant-service.' is accurate copy but also hard-coded. Subtitle also names 'tenant-service' (internal service name) which is clerk-facing jargon.
@@ -527,7 +527,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-PLANS-01  ·  HIGH  ·  partly  ·  theme WIRING (was MONEY)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [ ] **Status** (W2 tenant REOPENED from the W0 PROVISIONAL tick: price renders paise-correct (_data.test.ts mapPlanRows) but the 'plans with modules show each module name' criterion is NOT met — only a module count ('3 modules') is shown and no test asserts names)
 - **First-pass claim:** Subtitle promises 'pricing and module entitlements' (plans/page.tsx:16) but neither is mapped: only description, planName-as-type and currency survive (tenant/_data.ts:53-65). A plans page with no prices and no feature comparison (hub note: 'feature comparison').
 - **Verified evidence:** plans/page.tsx description promises 'pricing and module entitlements'. mapTenantRows maps only description/type/category/planName -> sublabel (planName is a fallback after description/type/category, not 'type'), and meta = code ?? unit ?? usagePercent ?? limit ?? currency (_data.ts:60-65) - price, modules, features are not read; meta may show only a currency code. True no price/feature comparison. Field names in /api/v1/tenant/plans (_data.ts:100) cannot be verified: tenant-service absent. If price is returned in paise it must be formatted with formatINR per CLAUDE.md.
 - **Files to change:** `apps/web/src/app/(app)/tenant/plans/page.tsx`, `apps/web/src/app/(app)/tenant/_data.ts`
@@ -545,7 +545,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-PLANS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; apps/web ModuleListTable.showid.test.tsx (showId={false} hides the ID column; time-ordered UUIDs sharing an 8-char prefix are no longer rendered) + every tenant page passes showId={false})
 - **W0 note:** partly fixed by #1801 — Slug ids shown in full; UUID ids still sliced to 8 chars in ID column, column not dropped
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** ModuleListTable.tsx:40 header 'ID' and :50 renders <span className="mono">{row.id.slice(0, 8)}</span>. Shared by every ModuleListPage screen; mapTenantRows (_data.ts:36-43) falls back to key/code/resource/`row-N` as id so truncation is lossy.
@@ -563,7 +563,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-PLANS-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1862, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1862): apps/web/src/app/_components/ModuleListTable.test.tsx (retry/empty) + ds/RefreshErrorState.test.tsx)
 - **First-pass claim:** On a failed fetch the badge says 'Couldn't load — showing nothing' but the card body reads 'No records / Nothing to show yet' (ModuleListTable.tsx:33-35), which looks like a genuinely empty tenant; no retry (ModuleListPage.tsx:28 collapses cache/fallback into 'api'/'error').
 - **Verified evidence:** ModuleListPage.tsx:28 maps loader source to 'error'|'api' (LoaderSource is already only those two, so the 'collapses cache/fallback' wording is loose; cache fallback happens later inside useSeededResource). ModuleListTable.tsx:33 shows DataSourceBadge ('Couldn't load — showing nothing' for provenance error-no-data, DataSourceBadge.tsx) and :34-36 shows EmptyState 'No records / Nothing to show yet' whenever data.length===0, regardless of provenance. No retry control. RefreshErrorState exists (ds/RefreshErrorState.tsx) but is unused here.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -581,7 +581,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-PLANS-05  ·  LOW  ·  partly  ·  theme UX-TABLE (was CAP)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1923): same assertions as CODE-LISTS-05)
 - **First-pass claim:** Table has no search, sort or pagination and status is unstyled text (ModuleListTable.tsx:37-55), unlike the DS DataTable used on the tokens page.
 - **Verified evidence:** ModuleListTable.tsx:37-55 is a bare <table> with no search, sort or pagination and status is a plain {row.status ?? "—"} (line 53) - true. The 'capped fetch / server-side pagination' remedy is not verifiable: tenant-service is absent and tenantLoader (_data.ts:78-85) sends no limit/offset. The lists here are small reference sets, so severity is low.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -599,7 +599,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-PLANS-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
 - **W0 note:** partly fixed by #1916 — Banned Tenant term replaced by LABELS.tenantTitle; page title still hard-coded English, no next-intl
 - **First-pass claim:** Title 'Tenant — Plans' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Available plans with pricing and module entitlements.".
 - **Verified evidence:** page.tsx (title prop) hard-codes title="Tenant — Plans" and the description string; no useTranslations in these pages although 423 of 829 page files elsewhere use next-intl. lib/labels.ts:30 lists 'tenant' in BANNED_CLERK_TERMS (LABELS.tenant='office', lib/labels.ts:11), and the page title contains it. Subtitle 'Available plans with pricing and module entitlements.' is accurate copy but also hard-coded. Subtitle promises pricing that is not mapped (see PLANS-01).
@@ -622,7 +622,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-POSITIONS-01  ·  HIGH  ·  partly  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1916): _data.test.ts mapPositionRows ('Vacant' when filled strength is 0). The 'roles list' criterion is superseded: the positions payload carries no role bindings and the page subtitle no longer promises them)
 - **First-pass claim:** Subtitle promises 'role bindings' but none are mapped (tenant/_data.ts:32-75); incumbent and roles never appear. Position title shows as Name and the code as Meta, with no vacancy indicator beyond raw status text.
 - **Verified evidence:** Subtitle 'Position master records and role bindings.' Mapper (_data.ts:32-75) reads none of incumbent/roles/vacant; title -> label (name/title first), code -> meta (meta = code first), status -> raw text. All true for the current mapper. Real /api/v1/tenant/positions fields (_data.ts:95) cannot be verified: tenant-service absent.
 - **Files to change:** `apps/web/src/app/(app)/tenant/positions/page.tsx`, `apps/web/src/app/(app)/tenant/_data.ts`
@@ -638,7 +638,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-POSITIONS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; apps/web ModuleListTable.showid.test.tsx (showId={false} hides the ID column; time-ordered UUIDs sharing an 8-char prefix are no longer rendered) + every tenant page passes showId={false})
 - **W0 note:** partly fixed by #1801 — Slug ids full; UUID ids still sliced to 8 chars, ID column retained
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** ModuleListTable.tsx:40 header 'ID' and :50 renders <span className="mono">{row.id.slice(0, 8)}</span>. Shared by every ModuleListPage screen; mapTenantRows (_data.ts:36-43) falls back to key/code/resource/`row-N` as id so truncation is lossy.
@@ -656,7 +656,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-POSITIONS-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1862, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1862): apps/web/src/app/_components/ModuleListTable.test.tsx (retry/empty) + ds/RefreshErrorState.test.tsx)
 - **First-pass claim:** On a failed fetch the badge says 'Couldn't load — showing nothing' but the card body reads 'No records / Nothing to show yet' (ModuleListTable.tsx:33-35), which looks like a genuinely empty tenant; no retry (ModuleListPage.tsx:28 collapses cache/fallback into 'api'/'error').
 - **Verified evidence:** ModuleListPage.tsx:28 maps loader source to 'error'|'api' (LoaderSource is already only those two, so the 'collapses cache/fallback' wording is loose; cache fallback happens later inside useSeededResource). ModuleListTable.tsx:33 shows DataSourceBadge ('Couldn't load — showing nothing' for provenance error-no-data, DataSourceBadge.tsx) and :34-36 shows EmptyState 'No records / Nothing to show yet' whenever data.length===0, regardless of provenance. No retry control. RefreshErrorState exists (ds/RefreshErrorState.tsx) but is unused here.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -674,7 +674,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-POSITIONS-05  ·  LOW  ·  partly  ·  theme UX-TABLE (was CAP)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1923): same assertions as CODE-LISTS-05 + positions/page.test.tsx)
 - **First-pass claim:** Table has no search, sort or pagination and status is unstyled text (ModuleListTable.tsx:37-55), unlike the DS DataTable used on the tokens page.
 - **Verified evidence:** ModuleListTable.tsx:37-55 is a bare <table> with no search, sort or pagination and status is a plain {row.status ?? "—"} (line 53) - true. The 'capped fetch / server-side pagination' remedy is not verifiable: tenant-service is absent and tenantLoader (_data.ts:78-85) sends no limit/offset. The lists here are small reference sets, so severity is low.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -692,7 +692,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-POSITIONS-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
 - **W0 note:** partly fixed by #1916 — LABELS.tenantTitle used (no banned term); title still hard-coded English, not next-intl
 - **First-pass claim:** Title 'Tenant — Positions' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Position master records and role bindings.".
 - **Verified evidence:** page.tsx (title prop) hard-codes title="Tenant — Positions" and the description string; no useTranslations in these pages although 423 of 829 page files elsewhere use next-intl. lib/labels.ts:30 lists 'tenant' in BANNED_CLERK_TERMS (LABELS.tenant='office', lib/labels.ts:11), and the page title contains it. Subtitle 'Position master records and role bindings.' is accurate copy but also hard-coded. Subtitle promises role bindings that are not mapped (see POSITIONS-01).
@@ -733,7 +733,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-QUOTAS-02  ·  MEDIUM  ·  confirmed  ·  theme STATUS (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; QuotaStatusPill (ds/StatusPill.tsx) renders amber/red tones, an aria-hidden icon + text for near limit and exceeded, and sentence-case fallback (foo_bar -> Foo bar), scoped to the quotas page via ModuleListPage statusStyle=quota so humanizeStatus is unchanged elsewhere; asserted by apps/web/src/app/_components/ds/StatusPill.quota.test.tsx. Per-row highlight at threshold NOT built)
 - **W0-10 note:** review found the W0 tick partly — tenant/_data.ts:126-130 emits "Near limit"/"Exceeded"/"OK" and StatusPill humanizes, but ds/StatusPill.tsx STATUS_MAP has no near limit/exceeded/ok keys so pill falls to default "info" blue (:508), not amber; no icon cue and no row highlight in ModuleListTable.tsx:66.
 - **First-pass claim:** Status shows raw snake_case values such as near_limit (ModuleListTable.tsx:53) and there is no threshold colouring or warning.
 - **Verified evidence:** ModuleListTable.tsx:53 renders {row.status ?? "—"} raw; mapTenantRows passes row.status/state unchanged (_data.ts:58), so near_limit (if returned) is shown verbatim, with no colour or warning. Whether the API emits near_limit cannot be verified (service absent).
@@ -768,7 +768,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-QUOTAS-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1862, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1862): apps/web/src/app/_components/ModuleListTable.test.tsx (retry/empty) + ds/RefreshErrorState.test.tsx)
 - **First-pass claim:** On a failed fetch the badge says 'Couldn't load — showing nothing' but the card body reads 'No records / Nothing to show yet' (ModuleListTable.tsx:33-35), which looks like a genuinely empty tenant; no retry (ModuleListPage.tsx:28 collapses cache/fallback into 'api'/'error').
 - **Verified evidence:** ModuleListPage.tsx:28 maps loader source to 'error'|'api' (LoaderSource is already only those two, so the 'collapses cache/fallback' wording is loose; cache fallback happens later inside useSeededResource). ModuleListTable.tsx:33 shows DataSourceBadge ('Couldn't load — showing nothing' for provenance error-no-data, DataSourceBadge.tsx) and :34-36 shows EmptyState 'No records / Nothing to show yet' whenever data.length===0, regardless of provenance. No retry control. RefreshErrorState exists (ds/RefreshErrorState.tsx) but is unused here.
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -804,7 +804,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-QUOTAS-07  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
 - **W0 note:** partly fixed by #1916 — Banned term removed via LABELS.tenantTitle; title still hard-coded English, no next-intl
 - **First-pass claim:** Title 'Tenant — Quotas & Usage' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Resource consumption and plan limits for this tenant.".
 - **Verified evidence:** page.tsx (title prop) hard-codes title="Tenant — Quotas & Usage" and the description string; no useTranslations in these pages although 423 of 829 page files elsewhere use next-intl. lib/labels.ts:30 lists 'tenant' in BANNED_CLERK_TERMS (LABELS.tenant='office', lib/labels.ts:11), and the page title contains it. Subtitle 'Resource consumption and plan limits for this tenant.' is accurate copy but also hard-coded.
@@ -827,7 +827,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-SETTINGS-02  ·  MEDIUM  ·  confirmed  ·  theme WIRING (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1916): _data.test.ts mapSettingRows (value with and without description))
 - **First-pass claim:** Value is mixed into the Detail column and is replaced by description/type/category when those exist (tenant/_data.ts:53-58), so a setting's value may not be shown at all.
 - **Verified evidence:** tenant/_data.ts:53-58 sublabel = description ?? type ?? category ?? planName ?? value, so value is shown only when none of the earlier fields exist; there is no separate Value column (ModuleListTable columns ID/Name/Detail/Status/Meta, :39-45). A setting that has a description hides its value. Setting payload shape not visible (tenant-service absent), but the precedence is real.
 - **Files to change:** `apps/web/src/app/(app)/tenant/_data.ts`, `apps/web/src/app/(app)/tenant/settings/page.tsx`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -862,7 +862,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-SETTINGS-04  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1862, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1862): apps/web/src/app/_components/ModuleListTable.test.tsx (retry/empty) + ds/RefreshErrorState.test.tsx (router.refresh))
 - **First-pass claim:** On a failed fetch the badge says 'Couldn't load — showing nothing' but the card body reads 'No records / Nothing to show yet' (ModuleListTable.tsx:33-35), which looks like a genuinely empty tenant; no retry (ModuleListPage.tsx:28 collapses cache/fallback into 'api'/'error').
 - **Verified evidence:** ModuleListTable.tsx:50-51 renders DataSourceBadge with provenance from useSeededResource; DataSourceBadge.tsx:71 prints "Couldn't load — showing nothing" for provenance 'error-no-data', while ModuleListTable.tsx:34-35 (data.length===0) renders EmptyState 'No records / Nothing to show yet for this module.' in the same card, so a failure looks like an empty list. No retry action. Correction to observation: ModuleListPage.tsx:28 only maps LoaderSource ('api'|'error', apiClient.ts:6) to the same two values; the cache fallback is handled in useSeededResource (resource.ts:208-213, 'cached' provenance), not collapsed at :28. RefreshErrorState exists at app/_components/ds/RefreshErrorState.tsx (props error,onBack,backHref,helpHref).
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -880,7 +880,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-SETTINGS-05  ·  LOW  ·  confirmed  ·  theme OTHER (was CAP)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1923): same assertions as CODE-LISTS-05 + settings/page.test.tsx)
 - **First-pass claim:** Table has no search, sort or pagination and status is unstyled text (ModuleListTable.tsx:37-55), unlike the DS DataTable used on the tokens page.
 - **Verified evidence:** ModuleListTable.tsx:36-55 renders a plain <table className="tbl"> with no search, sort or pagination and status as plain text ({row.status ?? "—"} at :54). themes/ThemeTokenTable.tsx:38 uses DS <DataTable> (app/_components/ds/DataTable.tsx:172, has filterable/exportable). The loader fetches with no page/limit params (tenant/_data.ts:77-83), so 'server-side pagination' would need backend contract; the supplied fix text about 'client-side filtering of a capped fetch' does not match this code (no client filtering exists).
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -898,7 +898,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-SETTINGS-06  ·  LOW  ·  partly  ·  theme COPY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
 - **W0 note:** partly fixed by #1916 — LABELS.tenantTitle + reworded subtitle; no next-intl keys, breadcrumb/title still hard-coded
 - **First-pass claim:** Title 'Tenant — Settings' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Tenant-scoped configuration keys and values.".
 - **Verified evidence:** page.tsx:15 has literal title and :16 the literal subtitle; page.tsx:12 breadcrumb also says 'Tenant'. lib/labels.ts:11 maps tenant->'Office' and :30 lists 'tenant' in BANNED_CLERK_TERMS, so the copy conflicts with the rule. Subtitle text matches observation. The catalogue fix text (remove sample figures) does not apply: nothing here is fabricated; the real issue is untranslated/banned wording.
@@ -922,7 +922,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-STEWARDSHIP-01  ·  HIGH  ·  partly  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1916): _data.test.ts mapStewardshipRows ('Unassigned'); ID column now hidden so no row-N ids are displayed (ModuleListTable.showid.test.tsx))
 - **First-pass claim:** Subtitle promises 'assigned stewards' but no steward field is mapped (tenant/_data.ts:53-65): only the domain name, so accountability — the purpose of data governance — is invisible. IDs render as row-1, row-2 (fallback at _data.ts:43) when payloads lack id.
 - **Verified evidence:** page.tsx:16 subtitle promises 'assigned stewards' and tenant/_data.ts:44-65 maps no steward/owner field (label = name/title/label/key/.../domain, sublabel = description/type/category/planName/value). Id fallback `row-N` exists at :43 but only when no id/resource/key/code/planId/subscriptionId. The steward field name in the /data-governance/domains response cannot be seen (tenant-service absent), so the mapping fix cannot be finalized.
 - **Files to change:** `apps/web/src/app/(app)/tenant/_data.ts`, `apps/web/src/app/(app)/tenant/stewardship/page.tsx`
@@ -939,7 +939,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-STEWARDSHIP-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; apps/web ModuleListTable.showid.test.tsx (showId={false} hides the ID column; time-ordered UUIDs sharing an 8-char prefix are no longer rendered) + every tenant page passes showId={false})
 - **W0 note:** partly fixed by #1801 — Slug ids full; UUID ids still sliced to 8 chars, ID column retained
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** ModuleListTable.tsx:50 renders <span className="mono">{row.id.slice(0, 8)}</span> (file lines 37-55 hold the table). Ids come from mapper fallback chain (id/key/code/... then `row-N`), so long keys/UUIDs sharing a prefix display identically; <tr key={row.id}> at :47 would also duplicate if real ids collide.
@@ -957,7 +957,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-STEWARDSHIP-03  ·  MEDIUM  ·  partly  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1862, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1862): apps/web/src/app/_components/ModuleListTable.test.tsx (retry/empty) + ds/RefreshErrorState.test.tsx)
 - **First-pass claim:** On a failed fetch the badge says 'Couldn't load — showing nothing' but the card body reads 'No records / Nothing to show yet' (ModuleListTable.tsx:33-35), which looks like a genuinely empty tenant; no retry (ModuleListPage.tsx:28 collapses cache/fallback into 'api'/'error').
 - **Verified evidence:** ModuleListTable.tsx:50-51 renders DataSourceBadge with provenance from useSeededResource; DataSourceBadge.tsx:71 prints "Couldn't load — showing nothing" for provenance 'error-no-data', while ModuleListTable.tsx:34-35 (data.length===0) renders EmptyState 'No records / Nothing to show yet for this module.' in the same card, so a failure looks like an empty list. No retry action. Correction to observation: ModuleListPage.tsx:28 only maps LoaderSource ('api'|'error', apiClient.ts:6) to the same two values; the cache fallback is handled in useSeededResource (resource.ts:208-213, 'cached' provenance), not collapsed at :28. RefreshErrorState exists at app/_components/ds/RefreshErrorState.tsx (props error,onBack,backHref,helpHref).
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`, `apps/web/src/app/_components/ModuleListPage.tsx`
@@ -975,7 +975,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-STEWARDSHIP-05  ·  LOW  ·  confirmed  ·  theme OTHER (was CAP)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1923): same assertions as CODE-LISTS-05 + stewardship/page.test.tsx)
 - **First-pass claim:** Table has no search, sort or pagination and status is unstyled text (ModuleListTable.tsx:37-55), unlike the DS DataTable used on the tokens page.
 - **Verified evidence:** ModuleListTable.tsx:36-55 renders a plain <table className="tbl"> with no search, sort or pagination and status as plain text ({row.status ?? "—"} at :54). themes/ThemeTokenTable.tsx:38 uses DS <DataTable> (app/_components/ds/DataTable.tsx:172, has filterable/exportable). The loader fetches with no page/limit params (tenant/_data.ts:77-83), so 'server-side pagination' would need backend contract; the supplied fix text about 'client-side filtering of a capped fetch' does not match this code (no client filtering exists).
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -993,7 +993,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-STEWARDSHIP-06  ·  LOW  ·  partly  ·  theme COPY (was FABRICATED)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; apps/web/src/app/(app)/tenant/w2-pages-i18n.test.tsx (title + subtitle + breadcrumb come from the tenantPages namespace; en/hi parity, hi differs from en, no banned term in en/hi strings or rendered heading))
 - **W0 note:** partly fixed by #1916 — LABELS.tenantTitle used, subtitle reworded; still hard-coded English, no next-intl
 - **First-pass claim:** Title 'Tenant — Stewardship' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Data governance domains and assigned stewards.".
 - **Verified evidence:** page.tsx:15 has literal title and :16 the literal subtitle; page.tsx:12 breadcrumb also says 'Tenant'. lib/labels.ts:11 maps tenant->'Office' and :30 lists 'tenant' in BANNED_CLERK_TERMS, so the copy conflicts with the rule. Subtitle matches observation. The catalogue fix text (remove sample figures) does not apply: nothing here is fabricated; the real issue is untranslated/banned wording.
@@ -1017,7 +1017,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-SUBSCRIPTIONS-01  ·  HIGH  ·  partly  ·  theme WIRING (was DATEFMT)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1916): _data.test.ts mapSubscriptionRows (plan name, 'Renews ... 2026'; no raw uuid). Date uses the house formatIndianDate, not a literal dd/MM/yyyy)
 - **First-pass claim:** Name column falls back to the raw subscriptionId because no name/title/label/key/resource/code/domain exists on the payload (tenant/_data.ts:44-52), so the primary label is an opaque id; renewal date, amount and lifecycle actions (hub: 'lifecycle') have no column.
 - **Verified evidence:** tenant/_data.ts:44-52 label falls back to id, and id falls back to subscriptionId (:42), so an id-only payload shows an opaque id as the name; planName is only in sublabel (:57). No renewal date/amount/actions column exists in mapper or table. Theme tag DATEFMT is wrong: the core gap is missing field mapping and lifecycle actions; payload fields unverifiable (tenant-service absent).
 - **Files to change:** `apps/web/src/app/(app)/tenant/_data.ts`, `apps/web/src/app/(app)/tenant/subscriptions/page.tsx`, `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -1034,7 +1034,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-SUBSCRIPTIONS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; apps/web ModuleListTable.showid.test.tsx (showId={false} hides the ID column; time-ordered UUIDs sharing an 8-char prefix are no longer rendered) + every tenant page passes showId={false})
 - **W0 note:** partly fixed by #1801 — Slug ids full; UUID ids still sliced to 8 chars, ID column retained
 - **First-pass claim:** ID column prints row.id.slice(0, 8) (ModuleListTable.tsx:50): truncated ids mean nothing to clerks and can collide.
 - **Verified evidence:** ModuleListTable.tsx:50 renders <span className="mono">{row.id.slice(0, 8)}</span> (file lines 37-55 hold the table). Ids come from mapper fallback chain (id/key/code/... then `row-N`), so long keys/UUIDs sharing a prefix display identically; <tr key={row.id}> at :47 would also duplicate if real ids collide.
@@ -1087,7 +1087,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-SUBSCRIPTIONS-06  ·  LOW  ·  confirmed  ·  theme OTHER (was CAP)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1923, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1923): same assertions as CODE-LISTS-05 + subscriptions/page.test.tsx)
 - **First-pass claim:** Table has no search, sort or pagination and status is unstyled text (ModuleListTable.tsx:37-55), unlike the DS DataTable used on the tokens page.
 - **Verified evidence:** ModuleListTable.tsx:36-55 renders a plain <table className="tbl"> with no search, sort or pagination and status as plain text ({row.status ?? "—"} at :54). themes/ThemeTokenTable.tsx:38 uses DS <DataTable> (app/_components/ds/DataTable.tsx:172, has filterable/exportable). The loader fetches with no page/limit params (tenant/_data.ts:77-83), so 'server-side pagination' would need backend contract; the supplied fix text about 'client-side filtering of a capped fetch' does not match this code (no client filtering exists).
 - **Files to change:** `apps/web/src/app/_components/ModuleListTable.tsx`
@@ -1105,7 +1105,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-SUBSCRIPTIONS-07  ·  LOW  ·  partly  ·  theme COPY (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W2 tenant RE-CONFIRMED (was W0 PROVISIONAL; originally closed by #1916): w2-pages-i18n.test.tsx (catalogue title, no banned term))
 - **First-pass claim:** Title 'Tenant — Subscriptions' is hard-coded English rather than next-intl (page.tsx:15) and 'tenant' is on the banned clerk-facing terms list (lib/labels.ts:30); subtitle: "Current subscription details and lifecycle state.".
 - **Verified evidence:** page.tsx:15 has literal title and :16 the literal subtitle; page.tsx:12 breadcrumb also says 'Tenant'. lib/labels.ts:11 maps tenant->'Office' and :30 lists 'tenant' in BANNED_CLERK_TERMS, so the copy conflicts with the rule. Subtitle matches observation. The catalogue fix text (remove sample figures) does not apply: nothing here is fabricated; the real issue is untranslated/banned wording.
 - **Files to change:** `apps/web/src/app/(app)/tenant/subscriptions/page.tsx`, `apps/web/src/lib/labels.ts`, `apps/web/messages/en.json`
@@ -1125,7 +1125,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-HOME-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for usage/settings/consent/requests/org/migrations; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
 - **First-pass claim:** No role gate on a hub that fans out to quotas, configuration keys, DPDP consent requests and data migrations: layout.tsx:5 only checks module enablement and middleware.ts:48-59 only a session. Every tile is shown to every signed-in user; backend authorization undeterminable (tenant-service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/usage', 'GET /api/v1/tenant/settings', 'GET /api/v1/tenant/consent/requests', 'GET /api/v1/tenant/org/migrations']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate? Also check that consent and migration data are limited to admin/DPO roles.
@@ -1136,7 +1136,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-CODE-LISTS-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/code-lists; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/code-lists']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
@@ -1147,7 +1147,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-DATA-MIGRATION-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/org/migrations (super_admin only); plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/org/migrations']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
@@ -1158,7 +1158,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-ORG-HIERARCHY-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/org/hierarchy; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/org/hierarchy']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
@@ -1169,7 +1169,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-OVERVIEW-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 tenant INTERIM — NEEDS OWNER DECISION: GET /v1/tenant/current has no role gate by design (any signed-in user reads their OWN tenant profile; scoping asserted in w2-tenant-web-paths-authz.test.ts). The ledger asks for basic-user 403; the /tenant web area is admin-gated (layout.tsx) but the API is not. Gating it could break shell consumers of /v1/tenants/current)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/current']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
@@ -1180,7 +1180,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-PLANS-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [ ] **Status** (W2 tenant INTERIM — NEEDS OWNER DECISION: GET /v1/tenant/plans returns the static plan-comparison catalogue to ANY authenticated user by design (comment in subscriptions/routes.ts; pinned by subscription-upgrade.test.ts). The ledger asks for basic-user 403. No tenant data is exposed; owner to decide whether pricing is admin-only)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/plans']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
@@ -1191,7 +1191,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-POSITIONS-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/positions; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/positions']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
@@ -1202,7 +1202,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-QUOTAS-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/usage; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/usage']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
@@ -1213,7 +1213,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-SETTINGS-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; role gate pinned in services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted), and the list response now masks credential-named keys server-side (settings/routes.ts maskSecretSettings), asserted by services/tenant-service/tests/w2-settings-list-masking.test.ts: admin sees ******** for smtp_password, ordinary value intact)
 - **First-pass claim:** Any signed-in user can read every tenant configuration key and value: no role gate (tenant/layout.tsx:5, middleware.ts:48-59), and the value is printed verbatim in the Detail column when the row has no description (tenant/_data.ts:53-58 maps sublabel = description ?? type ?? category ?? planName ?? value). No masking of secret-looking keys. Backend filtering undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/settings']`
 - **Question:** Is GET settings restricted to admin roles and does it redact secret-typed values (masked or omitted)?
@@ -1224,7 +1224,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-STEWARDSHIP-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/data-governance/domains; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/data-governance/domains']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
@@ -1235,7 +1235,7 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 
 ### GAP-TENANT-SUBSCRIPTIONS-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 tenant: closed by #2060; verified server-side on main: services/tenant-service/tests/w2-tenant-web-paths-authz.test.ts (exact web path: no token 401, basic employee 403, admin role admitted) for /v1/tenant/subscription/current; plus web gate apps/web/src/app/(app)/tenant/w2-layout-notfound.test.tsx)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/subscription/current']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?

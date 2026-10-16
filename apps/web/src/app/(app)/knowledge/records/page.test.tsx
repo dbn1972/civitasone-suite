@@ -81,3 +81,21 @@ describe("KnowledgeRecordsPage", () => {
     expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
   });
 });
+
+describe("KnowledgeRecordsPage status pills and disposal-due column (GAP-KNOWLEDGE-RECORDS-06)", () => {
+  beforeEach(() => getKnowledgeRecordsMock.mockReset());
+
+  it("Given archived and inactive records, then each row shows a labelled pill; disposal-due is formatted or a dash", async () => {
+    getKnowledgeRecordsMock.mockResolvedValue({
+      data: [
+        rec({ id: "r-arch", title: "Archived file", status: "archived", disposalDueDate: "2026-10-30" }),
+        rec({ id: "r-inact", title: "Inactive file", status: "inactive", disposalDueDate: undefined }),
+      ],
+      source: "api",
+    });
+    render(await KnowledgeRecordsPage());
+    expect(screen.getByText("Archived").closest(".pill")).not.toBeNull();
+    expect(screen.getByText("Inactive").closest(".pill")).not.toBeNull();
+    expect(screen.getByText("30 Oct 2026")).toBeInTheDocument();
+  });
+});

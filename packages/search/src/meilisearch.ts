@@ -34,17 +34,19 @@ export class MeilisearchEngine implements SearchEngine {
           method: "POST",
           body: JSON.stringify({ uid: this.indexName, primaryKey: "id" }),
         });
-        // Configure filterable & searchable attributes
-        await this.fetch(`/indexes/${this.indexName}/settings`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            filterableAttributes: ["tenantId", "category", "tags"],
-            searchableAttributes: ["title", "content", "tags"],
-            sortableAttributes: ["indexedAt"],
-          }),
-        });
         log.info({ indexName: this.indexName }, "Meilisearch index created");
       }
+      // Always (re)apply the settings, for new AND existing indexes, so that
+      // accessLevel is filterable in production without a manual step. The
+      // PATCH is idempotent.
+      await this.fetch(`/indexes/${this.indexName}/settings`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          filterableAttributes: ["tenantId", "category", "tags", "accessLevel"],
+          searchableAttributes: ["title", "content", "tags"],
+          sortableAttributes: ["indexedAt"],
+        }),
+      });
     } catch (err) {
       log.warn({ err }, "Meilisearch initialization failed — search will use DB fallback");
     }
@@ -74,6 +76,14 @@ export class MeilisearchEngine implements SearchEngine {
     if (query.category) filter.push(`category = "${this.escape(query.category)}"`);
     if (query.tags?.length) {
       filter.push(query.tags.map((t) => `tags = "${this.escape(t)}"`).join(" AND "));
+    }
+    if (query.accessLevels) {
+      // Empty list = matches nothing (fail closed).
+      filter.push(
+        query.accessLevels.length
+          ? `(${query.accessLevels.map((l) => `accessLevel = "${this.escape(l)}"`).join(" OR ")})`
+          : `accessLevel = "__none__"`,
+      );
     }
 
     const start = Date.now();
@@ -155,6 +165,7 @@ export class MeilisearchEngine implements SearchEngine {
       content: doc.content,
       tags: doc.tags,
       category: doc.category ?? "",
+      accessLevel: doc.accessLevel ?? "internal",
       indexedAt: new Date().toISOString(),
     };
   }

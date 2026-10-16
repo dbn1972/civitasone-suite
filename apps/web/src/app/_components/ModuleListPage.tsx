@@ -32,13 +32,21 @@ interface ModuleListPageProps {
    * title-derived key exactly as before.
    */
   cacheKey?: string;
+  /**
+   * GAP-TENANT-*-02: set false to drop the raw ID column (opaque ids mean
+   * nothing to a clerk and time-ordered UUIDs share a prefix). Defaults to
+   * true so every other ModuleListPage consumer is unchanged.
+   */
+  showId?: boolean;
+  /** GAP-TENANT-QUOTAS-02: pass "quota" for quota status rendering. */
+  statusStyle?: "quota";
 }
 
 function slugify(s: string): string {
   return `module.${s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`;
 }
 
-export function ModuleListPage({ title, description, rows, source, children, back, backLabel, errorArea, cacheKey }: ModuleListPageProps) {
+export function ModuleListPage({ title, description, rows, source, children, back, backLabel, errorArea, cacheKey, showId, statusStyle }: ModuleListPageProps) {
   return (
     <>
       <PageHeader
@@ -57,6 +65,8 @@ export function ModuleListPage({ title, description, rows, source, children, bac
         rows={rows}
         source={source === "error" ? "error" : "api"}
         {...(errorArea ? { errorArea } : {})}
+        {...(showId === false ? { showId: false } : {})}
+        {...(statusStyle ? { statusStyle } : {})}
         {...(back ? { backHref: back } : {})}
       />
     </>

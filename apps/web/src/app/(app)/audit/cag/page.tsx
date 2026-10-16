@@ -1,10 +1,12 @@
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getCagParas } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
+import { getAuditT } from "@/lib/audit/getAuditT";
 import { toHumanError } from "@/lib/messages";
 import { CagTable } from "./CagTable";
 
 export default async function CagPage() {
+  const t = await getAuditT();
   const result = await getCagParas();
   const { data: paras, source } = result;
   const resource = toResourceState(result);
@@ -15,9 +17,12 @@ export default async function CagPage() {
   // Settled / Pending are counts of the settled vs not-settled statuses.
   const totalParas = errored ? null : paras.length;
   const settled = errored ? null : paras.filter((p) => p.status === "settled").length;
-  const pending = errored ? null : paras.filter((p) => p.status !== "settled").length;
+  // GAP-AUDIT-CAG-03: unmodelled statuses are neither settled nor known-pending;
+  // they are excluded from Pending (and counted in Paragraphs) rather than guessed.
+  const pending = errored ? null : paras.filter((p) => p.status !== "settled" && p.status !== "unknown").length;
   // GAP-AUDIT-CAG-04: ignore rows with no department before counting distinct
   // departments, so a missing/blank department does not count as one.
+  const unrecognised = errored ? null : paras.filter((p) => p.status === "unknown").length;
   const departments = errored ? null : new Set(paras.map((p) => p.department).filter((d): d is string => !!d)).size;
 
   return (
@@ -32,6 +37,9 @@ export default async function CagPage() {
         <StatCard icon="📜" iconBg="#eef2ff" label="Paragraphs" value={totalParas ?? "—"} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled" value={settled ?? "—"} />
         <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={pending ?? "—"} />
+        {unrecognised !== null && unrecognised > 0 ? (
+          <StatCard icon="❔" iconBg="var(--warnbg)" label={t("cagUnrecognised")} value={unrecognised} />
+        ) : null}
         <StatCard icon="🏛️" iconBg="#fce7ee" label="Departments" value={departments ?? "—"} />
       </StatGrid>
 

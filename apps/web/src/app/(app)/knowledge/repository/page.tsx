@@ -2,10 +2,12 @@ import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getKnowledgeDocs } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, RefreshErrorState, EmptyState } from "../../../_components/ds";
+import { getTranslations } from "next-intl/server";
 import { toHumanError } from "@/lib/messages";
 import { knowledgeDocStatusLabel, knowledgeDocStatusPill, categorySegment } from "../_data/statusLabels";
 import { RepositoryClient } from "./RepositoryClient";
-import { ImportButton } from "./ImportButton";
+
+const ACCESS_LEVELS = ["public", "internal", "restricted", "confidential"] as const;
 
 export type DocRow = {
   id: string;
@@ -18,11 +20,16 @@ export type DocRow = {
   statusPill: string;
   rawCategory: string;
   segment: string;
+  accessLevel: string;
+  accessLabel: string;
 };
 
 export default async function KnowledgeRepositoryPage() {
+  const t = await getTranslations("knowledgeW2");
   const { data: docs, source } = await getKnowledgeDocs();
   const errored = source === "error";
+  const accessLabel = (level: string) =>
+    (ACCESS_LEVELS as readonly string[]).includes(level) ? t(`accessLevels.${level as (typeof ACCESS_LEVELS)[number]}`) : level;
 
   // GAP-KNOWLEDGE-REPOSITORY-03: filter out archived by default
   const visible = docs.filter((d) => d.status !== "archived");
@@ -44,6 +51,8 @@ export default async function KnowledgeRepositoryPage() {
     statusPill: knowledgeDocStatusPill(doc.status),
     rawCategory: doc.category,
     segment: categorySegment(doc.category),
+    accessLevel: doc.accessLevel,
+    accessLabel: accessLabel(doc.accessLevel),
   }));
 
   return (
@@ -53,10 +62,7 @@ export default async function KnowledgeRepositoryPage() {
         title="Digital Repository"
         subtitle="Circulars, policies &amp; notifications with versioning."
         actions={
-          <>
-            <ImportButton />
-            <Link href="/knowledge/documents/new" className="btn primary" style={{ minHeight: 44 }}>+ Publish Document</Link>
-          </>
+          <Link href="/knowledge/documents/new" className="btn primary" style={{ minHeight: 44 }}>{t("addDocument")}</Link>
         }
       />
 
@@ -76,7 +82,7 @@ export default async function KnowledgeRepositoryPage() {
         ) : rows.length === 0 ? (
           <EmptyState icon="📂" title="No documents found" message="No documents found in the repository." />
         ) : (
-          <RepositoryClient rows={rows} />
+          <RepositoryClient rows={rows} accessHeader={t("accessColumn")} />
         )}
         {archived > 0 && !errored && (
           <div style={{ padding: "8px 16px", fontSize: "12px", color: "var(--mut)" }}>

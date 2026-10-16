@@ -18,6 +18,7 @@ import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { procurementRfqs, procurementRfqItems } from "../src/modules/rfq/schema.js";
 import { registerRfqConsumers } from "../src/modules/rfq/consumer.js";
+import { procurementVendors } from "../src/modules/vendor/schema.js";
 import { COMMANDS } from "../src/topics.js";
 import type { FastifyInstance } from "fastify";
 
@@ -84,17 +85,72 @@ describe("POST /v1/procurement/rfqs — route contract", () => {
     expect(res.statusCode).toBe(400);
   });
 
+  async function seedVendors(ids: string[]): Promise<void> {
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(procurementVendors).values(ids.map((id, n) => ({
+        id, tenantId: TENANT, name: `RFQ Test Vendor ${n}`, createdBy: ACTOR, updatedBy: ACTOR,
+      })));
+    }));
+  }
+  async function dropVendors(): Promise<void> {
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(procurementVendors).where(eq(procurementVendors.tenantId, TENANT));
+    }));
+  }
+  const post = (payload: Record<string, unknown>) => app.inject({
+    method: "POST", url: "/v1/procurement/rfqs",
+    headers: { authorization: `Bearer ${tok(["procurement_officer"])}`, "content-type": "application/json" },
+    payload: { title: "Min-vendor rule", closingDate: "2026-12-01", ...payload },
+  });
+
+  // GAP-PROCUREMENT-RFQ-NEW-02: GFR limited tender needs >= 3 vendors, enforced
+  // by the server (the web form is only a convenience).
+  it("RFQ-NEW-02: rejects 2 invited vendors without a justification (422 RFQ_MIN_VENDORS)", async () => {
+    const [a, b] = [randomUUID(), randomUUID()];
+    await seedVendors([a, b]);
+    try {
+      const res = await post({ vendorIds: [a, b] });
+      expect(res.statusCode).toBe(422);
+      expect(res.json().code).toBe("RFQ_MIN_VENDORS");
+      // A repeated id must not pad the count up to the minimum.
+      const padded = await post({ vendorIds: [a, a, b, b] });
+      expect(padded.statusCode).toBe(422);
+    } finally { await dropVendors(); }
+  });
+
+  it("RFQ-NEW-02: accepts fewer than 3 with a written justification, and 3 without one", async () => {
+    const ids = [randomUUID(), randomUUID(), randomUUID()];
+    await seedVendors(ids);
+    try {
+      const justified = await post({ vendorIds: ids.slice(0, 1), fewerVendorsJustification: "Sole empanelled source for this item." });
+      expect(justified.statusCode).toBe(202);
+      const blankJustification = await post({ vendorIds: ids.slice(0, 2), fewerVendorsJustification: "   " });
+      expect(blankJustification.statusCode).toBe(422);
+      const three = await post({ vendorIds: ids });
+      expect(three.statusCode).toBe(202);
+    } finally { await dropVendors(); }
+  });
+
+  it("RFQ-NEW-02: rejects an invited vendor that does not exist in this tenant (422 VENDOR_NOT_FOUND)", async () => {
+    const res = await post({ vendorIds: [randomUUID(), randomUUID(), randomUUID()] });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("VENDOR_NOT_FOUND");
+  });
+
   it("returns 202 with an accepted id for a valid RFQ create request", async () => {
+    const ids = [VENDOR_1, VENDOR_2, "9b900000-3333-4000-8000-000000000003"];
+    await seedVendors(ids);
     const res = await app.inject({
       method: "POST", url: "/v1/procurement/rfqs",
       headers: { authorization: `Bearer ${tok(["procurement_officer"])}`, "content-type": "application/json" },
       payload: {
         rfqNo: "CLIENT-SUPPLIED-IGNORED",
         title: "Supply of laptops", closingDate: "2026-12-01",
-        vendorIds: [VENDOR_1, VENDOR_2],
+        vendorIds: ids,
         items: [{ itemName: "Laptop 14-inch", quantity: 20, unit: "nos" }],
       },
     });
+    await dropVendors();
     expect(res.statusCode).toBe(202);
     const body = res.json();
     expect(body.status).toBe("accepted");

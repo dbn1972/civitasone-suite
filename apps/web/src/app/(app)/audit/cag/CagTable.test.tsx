@@ -34,3 +34,14 @@ describe("CagTable", () => {
     expect(screen.getByText(/Showing saved data/i)).toBeInTheDocument();
   });
 });
+
+describe("CagTable unknown status (GAP-AUDIT-CAG-03)", () => {
+  it("an unmodelled status 'xyz' renders 'Xyz' in a neutral pill, not 'Under Review'", () => {
+    const row: CagParaSummary = { id: "p9", reportYear: "2024-25", paraNo: "9", department: "Works", status: "unknown", rawStatus: "xyz" };
+    seeded.mockReturnValue({ data: [row], provenance: "live", cachedAt: null, offline: false });
+    const { container } = render(<CagTable rows={[row]} source="api" />);
+    expect(screen.getByText("Xyz")).toBeInTheDocument();
+    expect(screen.queryByText("Under Review")).not.toBeInTheDocument();
+    expect(container.querySelector(".pill.mut")).not.toBeNull();
+  });
+});

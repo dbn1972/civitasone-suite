@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { PageHeader } from "../../../_components/ds";
-import { getProcurementVendors } from "../../../_data/loaders";
+import { getProcurementVendors, getProcurementVendorSummary } from "../../../_data/loaders";
 import { VendorsTable } from "./VendorsTable";
 
 export default async function VendorsPage() {
   const VENDOR_LIST_LIMIT = 500;
-  const { data: vendors, source } = await getProcurementVendors({ limit: VENDOR_LIST_LIMIT });
+  const [{ data: vendors, source }, { data: summary }] = await Promise.all([
+    getProcurementVendors({ limit: VENDOR_LIST_LIMIT }),
+    // GAP-PROCUREMENT-VENDORS-03: whole-directory counts for the stat tiles. A
+    // failed summary is simply null - the table then falls back to its own rows.
+    getProcurementVendorSummary(),
+  ]);
   // GAP-...-VENDORS-03 (interim): the list is capped at the fetch limit and the
   // DataTable pages client-side, so a tenant with more vendors than the limit
   // is silently truncated. Until the backend returns a true total + server
@@ -31,7 +36,7 @@ export default async function VendorsPage() {
         }
       />
 
-      <VendorsTable vendors={vendors} source={source} truncated={truncated} limit={VENDOR_LIST_LIMIT} />
+      <VendorsTable vendors={vendors} source={source} truncated={truncated} limit={VENDOR_LIST_LIMIT} summary={summary} />
     </>
   );
 }

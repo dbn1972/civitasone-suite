@@ -1167,6 +1167,10 @@ export type VendorDetail = {
   ifscCode?: string;
   kycStatus?: string;
   kycVerifiedAt?: string | null;
+  /** GAP-PROCUREMENT-VENDORS-DETAIL-04: latest active empanelment validity (YYYY-MM-DD); absent when open-ended / none. */
+  empanelmentValidTill?: string | null;
+  /** True when every empanelment on file is past its date or no longer active. */
+  empanelmentLapsed?: boolean;
 };
 
 export type RFQSummary = {
@@ -2255,7 +2259,10 @@ export type CagParaSummary = {
   totalParas?: number;
   settled?: number;
   pending?: number;
-  status: "under_review" | "partially_settled" | "nearly_settled" | "settled";
+  // GAP-AUDIT-CAG-03: "unknown" = a backend status the web does not model; the
+  // raw API value is kept in rawStatus and shown humanized, never as "Under Review".
+  status: "under_review" | "partially_settled" | "nearly_settled" | "settled" | "unknown";
+  rawStatus?: string;
 };
 
 export type VigilanceCaseSummary = {
@@ -2263,8 +2270,12 @@ export type VigilanceCaseSummary = {
   caseNo: string;
   officer: string;
   charges: string;
-  inquiryStatus: "preliminary_enquiry" | "under_investigation" | "charge_sheet_issued" | "inquiry_complete";
-  outcome: "pending" | "major_penalty" | "minor_penalty" | "exonerated";
+  // GAP-AUDIT-VIGILANCE-04: "unknown" = unmodelled or missing; raw value kept so a
+  // new stage is never shown as the earliest stage / "Pending".
+  inquiryStatus: "preliminary_enquiry" | "under_investigation" | "charge_sheet_issued" | "inquiry_complete" | "unknown";
+  outcome: "pending" | "major_penalty" | "minor_penalty" | "exonerated" | "unknown";
+  rawInquiryStatus?: string;
+  rawOutcome?: string;
 };
 
 export type InvestigationSummary = {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
@@ -94,5 +94,79 @@ describe("KnowledgeRepositoryPage", () => {
     expect(screen.queryByText("D1ABCDEF")).not.toBeInTheDocument();
     expect(screen.getByText("Author")).toBeInTheDocument();
     expect(screen.queryByText("Dept")).not.toBeInTheDocument();
+  });
+});
+
+describe("KnowledgeRepositoryPage w2 closures", () => {
+  beforeEach(() => getKnowledgeDocsMock.mockReset());
+
+  // GAP-KNOWLEDGE-LIST-01: rows open the document detail route (documents/[id]).
+  it("GAP-LIST-01: a row title links to /knowledge/documents/<full id>, not the policies route", async () => {
+    const id = "33333333-3333-4333-8333-333333333333";
+    getKnowledgeDocsMock.mockResolvedValue({ data: [doc({ id, title: "Linked Doc" })], source: "api" });
+    render(await KnowledgeRepositoryPage());
+    expect(screen.getByRole("link", { name: "Open Linked Doc" })).toHaveAttribute("href", `/knowledge/documents/${id}`);
+  });
+
+  // GAP-KNOWLEDGE-DOCUMENTS-NEW-02 / LIST-04: no Import entry point to a flow that does not exist;
+  // DOCUMENTS-NEW-04: no "Publish" wording on a route that creates drafts.
+  it("GAP-NEW-02/LIST-04/NEW-04: no Import control; the create action reads '+ Add Document'", async () => {
+    getKnowledgeDocsMock.mockResolvedValue({ data: [doc()], source: "api" });
+    render(await KnowledgeRepositoryPage());
+    expect(screen.queryByRole("link", { name: /import/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /import/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "+ Add Document" })).toHaveAttribute("href", "/knowledge/documents/new");
+    expect(screen.queryByText(/Publish Document/i)).not.toBeInTheDocument();
+    // no link in the page targets a query param the destination ignores
+    for (const a of Array.from(document.querySelectorAll("a"))) {
+      expect(a.getAttribute("href") ?? "").not.toMatch(/mode=import|bulk=true/);
+    }
+  });
+
+  // GAP-KNOWLEDGE-REPOSITORY-02 acceptance: dashes in the cards on a failed load.
+  it("GAP-REPOSITORY-02: on a failed load the stat cards show dashes and no zero counts", async () => {
+    getKnowledgeDocsMock.mockResolvedValue({ data: [], source: "error" });
+    render(await KnowledgeRepositoryPage());
+    expect(screen.getByText("Documents").closest(".stat")).toHaveTextContent("—");
+    expect(screen.getByText("Published").closest(".stat")).toHaveTextContent("—");
+    expect(screen.queryByText("No documents found")).not.toBeInTheDocument();
+  });
+});
+
+describe("KnowledgeRepositoryPage access column and segments (GAP-KNOWLEDGE-LIST-06, REPOSITORY-07)", () => {
+  beforeEach(() => getKnowledgeDocsMock.mockReset());
+
+  it("LIST-06: restricted documents show a lock and the spelled-out level; public is a plain pill", async () => {
+    getKnowledgeDocsMock.mockResolvedValue({
+      data: [
+        doc({ id: "r1", title: "Secret Circular", accessLevel: "restricted" }),
+        doc({ id: "r2", title: "Open Circular", accessLevel: "public" }),
+      ],
+      source: "api",
+    });
+    render(await KnowledgeRepositoryPage());
+    expect(screen.getByText("Access")).toBeInTheDocument();
+    const restricted = screen.getByText("Restricted");
+    expect(restricted.closest(".pill")).not.toBeNull();
+    expect(restricted.parentElement).toHaveTextContent("🔒");
+    const open = screen.getByText("Public");
+    expect(open.parentElement).not.toHaveTextContent("🔒");
+  });
+
+  it("REPOSITORY-07: choosing the Circulars segment keeps 'Circular' documents and drops the others", async () => {
+    getKnowledgeDocsMock.mockResolvedValue({
+      data: [
+        doc({ id: "s1", title: "Alpha Circular Doc", category: "Circular" }),
+        doc({ id: "s2", title: "Beta Policy Doc", category: "Policy" }),
+        doc({ id: "s3", title: "Gamma Misc Doc", category: "Other" }),
+      ],
+      source: "api",
+    });
+    render(await KnowledgeRepositoryPage());
+    expect(screen.getByText("Gamma Misc Doc")).toBeInTheDocument(); // All includes 'Other'
+    fireEvent.click(screen.getByRole("tab", { name: "Circulars" }));
+    expect(screen.getByText("Alpha Circular Doc")).toBeInTheDocument();
+    expect(screen.queryByText("Beta Policy Doc")).not.toBeInTheDocument();
+    expect(screen.queryByText("Gamma Misc Doc")).not.toBeInTheDocument();
   });
 });

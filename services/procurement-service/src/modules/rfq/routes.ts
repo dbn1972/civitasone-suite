@@ -14,6 +14,8 @@ import * as blacklistRepo from "../vendor-blacklist/repo.js";
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
+/** GFR limited tender: minimum vendors to invite without a recorded justification. */
+export const MIN_RFQ_VENDORS = 3;
 const idParam      = z.object({ id: z.string().uuid() });
 const VENDOR_ROLES = ["vendor", ...PROC_ROLES];
 
@@ -21,7 +23,20 @@ export async function rfqRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/procurement/rfqs", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);
-    const body = createRfqBody.parse(req.body);
+    const parsed = createRfqBody.parse(req.body);
+    // GAP-PROCUREMENT-RFQ-NEW-02: an invitation list is a SET - a repeated id
+    // must not inflate the "vendors invited" count that the minimum is judged on.
+    const body = { ...parsed, vendorIds: [...new Set(parsed.vendorIds)] };
+    // GAP-PROCUREMENT-RFQ-NEW-02: GFR limited-tender minimum of three vendors.
+    // Fewer is allowed only with a written justification (recorded in the create
+    // audit event). The web form shows the same rule; this is the real control.
+    if (body.vendorIds.length < MIN_RFQ_VENDORS && !(body.fewerVendorsJustification ?? "").trim()) {
+      throw new HttpError(
+        422,
+        "RFQ_MIN_VENDORS",
+        `at least ${MIN_RFQ_VENDORS} vendors must be invited to an RFQ; a written justification is required to invite fewer`,
+      );
+    }
     // GAP-PROCUREMENT-VENDORS-01: a blacklisted vendor must never be invited to
     // an RFQ. The web form hides blacklisted vendors from the invite list, but
     // the server is the real control — reject synchronously (4xx) before the
@@ -29,6 +44,9 @@ export async function rfqRoutes(app: FastifyInstance): Promise<void> {
     // central debarment by PAN, or the vendor's own 'blacklisted' type).
     for (const vendorId of body.vendorIds) {
       const vendor = await vendorRepo.findVendorById(vendorId, ctx.tenantId);
+      if (!vendor) {
+        throw new HttpError(422, "VENDOR_NOT_FOUND", `vendor ${vendorId} does not exist in this tenant`);
+      }
       const blacklisted =
         Boolean(await blacklistRepo.findActive(ctx.tenantId, vendorId))
         || (await blacklistRepo.findActiveCentralByPan(vendor?.pan ?? "")) != null

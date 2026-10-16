@@ -1,6 +1,7 @@
 import { cache } from "../../shared/infra.js";
 import { RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
+import { clearanceScope } from "./clearance.js";
 import type { DocumentView } from "./schema.js";
 
 export async function searchDocuments(
@@ -8,18 +9,22 @@ export async function searchDocuments(
   query: string,
   category: string | undefined,
   limit: number,
+  levels?: repo.Clearance,
 ): Promise<DocumentView[]> {
-  const rows = await repo.searchByTenant(tenantId, query, category, limit);
+  const rows = await repo.searchByTenant(tenantId, query, category, limit, levels);
   return rows;
 }
 
 export async function listDocuments(
   tenantId: string,
   limit: number,
-  offset: number
+  offset: number,
+  levels: repo.Clearance = null,
 ): Promise<{ data: DocumentView[]; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
-  return cache.listOrLoad(tenantId, RESOURCE, `list:${limit}:${offset}`, async () => {
-    const rows = await repo.listByTenant(tenantId, limit, offset);
+  // The clearance scope is part of the cache key: a list cached for an
+  // admin (all levels) must never be served to an uncleared user.
+  return cache.listOrLoad(tenantId, RESOURCE, `list:${limit}:${offset}:${clearanceScope(levels ?? null)}`, async () => {
+    const rows = await repo.listByTenant(tenantId, limit, offset, levels);
     return {
       data: rows,
       pagination: {
@@ -31,8 +36,8 @@ export async function listDocuments(
   });
 }
 
-export async function getDocumentById(tenantId: string, id: string): Promise<DocumentView | null> {
-  return repo.getById(tenantId, id);
+export async function getDocumentById(tenantId: string, id: string, levels?: repo.Clearance): Promise<DocumentView | null> {
+  return repo.getById(tenantId, id, levels);
 }
 
 /**
@@ -44,20 +49,21 @@ export async function listRecords(
   tenantId: string,
   limit: number,
   offset: number,
+  levels?: repo.Clearance,
 ): Promise<repo.RecordProjection[]> {
-  return repo.listRecords(tenantId, limit, offset);
+  return repo.listRecords(tenantId, limit, offset, levels);
 }
 
 /**
  * GAP2-KNOWLEDGE-DASHBOARD-CAP-01: repository-wide document aggregate for the
  * dashboard StatCards + category chart (not page-capped).
  */
-export async function summarizeDocuments(tenantId: string): Promise<repo.DocumentsSummary> {
-  return repo.summarize(tenantId);
+export async function summarizeDocuments(tenantId: string, levels?: repo.Clearance): Promise<repo.DocumentsSummary> {
+  return repo.summarize(tenantId, levels);
 }
 
-export async function listDocumentsByCategory(tenantId: string, categoryId: string, limit: number, offset: number): Promise<DocumentView[]> {
-  return repo.listByCategory(tenantId, categoryId, limit, offset);
+export async function listDocumentsByCategory(tenantId: string, categoryId: string, limit: number, offset: number, levels?: repo.Clearance): Promise<DocumentView[]> {
+  return repo.listByCategory(tenantId, categoryId, limit, offset, levels);
 }
 
 

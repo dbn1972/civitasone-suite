@@ -90,6 +90,12 @@ export const vendorSummarySchema = z.object({
   gstin: z.string().optional(),
   kycStatus: z.string().optional(),
   kycVerifiedAt: z.string().nullable().optional(),
+  // GAP-PROCUREMENT-VENDORS-03/05 + RFQ-NEW-02: these two were emitted by the
+  // list query but stripped here (schema.parse drops unknown keys), so the web
+  // list could never tell an empanelled vendor from a merely registered one and
+  // the RFQ invite list never saw the blacklisted flag.
+  vendorType: z.enum(["registered", "empanelled", "blacklisted"]).optional(),
+  blacklisted: z.boolean().optional(),
   bankAccount: z.string().optional(),
   ifsc: z.string().optional(),
   email: z.string().optional(),
@@ -1247,6 +1253,8 @@ export const VendorDetailSchema = z.object({
   ifscCode: z.string().optional(),
   kycStatus: z.string().optional(),
   kycVerifiedAt: z.string().nullable().optional(),
+  empanelmentValidTill: z.string().nullable().optional(),
+  empanelmentLapsed: z.boolean().optional(),
 });
 export const VendorDetailListSchema = z.array(VendorDetailSchema);
 
@@ -2254,7 +2262,8 @@ export const CagParaSummarySchema = z.object({
   totalParas: z.number().optional(),
   settled: z.number().optional(),
   pending: z.number().optional(),
-  status: z.string(),
+  // GAP-AUDIT-CAG-03: a missing status is mapped to "unknown" by the loader, not a payload failure.
+  status: z.string().nullish(),
 });
 export const CagParaSummaryListSchema = z.array(CagParaSummarySchema);
 
@@ -2263,8 +2272,11 @@ export const VigilanceCaseSummarySchema = z.object({
   caseNo: z.string(),
   officer: z.string(),
   charges: z.string(),
-  inquiryStatus: z.enum(["preliminary_enquiry", "under_investigation", "charge_sheet_issued", "inquiry_complete"]),
-  outcome: z.enum(["pending", "major_penalty", "minor_penalty", "exonerated"]),
+  // GAP-AUDIT-VIGILANCE-04: accept any (or missing) stage/outcome at the
+  // boundary; the loader maps unrecognised or null values to "unknown" and keeps
+  // the raw string, instead of one new backend stage failing the whole payload.
+  inquiryStatus: z.string().nullish(),
+  outcome: z.string().nullish(),
 });
 export const VigilanceCaseSummaryListSchema = z.array(VigilanceCaseSummarySchema);
 

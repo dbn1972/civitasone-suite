@@ -3,14 +3,14 @@ import { useTranslations } from "next-intl";
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { toHumanError } from "@/lib/messages";
 import { useFormError } from "@/lib/useFormError";
 import { Button, useToast } from "@/app/_components/ds";
 import { todayIST } from "@/lib/formatters";
+import { VendorInvitePicker, type InviteVendor } from "./VendorInvitePicker";
 
 type IndentOption = { id: string; indentNo?: string; department?: string; status?: string };
-type VendorOption = { id: string; name: string; blacklisted?: boolean };
 
 // GFR limited-tender rule: at least three vendors must be invited to an RFQ;
 // fewer requires a recorded justification (override).
@@ -21,13 +21,14 @@ export function CreateRFQForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const tw = useTranslations("procurement.w2.rfq");
   const [indents, setIndents] = useState<IndentOption[]>([]);
   const [indentId, setIndentId] = useState("");
   const [title, setTitle] = useState("");
   const [closingDate, setClosingDate] = useState("");
-  const [vendors, setVendors] = useState<VendorOption[]>([]);
-  const [vendorSearch, setVendorSearch] = useState("");
-  const [invited, setInvited] = useState<Set<string>>(new Set());
+  // GAP-PROCUREMENT-RFQ-NEW-04: vendors are searched on the server by the
+  // picker; the form only keeps the ones the officer ticked.
+  const [invited, setInvited] = useState<Map<string, InviteVendor>>(new Map());
   const [fewerJustification, setFewerJustification] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
@@ -60,37 +61,14 @@ export function CreateRFQForm() {
         /* optional */
       }
     })();
-    void (async () => {
-      try {
-        const res = await fetch("/api/proxy/v1/procurement/vendors?limit=100", { signal: controller.signal });
-        if (res.ok) {
-          const body = await res.json() as { data?: VendorOption[] } | VendorOption[];
-          const rows = Array.isArray(body) ? body : (body.data ?? []);
-          setVendors(rows.filter((v) => v.id && v.name));
-        }
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        /* optional */
-      }
-    })();
     return () => controller.abort();
   }, [deepLinkIndent]);
 
-  // GAP-PROCUREMENT-RFQ-NEW-04 / VENDORS-01: client-side vendor search instead
-  // of relying on the first 100 rows. A blacklisted vendor stays VISIBLE but
-  // is rendered disabled with a "Blacklisted" badge (RFQ-NEW-02's tested
-  // design — so the officer sees WHY it is unavailable) and can never be
-  // toggled on; the POST /rfqs route is the real server control.
-  const visibleVendors = useMemo(() => {
-    const q = vendorSearch.trim().toLowerCase();
-    return vendors.filter((v) => !q || v.name.toLowerCase().includes(q));
-  }, [vendors, vendorSearch]);
-
-  function toggleVendor(id: string, blacklisted?: boolean) {
-    if (blacklisted) return; // defence-in-depth: cannot invite a blacklisted vendor
+  function toggleVendor(v: InviteVendor) {
+    if (v.blacklisted) return; // defence-in-depth: cannot invite a blacklisted vendor
     setInvited((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
+      const next = new Map(prev);
+      if (next.has(v.id)) next.delete(v.id); else next.set(v.id, v);
       return next;
     });
   }
@@ -125,7 +103,7 @@ export function CreateRFQForm() {
       title: title.trim(),
       indentRef: `procurement_indent:${indentId}`,
       closingDate,
-      vendorIds: [...invited],
+      vendorIds: [...invited.keys()],
       ...(belowMinimum ? { fewerVendorsJustification: fewerJustification.trim() } : {}),
     };
     try {
@@ -136,6 +114,13 @@ export function CreateRFQForm() {
       });
       const text = await res.text();
       if (!res.ok) {
+        // GAP-PROCUREMENT-RFQ-NEW-02: the server is the real control - say which
+        // rule it enforced instead of a generic save failure.
+        let code: string | undefined;
+        try { code = (JSON.parse(text) as { code?: string }).code; } catch { /* not JSON */ }
+        if (res.status === 422 && code === "RFQ_MIN_VENDORS") { setStatus("error"); setMessage(tw("serverMinVendors")); return; }
+        if (res.status === 422 && code === "VENDOR_BLACKLISTED") { setStatus("error"); setMessage(tw("serverBlacklisted")); return; }
+        if (res.status === 422 && code === "VENDOR_NOT_FOUND") { setStatus("error"); setMessage(tw("serverVendorMissing")); return; }
         const human = toHumanError("save", { area: "RFQ" });
         setStatus("error");
         setMessage(`${human.what} ${human.next}`);
@@ -181,35 +166,7 @@ export function CreateRFQForm() {
         <legend style={{ fontSize: 12, fontWeight: 700, padding: "0 6px" }}>
           Invite vendors * ({invited.size} selected; minimum {MIN_VENDORS} for a limited tender)
         </legend>
-        <input
-          className="inp"
-          type="search"
-          placeholder="Search vendors…"
-          value={vendorSearch}
-          onChange={(e) => setVendorSearch(e.target.value)}
-          style={{ minHeight: 40, marginBottom: 10 }}
-          aria-label="Search vendors"
-        />
-        {vendors.length === 0 ? (
-          <p style={{ fontSize: 13, color: "var(--mut)", margin: 0 }}>Loading vendors…</p>
-        ) : visibleVendors.length === 0 ? (
-          <p style={{ fontSize: 13, color: "var(--mut)", margin: 0 }}>No vendors match “{vendorSearch}”.</p>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 8 }}>
-            {visibleVendors.map((v) => (
-              <label key={v.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5, minHeight: 36, opacity: v.blacklisted ? 0.6 : 1 }}>
-                <input
-                  type="checkbox"
-                  checked={invited.has(v.id)}
-                  disabled={v.blacklisted}
-                  onChange={() => toggleVendor(v.id, v.blacklisted)}
-                />
-                {v.name}
-                {v.blacklisted ? <span className="pill bad" style={{ marginInlineStart: 4 }}>Blacklisted</span> : null}
-              </label>
-            ))}
-          </div>
-        )}
+        <VendorInvitePicker selected={invited} onToggle={toggleVendor} />
         {belowMinimum ? (
           <div className="field" style={{ marginTop: 12 }}>
             <label className="label" htmlFor="r-fewer">Justification for inviting fewer than {MIN_VENDORS} vendors *</label>

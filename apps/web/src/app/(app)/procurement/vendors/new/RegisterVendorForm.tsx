@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   validatePan,
   validateIfsc,
@@ -28,8 +29,13 @@ const CATEGORY_OPTIONS = [
   { value: "works", label: "Works" },
 ] as const;
 
+type Duplicate = { id: string; name: string; field: "gstin" | "pan" };
+
 export function RegisterVendorForm() {
   const router = useRouter();
+  const tw = useTranslations("procurement.w2.vendorNew");
+  // GAP-PROCUREMENT-VENDORS-NEW-02/06: set when the server refuses a repeat GSTIN / PAN.
+  const [duplicate, setDuplicate] = useState<Duplicate | null>(null);
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
   const [contactPerson, setContactPerson] = useState("");
@@ -82,6 +88,7 @@ export function RegisterVendorForm() {
     }
     setStatus("submitting");
     setMessage("");
+    setDuplicate(null);
     try {
       const res = await fetch("/api/proxy/v1/procurement/vendors", {
         method: "POST",
@@ -102,6 +109,31 @@ export function RegisterVendorForm() {
         }),
       });
       if (!res.ok) {
+        // GAP-PROCUREMENT-VENDORS-NEW-02/06: the server is the real control for
+        // identifier integrity and uniqueness - show which rule, with fixed copy
+        // (never the raw server text).
+        const failure = await res.clone().json().catch(() => null) as
+          { code?: string; field?: string; existingVendorId?: string; existingVendorName?: string; fieldErrors?: Array<{ field?: string }> } | null;
+        if (res.status === 409 && failure?.code === "VENDOR_DUPLICATE" && failure.existingVendorId) {
+          const field = failure.field === "pan" ? "pan" : "gstin";
+          setErrors((p) => ({ ...p, [field]: tw(field === "pan" ? "duplicatePan" : "duplicateGstin") }));
+          setDuplicate({ id: failure.existingVendorId, name: failure.existingVendorName ?? "", field });
+          setStatus("error");
+          setMessage(tw("duplicateSummary"));
+          return;
+        }
+        if (res.status === 400 && failure?.code === "VALIDATION_FAILED") {
+          const bad = new Set((failure.fieldErrors ?? []).map((f) => f.field));
+          const patch: Errors = {};
+          if (bad.has("gstin")) patch.gstin = tw("serverGstin");
+          if (bad.has("pan")) patch.pan = tw("serverPan");
+          if (Object.keys(patch).length > 0) {
+            setErrors((p) => ({ ...p, ...patch }));
+            setStatus("error");
+            setMessage("Please correct the highlighted fields.");
+            return;
+          }
+        }
         const human = toHumanError("save", { area: "vendor" });
         setStatus("error");
         setMessage(`${human.what} ${human.next}`);
@@ -177,6 +209,8 @@ export function RegisterVendorForm() {
             aria-invalid={!!errors.gstin} aria-describedby={errors.gstin ? "gstin-err" : undefined}
             placeholder="22AAAAA0000A1Z5" autoCapitalize="characters" style={{ minHeight: 44 }} />
           {fieldError("gstin", "gstin")}
+          {/* GAP-PROCUREMENT-VENDORS-NEW-04: honest about what is (not) checked. */}
+          <span className="muted" style={{ fontSize: "0.75rem", marginTop: 4 }}>{tw("notVerified")}</span>
         </div>
         <div className="field">
           <label className="label" htmlFor="pan">PAN</label>
@@ -185,6 +219,7 @@ export function RegisterVendorForm() {
             aria-invalid={!!errors.pan} aria-describedby={errors.pan ? "pan-err" : undefined}
             placeholder="ABCDE1234F" autoCapitalize="characters" style={{ minHeight: 44 }} />
           {fieldError("pan", "pan")}
+          <span className="muted" style={{ fontSize: "0.75rem", marginTop: 4 }}>{tw("notVerified")}</span>
         </div>
         <div className="field">
           <label className="label" htmlFor="email">Email</label>
@@ -233,6 +268,11 @@ export function RegisterVendorForm() {
         {message ? (
           <p role={status === "error" ? "alert" : undefined} style={{ marginTop: 12, color: status === "error" ? "var(--bad)" : "var(--good)", fontSize: "0.875rem" }}>
             {message}
+          </p>
+        ) : null}
+        {duplicate ? (
+          <p style={{ fontSize: "0.875rem", margin: "6px 0 0" }}>
+            <Link href={`/procurement/vendors/${duplicate.id}`}>{tw("viewExisting", { name: duplicate.name || tw("existingVendor") })}</Link>
           </p>
         ) : null}
       </div>

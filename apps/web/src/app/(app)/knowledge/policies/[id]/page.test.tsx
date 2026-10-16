@@ -98,3 +98,43 @@ describe("Policy detail page", () => {
     expect(screen.queryByRole("button", { name: /I have read & understood/ })).not.toBeInTheDocument();
   });
 });
+
+describe("Policy detail page w2 closures", () => {
+  beforeEach(() => {
+    getKnowledgePolicyMock.mockReset();
+    getPolicyAcknowledgementsMock.mockReset();
+    getSessionUserIdMock.mockReset();
+    getSessionRolesMock.mockReset();
+    getSessionUserIdMock.mockReturnValue("viewer-1");
+    getSessionRolesMock.mockReturnValue(["knowledge_user"]);
+    getPolicyAcknowledgementsMock.mockResolvedValue({ data: { acknowledgedCount: 0, employeeIds: [] }, source: "api" });
+  });
+
+  it("GAP-POLICIES-05: a draft without referenceNo shows 'Unassigned' in the header, never a truncated id", async () => {
+    getKnowledgePolicyMock.mockResolvedValue({ data: policy({ id: "abcdef01-0000-0000-0000-000000000000", referenceNo: null, status: "draft" }), source: "api" });
+    render(await Page({ params: { id: "abcdef01" } }));
+    expect(screen.getByText(/Unassigned/)).toBeInTheDocument();
+    expect(screen.queryByText(/ABCDEF01/)).not.toBeInTheDocument();
+  });
+
+  it("GAP-DETAIL-04: the approval trail shows author, reviewer and approver without printing identifiers, and states the maker-checker separation", async () => {
+    getKnowledgePolicyMock.mockResolvedValue({
+      data: policy({ authorId: "viewer-1", reviewerId: "rev-uuid-9999", approverId: "app-uuid-8888" }),
+      source: "api",
+    });
+    render(await Page({ params: { id: "p1" } }));
+    expect(screen.getByText("Approval trail")).toBeInTheDocument();
+    expect(screen.getByText("You")).toBeInTheDocument(); // the viewer is the author
+    expect(screen.getAllByText("Another user (recorded in the audit log)")).toHaveLength(2);
+    expect(screen.queryByText("rev-uuid-9999")).not.toBeInTheDocument();
+    expect(screen.queryByText("app-uuid-8888")).not.toBeInTheDocument();
+    expect(screen.getByText(/approver is a different person from the author/)).toBeInTheDocument();
+  });
+
+  it("GAP-DETAIL-04: an unapproved draft shows 'Not yet assigned' for approver and no separation note", async () => {
+    getKnowledgePolicyMock.mockResolvedValue({ data: policy({ status: "draft", approverId: null, reviewerId: null }), source: "api" });
+    render(await Page({ params: { id: "p1" } }));
+    expect(screen.getAllByText("Not yet assigned")).toHaveLength(2);
+    expect(screen.queryByText(/different person from the author/)).not.toBeInTheDocument();
+  });
+});

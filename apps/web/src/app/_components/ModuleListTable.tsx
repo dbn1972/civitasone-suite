@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { Card, EmptyState, DataTable } from "./ds";
-import { StatusPill } from "./ds/StatusPill";
+import { StatusPill, QuotaStatusPill } from "./ds/StatusPill";
 import { DataSourceBadge } from "./DataSourceBadge";
 import { RefreshErrorState } from "./ds/RefreshErrorState";
 import type { ModuleRowSummary } from "@civitasone/types";
@@ -79,6 +79,8 @@ export function ModuleListTable({
   source,
   errorArea,
   backHref,
+  showId = true,
+  statusStyle,
 }: {
   cacheKey: string;
   rows: ModuleRowSummary[];
@@ -91,7 +93,16 @@ export function ModuleListTable({
   errorArea?: string;
   /** Optional "back" target for the error state's back action. */
   backHref?: string;
+  /** GAP-TENANT-*-02: false hides the raw ID column (default true). */
+  showId?: boolean;
+  /** GAP-TENANT-QUOTAS-02: "quota" renders status with an icon cue + sentence case. */
+  statusStyle?: "quota";
 }) {
+  const columns = (showId ? MODULE_COLUMNS : MODULE_COLUMNS.filter((c) => c.key !== "id")).map((c) =>
+    c.key === "status" && statusStyle === "quota"
+      ? { ...c, render: (row: ModuleRowSummary) => (row.status ? <QuotaStatusPill status={row.status} /> : "—") }
+      : c,
+  );
   const { data, provenance, offline, cachedAt } = useSeededResource<ModuleRowSummary[]>(
     cacheKey,
     rows,
@@ -140,7 +151,7 @@ export function ModuleListTable({
         />
       ) : (
         <DataTable<ModuleRow>
-          columns={MODULE_COLUMNS}
+          columns={columns}
           rows={data as ModuleRow[]}
           sortable
           filterable

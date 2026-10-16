@@ -87,12 +87,20 @@ export class OpenSearchEngine implements SearchEngine {
                 content: { type: "text", analyzer: "civitas_text" },
                 tags: { type: "keyword" },
                 category: { type: "keyword" },
+                accessLevel: { type: "keyword" },
                 indexedAt: { type: "date" },
               },
             },
           },
         });
         log.info({ indexName: this.indexName }, "OpenSearch index created");
+      } else {
+        // Existing index: add the accessLevel keyword mapping (additive, idempotent)
+        // so clearance filtering works without a manual step.
+        await this.client.indices.putMapping({
+          index: this.indexName,
+          body: { properties: { accessLevel: { type: "keyword" } } },
+        });
       }
     } catch (err) {
       log.warn({ err }, "OpenSearch initialization failed — search may be unavailable");
@@ -141,6 +149,9 @@ export class OpenSearchEngine implements SearchEngine {
     }
 
     const filter: Array<Record<string, unknown>> = [];
+    if (query.accessLevels) {
+      filter.push({ terms: { accessLevel: query.accessLevels } });
+    }
     if (query.category) {
       filter.push({ term: { category: query.category } });
     }
@@ -239,6 +250,7 @@ export class OpenSearchEngine implements SearchEngine {
       content: doc.content,
       tags: doc.tags,
       category: doc.category ?? "",
+      accessLevel: doc.accessLevel ?? "internal",
       indexedAt: new Date().toISOString(),
     };
   }

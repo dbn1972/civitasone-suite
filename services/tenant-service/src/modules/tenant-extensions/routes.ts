@@ -89,8 +89,8 @@ export async function tenantExtensionRoutes(app: FastifyInstance): Promise<void>
 
   app.get("/v1/tenants/:tenantId/feature-flags", async (req, reply) => {
     const ctx = resolveContext(req);
-    if (ctx.tenantId !== req.params && !ctx.roles.some((r) => PLAT.includes(r))) throw new HttpError(403, "FORBIDDEN", "cross-tenant");
     const { tenantId } = safeParse(tenantIdParam, req.params);
+    if (ctx.tenantId !== tenantId && !ctx.roles.some((r) => PLAT.includes(r))) throw new HttpError(403, "FORBIDDEN", "cross-tenant");
     const cfg = await readScoped(tenantId, (tx) => getOrInitConfig(tx, tenantId));
     return reply.send({ tenantId, featureFlags: cfg.featureFlags });
   });

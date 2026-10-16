@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { sql } from "drizzle-orm";
 import type { Queue } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
@@ -21,6 +22,18 @@ export function registerVendorConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // GAP-PROCUREMENT-VENDORS-NEW-02 / NEW-06: authoritative duplicate guard.
+      // The route pre-check can race a concurrent create, so serialise creates
+      // for the same identifier with a transaction-scoped advisory lock, then
+      // re-check inside the same transaction as the insert.
+      for (const key of [p.gstin, p.pan].filter((k): k is string => Boolean(k))) {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`vendor-ident:${p.tenantId}:${key}`}))`);
+      }
+      const dup = await repo.findDuplicateVendorTx(tx, p.tenantId, { gstin: p.gstin ?? null, pan: p.pan ?? null });
+      if (dup) {
+        await audit(tx, msg, "create_rejected_duplicate", "vendor", dup.id);
+        return;
+      }
       await repo.insertVendor(tx, {
         id: p.id, tenantId: p.tenantId, name: p.name,
         gstin: p.gstin ?? null, pan: p.pan ?? null,
@@ -50,6 +63,23 @@ export function registerVendorConsumers(queue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "empanel", "vendor", p.id);
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "vendor", p.id));
+  });
+
+  queue.subscribe(COMMANDS.vendorSuspend, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const vendor = await repo.findVendorByIdTx(tx, p.id, p.tenantId);
+      if (!vendor) throw new Error(`vendor ${p.id} not found`);
+      const changed = await repo.suspendActiveEmpanelmentsTx(tx, p.id, p.tenantId, msg.actorId);
+      if (changed === 0) return; // nothing active to suspend (already suspended / never empanelled)
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "procurement", action: "suspend", resourceType: "vendor", resourceId: p.id, outcome: "success", reason: p.reason, empanelmentsSuspended: changed },
+      });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "vendor", p.id));
   });

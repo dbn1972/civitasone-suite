@@ -1,3 +1,4 @@
+import { getAuditT } from "@/lib/audit/getAuditT";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getVigilanceCases } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
@@ -22,6 +23,7 @@ function maskName(name: string): string {
 }
 
 export default async function VigilancePage() {
+  const t = await getAuditT();
   const result = await getVigilanceCases();
   const { data: cases, source } = result;
   const resource = toResourceState(result);
@@ -51,6 +53,9 @@ export default async function VigilancePage() {
     ? null
     : cases.filter((c) => c.inquiryStatus === "charge_sheet_issued").length;
   const inquiryComplete = errored ? null : cases.filter((c) => c.inquiryStatus === "inquiry_complete").length;
+  // GAP-AUDIT-VIGILANCE-04: unrecognised stages sit in no stage bucket; surface
+  // the count so the stage cards still reconcile with Total Cases.
+  const unrecognised = errored ? null : cases.filter((c) => c.inquiryStatus === "unknown").length;
   const penaltiesImposed = errored
     ? null
     : cases.filter((c) => c.outcome === "major_penalty" || c.outcome === "minor_penalty").length;
@@ -69,6 +74,9 @@ export default async function VigilancePage() {
         <StatCard icon="📑" iconBg="#fef3c7" label="Charge Sheet Issued" value={chargeSheeted ?? "—"} />
         <StatCard icon="📋" iconBg="var(--warnbg)" label="Inquiry Complete" value={inquiryComplete ?? "—"} />
         <StatCard icon="⚠️" iconBg="#fce7ee" label="Penalties Imposed" value={penaltiesImposed ?? "—"} />
+        {unrecognised !== null && unrecognised > 0 ? (
+          <StatCard icon="❔" iconBg="var(--warnbg)" label={t("vigilanceUnrecognisedStage")} value={unrecognised} />
+        ) : null}
       </StatGrid>
 
       {errored ? (

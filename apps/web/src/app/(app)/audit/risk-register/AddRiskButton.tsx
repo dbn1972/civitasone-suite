@@ -3,7 +3,8 @@
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
-import { Button, Modal } from "@/app/_components/ds";
+import { Button, ConfirmDialog, Modal } from "@/app/_components/ds";
+import { useAuditT } from "@/lib/audit/useAuditT";
 import { riskScore, band, BAND_LABEL, LIKELIHOOD_LABEL, IMPACT_LABEL, CATEGORY_LABEL } from "@/lib/audit/riskScoring";
 
 const LIKELIHOOD = ["rare", "unlikely", "possible", "likely", "almost_certain"] as const;
@@ -23,12 +24,20 @@ export function AddRiskButton() {
   const [impact, setImpact] = useState<(typeof IMPACT)[number]>("moderate");
   const [owner, setOwner] = useState("");
   const formError = useFormError("risk");
+  const t = useAuditT();
+  // GAP-AUDIT-RISK-REGISTER-04: confirm gate summarising the risk before the create mutation.
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const close = useCallback(() => { if (!busy) { setOpen(false); setError(null); } }, [busy]);
 
-  const submit = useCallback(async () => {
+  const handleProceed = useCallback(() => {
     setError(null);
     if (!riskCode.trim() || !title.trim()) { setError("Risk code and title are required."); return; }
+    setConfirmOpen(true);
+  }, [riskCode, title]);
+
+  const submit = useCallback(async () => {
+    setError(null);
     setBusy(true);
     try {
       const res = await fetch("/api/proxy/v1/audit/risks", {
@@ -48,6 +57,7 @@ export function AddRiskButton() {
         setError(resolved.message);
         return;
       }
+      setConfirmOpen(false);
       setOpen(false);
       router.refresh();
     } catch (caught) {
@@ -65,7 +75,7 @@ export function AddRiskButton() {
     <>
       <Button onClick={() => setOpen(true)}>+ Add Risk</Button>
       {/* SF-19: ds/Modal (focus trap, inert background, Escape). Overlay click never discards typed input. */}
-      <Modal open={open} onClose={close} title="Add risk" size="lg" closeOnOverlayClick={false}>
+      <Modal open={open} onClose={() => { if (!confirmOpen) close(); }} title="Add risk" size="lg" closeOnOverlayClick={false}>
           <div style={{ maxHeight: "70vh", overflowY: "auto" }}>
             <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <label className="lbl" htmlFor="rk-code">Risk code</label>
@@ -105,11 +115,27 @@ export function AddRiskButton() {
               {error && <div role="alert" style={{ color: "var(--bad)", fontSize: 13, marginTop: 4 }}>{error}</div>}
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
                 <Button variant="ghost" onClick={close} disabled={busy}>Cancel</Button>
-                <Button onClick={() => void submit()} disabled={busy}>{busy ? "Adding…" : "Add risk"}</Button>
+                <Button onClick={handleProceed} disabled={busy}>{busy ? "Adding…" : "Add risk"}</Button>
               </div>
             </div>
           </div>
       </Modal>
+      <ConfirmDialog
+        open={confirmOpen}
+        title={t("riskConfirmTitle", { riskCode: riskCode.trim() })}
+        description={t("riskConfirmDescription", {
+          title: title.trim(),
+          category: CATEGORY_LABEL[category] ?? category,
+          score: riskScore(likelihood, impact),
+          band: BAND_LABEL[band(riskScore(likelihood, impact))],
+        })}
+        confirmLabel={t("riskConfirmLabel")}
+        cancelLabel={t("cancel")}
+        busy={busy}
+        errorMessage={error ?? undefined}
+        onConfirm={() => void submit()}
+        onCancel={() => { if (!busy) setConfirmOpen(false); }}
+      />
     </>
   );
 }

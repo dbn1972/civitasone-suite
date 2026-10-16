@@ -29,6 +29,7 @@ describe("PlanAuditButton", () => {
     render(<PlanAuditButton />);
     openAndFillDialog();
     fireEvent.click(screen.getByRole("button", { name: "Plan audit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm & plan" }));
 
     await waitFor(() => expect(refreshMock).toHaveBeenCalled());
     const [url] = fetchSpy.mock.calls[0];
@@ -46,9 +47,23 @@ describe("PlanAuditButton", () => {
     render(<PlanAuditButton />);
     openAndFillDialog();
     fireEvent.click(screen.getByRole("button", { name: "Plan audit" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm & plan" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/This audit plan was changed by someone else\. Refresh to see the latest version, then try again\./);
     expect(screen.queryByText(/already exists for this fiscal year/)).not.toBeInTheDocument();
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-AUDIT-PLAN-05: create shows a confirm summary and sends nothing until confirmed.
+  it("does not POST until the confirm dialog is confirmed, and the summary names the plan", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 201 }));
+    render(<PlanAuditButton />);
+    openAndFillDialog();
+    fireEvent.click(screen.getByRole("button", { name: "Plan audit" }));
+    expect(await screen.findByRole("button", { name: "Confirm & plan" })).toBeInTheDocument();
+    expect(screen.getByText("Create audit plan PLAN-FY26-03?")).toBeInTheDocument();
+    expect(screen.getByText(/Procurement compliance audit · Procurement Wing/)).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
     expect(refreshMock).not.toHaveBeenCalled();
   });
 

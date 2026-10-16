@@ -7,9 +7,10 @@ import { runWithTenant } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { procurementIndents } from "../src/modules/indent/schema.js";
+import { procurementVendors } from "../src/modules/vendor/schema.js";
 import type { FastifyInstance } from "fastify";
 
-const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
+const SECRET = process.env.JWT_SECRET as string;
 const TENANT = "9b900000-1111-4000-8000-0000000000b1";
 const OTHER_TENANT = "9b900000-1111-4000-8000-0000000000b2";
 const ACTOR = "9b900000-2222-4000-8000-0000000000b1";
@@ -30,12 +31,17 @@ async function post(indentRef: string | undefined) {
   return app.inject({
     method: "POST", url: "/v1/procurement/rfqs",
     headers: { authorization: `Bearer ${tok()}`, "content-type": "application/json" },
-    payload: { title: "Supply", closingDate: "2026-12-01", vendorIds: [VENDOR], indentRef },
+    payload: { title: "Supply", closingDate: "2026-12-01", vendorIds: [VENDOR], indentRef,
+      // One real vendor: the GFR minimum of three needs a justification (RFQ-NEW-02) so these tests exercise the indent rules.
+      fewerVendorsJustification: "Sole source for this test" },
   });
 }
 
 beforeAll(async () => {
   app = await buildApp();
+  await runWithTenant(TENANT, () => db.transaction((tx) => tx.insert(procurementVendors).values({
+    id: VENDOR, tenantId: TENANT, name: "RFQ indent-test vendor", createdBy: ACTOR, updatedBy: ACTOR,
+  })));
   await seed(ids.draft, TENANT, "draft");
   await seed(ids.approved, TENANT, "approved");
   await seed(ids.foreign, OTHER_TENANT, "approved");
@@ -44,6 +50,7 @@ afterAll(async () => {
   for (const [t, id] of [[TENANT, ids.draft], [TENANT, ids.approved], [OTHER_TENANT, ids.foreign]] as const) {
     await runWithTenant(t, () => db.transaction((tx) => tx.delete(procurementIndents).where(eq(procurementIndents.id, id))));
   }
+  await runWithTenant(TENANT, () => db.transaction((tx) => tx.delete(procurementVendors).where(eq(procurementVendors.id, VENDOR))));
   await app.close();
   await sqlClient.end();
 });

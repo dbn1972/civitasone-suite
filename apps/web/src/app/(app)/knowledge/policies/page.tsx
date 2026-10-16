@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getKnowledgePolicies, getReviewDuePolicies } from "../_data/loaders";
 import { formatIndianDate, todayIST } from "@/lib/formatters";
+import { getTranslations } from "next-intl/server";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { policyStatusLabel } from "../_data/statusLabels";
@@ -47,6 +48,7 @@ export default async function Page({ searchParams }: { searchParams?: { filter?:
     getKnowledgePolicies(),
     getReviewDuePolicies(),
   ]);
+  const t = await getTranslations("knowledgeW2");
   const errored = source === "error";
   const filterReviewDue = searchParams?.filter === "review-due";
   const canCreate = AUTHOR_ROLES.some((r) => getSessionRoles().includes(r));
@@ -88,6 +90,7 @@ export default async function Page({ searchParams }: { searchParams?: { filter?:
             icon="📘"
             title={filterReviewDue ? "Nothing is due for review" : "No governed documents yet"}
             message={filterReviewDue ? "No published document has reached its periodic review date." : "Create a SOP, policy or circular to begin the lifecycle."}
+            action={!filterReviewDue && canCreate ? <Link href="/knowledge/policies/new" className="btn primary" style={{ minHeight: 44 }}>{t("createFirst")}</Link> : undefined}
           />
         ) : (
           <PoliciesTable rows={rows} />

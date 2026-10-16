@@ -2,10 +2,13 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
+import { hasAnyRole } from "@civitasone/auth";
+import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { LifecycleError } from "./domain.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import type { Viewer } from "./repo.js";
 import {
   createPolicyBody,
   submitPolicyBody,
@@ -19,6 +22,10 @@ import {
 const ROLES = ["knowledge_user", "knowledge_admin", "super_admin"];
 const APPROVER_ROLES = ["knowledge_admin", "super_admin"];
 
+/** Lifecycle visibility for the caller: approver roles see all states, others only published + their own. */
+function viewerOf(ctx: RequestContext): Viewer {
+  return { actorId: ctx.actorId, privileged: hasAnyRole(ctx, APPROVER_ROLES) };
+}
 /** Map a domain LifecycleError to the correct HTTP status. */
 function mapLifecycle(err: LifecycleError): HttpError {
   switch (err.code) {
@@ -50,7 +57,7 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
     const filters: { status?: string; docType?: string } = {};
     if (q.status) filters.status = q.status;
     if (q.docType) filters.docType = q.docType;
-    const data = await queries.listPolicies(ctx.tenantId, filters, q.limit, q.offset);
+    const data = await queries.listPolicies(ctx.tenantId, filters, q.limit, q.offset, viewerOf(ctx));
     return reply.send(data);
   });
 
@@ -66,7 +73,7 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { id } = req.params as { id: string };
-    const policy = await queries.getPolicy(ctx.tenantId, id);
+    const policy = await queries.getPolicy(ctx.tenantId, id, viewerOf(ctx));
     if (!policy) throw new HttpError(404, "NOT_FOUND", "policy not found");
     return reply.send(policy);
   });
@@ -75,13 +82,23 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const { id } = req.params as { id: string };
+    const viewer = viewerOf(ctx);
+    // A caller who cannot see the document cannot see who acknowledged it.
+    if (!viewer.privileged && !(await queries.getPolicy(ctx.tenantId, id, viewer))) {
+      throw new HttpError(404, "NOT_FOUND", "policy not found");
+    }
     const employeeIds = await queries.acknowledgedEmployeeIds(ctx.tenantId, id);
-    return reply.send({ policyId: id, acknowledgedCount: employeeIds.length, employeeIds });
+    // Who acknowledged is personal data (DPDP): approver roles get the full
+    // list; everyone else gets the total count plus only their own id, which
+    // is all the UI needs to show "you have acknowledged".
+    const visibleIds = viewer.privileged ? employeeIds : employeeIds.filter((e) => e === ctx.actorId);
+    return reply.send({ policyId: id, acknowledgedCount: employeeIds.length, employeeIds: visibleIds });
   });
 
   app.post("/v1/knowledge/policies/:id/acknowledgements/report", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    // Who-has / who-hasn't over an arbitrary roster is an oversight report.
+    requireRole(ctx, APPROVER_ROLES);
     const { id } = req.params as { id: string };
     const body = ackReportBody.parse(req.body);
     const report = await queries.acknowledgementReport(ctx.tenantId, id, body.expectedEmployeeIds);
@@ -145,6 +162,11 @@ export async function policyRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ROLES);
     const { id } = req.params as { id: string };
     const body = acknowledgePolicyBody.parse(req.body ?? {});
+    // An acknowledgement binds to the caller's own identity; nobody may
+    // acknowledge on behalf of another employee.
+    if (body.employeeId && body.employeeId !== ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "an acknowledgement can only be recorded for yourself");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await run(() => commands.acknowledgePolicy(ctx, id, body)));
   });
 

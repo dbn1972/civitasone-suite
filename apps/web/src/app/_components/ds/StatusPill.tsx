@@ -469,6 +469,14 @@ const STATUS_MAP: Record<string, PillVariant> = {
   // GAP-PROCUREMENT-TENDERS-03: bid-window overdue cue. A published tender past
   // its close with zero bids is the exception the register exists to surface.
   "closed no bids": "bad",
+
+  // GAP-TENANT-QUOTAS-02: quota/usage status words from tenant/_data.ts
+  // mapQuotaRows. Without keys all three fell to the neutral "info" blue, so a
+  // quota past its limit looked like a healthy one. The label text itself
+  // ("Near limit" / "Exceeded" / "OK") is the non-colour cue.
+  "near limit": "warn",
+  exceeded: "bad",
+  ok: "good",
 };
 // Deliberately NOT added: a generic "flagged" key. tenant-admin/security/SecurityTable.tsx
 // has its own inline outcome->variant mapping that fails closed to "bad" for any
@@ -514,4 +522,31 @@ export function StatusPill({ status, label, variant: variantOverride }: StatusPi
   // default. Now falls back to a humanized version of status instead of the
   // raw string; callers that need exact custom wording still can via label.
   return <span className={`pill ${variant}`}>{label ?? humanizeStatus(status)}</span>;
+}
+
+/**
+ * GAP-TENANT-QUOTAS-02: quota/usage status. Same tones as StatusPill, plus a
+ * non-colour cue (aria-hidden icon + the text) for "near limit" and
+ * "exceeded", and a sentence-case fallback for unknown values ('foo_bar' ->
+ * 'Foo bar'). Scoped here so the shared humanizeStatus (Title Case) is
+ * unchanged for every other module.
+ */
+const QUOTA_ICONS: Record<string, string> = { "near limit": "\u26A0", exceeded: "\u2716" };
+
+export function quotaStatusLabel(status: string): string {
+  const key = normalizeStatusKey(status);
+  if (key === "ok") return "OK";
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+export function QuotaStatusPill({ status }: { status: string }) {
+  const key = normalizeStatusKey(status);
+  const variant: PillVariant = STATUS_MAP[key] ?? "info";
+  const icon = QUOTA_ICONS[key];
+  return (
+    <span className={`pill ${variant}`}>
+      {icon ? <span aria-hidden="true">{icon} </span> : null}
+      {quotaStatusLabel(status)}
+    </span>
+  );
 }

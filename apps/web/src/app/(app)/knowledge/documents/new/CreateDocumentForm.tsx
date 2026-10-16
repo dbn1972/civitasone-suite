@@ -20,9 +20,16 @@ import { KNOWLEDGE_CATEGORIES } from "../../_data/categories";
 export function CreateDocumentForm({
   defaultCategory = "",
   backHref = "/knowledge/repository",
+  canSetRestricted = true,
 }: {
   defaultCategory?: string;
   backHref?: string;
+  /**
+   * Restricted / confidential levels need knowledge-admin clearance. The
+   * service rejects them for anyone else (403), so the form does not offer
+   * them; the server remains the control.
+   */
+  canSetRestricted?: boolean;
 }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -105,8 +112,8 @@ export function CreateDocumentForm({
           >
             <option value="public">Public</option>
             <option value="internal">Internal (default)</option>
-            <option value="restricted">Restricted</option>
-            <option value="confidential">Confidential</option>
+            {canSetRestricted && <option value="restricted">Restricted</option>}
+            {canSetRestricted && <option value="confidential">Confidential</option>}
           </select>
         </div>
       </div>
