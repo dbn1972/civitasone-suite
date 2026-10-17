@@ -8,7 +8,7 @@ type Props = {
   /** Kept for caller compatibility; the standard 403 copy does not name the module. */
   module?: string;
   /** Kept for caller compatibility; internal role slugs are never shown. */
-  requiredRoles?: string[];
+  requiredRoles?: readonly string[];
   /**
    * The service's own free-text reason. It is NEVER rendered (it can carry role
    * slugs and ownership detail); in development it is logged to the console.

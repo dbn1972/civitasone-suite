@@ -483,6 +483,8 @@ describe("GAP-AUDIT-OBSERVATIONS-DETAIL-07 — reply audit event + status-transi
     });
     await new Promise<void>((r) => setTimeout(r, 600));
     await relayOnce(dbInst2 as never, q, 100, "audit-service");
+    // Let the relayed audit event reach the audit consumer before the queue stops.
+    await new Promise<void>((r) => setTimeout(r, 600));
     await q.stop();
 
     const { eq: eqFn } = await import("drizzle-orm");

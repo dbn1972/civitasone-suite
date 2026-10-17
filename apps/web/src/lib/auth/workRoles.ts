@@ -454,7 +454,7 @@ export function canWriteFleet(roles: readonly string[]): boolean {
  *  - ARREAR_DECIDER: POST /v1/payroll/arrears/:id/approve|reject (maker != checker enforced server-side).
  */
 export const PAYROLL_STATUTORY_WRITE_ROLES = ["payroll_admin", "payroll_officer", "super_admin"] as const;
-export const PAYROLL_CONFIG_ADMIN_ROLES = ["payroll_admin", "super_admin"] as const;
+export const PAYROLL_CONFIG_ADMIN_ROLES: readonly string[] = ["payroll_admin", "super_admin"] as const;
 export const PAYROLL_ARREAR_DECIDER_ROLES = ["payroll_admin", "payroll_officer", "super_admin"] as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -700,7 +700,7 @@ export const WORKFORCE_READER_ROLES = [...HR_STAFF_MANAGER_ROLES, "finance_offic
  * /hr access; the /hr/audit-log page gates itself explicitly. Keep in sync
  * with services/audit-service/src/modules/events/routes.ts.
  */
-export const AUDIT_LOG_READER_ROLES = [
+export const AUDIT_LOG_READER_ROLES: readonly string[] = [
   "audit_officer",
   "audit_admin",
   "super_admin",
@@ -712,7 +712,7 @@ export const AUDIT_LOG_READER_ROLES = [
  * Mirrors services/location-service location WRITE_ROLES; kept in sync by
  * convention (see hr-role-matrix noBackendRouteFound entry GAP-HR-SF09A-018).
  */
-export const HR_LOCATION_ADMIN_ROLES = [
+export const HR_LOCATION_ADMIN_ROLES: readonly string[] = [
   "location_user",
   "location_admin",
   "super_admin",
@@ -743,7 +743,7 @@ export const PAYROLL_HR_READER_ROLES = [
  * W1 SF-09c: FNF compute/admin tier. Mirrors payroll-service fnf/routes.ts
  * FNF_ROLES (the roles that may compute or manage a settlement).
  */
-export const FNF_COMPUTE_ROLES = [
+export const FNF_COMPUTE_ROLES: readonly string[] = [
   "payroll_admin",
   "hr_admin",
   "super_admin",
@@ -754,7 +754,7 @@ export const FNF_COMPUTE_ROLES = [
  * W1 SF-09c: FNF read tier (FNF_COMPUTE_ROLES + payroll_officer who submits).
  * Mirrors payroll-service fnf/routes.ts FNF_READ_ROLES.
  */
-export const FNF_READ_ROLES = [...FNF_COMPUTE_ROLES, "payroll_officer"] as const;
+export const FNF_READ_ROLES: readonly string[] = [...FNF_COMPUTE_ROLES, "payroll_officer"] as const;
 
 /** W1 SF-09c: FNF submit tier (payroll-service fnf/routes.ts SUBMIT_GATE). */
 export const FNF_SUBMIT_ROLES = ["payroll_admin", "payroll_officer"] as const;
@@ -769,7 +769,7 @@ export const FNF_DISBURSE_ROLES = ["payroll_admin", "super_admin"] as const;
  * W1 SF-09c: expense-claim decide tier. Mirrors services/hrms-service
  * social/routes.ts EXPENSE_DECIDE_ROLES (approve/reject/view-receipt).
  */
-export const HR_EXPENSE_DECIDE_ROLES = [
+export const HR_EXPENSE_DECIDE_ROLES: readonly string[] = [
   "manager",
   "hr_admin",
   "finance_officer",

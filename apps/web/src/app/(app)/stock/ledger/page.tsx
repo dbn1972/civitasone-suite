@@ -6,7 +6,7 @@ import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { StockLedgerClient } from "./StockLedgerClient";
 
-export default async function StockLedgerPage({ searchParams }: { searchParams?: { from?: string; to?: string; type?: string; cursor?: string } } = {}) {
+export default async function StockLedgerPage({ searchParams }: { searchParams?: { from?: string; to?: string; type?: string; cursor?: string } }) {
   // GAP-STOCK-LEDGER-08: pass date-range, type, and cursor from searchParams
   // so the server can filter/paginate rather than returning the full unbounded set.
   const { from, to, type, cursor } = searchParams ?? {};
