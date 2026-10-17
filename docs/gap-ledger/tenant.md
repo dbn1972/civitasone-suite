@@ -325,9 +325,9 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 - **Source:** `apps/web/src/app/(app)/tenant/org-hierarchy/page.tsx`
 - **Design reference:** `redesign/tenant/org-hierarchy.html`
 
-### GAP-TENANT-ORG-HIERARCHY-01  ·  HIGH  ·  closed  ·  theme WIRING
+### GAP-TENANT-ORG-HIERARCHY-01  ·  HIGH  ·  interim  ·  theme WIRING
 
-- [x] **Status** (closed: tenant/org-hierarchy/page.tsx now redirects to /tenant-admin/org-hierarchy (which has a working tree view); hub note updated to 'Organisation structure (redirects to Administration view)')
+- [~] **Status** (W2 tenant INTERIM — redirect landed and tested (tenant/org-hierarchy/page.test.tsx asserts redirect to /tenant-admin/org-hierarchy; tenant/ and tenant-admin/ layouts now share TENANT_ADMIN_ROLES, pinned by tenant-admin/layout.roles.test.tsx; destination tree rendering covered by tenant-admin/org-hierarchy/page.test.tsx). NOT PROVEN: that the destination data (getOrgHierarchy -> /api/v1/admin/org-hierarchy) is equivalent to the unconfirmed /api/v1/tenant/org/hierarchy payload — tenant-service shape cannot be verified here; the orphaned tenant-side loader/mapper were removed. Keep open until the owner confirms the admin endpoint is the intended source)
 - **W0 note:** partly fixed by #1916 — mapOrgHierarchyRows computes depth/indent from parentId; still flat table, no tree component
 - **First-pass claim:** Hub note promises 'Organisation units and subtree views' (tenant/page.tsx:13) but the route is a flat table: parentId / children are not mapped (tenant/_data.ts:32-75), so the hierarchy — the point of the page — cannot be seen.
 - **Verified evidence:** tenant/page.tsx:13 note is 'Organisation units and subtree views'. Page renders ModuleListPage (flat table). mapTenantRows (_data.ts:32-75) reads only id/label/sublabel/status/meta - parentId, children, level are never read, so hierarchy is not shown. Payload shape of /api/v1/tenant/org/hierarchy (_data.ts:90) cannot be verified: tenant-service is absent. Note a working hierarchy screen already exists at tenant-admin/org-hierarchy/page.tsx using getOrgHierarchy (loaders.ts:4665, OrgHierarchyNode).

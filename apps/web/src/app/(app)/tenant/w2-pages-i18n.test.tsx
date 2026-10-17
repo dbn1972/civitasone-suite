@@ -11,7 +11,6 @@ vi.mock("./_data", () => ({
   getTenantCodeLists: empty,
   getTenantConsentExchange: empty,
   getTenantDataMigration: empty,
-  getTenantOrgHierarchy: empty,
   getTenantOverview: empty,
   getTenantPlans: empty,
   getTenantPositions: empty,
@@ -24,7 +23,6 @@ vi.mock("./_data", () => ({
 import CodeLists from "./code-lists/page";
 import Consent from "./consent-exchange/page";
 import DataMigration from "./data-migration/page";
-import OrgHierarchy from "./org-hierarchy/page";
 import Overview from "./overview/page";
 import Plans from "./plans/page";
 import Positions from "./positions/page";
@@ -41,7 +39,6 @@ const PAGES = [
   { key: "codeLists", Page: CodeLists },
   { key: "consentExchange", Page: Consent },
   { key: "dataMigration", Page: DataMigration },
-  { key: "orgHierarchy", Page: OrgHierarchy },
   { key: "overview", Page: Overview },
   { key: "plans", Page: Plans },
   { key: "positions", Page: Positions },
