@@ -8,8 +8,9 @@ import { INSTALL_VIEW_ROLES } from "@/lib/auth/roleGuard";
  * silo provisions, Domain Pack activation). These pages run and inspect tenant
  * provisioning, so a viewer outside INSTALL_VIEW_ROLES is redirected to the
  * dashboard rather than shown provisioning state / mutation controls. The
- * install-service enforces the SAME role set on every route (requireRole),
- * so this is defence-in-depth, not the sole control.
+ * install-service enforces its own per-route role sets via requireRole (the
+ * silo-provisions route differs: see INSTALL_SILO_READ_ROLES), so this is
+ * defence-in-depth, not the sole control.
  */
 export default function InstallLayout({ children }: { children: ReactNode }) {
   requireAnyRole(INSTALL_VIEW_ROLES);

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { mapRows, mapInstallModules } from "./_data";
+import { mapRows, mapInstallModules, mapSiloProvisions } from "./_data";
 
 // GAP-INSTALL-{MODULES,SILOS,STAGES}-01 (FORMAT): the generic install row
 // mapper must not surface a raw ISO timestamp or a UUID fragment where a
@@ -69,5 +69,28 @@ describe("install steps payload shape", () => {
       { id: "s1", stepNo: 1, title: "Create tenant", status: "pending" },
     ]);
     expect(step).toMatchObject({ title: "Create tenant", stepNo: 1, isRequired: true });
+  });
+});
+
+// GAP-INSTALL-SILOS-04: free-text infrastructure detail must never be rendered.
+describe("mapSiloProvisions (allow-listed)", () => {
+  it("drops description / errorMessage carrying infra hostnames", () => {
+    const rows = mapSiloProvisions({
+      data: [
+        {
+          id: "silo-1",
+          tenantCode: "OFFICE-A",
+          region: "ap-south-1",
+          status: "failed",
+          description: "db-host.internal",
+          errorMessage: "connect ECONNREFUSED db-host.internal:5432",
+        },
+      ],
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ label: "OFFICE-A", sublabel: "ap-south-1", status: "failed" });
+    const rendered = JSON.stringify(rows);
+    expect(rendered).not.toContain("db-host.internal");
+    expect(rendered).not.toContain("ECONNREFUSED");
   });
 });
