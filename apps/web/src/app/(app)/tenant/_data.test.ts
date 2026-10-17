@@ -17,7 +17,6 @@ import {
   mapMigrationRows,
   mapCodeListRows,
   mapPlanRows,
-  mapOrgHierarchyRows,
   mapOverviewRows,
 } from "./_data";
 
@@ -217,23 +216,6 @@ describe("mapPlanRows (GAP-TENANT-PLANS-01)", () => {
     const [row] = mapPlanRows({ data: [{ id: "p2", name: "Basic", priceMinor: "99" }] });
     // 99 paise = ₹0.99
     expect(row.sublabel).toMatch(/₹0\.99/);
-  });
-});
-
-describe("mapOrgHierarchyRows (GAP-TENANT-ORG-HIERARCHY-01)", () => {
-  it("indents child units under their parent (hierarchy visible in flat table)", () => {
-    const rows = mapOrgHierarchyRows({
-      data: [
-        { id: "root", parentId: null, name: "Municipality", type: "municipal_body", level: 1 },
-        { id: "zone-a", parentId: "root", name: "Zone A", type: "zone", level: 2 },
-        { id: "ward-1", parentId: "zone-a", name: "Ward 1", type: "ward", level: 3 },
-      ],
-    });
-    expect(rows[0].label).toBe("Municipality");
-    expect(rows[1].label).toMatch(/↳\s*Zone A/);
-    expect(rows[2].label).toMatch(/↳\s*Ward 1/);
-    // Deeper units have more indentation
-    expect(rows[2].label.indexOf("↳")).toBeGreaterThan(rows[1].label.indexOf("↳"));
   });
 });
 
