@@ -30,7 +30,7 @@ export interface LoadErrorStateProps {
    * "managers may only view their own direct reports' records" has no
    * fixed roles list at all).
    */
-  requiredRoles?: string[];
+  requiredRoles?: readonly string[];
 }
 
 /**
