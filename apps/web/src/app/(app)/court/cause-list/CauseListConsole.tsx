@@ -32,6 +32,9 @@ const fieldStyle: React.CSSProperties = {
   fontSize: 13.5,
 };
 
+const CASE_FETCH_CONCURRENCY = 5;
+const MAX_CASE_RETRIES = 2;
+
 /**
  * The court-service exposes GET /cause-lists?courtId&listDate (a court has
  * exactly ONE cause-list per day, deterministic id) so this console looks up
@@ -62,6 +65,15 @@ export function CauseListConsole({
   // GAP-COURT-CAUSE-LIST-04: cases beyond the 100-row limit are fetched
   // individually on demand and cached here so their title/type/stage render.
   const fetchedRef = useRef(new Set<string>());
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+  const retriesRef = useRef(new Map<string, number>());
+  const [retryTick, setRetryTick] = useState(0);
   const [extraCases, setExtraCases] = useState<Map<string, CourtCase>>(() => new Map());
 
   // Fallback only when the registry couldn't be reached: infer courts from the
@@ -88,20 +100,46 @@ export function CauseListConsole({
   );
 
   // GAP-COURT-CAUSE-LIST-04: when items include caseIds not in the 100-row
-  // cases prop, fetch those cases individually so title/type/stage display.
+  // cases prop, resolve those cases individually (bounded concurrency).
+  // "Not found" is permanent (kept in fetchedRef, row shows em-dashes); a
+  // transient failure is released and retried after a backoff, up to
+  // MAX_CASE_RETRIES times per case.
   useEffect(() => {
     const missing = items
       .map((it) => it.caseId)
       .filter((id) => !cases.some((c) => c.id === id) && !fetchedRef.current.has(id));
-    if (missing.length === 0) return;
-    for (const id of missing) fetchedRef.current.add(id);
+    const unique = [...new Set(missing)];
+    if (unique.length === 0) return;
+    for (const id of unique) fetchedRef.current.add(id);
+    let cancelled = false;
+    let next = 0;
+    async function worker() {
+      while (!cancelled && next < unique.length) {
+        const id = unique[next++]!;
+        try {
+          const row = await fetchCase(id);
+          if (row) setExtraCases((prev) => new Map(prev).set(id, row));
+        } catch {
+          const tries = (retriesRef.current.get(id) ?? 0) + 1;
+          retriesRef.current.set(id, tries);
+          if (tries <= MAX_CASE_RETRIES) {
+            fetchedRef.current.delete(id);
+            setTimeout(() => {
+              if (mountedRef.current) setRetryTick((n) => n + 1);
+            }, 1000 * tries);
+          }
+        }
+      }
+    }
     void Promise.all(
-      missing.map(async (id) => {
-        const row = await fetchCase(id);
-        if (row) setExtraCases((prev) => new Map(prev).set(id, row));
-      }),
+      Array.from({ length: Math.min(CASE_FETCH_CONCURRENCY, unique.length) }, () => worker()),
     );
-  }, [items, cases]);
+    return () => {
+      cancelled = true;
+      // Release ids that were claimed but never started so a re-run picks them up.
+      for (let i = next; i < unique.length; i++) fetchedRef.current.delete(unique[i]!);
+    };
+  }, [items, cases, retryTick]);
 
   // Read initial selection from the URL (deep link / reload).
   useEffect(() => {
