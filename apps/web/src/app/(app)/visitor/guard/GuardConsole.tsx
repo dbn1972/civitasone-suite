@@ -438,7 +438,7 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
         open={confirmCheckIn}
         title="Admit this visitor?"
         description="Record this visitor's entry at this gate. This updates the live occupancy roster."
-        confirmLabel="Admit & check in"
+        confirmLabel="Yes, admit visitor"
         busy={busyPass === "checkin"}
         onConfirm={() => { setConfirmCheckIn(false); void onCheckIn(); }}
         onCancel={() => { if (busyPass === null) setConfirmCheckIn(false); }}
