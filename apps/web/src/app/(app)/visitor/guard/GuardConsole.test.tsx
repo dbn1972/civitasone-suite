@@ -94,6 +94,9 @@ describe("GuardConsole", () => {
 
     fetchRosterMock.mockResolvedValue([rosterEntry]);
     fireEvent.click(screen.getByRole("button", { name: /Admit & check in/i }));
+    const admitDialog = await screen.findByRole("alertdialog", { name: "Admit this visitor?" });
+    expect(recordCheckInMock).not.toHaveBeenCalled();
+    fireEvent.click(within(admitDialog).getByRole("button", { name: "Yes, admit visitor" }));
 
     await waitFor(() => expect(recordCheckInMock).toHaveBeenCalledWith("pass-1", GATE_UUID));
     expect(await screen.findByText("✓ Checked in.")).toBeInTheDocument();
@@ -132,6 +135,39 @@ describe("GuardConsole", () => {
     const dialog = await screen.findByRole("alertdialog", { name: "Check this visitor out?" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Check out" }));
     await waitFor(() => expect(recordCheckOutMock).toHaveBeenCalledWith("pass-1", GATE_UUID));
+  });
+
+  // GAP-VISITOR-GUARD-06: Admit & check in is gated by a confirm dialog.
+  describe("Admit confirm dialog", () => {
+    async function verifyValid() {
+      verifyPassMock.mockResolvedValue({ valid: true, passId: "pass-1", passNumber: "PASS-001" });
+      recordCheckInMock.mockResolvedValue(undefined);
+      render(<GuardConsole locations={[location]} expectedToday={[]} expectedTodaySource="api" />);
+      fireEvent.change(screen.getByLabelText(/Gate terminal ID/i), { target: { value: GATE_UUID } });
+      fireEvent.change(screen.getByLabelText(/Scanned pass token/i), { target: { value: "qr-token-abc" } });
+      fireEvent.click(screen.getByRole("button", { name: "Verify pass" }));
+      await screen.findByText("Pass valid");
+    }
+
+    it("opens the dialog without mutating, and cancel closes it with no check-in", async () => {
+      await verifyValid();
+      fireEvent.click(screen.getByRole("button", { name: /Admit & check in/i }));
+      const dialog = await screen.findByRole("alertdialog", { name: "Admit this visitor?" });
+      expect(recordCheckInMock).not.toHaveBeenCalled();
+      fireEvent.click(within(dialog).getByRole("button", { name: /Cancel/i }));
+      await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+      expect(recordCheckInMock).not.toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: /Admit & check in/i })).toBeInTheDocument();
+    });
+
+    it("confirm performs exactly one check-in", async () => {
+      await verifyValid();
+      fireEvent.click(screen.getByRole("button", { name: /Admit & check in/i }));
+      const dialog = await screen.findByRole("alertdialog", { name: "Admit this visitor?" });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Yes, admit visitor" }));
+      await waitFor(() => expect(recordCheckInMock).toHaveBeenCalledTimes(1));
+      expect(recordCheckInMock).toHaveBeenCalledWith("pass-1", GATE_UUID);
+    });
   });
 
   // GAP-VISITOR-GUARD-02: an invalid (non-UUID) gate shows an inline error and

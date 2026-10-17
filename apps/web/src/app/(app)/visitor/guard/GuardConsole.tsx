@@ -98,6 +98,7 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
   const [busyPass, setBusyPass] = useState<string | null>(null);
   // GAP-VISITOR-GUARD-06: confirm a check-out before mutating the roster.
   const [confirmCheckOut, setConfirmCheckOut] = useState<RosterEntry | null>(null);
+  const [confirmCheckIn, setConfirmCheckIn] = useState(false);
 
   const loadRoster = useCallback(async (isLive: () => boolean = () => true) => {
     if (!locationId) {
@@ -294,7 +295,7 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
                 {checkedInPass === verifyResult.passId ? (
                   <p style={{ marginTop: 10, fontSize: 13, color: "var(--primary-d)", fontWeight: 600 }}>✓ Checked in.</p>
                 ) : (
-                  <button type="button" className="btn primary" style={{ marginTop: 12 }} disabled={busyPass === "checkin"} onClick={() => void onCheckIn()}>
+                  <button type="button" className="btn primary" style={{ marginTop: 12 }} disabled={busyPass === "checkin"} onClick={() => setConfirmCheckIn(true)}>
                     {busyPass === "checkin" ? "Checking in…" : "Admit & check in"}
                   </button>
                 )}
@@ -430,6 +431,17 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
           void onCheckOut(r.passId);
         }}
         onCancel={() => { if (busyPass === null) setConfirmCheckOut(null); }}
+      />
+
+      {/* GAP-VISITOR-GUARD-06: confirm before an Admit & check-in mutates the roster. */}
+      <ConfirmDialog
+        open={confirmCheckIn}
+        title="Admit this visitor?"
+        description="Record this visitor's entry at this gate. This updates the live occupancy roster."
+        confirmLabel="Yes, admit visitor"
+        busy={busyPass === "checkin"}
+        onConfirm={() => { setConfirmCheckIn(false); void onCheckIn(); }}
+        onCancel={() => { if (busyPass === null) setConfirmCheckIn(false); }}
       />
     </>
   );

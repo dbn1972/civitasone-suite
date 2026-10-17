@@ -606,6 +606,19 @@ describe("Check-in routes — auth", () => {
   });
 });
 
+// GAP-VISITOR-GUARD-06: a role outside the gate/write set is rejected 403 on the
+// check-in / check-out mutations (protocol_officer may read the live roster but not write).
+describe("Check-in routes — role gate", () => {
+  it("POST /v1/visitor/check-ins → 403 for a non-gate role", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/visitor/check-ins", headers: headers(["protocol_officer"]), payload: { passId: FAKE_ID, gateId: GATE_ID } });
+    expect(res.statusCode).toBe(403);
+  });
+  it("POST /v1/visitor/check-outs → 403 for a non-gate role", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/visitor/check-outs", headers: headers(["protocol_officer"]), payload: { passId: FAKE_ID, gateId: GATE_ID } });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
 describe("Check-in routes — happy paths", () => {
   it("GET /v1/visitor/check-ins/active → 200", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/visitor/check-ins/active", headers: headers(["security_admin"]) });
