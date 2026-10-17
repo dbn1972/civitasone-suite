@@ -152,8 +152,8 @@ export const getInstallModules = installModulesLoader;
  * field in the API row verbatim, so an errorMessage or hostname in `description`
  * would be shown to any viewer.  This allow-listed mapper surfaces only
  * tenant, region and lifecycle status — no free-text infrastructure detail.
- * The /install layout.tsx role gate (requireAnyRole(INSTALL_VIEW_ROLES)) is
- * defence-in-depth; install-service enforces the same role check server-side.
+ * silos/page.tsx gates on INSTALL_SILO_READ_ROLES (mirrors install-service
+ * READER_ROLES for this route); the server remains the authority.
  */
 export function mapSiloProvisions(payload: unknown): ModuleRowSummary[] {
   const rows = extractRows(payload);

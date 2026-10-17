@@ -3,6 +3,7 @@ import { getInstallSteps } from "../../../_data/loaders";
 import { StatGrid, StatCard, RefreshErrorState } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { getSessionRoles, INSTALL_SILO_READ_ROLES } from "@/lib/auth/roleGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,11 @@ const LINKS = [
 
 export default async function Page() {
   const { data: steps, source } = await getInstallSteps();
+  // GAP-INSTALL-SILOS-04: hide the silo entry from roles the API would 403.
+  const roles = getSessionRoles();
+  const links = LINKS.filter(
+    (l) => l.href !== "/install/silos" || INSTALL_SILO_READ_ROLES.some((r) => roles.includes(r)),
+  );
 
   const total = steps.length;
   const completedRequired = steps.filter((s) => s.isRequired && s.status === "completed").length;
@@ -60,7 +66,7 @@ export default async function Page() {
       title="Install console"
       description="Provisioning stages, module resolution and silo provisions."
       help="install"
-      links={LINKS}
+      links={links}
     >
       {source === "error" ? (
         <RefreshErrorState
