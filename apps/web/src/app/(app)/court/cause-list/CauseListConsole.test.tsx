@@ -5,12 +5,14 @@ const createCauseListMock = vi.fn();
 const addCauseListItemMock = vi.fn();
 const fetchCauseListItemsMock = vi.fn();
 const fetchCauseListByCourtDateMock = vi.fn();
+const fetchCaseMock = vi.fn();
 
 vi.mock("../_data/client", () => ({
   createCauseList: (...a: unknown[]) => createCauseListMock(...a),
   addCauseListItem: (...a: unknown[]) => addCauseListItemMock(...a),
   fetchCauseListItems: (...a: unknown[]) => fetchCauseListItemsMock(...a),
   fetchCauseListByCourtDate: (...a: unknown[]) => fetchCauseListByCourtDateMock(...a),
+  fetchCase: (...a: unknown[]) => fetchCaseMock(...a),
 }));
 
 import { CauseListConsole } from "./CauseListConsole";
@@ -53,6 +55,7 @@ describe("CauseListConsole", () => {
     vi.clearAllMocks();
     fetchCauseListByCourtDateMock.mockResolvedValue(null);
     fetchCauseListItemsMock.mockResolvedValue([]);
+    fetchCaseMock.mockResolvedValue(null);
   });
 
   it("CAUSE-LIST-01: courts are listed by NAME, no 8-char UUID; an empty court is still selectable", () => {
@@ -128,5 +131,74 @@ describe("CauseListConsole", () => {
     // Type + stage columns.
     expect(within(row).getByText("Revenue appeal")).toBeInTheDocument();
     expect(within(row).getByText("Arguments")).toBeInTheDocument();
+  });
+
+  const OTHER = "44444444-4444-4444-8444-444444444444";
+  const otherCase: CourtCase = { ...cases[0]!, id: OTHER, title: "Beyond v. Limit", cnrNumber: "RJHC0100000992026" };
+  const mkItem = (id: string, caseId: string, n: number) => ({
+    id, causeListId: "list-1", caseId, itemNumber: n, slot: "AM-1", courtroom: "A", listDate: "2026-02-01", version: 1,
+  });
+  async function openList() {
+    fetchCauseListByCourtDateMock.mockResolvedValue({ id: "list-1", courtId: COURT_A, listDate: "2026-02-01" });
+    renderConsole();
+    fireEvent.change(screen.getByLabelText("Court"), { target: { value: COURT_A } });
+  }
+
+  it("CAUSE-LIST-04: an item whose case is not in the cases prop gets its title from fetchCase", async () => {
+    fetchCauseListItemsMock.mockResolvedValue([mkItem("it9", OTHER, 1)]);
+    fetchCaseMock.mockResolvedValue(otherCase);
+    await openList();
+    await waitFor(() => expect(screen.getByText("Beyond v. Limit")).toBeInTheDocument());
+    expect(fetchCaseMock).toHaveBeenCalledWith(OTHER);
+  });
+
+  it("CAUSE-LIST-04: a case that is not found leaves em-dashes and is not refetched", async () => {
+    fetchCauseListItemsMock.mockResolvedValue([mkItem("it9", OTHER, 1)]);
+    fetchCaseMock.mockResolvedValue(null);
+    await openList();
+    await waitFor(() => expect(fetchCaseMock).toHaveBeenCalledTimes(1));
+    const row = (await screen.findAllByRole("row")).find((r) => r.textContent?.includes("AM-1")) as HTMLElement;
+    expect(within(row).getAllByText("—").length).toBeGreaterThanOrEqual(2);
+    expect(fetchCaseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("CAUSE-LIST-04: fetches each missing case once even when several items share it", async () => {
+    fetchCauseListItemsMock.mockResolvedValue([mkItem("a", OTHER, 1), mkItem("b", OTHER, 2)]);
+    fetchCaseMock.mockResolvedValue(otherCase);
+    await openList();
+    await waitFor(() => expect(screen.getAllByText("Beyond v. Limit")).toHaveLength(2));
+    expect(fetchCaseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("CAUSE-LIST-04: a transient fetch failure is retried and then resolves", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      fetchCauseListItemsMock.mockResolvedValue([mkItem("it9", OTHER, 1)]);
+      fetchCaseMock.mockRejectedValueOnce(new Error("boom")).mockResolvedValue(otherCase);
+      await openList();
+      await waitFor(() => expect(fetchCaseMock).toHaveBeenCalledTimes(1));
+      await vi.advanceTimersByTimeAsync(1500);
+      await waitFor(() => expect(screen.getByText("Beyond v. Limit")).toBeInTheDocument());
+      expect(fetchCaseMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("CAUSE-LIST-04: never runs more than 5 case fetches at once", async () => {
+    const ids = Array.from({ length: 12 }, (_, i) => `55555555-5555-4555-8555-5555555555${String(i).padStart(2, "0")}`);
+    fetchCauseListItemsMock.mockResolvedValue(ids.map((id, i) => mkItem(`i${i}`, id, i + 1)));
+    let inflight = 0;
+    let peak = 0;
+    fetchCaseMock.mockImplementation(async () => {
+      inflight++;
+      peak = Math.max(peak, inflight);
+      await new Promise((r) => setTimeout(r, 5));
+      inflight--;
+      return null;
+    });
+    await openList();
+    await waitFor(() => expect(fetchCaseMock).toHaveBeenCalledTimes(12));
+    expect(peak).toBeLessThanOrEqual(5);
   });
 });
