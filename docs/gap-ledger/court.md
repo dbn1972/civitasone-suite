@@ -405,7 +405,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CAUSE-LIST-04  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 2026-10-17: partly closed by #2118 — items whose case is outside the 100-row fetch are resolved via fetchCase(caseId) (404 = not found, em-dashes; other failures retried, concurrency capped at 5), so title/type/stage render. REMAINING: no purpose column — the cause-list items API does not return purpose, needs a backend/product decision.)
 - **W0 note:** partly fixed by #1923 — Type and Stage columns added from the matched case; remaining: cases are still fetched with limit=100 and an item whose case is outside it falls back to 'Case' + id prefix (no getCase(id) resolve), no purpose column
 - **First-pass claim:** Listed-items table shows only CNR/id: no case title, purpose or parties for the bench (CauseListConsole.tsx items map).
 - **Verified evidence:** Table (CauseListConsole.tsx:187-204) does show case title and CNR via cases.find(x=>x.id===it.caseId), falling back to 'Case' and caseId.slice(0,8) if the case is not in the 100-row fetch (loaders.ts:191). Missing: hearing purpose, parties and stage. Items endpoint fields for purpose unknown (CauseListItem type not extended).
