@@ -68,9 +68,9 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 - **Source:** `apps/web/src/app/(app)/tenant/code-lists/page.tsx`
 - **Design reference:** `redesign/tenant/code-lists.html`
 
-### GAP-TENANT-CODE-LISTS-01  ·  HIGH  ·  confirmed  ·  theme WIRING
+### GAP-TENANT-CODE-LISTS-01  ·  HIGH  ·  interim  ·  theme WIRING
 
-- [ ] **Status** (W2 tenant: NOT DONE — needs a backend values endpoint (effective-dated code values) and a /tenant/code-lists/[code] page; web+backend feature build. Subtitle already limited to 'dated values' wording)
+- [~] **Status** (INTERIM — needs tenant-service effective-dated code-value endpoint and /tenant/code-lists/[code] detail page; web+backend feature build, not invented here)
 - **W0 note:** partly fixed by #1916 — mapCodeListRows maps header fields (code, system/custom); no [code] detail route or effective dates
 - **First-pass claim:** Subtitle promises 'effective-dated values' but only list headers are shown; values, effectiveFrom/effectiveTo are not mapped (tenant/_data.ts:32-75) and there is no drill-down link, so the reference data cannot be inspected.
 - **Verified evidence:** mapTenantRows (tenant/_data.ts:32-75) flattens rows to id/label/sublabel/status/meta; it reads row.value but not a values array, effectiveFrom or effectiveTo. ModuleListTable has no link column and no [id] route exists under tenant/code-lists (only page.tsx). Payload shape from tenant-service is cannot-verify.
@@ -150,9 +150,9 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 - **Source:** `apps/web/src/app/(app)/tenant/consent-exchange/page.tsx`
 - **Design reference:** `redesign/tenant/consent-exchange.html`
 
-### GAP-TENANT-CONSENT-EXCHANGE-01  ·  HIGH  ·  confirmed  ·  theme DEADROUTE
+### GAP-TENANT-CONSENT-EXCHANGE-01  ·  HIGH  ·  interim  ·  theme DEADROUTE
 
-- [ ] **Status** (W2 tenant INTERIM — NEEDS OWNER DECISION: page is read-only and its subtitle already says '(read-only)'; approve/reject needs a DPDP decision endpoint with audit + reviewer role that does not exist — not invented here)
+- [~] **Status** (W2 tenant INTERIM — NEEDS OWNER DECISION: page is read-only and its subtitle already says '(read-only)'; approve/reject needs a DPDP decision endpoint with audit + reviewer role that does not exist — not invented here)
 - **W0 note:** partly fixed by #1916 — mapConsentRows shows purpose/categories/expiry; page still read-only, no decision actions
 - **First-pass claim:** No way to act on a consent request from the route: read-only table despite 'awaiting decision' (consent-exchange/page.tsx:16). Requests carry no purpose or data-category text for the reviewer.
 - **Verified evidence:** consent-exchange/page.tsx is a ModuleListPage only: no action controls; subtitle 'awaiting decision' (:16). mapTenantRows carries no purpose or data-category fields. Whether a decision endpoint exists is cannot-verify (tenant-service not in snapshot).
@@ -247,9 +247,9 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 - **Source:** `apps/web/src/app/(app)/tenant/data-migration/page.tsx`
 - **Design reference:** `redesign/tenant/data-migration.html`
 
-### GAP-TENANT-DATA-MIGRATION-01  ·  HIGH  ·  partly  ·  theme WIRING (was DEADROUTE)
+### GAP-TENANT-DATA-MIGRATION-01  ·  HIGH  ·  interim  ·  theme WIRING (was DEADROUTE)
 
-- [ ] **Status** (W2 tenant INTERIM — NEEDS OWNER DECISION: no start/retry/error-report endpoints exist; row counts/dry-run are shown read-only. Actions are a data-integrity feature build, not invented here)
+- [~] **Status** (W2 tenant INTERIM — NEEDS OWNER DECISION: no start/retry/error-report endpoints exist; row counts/dry-run are shown read-only. Actions are a data-integrity feature build, not invented here)
 - **W0 note:** partly fixed by #1916 — mapMigrationRows shows entities, records migrated, error count, dry-run; no start/retry/download control
 - **First-pass claim:** 'Reconciliation jobs' (data-migration/page.tsx:16) show only name and status: no progress, record counts or mismatch totals (tenant/_data.ts:32-75), and no way to start, retry or download an error report. Read-only view of a data-integrity operation.
 - **Verified evidence:** True: data-migration page is a read-only ModuleListPage of /api/v1/tenant/org/migrations mapped to id/label/status only (_data.ts). No start/retry/download control. Whether backend exposes start/retry/error-report endpoints is cannot-verify; it is a missing feature rather than a dead route.
@@ -325,9 +325,9 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 - **Source:** `apps/web/src/app/(app)/tenant/org-hierarchy/page.tsx`
 - **Design reference:** `redesign/tenant/org-hierarchy.html`
 
-### GAP-TENANT-ORG-HIERARCHY-01  ·  HIGH  ·  partly  ·  theme WIRING
+### GAP-TENANT-ORG-HIERARCHY-01  ·  HIGH  ·  closed  ·  theme WIRING
 
-- [ ] **Status** (W2 tenant: NOT DONE — still a flat indented table (mapOrgHierarchyRows depth); a real tree needs the API shape confirmed or a redirect decision to /tenant-admin/org-hierarchy)
+- [x] **Status** (closed: tenant/org-hierarchy/page.tsx now redirects to /tenant-admin/org-hierarchy (which has a working tree view); hub note updated to 'Organisation structure (redirects to Administration view)')
 - **W0 note:** partly fixed by #1916 — mapOrgHierarchyRows computes depth/indent from parentId; still flat table, no tree component
 - **First-pass claim:** Hub note promises 'Organisation units and subtree views' (tenant/page.tsx:13) but the route is a flat table: parentId / children are not mapped (tenant/_data.ts:32-75), so the hierarchy — the point of the page — cannot be seen.
 - **Verified evidence:** tenant/page.tsx:13 note is 'Organisation units and subtree views'. Page renders ModuleListPage (flat table). mapTenantRows (_data.ts:32-75) reads only id/label/sublabel/status/meta - parentId, children, level are never read, so hierarchy is not shown. Payload shape of /api/v1/tenant/org/hierarchy (_data.ts:90) cannot be verified: tenant-service is absent. Note a working hierarchy screen already exists at tenant-admin/org-hierarchy/page.tsx using getOrgHierarchy (loaders.ts:4665, OrgHierarchyNode).
@@ -1167,9 +1167,9 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 - **Impact if wrong:** Any employee reads tenant governance, plans or configuration.
 - **Web change if wrong:** Add requireAnyRole(tenant admin) in tenant/layout.tsx (web change needed regardless since gate is missing).
 
-### GAP-TENANT-OVERVIEW-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-TENANT-OVERVIEW-05  ·  MEDIUM  ·  interim  ·  theme BACKEND
 
-- [ ] **Status** (W2 tenant INTERIM — NEEDS OWNER DECISION: GET /v1/tenant/current has no role gate by design (any signed-in user reads their OWN tenant profile; scoping asserted in w2-tenant-web-paths-authz.test.ts). The ledger asks for basic-user 403; the /tenant web area is admin-gated (layout.tsx) but the API is not. Gating it could break shell consumers of /v1/tenants/current)
+- [~] **Status** (W2 tenant INTERIM — NEEDS OWNER DECISION: GET /v1/tenant/current has no role gate by design (any signed-in user reads their OWN tenant profile; scoping asserted in w2-tenant-web-paths-authz.test.ts). The ledger asks for basic-user 403; the /tenant web area is admin-gated (layout.tsx) but the API is not. Gating it could break shell consumers of /v1/tenants/current)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/current']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
@@ -1178,9 +1178,9 @@ Counts: ACTION 62, BACKEND-VERIFY 11
 - **Impact if wrong:** Any employee reads tenant governance, plans or configuration.
 - **Web change if wrong:** Add requireAnyRole(tenant admin) in tenant/layout.tsx (web change needed regardless since gate is missing).
 
-### GAP-TENANT-PLANS-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-TENANT-PLANS-04  ·  MEDIUM  ·  interim  ·  theme BACKEND
 
-- [ ] **Status** (W2 tenant INTERIM — NEEDS OWNER DECISION: GET /v1/tenant/plans returns the static plan-comparison catalogue to ANY authenticated user by design (comment in subscriptions/routes.ts; pinned by subscription-upgrade.test.ts). The ledger asks for basic-user 403. No tenant data is exposed; owner to decide whether pricing is admin-only)
+- [~] **Status** (W2 tenant INTERIM — NEEDS OWNER DECISION: GET /v1/tenant/plans returns the static plan-comparison catalogue to ANY authenticated user by design (comment in subscriptions/routes.ts; pinned by subscription-upgrade.test.ts). The ledger asks for basic-user 403. No tenant data is exposed; owner to decide whether pricing is admin-only)
 - **First-pass claim:** Route reachable by any signed-in user: only ModuleGate (tenant/layout.tsx:5) and a session check (middleware.ts:48-59) stand in front of it; role enforcement in tenant-service is undeterminable (service absent).
 - **Service:** `tenant-service`  ·  **Endpoint(s):** `['GET /api/v1/tenant/plans']`
 - **Question:** Does tenant-service authorise these endpoints by role (tenant admin/config role) and tenant scope, independent of the web gate?
