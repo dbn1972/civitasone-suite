@@ -791,6 +791,7 @@ function OrderRow({
   const [mode, setMode] = useState<"none" | "issue" | "sendback" | "recall" | "submit">("none");
   const [dsc, setDsc] = useState("");
   const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const run = useCallback(
     async (fn: () => Promise<void>, ok: string, bad: string) => {
@@ -866,7 +867,7 @@ function OrderRow({
         <ConfirmDialog
           open
           title="Submit this order for approval?"
-          confirmLabel="Submit for approval"
+          confirmLabel="Confirm submit"
           description={
             <p>
               The order will move to <strong>pending approval</strong>. A different officer
@@ -874,14 +875,26 @@ function OrderRow({
             </p>
           }
           busy={busy}
-          onConfirm={() =>
+          errorMessage={submitError ?? undefined}
+          onConfirm={() => {
+            setSubmitError(null);
             void run(
-              () => submitOrderForApproval(order.id, order.version),
+              async () => {
+                try {
+                  await submitOrderForApproval(order.id, order.version);
+                } catch (err) {
+                  setSubmitError("Could not submit the order. Please try again.");
+                  throw err;
+                }
+              },
               "Order submitted for approval.",
               "Could not submit the order.",
-            )
-          }
-          onCancel={() => setMode("none")}
+            );
+          }}
+          onCancel={() => {
+            setSubmitError(null);
+            setMode("none");
+          }}
         />
       )}
       {mode === "issue" && (
