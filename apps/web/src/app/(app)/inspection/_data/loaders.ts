@@ -113,6 +113,24 @@ export function getInspections(): Promise<LoaderResult<Record<string, unknown>[]
   });
 }
 
+/** Single inspection (GET /v1/inspection/inspections/:id) for the detail page. */
+export function getInspectionById(id: string): Promise<LoaderResult<Record<string, unknown> | null>> {
+  return fetchJson<unknown, Record<string, unknown> | null>(
+    `/api/v1/inspection/inspections/${encodeURIComponent(id)}`,
+    null,
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "inspection.detail",
+      mapResponse: (payload) => {
+        const body = payload && typeof payload === "object" && "data" in payload
+          ? (payload as { data?: unknown }).data
+          : payload;
+        return body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
+      },
+    },
+  );
+}
+
 export function getInspectionAssignments(): Promise<LoaderResult<Record<string, unknown>[]>> {
   return fetchJson<unknown, Record<string, unknown>[]>("/api/v1/inspection/assignments?pageSize=50", [], {
     revalidateSeconds: 30,
