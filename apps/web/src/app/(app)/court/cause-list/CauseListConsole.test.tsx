@@ -159,6 +159,8 @@ describe("CauseListConsole", () => {
     await waitFor(() => expect(fetchCaseMock).toHaveBeenCalledTimes(1));
     const row = (await screen.findAllByRole("row")).find((r) => r.textContent?.includes("AM-1")) as HTMLElement;
     expect(within(row).getAllByText("—").length).toBeGreaterThanOrEqual(2);
+    // Re-render and let any timers elapse: a not-found case must never be refetched.
+    await new Promise((r) => setTimeout(r, 2500));
     expect(fetchCaseMock).toHaveBeenCalledTimes(1);
   });
 
@@ -200,5 +202,42 @@ describe("CauseListConsole", () => {
     await openList();
     await waitFor(() => expect(fetchCaseMock).toHaveBeenCalledTimes(12));
     expect(peak).toBeLessThanOrEqual(5);
+  });
+
+  it("CAUSE-LIST-04: retries stop after 2 failed retries (3 calls total)", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      fetchCauseListItemsMock.mockResolvedValue([mkItem("it9", OTHER, 1)]);
+      fetchCaseMock.mockRejectedValue(new Error("boom"));
+      await openList();
+      await waitFor(() => expect(fetchCaseMock).toHaveBeenCalledTimes(1));
+      await vi.advanceTimersByTimeAsync(10_000);
+      await waitFor(() => expect(fetchCaseMock).toHaveBeenCalledTimes(3));
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(fetchCaseMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("CAUSE-LIST-04: unmounting with a retry timer pending causes no further fetch or error", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const errSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      fetchCauseListItemsMock.mockResolvedValue([mkItem("it9", OTHER, 1)]);
+      fetchCaseMock.mockRejectedValue(new Error("boom"));
+      fetchCauseListByCourtDateMock.mockResolvedValue({ id: "list-1", courtId: COURT_A, listDate: "2026-02-01" });
+      const { unmount } = renderConsole();
+      fireEvent.change(screen.getByLabelText("Court"), { target: { value: COURT_A } });
+      await waitFor(() => expect(fetchCaseMock).toHaveBeenCalledTimes(1));
+      errSpy.mockClear();
+      unmount();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(fetchCaseMock).toHaveBeenCalledTimes(1);
+      expect(errSpy).not.toHaveBeenCalled();
+    } finally {
+      errSpy.mockRestore();
+      vi.useRealTimers();
+    }
   });
 });
