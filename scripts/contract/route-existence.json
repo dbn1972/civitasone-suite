@@ -1,17 +1,17 @@
 {
-  "generatedAt": "2026-10-17",
+  "generatedAt": "2026-10-14",
   "counts": {
-    "realRoutes": 934,
-    "totalLinks": 2033,
+    "realRoutes": 925,
+    "totalLinks": 2053,
     "byKind": {
-      "href": 1665,
-      "helperReturn": 25,
-      "navigate": 208,
-      "rowLinkPrefix": 104,
-      "rowLinkKeyField": 7,
-      "linkField": 24
+      "href": 1693,
+      "helperReturn": 27,
+      "navigate": 201,
+      "rowLinkPrefix": 103,
+      "rowLinkKeyField": 6,
+      "linkField": 23
     },
-    "dead": 29,
+    "dead": 28,
     "unresolvedRowLinks": 1
   },
   "links": [
@@ -132,7 +132,7 @@
     },
     {
       "file": "apps/web/src/app/_components/ds/PageHeader.tsx",
-      "line": 49,
+      "line": 48,
       "kind": "href",
       "target": "/help/${help}",
       "resolved": "/help/${help}",
@@ -668,7 +668,7 @@
     },
     {
       "file": "apps/web/src/app/_components/RaiseEOfficeNote.tsx",
-      "line": 234,
+      "line": 240,
       "kind": "href",
       "target": "/estab/files/${file.id}",
       "resolved": "/estab/files/${file.id}",
@@ -684,7 +684,7 @@
     },
     {
       "file": "apps/web/src/app/_components/UsageWarningBanner.tsx",
-      "line": 35,
+      "line": 51,
       "kind": "href",
       "target": "/tenant-admin/usage",
       "resolved": "/tenant-admin/usage",
@@ -700,7 +700,7 @@
     },
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 7497,
+      "line": 7361,
       "kind": "helperReturn",
       "fn": "buildApprovalLink",
       "target": "/hr/leave/approvals",
@@ -709,7 +709,7 @@
     },
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 7499,
+      "line": 7363,
       "kind": "helperReturn",
       "fn": "buildApprovalLink",
       "target": "/hr/payroll",
@@ -718,7 +718,7 @@
     },
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 7501,
+      "line": 7365,
       "kind": "helperReturn",
       "fn": "buildApprovalLink",
       "target": "/procurement/indents/${refId}",
@@ -727,7 +727,7 @@
     },
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 7503,
+      "line": 7367,
       "kind": "helperReturn",
       "fn": "buildApprovalLink",
       "target": "/procurement/orders/${refId}",
@@ -736,7 +736,7 @@
     },
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 7505,
+      "line": 7369,
       "kind": "helperReturn",
       "fn": "buildApprovalLink",
       "target": "/finance/expenditure/bills/${refId}",
@@ -745,7 +745,7 @@
     },
     {
       "file": "apps/web/src/app/_data/loaders.ts",
-      "line": 7507,
+      "line": 7371,
       "kind": "helperReturn",
       "fn": "buildApprovalLink",
       "target": "/estab/files/${refId}",
@@ -812,37 +812,13 @@
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
       "line": 50,
       "kind": "href",
-      "target": "/contracts",
-      "resolved": "/contracts",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 51,
-      "kind": "href",
-      "target": "/works",
-      "resolved": "/works",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 52,
-      "kind": "href",
       "target": "/estab",
       "resolved": "/estab",
       "ok": true
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 53,
-      "kind": "href",
-      "target": "/documents",
-      "resolved": "/documents",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 54,
+      "line": 51,
       "kind": "href",
       "target": "/assets",
       "resolved": "/assets",
@@ -850,7 +826,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 55,
+      "line": 52,
       "kind": "href",
       "target": "/stock",
       "resolved": "/stock",
@@ -858,7 +834,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 56,
+      "line": 53,
       "kind": "href",
       "target": "/crm",
       "resolved": "/crm",
@@ -866,7 +842,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 57,
+      "line": 54,
       "kind": "href",
       "target": "/helpdesk",
       "resolved": "/helpdesk",
@@ -874,15 +850,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 58,
-      "kind": "href",
-      "target": "/telephony",
-      "resolved": "/telephony",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 59,
+      "line": 55,
       "kind": "href",
       "target": "/citizen",
       "resolved": "/citizen",
@@ -890,7 +858,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 60,
+      "line": 56,
       "kind": "href",
       "target": "/designer",
       "resolved": "/designer",
@@ -898,7 +866,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 61,
+      "line": 57,
       "kind": "href",
       "target": "/visitor",
       "resolved": "/visitor",
@@ -906,7 +874,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 62,
+      "line": 58,
       "kind": "href",
       "target": "/meeting",
       "resolved": "/meeting",
@@ -914,7 +882,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 63,
+      "line": 59,
       "kind": "href",
       "target": "/court",
       "resolved": "/court",
@@ -922,7 +890,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 64,
+      "line": 60,
       "kind": "href",
       "target": "/inspection",
       "resolved": "/inspection",
@@ -930,7 +898,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 65,
+      "line": 61,
       "kind": "href",
       "target": "/audit",
       "resolved": "/audit",
@@ -938,7 +906,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 66,
+      "line": 62,
       "kind": "href",
       "target": "/legal",
       "resolved": "/legal",
@@ -946,7 +914,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 67,
+      "line": 63,
       "kind": "href",
       "target": "/ai",
       "resolved": "/ai",
@@ -954,7 +922,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 68,
+      "line": 64,
       "kind": "href",
       "target": "/field",
       "resolved": "/field",
@@ -962,7 +930,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 69,
+      "line": 65,
       "kind": "href",
       "target": "/loyalty",
       "resolved": "/loyalty",
@@ -970,7 +938,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 70,
+      "line": 66,
       "kind": "href",
       "target": "/catalogue",
       "resolved": "/catalogue",
@@ -978,7 +946,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 71,
+      "line": 67,
       "kind": "href",
       "target": "/cdp",
       "resolved": "/cdp",
@@ -986,7 +954,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 72,
+      "line": 68,
       "kind": "href",
       "target": "/journeys",
       "resolved": "/journeys",
@@ -994,7 +962,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 73,
+      "line": 69,
       "kind": "href",
       "target": "/recommendations",
       "resolved": "/recommendations",
@@ -1002,7 +970,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 74,
+      "line": 70,
       "kind": "href",
       "target": "/reports",
       "resolved": "/reports",
@@ -1010,7 +978,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 75,
+      "line": 71,
       "kind": "href",
       "target": "/knowledge",
       "resolved": "/knowledge",
@@ -1018,7 +986,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 76,
+      "line": 72,
       "kind": "href",
       "target": "/identity",
       "resolved": "/identity",
@@ -1026,7 +994,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 77,
+      "line": 73,
       "kind": "href",
       "target": "/tenant",
       "resolved": "/tenant",
@@ -1034,7 +1002,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 78,
+      "line": 74,
       "kind": "href",
       "target": "/notifications",
       "resolved": "/notifications",
@@ -1042,7 +1010,7 @@
     },
     {
       "file": "apps/web/src/app/_data/moduleRegistry.ts",
-      "line": 79,
+      "line": 75,
       "kind": "href",
       "target": "/tenant-admin",
       "resolved": "/tenant-admin",
@@ -1539,7 +1507,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/ai/chat/[id]/page.tsx",
-      "line": 37,
+      "line": 42,
       "kind": "navigate",
       "target": "/ai",
       "resolved": "/ai",
@@ -1547,7 +1515,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/ai/chat/[id]/page.tsx",
-      "line": 68,
+      "line": 71,
       "kind": "href",
       "target": "/ai/chat",
       "resolved": "/ai/chat",
@@ -1555,7 +1523,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/ai/chat/page.tsx",
-      "line": 38,
+      "line": 36,
       "kind": "href",
       "target": "/ai/governance",
       "resolved": "/ai/governance",
@@ -1619,7 +1587,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/analytics/dashboards/[id]/page.tsx",
-      "line": 27,
+      "line": 25,
       "kind": "href",
       "target": "/analytics/dashboards",
       "resolved": "/analytics/dashboards",
@@ -1627,7 +1595,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/analytics/dashboards/[id]/page.tsx",
-      "line": 42,
+      "line": 40,
       "kind": "href",
       "target": "/analytics/dashboards",
       "resolved": "/analytics/dashboards",
@@ -1651,7 +1619,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx",
-      "line": 74,
+      "line": 68,
       "kind": "href",
       "target": "/analytics/ml-insights",
       "resolved": "/analytics/ml-insights",
@@ -1659,7 +1627,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/analytics/ml-insights/_components/DomainInsightPage.tsx",
-      "line": 109,
+      "line": 103,
       "kind": "href",
       "target": "/analytics/ml-insights",
       "resolved": "/analytics/ml-insights",
@@ -1675,7 +1643,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/analytics/ml-insights/leads/page.tsx",
-      "line": 26,
+      "line": 21,
       "kind": "rowLinkPrefix",
       "target": "/crm/contacts/",
       "resolved": "/crm/contacts/${rowId}",
@@ -1787,7 +1755,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/analytics/queries/page.tsx",
-      "line": 26,
+      "line": 23,
       "kind": "href",
       "target": "/analytics",
       "resolved": "/analytics",
@@ -2195,7 +2163,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/assets/verification/[id]/page.tsx",
-      "line": 72,
+      "line": 71,
       "kind": "href",
       "target": "/assets/${String(r.assetId)}",
       "resolved": "/assets/${String(r.assetId)}",
@@ -2298,8 +2266,16 @@
       "ok": true
     },
     {
+      "file": "apps/web/src/app/(app)/audit/exports/page.tsx",
+      "line": 22,
+      "kind": "href",
+      "target": "/audit/dashboard",
+      "resolved": "/audit/dashboard",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/(app)/audit/observations/[id]/page.tsx",
-      "line": 24,
+      "line": 23,
       "kind": "href",
       "target": "/audit/observations",
       "resolved": "/audit/observations",
@@ -2307,7 +2283,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/audit/observations/[id]/page.tsx",
-      "line": 31,
+      "line": 30,
       "kind": "href",
       "target": "/audit/observations",
       "resolved": "/audit/observations",
@@ -2317,8 +2293,32 @@
       "file": "apps/web/src/app/(app)/audit/observations/[id]/page.tsx",
       "line": 74,
       "kind": "href",
+      "target": "/audit/dashboard",
+      "resolved": "/audit/dashboard",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/audit/observations/[id]/page.tsx",
+      "line": 76,
+      "kind": "href",
       "target": "/audit/observations",
       "resolved": "/audit/observations",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/audit/observations/page.tsx",
+      "line": 33,
+      "kind": "href",
+      "target": "/audit/dashboard",
+      "resolved": "/audit/dashboard",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/audit/observations/page.tsx",
+      "line": 66,
+      "kind": "href",
+      "target": "/audit/dashboard",
+      "resolved": "/audit/dashboard",
       "ok": true
     },
     {
@@ -2327,6 +2327,22 @@
       "kind": "href",
       "target": "/audit/exports",
       "resolved": "/audit/exports",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/audit/plan/page.tsx",
+      "line": 24,
+      "kind": "href",
+      "target": "/audit/dashboard",
+      "resolved": "/audit/dashboard",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/audit/risk-register/page.tsx",
+      "line": 24,
+      "kind": "href",
+      "target": "/audit/dashboard",
+      "resolved": "/audit/dashboard",
       "ok": true
     },
     {
@@ -2650,14 +2666,6 @@
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/citizen/eligibility/page.tsx",
-      "line": 61,
-      "kind": "href",
-      "target": "/citizen/services/${encodeURIComponent(r.serviceKey)}",
-      "resolved": "/citizen/services/${encodeURIComponent(r.serviceKey)}",
-      "ok": true
-    },
-    {
       "file": "apps/web/src/app/(app)/citizen/feedback/page.tsx",
       "line": 21,
       "kind": "href",
@@ -2675,7 +2683,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/citizen/grievances/new/page.tsx",
-      "line": 139,
+      "line": 138,
       "kind": "href",
       "target": "/citizen/requests/${ack.id}",
       "resolved": "/citizen/requests/${ack.id}",
@@ -2683,7 +2691,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/citizen/grievances/new/page.tsx",
-      "line": 273,
+      "line": 272,
       "kind": "href",
       "target": "/citizen/grievances",
       "resolved": "/citizen/grievances",
@@ -3027,7 +3035,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/contracts/new/NewContractForm.tsx",
-      "line": 167,
+      "line": 149,
       "kind": "navigate",
       "target": "/contracts/list",
       "resolved": "/contracts/list",
@@ -3115,7 +3123,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/court/hearings/HearingsConsole.tsx",
-      "line": 84,
+      "line": 81,
       "kind": "href",
       "target": "/court/cases/${caseId}",
       "resolved": "/court/cases/${caseId}",
@@ -3131,7 +3139,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/court/orders/OrdersConsole.tsx",
-      "line": 144,
+      "line": 142,
       "kind": "href",
       "target": "/court/cases/${caseId}",
       "resolved": "/court/cases/${caseId}",
@@ -3219,7 +3227,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/accounts/NewAccountForm.tsx",
-      "line": 233,
+      "line": 255,
       "kind": "href",
       "target": "/crm/accounts",
       "resolved": "/crm/accounts",
@@ -3227,7 +3235,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/contacts/[id]/ContactDetailActions.tsx",
-      "line": 76,
+      "line": 72,
       "kind": "href",
       "target": "/crm/contacts/${contactId}/edit",
       "resolved": "/crm/contacts/${contactId}/edit",
@@ -3235,7 +3243,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/contacts/[id]/ContactDetailActions.tsx",
-      "line": 97,
+      "line": 93,
       "kind": "navigate",
       "target": "/crm/contacts",
       "resolved": "/crm/contacts",
@@ -3307,7 +3315,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/contacts/ContactToolbar.tsx",
-      "line": 62,
+      "line": 61,
       "kind": "navigate",
       "target": "/crm/contacts",
       "resolved": "/crm/contacts",
@@ -3315,7 +3323,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/contacts/ContactToolbar.tsx",
-      "line": 124,
+      "line": 123,
       "kind": "href",
       "target": "/crm/contacts/new",
       "resolved": "/crm/contacts/new",
@@ -3323,7 +3331,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/contacts/ContactToolbar.tsx",
-      "line": 130,
+      "line": 129,
       "kind": "href",
       "target": "/crm/contacts/import",
       "resolved": "/crm/contacts/import",
@@ -3483,7 +3491,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/deals/page.tsx",
-      "line": 18,
+      "line": 15,
       "kind": "href",
       "target": "/crm/deals/new",
       "resolved": "/crm/deals/new",
@@ -3547,7 +3555,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/grievances/[id]/page.tsx",
-      "line": 195,
+      "line": 196,
       "kind": "href",
       "target": "/crm/grievances",
       "resolved": "/crm/grievances",
@@ -3563,7 +3571,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/grievances/GrievancesTable.tsx",
-      "line": 175,
+      "line": 174,
       "kind": "href",
       "target": "/crm/grievances/${r.id}",
       "resolved": "/crm/grievances/${r.id}",
@@ -3571,7 +3579,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/grievances/new/page.tsx",
-      "line": 146,
+      "line": 143,
       "kind": "navigate",
       "target": "/crm/grievances/${data.id}",
       "resolved": "/crm/grievances/${data.id}",
@@ -3579,16 +3587,8 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/grievances/new/page.tsx",
-      "line": 414,
+      "line": 411,
       "kind": "href",
-      "target": "/crm/grievances",
-      "resolved": "/crm/grievances",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/crm/grievances/new/page.tsx",
-      "line": 430,
-      "kind": "navigate",
       "target": "/crm/grievances",
       "resolved": "/crm/grievances",
       "ok": true
@@ -3603,7 +3603,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/health/[accountId]/FollowUpModal.tsx",
-      "line": 93,
+      "line": 98,
       "kind": "navigate",
       "target": "/crm/service-requests/${data.id}",
       "resolved": "/crm/service-requests/${data.id}",
@@ -3611,7 +3611,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/health/[accountId]/page.tsx",
-      "line": 75,
+      "line": 81,
       "kind": "href",
       "target": "/crm/health",
       "resolved": "/crm/health",
@@ -3619,7 +3619,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/health/[accountId]/page.tsx",
-      "line": 91,
+      "line": 97,
       "kind": "href",
       "target": "/crm/accounts/${breakdown.accountId}",
       "resolved": "/crm/accounts/${breakdown.accountId}",
@@ -3643,7 +3643,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/health/WatchlistTable.tsx",
-      "line": 147,
+      "line": 146,
       "kind": "href",
       "target": "/crm/health/${row.accountId}?followUp=1",
       "resolved": "/crm/health/${row.accountId}",
@@ -4035,7 +4035,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/rti/[id]/page.tsx",
-      "line": 168,
+      "line": 170,
       "kind": "href",
       "target": "/crm/rti",
       "resolved": "/crm/rti",
@@ -4067,7 +4067,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/rti/RtiTable.tsx",
-      "line": 164,
+      "line": 170,
       "kind": "href",
       "target": "/crm/rti/${r.id}",
       "resolved": "/crm/rti/${r.id}",
@@ -4099,7 +4099,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/crm/service-requests/ServiceRequestsTable.tsx",
-      "line": 191,
+      "line": 190,
       "kind": "href",
       "target": "/crm/service-requests/${r.id}",
       "resolved": "/crm/service-requests/${r.id}",
@@ -4155,7 +4155,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/dashboard/FirstRunTour.tsx",
-      "line": 163,
+      "line": 223,
       "kind": "href",
       "target": "/setup",
       "resolved": "/setup",
@@ -4851,7 +4851,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/designer/DesignerHomeClient.tsx",
-      "line": 89,
+      "line": 88,
       "kind": "href",
       "target": "/designer/new",
       "resolved": "/designer/new",
@@ -4859,7 +4859,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/designer/DesignerHomeClient.tsx",
-      "line": 129,
+      "line": 128,
       "kind": "href",
       "target": "/designer/library",
       "resolved": "/designer/library",
@@ -4867,7 +4867,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/designer/DesignerHomeClient.tsx",
-      "line": 131,
+      "line": 130,
       "kind": "href",
       "target": "/designer/new",
       "resolved": "/designer/new",
@@ -4875,7 +4875,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/designer/DesignerHomeClient.tsx",
-      "line": 148,
+      "line": 147,
       "kind": "rowLinkPrefix",
       "target": "/designer/",
       "resolved": "/designer/${rowId}",
@@ -4883,7 +4883,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/designer/DesignerHomeClient.tsx",
-      "line": 173,
+      "line": 172,
       "kind": "href",
       "target": "/designer/library",
       "resolved": "/designer/library",
@@ -4891,7 +4891,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/designer/DesignerHomeClient.tsx",
-      "line": 195,
+      "line": 194,
       "kind": "href",
       "target": "/designer/library",
       "resolved": "/designer/library",
@@ -4899,7 +4899,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/designer/library/PackLibraryClient.tsx",
-      "line": 155,
+      "line": 135,
       "kind": "navigate",
       "target": "/designer/${draftId}/b1",
       "resolved": "/designer/${draftId}/b1",
@@ -4907,7 +4907,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/designer/library/PackLibraryClient.tsx",
-      "line": 173,
+      "line": 153,
       "kind": "href",
       "target": "/designer",
       "resolved": "/designer",
@@ -5091,7 +5091,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/dak/page.tsx",
-      "line": 143,
+      "line": 152,
       "kind": "navigate",
       "target": "/estab/files/${body.id}",
       "resolved": "/estab/files/${body.id}",
@@ -5099,7 +5099,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/dak/page.tsx",
-      "line": 296,
+      "line": 273,
       "kind": "href",
       "target": "/estab/files/${r.fileId}",
       "resolved": "/estab/files/${r.fileId}",
@@ -5107,7 +5107,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/dashboard/page.tsx",
-      "line": 57,
+      "line": 55,
       "kind": "href",
       "target": "/estab/dak",
       "resolved": "/estab/dak",
@@ -5115,7 +5115,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/dashboard/page.tsx",
-      "line": 58,
+      "line": 56,
       "kind": "href",
       "target": "/estab/files/new",
       "resolved": "/estab/files/new",
@@ -5123,7 +5123,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/dashboard/page.tsx",
-      "line": 64,
+      "line": 61,
       "kind": "href",
       "target": "/estab/list",
       "resolved": "/estab/list",
@@ -5131,7 +5131,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/dashboard/page.tsx",
-      "line": 65,
+      "line": 62,
       "kind": "href",
       "target": "/estab/inbox",
       "resolved": "/estab/inbox",
@@ -5139,7 +5139,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/dashboard/page.tsx",
-      "line": 66,
+      "line": 63,
       "kind": "href",
       "target": "/estab/dak",
       "resolved": "/estab/dak",
@@ -5147,7 +5147,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/dashboard/page.tsx",
-      "line": 68,
+      "line": 65,
       "kind": "href",
       "target": "/estab/meetings",
       "resolved": "/estab/meetings",
@@ -5155,7 +5155,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/dashboard/page.tsx",
-      "line": 69,
+      "line": 66,
       "kind": "href",
       "target": "/estab/compliance",
       "resolved": "/estab/compliance",
@@ -5163,7 +5163,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/dashboard/page.tsx",
-      "line": 76,
+      "line": 73,
       "kind": "href",
       "target": "/estab/list",
       "resolved": "/estab/list",
@@ -5171,7 +5171,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/dashboard/page.tsx",
-      "line": 92,
+      "line": 89,
       "kind": "rowLinkPrefix",
       "target": "/estab/files/",
       "resolved": "/estab/files/${rowId}",
@@ -5179,7 +5179,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/dashboard/page.tsx",
-      "line": 104,
+      "line": 101,
       "kind": "href",
       "target": "/estab/dak",
       "resolved": "/estab/dak",
@@ -5187,7 +5187,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/dashboard/page.tsx",
-      "line": 105,
+      "line": 102,
       "kind": "href",
       "target": "/estab/approvals",
       "resolved": "/estab/approvals",
@@ -5195,7 +5195,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/dashboard/page.tsx",
-      "line": 106,
+      "line": 103,
       "kind": "href",
       "target": "/estab/dispatch",
       "resolved": "/estab/dispatch",
@@ -5203,23 +5203,15 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/dashboard/page.tsx",
-      "line": 107,
+      "line": 104,
       "kind": "href",
       "target": "/estab/compliance",
       "resolved": "/estab/compliance",
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/estab/dfa/DfaPanel.tsx",
-      "line": 411,
-      "kind": "href",
-      "target": "/estab/files/${d.fileId}",
-      "resolved": "/estab/files/${d.fileId}",
-      "ok": true
-    },
-    {
       "file": "apps/web/src/app/(app)/estab/dispatch/page.tsx",
-      "line": 196,
+      "line": 122,
       "kind": "href",
       "target": "/estab/files/${r.fileId}",
       "resolved": "/estab/files/${r.fileId}",
@@ -5227,7 +5219,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/files/new/page.tsx",
-      "line": 189,
+      "line": 182,
       "kind": "navigate",
       "target": "/estab/files/${body.id}",
       "resolved": "/estab/files/${body.id}",
@@ -5235,7 +5227,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/files/new/page.tsx",
-      "line": 206,
+      "line": 199,
       "kind": "navigate",
       "target": "/estab/list",
       "resolved": "/estab/list",
@@ -5243,7 +5235,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/files/new/page.tsx",
-      "line": 215,
+      "line": 208,
       "kind": "navigate",
       "target": "/estab/list",
       "resolved": "/estab/list",
@@ -5251,7 +5243,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/files/new/page.tsx",
-      "line": 487,
+      "line": 470,
       "kind": "href",
       "target": "/estab/list",
       "resolved": "/estab/list",
@@ -5259,7 +5251,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/guesthouse/new/page.tsx",
-      "line": 153,
+      "line": 151,
       "kind": "navigate",
       "target": "/estab/guesthouse",
       "resolved": "/estab/guesthouse",
@@ -5267,7 +5259,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/guesthouse/new/page.tsx",
-      "line": 417,
+      "line": 415,
       "kind": "href",
       "target": "/estab/guesthouse",
       "resolved": "/estab/guesthouse",
@@ -5275,7 +5267,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/guesthouse/page.tsx",
-      "line": 38,
+      "line": 35,
       "kind": "href",
       "target": "/estab/guesthouse/new",
       "resolved": "/estab/guesthouse/new",
@@ -5283,7 +5275,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/guesthouse/page.tsx",
-      "line": 61,
+      "line": 58,
       "kind": "href",
       "target": "/estab/guesthouse/new",
       "resolved": "/estab/guesthouse/new",
@@ -5299,7 +5291,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/inbox/page.tsx",
-      "line": 49,
+      "line": 47,
       "kind": "href",
       "target": "/estab/list",
       "resolved": "/estab/list",
@@ -5363,7 +5355,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/list/page.tsx",
-      "line": 72,
+      "line": 70,
       "kind": "href",
       "target": "/estab/workspace",
       "resolved": "/estab/workspace",
@@ -5371,7 +5363,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/list/page.tsx",
-      "line": 73,
+      "line": 71,
       "kind": "href",
       "target": "/estab/files/new",
       "resolved": "/estab/files/new",
@@ -5379,7 +5371,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/list/page.tsx",
-      "line": 79,
+      "line": 77,
       "kind": "href",
       "target": "/estab/inbox",
       "resolved": "/estab/inbox",
@@ -5387,7 +5379,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/list/page.tsx",
-      "line": 80,
+      "line": 78,
       "kind": "href",
       "target": "/estab/dak",
       "resolved": "/estab/dak",
@@ -5395,7 +5387,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/list/page.tsx",
-      "line": 81,
+      "line": 79,
       "kind": "href",
       "target": "/estab/dispatch",
       "resolved": "/estab/dispatch",
@@ -5403,7 +5395,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/list/page.tsx",
-      "line": 82,
+      "line": 80,
       "kind": "href",
       "target": "/estab/dfa",
       "resolved": "/estab/dfa",
@@ -5411,7 +5403,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/list/page.tsx",
-      "line": 83,
+      "line": 81,
       "kind": "href",
       "target": "/estab/approvals",
       "resolved": "/estab/approvals",
@@ -5419,7 +5411,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/list/page.tsx",
-      "line": 84,
+      "line": 82,
       "kind": "href",
       "target": "/estab/approval-matrix",
       "resolved": "/estab/approval-matrix",
@@ -5427,7 +5419,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/list/page.tsx",
-      "line": 85,
+      "line": 83,
       "kind": "href",
       "target": "/estab/operators",
       "resolved": "/estab/operators",
@@ -5435,7 +5427,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/list/page.tsx",
-      "line": 86,
+      "line": 84,
       "kind": "href",
       "target": "/estab/handover",
       "resolved": "/estab/handover",
@@ -5443,7 +5435,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/list/page.tsx",
-      "line": 87,
+      "line": 85,
       "kind": "href",
       "target": "/estab/migration",
       "resolved": "/estab/migration",
@@ -5451,7 +5443,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/list/page.tsx",
-      "line": 88,
+      "line": 86,
       "kind": "href",
       "target": "/estab/notifications",
       "resolved": "/estab/notifications",
@@ -5459,7 +5451,15 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/meetings/[id]/page.tsx",
-      "line": 54,
+      "line": 43,
+      "kind": "href",
+      "target": "/estab/meetings",
+      "resolved": "/estab/meetings",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/estab/meetings/[id]/page.tsx",
+      "line": 58,
       "kind": "href",
       "target": "/estab/meetings/${params.id}",
       "resolved": "/estab/meetings/${params.id}",
@@ -5467,7 +5467,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/meetings/[id]/page.tsx",
-      "line": 62,
+      "line": 66,
       "kind": "href",
       "target": "/estab/meetings/${params.id}?tab=agenda",
       "resolved": "/estab/meetings/${params.id}",
@@ -5475,7 +5475,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/meetings/MeetingsCalendar.tsx",
-      "line": 150,
+      "line": 149,
       "kind": "href",
       "target": "/estab/meetings/${m.id}",
       "resolved": "/estab/meetings/${m.id}",
@@ -5491,7 +5491,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/meetings/page.tsx",
-      "line": 65,
+      "line": 62,
       "kind": "href",
       "target": "/estab/meetings",
       "resolved": "/estab/meetings",
@@ -5499,7 +5499,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/meetings/page.tsx",
-      "line": 73,
+      "line": 66,
       "kind": "href",
       "target": "/estab/meetings?view=calendar",
       "resolved": "/estab/meetings",
@@ -5507,7 +5507,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/meetings/page.tsx",
-      "line": 84,
+      "line": 73,
       "kind": "href",
       "target": "/meeting/meetings/new",
       "resolved": "/meeting/meetings/new",
@@ -5515,18 +5515,10 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/migration/MigrationPanel.tsx",
-      "line": 250,
+      "line": 217,
       "kind": "href",
       "target": "/estab/files/${r.efileId}",
       "resolved": "/estab/files/${r.efileId}",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/estab/operators/HeldFilesNotice.tsx",
-      "line": 50,
-      "kind": "href",
-      "target": "/estab/handover",
-      "resolved": "/estab/handover",
       "ok": true
     },
     {
@@ -5691,7 +5683,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/quarters/[id]/page.tsx",
-      "line": 139,
+      "line": 138,
       "kind": "rowLinkPrefix",
       "target": "/estab/quarters/allotments/",
       "resolved": "/estab/quarters/allotments/${rowId}",
@@ -5699,7 +5691,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/quarters/allotments/AllotmentsTable.tsx",
-      "line": 82,
+      "line": 59,
       "kind": "rowLinkPrefix",
       "target": "/estab/quarters/allotments/",
       "resolved": "/estab/quarters/allotments/${rowId}",
@@ -5723,7 +5715,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/vehicles/new/page.tsx",
-      "line": 71,
+      "line": 79,
       "kind": "navigate",
       "target": "/estab/vehicles?added=${encodeURIComponent(normalisedRegNo)}",
       "resolved": "/estab/vehicles",
@@ -5731,7 +5723,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/vehicles/new/page.tsx",
-      "line": 171,
+      "line": 179,
       "kind": "href",
       "target": "/estab/vehicles",
       "resolved": "/estab/vehicles",
@@ -5739,7 +5731,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/vehicles/page.tsx",
-      "line": 52,
+      "line": 48,
       "kind": "href",
       "target": "/estab/vehicles/new",
       "resolved": "/estab/vehicles/new",
@@ -5747,7 +5739,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/vehicles/page.tsx",
-      "line": 71,
+      "line": 67,
       "kind": "href",
       "target": "/assets/fleet/vehicles",
       "resolved": "/assets/fleet/vehicles",
@@ -5755,7 +5747,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/estab/vehicles/page.tsx",
-      "line": 72,
+      "line": 68,
       "kind": "href",
       "target": "/assets/fleet/maintenance",
       "resolved": "/assets/fleet/maintenance",
@@ -6836,7 +6828,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/grants/applications/[id]/page.tsx",
-      "line": 210,
+      "line": 185,
       "kind": "href",
       "target": "/grants/installments?appId=${params.id}",
       "resolved": "/grants/installments",
@@ -6932,7 +6924,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/grants/page.tsx",
-      "line": 16,
+      "line": 17,
       "kind": "href",
       "target": "/grants/schemes",
       "resolved": "/grants/schemes",
@@ -6940,7 +6932,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/grants/page.tsx",
-      "line": 17,
+      "line": 18,
       "kind": "href",
       "target": "/grants/applications",
       "resolved": "/grants/applications",
@@ -6948,7 +6940,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/grants/page.tsx",
-      "line": 18,
+      "line": 19,
       "kind": "href",
       "target": "/grants/list",
       "resolved": "/grants/list",
@@ -6956,7 +6948,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/grants/page.tsx",
-      "line": 19,
+      "line": 20,
       "kind": "href",
       "target": "/grants/installments",
       "resolved": "/grants/installments",
@@ -6964,7 +6956,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/grants/page.tsx",
-      "line": 20,
+      "line": 21,
       "kind": "href",
       "target": "/grants/releases",
       "resolved": "/grants/releases",
@@ -6972,7 +6964,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/grants/page.tsx",
-      "line": 21,
+      "line": 22,
       "kind": "href",
       "target": "/grants/utilization",
       "resolved": "/grants/utilization",
@@ -6980,7 +6972,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/grants/page.tsx",
-      "line": 22,
+      "line": 23,
       "kind": "href",
       "target": "/grants/grantees",
       "resolved": "/grants/grantees",
@@ -6988,7 +6980,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/grants/page.tsx",
-      "line": 23,
+      "line": 24,
       "kind": "href",
       "target": "/grants/dashboard",
       "resolved": "/grants/dashboard",
@@ -7108,7 +7100,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/help/[module]/page.tsx",
-      "line": 42,
+      "line": 43,
       "kind": "href",
       "target": "/help",
       "resolved": "/help",
@@ -7116,7 +7108,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/help/[module]/page.tsx",
-      "line": 51,
+      "line": 52,
       "kind": "href",
       "target": "/help",
       "resolved": "/help",
@@ -7124,7 +7116,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/help/[module]/page.tsx",
-      "line": 67,
+      "line": 68,
       "kind": "href",
       "target": "/help",
       "resolved": "/help",
@@ -7132,7 +7124,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/help/[module]/page.tsx",
-      "line": 126,
+      "line": 127,
       "kind": "href",
       "target": "/help",
       "resolved": "/help",
@@ -7148,7 +7140,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/help/page.tsx",
-      "line": 43,
+      "line": 39,
       "kind": "href",
       "target": "/helpdesk",
       "resolved": "/helpdesk",
@@ -7156,7 +7148,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/help/page.tsx",
-      "line": 50,
+      "line": 46,
       "kind": "href",
       "target": "/helpdesk",
       "resolved": "/helpdesk",
@@ -7164,7 +7156,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/help/page.tsx",
-      "line": 60,
+      "line": 56,
       "kind": "href",
       "target": "/help/${m.slug}",
       "resolved": "/help/${m.slug}",
@@ -7172,7 +7164,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/help/page.tsx",
-      "line": 83,
+      "line": 79,
       "kind": "href",
       "target": "/setup",
       "resolved": "/setup",
@@ -7180,7 +7172,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/help/page.tsx",
-      "line": 84,
+      "line": 80,
       "kind": "href",
       "target": "/helpdesk",
       "resolved": "/helpdesk",
@@ -7284,7 +7276,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/helpdesk/internal/InternalTicketsTable.tsx",
-      "line": 68,
+      "line": 67,
       "kind": "rowLinkPrefix",
       "target": "/helpdesk/internal/",
       "resolved": "/helpdesk/internal/${rowId}",
@@ -7292,7 +7284,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/helpdesk/internal/new/NewInternalTicketForm.tsx",
-      "line": 101,
+      "line": 75,
       "kind": "navigate",
       "target": "/helpdesk/internal/${payload.data.id}",
       "resolved": "/helpdesk/internal/${payload.data.id}",
@@ -7300,7 +7292,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/helpdesk/internal/new/NewInternalTicketForm.tsx",
-      "line": 103,
+      "line": 77,
       "kind": "navigate",
       "target": "/helpdesk/internal",
       "resolved": "/helpdesk/internal",
@@ -7308,7 +7300,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/helpdesk/internal/new/NewInternalTicketForm.tsx",
-      "line": 224,
+      "line": 179,
       "kind": "href",
       "target": "/helpdesk/internal",
       "resolved": "/helpdesk/internal",
@@ -7484,7 +7476,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/audit-log/page.tsx",
-      "line": 131,
+      "line": 130,
       "kind": "href",
       "target": "/hr/audit-log",
       "resolved": "/hr/audit-log",
@@ -7492,7 +7484,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/contractual/page.tsx",
-      "line": 132,
+      "line": 129,
       "kind": "rowLinkPrefix",
       "target": "/hr/contractual/",
       "resolved": "/hr/contractual/${rowId}",
@@ -7732,7 +7724,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/directory/DirectoryClient.tsx",
-      "line": 173,
+      "line": 222,
       "kind": "href",
       "target": "/hr/employees/${emp.id}",
       "resolved": "/hr/employees/${emp.id}",
@@ -7740,7 +7732,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/directory/DirectoryClient.tsx",
-      "line": 177,
+      "line": 226,
       "kind": "href",
       "target": "/hr/org-chart",
       "resolved": "/hr/org-chart",
@@ -7844,7 +7836,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/employee-types/_components/EmployeeTypeForm.tsx",
-      "line": 128,
+      "line": 131,
       "kind": "navigate",
       "target": "/hr/employee-types",
       "resolved": "/hr/employee-types",
@@ -7852,7 +7844,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/employee-types/_components/EmployeeTypeForm.tsx",
-      "line": 255,
+      "line": 281,
       "kind": "navigate",
       "target": "/hr/employee-types",
       "resolved": "/hr/employee-types",
@@ -7860,7 +7852,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/employee-types/page.tsx",
-      "line": 97,
+      "line": 96,
       "kind": "rowLinkKeyField",
       "target": "/hr/employee-types/${et.id}/edit",
       "resolved": "/hr/employee-types/${et.id}/edit",
@@ -7868,7 +7860,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/employee-types/page.tsx",
-      "line": 124,
+      "line": 123,
       "kind": "href",
       "target": "/hr/employee-types/new",
       "resolved": "/hr/employee-types/new",
@@ -7876,7 +7868,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/employees/[id]/edit/EditEmployeeForm.tsx",
-      "line": 298,
+      "line": 297,
       "kind": "navigate",
       "target": "/hr/employees/${employee.id}",
       "resolved": "/hr/employees/${employee.id}",
@@ -7884,7 +7876,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/employees/[id]/edit/EditEmployeeForm.tsx",
-      "line": 493,
+      "line": 532,
       "kind": "navigate",
       "target": "/hr/employees/${employee.id}",
       "resolved": "/hr/employees/${employee.id}",
@@ -8085,7 +8077,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/grievance/new/NewGrievanceForm.tsx",
-      "line": 66,
+      "line": 73,
       "kind": "navigate",
       "target": "/hr/grievance",
       "resolved": "/hr/grievance",
@@ -8093,7 +8085,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/grievance/new/NewGrievanceForm.tsx",
-      "line": 79,
+      "line": 86,
       "kind": "href",
       "target": "/hr/icc",
       "resolved": "/hr/icc",
@@ -8101,7 +8093,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/grievance/new/NewGrievanceForm.tsx",
-      "line": 111,
+      "line": 127,
       "kind": "navigate",
       "target": "/hr/grievance",
       "resolved": "/hr/grievance",
@@ -8141,7 +8133,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/holidays/page.tsx",
-      "line": 104,
+      "line": 102,
       "kind": "href",
       "target": "/hr/holidays?year=${year - 1}",
       "resolved": "/hr/holidays",
@@ -8149,7 +8141,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/holidays/page.tsx",
-      "line": 108,
+      "line": 106,
       "kind": "href",
       "target": "/hr/holidays?year=${year + 1}",
       "resolved": "/hr/holidays",
@@ -8221,7 +8213,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/interns/page.tsx",
-      "line": 98,
+      "line": 97,
       "kind": "href",
       "target": "/hr/employees/new",
       "resolved": "/hr/employees/new",
@@ -8229,7 +8221,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/interns/page.tsx",
-      "line": 123,
+      "line": 122,
       "kind": "rowLinkPrefix",
       "target": "/hr/employees/",
       "resolved": "/hr/employees/${rowId}",
@@ -8237,7 +8229,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/jd-templates/new/NewTemplateForm.tsx",
-      "line": 239,
+      "line": 241,
       "kind": "href",
       "target": "/hr/jd-templates",
       "resolved": "/hr/jd-templates",
@@ -8245,7 +8237,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/jd-templates/new/NewTemplateForm.tsx",
-      "line": 338,
+      "line": 345,
       "kind": "navigate",
       "target": "/hr/jd-templates",
       "resolved": "/hr/jd-templates",
@@ -8253,7 +8245,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/jd-templates/new/NewTemplateForm.tsx",
-      "line": 347,
+      "line": 354,
       "kind": "href",
       "target": "/hr/jd-templates",
       "resolved": "/hr/jd-templates",
@@ -8261,7 +8253,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/jd-templates/new/NewTemplateForm.tsx",
-      "line": 370,
+      "line": 377,
       "kind": "navigate",
       "target": "/hr/jd-templates",
       "resolved": "/hr/jd-templates",
@@ -8301,15 +8293,15 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/leave/allocate/AllocateLeaveForm.tsx",
-      "line": 244,
+      "line": 262,
       "kind": "href",
-      "target": "/hr/leave/balance?empId=${encodeURIComponent(employeeId)}",
+      "target": "/hr/leave/balance?empId=${employeeId}",
       "resolved": "/hr/leave/balance",
       "ok": true
     },
     {
       "file": "apps/web/src/app/(app)/hr/leave/allocate/AllocateLeaveForm.tsx",
-      "line": 296,
+      "line": 341,
       "kind": "navigate",
       "target": "/hr/leave",
       "resolved": "/hr/leave",
@@ -8317,7 +8309,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/leave/balance/LeaveBalanceClient.tsx",
-      "line": 214,
+      "line": 213,
       "kind": "href",
       "target": "/hr/leave/allocate",
       "resolved": "/hr/leave/allocate",
@@ -8325,7 +8317,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/leave/history/LeaveHistoryClient.tsx",
-      "line": 217,
+      "line": 216,
       "kind": "href",
       "target": "/hr/leave/apply",
       "resolved": "/hr/leave/apply",
@@ -8526,7 +8518,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/medical/new/NewMedicalClaimForm.tsx",
-      "line": 77,
+      "line": 76,
       "kind": "navigate",
       "target": "/hr/medical",
       "resolved": "/hr/medical",
@@ -8534,7 +8526,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/medical/page.tsx",
-      "line": 116,
+      "line": 117,
       "kind": "href",
       "target": "/hr/medical/new",
       "resolved": "/hr/medical/new",
@@ -8583,7 +8575,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/outsourced/page.tsx",
-      "line": 84,
+      "line": 83,
       "kind": "href",
       "target": "/hr/outsourced?offset=${Math.max(0, page.offset - PAGE_SIZE)}",
       "resolved": "/hr/outsourced",
@@ -8591,7 +8583,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/outsourced/page.tsx",
-      "line": 87,
+      "line": 86,
       "kind": "href",
       "target": "/hr/outsourced?offset=${page.offset + PAGE_SIZE}",
       "resolved": "/hr/outsourced",
@@ -8599,7 +8591,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/overtime/new/page.tsx",
-      "line": 116,
+      "line": 115,
       "kind": "navigate",
       "target": "/hr/overtime",
       "resolved": "/hr/overtime",
@@ -8607,7 +8599,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/overtime/new/page.tsx",
-      "line": 128,
+      "line": 127,
       "kind": "navigate",
       "target": "/hr/overtime",
       "resolved": "/hr/overtime",
@@ -8615,7 +8607,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/overtime/new/page.tsx",
-      "line": 209,
+      "line": 224,
       "kind": "navigate",
       "target": "/hr/overtime",
       "resolved": "/hr/overtime",
@@ -8623,7 +8615,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/overtime/page.tsx",
-      "line": 63,
+      "line": 62,
       "kind": "href",
       "target": "/hr/overtime/new",
       "resolved": "/hr/overtime/new",
@@ -8631,7 +8623,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/overtime/page.tsx",
-      "line": 89,
+      "line": 88,
       "kind": "href",
       "target": "/hr/overtime/new",
       "resolved": "/hr/overtime/new",
@@ -9335,7 +9327,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/payroll/[id]/ExceptionPanel.tsx",
-      "line": 66,
+      "line": 65,
       "kind": "href",
       "target": "/hr/employees/${ex.employeeId}",
       "resolved": "/hr/employees/${ex.employeeId}",
@@ -9343,7 +9335,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/payroll/[id]/page.tsx",
-      "line": 124,
+      "line": 125,
       "kind": "href",
       "target": "/hr/payroll/register?runId=${encodeURIComponent(run.id)}",
       "resolved": "/hr/payroll/register",
@@ -9351,7 +9343,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/payroll/costing/CostingPeriodForm.tsx",
-      "line": 25,
+      "line": 24,
       "kind": "navigate",
       "target": "/hr/payroll/costing?period=${encodeURIComponent(period.trim())}",
       "resolved": "/hr/payroll/costing",
@@ -9375,7 +9367,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/payroll/CreatePayrollRunForm.tsx",
-      "line": 308,
+      "line": 335,
       "kind": "href",
       "target": "/hr/payroll/${id}",
       "resolved": "/hr/payroll/${id}",
@@ -9383,7 +9375,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/payroll/CreatePayrollRunForm.tsx",
-      "line": 323,
+      "line": 350,
       "kind": "href",
       "target": "/hr/leave/approvals",
       "resolved": "/hr/leave/approvals",
@@ -9391,7 +9383,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/payroll/ddos/CreateDdoForm.tsx",
-      "line": 160,
+      "line": 177,
       "kind": "href",
       "target": "/hr/payroll/ddos",
       "resolved": "/hr/payroll/ddos",
@@ -9423,7 +9415,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/payroll/loans/CreateLoanForm.tsx",
-      "line": 151,
+      "line": 152,
       "kind": "navigate",
       "target": "/hr/payroll/loans?empId=${encodeURIComponent(v.employeeId)}",
       "resolved": "/hr/payroll/loans",
@@ -9487,7 +9479,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/payroll/pay-groups/CreatePayGroupForm.tsx",
-      "line": 335,
+      "line": 383,
       "kind": "href",
       "target": "/hr/payroll/pay-groups",
       "resolved": "/hr/payroll/pay-groups",
@@ -9559,7 +9551,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/payroll/pensioners/new/CreatePensionerForm.tsx",
-      "line": 174,
+      "line": 188,
       "kind": "navigate",
       "target": "/hr/payroll/pensioners",
       "resolved": "/hr/payroll/pensioners",
@@ -9567,7 +9559,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/payroll/pensioners/page.tsx",
-      "line": 79,
+      "line": 81,
       "kind": "href",
       "target": "/hr/payroll/pensioners/new",
       "resolved": "/hr/payroll/pensioners/new",
@@ -9575,7 +9567,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/payroll/pensioners/page.tsx",
-      "line": 111,
+      "line": 113,
       "kind": "rowLinkPrefix",
       "target": "/hr/payroll/pensioners/",
       "resolved": "/hr/payroll/pensioners/${rowId}",
@@ -9607,7 +9599,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/payroll/salary-slips/[id]/page.tsx",
-      "line": 81,
+      "line": 80,
       "kind": "href",
       "target": "/hr/payroll/slips/${params.id}",
       "resolved": "/hr/payroll/slips/${params.id}",
@@ -9615,7 +9607,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/payroll/salary-slips/SalarySlipsTable.tsx",
-      "line": 28,
+      "line": 27,
       "kind": "href",
       "target": "/hr/employees/${r.employeeId}",
       "resolved": "/hr/employees/${r.employeeId}",
@@ -9623,7 +9615,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/payroll/salary-slips/SalarySlipsTable.tsx",
-      "line": 78,
+      "line": 77,
       "kind": "href",
       "target": "/hr/payroll",
       "resolved": "/hr/payroll",
@@ -9631,7 +9623,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/payroll/salary-slips/SalarySlipsTable.tsx",
-      "line": 84,
+      "line": 83,
       "kind": "rowLinkPrefix",
       "target": "/hr/payroll/salary-slips/",
       "resolved": "/hr/payroll/salary-slips/${rowId}",
@@ -9887,7 +9879,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/recruitment/[id]/applications/[appId]/page.tsx",
-      "line": 237,
+      "line": 273,
       "kind": "href",
       "target": "/hr/recruitment/${jobOpeningId}",
       "resolved": "/hr/recruitment/${jobOpeningId}",
@@ -9967,7 +9959,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/recruitment/page.tsx",
-      "line": 106,
+      "line": 105,
       "kind": "href",
       "target": "/hr/recruitment/talent-pool",
       "resolved": "/hr/recruitment/talent-pool",
@@ -9975,7 +9967,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/recruitment/page.tsx",
-      "line": 107,
+      "line": 106,
       "kind": "href",
       "target": "/hr/recruitment/requisitions",
       "resolved": "/hr/recruitment/requisitions",
@@ -9983,7 +9975,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/recruitment/page.tsx",
-      "line": 108,
+      "line": 107,
       "kind": "href",
       "target": "/hr/recruitment/settings",
       "resolved": "/hr/recruitment/settings",
@@ -9991,7 +9983,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/recruitment/page.tsx",
-      "line": 109,
+      "line": 108,
       "kind": "href",
       "target": "/hr/recruitment/new",
       "resolved": "/hr/recruitment/new",
@@ -9999,7 +9991,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/recruitment/page.tsx",
-      "line": 133,
+      "line": 132,
       "kind": "href",
       "target": "/hr/recruitment/new",
       "resolved": "/hr/recruitment/new",
@@ -10007,7 +9999,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/recruitment/page.tsx",
-      "line": 152,
+      "line": 151,
       "kind": "rowLinkPrefix",
       "target": "/hr/recruitment/",
       "resolved": "/hr/recruitment/${rowId}",
@@ -10015,7 +10007,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/recruitment/page.tsx",
-      "line": 165,
+      "line": 164,
       "kind": "href",
       "target": "/careers",
       "resolved": "/careers",
@@ -10023,7 +10015,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/recruitment/page.tsx",
-      "line": 169,
+      "line": 168,
       "kind": "href",
       "target": "/hr/recruitment/talent-pool",
       "resolved": "/hr/recruitment/talent-pool",
@@ -10031,7 +10023,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/recruitment/requisitions/RequisitionsClient.tsx",
-      "line": 243,
+      "line": 234,
       "kind": "href",
       "target": "/hr/recruitment/${opening}",
       "resolved": "/hr/recruitment/${opening}",
@@ -10039,7 +10031,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/recruitment/settings/page.tsx",
-      "line": 63,
+      "line": 65,
       "kind": "href",
       "target": "/hr/recruitment",
       "resolved": "/hr/recruitment",
@@ -10047,7 +10039,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/recruitment/talent-pool/page.tsx",
-      "line": 158,
+      "line": 156,
       "kind": "href",
       "target": "/hr/recruitment/talent-pool",
       "resolved": "/hr/recruitment/talent-pool",
@@ -10055,7 +10047,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/recruitment/talent-pool/page.tsx",
-      "line": 177,
+      "line": 175,
       "kind": "href",
       "target": "/careers",
       "resolved": "/careers",
@@ -10063,7 +10055,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/recruitment/talent-pool/page.tsx",
-      "line": 193,
+      "line": 191,
       "kind": "href",
       "target": "/hr/recruitment/talent-pool?${pageQuery(searchParams, page - 1)}",
       "resolved": "/hr/recruitment/talent-pool",
@@ -10071,7 +10063,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/recruitment/talent-pool/page.tsx",
-      "line": 197,
+      "line": 195,
       "kind": "href",
       "target": "/hr/recruitment/talent-pool?${pageQuery(searchParams, page + 1)}",
       "resolved": "/hr/recruitment/talent-pool",
@@ -10103,7 +10095,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/salary-structure/page.tsx",
-      "line": 31,
+      "line": 28,
       "kind": "navigate",
       "target": "/hr/payroll/structures",
       "resolved": "/hr/payroll/structures",
@@ -10111,7 +10103,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/service-book/page.tsx",
-      "line": 107,
+      "line": 106,
       "kind": "href",
       "target": "/hr/service-book",
       "resolved": "/hr/service-book",
@@ -10151,7 +10143,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/training/new/NewTrainingForm.tsx",
-      "line": 97,
+      "line": 93,
       "kind": "navigate",
       "target": "/hr/training",
       "resolved": "/hr/training",
@@ -10159,16 +10151,8 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/training/new/NewTrainingForm.tsx",
-      "line": 299,
+      "line": 294,
       "kind": "href",
-      "target": "/hr/training",
-      "resolved": "/hr/training",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/hr/training/new/NewTrainingForm.tsx",
-      "line": 324,
-      "kind": "navigate",
       "target": "/hr/training",
       "resolved": "/hr/training",
       "ok": true
@@ -10295,7 +10279,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/hr/workforce/page.tsx",
-      "line": 130,
+      "line": 127,
       "kind": "href",
       "target": "/hr/workforce?groupBy=${g}",
       "resolved": "/hr/workforce",
@@ -10431,7 +10415,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/inspection/assignments/page.tsx",
-      "line": 44,
+      "line": 26,
       "kind": "href",
       "target": "/inspection",
       "resolved": "/inspection",
@@ -10447,7 +10431,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/inspection/inspections/page.tsx",
-      "line": 79,
+      "line": 67,
       "kind": "href",
       "target": "/inspection",
       "resolved": "/inspection",
@@ -10455,7 +10439,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/inspection/inspections/page.tsx",
-      "line": 91,
+      "line": 82,
       "kind": "href",
       "target": "/inspection/assignments",
       "resolved": "/inspection/assignments",
@@ -10463,15 +10447,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/inspection/inspections/page.tsx",
-      "line": 118,
-      "kind": "href",
-      "target": "/inspection/inspections/${row.id}",
-      "resolved": "/inspection/inspections/${row.id}",
-      "ok": false
-    },
-    {
-      "file": "apps/web/src/app/(app)/inspection/inspections/page.tsx",
-      "line": 137,
+      "line": 117,
       "kind": "href",
       "target": "/inspection/inspections?page=${page - 1}",
       "resolved": "/inspection/inspections",
@@ -10479,7 +10455,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/inspection/inspections/page.tsx",
-      "line": 150,
+      "line": 130,
       "kind": "href",
       "target": "/inspection/inspections?page=${page + 1}",
       "resolved": "/inspection/inspections",
@@ -10631,7 +10607,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/install/stages/page.tsx",
-      "line": 28,
+      "line": 27,
       "kind": "href",
       "target": "/install",
       "resolved": "/install",
@@ -10639,7 +10615,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/install/stages/page.tsx",
-      "line": 30,
+      "line": 29,
       "kind": "href",
       "target": "/install/domain-packs",
       "resolved": "/install/domain-packs",
@@ -10831,7 +10807,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/inventory/ledger/new/page.tsx",
-      "line": 112,
+      "line": 111,
       "kind": "navigate",
       "target": "/inventory/reconcile",
       "resolved": "/inventory/reconcile",
@@ -11103,7 +11079,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/knowledge/assistant/AssistantClient.tsx",
-      "line": 147,
+      "line": 150,
       "kind": "href",
       "target": "/knowledge/policies/${c.docId}",
       "resolved": "/knowledge/policies/${c.docId}",
@@ -11142,11 +11118,11 @@
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/knowledge/dashboard/RecentDocsTable.tsx",
-      "line": 31,
-      "kind": "rowLinkPrefix",
-      "target": "/knowledge/documents/",
-      "resolved": "/knowledge/documents/${rowId}",
+      "file": "apps/web/src/app/(app)/knowledge/list/ImportButton.tsx",
+      "line": 11,
+      "kind": "href",
+      "target": "/knowledge/documents/new?mode=import",
+      "resolved": "/knowledge/documents/new",
       "ok": true
     },
     {
@@ -11239,7 +11215,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/knowledge/policies/[id]/page.tsx",
-      "line": 86,
+      "line": 70,
       "kind": "href",
       "target": "/knowledge/policies/${policy.supersedesId}",
       "resolved": "/knowledge/policies/${policy.supersedesId}",
@@ -11263,7 +11239,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/knowledge/policies/new/CreatePolicyForm.tsx",
-      "line": 107,
+      "line": 90,
       "kind": "href",
       "target": "/knowledge/policies",
       "resolved": "/knowledge/policies",
@@ -11271,7 +11247,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/knowledge/policies/page.tsx",
-      "line": 67,
+      "line": 65,
       "kind": "href",
       "target": "/knowledge/policies/new",
       "resolved": "/knowledge/policies/new",
@@ -11279,18 +11255,10 @@
     },
     {
       "file": "apps/web/src/app/(app)/knowledge/policies/page.tsx",
-      "line": 79,
+      "line": 77,
       "kind": "href",
       "target": "/knowledge/policies?filter=review-due",
       "resolved": "/knowledge/policies",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/knowledge/policies/page.tsx",
-      "line": 93,
-      "kind": "href",
-      "target": "/knowledge/policies/new",
-      "resolved": "/knowledge/policies/new",
       "ok": true
     },
     {
@@ -11326,8 +11294,16 @@
       "ok": true
     },
     {
+      "file": "apps/web/src/app/(app)/knowledge/repository/ImportButton.tsx",
+      "line": 10,
+      "kind": "href",
+      "target": "/knowledge/documents/new",
+      "resolved": "/knowledge/documents/new",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/(app)/knowledge/repository/page.tsx",
-      "line": 65,
+      "line": 58,
       "kind": "href",
       "target": "/knowledge/documents/new",
       "resolved": "/knowledge/documents/new",
@@ -11335,18 +11311,18 @@
     },
     {
       "file": "apps/web/src/app/(app)/knowledge/repository/RepositoryClient.tsx",
-      "line": 57,
+      "line": 41,
       "kind": "rowLinkPrefix",
-      "target": "/knowledge/documents/",
-      "resolved": "/knowledge/documents/${rowId}",
+      "target": "/knowledge/policies/",
+      "resolved": "/knowledge/policies/${rowId}",
       "ok": true
     },
     {
       "file": "apps/web/src/app/(app)/knowledge/search/SearchClient.tsx",
       "line": 84,
       "kind": "href",
-      "target": "/knowledge/documents/${encodeURIComponent(doc.id)}",
-      "resolved": "/knowledge/documents/${encodeURIComponent(doc.id)}",
+      "target": "/knowledge/policies/${doc.id}",
+      "resolved": "/knowledge/policies/${doc.id}",
       "ok": true
     },
     {
@@ -11355,22 +11331,6 @@
       "kind": "navigate",
       "target": "/auth/login",
       "resolved": "/auth/login",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/learning/assessments/_components/AssessmentsTable.tsx",
-      "line": 22,
-      "kind": "href",
-      "target": "/learning/courses/",
-      "resolved": "/learning/courses/",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/learning/assessments/_components/AssessmentsTable.tsx",
-      "line": 32,
-      "kind": "rowLinkPrefix",
-      "target": "/learning/assessments/",
-      "resolved": "/learning/assessments/${rowId}",
       "ok": true
     },
     {
@@ -11383,10 +11343,18 @@
     },
     {
       "file": "apps/web/src/app/(app)/learning/assessments/page.tsx",
-      "line": 38,
+      "line": 37,
       "kind": "href",
       "target": "/learning/assessments/verify",
       "resolved": "/learning/assessments/verify",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/learning/assessments/page.tsx",
+      "line": 56,
+      "kind": "rowLinkPrefix",
+      "target": "/learning/assessments/",
+      "resolved": "/learning/assessments/${rowId}",
       "ok": true
     },
     {
@@ -11559,7 +11527,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/legal/cases/[id]/page.tsx",
-      "line": 136,
+      "line": 118,
       "kind": "href",
       "target": "/legal",
       "resolved": "/legal",
@@ -11567,7 +11535,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/legal/cases/[id]/page.tsx",
-      "line": 138,
+      "line": 120,
       "kind": "href",
       "target": "/legal/list",
       "resolved": "/legal/list",
@@ -11647,7 +11615,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/legal/list/LegalCasesTable.tsx",
-      "line": 116,
+      "line": 99,
       "kind": "rowLinkPrefix",
       "target": "/legal/cases/",
       "resolved": "/legal/cases/${rowId}",
@@ -11798,42 +11766,44 @@
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/locations/list/page.tsx",
-      "line": 26,
-      "kind": "href",
-      "target": "/setup",
-      "resolved": "/setup",
+      "file": "apps/web/src/app/(app)/locations/maps/_components/MonitoringMap.tsx",
+      "line": 53,
+      "kind": "helperReturn",
+      "fn": "recordHref",
+      "target": "/assets/${encodeURIComponent(refId)}",
+      "resolved": "/assets/${encodeURIComponent(refId)}",
       "ok": true
     },
     {
       "file": "apps/web/src/app/(app)/locations/maps/_components/MonitoringMap.tsx",
-      "line": 78,
+      "line": 55,
       "kind": "helperReturn",
       "fn": "recordHref",
-      "target": "/locations/infrastructure",
-      "resolved": "/locations/infrastructure",
+      "target": "/locations/list?ref=${encodeURIComponent(refId)}",
+      "resolved": "/locations/list",
       "ok": true
     },
     {
       "file": "apps/web/src/app/(app)/locations/maps/_components/MonitoringMap.tsx",
-      "line": 80,
+      "line": 57,
       "kind": "helperReturn",
       "fn": "recordHref",
-      "target": "/locations/geofences",
-      "resolved": "/locations/geofences",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/locations/not-found.tsx",
-      "line": 12,
-      "kind": "href",
-      "target": "/locations",
+      "target": "/locations?geofence=${encodeURIComponent(refId)}",
       "resolved": "/locations",
       "ok": true
     },
     {
+      "file": "apps/web/src/app/(app)/locations/maps/_components/MonitoringMap.tsx",
+      "line": 59,
+      "kind": "helperReturn",
+      "fn": "recordHref",
+      "target": "/locations/list?ref=${encodeURIComponent(refId)}",
+      "resolved": "/locations/list",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/(app)/locations/page.tsx",
-      "line": 12,
+      "line": 10,
       "kind": "href",
       "target": "/locations/list",
       "resolved": "/locations/list",
@@ -11841,7 +11811,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/locations/page.tsx",
-      "line": 13,
+      "line": 11,
       "kind": "href",
       "target": "/locations/geofences",
       "resolved": "/locations/geofences",
@@ -11849,7 +11819,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/locations/page.tsx",
-      "line": 14,
+      "line": 12,
       "kind": "href",
       "target": "/locations/jurisdictions",
       "resolved": "/locations/jurisdictions",
@@ -11857,7 +11827,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/locations/page.tsx",
-      "line": 15,
+      "line": 13,
       "kind": "href",
       "target": "/locations/infrastructure",
       "resolved": "/locations/infrastructure",
@@ -11865,7 +11835,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/locations/page.tsx",
-      "line": 16,
+      "line": 14,
       "kind": "href",
       "target": "/locations/maps",
       "resolved": "/locations/maps",
@@ -11873,47 +11843,15 @@
     },
     {
       "file": "apps/web/src/app/(app)/locations/page.tsx",
-      "line": 17,
+      "line": 15,
       "kind": "href",
       "target": "/locations/maps/monitoring",
       "resolved": "/locations/maps/monitoring",
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/loyalty/accruals/page.tsx",
-      "line": 43,
-      "kind": "href",
-      "target": "/loyalty/accruals?page=${page - 1}",
-      "resolved": "/loyalty/accruals",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/loyalty/accruals/page.tsx",
-      "line": 51,
-      "kind": "href",
-      "target": "/loyalty/accruals?page=${page + 1}",
-      "resolved": "/loyalty/accruals",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/loyalty/members/page.tsx",
-      "line": 54,
-      "kind": "href",
-      "target": "/loyalty/members?page=${page - 1}",
-      "resolved": "/loyalty/members",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/loyalty/members/page.tsx",
-      "line": 62,
-      "kind": "href",
-      "target": "/loyalty/members?page=${page + 1}",
-      "resolved": "/loyalty/members",
-      "ok": true
-    },
-    {
       "file": "apps/web/src/app/(app)/loyalty/page.tsx",
-      "line": 14,
+      "line": 13,
       "kind": "href",
       "target": "/loyalty/programs",
       "resolved": "/loyalty/programs",
@@ -11921,7 +11859,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/loyalty/page.tsx",
-      "line": 15,
+      "line": 14,
       "kind": "href",
       "target": "/loyalty/members",
       "resolved": "/loyalty/members",
@@ -11929,7 +11867,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/loyalty/page.tsx",
-      "line": 16,
+      "line": 15,
       "kind": "href",
       "target": "/loyalty/accruals",
       "resolved": "/loyalty/accruals",
@@ -11937,7 +11875,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/loyalty/page.tsx",
-      "line": 17,
+      "line": 16,
       "kind": "href",
       "target": "/loyalty/redemptions",
       "resolved": "/loyalty/redemptions",
@@ -11945,18 +11883,10 @@
     },
     {
       "file": "apps/web/src/app/(app)/loyalty/page.tsx",
-      "line": 18,
+      "line": 17,
       "kind": "href",
       "target": "/loyalty/tiers",
       "resolved": "/loyalty/tiers",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/loyalty/page.tsx",
-      "line": 46,
-      "kind": "href",
-      "target": "/loyalty",
-      "resolved": "/loyalty",
       "ok": true
     },
     {
@@ -11968,16 +11898,8 @@
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/loyalty/tiers/TiersTable.tsx",
-      "line": 115,
-      "kind": "href",
-      "target": "/loyalty/programs",
-      "resolved": "/loyalty/programs",
-      "ok": true
-    },
-    {
       "file": "apps/web/src/app/(app)/meeting/meetings/[meetingId]/MeetingConsole.tsx",
-      "line": 388,
+      "line": 375,
       "kind": "href",
       "target": "/meeting/meetings/${meeting.id}/minutes",
       "resolved": "/meeting/meetings/${meeting.id}/minutes",
@@ -12049,7 +11971,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/meeting/page.tsx",
-      "line": 74,
+      "line": 63,
       "kind": "href",
       "target": "/meeting/meetings/new",
       "resolved": "/meeting/meetings/new",
@@ -12057,7 +11979,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/meeting/page.tsx",
-      "line": 96,
+      "line": 84,
       "kind": "href",
       "target": "/meeting/meetings",
       "resolved": "/meeting/meetings",
@@ -12065,7 +11987,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/meeting/page.tsx",
-      "line": 103,
+      "line": 91,
       "kind": "href",
       "target": "/meeting/meetings?status=in_progress",
       "resolved": "/meeting/meetings",
@@ -12073,7 +11995,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/meeting/page.tsx",
-      "line": 110,
+      "line": 98,
       "kind": "href",
       "target": "/meeting/meetings?status=scheduled",
       "resolved": "/meeting/meetings",
@@ -12081,7 +12003,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/meeting/page.tsx",
-      "line": 118,
+      "line": 106,
       "kind": "href",
       "target": "/meeting/meetings?status=minutes_pending",
       "resolved": "/meeting/meetings",
@@ -12089,7 +12011,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/meeting/page.tsx",
-      "line": 126,
+      "line": 114,
       "kind": "href",
       "target": "/meeting/meetings?status=adjourned",
       "resolved": "/meeting/meetings",
@@ -12153,7 +12075,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/municipal/_components/RecordsTable.tsx",
-      "line": 51,
+      "line": 41,
       "kind": "rowLinkPrefix",
       "target": "/municipal/${config.serviceKey}/applications/",
       "resolved": "/municipal/${config.serviceKey}/applications/${rowId}",
@@ -12253,7 +12175,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/notifications/compose/page.tsx",
-      "line": 279,
+      "line": 284,
       "kind": "href",
       "target": "/notifications/templates/new",
       "resolved": "/notifications/templates/new",
@@ -12261,7 +12183,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/notifications/compose/page.tsx",
-      "line": 368,
+      "line": 396,
       "kind": "href",
       "target": "/notifications/deliveries",
       "resolved": "/notifications/deliveries",
@@ -12269,7 +12191,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/notifications/deliveries/[id]/DeliveryDetail.tsx",
-      "line": 159,
+      "line": 158,
       "kind": "href",
       "target": "/notifications/deliveries",
       "resolved": "/notifications/deliveries",
@@ -12277,7 +12199,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/notifications/deliveries/[id]/DeliveryDetail.tsx",
-      "line": 213,
+      "line": 212,
       "kind": "href",
       "target": "/notifications/templates/${delivery.templateId}",
       "resolved": "/notifications/templates/${delivery.templateId}",
@@ -12293,7 +12215,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/notifications/deliveries/page.tsx",
-      "line": 92,
+      "line": 91,
       "kind": "href",
       "target": "/notifications/compose",
       "resolved": "/notifications/compose",
@@ -12301,7 +12223,15 @@
     },
     {
       "file": "apps/web/src/app/(app)/notifications/deliveries/page.tsx",
-      "line": 93,
+      "line": 92,
+      "kind": "href",
+      "target": "/notifications/templates",
+      "resolved": "/notifications/templates",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/notifications/list/page.tsx",
+      "line": 38,
       "kind": "href",
       "target": "/notifications/templates",
       "resolved": "/notifications/templates",
@@ -12311,21 +12241,13 @@
       "file": "apps/web/src/app/(app)/notifications/list/page.tsx",
       "line": 39,
       "kind": "href",
-      "target": "/notifications/templates",
-      "resolved": "/notifications/templates",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/notifications/list/page.tsx",
-      "line": 40,
-      "kind": "href",
       "target": "/notifications/deliveries",
       "resolved": "/notifications/deliveries",
       "ok": true
     },
     {
       "file": "apps/web/src/app/(app)/notifications/list/page.tsx",
-      "line": 41,
+      "line": 40,
       "kind": "href",
       "target": "/tenant-admin/notifications",
       "resolved": "/tenant-admin/notifications",
@@ -12333,7 +12255,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/notifications/list/page.tsx",
-      "line": 42,
+      "line": 41,
       "kind": "href",
       "target": "/notifications/compose",
       "resolved": "/notifications/compose",
@@ -12445,7 +12367,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/notifications/templates/new/page.tsx",
-      "line": 67,
+      "line": 71,
       "kind": "navigate",
       "target": "/notifications/templates",
       "resolved": "/notifications/templates",
@@ -12453,7 +12375,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/notifications/templates/new/page.tsx",
-      "line": 126,
+      "line": 139,
       "kind": "href",
       "target": "/notifications/templates",
       "resolved": "/notifications/templates",
@@ -12493,7 +12415,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/platform-admin/org-config/page.tsx",
-      "line": 28,
+      "line": 29,
       "kind": "href",
       "target": "/platform-admin",
       "resolved": "/platform-admin",
@@ -12597,7 +12519,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/platform-admin/users/UserManagementPage.tsx",
-      "line": 389,
+      "line": 388,
       "kind": "href",
       "target": "/tenant-admin/users/${user.id}",
       "resolved": "/tenant-admin/users/${user.id}",
@@ -12693,7 +12615,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/approvals/escalation/page.tsx",
-      "line": 45,
+      "line": 44,
       "kind": "href",
       "target": "/procurement/approvals",
       "resolved": "/procurement/approvals",
@@ -12709,7 +12631,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/approvals/ProcurementApprovalsPanel.tsx",
-      "line": 222,
+      "line": 151,
       "kind": "helperReturn",
       "fn": "refLink",
       "target": "/procurement/indents/${task.refId}",
@@ -12718,7 +12640,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/approvals/ProcurementApprovalsPanel.tsx",
-      "line": 223,
+      "line": 152,
       "kind": "helperReturn",
       "fn": "refLink",
       "target": "/procurement/orders/${task.refId}",
@@ -12727,7 +12649,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/approvals/ProcurementApprovalsPanel.tsx",
-      "line": 224,
+      "line": 153,
       "kind": "helperReturn",
       "fn": "refLink",
       "target": "/procurement/planning/${task.refId}",
@@ -12744,47 +12666,47 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/contracts/new/CreateContractForm.tsx",
-      "line": 109,
+      "line": 125,
       "kind": "navigate",
-      "target": "/contracts/list",
-      "resolved": "/contracts/list",
+      "target": "/procurement/contracts",
+      "resolved": "/procurement/contracts",
       "ok": true
     },
     {
       "file": "apps/web/src/app/(app)/procurement/contracts/new/CreateContractForm.tsx",
-      "line": 215,
+      "line": 243,
       "kind": "href",
-      "target": "/contracts/list",
-      "resolved": "/contracts/list",
+      "target": "/procurement/contracts",
+      "resolved": "/procurement/contracts",
       "ok": true
     },
     {
       "file": "apps/web/src/app/(app)/procurement/contracts/page.tsx",
-      "line": 10,
-      "kind": "navigate",
-      "target": "/contracts/list",
-      "resolved": "/contracts/list",
+      "line": 60,
+      "kind": "href",
+      "target": "/procurement/contracts/new",
+      "resolved": "/procurement/contracts/new",
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/procurement/contracts/ProcurementContractsTable.tsx",
-      "line": 55,
+      "file": "apps/web/src/app/(app)/procurement/contracts/page.tsx",
+      "line": 85,
+      "kind": "href",
+      "target": "/procurement/contracts/new",
+      "resolved": "/procurement/contracts/new",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/procurement/contracts/page.tsx",
+      "line": 97,
       "kind": "rowLinkPrefix",
       "target": "/contracts/",
       "resolved": "/contracts/${rowId}",
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/procurement/contracts/ProcurementContractsTable.tsx",
-      "line": 69,
-      "kind": "href",
-      "target": "/procurement/orders/${m[1]}",
-      "resolved": "/procurement/orders/${m[1]}",
-      "ok": true
-    },
-    {
       "file": "apps/web/src/app/(app)/procurement/dashboard/page.tsx",
-      "line": 48,
+      "line": 46,
       "kind": "href",
       "target": "/procurement",
       "resolved": "/procurement",
@@ -12792,7 +12714,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/dashboard/page.tsx",
-      "line": 49,
+      "line": 47,
       "kind": "href",
       "target": "/procurement/indents/new",
       "resolved": "/procurement/indents/new",
@@ -12832,7 +12754,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/grn/[id]/srn/new/CreateSrnForm.tsx",
-      "line": 69,
+      "line": 68,
       "kind": "navigate",
       "target": "/procurement/grn/${grnId}/srn?signFailed=1",
       "resolved": "/procurement/grn/${grnId}/srn",
@@ -12840,7 +12762,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/grn/[id]/srn/new/CreateSrnForm.tsx",
-      "line": 85,
+      "line": 84,
       "kind": "navigate",
       "target": "/procurement/grn/${grnId}/srn?signFailed=1",
       "resolved": "/procurement/grn/${grnId}/srn",
@@ -12848,7 +12770,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/grn/[id]/srn/new/CreateSrnForm.tsx",
-      "line": 91,
+      "line": 90,
       "kind": "navigate",
       "target": "/procurement/grn/${grnId}/srn",
       "resolved": "/procurement/grn/${grnId}/srn",
@@ -12856,7 +12778,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/grn/[id]/srn/new/CreateSrnForm.tsx",
-      "line": 207,
+      "line": 204,
       "kind": "href",
       "target": "/procurement/grn/${grnId}",
       "resolved": "/procurement/grn/${grnId}",
@@ -12864,7 +12786,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/grn/[id]/srn/page.tsx",
-      "line": 51,
+      "line": 43,
       "kind": "href",
       "target": "/procurement/grn/${params.id}/srn/new",
       "resolved": "/procurement/grn/${params.id}/srn/new",
@@ -12872,7 +12794,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/grn/[id]/srn/page.tsx",
-      "line": 101,
+      "line": 83,
       "kind": "href",
       "target": "/procurement/grn/${params.id}",
       "resolved": "/procurement/grn/${params.id}",
@@ -12880,7 +12802,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/grn/new/CreateGRNForm.tsx",
-      "line": 340,
+      "line": 367,
       "kind": "href",
       "target": "/procurement/grn",
       "resolved": "/procurement/grn",
@@ -12912,7 +12834,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/indents/[id]/page.tsx",
-      "line": 29,
+      "line": 28,
       "kind": "href",
       "target": "/procurement/approvals",
       "resolved": "/procurement/approvals",
@@ -12920,7 +12842,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/indents/[id]/page.tsx",
-      "line": 30,
+      "line": 29,
       "kind": "href",
       "target": "/procurement/tenders/new",
       "resolved": "/procurement/tenders/new",
@@ -12928,7 +12850,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/indents/[id]/page.tsx",
-      "line": 31,
+      "line": 30,
       "kind": "href",
       "target": "/procurement/orders/new",
       "resolved": "/procurement/orders/new",
@@ -13008,7 +12930,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/orders/new/CreatePOForm.tsx",
-      "line": 334,
+      "line": 251,
       "kind": "href",
       "target": "/procurement/orders",
       "resolved": "/procurement/orders",
@@ -13072,7 +12994,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/rfq/new/CreateRFQForm.tsx",
-      "line": 193,
+      "line": 234,
       "kind": "href",
       "target": "/procurement/rfq",
       "resolved": "/procurement/rfq",
@@ -13132,14 +13054,6 @@
       "kind": "href",
       "target": "/procurement/tenders/${tender.id}/documents",
       "resolved": "/procurement/tenders/${tender.id}/documents",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/procurement/tenders/[id]/TenderLifecycleActions.tsx",
-      "line": 118,
-      "kind": "href",
-      "target": "/procurement/tenders/${tenderId}/documents",
-      "resolved": "/procurement/tenders/${tenderId}/documents",
       "ok": true
     },
     {
@@ -13250,8 +13164,8 @@
       "file": "apps/web/src/app/(app)/procurement/tiles.ts",
       "line": 34,
       "kind": "href",
-      "target": "/contracts/list",
-      "resolved": "/contracts/list",
+      "target": "/procurement/contracts",
+      "resolved": "/procurement/contracts",
       "ok": true
     },
     {
@@ -13320,23 +13234,15 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/vendors/[id]/page.tsx",
-      "line": 98,
+      "line": 78,
       "kind": "href",
       "target": "/procurement/vendors/${vendor.id}/scorecard",
       "resolved": "/procurement/vendors/${vendor.id}/scorecard",
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/procurement/vendors/[id]/VendorOrdersTable.tsx",
-      "line": 24,
-      "kind": "href",
-      "target": "/procurement/orders/${r.id}",
-      "resolved": "/procurement/orders/${r.id}",
-      "ok": true
-    },
-    {
       "file": "apps/web/src/app/(app)/procurement/vendors/new/RegisterVendorForm.tsx",
-      "line": 156,
+      "line": 124,
       "kind": "navigate",
       "target": "/procurement/vendors/${newId}?registered=1",
       "resolved": "/procurement/vendors/${newId}",
@@ -13344,7 +13250,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/vendors/new/RegisterVendorForm.tsx",
-      "line": 158,
+      "line": 126,
       "kind": "navigate",
       "target": "/procurement/vendors",
       "resolved": "/procurement/vendors",
@@ -13352,7 +13258,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/vendors/new/RegisterVendorForm.tsx",
-      "line": 183,
+      "line": 151,
       "kind": "href",
       "target": "/help/privacy",
       "resolved": "/help/privacy",
@@ -13360,15 +13266,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/vendors/new/RegisterVendorForm.tsx",
-      "line": 275,
-      "kind": "href",
-      "target": "/procurement/vendors/${duplicate.id}",
-      "resolved": "/procurement/vendors/${duplicate.id}",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/procurement/vendors/new/RegisterVendorForm.tsx",
-      "line": 283,
+      "line": 243,
       "kind": "href",
       "target": "/procurement/vendors",
       "resolved": "/procurement/vendors",
@@ -13376,10 +13274,34 @@
     },
     {
       "file": "apps/web/src/app/(app)/procurement/vendors/page.tsx",
-      "line": 35,
+      "line": 30,
       "kind": "href",
       "target": "/procurement/vendors/new",
       "resolved": "/procurement/vendors/new",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/projects/[id]/page.tsx",
+      "line": 94,
+      "kind": "href",
+      "target": "/projects/${params.id}/tasks",
+      "resolved": "/projects/${params.id}/tasks",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/projects/[id]/page.tsx",
+      "line": 97,
+      "kind": "href",
+      "target": "/projects/${params.id}/members",
+      "resolved": "/projects/${params.id}/members",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/projects/[id]/page.tsx",
+      "line": 100,
+      "kind": "href",
+      "target": "/projects/${params.id}/risks",
+      "resolved": "/projects/${params.id}/risks",
       "ok": true
     },
     {
@@ -13848,7 +13770,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/revenue/bbps/PayBillForm.tsx",
-      "line": 281,
+      "line": 244,
       "kind": "href",
       "target": "/revenue/receipts?assesseeId=${encodeURIComponent(lastAssesseeId)}",
       "resolved": "/revenue/receipts",
@@ -14015,22 +13937,6 @@
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/revenue/waivers/page.tsx",
-      "line": 111,
-      "kind": "linkField",
-      "target": "/revenue/waivers/${raw.id}/decide",
-      "resolved": "/revenue/waivers/${raw.id}/decide",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/revenue/waivers/page.tsx",
-      "line": 111,
-      "kind": "rowLinkKeyField",
-      "target": "/revenue/waivers/${raw.id}/decide",
-      "resolved": "/revenue/waivers/${raw.id}/decide",
-      "ok": true
-    },
-    {
       "file": "apps/web/src/app/(app)/revenue/write-offs/page.tsx",
       "line": 124,
       "kind": "linkField",
@@ -14120,23 +14026,15 @@
     },
     {
       "file": "apps/web/src/app/(app)/stock/items/new/page.tsx",
-      "line": 387,
-      "kind": "navigate",
-      "target": "/stock/list",
-      "resolved": "/stock/list",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/stock/items/new/page.tsx",
-      "line": 398,
-      "kind": "navigate",
+      "line": 383,
+      "kind": "href",
       "target": "/stock/list",
       "resolved": "/stock/list",
       "ok": true
     },
     {
       "file": "apps/web/src/app/(app)/stock/ledger/new/page.tsx",
-      "line": 219,
+      "line": 135,
       "kind": "navigate",
       "target": "/stock/ledger",
       "resolved": "/stock/ledger",
@@ -14144,7 +14042,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/stock/ledger/new/page.tsx",
-      "line": 414,
+      "line": 270,
       "kind": "href",
       "target": "/stock/ledger",
       "resolved": "/stock/ledger",
@@ -14152,7 +14050,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/stock/ledger/page.tsx",
-      "line": 33,
+      "line": 23,
       "kind": "href",
       "target": "/stock/ledger/new",
       "resolved": "/stock/ledger/new",
@@ -14160,7 +14058,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/stock/list/page.tsx",
-      "line": 31,
+      "line": 26,
       "kind": "href",
       "target": "/stock/items/new",
       "resolved": "/stock/items/new",
@@ -14168,7 +14066,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/stock/list/StockListClient.tsx",
-      "line": 90,
+      "line": 58,
       "kind": "rowLinkPrefix",
       "target": "/inventory/",
       "resolved": "/inventory/${rowId}",
@@ -14255,32 +14153,112 @@
       "ok": true
     },
     {
+      "file": "apps/web/src/app/(app)/tenant-admin/api-keys/page.tsx",
+      "line": 27,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/(app)/tenant-admin/audit/page.tsx",
-      "line": 66,
+      "line": 40,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/audit/page.tsx",
+      "line": 68,
       "kind": "href",
       "target": "/tenant-admin/audit",
       "resolved": "/tenant-admin/audit",
       "ok": true
     },
     {
+      "file": "apps/web/src/app/(app)/tenant-admin/breakglass/[id]/page.tsx",
+      "line": 29,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/breakglass/[id]/page.tsx",
+      "line": 29,
+      "kind": "href",
+      "target": "/tenant-admin/breakglass",
+      "resolved": "/tenant-admin/breakglass",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/breakglass/[id]/page.tsx",
+      "line": 42,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/breakglass/[id]/page.tsx",
+      "line": 42,
+      "kind": "href",
+      "target": "/tenant-admin/breakglass",
+      "resolved": "/tenant-admin/breakglass",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/(app)/tenant-admin/breakglass/BreakglassTable.tsx",
-      "line": 60,
+      "line": 50,
       "kind": "href",
       "target": "/tenant-admin/breakglass/${event.id}",
       "resolved": "/tenant-admin/breakglass/${event.id}",
       "ok": true
     },
     {
+      "file": "apps/web/src/app/(app)/tenant-admin/breakglass/page.tsx",
+      "line": 30,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/compliance/page.tsx",
+      "line": 16,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/(app)/tenant-admin/domain/page.tsx",
-      "line": 19,
+      "line": 20,
       "kind": "href",
       "target": "/settings/branding",
       "resolved": "/settings/branding",
       "ok": true
     },
     {
+      "file": "apps/web/src/app/(app)/tenant-admin/idp/page.tsx",
+      "line": 32,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/(app)/tenant-admin/install/page.tsx",
-      "line": 52,
+      "line": 49,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/install/page.tsx",
+      "line": 55,
       "kind": "href",
       "target": "/install",
       "resolved": "/install",
@@ -14288,7 +14266,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/install/page.tsx",
-      "line": 94,
+      "line": 97,
       "kind": "href",
       "target": "/install",
       "resolved": "/install",
@@ -14296,23 +14274,63 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/install/page.tsx",
-      "line": 112,
+      "line": 115,
       "kind": "href",
       "target": "/install/steps#step-${step.stepNo ?? idx + 1}",
       "resolved": "/install/steps",
       "ok": true
     },
     {
+      "file": "apps/web/src/app/(app)/tenant-admin/mfa/page.tsx",
+      "line": 35,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/(app)/tenant-admin/notifications/page.tsx",
-      "line": 30,
+      "line": 24,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/notifications/page.tsx",
+      "line": 33,
       "kind": "href",
       "target": "/tenant-admin/audit?entity=notification-prefs",
       "resolved": "/tenant-admin/audit",
       "ok": true
     },
     {
+      "file": "apps/web/src/app/(app)/tenant-admin/operations/page.tsx",
+      "line": 71,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/operations/page.tsx",
+      "line": 95,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/(app)/tenant-admin/org-hierarchy/page.tsx",
-      "line": 100,
+      "line": 96,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/org-hierarchy/page.tsx",
+      "line": 103,
       "kind": "href",
       "target": "/admin/org",
       "resolved": "/admin/org",
@@ -14320,7 +14338,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/org-hierarchy/page.tsx",
-      "line": 101,
+      "line": 104,
       "kind": "href",
       "target": "/tenant-admin/org-type",
       "resolved": "/tenant-admin/org-type",
@@ -14328,7 +14346,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/org-hierarchy/page.tsx",
-      "line": 102,
+      "line": 105,
       "kind": "href",
       "target": "/platform-admin/org-config",
       "resolved": "/platform-admin/org-config",
@@ -14336,7 +14354,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 22,
+      "line": 23,
       "kind": "href",
       "target": "/tenant-admin/users",
       "resolved": "/tenant-admin/users",
@@ -14344,7 +14362,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 23,
+      "line": 24,
       "kind": "href",
       "target": "/tenant-admin/roles",
       "resolved": "/tenant-admin/roles",
@@ -14352,7 +14370,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 24,
+      "line": 25,
       "kind": "href",
       "target": "/tenant-admin/sessions",
       "resolved": "/tenant-admin/sessions",
@@ -14360,7 +14378,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 25,
+      "line": 26,
       "kind": "href",
       "target": "/tenant-admin/security",
       "resolved": "/tenant-admin/security",
@@ -14368,7 +14386,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 26,
+      "line": 27,
       "kind": "href",
       "target": "/tenant-admin/mfa",
       "resolved": "/tenant-admin/mfa",
@@ -14376,7 +14394,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 27,
+      "line": 28,
       "kind": "href",
       "target": "/tenant-admin/sso",
       "resolved": "/tenant-admin/sso",
@@ -14384,7 +14402,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 28,
+      "line": 29,
       "kind": "href",
       "target": "/tenant-admin/idp",
       "resolved": "/tenant-admin/idp",
@@ -14392,7 +14410,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 29,
+      "line": 30,
       "kind": "href",
       "target": "/tenant-admin/api-keys",
       "resolved": "/tenant-admin/api-keys",
@@ -14400,7 +14418,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 30,
+      "line": 31,
       "kind": "href",
       "target": "/tenant-admin/audit",
       "resolved": "/tenant-admin/audit",
@@ -14408,7 +14426,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 31,
+      "line": 32,
       "kind": "href",
       "target": "/tenant-admin/breakglass",
       "resolved": "/tenant-admin/breakglass",
@@ -14416,7 +14434,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 32,
+      "line": 33,
       "kind": "href",
       "target": "/tenant-admin/compliance",
       "resolved": "/tenant-admin/compliance",
@@ -14424,7 +14442,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 33,
+      "line": 34,
       "kind": "href",
       "target": "/tenant-admin/siem",
       "resolved": "/tenant-admin/siem",
@@ -14432,7 +14450,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 34,
+      "line": 35,
       "kind": "href",
       "target": "/tenant-admin/org-hierarchy",
       "resolved": "/tenant-admin/org-hierarchy",
@@ -14440,7 +14458,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 35,
+      "line": 36,
       "kind": "href",
       "target": "/tenant-admin/readiness",
       "resolved": "/tenant-admin/readiness",
@@ -14448,7 +14466,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 36,
+      "line": 37,
       "kind": "href",
       "target": "/tenant-admin/activation",
       "resolved": "/tenant-admin/activation",
@@ -14456,7 +14474,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 37,
+      "line": 38,
       "kind": "href",
       "target": "/tenant-admin/platform-config",
       "resolved": "/tenant-admin/platform-config",
@@ -14464,7 +14482,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 38,
+      "line": 39,
       "kind": "href",
       "target": "/tenant-admin/org-type",
       "resolved": "/tenant-admin/org-type",
@@ -14472,7 +14490,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 39,
+      "line": 40,
       "kind": "href",
       "target": "/tenant-admin/install",
       "resolved": "/tenant-admin/install",
@@ -14480,7 +14498,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 40,
+      "line": 41,
       "kind": "href",
       "target": "/tenant-admin/settings",
       "resolved": "/tenant-admin/settings",
@@ -14488,7 +14506,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 41,
+      "line": 42,
       "kind": "href",
       "target": "/tenant-admin/notifications",
       "resolved": "/tenant-admin/notifications",
@@ -14496,7 +14514,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 42,
+      "line": 43,
       "kind": "href",
       "target": "/tenant-admin/subscription",
       "resolved": "/tenant-admin/subscription",
@@ -14504,7 +14522,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 82,
+      "line": 84,
       "kind": "href",
       "target": "/tenant-admin/audit",
       "resolved": "/tenant-admin/audit",
@@ -14512,7 +14530,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 83,
+      "line": 85,
       "kind": "href",
       "target": "/tenant-admin/operations",
       "resolved": "/tenant-admin/operations",
@@ -14520,23 +14538,95 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/page.tsx",
-      "line": 86,
+      "line": 88,
       "kind": "href",
       "target": "/tenant-admin/users?invite=1",
       "resolved": "/tenant-admin/users",
       "ok": true
     },
     {
+      "file": "apps/web/src/app/(app)/tenant-admin/readiness/page.tsx",
+      "line": 52,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/(app)/tenant-admin/roles/[id]/not-found.tsx",
-      "line": 16,
+      "line": 11,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/roles/[id]/not-found.tsx",
+      "line": 11,
       "kind": "href",
       "target": "/tenant-admin/roles",
       "resolved": "/tenant-admin/roles",
       "ok": true
     },
     {
+      "file": "apps/web/src/app/(app)/tenant-admin/roles/[id]/not-found.tsx",
+      "line": 18,
+      "kind": "href",
+      "target": "/tenant-admin/roles",
+      "resolved": "/tenant-admin/roles",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/roles/[id]/page.tsx",
+      "line": 23,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/roles/[id]/page.tsx",
+      "line": 23,
+      "kind": "href",
+      "target": "/tenant-admin/roles",
+      "resolved": "/tenant-admin/roles",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/roles/[id]/page.tsx",
+      "line": 37,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/roles/[id]/page.tsx",
+      "line": 37,
+      "kind": "href",
+      "target": "/tenant-admin/roles",
+      "resolved": "/tenant-admin/roles",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/roles/page.tsx",
+      "line": 32,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/(app)/tenant-admin/security/page.tsx",
-      "line": 31,
+      "line": 15,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/security/page.tsx",
+      "line": 34,
       "kind": "href",
       "target": "/tenant-admin/audit",
       "resolved": "/tenant-admin/audit",
@@ -14544,7 +14634,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/security/page.tsx",
-      "line": 35,
+      "line": 38,
       "kind": "href",
       "target": "/tenant-admin/audit",
       "resolved": "/tenant-admin/audit",
@@ -14552,10 +14642,42 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/security/page.tsx",
-      "line": 39,
+      "line": 42,
       "kind": "href",
       "target": "/tenant-admin/audit",
       "resolved": "/tenant-admin/audit",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/sessions/[id]/page.tsx",
+      "line": 47,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/sessions/[id]/page.tsx",
+      "line": 47,
+      "kind": "href",
+      "target": "/tenant-admin/sessions",
+      "resolved": "/tenant-admin/sessions",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/sessions/[id]/page.tsx",
+      "line": 64,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/sessions/[id]/page.tsx",
+      "line": 64,
+      "kind": "href",
+      "target": "/tenant-admin/sessions",
+      "resolved": "/tenant-admin/sessions",
       "ok": true
     },
     {
@@ -14564,6 +14686,14 @@
       "kind": "navigate",
       "target": "/tenant-admin/sessions",
       "resolved": "/tenant-admin/sessions",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/sessions/page.tsx",
+      "line": 31,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
       "ok": true
     },
     {
@@ -14576,15 +14706,103 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant-admin/settings/page.tsx",
-      "line": 28,
+      "line": 21,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/settings/page.tsx",
+      "line": 31,
       "kind": "href",
       "target": "/tenant-admin/audit",
       "resolved": "/tenant-admin/audit",
       "ok": true
     },
     {
+      "file": "apps/web/src/app/(app)/tenant-admin/siem/page.tsx",
+      "line": 21,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/sso/page.tsx",
+      "line": 37,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/subscription/page.tsx",
+      "line": 25,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/usage/page.tsx",
+      "line": 36,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/users/[id]/page.tsx",
+      "line": 21,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/users/[id]/page.tsx",
+      "line": 21,
+      "kind": "href",
+      "target": "/tenant-admin/users",
+      "resolved": "/tenant-admin/users",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/users/[id]/page.tsx",
+      "line": 30,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/users/[id]/page.tsx",
+      "line": 30,
+      "kind": "href",
+      "target": "/tenant-admin/users",
+      "resolved": "/tenant-admin/users",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/users/[id]/page.tsx",
+      "line": 40,
+      "kind": "href",
+      "target": "/tenant-admin",
+      "resolved": "/tenant-admin",
+      "ok": true
+    },
+    {
+      "file": "apps/web/src/app/(app)/tenant-admin/users/[id]/page.tsx",
+      "line": 40,
+      "kind": "href",
+      "target": "/tenant-admin/users",
+      "resolved": "/tenant-admin/users",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/(app)/tenant/code-lists/page.tsx",
-      "line": 14,
+      "line": 13,
       "kind": "href",
       "target": "/tenant",
       "resolved": "/tenant",
@@ -14592,7 +14810,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant/consent-exchange/page.tsx",
-      "line": 14,
+      "line": 13,
       "kind": "href",
       "target": "/tenant",
       "resolved": "/tenant",
@@ -14600,7 +14818,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant/data-migration/page.tsx",
-      "line": 14,
+      "line": 13,
       "kind": "href",
       "target": "/tenant",
       "resolved": "/tenant",
@@ -14632,7 +14850,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant/overview/page.tsx",
-      "line": 14,
+      "line": 13,
       "kind": "href",
       "target": "/tenant",
       "resolved": "/tenant",
@@ -14736,7 +14954,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant/plans/page.tsx",
-      "line": 14,
+      "line": 13,
       "kind": "href",
       "target": "/tenant",
       "resolved": "/tenant",
@@ -14816,7 +15034,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/workflow/_components/TasksTable.tsx",
-      "line": 224,
+      "line": 212,
       "kind": "href",
       "target": "/workflow/instances/${r.instanceId}",
       "resolved": "/workflow/instances/${r.instanceId}",
@@ -14879,6 +15097,14 @@
       "ok": true
     },
     {
+      "file": "apps/web/src/app/(app)/workflow/my-tasks/page.tsx",
+      "line": 59,
+      "kind": "href",
+      "target": "/workflow",
+      "resolved": "/workflow",
+      "ok": true
+    },
+    {
       "file": "apps/web/src/app/(app)/workflow/page.tsx",
       "line": 86,
       "kind": "href",
@@ -14912,15 +15138,15 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/approvals/aa/[id]/page.tsx",
-      "line": 151,
+      "line": 137,
       "kind": "href",
-      "target": "/works/proposals/${aa.workId}",
-      "resolved": "/works/proposals/${aa.workId}",
+      "target": "/works/billing/${aa.workId}",
+      "resolved": "/works/billing/${aa.workId}",
       "ok": true
     },
     {
       "file": "apps/web/src/app/(app)/works/approvals/aa/[id]/page.tsx",
-      "line": 232,
+      "line": 218,
       "kind": "href",
       "target": "/works/approvals",
       "resolved": "/works/approvals",
@@ -14959,16 +15185,16 @@
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/works/approvals/ts-new/NewTsForm.tsx",
-      "line": 98,
+      "file": "apps/web/src/app/(app)/works/approvals/ts-new/page.tsx",
+      "line": 96,
       "kind": "navigate",
       "target": "/works/approvals",
       "resolved": "/works/approvals",
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/works/approvals/ts-new/NewTsForm.tsx",
-      "line": 240,
+      "file": "apps/web/src/app/(app)/works/approvals/ts-new/page.tsx",
+      "line": 237,
       "kind": "navigate",
       "target": "/works/approvals",
       "resolved": "/works/approvals",
@@ -14976,31 +15202,23 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/approvals/ts/[id]/page.tsx",
-      "line": 146,
+      "line": 132,
       "kind": "href",
-      "target": "/works/proposals/${ts.workId}",
-      "resolved": "/works/proposals/${ts.workId}",
+      "target": "/works/billing/${ts.workId}",
+      "resolved": "/works/billing/${ts.workId}",
       "ok": true
     },
     {
       "file": "apps/web/src/app/(app)/works/approvals/ts/[id]/page.tsx",
-      "line": 227,
+      "line": 213,
       "kind": "href",
       "target": "/works/approvals",
       "resolved": "/works/approvals",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/works/billing/[workId]/BillingActions.tsx",
-      "line": 283,
-      "kind": "href",
-      "target": "/works/billing/measurements/new?workId=${encodeURIComponent(workId)}&mbId=${encodeURIComponent(mb.id)}",
-      "resolved": "/works/billing/measurements/new",
       "ok": true
     },
     {
       "file": "apps/web/src/app/(app)/works/billing/[workId]/page.tsx",
-      "line": 102,
+      "line": 93,
       "kind": "href",
       "target": "/works/billing/measurements/new?workId=${params.workId}",
       "resolved": "/works/billing/measurements/new",
@@ -15008,7 +15226,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/billing/[workId]/page.tsx",
-      "line": 109,
+      "line": 100,
       "kind": "href",
       "target": "/works/billing/bills/new?workId=${params.workId}",
       "resolved": "/works/billing/bills/new",
@@ -15016,7 +15234,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/billing/[workId]/page.tsx",
-      "line": 187,
+      "line": 170,
       "kind": "href",
       "target": "/works/billing",
       "resolved": "/works/billing",
@@ -15024,7 +15242,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/billing/[workId]/page.tsx",
-      "line": 190,
+      "line": 173,
       "kind": "href",
       "target": "/works/billing/bills/new?workId=${params.workId}",
       "resolved": "/works/billing/bills/new",
@@ -15032,7 +15250,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/billing/account-compile/page.tsx",
-      "line": 225,
+      "line": 205,
       "kind": "href",
       "target": "/works/billing",
       "resolved": "/works/billing",
@@ -15040,18 +15258,10 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/billing/account-compile/page.tsx",
-      "line": 335,
+      "line": 315,
       "kind": "href",
       "target": "/works/billing",
       "resolved": "/works/billing",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/works/billing/bills/new/page.tsx",
-      "line": 190,
-      "kind": "navigate",
-      "target": "/works/billing/${safeWorkId(form.workId)}",
-      "resolved": "/works/billing/${safeWorkId(form.workId)}",
       "ok": true
     },
     {
@@ -15087,26 +15297,18 @@
       "ok": true
     },
     {
-      "file": "apps/web/src/app/(app)/works/boq/[workId]/BoqItemsTable.tsx",
-      "line": 32,
+      "file": "apps/web/src/app/(app)/works/boq/[workId]/page.tsx",
+      "line": 189,
       "kind": "href",
-      "target": "/works/billing/measurements/new?workId=${encodeURIComponent(workId)}&boqItemId=${encodeURIComponent(row.id)}",
-      "resolved": "/works/billing/measurements/new",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/works/boq/[workId]/BoqItemsTable.tsx",
-      "line": 51,
-      "kind": "href",
-      "target": "/works/boq/new?workId=${workId}",
+      "target": "/works/boq/new?workId=",
       "resolved": "/works/boq/new",
       "ok": true
     },
     {
       "file": "apps/web/src/app/(app)/works/boq/[workId]/page.tsx",
-      "line": 198,
+      "line": 232,
       "kind": "href",
-      "target": "/works/boq/new?workId=",
+      "target": "/works/boq/new?workId=${workId}",
       "resolved": "/works/boq/new",
       "ok": true
     },
@@ -15224,7 +15426,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/execution/issues/new/page.tsx",
-      "line": 132,
+      "line": 124,
       "kind": "navigate",
       "target": "/works/execution/${encodeURIComponent(parsed.data.workId)}",
       "resolved": "/works/execution/${encodeURIComponent(parsed.data.workId)}",
@@ -15232,7 +15434,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/execution/issues/page.tsx",
-      "line": 79,
+      "line": 78,
       "kind": "href",
       "target": "/works/execution/issues/new",
       "resolved": "/works/execution/issues/new",
@@ -15248,7 +15450,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/execution/photos/new/page.tsx",
-      "line": 147,
+      "line": 128,
       "kind": "navigate",
       "target": "/works/execution/${encodeURIComponent(parsed.data.workId)}",
       "resolved": "/works/execution/${encodeURIComponent(parsed.data.workId)}",
@@ -15376,7 +15578,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/proposals/[id]/page.tsx",
-      "line": 322,
+      "line": 312,
       "kind": "href",
       "target": "/works/proposals",
       "resolved": "/works/proposals",
@@ -15384,7 +15586,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/proposals/[id]/page.tsx",
-      "line": 340,
+      "line": 330,
       "kind": "href",
       "target": "/works/approvals/new?workId=",
       "resolved": "/works/approvals/new",
@@ -15392,7 +15594,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/proposals/[id]/ProposalExtActions.tsx",
-      "line": 170,
+      "line": 169,
       "kind": "href",
       "target": "/works/proposals/${splitResult.id}",
       "resolved": "/works/proposals/${splitResult.id}",
@@ -15400,15 +15602,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/proposals/new/page.tsx",
-      "line": 97,
-      "kind": "navigate",
-      "target": "/works/proposals",
-      "resolved": "/works/proposals",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/works/proposals/new/page.tsx",
-      "line": 330,
+      "line": 92,
       "kind": "navigate",
       "target": "/works/proposals",
       "resolved": "/works/proposals",
@@ -15432,7 +15626,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/reports/ReportFilters.tsx",
-      "line": 82,
+      "line": 60,
       "kind": "navigate",
       "target": "/works/reports",
       "resolved": "/works/reports",
@@ -15448,15 +15642,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/tenders/[id]/page.tsx",
-      "line": 303,
-      "kind": "href",
-      "target": "/works/billing/new-mb?workId=${tender.workId}&awardId=${quotations.find((q) => q.awardId !== null)?.awardId ?? ",
-      "resolved": "/works/billing/new-mb",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/works/tenders/[id]/page.tsx",
-      "line": 309,
+      "line": 299,
       "kind": "href",
       "target": "/works/tenders/new",
       "resolved": "/works/tenders/new",
@@ -15464,7 +15650,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/tenders/new/page.tsx",
-      "line": 119,
+      "line": 111,
       "kind": "navigate",
       "target": "/works/tenders",
       "resolved": "/works/tenders",
@@ -15472,7 +15658,7 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/tenders/new/page.tsx",
-      "line": 192,
+      "line": 184,
       "kind": "navigate",
       "target": "/works/tenders",
       "resolved": "/works/tenders",
@@ -15480,31 +15666,15 @@
     },
     {
       "file": "apps/web/src/app/(app)/works/tenders/page.tsx",
-      "line": 40,
+      "line": 28,
       "kind": "href",
       "target": "/works/tenders/new",
       "resolved": "/works/tenders/new",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/works/tenders/page.tsx",
-      "line": 55,
-      "kind": "href",
-      "target": "/works/tenders?page=${page - 1}",
-      "resolved": "/works/tenders",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/works/tenders/page.tsx",
-      "line": 60,
-      "kind": "href",
-      "target": "/works/tenders?page=${page + 1}",
-      "resolved": "/works/tenders",
       "ok": true
     },
     {
       "file": "apps/web/src/app/(marketing)/contact/page.tsx",
-      "line": 185,
+      "line": 154,
       "kind": "href",
       "target": "/.well-known/security.txt",
       "resolved": "/.well-known/security.txt",
@@ -15912,7 +16082,7 @@
     },
     {
       "file": "apps/web/src/app/auth/login/LoginClient.tsx",
-      "line": 70,
+      "line": 65,
       "kind": "href",
       "target": "/auth/forgot",
       "resolved": "/auth/forgot",
@@ -15920,7 +16090,7 @@
     },
     {
       "file": "apps/web/src/app/careers/[id]/page.tsx",
-      "line": 41,
+      "line": 40,
       "kind": "href",
       "target": "/careers",
       "resolved": "/careers",
@@ -15928,7 +16098,7 @@
     },
     {
       "file": "apps/web/src/app/careers/[id]/page.tsx",
-      "line": 48,
+      "line": 47,
       "kind": "href",
       "target": "/careers/${encodeURIComponent(params.id)}",
       "resolved": "/careers/${encodeURIComponent(params.id)}",
@@ -15936,7 +16106,7 @@
     },
     {
       "file": "apps/web/src/app/careers/[id]/page.tsx",
-      "line": 64,
+      "line": 63,
       "kind": "href",
       "target": "/careers",
       "resolved": "/careers",
@@ -15944,7 +16114,7 @@
     },
     {
       "file": "apps/web/src/app/careers/page.tsx",
-      "line": 155,
+      "line": 154,
       "kind": "href",
       "target": "/careers",
       "resolved": "/careers",
@@ -15952,7 +16122,7 @@
     },
     {
       "file": "apps/web/src/app/careers/page.tsx",
-      "line": 170,
+      "line": 169,
       "kind": "href",
       "target": "/careers",
       "resolved": "/careers",
@@ -15960,7 +16130,7 @@
     },
     {
       "file": "apps/web/src/app/careers/page.tsx",
-      "line": 188,
+      "line": 187,
       "kind": "href",
       "target": "/careers/${v.id}",
       "resolved": "/careers/${v.id}",
@@ -16016,7 +16186,7 @@
     },
     {
       "file": "apps/web/src/app/careers/portal/page.tsx",
-      "line": 69,
+      "line": 68,
       "kind": "navigate",
       "target": "/careers/portal/login",
       "resolved": "/careers/portal/login",
@@ -16024,7 +16194,7 @@
     },
     {
       "file": "apps/web/src/app/careers/portal/page.tsx",
-      "line": 90,
+      "line": 89,
       "kind": "href",
       "target": "/careers",
       "resolved": "/careers",
@@ -16032,7 +16202,7 @@
     },
     {
       "file": "apps/web/src/app/careers/portal/page.tsx",
-      "line": 110,
+      "line": 109,
       "kind": "href",
       "target": "/careers/portal",
       "resolved": "/careers/portal",
@@ -16040,7 +16210,7 @@
     },
     {
       "file": "apps/web/src/app/careers/portal/page.tsx",
-      "line": 119,
+      "line": 118,
       "kind": "href",
       "target": "/careers",
       "resolved": "/careers",
@@ -16048,7 +16218,7 @@
     },
     {
       "file": "apps/web/src/app/careers/portal/page.tsx",
-      "line": 131,
+      "line": 130,
       "kind": "href",
       "target": "/careers/portal/application/${app.id}",
       "resolved": "/careers/portal/application/${app.id}",
@@ -16056,7 +16226,7 @@
     },
     {
       "file": "apps/web/src/app/careers/portal/page.tsx",
-      "line": 167,
+      "line": 166,
       "kind": "href",
       "target": "/careers/portal?page=${page - 1}",
       "resolved": "/careers/portal",
@@ -16064,7 +16234,7 @@
     },
     {
       "file": "apps/web/src/app/careers/portal/page.tsx",
-      "line": 169,
+      "line": 168,
       "kind": "href",
       "target": "/careers/portal?page=${page + 1}",
       "resolved": "/careers/portal",
@@ -16213,14 +16383,6 @@
       "kind": "href",
       "target": "/stock",
       "resolved": "/stock",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/lib/helpContent.ts",
-      "line": 530,
-      "kind": "href",
-      "target": "/catalogue",
-      "resolved": "/catalogue",
       "ok": true
     },
     {
@@ -16528,14 +16690,6 @@
       "kind": "navigate",
       "target": "/designer/${params.id}/${wizard.prev}",
       "resolved": "/designer/${params.id}/${wizard.prev}",
-      "ok": false
-    },
-    {
-      "file": "apps/web/src/app/(app)/inspection/inspections/page.tsx",
-      "line": 118,
-      "kind": "href",
-      "target": "/inspection/inspections/${row.id}",
-      "resolved": "/inspection/inspections/${row.id}",
       "ok": false
     }
   ],
