@@ -75,7 +75,7 @@ function TradeLicensesTable({ licenses }: { licenses: TradeLicenseRow[] }) {
           key: "status",
           label: "Status",
           cellType: "status",
-          statusTones: LICENSE_STATUS_TONES,
+          statusVariants: LICENSE_STATUS_TONES,
         },
         { key: "expiryDate", label: "Expiry", cellType: "date" },
         { key: "renewalCount", label: "Renewals", align: "right" },

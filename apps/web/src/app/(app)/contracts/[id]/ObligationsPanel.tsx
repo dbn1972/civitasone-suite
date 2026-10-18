@@ -150,7 +150,7 @@ export function ObligationsPanel({ contractId, obligations }: Props) {
               <strong>{o.title}</strong> — <span className="pill mut">{STATUS_LABEL[o.status] ?? o.status}</span>
               {/* GAP-CONTRACTS-DETAIL-06: Pending pill while write propagates. */}
               {pendingMap.has(o.id) ? (
-                <span className="pill mut" aria-label="Status update pending" style={{ marginLeft: 4 }}>Pending</span>
+                <span className="pill mut" aria-label="Status update pending" style={{ marginInlineStart: 4 }}>Pending</span>
               ) : null}
               {o.dueDate ? <span style={{ color: "var(--ink2)" }}> · due {formatIndianDate(o.dueDate)}</span> : null}
               {o.status !== "completed" ? (

@@ -27,7 +27,7 @@ export const PAYMENT_REFERENCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9/-]{3,63}$/;
 export const REJECT_REASON_MIN = 10;
 export const REASON_MAX = 512;
 
-const has = (viewer: FnfViewer, roles: string[]) => roles.some((r) => viewer.roles.includes(r));
+const has = (viewer: FnfViewer, roles: readonly string[]) => roles.some((r) => viewer.roles.includes(r));
 
 export type FnfAvailability = {
   /** Actions this viewer may take now, in display order. */

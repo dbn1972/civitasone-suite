@@ -48,7 +48,7 @@ function shortId(id: unknown): string {
  * that is deferred until the detail route is built.
  */
 function inspectorCell(inspectors: string[] | undefined): string {
-  if (!inspectors || inspectors.length === 0) return "—";
+  if (!inspectors || inspectors.length === 0) return "—"; // ux-001-ok: cell formatter for one already-loaded row, not a fetch result
   const first = shortId(inspectors[0]);
   return inspectors.length > 1 ? `${first} +${inspectors.length - 1}` : first;
 }

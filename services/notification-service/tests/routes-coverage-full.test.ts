@@ -635,13 +635,16 @@ describe("PATCH /notifications/campaigns/:id/send", () => {
     // Maker-checker: send route checks campaign exists and creator != sender.
     const campaignId = randomUUID();
     const SYSTEM_ACTOR = "00000000-0000-0000-0000-000000000001";
-    await sqlClient.begin((sql) => sql`
-      INSERT INTO bulk.notification_campaigns
+    await sqlClient.begin(async (sql) => {
+      await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+      await sql`
+      INSERT INTO bulk.campaigns
         (id, tenant_id, template_id, name, status, budget_minor, currency, created_by, updated_by)
       VALUES
         (${campaignId}::uuid, ${TENANT}::uuid, ${randomUUID()}::uuid,
          'send-auth-fixture', 'draft', 0, 'INR', ${SYSTEM_ACTOR}::uuid, ${SYSTEM_ACTOR}::uuid)
-    `);
+    `;
+    });
     const app = await buildApp();
     const res = await app.inject({
       method: "PATCH",
@@ -649,7 +652,10 @@ describe("PATCH /notifications/campaigns/:id/send", () => {
       headers: { authorization: `Bearer ${adminToken}` },
     });
     await app.close();
-    await sqlClient`DELETE FROM bulk.notification_campaigns WHERE id = ${campaignId}::uuid`;
+    await sqlClient.begin(async (sql) => {
+      await sql`select set_config('app.tenant_id', ${TENANT}, true)`;
+      await sql`DELETE FROM bulk.campaigns WHERE id = ${campaignId}::uuid`;
+    });
     expect(res.statusCode).toBe(202);
   });
 

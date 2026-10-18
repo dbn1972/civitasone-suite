@@ -225,7 +225,7 @@ describe("HearingsConsole — table layout (GAP-COURT-HEARINGS-04)", () => {
         hearingsSource="api"
       />,
     );
-    expect(screen.getByRole("columnheader", { name: /date/i })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /^date/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /purpose/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /status/i })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: /next date/i })).toBeInTheDocument();
@@ -266,7 +266,7 @@ describe("HearingsConsole — table layout (GAP-COURT-HEARINGS-04)", () => {
         hearingsSource="api"
       />,
     );
-    const dateHeader = screen.getByRole("columnheader", { name: /date/i });
+    const dateHeader = screen.getByRole("columnheader", { name: /^date/i });
     expect(dateHeader).toHaveAttribute("aria-sort", "descending");
     fireEvent.click(dateHeader);
     expect(dateHeader).toHaveAttribute("aria-sort", "ascending");

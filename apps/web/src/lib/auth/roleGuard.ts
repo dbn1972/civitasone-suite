@@ -60,7 +60,7 @@ export function getSessionUserId(): string | null {
   return typeof payload.sub === "string" && payload.sub.length > 0 ? payload.sub : null;
 }
 
-export function requireAnyRole(allowed: string[], redirectTo = "/dashboard"): void {
+export function requireAnyRole(allowed: readonly string[], redirectTo = "/dashboard"): void {
   const sessionRoles = getSessionRoles();
   const hasRole = allowed.some((r) => sessionRoles.includes(r));
   if (!hasRole) redirect(redirectTo);
@@ -506,7 +506,7 @@ export const ESTAB_APPROVER_ROLES = [
 ];
 
 /** True when any of the session roles is in `allowed`. Pure; for UI gating. */
-export function hasAnyRole(sessionRoles: string[], allowed: string[]): boolean {
+export function hasAnyRole(sessionRoles: readonly string[], allowed: readonly string[]): boolean {
   return allowed.some((r) => sessionRoles.includes(r));
 }
 
