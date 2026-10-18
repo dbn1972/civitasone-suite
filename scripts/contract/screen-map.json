@@ -1856,17 +1856,6 @@
     },
     {
       "module": "citizen",
-      "screen": "/citizen/documents/digilocker/callback",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
-    },
-    {
-      "module": "citizen",
       "screen": "/citizen/documents",
       "loaders": [],
       "apiPaths": [],
@@ -4148,21 +4137,6 @@
     },
     {
       "module": "finance",
-      "screen": "/finance/budget/sanctions",
-      "loaders": [
-        "getFinanceSanctionsSummary"
-      ],
-      "apiPaths": [
-        "/api/v1/finance/sanctions/summary"
-      ],
-      "upstream": "finance → /v1/finance/sanctions/summary",
-      "routeHandler": "/v1/finance/sanctions/summary",
-      "tablesPresent": true,
-      "status": "WIRED",
-      "detail": "ok"
-    },
-    {
-      "module": "finance",
       "screen": "/finance/chart-of-accounts/new",
       "loaders": [],
       "apiPaths": [],
@@ -4626,21 +4600,6 @@
     },
     {
       "module": "finance",
-      "screen": "/finance/payments",
-      "loaders": [
-        "getPaymentsSummary"
-      ],
-      "apiPaths": [
-        "/api/v1/finance/payments/summary"
-      ],
-      "upstream": "finance → /v1/finance/payments/summary",
-      "routeHandler": "/v1/finance/payments/summary",
-      "tablesPresent": true,
-      "status": "WIRED",
-      "detail": "ok"
-    },
-    {
-      "module": "finance",
       "screen": "/finance/period-close",
       "loaders": [],
       "apiPaths": [],
@@ -4843,21 +4802,6 @@
       ],
       "upstream": "finance → /v1/finance/deposits",
       "routeHandler": "/v1/finance/deposits",
-      "tablesPresent": true,
-      "status": "WIRED",
-      "detail": "ok"
-    },
-    {
-      "module": "finance",
-      "screen": "/finance/treasury/deposits",
-      "loaders": [
-        "getFinanceDepositsSummary"
-      ],
-      "apiPaths": [
-        "/api/v1/finance/deposits/summary"
-      ],
-      "upstream": "finance → /v1/finance/deposits/summary",
-      "routeHandler": "/v1/finance/deposits/summary",
       "tablesPresent": true,
       "status": "WIRED",
       "detail": "ok"
@@ -8217,21 +8161,6 @@
     },
     {
       "module": "knowledge",
-      "screen": "/knowledge/dashboard",
-      "loaders": [
-        "getKnowledgeDocsSummary"
-      ],
-      "apiPaths": [
-        "/api/v1/knowledge/documents/summary"
-      ],
-      "upstream": "knowledge → /v1/knowledge/documents/summary",
-      "routeHandler": "/v1/knowledge/documents/summary",
-      "tablesPresent": true,
-      "status": "WIRED",
-      "detail": "ok"
-    },
-    {
-      "module": "knowledge",
       "screen": "/knowledge/documents/[id]",
       "loaders": [],
       "apiPaths": [],
@@ -8462,17 +8391,13 @@
     {
       "module": "learning",
       "screen": "/learning/my-learning",
-      "loaders": [
-        "getEmployeeById"
-      ],
-      "apiPaths": [
-        "/api/v1/hrms/employees/:param"
-      ],
-      "upstream": "hrms → /v1/hrms/employees/:param",
-      "routeHandler": "/v1/hrms/employees/:id",
-      "tablesPresent": true,
-      "status": "WIRED",
-      "detail": "ok"
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
     },
     {
       "module": "learning",
@@ -8563,7 +8488,7 @@
       "module": "legal",
       "screen": "/legal/court-orders",
       "loaders": [
-        "getCourtOrdersPage"
+        "getCourtOrders"
       ],
       "apiPaths": [
         "/api/v1/legal/court-orders"
@@ -8733,13 +8658,17 @@
     {
       "module": "locations",
       "screen": "/locations/list",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getLocations"
+      ],
+      "apiPaths": [
+        "/api/v1/locations"
+      ],
+      "upstream": "locations → /v1/locations/",
+      "routeHandler": "/v1/locations",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "locations",
@@ -9521,13 +9450,17 @@
     {
       "module": "procurement",
       "screen": "/procurement/contracts",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
+      "loaders": [
+        "getContracts"
+      ],
+      "apiPaths": [
+        "/api/v1/contract/contracts"
+      ],
+      "upstream": "contract → /v1/contract/contracts",
+      "routeHandler": "/v1/contract/contracts",
+      "tablesPresent": true,
+      "status": "WIRED",
+      "detail": "ok"
     },
     {
       "module": "procurement",
@@ -10039,17 +9972,13 @@
     {
       "module": "procurement",
       "screen": "/procurement/vendors",
-      "loaders": [
-        "getProcurementVendorSummary"
-      ],
-      "apiPaths": [
-        "/api/v1/procurement/vendors/summary"
-      ],
-      "upstream": "procurement → /v1/procurement/vendors/summary",
-      "routeHandler": "/v1/procurement/vendors/summary",
-      "tablesPresent": true,
-      "status": "WIRED",
-      "detail": "ok"
+      "loaders": [],
+      "apiPaths": [],
+      "upstream": null,
+      "routeHandler": null,
+      "tablesPresent": null,
+      "status": "NO_LOADER",
+      "detail": "navigation hub — no data loader"
     },
     {
       "module": "projects",
@@ -11086,21 +11015,6 @@
     },
     {
       "module": "tenant-admin",
-      "screen": "/tenant-admin/audit",
-      "loaders": [
-        "getTenantAuditSummary"
-      ],
-      "apiPaths": [
-        "/api/v1/audit/events/summary"
-      ],
-      "upstream": "audit → /v1/audit/events/summary",
-      "routeHandler": "/v1/audit/events/summary",
-      "tablesPresent": true,
-      "status": "WIRED",
-      "detail": "ok"
-    },
-    {
-      "module": "tenant-admin",
       "screen": "/tenant-admin/breakglass/[id]",
       "loaders": [
         "getBreakglassEvent"
@@ -11432,21 +11346,6 @@
       ],
       "upstream": "admin → /v1/admin/tenant/modules",
       "routeHandler": "/v1/admin/tenant/modules",
-      "tablesPresent": true,
-      "status": "WIRED",
-      "detail": "ok"
-    },
-    {
-      "module": "tenant-admin",
-      "screen": "/tenant-admin/settings",
-      "loaders": [
-        "getCurrentTenantOrgType"
-      ],
-      "apiPaths": [
-        "/api/v1/tenants/current"
-      ],
-      "upstream": "tenant → /v1/tenants/current",
-      "routeHandler": "/v1/tenants/current",
       "tablesPresent": true,
       "status": "WIRED",
       "detail": "ok"
@@ -12123,21 +12022,15 @@
     }
   ],
   "counts": {
-    "totalPages": 883,
-    "wired": 377,
+    "totalPages": 882,
+    "wired": 371,
     "missing": 4,
     "mismatch": 1,
-    "noLoader": 581,
+    "noLoader": 580,
     "fabricatedData": 0
   },
   "linkAudit": {
-    "total": 1673,
-    "dead": [
-      {
-        "file": "apps/web/src/app/(app)/inspection/inspections/page.tsx",
-        "href": "/inspection/inspections/${row.id}",
-        "resolved": false
-      }
-    ]
+    "total": 1699,
+    "dead": []
   }
 }
