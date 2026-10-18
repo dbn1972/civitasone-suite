@@ -118,7 +118,7 @@ export function CauseListConsole({
         const id = unique[next++]!;
         try {
           const row = await fetchCase(id);
-          if (row) setExtraCases((prev) => new Map(prev).set(id, row));
+          if (row && mountedRef.current) setExtraCases((prev) => new Map(prev).set(id, row));
         } catch {
           const tries = (retriesRef.current.get(id) ?? 0) + 1;
           retriesRef.current.set(id, tries);

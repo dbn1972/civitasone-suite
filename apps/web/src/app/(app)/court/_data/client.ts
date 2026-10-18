@@ -73,9 +73,10 @@ export async function fetchCases(status?: CaseStatus): Promise<CourtCase[]> {
 }
 
 /**
- * Resolve one case by id. Resolves `null` ONLY when the case does not exist
- * (404); any other failure (network, 5xx, malformed body) THROWS so callers
- * can tell "not found" (permanent) from "failed" (transient, retryable).
+ * Resolve one case by id. Resolves `null` when the case does not exist (404)
+ * or when a 2xx body carries no case id. THROWS on any other non-OK status
+ * and on an invalid JSON body, so callers can tell "not found" (permanent)
+ * from "failed" (transient, retryable).
  */
 export async function fetchCase(caseId: string): Promise<CourtCase | null> {
   const res = await browserFetch(`v1/court/cases/${encodeURIComponent(caseId)}`);
