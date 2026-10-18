@@ -428,7 +428,7 @@ Counts: ACTION 37
 - **Needs:** web  ·  **Effort:** S ~half day  ·  **Risk:** Shared component; install lists are small so pagination is UX only.
 - **Depends on:** GAP-INSTALL-SILOS-01
 
-### GAP-INSTALL-SILOS-04  ·  MEDIUM  ·  closed  ·  theme ROLEGATE
+### GAP-INSTALL-SILOS-04  ·  MEDIUM  ·  partly  ·  theme ROLEGATE
 
 - [~] **Status** (W2 PQ: PARTLY closed by #2120 - web gate + forbidden state on silos/page.tsx using INSTALL_SILO_READ_ROLES (mirrors backend READER_ROLES), allow-listed mapSiloProvisions with fixture test, nav link hidden from non-readers on /install/console, backend 403 covered by services/install-service/tests/routes-coverage-full.test.ts 'GET /v1/install/silo-provisions > 403 wrong role'. NEEDS OWNER DECISION: web INSTALL_VIEW_ROLES (install_user, install_admin, super_admin, tenant_admin) vs backend silo READER_ROLES (install_admin, super_admin, platform_admin, install_user) disagree on tenant_admin / platform_admin; kept [~] until aligned. No PRIORITY_QUEUE.md entry exists for this item.)
 - **First-pass claim:** Silo provision records are shown with the generic mapper's heuristics (name/title/label/code, description/status) — infrastructure identifiers or error text in these fields would be displayed unfiltered to any viewer; no role gate (_data.ts:44-79, silos/page.tsx).
