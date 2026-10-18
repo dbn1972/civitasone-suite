@@ -461,8 +461,11 @@ export const INSTALL_SILO_READ_ROLES = ["install_admin", "super_admin", "platfor
 /**
  * GAP-INSTALL-HOME-03 / GAP-INSTALL-DOMAIN-PACKS-01: roles permitted to RUN
  * install mutations — run/skip/retry a step and activate a Domain Pack (Stage
- * 3 tenant provisioning). The install-service accepts the same set for reads
- * and writes today, so this currently equals INSTALL_VIEW_ROLES; it is kept as
+ * 3 tenant provisioning). The orchestrator and stages routes accept the same
+ * set for reads and writes, so this currently equals INSTALL_VIEW_ROLES; the
+ * exception is GET /v1/install/silo-provisions, whose READER_ROLES (see
+ * INSTALL_SILO_READ_ROLES) include platform_admin and exclude tenant_admin.
+ * It is kept as
  * a separate constant so the write surface can be narrowed (e.g. drop
  * install_user) without touching the read gate, and so the UI can hide
  * mutation controls from a hypothetical read-only install role. The server
