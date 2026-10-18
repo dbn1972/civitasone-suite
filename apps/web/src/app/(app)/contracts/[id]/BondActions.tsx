@@ -222,7 +222,7 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
               <strong>{b.referenceNo ?? formatShortId(b.id)}</strong> — {b.status}
               {/* GAP-CONTRACTS-DETAIL-06: Pending pill while transition propagates. */}
               {pendingMap.has(b.id) ? (
-                <span className="pill mut" aria-label="Status update pending" style={{ marginLeft: 6 }}>Pending</span>
+                <span className="pill mut" aria-label="Status update pending" style={{ marginInlineStart: 6 }}>Pending</span>
               ) : null}
               {/* GAP-CONTRACTS-DETAIL-02: surface the bond's validity window so
                   an officer can see at a glance when the security lapses. */}
