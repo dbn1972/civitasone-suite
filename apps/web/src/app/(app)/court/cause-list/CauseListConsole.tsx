@@ -105,12 +105,13 @@ export function CauseListConsole({
   // transient failure is released and retried after a backoff, up to
   // MAX_CASE_RETRIES times per case.
   useEffect(() => {
+    const fetched = fetchedRef.current;
     const missing = items
       .map((it) => it.caseId)
-      .filter((id) => !cases.some((c) => c.id === id) && !fetchedRef.current.has(id));
+      .filter((id) => !cases.some((c) => c.id === id) && !fetched.has(id));
     const unique = [...new Set(missing)];
     if (unique.length === 0) return;
-    for (const id of unique) fetchedRef.current.add(id);
+    for (const id of unique) fetched.add(id);
     let cancelled = false;
     let next = 0;
     async function worker() {
@@ -123,7 +124,7 @@ export function CauseListConsole({
           const tries = (retriesRef.current.get(id) ?? 0) + 1;
           retriesRef.current.set(id, tries);
           if (tries <= MAX_CASE_RETRIES) {
-            fetchedRef.current.delete(id);
+            fetched.delete(id);
             setTimeout(() => {
               if (mountedRef.current) setRetryTick((n) => n + 1);
             }, 1000 * tries);
@@ -137,7 +138,7 @@ export function CauseListConsole({
     return () => {
       cancelled = true;
       // Release ids that were claimed but never started so a re-run picks them up.
-      for (let i = next; i < unique.length; i++) fetchedRef.current.delete(unique[i]!);
+      for (let i = next; i < unique.length; i++) fetched.delete(unique[i]!);
     };
   }, [items, cases, retryTick]);
 
