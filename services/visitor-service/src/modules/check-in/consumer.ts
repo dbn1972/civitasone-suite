@@ -28,6 +28,7 @@ import { NonRetryableError, type Queue } from "@civitasone/queue";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { domainRejectionSafe } from "../../shared/domain-rejection.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { notifyVipArrival } from "../vip/routes.js";
 import { releaseParkingIfAllocated } from "../vehicle-pass/commands.js";
@@ -106,7 +107,9 @@ interface ScanBlacklistMatchPayload {
 }
 
 export function registerCheckInConsumers(queue: Queue): void {
-  queue.subscribe<CheckInRecordPayload>(COMMANDS.checkInRecord, async (msg) => {
+  // Domain rejections are permanent -> dead-letter on first attempt (not 5x retried).
+  const q = domainRejectionSafe(queue);
+  q.subscribe<CheckInRecordPayload>(COMMANDS.checkInRecord, async (msg) => {
     const p = msg.payload;
 
     const committed: CommittedCheckIn | null = await db.transaction(async (tx): Promise<CommittedCheckIn | null> => {
@@ -589,7 +592,7 @@ export function registerCheckInConsumers(queue: Queue): void {
     }
   });
 
-  queue.subscribe<CheckOutRecordPayload>(COMMANDS.checkOutRecord, async (msg) => {
+  q.subscribe<CheckOutRecordPayload>(COMMANDS.checkOutRecord, async (msg) => {
     const p = msg.payload;
 
     const committed: CommittedCheckOut | null = await db.transaction(async (tx): Promise<CommittedCheckOut | null> => {
@@ -675,7 +678,7 @@ export function registerCheckInConsumers(queue: Queue): void {
   // Requirement 6.3/6.4: queries currently checked-in passes whose
   // `valid_until` is in the past, outboxes `overstayAlerted` +
   // NOTIFICATION_SEND to host and security for each overstayed visitor.
-  queue.subscribe<OvrstayDetectPayload>(COMMANDS.overstayDetect, async (msg) => {
+  q.subscribe<OvrstayDetectPayload>(COMMANDS.overstayDetect, async (msg) => {
     const p = msg.payload;
     const now = p.asOf ? new Date(p.asOf) : new Date();
 
@@ -797,7 +800,7 @@ export function registerCheckInConsumers(queue: Queue): void {
   // (it re-derives and checks the same canonical hash from the visit's own
   // identityDocRef), so this handler's job is purely to make the scan-time
   // hit visible to security ops — it does not gate anything itself.
-  queue.subscribe<ScanBlacklistMatchPayload>(EVENTS.scanBlacklistMatch, async (msg) => {
+  q.subscribe<ScanBlacklistMatchPayload>(EVENTS.scanBlacklistMatch, async (msg) => {
     const p = msg.payload;
 
     const committed = await db.transaction(async (tx): Promise<{ locationId: string } | null> => {

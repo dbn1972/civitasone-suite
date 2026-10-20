@@ -23,6 +23,7 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { configEntries } from "./schema.js";
 import * as repo from "./repo.js";
 import { assertValidNamespace, assertValidKey } from "./domain.js";
+import { buildConfigChangedAudit } from "./audit.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -126,7 +127,21 @@ export function registerConfigRegistryConsumers(queue: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.id, namespace: p.namespace, configKey: p.configKey },
       });
-      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "config_registry", resourceId: p.id, outcome: "success", ...(p.reason ? { reason: p.reason } : {}) } });
+      const after = {
+        configKey: p.configKey,
+        value: p.value,
+        label: p.label ?? null,
+        description: p.description ?? null,
+        sortOrder: p.sortOrder ?? 0,
+        effectiveFrom: p.effectiveFrom ?? null,
+        effectiveTo: p.effectiveTo ?? null,
+        active: true,
+        version: current ? current.version + 1 : 1,
+      };
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildConfigChangedAudit({ resourceId: p.id, namespace: p.namespace, before: current ?? null, after, reason: p.reason }),
+      });
 
       // Invalidate the (tenant, namespace) read cache on commit so subsequent
       // reads see the new/updated value (fires only if the tx commits).
@@ -166,7 +181,15 @@ export function registerConfigRegistryConsumers(queue: Queue): void {
         correlationId: msg.correlationId,
         payload: { id: p.configId, namespace: current.namespace },
       });
-      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "process", resourceType: "config_registry", resourceId: p.configId, outcome: "success" } });
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildConfigChangedAudit({
+          resourceId: p.configId,
+          namespace: current.namespace,
+          before: current,
+          after: { ...current, active: false, version: current.version + 1 },
+        }),
+      });
 
       await cache.invalidateResourceAfterCommit(tx, p.tenantId, `config:${current.namespace}`);
     });

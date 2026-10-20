@@ -339,7 +339,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-HOME-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 owner-decisions PR: gate access closed; item kept `[~]` because the literal Given/When/Then also expects 403 on POST visit-requests/:id/approve for a plain employee, and that is NOT true by design: an employee may approve/reject requests for which they are the host, host-scoped in visit-request/routes.ts APPROVAL_ROLES + the cross-host IDOR guard. Closed here: `employee` removed from check-in GATE_ROLES/WRITE_ROLES (services/visitor-service/src/modules/check-in/routes.ts) and from web VISITOR_GUARD_ROLES; tests: all-routes.test.ts 'employee gets 403 on POST check-ins / check-outs / passes/verify / GET gate-sync', all-routes 'POST /v1/visitor/config → 403 wrong role', apps/web/tests/contract/visitor-guard-roles.contract.test.ts (web list pinned to backend source). `employee` deliberately keeps READ access to GET check-ins/active (ACTIVE_ROLES) - not changed without evidence; owner may want to review that read access.)
 - **First-pass claim:** No role gate anywhere in the segment: visitor/layout.tsx is ModuleGate only, so every tenant user gets the Admin Configuration tile and Guard Console. Whether services/visitor-service rejects non-admin writes is undeterminable (service absent from snapshot).
 - **Service:** `visitor-service`  ·  **Endpoint(s):** `['POST /v1/visitor/config', 'POST /v1/visitor/check-ins', 'POST /v1/visitor/visit-requests/:id/approve']`
 - **Question:** Does visitor-service enforce per-endpoint roles (admin, guard, host) rather than trusting the web tiles?
@@ -350,7 +350,7 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 
 ### GAP-VISITOR-ADMIN-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 owner-decisions PR: config writes emit `config.changed` audit with redacted oldValue/newValue + reason (config-registry/audit.ts, consumer.ts), tests config-changed-audit.test.ts; stale `expectedVersion` -> consumer VERSION_CONFLICT NonRetryableError (config-changed-audit.test.ts) and synchronous HTTP 409 from POST /v1/visitor/config via best-effort route pre-check (all-routes.test.ts 'stale expectedVersion → 409'); the consumer guard stays the authoritative check for races, and PATCH .../deactivate remains async-only (stale version dead-letters, no 409); employee 403 on POST config: all-routes.test.ts)
 - **First-pass claim:** No role gate on the segment (visitor/layout.tsx is ModuleGate only); any user who can open /visitor/admin can POST config. Service enforcement and audit-logging of config writes are undeterminable (services/visitor-service not in snapshot).
 - **Service:** `visitor-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/visitor/config (client.ts setConfig)', 'GET /api/v1/visitor/config/:namespace']`
 - **Question:** Does POST /v1/visitor/config require an admin role, honour expectedVersion (409 on stale) and emit an audit event with old/new value?

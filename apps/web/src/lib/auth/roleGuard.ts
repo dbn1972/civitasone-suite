@@ -727,12 +727,16 @@ export const VISITOR_ADMIN_ROLES = ["tenant_admin", "super_admin"];
 
 /**
  * GAP-VISITOR-HOME-02: roles permitted to operate the guard console
- * (/visitor/guard). Mirrors visitor-service check-in ACTIVE_ROLES / GATE_ROLES
- * (modules/check-in/routes.ts) — the roster/verify/check-in endpoints admit
- * these roles and 403 others. The guard console is also reachable by the
- * gate-terminal service account. Defence-in-depth; the service is the gate.
+ * (/visitor/guard). Equals the union of visitor-service check-in ACTIVE_ROLES
+ * (roster read) and GATE_ROLES/WRITE_ROLES (verify / check-in / check-out)
+ * (modules/check-in/routes.ts) MINUS the plain `employee` role: owner decision
+ * (W2) removed `employee` from the gate roles, and a console whose verify /
+ * admit / check-out calls would all 403 must not be offered to them. Pinned
+ * against the backend source by tests/contract/visitor-guard-roles.contract.test.ts.
+ * The guard console is also reachable by the gate-terminal service account.
+ * Defence-in-depth; the service is the gate.
  */
-export const VISITOR_GUARD_ROLES = ["security_admin", "gate_terminal", "protocol_officer", "employee", "tenant_admin", "super_admin"];
+export const VISITOR_GUARD_ROLES = ["security_admin", "gate_terminal", "protocol_officer", "tenant_admin", "super_admin"];
 
 /**
  * GAP-LOYALTY-ACCRUALS-02 / MEMBERS-02 / HOME-03: roles permitted to READ
