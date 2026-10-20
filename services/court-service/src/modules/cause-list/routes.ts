@@ -46,7 +46,7 @@ export async function causeListRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CAUSELIST_READ_ROLES);
     const { id } = causeListIdParam.parse(req.params);
-    const items = await repo.listItems(ctx.tenantId, id);
+    const items = await repo.listItemsWithPurpose(ctx.tenantId, id);
     return reply.send({ items, count: items.length, source: "db" });
   });
 
