@@ -1,4 +1,4 @@
-import { eq, and, asc, inArray, ne, desc } from "drizzle-orm";
+import { eq, and, asc, inArray, ne } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { causeLists, causeListItems } from "./schema.js";
 import { hearings } from "../hearing/schema.js";
@@ -124,7 +124,7 @@ export type CauseListItemWithPurpose = CauseListItemRow & { purpose: string | nu
 /**
  * Items of a cause-list, each carrying the `purpose` of the (non-cancelled)
  * hearing of that case scheduled on the item's list date (IST calendar day), or
- * null when no such hearing exists / it has no purpose. Additive over listItems;
+ * null when none exists, it has no purpose, or several different purposes match. Additive over listItems;
  * tenant-scoped on both reads.
  */
 export async function listItemsWithPurpose(
@@ -147,8 +147,7 @@ export async function listItemsWithPurpose(
         eq(hearings.tenantId, tenantId),
         inArray(hearings.caseId, caseIds),
         ne(hearings.status, "cancelled"),
-      ))
-      .orderBy(desc(hearings.updatedAt));
+      ));
     return items.map((i) => ({ ...i, purpose: pickItemPurpose(i, hs) }));
   });
 }

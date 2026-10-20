@@ -12,6 +12,7 @@ vi.mock("../src/shared/db.js", () => {
     const c: any = {
       from: () => c, where: () => c,
       orderBy: () => Promise.resolve(rows),
+      then: (res: (v: unknown[]) => unknown, rej?: (e: unknown) => unknown) => Promise.resolve(rows).then(res, rej),
     };
     return c;
   };
@@ -50,12 +51,20 @@ describe("pickItemPurpose", () => {
     expect(pickItemPurpose(it, [{ caseId: CASE_A, scheduledDate: d, purpose: null }])).toBeNull();
     expect(pickItemPurpose(it, [{ caseId: CASE_A, scheduledDate: null, purpose: "x" }])).toBeNull();
   });
-  it("first (newest) matching hearing with a purpose wins", () => {
+  it("ambiguous: two different purposes the same IST day => null", () => {
     const d = new Date("2026-07-11T05:00:00Z");
     const h = [
-      { caseId: CASE_A, scheduledDate: d, purpose: null },
       { caseId: CASE_A, scheduledDate: d, purpose: "arguments" },
-      { caseId: CASE_A, scheduledDate: d, purpose: "older" },
+      { caseId: CASE_A, scheduledDate: d, purpose: "evidence" },
+    ];
+    expect(pickItemPurpose({ caseId: CASE_A, listDate: "2026-07-11" }, h)).toBeNull();
+  });
+  it("agreeing duplicates (and a null-purpose sibling) => that purpose", () => {
+    const d = new Date("2026-07-11T05:00:00Z");
+    const h = [
+      { caseId: CASE_A, scheduledDate: d, purpose: "arguments" },
+      { caseId: CASE_A, scheduledDate: new Date("2026-07-11T08:00:00Z"), purpose: "arguments" },
+      { caseId: CASE_A, scheduledDate: d, purpose: null },
     ];
     expect(pickItemPurpose({ caseId: CASE_A, listDate: "2026-07-11" }, h)).toBe("arguments");
   });
