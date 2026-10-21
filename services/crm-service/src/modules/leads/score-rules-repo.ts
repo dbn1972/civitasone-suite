@@ -70,6 +70,17 @@ export async function getStoredRules(tenantId: string, actorId: string): Promise
   return seeded.map(toStored);
 }
 
+/**
+ * The attributes the tenant already has a stored rule for (no lazy-seeding: a read that
+ * must not create rows). Used to tell a legacy rule that is being retired from a new one.
+ */
+export async function storedAttributes(tenantId: string): Promise<Set<string>> {
+  const rows = await scopedRead((tx) =>
+    tx.select({ attribute: leadScoreRules.attribute }).from(leadScoreRules).where(eq(leadScoreRules.tenantId, tenantId)),
+  );
+  return new Set(rows.map((r) => r.attribute));
+}
+
 /** Admin GET view (includes ids/versions), seeding defaults on first read. */
 export async function getRuleViews(tenantId: string, actorId: string): Promise<ScoreRuleView[]> {
   await getStoredRules(tenantId, actorId); // ensure seeded

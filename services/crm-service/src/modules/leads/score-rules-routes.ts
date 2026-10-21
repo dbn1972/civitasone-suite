@@ -7,11 +7,17 @@
  *   GET /v1/crm/leads/:id/score-history   — score change history for a lead
  */
 import type { FastifyInstance } from "fastify";
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./score-rules-repo.js";
-import { putScoreRulesBody, previewScoreRulesBody, scoreHistoryQuery, leadIdParam } from "./score-rules-validators.js";
-import { SCOREABLE_LEAD_ATTRIBUTES } from "./score-rules-domain.js";
+import {
+  putScoreRulesBody,
+  previewScoreRulesBody,
+  scoreHistoryQuery,
+  leadIdParam,
+  NOT_SCOREABLE_MESSAGE,
+} from "./score-rules-validators.js";
+import { SCOREABLE_LEAD_ATTRIBUTES, isScoreableAttribute } from "./score-rules-domain.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["crm_admin", "tenant_admin", "super_admin"];
@@ -24,6 +30,25 @@ const confirmEmptyQuery = z.object({
     .default("false")
     .transform((v) => v === "true"),
 });
+
+/**
+ * A rule on a field the scorer does not read gets past the validator only when it is DISABLED (that is
+ * how a legacy rule is retired). It must also already be stored for this tenant: otherwise it is a NEW
+ * rule on an unscoreable field, refused with the same field error as an enabled one.
+ */
+async function assertRetiredRulesAreStored(tenantId: string, rules: ReadonlyArray<{ attribute: string }>): Promise<void> {
+  const unscoreable = rules
+    .map((rule, index) => ({ attribute: rule.attribute, index }))
+    .filter((r) => !isScoreableAttribute(r.attribute));
+  if (unscoreable.length === 0) return;
+  const stored = await repo.storedAttributes(tenantId);
+  const unknown = unscoreable.filter((r) => !stored.has(r.attribute));
+  if (unknown.length > 0) {
+    throw new ZodError(
+      unknown.map((r) => ({ code: "custom" as const, path: ["rules", r.index, "attribute"], message: NOT_SCOREABLE_MESSAGE })),
+    );
+  }
+}
 
 export async function leadScoreRuleRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/crm/lead-score-rules", async (req, reply) => {
@@ -50,6 +75,7 @@ export async function leadScoreRuleRoutes(app: FastifyInstance): Promise<void> {
       const ctx = resolveContext(req);
       requireRole(ctx, ADMIN_ROLES);
       const body = previewScoreRulesBody.parse(req.body);
+      await assertRetiredRulesAreStored(ctx.tenantId, body.rules);
       const data = await repo.previewRules(
         ctx.tenantId,
         body.rules.map((r) => ({
@@ -68,6 +94,7 @@ export async function leadScoreRuleRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = putScoreRulesBody.parse(req.body);
+    await assertRetiredRulesAreStored(ctx.tenantId, body.rules);
     const { confirmEmpty } = confirmEmptyQuery.parse(req.query ?? {});
     // F3-03: refuse an accidental empty rule-set PUT unless the caller explicitly
     // confirmed clearing all (the web only sends confirmEmpty=true from its "clear

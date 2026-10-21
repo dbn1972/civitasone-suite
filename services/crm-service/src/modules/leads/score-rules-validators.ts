@@ -87,12 +87,15 @@ const numericThresholdParams = z
   })
   .passthrough();
 
+/** The field error on `rules.<i>.attribute` for a rule that names a field the scorer does not read. */
+export const NOT_SCOREABLE_MESSAGE = "attribute is not a scoreable lead field";
+
 const ruleBase = {
-  // GAP-CRM-LEAD-SCORING-03: only a field the scorer really evaluates (an unknown
-  // attribute would be saved but never score anything).
-  attribute: z.string().min(1).max(64).refine(isScoreableAttribute, {
-    message: "attribute is not a scoreable lead field",
-  }),
+  // GAP-CRM-LEAD-SCORING-03: only a field the scorer really evaluates may carry an ENABLED rule (an
+  // unknown attribute would be saved but score every lead against `undefined`, a constant). Whether
+  // the attribute is acceptable depends on `enabled`, so it is checked per list (scoreRuleList) and,
+  // for a DISABLED one, against the tenant's stored rules (score-rules-routes.ts) - see below.
+  attribute: z.string().min(1).max(64),
   weight: z.number().int().min(0).max(100),
   enabled: z.boolean().default(true),
 };
@@ -112,6 +115,13 @@ export const scoreRuleSchema = z.discriminatedUnion("scoreFnType", [
  * The backend keeps ONE rule per (tenant, attribute): a second entry for the same attribute
  * in one request would silently overwrite the first on save (and be scored twice by a
  * naive preview), so it is rejected as a field error on the repeated entry.
+ *
+ * Retiring a legacy rule: rules saved before the allow-list existed can sit on a field the
+ * scorer does not read, and PUT is additive so they can never be deleted. The only way out is
+ * to switch them off (a disabled rule is never scored), so a rule on an unscoreable field is
+ * accepted here ONLY when it is disabled; an enabled one is still a 400 on `rules.<i>.attribute`.
+ * The routes additionally require that disabled rule to already be stored for the tenant, so
+ * this cannot be used to plant a new rule on an arbitrary name.
  */
 const scoreRuleList = z
   .array(scoreRuleSchema)
@@ -119,6 +129,9 @@ const scoreRuleList = z
   .superRefine((rules, ctx) => {
     const seen = new Set<string>();
     rules.forEach((rule, index) => {
+      if (rule.enabled && !isScoreableAttribute(rule.attribute)) {
+        ctx.addIssue({ code: "custom", path: [index, "attribute"], message: NOT_SCOREABLE_MESSAGE });
+      }
       if (seen.has(rule.attribute)) {
         ctx.addIssue({
           code: "custom",

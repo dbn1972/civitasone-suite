@@ -582,3 +582,59 @@ describe("LeadScoreRulesEditor weights + impact preview (GAP-CRM-LEAD-SCORING-04
     expect(dialog).toHaveTextContent(/80 of 120 leads would score differently once re-scored/i);
   });
 });
+
+// GAP-CRM-LEAD-SCORING-03: Save is an additive upsert, so a stored rule on a field the scorer does not
+// read can never be deleted. It used to block every Save until it was removed from the list (and then
+// kept scoring). It is retired by switching it OFF, which crm-service accepts for a rule it stores.
+describe("LeadScoreRulesEditor legacy rules (GAP-CRM-LEAD-SCORING-03)", () => {
+  const legacy: lq.LeadScoreRule = { attribute: "industry", weight: 10, scoreFnType: "presence", params: { present: 100, absent: 0 }, enabled: true };
+
+  it("a legacy rule that is switched on blocks the save, a switched-off one does not and is sent disabled", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [rule, legacy], source: "api" });
+    vi.mocked(lq.saveScoreRules).mockResolvedValue(undefined);
+    renderWithIntl(<LeadScoreRulesEditor />);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+
+    // on: flagged, with the way out in the message, and Save is refused
+    expect(screen.getByLabelText(/attribute for rule 2/i)).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText(/turn the rule off/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    expect(await screen.findByText(/needs an attribute, a whole-number weight/i)).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(lq.saveScoreRules).not.toHaveBeenCalled();
+
+    // off: no longer an error (it is still listed, so the admin can see what was retired)
+    fireEvent.click(screen.getByLabelText(/enable rule 2/i));
+    expect(screen.getByLabelText(/attribute for rule 2/i)).not.toHaveAttribute("aria-invalid", "true");
+    expect(screen.queryByText(/can never score/i)).not.toBeInTheDocument();
+    expect((screen.getByRole("option", { name: "industry" }) as HTMLOptionElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    await confirmSave();
+    await waitFor(() => expect(lq.saveScoreRules).toHaveBeenCalledTimes(1));
+    const sent = vi.mocked(lq.saveScoreRules).mock.calls[0]![0];
+    expect(sent.find((r) => r.attribute === "industry")).toMatchObject({ enabled: false });
+    expect(sent.find((r) => r.attribute === "leadSource")).toMatchObject({ enabled: true });
+  });
+
+  it("switching a legacy rule back on blocks the save again", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [rule, { ...legacy, enabled: false }], source: "api" });
+    renderWithIntl(<LeadScoreRulesEditor />);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    expect(screen.queryByText(/can never score/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(/enable rule 2/i));
+    expect(screen.getByText(/can never score/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    expect(await screen.findByText(/needs an attribute, a whole-number weight/i)).toBeInTheDocument();
+    expect(lq.saveScoreRules).not.toHaveBeenCalled();
+  });
+
+  it("previews with the retired rule included (the same disabled rule the Save would send)", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [rule, { ...legacy, enabled: false }], source: "api" });
+    vi.mocked(lq.previewScoreRules).mockRejectedValue(new Error("not under test"));
+    renderWithIntl(<LeadScoreRulesEditor />);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /preview impact/i }));
+    await waitFor(() => expect(lq.previewScoreRules).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(lq.previewScoreRules).mock.calls[0]![0].find((r) => r.attribute === "industry")).toMatchObject({ enabled: false });
+  });
+});

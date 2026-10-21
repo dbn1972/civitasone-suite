@@ -19,7 +19,9 @@
  * GAP-CRM-LEAD-SCORING-03 (attribute): the attribute is a SELECT of the lead
  * fields the scorer actually evaluates (advertised by the backend in the GET meta,
  * with the built-in list as fallback) -- a typo is impossible, and a stored rule on
- * any other attribute is flagged and BLOCKS the save (the backend rejects it too).
+ * any other attribute, while it is switched ON, is flagged and BLOCKS the save (the backend
+ * rejects it too). Save is additive, so such a legacy rule can never be deleted; it is retired
+ * by switching it OFF, which crm-service accepts for a rule it already stores.
  * Custom fields are not scoreable today (they are not part of the scoring input).
  *
  * GAP-CRM-LEAD-SCORING-04 (weights): a running weight total and each rule's
@@ -138,7 +140,9 @@ function rowValid(row: RuleRow, allowed: readonly string[], attributeCounts: Map
   const ps = paramsState(row);
   return (
     attr.length > 0 &&
-    allowed.includes(attr) &&
+    // A stored legacy rule on a field the scorer does not read cannot be deleted (Save is additive), but it
+    // CAN be switched off: crm-service accepts it when it is disabled, and a disabled rule is never scored.
+    (allowed.includes(attr) || !row.enabled) &&
     (attributeCounts.get(attr) ?? 0) === 1 &&
     Number.isInteger(row.weight) &&
     row.weight >= 0 &&
@@ -393,7 +397,10 @@ export function LeadScoreRulesEditor() {
               const n = idx + 1;
               const ps = paramsState(row);
               const attr = row.attribute.trim();
-              const unknownAttr = attr.length > 0 && !allowedAttributes.includes(attr);
+              // `legacyAttr`: a stored rule on a field the scorer does not read; it stays listed so it can be
+              // switched off. Only an ENABLED one is an error (it would score every lead against nothing).
+              const legacyAttr = attr.length > 0 && !allowedAttributes.includes(attr);
+              const unknownAttr = legacyAttr && row.enabled;
               const duplicateAttr = attr.length > 0 && (attributeCounts.get(attr) ?? 0) > 1;
               const attrError = unknownAttr ? t("attributeNotScoreable") : duplicateAttr ? t("attributeDuplicate") : "";
               const attrErrId = `${headingId}-attr-${idx}-err`;
@@ -414,8 +421,8 @@ export function LeadScoreRulesEditor() {
                     >
                       <option value="">{t("attributePlaceholder")}</option>
                       {/* A stored rule on a field the scorer does not read stays visible (so it can be
-                          seen and removed) but cannot be re-chosen, and blocks the save. */}
-                      {unknownAttr ? <option value={row.attribute} disabled>{row.attribute}</option> : null}
+                          seen and switched off) but cannot be re-chosen; while it is on it blocks the save. */}
+                      {legacyAttr ? <option value={row.attribute} disabled>{row.attribute}</option> : null}
                       {allowedAttributes.map((a) => (
                         <option key={a} value={a}>{t.has(`attr_${a}`) ? t(`attr_${a}`) : a}</option>
                       ))}

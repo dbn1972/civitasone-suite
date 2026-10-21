@@ -13977,7 +13977,7 @@
     "attr_leadStatus": "Lead status",
     "attr_city": "City",
     "attr_designation": "Designation",
-    "attributeNotScoreable": "Not a field the scorer reads, so this rule can never score. Choose a field from the list or remove the rule.",
+    "attributeNotScoreable": "Not a field the scorer reads, so this rule can never score. Turn the rule off, or choose a field from the list.",
     "attributeDuplicate": "Another rule already uses this field. Each field can have one rule.",
     "editAsJson": "Edit as JSON",
     "useForm": "Use form",
