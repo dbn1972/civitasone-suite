@@ -18,6 +18,14 @@ import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
  */
 const DISCIPLINARY_ROLES = HR_STAFF_ROLES;
 
+/**
+ * GAP-HR-DISCIPLINARY-DETAIL-07: the eOffice routing key for the originating
+ * department -- a system identifier the eOffice matrix matches on (every
+ * RaiseEOfficeNote caller passes one: "Finance", "Legal", ...), not display
+ * copy, so it is deliberately NOT translated.
+ */
+const EOFFICE_DEPARTMENT = "HR";
+
 function field(data: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
     const v = data[key];
@@ -33,7 +41,7 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
   const roles = getSessionRoles();
   const canAccess = roles.some((r) => DISCIPLINARY_ROLES.includes(r));
   if (!canAccess) {
-    return <PermissionDenied module="disciplinary cases" requiredRoles={DISCIPLINARY_ROLES} />;
+    return <PermissionDenied requiredRoles={DISCIPLINARY_ROLES} />;
   }
 
   const { data: dcase, source, status, errorMessage } = await getDisciplinaryCaseById(params.id);
@@ -56,7 +64,7 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
           <PageHeader title={t("notFoundTitle")} back="/hr/disciplinary" backLabel={t("backLabel")} />
           <LoadErrorState
             result={{ status, errorMessage }}
-            area="disciplinary case"
+            area={t("loadErrorArea")}
             backHref="/hr/disciplinary"
             requiredRoles={DISCIPLINARY_ROLES}
           />
@@ -237,8 +245,8 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
       <RaiseEOfficeNote
         refType="hr_disciplinary"
         refId={params.id}
-        subject={`Disciplinary case ${caseLabel}`}
-        dept="HR"
+        subject={t("eofficeSubject", { caseLabel })}
+        dept={EOFFICE_DEPARTMENT}
         // GAP-HR-DISCIPLINARY-DETAIL-01: disciplinary data warrants a
         // higher classification than the component's generic "confidential"
         // default -- 'secret' is this fix's own suggested value pending
