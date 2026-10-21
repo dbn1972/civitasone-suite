@@ -14,11 +14,30 @@ const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 
 const pipelineScopeQuery = z.object({ pipelineId: z.string().uuid().optional() });
 
+/** 422 USE_CLOSE_ENDPOINT when `stage` is a terminal (deal-closing) stage. */
+function assertOpenCreateStage(stage: string): void {
+  if (isTerminalStage(stage)) {
+    throw new HttpError(
+      422,
+      "USE_CLOSE_ENDPOINT",
+      `stage '${stage}' is terminal; create the deal in an open stage and close it via POST /v1/crm/deals/:id/close with an outcome and reason`,
+    );
+  }
+}
+
 export async function dealRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/crm/deals", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const body = createDealBody.parse(req.body);
+
+    // GAP-CRM-DEALS-NEW-01: a deal is only ever CREATED open. Won/Lost are terminal
+    // outcomes reached through the governed close flow (POST /v1/crm/deals/:id/close),
+    // which requires a reason (min 10 chars for a loss) and is the one path that emits
+    // the close audit event. Creating straight into a closed stage would bypass all of
+    // that, so reject it here exactly like the PATCH stage route does (by stage NAME, so
+    // it holds whether or not a pipeline is scoped).
+    if (body.stage !== undefined) assertOpenCreateStage(body.stage);
 
     // OP-002: stage names are per-pipeline, not a fixed enum (see validators.ts) — so
     // when the deal is scoped to a pipeline, resolve + validate the stage dynamically
@@ -62,6 +81,10 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
         }
       }
     }
+
+    // The pipeline's resolved ENTRY stage must be open too (a pipeline whose lowest-ordinal
+    // stage were named Won/Lost would otherwise create closed deals by omission).
+    assertOpenCreateStage(stage ?? "Lead");
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.createDeal(ctx, { ...body, stage: stage ?? "Lead" }));
   });

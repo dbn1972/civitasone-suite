@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { paginatedSchema } from "@civitasone/schemas/common";
+import { zMoneyMinorStringNonNeg } from "@civitasone/schemas/money";
 
 // OP-002: pipelines (pipelines/validators.ts's pipelineStageSchema) let admins define
 // 3-10 arbitrary, per-pipeline stage names (each up to 100 chars) — "Lead"/"Proposal"/
@@ -28,6 +29,20 @@ const opportunityFields = {
   expectedCloseDate: isoDate.optional(),
 };
 
+/** Largest value the bigint (int8) value_minor column can hold. */
+const MAX_VALUE_MINOR = 9_223_372_036_854_775_807n;
+
+/**
+ * GAP-CRM-DEALS-NEW-03: deal value on create, in paise. Money is carried as an exact
+ * base-10 string end to end (@civitasone/schemas/money's codec), so the web form posts
+ * `"123456789"` rather than a lossy JS number; a legacy safe-integer JSON number is
+ * still accepted. Either form is normalised to the canonical digit string, and a value
+ * beyond int8 is a clean 400 here instead of an async insert failure in the consumer.
+ */
+const valueMinorField = zMoneyMinorStringNonNeg
+  .refine((v) => BigInt(v) <= MAX_VALUE_MINOR, { message: "valueMinor exceeds the maximum storable amount" })
+  .default("0");
+
 export const createDealBody = z.object({
   name: z.string().min(1).max(200),
   pipelineId: z.string().uuid().optional(),
@@ -37,7 +52,7 @@ export const createDealBody = z.object({
   // routes.ts resolves the effective stage (pipeline's own entry stage, or "Lead" when
   // pipeline-less) before this reaches commands.createDeal.
   stage: dealStage.optional(),
-  valueMinor: z.number().int().nonnegative().default(0),
+  valueMinor: valueMinorField,
   currency: z.string().length(3).default("INR"),
   contactId: z.string().uuid().optional(),
   ownerId: z.string().uuid().optional(),
