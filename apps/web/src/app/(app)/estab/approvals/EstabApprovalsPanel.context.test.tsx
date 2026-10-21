@@ -120,8 +120,45 @@ describe("EstabApprovalsPanel — file context from the real (bare) file DTO (GA
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
     const dialog = await screen.findByRole("alertdialog");
     expect(dialog.textContent).toMatch(/Approve file EST\/2026\/88 — Transfer of Shri X\?/);
-    expect(dialog.textContent).toMatch(/Latest note on this file:/);
+    expect(dialog.textContent).toMatch(/Note submitted for approval:/);
     expect(dialog.textContent).toMatch(/Recommended for approval as per the transfer policy of 2024\./);
+  });
+
+  it("shows the submitted note under approval, not a newer draft the maker started after submitting", async () => {
+    installFetch({
+      fileDto: {
+        ...FILE_DTO,
+        noteSheets: [
+          ...FILE_DTO.noteSheets,
+          { id: "n3", author: "Vikram Sen", content: "Working draft of a follow-up, not yet submitted.", timestamp: "2026-10-05T08:00:00.000Z", noteStatus: "draft" },
+        ],
+      },
+    });
+    render(<EstabApprovalsPanel />);
+    await screen.findByText("EST/2026/88");
+    expect(screen.getByText(/Recommended for approval as per the transfer policy of 2024\./)).toBeInTheDocument();
+    expect(screen.queryByText(/Working draft of a follow-up/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog.textContent).toMatch(/Note submitted for approval:/);
+    expect(dialog.textContent).toMatch(/Recommended for approval as per the transfer policy/);
+    expect(dialog.textContent).not.toMatch(/Working draft of a follow-up/);
+  });
+
+  it("falls back to the newest note, labelled as the latest note rather than the note under approval, when none is submitted", async () => {
+    installFetch({
+      fileDto: {
+        ...FILE_DTO,
+        noteSheets: [{ id: "n1", author: "Asha Rao", content: "Only a draft exists.", timestamp: "2026-10-01T09:00:00.000Z", noteStatus: "draft" }],
+      },
+    });
+    render(<EstabApprovalsPanel />);
+    await screen.findByText("EST/2026/88");
+    expect(screen.getByText(/Only a draft exists\./)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog.textContent).toMatch(/Latest note on this file:/);
+    expect(dialog.textContent).not.toMatch(/Note submitted for approval:/);
   });
 
   it("offers an 'Open note in a new tab' link per row that cannot hijack the opener", async () => {
@@ -198,7 +235,7 @@ describe("EstabApprovalsPanel — secret and top-secret files stay masked, as in
     expect(dialog.textContent).toMatch(/The note of a classified file is not shown here/);
     expect(dialog.textContent).not.toContain("Sensitive posting of Shri Y");
     expect(dialog.textContent).not.toContain("Cabinet-level detail");
-    expect(dialog.textContent).not.toMatch(/Latest note on this file:/);
+    expect(dialog.textContent).not.toMatch(/(?:Latest note on this file|Note submitted for approval):/);
   });
 
   it("Given a confidential file, Then it is listed with its subject and note, as in the register", async () => {

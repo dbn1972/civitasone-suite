@@ -1,9 +1,9 @@
 import { getTranslations } from "next-intl/server";
 import { getEstabDashboard, getEstabFiles } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState, Term } from "../../../_components/ds";
+import { Alert, PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState, Term } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { formatDays } from "@/lib/formatters";
-import { isClosedStatus } from "@/lib/estab/sla";
+import { averagePendencyDays, isClosedStatus } from "@/lib/estab/sla";
 import { MASKED_CLASSIFICATIONS } from "@/lib/estab/classification";
 import { FilesTable, type FileRow } from "./FilesTable";
 import Link from "next/link";
@@ -28,17 +28,41 @@ export default async function EstabFilesListPage() {
   // GAP-ESTAB-DASHBOARD-01/02: the office-wide figures (Active Files, Avg Pendency) come from the
   // same service counts as the dashboard, so a tile with the same name shows the same number. The
   // register page itself holds only one page of rows, so counting them here would disagree.
-  const [{ data: files, source }, { data: dash, source: dashSource }] = await Promise.all([
+  const [{ data: files, source }, { data: dash, source: dashSource, status: dashStatus }] = await Promise.all([
     getEstabFiles(),
     getEstabDashboard(),
   ]);
   const errored = source === "error";
   const dashErrored = dashSource === "error";
+  // GET /v1/estab/dashboard is gated to estab_officer, estab_admin, section_officer and
+  // super_admin, while the register is also open to the Deputy Secretary and audit_officer, who get
+  // a 403 there. That is an access boundary, not an outage: their tiles say so and count the loaded
+  // rows under a different label, so a figure with the dashboard's name is never a different number.
+  const dashRestricted = dashErrored && dashStatus === 403;
   const pending = files.filter((f) => f.status === "pending").length;
   // GAP-ESTAB-LIST-02: "Closed (MTD)" → "Closed" — we don't have closedAt,
   // so the count is all-time closed, not month-to-date. Closed, archived and disposed are all finished.
   const closed = files.filter((f) => isClosedStatus(f.status)).length;
-  const avgPendencyDisplay = `${formatDays(dash.avgPendencyDays)} days`;
+  const loadedActive = files.filter((f) => f.status === "active").length;
+  const loadedPendency = averagePendencyDays(files);
+
+  // Restricted viewers still see figures for the rows they can read, under a label that says so.
+  const countLoaded = dashRestricted && !errored;
+  const noticeKey = dashRestricted ? "listOfficeFiguresRestricted" : "listOfficeFiguresUnavailable";
+  const activeTile = !dashErrored
+    ? { label: "Active Files", value: dash.filesActive.toLocaleString("en-IN"), hint: t("listActiveFilesHint") }
+    : {
+        label: countLoaded ? t("listActiveFilesLoaded") : "Active Files",
+        value: countLoaded ? loadedActive.toLocaleString("en-IN") : "—",
+        hint: t(noticeKey),
+      };
+  const pendencyTile = !dashErrored
+    ? { label: "Avg Pendency", value: `${formatDays(dash.avgPendencyDays)} days`, hint: undefined }
+    : {
+        label: countLoaded ? t("listAvgPendencyLoaded") : "Avg Pendency",
+        value: countLoaded && loadedPendency !== null ? `${formatDays(loadedPendency)} days` : "—",
+        hint: t(noticeKey),
+      };
 
   const rows: FileRow[] = files.map((f) => ({
     id: f.id,
@@ -101,12 +125,17 @@ export default async function EstabFilesListPage() {
         <span aria-hidden="true">📁</span> <b>eOffice integration.</b> Digital files with signed note sheets, full movement trail — no physical files.
       </div>
       <StatGrid>
-        <StatCard icon="📁" tone="good" hint={t("listActiveFilesHint")} label="Active Files" value={dashErrored ? "—" : dash.filesActive.toLocaleString("en-IN")} />
-        <StatCard icon="⏱" tone="warn" label="Avg Pendency" value={dashErrored ? "—" : avgPendencyDisplay} />
+        <StatCard icon="📁" tone="good" hint={activeTile.hint} label={activeTile.label} value={activeTile.value} />
+        <StatCard icon="⏱" tone="warn" hint={pendencyTile.hint} label={pendencyTile.label} value={pendencyTile.value} />
         <StatCard icon="🟡" tone="warn" label="Pending" value={errored ? "—" : pending.toLocaleString("en-IN")} />
         {/* GAP-ESTAB-LIST-02: label "Closed", not "Closed (MTD)" */}
         <StatCard icon="✅" tone="info" label="Closed" value={errored ? "—" : closed.toLocaleString("en-IN")} />
       </StatGrid>
+      {dashErrored && (
+        <Alert variant={dashRestricted ? "info" : "warning"} style={{ marginTop: 12 }}>
+          {t(noticeKey)}
+        </Alert>
+      )}
       <div className="card" style={{ marginTop: 18 }}>
         {errored ? (
           <>

@@ -10,7 +10,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { render, screen, fireEvent, waitFor } from "@/test-utils/intl-render";
 import {
-  APPROVAL_RECORDS_COPY, DSC_NOT_APPLIED_COPY, NOTE_SIGN_RECORDS_COPY, SIGN_RECORDS_COPY,
+  APPROVAL_RECORDS_COPY, DSC_NOT_APPLIED_COPY, NOTE_SIGN_RECORDS_COPY, NOTE_SIGNED_LABEL, SIGN_RECORDS_COPY,
 } from "./signatureCopy";
 
 let mockSearch = new URLSearchParams();
@@ -33,6 +33,13 @@ describe("shared signature copy", () => {
       expect(copy).toContain(DSC_NOT_APPLIED_COPY);
       expect(copy).not.toMatch(/DSC e-?sign|e-?signed|arrives in phase/i);
     }
+  });
+});
+
+describe("signed-note label", () => {
+  it("names a signed note as a hash-chained note and makes no e-signature or DSC claim", () => {
+    expect(NOTE_SIGNED_LABEL).toBe("Signed (hash-chained note)");
+    expect(NOTE_SIGNED_LABEL).not.toMatch(/e-?sign|dsc/i);
   });
 });
 

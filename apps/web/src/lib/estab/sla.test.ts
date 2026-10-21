@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { daysLeft, computeSla, isOverdue, pendencyDays, isClosedStatus } from "./sla";
+import { daysLeft, computeSla, isOverdue, pendencyDays, isClosedStatus, averagePendencyDays } from "./sla";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -99,5 +99,25 @@ describe("pendencyDays zero (GAP-ESTAB-DASHBOARD-01)", () => {
     vi.setSystemTime(new Date("2026-10-21T10:00:00+05:30"));
     expect(Object.is(pendencyDays({ createdDate: "2026-10-21", status: "active" }), 0)).toBe(true);
     expect(pendencyDays({ createdDate: "2026-10-11", status: "active" })).toBe(10);
+  });
+});
+
+describe("averagePendencyDays (GAP-ESTAB-DASHBOARD-02: the dashboard definition over the rows held)", () => {
+  it("averages whole IST days since creation over open files only, to one decimal", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-21T10:00:00+05:30"));
+    const files = [
+      { createdDate: "2026-10-11", status: "active" },  // 10 days
+      { createdDate: "2026-10-18", status: "draft" },   // 3 days: a draft is open
+      { createdDate: "2026-10-14", status: "pending" }, // 7 days
+      { createdDate: "2026-01-01", status: "closed" },  // finished: not counted
+      { createdDate: "2026-01-01", status: "archived" },
+    ];
+    expect(averagePendencyDays(files)).toBe(6.7); // (10 + 3 + 7) / 3 = 6.666...
+  });
+
+  it("is null when no open file has a usable created date", () => {
+    expect(averagePendencyDays([])).toBeNull();
+    expect(averagePendencyDays([{ createdDate: "2026-01-01", status: "closed" }, { createdDate: "—", status: "active" }])).toBeNull();
   });
 });

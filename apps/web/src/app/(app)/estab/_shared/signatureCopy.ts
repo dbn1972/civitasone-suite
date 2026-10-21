@@ -27,6 +27,12 @@ export const SIGN_RECORDS_COPY = `Records who signed and when. ${DSC_NOT_APPLIED
 export const NOTE_SIGN_RECORDS_COPY =
   `This records your signature — your name and the time — into the file's tamper-evident (hash-chained) noting trail as a green note in your name. ${DSC_NOT_APPLIED_COPY} A signed note cannot be edited or withdrawn.`;
 
+/**
+ * What a signed note is called wherever it is listed (the file detail's Notes column): it is
+ * signed into the hash-chained trail, with no DSC applied, so it is not called "e-Signed".
+ */
+export const NOTE_SIGNED_LABEL = "Signed (hash-chained note)";
+
 /** Button + success labels, kept neutral of any "e-Sign/DSC" claim. */
 export const APPROVE_BUTTON_LABEL = "Approve";
 export const APPROVED_SUBTITLE = "Approve yellow notes to green.";

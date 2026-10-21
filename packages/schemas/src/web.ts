@@ -1828,9 +1828,13 @@ export const GrantUtilizationListSchema = z.array(GrantUtilizationSchema);
 
 // Establishment schemas
 export const EstabDashboardSchema = z.object({
-  filesActive: z.number().default(0),
+  // Neither count defaults here: a default would turn "this service did not send the field" into
+  // a numeric 0 before the web mapper runs, so its filesPending -> filesActive fallback could never
+  // fire (new web, estab-service not yet redeployed, would show 0 Active Files). The mapper
+  // (apps/web/src/app/_data/loaders.ts mapEstabDashboard) resolves filesActive ?? filesPending ?? 0.
+  filesActive: z.number().optional(),
   /** Deprecated alias of filesActive (same value), kept so older clients keep working. */
-  filesPending: z.number().default(0),
+  filesPending: z.number().optional(),
   meetingsToday: z.number().default(0),
   vehiclesInUse: z.number().default(0),
   complianceItemsDue: z.number().default(0),

@@ -1,9 +1,11 @@
 /**
- * The latest note on a file, for the approvals queue: the approver reads what they are about to
- * approve (GAP-ESTAB-APPROVALS-03). GET /v1/estab/files/:id returns the file with its note
- * sheets; the newest one by timestamp is the note under approval.
+ * The note an approver is about to approve, for the approvals queue (GAP-ESTAB-APPROVALS-03).
+ * GET /v1/estab/files/:id returns the file with its note sheets. The note under approval is the
+ * one its maker submitted (noteStatus "submitted"), so that is preferred: a draft started after
+ * submitting, or a rejected note, can carry a later timestamp but is not what is being decided on.
+ * Only when no note is submitted does the newest note by timestamp stand in for it.
  */
-export type NoteSheetLike = { content?: unknown; author?: unknown; timestamp?: unknown };
+export type NoteSheetLike = { content?: unknown; author?: unknown; timestamp?: unknown; noteStatus?: unknown };
 
 export type LatestNote = {
   content: string;
@@ -11,6 +13,8 @@ export type LatestNote = {
   author: string | null;
   /** ISO timestamp the note was written; null when unknown. */
   at: string | null;
+  /** True when this is the submitted note under approval, false when it is only the newest note. */
+  underApproval: boolean;
 };
 
 function sortKey(value: unknown): number {
@@ -19,13 +23,15 @@ function sortKey(value: unknown): number {
   return Number.isFinite(t) ? t : Number.NEGATIVE_INFINITY;
 }
 
-/** The newest non-empty note by timestamp (the last listed when no timestamp parses), or undefined. */
-export function latestNoteOf(sheets: NoteSheetLike[] | null | undefined): LatestNote | undefined {
-  if (!Array.isArray(sheets)) return undefined;
-  let best: NoteSheetLike | undefined;
+function hasText(sheet: NoteSheetLike | null | undefined): sheet is NoteSheetLike & { content: string } {
+  return typeof sheet?.content === "string" && sheet.content.trim() !== "";
+}
+
+/** The newest of `sheets` by timestamp (the last listed when no timestamp parses). */
+function newestOf<T extends NoteSheetLike>(sheets: T[]): T | undefined {
+  let best: T | undefined;
   let bestKey = Number.NEGATIVE_INFINITY;
   for (const sheet of sheets) {
-    if (typeof sheet?.content !== "string" || sheet.content.trim() === "") continue;
     const key = sortKey(sheet.timestamp);
     // ">=" so that among equal (or unparseable) timestamps the later-listed note wins.
     if (best === undefined || key >= bestKey) {
@@ -33,11 +39,24 @@ export function latestNoteOf(sheets: NoteSheetLike[] | null | undefined): Latest
       bestKey = key;
     }
   }
+  return best;
+}
+
+/**
+ * The newest non-empty submitted note, else the newest non-empty note, by timestamp (the last
+ * listed when no timestamp parses); undefined when no note has text.
+ */
+export function latestNoteOf(sheets: NoteSheetLike[] | null | undefined): LatestNote | undefined {
+  if (!Array.isArray(sheets)) return undefined;
+  const withText = sheets.filter(hasText);
+  const submitted = withText.filter((sheet) => sheet.noteStatus === "submitted");
+  const best = newestOf(submitted.length > 0 ? submitted : withText);
   if (best === undefined) return undefined;
   return {
-    content: best.content as string,
+    content: best.content,
     author: typeof best.author === "string" && best.author.trim() !== "" ? best.author : null,
     at: typeof best.timestamp === "string" && best.timestamp !== "" ? best.timestamp : null,
+    underApproval: submitted.length > 0,
   };
 }
 

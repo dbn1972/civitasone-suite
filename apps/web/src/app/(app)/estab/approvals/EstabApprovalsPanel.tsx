@@ -265,7 +265,7 @@ export function EstabApprovalsPanel() {
             { key: "subject", label: "Subject" },
             {
               key: "noteText",
-              label: t("colLatestNote"),
+              label: t("colNote"),
               sortable: false,
               render: (row) => {
                 const meta = row.refId ? files[row.refId] : undefined;
@@ -317,7 +317,7 @@ export function EstabApprovalsPanel() {
                         <>
                           {note ? (
                             <blockquote style={{ margin: "0 0 8px", padding: "6px 10px", borderInlineStart: "3px solid var(--line)", fontSize: "0.8125rem" }}>
-                              <strong>{t("dialogLatestNote")}</strong>
+                              <strong>{note.underApproval ? t("dialogSubmittedNote") : t("dialogLatestNote")}</strong>
                               <br />
                               {noteExcerpt(note.content, DIALOG_NOTE_CHARS)}
                             </blockquote>

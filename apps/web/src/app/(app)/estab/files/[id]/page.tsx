@@ -2,6 +2,7 @@ import { getEstabFileById } from "../../../../_data/loaders";
 import { PageHeader, StatusPill, EmptyState, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { NOTE_SIGNED_LABEL } from "../../_shared/signatureCopy";
 import { FileDetailActions } from "./FileDetailActions";
 import { FileAttachments } from "./FileAttachments";
 import { ScannedDocumentsSection } from "./ScannedDocumentsSection";
@@ -68,7 +69,7 @@ export default async function EstabFileDetailPage({ params }: { params: { id: st
         content: ns.content,
         author: ns.author,
         when: ns.timestamp ? formatIndianDate(ns.timestamp) : "—",
-        type: `${typeLabel}${ns.eSigned ? " · e-Signed" : ""}`,
+        type: `${typeLabel}${ns.eSigned ? ` · ${NOTE_SIGNED_LABEL}` : ""}`,
         status: (ns.noteStatus ?? "—").replace(/_/g, " "),
         signedAt: ns.signedAt ?? null,
       };
