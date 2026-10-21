@@ -105,6 +105,37 @@ describe("GET /v1/hrms/travel-requests?scope=team", () => {
     expect(r.json().data).toEqual([]);
   });
 
+  // GAP-HR-TRAVEL-01: HR used to get the whole tenant INCLUDING their own
+  // requests, so the UI offered Approve/Reject on a row the server would
+  // answer 403 SELF_APPROVAL. The approver's own requests are not part of
+  // the queue.
+  it("an hr_admin's OWN pending request is not in their tenant-wide approvals queue, but others' are", async () => {
+    const ownReq = await seedTravelRequest({ employeeActorId: HR_ACTOR });
+    const otherReq = await seedTravelRequest({ employeeActorId: OUTSIDER_ACTOR });
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/travel-requests?scope=team", headers: auth(HR_ACTOR, ["hr_admin"]) });
+    expect(r.statusCode).toBe(200);
+    const ids = (r.json().data as Array<{ id: string }>).map((x) => x.id);
+    expect(ids).toContain(otherReq);
+    expect(ids).not.toContain(ownReq);
+  });
+
+  it("a manager's own request is not in their team queue either", async () => {
+    const ownReq = await seedTravelRequest({ employeeActorId: MANAGER_ACTOR });
+    const reportReq = await seedTravelRequest({ employeeActorId: REPORT_ACTOR });
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/travel-requests?scope=team", headers: auth(MANAGER_ACTOR, ["manager"]) });
+    const ids = (r.json().data as Array<{ id: string }>).map((x) => x.id);
+    expect(ids).toContain(reportReq);
+    expect(ids).not.toContain(ownReq);
+  });
+
+  it("the approver's own request stays visible to them in the default self-scoped list", async () => {
+    const ownReq = await seedTravelRequest({ employeeActorId: HR_ACTOR });
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/travel-requests", headers: auth(HR_ACTOR, ["hr_admin"]) });
+    expect(r.statusCode).toBe(200);
+    const ids = (r.json().data as Array<{ id: string }>).map((x) => x.id);
+    expect(ids).toContain(ownReq);
+  });
+
   it("a plain employee cannot request team scope (403)", async () => {
     const r = await app.inject({ method: "GET", url: "/v1/hrms/travel-requests?scope=team", headers: auth(REPORT_ACTOR, ["employee"]) });
     expect(r.statusCode).toBe(403);

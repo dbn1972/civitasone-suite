@@ -644,13 +644,27 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ data: { id, totalElectedMinor: total } });
   });
 
+  // GAP-HR-BENEFITS-01: this used to be `ORDER BY be.fy DESC LIMIT 10` with no
+  // way to ask for more, so an employee with more than ten (plan, financial
+  // year) elections silently lost their oldest history. limit/offset are now
+  // bounded and zod-validated (default = the max, so an unparameterised call
+  // returns the whole history for any realistic employee -- elections are
+  // unique per plan x FY), the order is total (fy DESC, plan name, id) so
+  // pages never skip or repeat a row, and `meta.total` lets a client detect
+  // and page past a cap instead of being truncated without notice.
   app.get("/v1/hrms/benefits/my-elections", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ALL_ROLES);
-    const rows = await sqlClient.begin(async (sql) => {
+    const { limit, offset } = z.object({
+      limit: z.coerce.number().int().min(1).max(200).default(200),
+      offset: z.coerce.number().int().min(0).default(0),
+    }).parse(req.query);
+    const { rows, total } = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
-      return sql.unsafe(`SELECT be.id, bp.name AS plan_name, be.fy, be.elections, be.total_elected_minor, be.status FROM employee.benefit_elections be JOIN employee.benefit_plans bp ON bp.id = be.plan_id WHERE be.tenant_id = $1 AND be.employee_id = $2 ORDER BY be.fy DESC LIMIT 10`, [ctx.tenantId, ctx.actorId]);
+      const page = await sql.unsafe(`SELECT be.id, bp.name AS plan_name, be.fy, be.elections, be.total_elected_minor, be.status FROM employee.benefit_elections be JOIN employee.benefit_plans bp ON bp.id = be.plan_id WHERE be.tenant_id = $1 AND be.employee_id = $2 ORDER BY be.fy DESC, bp.name ASC, be.id ASC LIMIT $3 OFFSET $4`, [ctx.tenantId, ctx.actorId, limit, offset]);
+      const count = await sql.unsafe(`SELECT COUNT(*)::int AS n FROM employee.benefit_elections be WHERE be.tenant_id = $1 AND be.employee_id = $2`, [ctx.tenantId, ctx.actorId]);
+      return { rows: page, total: Number((count[0] as { n: number } | undefined)?.n ?? 0) };
     });
-    return reply.send({ data: rows });
+    return reply.send({ data: rows, meta: { total, limit, offset } });
   });
 
 
