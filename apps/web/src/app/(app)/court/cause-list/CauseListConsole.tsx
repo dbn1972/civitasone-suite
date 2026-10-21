@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, EmptyState, StatusPill } from "@/app/_components/ds";
 import type { CauseListItem, Court, CourtCase } from "../_data/types";
 import { fmtDate, humanize, todayIso } from "../_data/format";
 import {
   addCauseListItem,
   createCauseList,
+  fetchCase,
   fetchCauseListByCourtDate,
   fetchCauseListItems,
 } from "../_data/client";
@@ -30,6 +31,9 @@ const fieldStyle: React.CSSProperties = {
   border: "1px solid var(--line)",
   fontSize: 13.5,
 };
+
+const CASE_FETCH_CONCURRENCY = 5;
+const MAX_CASE_RETRIES = 2;
 
 /**
  * The court-service exposes GET /cause-lists?courtId&listDate (a court has
@@ -58,6 +62,19 @@ export function CauseListConsole({
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // GAP-COURT-CAUSE-LIST-04: cases beyond the 100-row limit are fetched
+  // individually on demand and cached here so their title/type/stage render.
+  const fetchedRef = useRef(new Set<string>());
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+  const retriesRef = useRef(new Map<string, number>());
+  const [retryTick, setRetryTick] = useState(0);
+  const [extraCases, setExtraCases] = useState<Map<string, CourtCase>>(() => new Map());
 
   // Fallback only when the registry couldn't be reached: infer courts from the
   // case list, but still label by name (never a bare UUID).
@@ -81,6 +98,49 @@ export function CauseListConsole({
     () => (courtId ? cases.filter((c) => c.courtId === courtId) : cases),
     [cases, courtId],
   );
+
+  // GAP-COURT-CAUSE-LIST-04: when items include caseIds not in the 100-row
+  // cases prop, resolve those cases individually (bounded concurrency).
+  // "Not found" is permanent (kept in fetchedRef, row shows em-dashes); a
+  // transient failure is released and retried after a backoff, up to
+  // MAX_CASE_RETRIES times per case.
+  useEffect(() => {
+    const fetched = fetchedRef.current;
+    const missing = items
+      .map((it) => it.caseId)
+      .filter((id) => !cases.some((c) => c.id === id) && !fetched.has(id));
+    const unique = [...new Set(missing)];
+    if (unique.length === 0) return;
+    for (const id of unique) fetched.add(id);
+    let cancelled = false;
+    let next = 0;
+    async function worker() {
+      while (!cancelled && next < unique.length) {
+        const id = unique[next++]!;
+        try {
+          const row = await fetchCase(id);
+          if (row && mountedRef.current) setExtraCases((prev) => new Map(prev).set(id, row));
+        } catch {
+          const tries = (retriesRef.current.get(id) ?? 0) + 1;
+          retriesRef.current.set(id, tries);
+          if (tries <= MAX_CASE_RETRIES) {
+            fetched.delete(id);
+            setTimeout(() => {
+              if (mountedRef.current) setRetryTick((n) => n + 1);
+            }, 1000 * tries);
+          }
+        }
+      }
+    }
+    void Promise.all(
+      Array.from({ length: Math.min(CASE_FETCH_CONCURRENCY, unique.length) }, () => worker()),
+    );
+    return () => {
+      cancelled = true;
+      // Release ids that were claimed but never started so a re-run picks them up.
+      for (let i = next; i < unique.length; i++) fetched.delete(unique[i]!);
+    };
+  }, [items, cases, retryTick]);
 
   // Read initial selection from the URL (deep link / reload).
   useEffect(() => {
@@ -284,16 +344,16 @@ export function CauseListConsole({
                     {[...items]
                       .sort((a, b) => (a.itemNumber ?? 0) - (b.itemNumber ?? 0))
                       .map((it) => {
-                        const c = cases.find((x) => x.id === it.caseId);
+                        const c = cases.find((x) => x.id === it.caseId) ?? extraCases.get(it.caseId);
                         return (
                           <tr key={it.id}>
                             <td data-label="Item" style={mono}>
                               {it.itemNumber ?? "—"}
                             </td>
                             <td data-label="Case">
-                              <div style={{ fontWeight: 600 }}>{c?.title ?? "Case"}</div>
+                              <div style={{ fontWeight: 600 }}>{c?.title ?? "—"}</div>
                               <div style={{ ...mono, fontSize: 12, color: "var(--ink2)" }}>
-                                {c?.cnrNumber ?? it.caseId.slice(0, 8)}
+                                {c?.cnrNumber ?? "—"}
                               </div>
                             </td>
                             <td data-label="Type">{c ? humanize(c.caseType) : "—"}</td>

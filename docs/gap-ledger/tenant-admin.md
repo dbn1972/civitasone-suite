@@ -395,9 +395,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
   - Clicking home 'Export report' lands on audit page without a dead query param (or downloads a file if implemented).
 - **Needs:** web  ·  **Effort:** S ~half day  ·  **Risk:** Audit log exports contain actor emails/IPs (PII); any real export must be role-gated and logged.
 
-### GAP-TENANT-ADMIN-AUDIT-03  ·  MEDIUM  ·  partly  ·  theme PII
+### GAP-TENANT-ADMIN-AUDIT-03  ·  MEDIUM  ·  interim  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
 - **W2 INTERIM (needs owner decision):** emails/IPs are masked by default and exports are now audited, but a click-to-reveal with an audited reveal and a server-side audit.viewed event are NOT built: they need a policy decision (may tenant admins reveal? an audit.viewed per list read doubles the log volume and appears in the log itself). Note also: audit-service /v1/audit/events allows audit_officer|audit_admin|super_admin|platform_admin — NOT tenant_admin — so confirm who this page is meant for.
 - **W0 note:** partly fixed by #1864 — Emails/IPs masked by default (maskEmail/maskIp); no reveal control or audit.viewed logging
 - **First-pass claim:** DPDP: actor identifiers (emails) and source IPs are shown in clear to every role in the layout with no masking or view-audit; reading the audit log is itself not evidenced as audited (AuditLogTable.tsx:51-56).
@@ -512,9 +512,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Same as DETAIL-02.
 - **Depends on:** GAP-TENANT-ADMIN-BREAKGLASS-DETAIL-01, GAP-TENANT-ADMIN-BREAKGLASS-DETAIL-02
 
-### GAP-TENANT-ADMIN-BREAKGLASS-05  ·  MEDIUM  ·  partly  ·  theme OTHER
+### GAP-TENANT-ADMIN-BREAKGLASS-05  ·  MEDIUM  ·  interim  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
 - **W2 note (INTERIM, needs owner decision):** the Close button is now shown only to platform_admin/super_admin (identity-service close is BG_ADMIN-only, so tenant_admin used to be offered a button the server 403s). Whether the requester may close their own session is a policy call (closing is risk-reducing; blocking it can leave an emergency session open) and is NOT invented here. Also found: admin-service `GET /v1/admin/breakglass[/:id]` is super_admin/platform_admin only, yet the tenant-admin layout admits tenant_admin, so a tenant_admin sees the load-error state; decide whether a tenant_admin may read break-glass events against their own tenant.
 - **First-pass claim:** Close session is offered to every allowed role, including the requester if they hold tenant_admin — no separation-of-duties gate; reason is required and audited (BreakglassActions.tsx:40,54).
 - **Verified evidence:** Confirmed: BreakglassTable.tsx:68-69 shows BreakglassActions for every active row and BreakglassActions.tsx:40 offers 'Close session' with no current-user comparison (only `requester` name used for dialog text, :48); reason is required (:54, requireReason) and sent (:23). The tenant-admin layout allows tenant_admin/platform_admin/super_admin. Overstated: closing (revoking) emergency access is a risk-reducing action, so a requester closing their own session is normally acceptable; separation-of-duties matters for grant/approval, which this UI does not show. Server-side enforcement and audit of /break-glass/:id/close are cannot-verify (identity service absent).
@@ -714,9 +714,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Needs:** decision  ·  **Effort:** S ~half day  ·  **Risk:** Personal-data egress (payroll/HRMS); role decision needs owner sign-off. Server-side enforcement must not rely on the UI.
 - **Depends on:** GAP-TENANT-ADMIN-DATA-EXPORT-01
 
-### GAP-TENANT-ADMIN-DATA-EXPORT-03  ·  MEDIUM  ·  confirmed  ·  theme PII
+### GAP-TENANT-ADMIN-DATA-EXPORT-03  ·  MEDIUM  ·  interim  ·  theme PII
 
-- [ ] **Status** (W2 tenant-admin REOPENED: acceptance 'download of a ready export returns a file' is unmet)
+- [~] **Status** (INTERIM — W2 tenant-admin REOPENED: acceptance 'download of a ready export returns a file' is unmet)
 - **W2 note (needs owner decision):** the Download link is real and authenticated, and Single Entity now requires an id, but the export itself is a stub: the process consumer marks the request ready with fileSizeBytes 0 and no file is generated; `GET /v1/admin/data-export/:id/download` returns a JSON `{downloadUrl, expiresAt}` whose URL points back at itself. A real export needs a generator and storage (S3 or signed URL) - not invented here.
 - **First-pass claim:** 'Single Entity' type offers no entity selector, so the request cannot say which entity; and the Download button has no href/handler in code (DataExportClient.tsx:85,141-143).
 - **Verified evidence:** DataExportClient.tsx:85 offers <option value="entity">Single Entity</option>, but the form renders only a Module select for type==='module' (lines 89-97); the POST body (line 53) has no entity field, so an 'entity' request is unspecified. The Download Button at line 141 has no onClick and is not an anchor with href; DataExportRequest (loaders) contains no download URL that could be used - a download endpoint is not visible in the snapshot.
@@ -1171,9 +1171,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Source:** `apps/web/src/app/(app)/tenant-admin/page.tsx`
 - **Design reference:** `redesign/tenant-admin/notifications-channels.html`
 
-### GAP-TENANT-ADMIN-NOTIFICATIONS-CHANNELS-01  ·  HIGH  ·  confirmed  ·  theme WIRING
+### GAP-TENANT-ADMIN-NOTIFICATIONS-CHANNELS-01  ·  HIGH  ·  interim  ·  theme WIRING
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
 - **W2 note (INTERIM):** Add form (#1864) plus, new in W2, audited Enable/Disable (PATCH /notifications/channels/:id, CQRS command, markProcessed + guarded write + audit in one transaction, reason mandatory to disable, tenant-isolated; real-DB test `services/notification-service/tests/channel-enable-disable.test.ts`). STILL OPEN, needs owner decision: Test-send (no provider send path for a single channel is exposed) and Edit (the channel model is {type,name,isDefault,enabled}; no provider/config store exists).
 - **W0 note:** partly fixed by #1864 — ChannelForm Add form exists; edit, test-send and disable intentionally not built (backend has create+list only)
 - **First-pass claim:** Subtitle says 'Configure … providers' but the only way to add a channel is to hand-craft a POST body shown in a <pre>; no Add channel form, edit, test-send or disable (page.tsx:37-42,67-87).
@@ -1447,9 +1447,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
   - Failed response shows error and plan unchanged.
 - **Needs:** web+backend  ·  **Effort:** L >2d  ·  **Risk:** Business/money: users are told they upgraded and paid when nothing happened; entitlement and invoice mismatch.
 
-### GAP-TENANT-ADMIN-PLANS-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
+### GAP-TENANT-ADMIN-PLANS-02  ·  HIGH  ·  interim  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
 - **W2 reopened:** the provisional re-check failed its criteria — the downgrade flow shows only a 'contact your administrator' dialog: no required reason, no usage-vs-target-limit blocking, no pending state/audit row (acceptance unmet). Tenant-self-serve plan change needs an owner decision (tenant-service has /v1/tenant/subscription/downgrade; billing-service is super-admin-only) — INTERIM only.
 - **First-pass claim:** Downgrade 'Confirm Downgrade' only sets local state and closes — no API call, no audit reason, no check that current users/data exceed the target plan's limits beyond a warning line (PlansClient.tsx:212).
 - **Verified evidence:** PlansClient.tsx:212 (line 243 by file) 'Confirm Downgrade' runs setCurrentPlanId(targetPlanId!) and closes the modal; no request, no reason, no audit. The only guard is a static warning comparing plan maxUsers (197-201), not actual active users/storage, which the page does not load.
@@ -1480,9 +1480,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 - **Depends on:** GAP-TENANT-ADMIN-PLANS-01
 
-### GAP-TENANT-ADMIN-PLANS-04  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
+### GAP-TENANT-ADMIN-PLANS-04  ·  MEDIUM  ·  interim  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
 - **W2 INTERIM (needs owner decision):** Razorpay checkout and the dead PDF button are gone; GST invoice columns and the Govt payment-mode (PO/GeM/treasury) choice need billing-API fields + a product decision.
 - **W0 note:** partly fixed by #1864 — Razorpay checkout and dead PDF button removed; GST invoice columns still absent (awaiting billing API)
 - **First-pass claim:** 'Pay via Razorpay' presents a card-gateway checkout to a Government department whose payments run through PO/GeM/treasury; GST invoice details are absent from the invoice table and the 📥 PDF button has no handler (PlansClient.tsx:171,145).
@@ -1643,9 +1643,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 - **Depends on:** GAP-TENANT-ADMIN-READINESS-01
 
-### GAP-TENANT-ADMIN-READINESS-03  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
+### GAP-TENANT-ADMIN-READINESS-03  ·  MEDIUM  ·  interim  ·  theme DEADROUTE
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
 - **W2 INTERIM (needs owner decision):** the readiness gates are platform-engineering gates (queue-first writes, k6, contract tests...) with no tenant-fixable screen, so there is no honest Fix target; GATE_META has no href by design. Decide whether tenant admins should see these gates at all.
 - **W0 note:** partly fixed by #1864 — Fix-link logic exists but GATE_META entries define no href, so no Fix link ever renders
 - **First-pass claim:** Rows are not actionable: a failing "Compliance Verified" or "Security Hardened" has no link to the screen that fixes it (page.tsx:79-89).
@@ -2072,9 +2072,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 - **Depends on:** GAP-TENANT-ADMIN-SESSIONS-DETAIL-01
 
-### GAP-TENANT-ADMIN-SESSIONS-DETAIL-05  ·  LOW  ·  partly  ·  theme PII
+### GAP-TENANT-ADMIN-SESSIONS-DETAIL-05  ·  LOW  ·  interim  ·  theme PII
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
 - **W2 note (INTERIM, needs owner decision):** IP is already masked by default (no clear IP is rendered). An audited reveal and a server-side session-viewed event need a DPDP policy decision on admin IP visibility and a new identity-service endpoint; not invented here. Full user agent is still printed.
 - **W0-10 note:** review found the W0 tick partly — sessions/[id]/page.tsx:93 IP masked via maskIp (no clear IP shown), but no reveal and no audited reveal/view event (acceptance "reveal audited" unmet; deliberate per comment :14); full userAgent still printed :106.
 - **First-pass claim:** Full user agent and IP are printed for any viewer; personal-data handling (DPDP) and access audit are not addressed (page.tsx:73,84-86).
@@ -2095,9 +2095,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Source:** `apps/web/src/app/(app)/tenant-admin/settings/page.tsx`
 - **Design reference:** `redesign/tenant-admin/settings.html`
 
-### GAP-TENANT-ADMIN-SETTINGS-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
+### GAP-TENANT-ADMIN-SETTINGS-01  ·  HIGH  ·  interim  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
 - **W2 INTERIM (needs owner decision):** the direct toggle + confirm + required reason + server audit is what exists; there is NO workflow module-change-requests endpoint, so an approval flow cannot be built without a product decision (maker-checker for module changes?). Backend TENANT_ADMIN gate is admin-service config/routes.ts. Found+fixed while verifying: the Settings page could never load real data (loader schema vs admin-service shape) — GET /v1/admin/tenant/modules?detail=1 + envelope-tolerant loader.
 - **W0 note:** partly fixed by #1864 — Dead banner removed; decision recorded that no workflow endpoint exists, direct toggle with confirm+reason; no approval flow
 - **First-pass claim:** ModuleApprovalBanner (tenant_admin "Approval required", workflow-service request) is dead code; the page lets a tenant_admin toggle modules directly with no approval or confirmation, contradicting the documented workflow (ModuleApprovalBanner.tsx:8-15, ModuleToggleActions.tsx:44-52).
@@ -2283,9 +2283,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Source:** `apps/web/src/app/(app)/tenant-admin/sso/page.tsx`
 - **Design reference:** `redesign/tenant-admin/sso.html`
 
-### GAP-TENANT-ADMIN-SSO-01  ·  HIGH  ·  confirmed  ·  theme OTHER
+### GAP-TENANT-ADMIN-SSO-01  ·  HIGH  ·  interim  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
 - **W2 INTERIM (needs owner decision):** admin-service GET /v1/admin/sso/providers and /idp/providers still answer 501 (no provider store; identity-service saml/config is an unfinished stub) — an add/edit form would POST to nothing. Pages stay honestly read-only with no circular links.
 - **W0 note:** partly fixed by #1864 — Circular links removed, page documented read-only; no add/edit provider (backend 501)
 - **First-pass claim:** The two provider screens point at each other: "Configure IDP" here opens /tenant-admin/idp and that page's "Add Provider" opens /tenant-admin/sso, so no screen actually adds or edits a provider (page.tsx:24,46; idp/page.tsx:24).
@@ -2396,9 +2396,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Needs:** web  ·  **Effort:** XS <1h  ·  **Risk:** Low.
 - **Depends on:** GAP-TENANT-ADMIN-USAGE-04
 
-### GAP-TENANT-ADMIN-SUBSCRIPTION-04  ·  MEDIUM  ·  partly  ·  theme WIRING (was DATEFMT)
+### GAP-TENANT-ADMIN-SUBSCRIPTION-04  ·  MEDIUM  ·  interim  ·  theme WIRING (was DATEFMT)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
 - **W2 INTERIM (needs owner decision):** the 'Download invoice' link targeted /v1/billing/invoices/latest?format=pdf which NO service implements (billing-service has GET /invoices/:id with a uuid id and no PDF renderer) — it was a dead control, removed (subscription/page.tsx). An invoice list + PDF download needs a billing-service invoice-PDF endpoint.
 - **W0 note:** partly fixed by #1864 — Download routed via /api/proxy; still latest-only link, no invoice list
 - **First-pass claim:** "Download invoice" is a plain link to the "latest" invoice with no invoice list, date or amount, and goes to /api/v1 directly rather than through the proxy used by mutations (page.tsx:28).
@@ -2913,9 +2913,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Impact if wrong:** Unauthenticated or cross-tenant domain hijack (tenant takeover) if direct path bypasses proxy controls.
 - **Web change if wrong:** Switch DomainClient.tsx and WebhooksClient.tsx fetches to /api/proxy/v1/admin/... to match other writes.
 
-### GAP-TENANT-ADMIN-IDP-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-TENANT-ADMIN-IDP-05  ·  LOW  ·  interim  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
 - **W2 note (INTERIM, needs owner decision):** the status vocabulary cannot be defined yet: `GET /v1/admin/idp/providers` answers 501 NOT_IMPLEMENTED because no IdP-provider store exists (same blocker as SSO-01 / SSO-06). The page therefore always shows its load-error state.
 - **First-pass claim:** Identity backend is not in this snapshot; status vocabulary beyond 'active' undeterminable.
 - **Service:** `identity-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/idp/providers (loaders.ts ~L4701)']`
@@ -3129,9 +3129,9 @@ Counts: ACTION 161, BACKEND-VERIFY 34, CANNOT-VERIFY 1
 - **Impact if wrong:** Alerts mishandled or hidden from responders.
 - **Web change if wrong:** Add state pills/filters for all lifecycle states.
 
-### GAP-TENANT-ADMIN-SSO-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-TENANT-ADMIN-SSO-06  ·  LOW  ·  interim  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (INTERIM — change to `[x]` when done, `[~]` if blocked + reason)
 - **W2 INTERIM (needs owner decision):** today the endpoint is a 501 with no body data, so no secret can leak; the real check (response omits clientSecret/signing keys, hasSecret flag) must be written WITH the provider store — kept open for that.
 - **First-pass claim:** Identity backend not in this snapshot; provider secrets handling and status values are undeterminable.
 - **Service:** `identity-service`  ·  **Endpoint(s):** `['GET /api/v1/admin/sso/providers (loaders.ts:4532)']`

@@ -4,9 +4,9 @@
     "realRoutes": 925,
     "totalLinks": 2053,
     "byKind": {
-      "href": 1694,
+      "href": 1693,
       "helperReturn": 27,
-      "navigate": 200,
+      "navigate": 201,
       "rowLinkPrefix": 103,
       "rowLinkKeyField": 6,
       "linkField": 23
@@ -14842,10 +14842,10 @@
     },
     {
       "file": "apps/web/src/app/(app)/tenant/org-hierarchy/page.tsx",
-      "line": 13,
-      "kind": "href",
-      "target": "/tenant",
-      "resolved": "/tenant",
+      "line": 9,
+      "kind": "navigate",
+      "target": "/tenant-admin/org-hierarchy",
+      "resolved": "/tenant-admin/org-hierarchy",
       "ok": true
     },
     {

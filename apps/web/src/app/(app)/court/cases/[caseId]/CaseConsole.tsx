@@ -788,9 +788,10 @@ function OrderRow({
   onDone: (msg: string) => Promise<void> | void;
   onError: (err: unknown, fallback: string) => void;
 }) {
-  const [mode, setMode] = useState<"none" | "issue" | "sendback" | "recall">("none");
+  const [mode, setMode] = useState<"none" | "issue" | "sendback" | "recall" | "submit">("none");
   const [dsc, setDsc] = useState("");
   const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const run = useCallback(
     async (fn: () => Promise<void>, ok: string, bad: string) => {
@@ -837,14 +838,7 @@ function OrderRow({
             <Button
               variant="ghost"
               size="sm"
-              disabled={busy}
-              onClick={() =>
-                void run(
-                  () => submitOrderForApproval(order.id, order.version),
-                  "Order submitted for approval.",
-                  "Could not submit the order.",
-                )
-              }
+              onClick={() => setMode("submit")}
             >
               Submit for approval
             </Button>
@@ -867,6 +861,42 @@ function OrderRow({
         </div>
       </div>
 
+      {/* GAP-COURT-CASES-CASEID-01: submit-for-approval via ConfirmDialog so the
+          action is not single-click — consistent with approve/sendback/recall. */}
+      {mode === "submit" && (
+        <ConfirmDialog
+          open
+          title="Submit this order for approval?"
+          confirmLabel="Confirm submit"
+          description={
+            <p>
+              The order will move to <strong>pending approval</strong>. A different officer
+              must then approve and issue it (self-approval is rejected by the service).
+            </p>
+          }
+          busy={busy}
+          errorMessage={submitError ?? undefined}
+          onConfirm={() => {
+            setSubmitError(null);
+            void run(
+              async () => {
+                try {
+                  await submitOrderForApproval(order.id, order.version);
+                } catch (err) {
+                  setSubmitError("Could not submit the order. Please try again.");
+                  throw err;
+                }
+              },
+              "Order submitted for approval.",
+              "Could not submit the order.",
+            );
+          }}
+          onCancel={() => {
+            setSubmitError(null);
+            setMode("none");
+          }}
+        />
+      )}
       {mode === "issue" && (
         <ConfirmDialog
           open

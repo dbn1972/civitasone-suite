@@ -23,8 +23,10 @@ export default async function HostPortalPage() {
   const elevated = hasAnyRole(roles, ELEVATED_APPROVAL_ROLES);
 
   // GAP-VISITOR-HOST-03: scope "Expected today" to the signed-in host (unless
-  // an elevated role, which legitimately sees all). The list endpoint is not
-  // host-scoped server-side, so filter web-side by hostEmployeeId.
+  // an elevated role, which legitimately sees all). The pending list is already
+  // scoped server-side (visit-request list host-scope; a plain employee only
+  // receives their own hosted requests); this filter only narrows expectedToday
+  // for display and is defence in depth, not the access control.
   const expectedToday = approved.data.filter(
     (r) => isToday(r.scheduledAt) && (elevated || !me || r.hostEmployeeId === me),
   );

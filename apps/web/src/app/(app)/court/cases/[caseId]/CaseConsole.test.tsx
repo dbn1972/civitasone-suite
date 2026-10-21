@@ -5,6 +5,7 @@ const transitionCaseMock = vi.fn();
 const adjournHearingMock = vi.fn();
 const recordHearingOutcomeMock = vi.fn();
 const recallOrderMock = vi.fn();
+const submitOrderForApprovalMock = vi.fn();
 const approveAndIssueOrderMock = vi.fn();
 const fetchCaseOrdersMock = vi.fn();
 const fetchCaseHearingsMock = vi.fn();
@@ -16,7 +17,7 @@ vi.mock("../../_data/client", () => ({
   recallOrder: (...a: unknown[]) => recallOrderMock(...a),
   approveAndIssueOrder: (...a: unknown[]) => approveAndIssueOrderMock(...a),
   sendBackOrder: vi.fn(),
-  submitOrderForApproval: vi.fn(),
+  submitOrderForApproval: (...a: unknown[]) => submitOrderForApprovalMock(...a),
   recordOrder: vi.fn(),
   scheduleHearing: vi.fn(),
   fetchCaseOrders: (...a: unknown[]) => fetchCaseOrdersMock(...a),
@@ -80,6 +81,8 @@ const issuedOrder: CourtOrder = {
   createdBy: null,
   version: 2,
 };
+
+const draftOrder: CourtOrder = { ...issuedOrder, id: "o2", status: "draft", issuedAt: null, hasDsc: false, version: 4 };
 
 const scheduledHearing: Hearing = {
   id: "h1",
@@ -173,5 +176,45 @@ describe("CaseConsole", () => {
     fireEvent.click(confirm);
     await waitFor(() => expect(adjournHearingMock).toHaveBeenCalledTimes(1));
     expect(adjournHearingMock).toHaveBeenCalledWith("h1", expect.objectContaining({ reason: "Counsel unavailable", expectedVersion: 1 }));
+  });
+
+  function openSubmitDialog() {
+    renderConsole(caseDetail(), [draftOrder], []);
+    fireEvent.click(screen.getByRole("tab", { name: /Orders/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
+    return screen.getByRole("alertdialog");
+  }
+
+  it("CASEID-01: Submit for approval opens a ConfirmDialog and does not call the API until confirmed", () => {
+    openSubmitDialog();
+    expect(submitOrderForApprovalMock).not.toHaveBeenCalled();
+  });
+
+  it("CASEID-01: cancelling the submit dialog closes it without calling the API", () => {
+    const dialog = openSubmitDialog();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(submitOrderForApprovalMock).not.toHaveBeenCalled();
+  });
+
+  it("CASEID-01: confirming submits once with the order id and version; double-click is blocked by busy", async () => {
+    let resolve!: () => void;
+    submitOrderForApprovalMock.mockReturnValue(new Promise<void>((r) => { resolve = r; }));
+    const dialog = openSubmitDialog();
+    const confirm = within(dialog).getByRole("button", { name: "Confirm submit" });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    await waitFor(() => expect(confirm).toBeDisabled());
+    expect(submitOrderForApprovalMock).toHaveBeenCalledTimes(1);
+    expect(submitOrderForApprovalMock).toHaveBeenCalledWith("o2", 4);
+    resolve();
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+  });
+
+  it("CASEID-01: a failed submit keeps the dialog open and shows an error inside it", async () => {
+    submitOrderForApprovalMock.mockRejectedValue(new Error("raw backend detail"));
+    const dialog = openSubmitDialog();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Confirm submit" }));
+    await waitFor(() => expect(within(screen.getByRole("alertdialog")).getByText("Could not submit the order. Please try again.")).toBeInTheDocument());
   });
 });
