@@ -125,9 +125,9 @@
     "codePlaceholder": "e.g. CLERK",
     "nameLabel": "Name",
     "namePlaceholder": "e.g. Upper Division Clerk",
-    "levelLabel": "Pay Level",
+    "levelLabel": "Pay Level (7th CPC, optional)",
     "levelPlaceholder": "e.g. 4",
-    "payGradeLabel": "Pay Grade",
+    "payGradeLabel": "Pay Grade (optional)",
     "payGradePlaceholder": "e.g. an old grade-pay reference",
     "addingBtn": "Adding…",
     "addBtn": "Add Designation",
@@ -2286,7 +2286,8 @@
     "tileGrievanceCategoriesDesc": "Grievance taxonomy"
   },
   "dashboardDays": {
-    "count": "{count, plural, one {# day} other {# days}}"
+    "count": "{count, plural, one {# day} other {# days}}",
+    "monthEnds": "Month ends in {days}"
   },
   "dashboard": {
     "title": "HR Dashboard",
@@ -2317,7 +2318,7 @@
     "title": "Departments",
     "subtitle": "The teams in your office — Finance, HR, Establishment and others. Add departments so people and work can be sorted correctly.",
     "backLabel": "HR",
-    "newBtn": "+ New Department",
+    "newBtn": "New Department",
     "breadcrumbHome": "Home",
     "statTotalLabel": "Total Departments",
     "statRootLabel": "Root Departments",
@@ -2351,7 +2352,8 @@
     "deleteConfirmTitle": "Delete \"{name}\"?",
     "deleteConfirmDesc": "This department will be permanently removed. This action cannot be undone.",
     "deleteConfirmBtn": "Delete department",
-    "rowErrorRequired": "Code and name are required"
+    "rowErrorRequired": "Code and name are required",
+    "employeeCountUnavailable": "Employee count unavailable"
   },
   "designations": {
     "title": "Designations",
@@ -2394,7 +2396,9 @@
     "tableCaption": "Designations",
     "levelEditHint": "Blank clears the level (shown as \"—\").",
     "noMatchTitle": "No matching designations",
-    "noMatchMessage": "No designation matches your search."
+    "noMatchMessage": "No designation matches your search.",
+    "clearLevelBtn": "Clear level",
+    "deleteInUseHint": "In use by {count, plural, one {# record} other {# records}} — reassign or remove them before deleting."
   },
   "directory": {
     "title": "Employee Directory",

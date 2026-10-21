@@ -76,6 +76,7 @@ specific reason helps the user act:
 | MAKER_CHECKER, MAKER_CHECKER_VIOLATION | This needs approval from someone other than the person who made it. Another approver needs to do this. |
 | STALE_ELECTION | This election was changed by someone else. Refresh to see the latest version, then choose again. |
 | DESIGNATION_IN_USE | This can't be done while it's still in use elsewhere. Update or reassign whatever depends on it first, then try again. |
+| DEPARTMENT_IN_USE | This department still has sub-departments or employees. Move or reassign them first, then try again. |
 | DUPLICATE_CODE | This code is already in use. Choose a different code and try again. |
 
 A call site that has its own translated sentence for a code (for example

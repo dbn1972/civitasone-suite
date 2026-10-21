@@ -100,3 +100,69 @@ describe("AddDesignationForm — GAP-HR-DESIGNATIONS-01 pay level bounded 1-18",
     expect(screen.queryByText(/between 1 and 18/i)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * GAP-HR-DESIGNATIONS-NEW-03: Pay Level and Pay Grade are optional, and a blank
+ * Pay Level is stored as 0 -- shown as "—" (unclassified) everywhere it is read
+ * back. The form now says so in its labels AND ties the hint to the input with
+ * aria-describedby, so a screen reader announces it when the field takes focus
+ * (a bare <p> sibling is only read when someone browses past it).
+ */
+describe("AddDesignationForm — GAP-HR-DESIGNATIONS-NEW-03 optional fields explained", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function renderForm() {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AddDesignationForm onCancel={vi.fn()} />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("labels the fields 'Pay Level (7th CPC, optional)' and 'Pay Grade (optional)'", () => {
+    renderForm();
+    expect(screen.getByLabelText("Pay Level (7th CPC, optional)")).toBeInTheDocument();
+    expect(screen.getByLabelText("Pay Grade (optional)")).toBeInTheDocument();
+  });
+
+  it("announces the blank-means-unclassified hint as the Pay Level input's accessible description", () => {
+    renderForm();
+    const input = screen.getByLabelText(/pay level/i);
+    expect(input).toHaveAccessibleDescription(/optional\. leave blank.*unclassified/i);
+  });
+
+  it("announces the Pay Grade hint as that input's accessible description", () => {
+    renderForm();
+    expect(screen.getByLabelText(/pay grade/i)).toHaveAccessibleDescription(/optional free-text reference/i);
+  });
+
+  it("keeps the hint in the description alongside a validation error", async () => {
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/code/i), { target: { value: "CLERK" } });
+    fireEvent.change(screen.getByLabelText(/name/i), { target: { value: "Upper Division Clerk" } });
+    fireEvent.change(screen.getByLabelText(/pay level/i), { target: { value: "40" } });
+    fireEvent.click(screen.getByRole("button", { name: /add designation/i }));
+
+    const description = await screen.findByText(/between 1 and 18/i);
+    expect(description).toBeInTheDocument();
+    expect(screen.getByLabelText(/pay level/i)).toHaveAccessibleDescription(/leave blank/i);
+  });
+
+  it("saves a blank Pay Level without sending a level at all (stored as unclassified)", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "d1" }), { status: 202 }));
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/code/i), { target: { value: "CLERK" } });
+    fireEvent.change(screen.getByLabelText(/name/i), { target: { value: "Upper Division Clerk" } });
+    fireEvent.click(screen.getByRole("button", { name: /add designation/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(body).toEqual({ code: "CLERK", name: "Upper Division Clerk" });
+    expect(body).not.toHaveProperty("level");
+  });
+});

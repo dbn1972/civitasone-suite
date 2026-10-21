@@ -68,7 +68,13 @@ export default async function DepartmentsPage() {
   // no information. Replaced with a metric that actually varies: how many
   // departments currently have zero employees, now that GET returns a real
   // employeeCount (GAP-HR-DEPARTMENTS-01).
-  const noEmployeeDepts = errored ? null : depts.filter((d) => (d.employeeCount ?? 0) === 0).length;
+  //
+  // GAP-HR-DEPARTMENTS-01: a department the API sent no employeeCount for is
+  // "unknown", not "zero" -- so this card only shows a number when EVERY row
+  // carries a real count, and an honest "—" otherwise (never a coerced 0
+  // that would overstate the number of empty departments).
+  const countsKnown = !errored && depts.every((d) => typeof d.employeeCount === "number");
+  const noEmployeeDepts = countsKnown ? depts.filter((d) => d.employeeCount === 0).length : null;
 
   return (
     <div className="page-main wrap">

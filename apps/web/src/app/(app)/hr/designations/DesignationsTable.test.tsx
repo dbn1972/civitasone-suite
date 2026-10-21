@@ -216,3 +216,96 @@ describe("DesignationsTable — GAP-HR-DESIGNATIONS-03 DataTable migration (sort
     expect(screen.queryByText("Designation 00")).not.toBeInTheDocument();
   });
 });
+
+/**
+ * GAP-HR-DESIGNATIONS-02 (fix step 4): the list now carries a per-row
+ * usageCount (admins only), and a designation that is still referenced says so
+ * up front instead of offering a Delete dialog that can only 409.
+ * aria-disabled (not `disabled`) keeps the button focusable so a keyboard or
+ * screen-reader user reaches it and hears why via aria-describedby.
+ */
+describe("DesignationsTable — GAP-HR-DESIGNATIONS-02 in-use designations", () => {
+  const IN_USE = [{ id: "d1", code: "SO", name: "Section Officer", level: 7, payGrade: "PB-2", usageCount: 3 }];
+  const FREE = [{ id: "d2", code: "CLK", name: "Clerk", level: 2, payGrade: null, usageCount: 0 }];
+
+  function renderItems(items: Array<Record<string, unknown>>) {
+    return render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+        <DesignationsTable items={items as any} canEdit={true} />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("marks Delete aria-disabled with the reason as its description when the designation is in use", () => {
+    renderItems(IN_USE);
+    const del = screen.getByRole("button", { name: "Delete Section Officer" });
+    expect(del).toHaveAttribute("aria-disabled", "true");
+    expect(del).not.toBeDisabled();
+    expect(del).toHaveAccessibleDescription(/in use by 3 records/i);
+  });
+
+  it("does not open the delete dialog for an in-use designation", () => {
+    renderItems(IN_USE);
+    fireEvent.click(screen.getByRole("button", { name: "Delete Section Officer" }));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("uses the singular for exactly one reference", () => {
+    renderItems([{ ...IN_USE[0], usageCount: 1 }]);
+    expect(screen.getByRole("button", { name: "Delete Section Officer" })).toHaveAccessibleDescription(/in use by 1 record\b/i);
+  });
+
+  it("leaves Delete fully usable for an unreferenced designation", () => {
+    renderItems(FREE);
+    const del = screen.getByRole("button", { name: "Delete Clerk" });
+    expect(del).not.toHaveAttribute("aria-disabled");
+    expect(del).not.toHaveAttribute("aria-describedby");
+    fireEvent.click(del);
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+  });
+
+  it("does not treat a missing usageCount as zero-and-safe or as in-use: Delete stays available and the API's 409 remains the backstop", () => {
+    renderItems([{ id: "d3", code: "X", name: "Unknown Usage", level: 1, payGrade: null }]);
+    const del = screen.getByRole("button", { name: "Delete Unknown Usage" });
+    expect(del).not.toHaveAttribute("aria-disabled");
+  });
+});
+
+/**
+ * GAP-HR-DESIGNATIONS-NEW-03: the edit row's "Blank clears the level" hint is
+ * announced when the Pay Level box takes focus, and there is an explicit
+ * "Clear level" action for what a blank box means.
+ */
+describe("DesignationsTable — GAP-HR-DESIGNATIONS-NEW-03 edit-row level hint and Clear level", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("announces the hint as the Pay Level input's accessible description", () => {
+    renderTable();
+    fireEvent.click(screen.getByRole("button", { name: /^edit/i }));
+    expect(screen.getByLabelText(/pay level/i)).toHaveAccessibleDescription(/blank clears the level/i);
+  });
+
+  it("'Clear level' empties the box, keeps focus on it, and saves the level as 0 (unclassified)", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 200 }));
+    renderTable();
+    fireEvent.click(screen.getByRole("button", { name: /^edit/i }));
+    const level = screen.getByLabelText(/pay level/i) as HTMLInputElement;
+    expect(level.value).toBe("7");
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear level" }));
+    expect(level.value).toBe("");
+    expect(level).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Clear level" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(body.level).toBe(0);
+  });
+});

@@ -14,11 +14,14 @@ import { HR_MASTERS_ADMIN_ROLES } from "@/lib/auth/workRoles";
  */
 const DESIGNATION_ADMIN_ROLES = HR_MASTERS_ADMIN_ROLES;
 
-type Designation = { id: string; code: string; name: string; level: number; payGrade: string | null } & Record<string, unknown>;
+type Designation = { id: string; code: string; name: string; level: number; payGrade: string | null; usageCount?: number } & Record<string, unknown>;
 
-async function getDesignations(): Promise<LoaderResult<Designation[]>> {
+async function getDesignations(withUsage: boolean): Promise<LoaderResult<Designation[]>> {
   try {
-    const r = await fetchJson<unknown, Designation[]>("/api/v1/hrms/designations", [], {
+    // GAP-HR-DESIGNATIONS-02: admins also get a per-row usageCount so the
+    // table can explain why Delete is unavailable instead of offering a
+    // dialog that can only 409. The API ignores the flag for other roles.
+    const r = await fetchJson<unknown, Designation[]>(`/api/v1/hrms/designations${withUsage ? "?withUsage=true" : ""}`, [], {
       telemetryKey: "config.designations",
       mapResponse: (p) => (p as { data: Designation[] })?.data ?? null,
     });
@@ -43,11 +46,11 @@ const newBtnStyle: React.CSSProperties = {
 
 export default async function DesignationsPage() {
   const t = await getTranslations("designations");
-  const result = await getDesignations();
-  const { data: items } = result;
-  const resource = toResourceState(result);
   const roles = getSessionRoles();
   const canEdit = roles.some((r) => DESIGNATION_ADMIN_ROLES.includes(r));
+  const result = await getDesignations(canEdit);
+  const { data: items } = result;
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
 
   const withPayGrade    = errored ? null : items.filter((d) => !!d.payGrade).length;

@@ -8,7 +8,13 @@ vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
 }));
 
+const rolesMock = vi.fn<() => string[]>(() => []);
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => rolesMock(),
+}));
+
 import DepartmentsPage from "./page";
+import hiMessages from "@/messages/hi.json";
 
 const MOCK_DEPTS = [{ id: "d1", code: "FIN", name: "Finance", parentId: null }];
 
@@ -28,7 +34,11 @@ async function renderPage() {
 }
 
 describe("DepartmentsPage", () => {
-  beforeEach(() => fetchJsonMock.mockReset());
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    rolesMock.mockReset();
+    rolesMock.mockReturnValue([]);
+  });
 
   it("renders departments and real stat counts on success", async () => {
     fetchJsonMock.mockResolvedValue({ data: MOCK_DEPTS, source: "api" });
@@ -49,5 +59,63 @@ describe("DepartmentsPage", () => {
     expect(screen.getByText("We couldn't connect.")).toBeInTheDocument();
     expect(screen.queryByText("No departments yet")).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * GAP-HR-DEPARTMENTS-01: the "No Employees" card counts departments with zero
+ * employees. A department the API sent no employeeCount for is unknown, not
+ * empty -- so the card must not coerce it to 0 and overstate the number.
+ */
+describe("DepartmentsPage — No Employees stat is honest about unknown counts (GAP-HR-DEPARTMENTS-01)", () => {
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    rolesMock.mockReset();
+    rolesMock.mockReturnValue([]);
+  });
+
+  function statValue(label: string): string {
+    const labelEl = screen.getByText(label);
+    return labelEl.parentElement?.textContent?.replace(label, "").trim() ?? "";
+  }
+
+  it("shows the real number of empty departments when every row carries a count", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        { id: "a", code: "A", name: "Alpha", parentId: null, employeeCount: 0 },
+        { id: "b", code: "B", name: "Beta", parentId: null, employeeCount: 7 },
+        { id: "c", code: "C", name: "Gamma", parentId: null, employeeCount: 0 },
+      ],
+      source: "api",
+    });
+    await renderPage();
+    expect(statValue("No Employees")).toContain("2");
+  });
+
+  it("shows an em dash, not a coerced count, when any department lacks employeeCount", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        { id: "a", code: "A", name: "Alpha", parentId: null, employeeCount: 0 },
+        { id: "b", code: "B", name: "Beta", parentId: null },
+      ],
+      source: "api",
+    });
+    await renderPage();
+    expect(statValue("No Employees")).toBe("—");
+  });
+
+  it("renders a single plus on the New Department button (no doubled '+ +')", async () => {
+    // page.tsx draws the decorative plus itself (aria-hidden); the translation must not carry another.
+    rolesMock.mockReturnValue(["hr_admin"]);
+    fetchJsonMock.mockResolvedValue({ data: MOCK_DEPTS, source: "api" });
+    await renderPage();
+    const link = screen.getByRole("link", { name: "New Department" });
+    expect(link.textContent).toBe("+ New Department");
+    expect(link.querySelector('[aria-hidden="true"]')?.textContent?.trim()).toBe("+");
+  });
+
+  it("carries no literal plus in the New Department label in either locale", () => {
+    expect(enMessages.departments.newBtn).not.toMatch(/\+/);
+    expect(hiMessages.departments.newBtn).not.toMatch(/\+/);
   });
 });
