@@ -340,6 +340,21 @@ export async function listAssignmentLog(tenantId: string, leadId: string): Promi
   )) as unknown as Row[];
 }
 
+/** The stored recipients + enabled flag of one escalation rule, or `undefined` when there is no such rule in the tenant. */
+export async function getEscalationRuleRecipients(
+  tenantId: string,
+  id: string,
+): Promise<{ recipientRole: string | null; recipientId: string | null; enabled: boolean } | undefined> {
+  const rows = (await scopedRead((tx) =>
+    tx.execute(sql`
+      SELECT recipient_role AS "recipientRole", recipient_id AS "recipientId", enabled
+      FROM crm.escalation_rules
+      WHERE tenant_id = ${tenantId} AND id = ${id}::uuid
+    `),
+  )) as unknown as Array<{ recipientRole: string | null; recipientId: string | null; enabled: boolean }>;
+  return rows[0];
+}
+
 export async function listEscalationRuleViews(tenantId: string): Promise<Row[]> {
   return (await scopedRead((tx) =>
     tx.execute(sql`

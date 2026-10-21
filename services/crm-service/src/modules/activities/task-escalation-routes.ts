@@ -16,6 +16,7 @@ import { enqueue } from "../../shared/outbox.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { isActiveTenantUser } from "../../shared/identity-client.js";
 import { listDirectoryRoles } from "../../shared/user-directory.js";
+import { recipientsToVerify } from "../../shared/recipient-changes.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["crm_admin", "tenant_admin", "super_admin"];
@@ -107,22 +108,22 @@ export async function taskEscalationRuleRoutes(app: FastifyInstance): Promise<vo
     requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     const b = updateBody.parse(req.body);
-    // Only a recipient being CHANGED is verified: the editor sends the whole rule on every save, and
-    // tuning (or disabling) a rule whose manager has since left must still work. Clearing one
-    // recipient is fine while the other remains; clearing the last one is not.
+    // Only a recipient being CHANGED is verified (plus every recipient of a rule being switched back ON):
+    // the editor sends the whole rule on every save, and tuning -- or disabling -- a rule whose manager
+    // has since left must still work. Same semantics as the lead-escalation rules
+    // (shared/recipient-changes.ts). Clearing one recipient is fine while the other remains; clearing
+    // the last one is not.
     const [cur] = (await scopedRead((tx) => tx.execute(sql`
-      SELECT recipient_role AS "recipientRole", recipient_id AS "recipientId"
+      SELECT recipient_role AS "recipientRole", recipient_id AS "recipientId", enabled
       FROM crm.task_escalation_rules WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
-    `))) as unknown as Array<{ recipientRole: string | null; recipientId: string | null }>;
+    `))) as unknown as Array<{ recipientRole: string | null; recipientId: string | null; enabled: boolean }>;
     if (!cur) throw new HttpError(404, "NOT_FOUND", "rule not found");
-    const roleChanged = b.recipientRole !== undefined && b.recipientRole !== cur.recipientRole;
-    const idChanged = b.recipientId !== undefined && b.recipientId !== cur.recipientId;
-    await assertRecipientsExist(ctx.tenantId, {
-      recipientRole: roleChanged ? b.recipientRole : undefined,
-      recipientId: idChanged ? b.recipientId : undefined,
-    });
     const role = b.recipientRole !== undefined ? b.recipientRole : cur.recipientRole;
     const user = b.recipientId !== undefined ? b.recipientId : cur.recipientId;
+    await assertRecipientsExist(
+      ctx.tenantId,
+      recipientsToVerify(cur, { recipientRole: role, recipientId: user, enabled: b.enabled !== undefined ? b.enabled : cur.enabled }),
+    );
     // Only when this update touches the recipients: disabling or retiming an older rule that has
     // none must not be blocked by a requirement it never changed.
     if ((b.recipientRole !== undefined || b.recipientId !== undefined) && !role && !user) {

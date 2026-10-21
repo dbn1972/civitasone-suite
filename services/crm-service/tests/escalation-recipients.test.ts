@@ -161,6 +161,108 @@ describe("GAP-CRM-ESCALATION-RULES-01: recipient must exist", () => {
   });
 });
 
+// A PUT carries the WHOLE rule, so re-verifying an unchanged recipient would make a rule whose role was retired
+// (or whose user left) impossible to disable. Same semantics as the task-escalation rules
+// (shared/recipient-changes.ts): verify what CHANGES, and everything when a rule is switched back ON.
+describe("PUT /v1/crm/escalation-rules/:id re-verifies only what changed (or everything when enabling)", () => {
+  async function createRule(extra: Record<string, unknown>): Promise<string> {
+    const created = await call("POST", "/v1/crm/escalation-rules", { ...RULE, ...extra });
+    expect(created.statusCode).toBe(202);
+    return created.json().id as string;
+  }
+  async function stored(id: string): Promise<{ enabled: boolean; recipient_role: string | null; recipient_id: string | null; threshold_minutes: number }> {
+    const rows = (await scoped((tx) => tx`SELECT enabled, recipient_role, recipient_id, threshold_minutes FROM crm.escalation_rules WHERE id = ${id}`)) as unknown as Array<{
+      enabled: boolean; recipient_role: string | null; recipient_id: string | null; threshold_minutes: number;
+    }>;
+    return rows[0]!;
+  }
+  /** The role the rule points at is retired afterwards: it is no longer in the tenant's directory. */
+  function retireRole(): void {
+    vi.mocked(listDirectoryRoles).mockReset().mockResolvedValue([role("lead_desk")]);
+  }
+  /** The user the rule points at has left: identity no longer vouches for them. */
+  function userLeaves(): void {
+    vi.mocked(isActiveTenantUser).mockReset().mockResolvedValue(false);
+  }
+
+  it("can DISABLE a rule whose recipient role was retired (unchanged recipient is not re-verified)", async () => {
+    const id = await createRule({ recipientRole: "sales_manager" });
+    retireRole();
+    const res = await call("PUT", `/v1/crm/escalation-rules/${id}`, { ...RULE, recipientRole: "sales_manager", enabled: false });
+    expect(res.statusCode).toBe(202);
+    expect((await stored(id)).enabled).toBe(false);
+    expect(listDirectoryRoles).not.toHaveBeenCalled();
+  });
+
+  it("can DISABLE a rule whose recipient user has left", async () => {
+    const id = await createRule({ recipientId: GOOD_USER });
+    userLeaves();
+    const res = await call("PUT", `/v1/crm/escalation-rules/${id}`, { ...RULE, recipientId: GOOD_USER, enabled: false });
+    expect(res.statusCode).toBe(202);
+    expect((await stored(id)).enabled).toBe(false);
+    expect(isActiveTenantUser).not.toHaveBeenCalled();
+  });
+
+  it("can disable a stale rule even while the directories are unreachable (no lookup is needed, so no 503)", async () => {
+    const id = await createRule({ recipientRole: "sales_manager", recipientId: GOOD_USER });
+    vi.mocked(listDirectoryRoles).mockReset().mockResolvedValue(undefined);
+    vi.mocked(isActiveTenantUser).mockReset().mockResolvedValue(undefined);
+    const res = await call("PUT", `/v1/crm/escalation-rules/${id}`, { ...RULE, recipientRole: "sales_manager", recipientId: GOOD_USER, enabled: false });
+    expect(res.statusCode).toBe(202);
+    expect((await stored(id)).enabled).toBe(false);
+  });
+
+  it("can retime an ENABLED stale rule (the editor re-sends enabled: true; that is not 'enabling')", async () => {
+    const id = await createRule({ recipientRole: "sales_manager" });
+    retireRole();
+    const res = await call("PUT", `/v1/crm/escalation-rules/${id}`, { ...RULE, thresholdMinutes: 120, recipientRole: "sales_manager", enabled: true });
+    expect(res.statusCode).toBe(202);
+    expect((await stored(id)).threshold_minutes).toBe(120);
+  });
+
+  it("still verifies a recipient that is being CHANGED, even on a stale rule", async () => {
+    const id = await createRule({ recipientRole: "sales_manager" });
+    retireRole();
+    const bad = await call("PUT", `/v1/crm/escalation-rules/${id}`, { ...RULE, recipientRole: "lead_dsk", enabled: false });
+    expect(bad.statusCode).toBe(422);
+    expect(bad.json().code).toBe("INVALID_RECIPIENT");
+    expect((await stored(id)).recipient_role).toBe("sales_manager");
+    const good = await call("PUT", `/v1/crm/escalation-rules/${id}`, { ...RULE, recipientRole: "lead_desk", enabled: false });
+    expect(good.statusCode).toBe(202);
+    expect((await stored(id)).recipient_role).toBe("lead_desk");
+  });
+
+  it("verifies every recipient when a disabled rule is switched back ON: a retired role cannot be re-enabled", async () => {
+    const id = await createRule({ recipientRole: "sales_manager", enabled: false });
+    retireRole();
+    const res = await call("PUT", `/v1/crm/escalation-rules/${id}`, { ...RULE, recipientRole: "sales_manager", enabled: true });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("INVALID_RECIPIENT");
+    expect((await stored(id)).enabled).toBe(false);
+  });
+
+  it("an omitted `enabled` means enabled (the consumer defaults it), so it is verified as enabling too", async () => {
+    const id = await createRule({ recipientId: GOOD_USER, enabled: false });
+    userLeaves();
+    const res = await call("PUT", `/v1/crm/escalation-rules/${id}`, { ...RULE, recipientId: GOOD_USER });
+    expect(res.statusCode).toBe(422);
+    expect((await stored(id)).enabled).toBe(false);
+  });
+
+  it("re-enabling works once the recipient is live again", async () => {
+    const id = await createRule({ recipientRole: "sales_manager", enabled: false });
+    const res = await call("PUT", `/v1/crm/escalation-rules/${id}`, { ...RULE, recipientRole: "sales_manager", enabled: true });
+    expect(res.statusCode).toBe(202);
+    expect((await stored(id)).enabled).toBe(true);
+  });
+
+  it("verifies a PUT to an id with no stored rule like a create (nothing to compare it with)", async () => {
+    const res = await call("PUT", `/v1/crm/escalation-rules/${randomUUID()}`, { ...RULE, recipientRole: "sales_mangaer" });
+    expect(res.statusCode).toBe(422);
+    expect(await ruleCount()).toBe(0);
+  });
+});
+
 describe("GAP-CRM-ESCALATION-RULES-01: recipient pickers (GET /v1/crm/escalation-rules/recipients)", () => {
   it("serves the tenant's roles and active users to a crm_admin, with availability flags", async () => {
     const res = await call("GET", "/v1/crm/escalation-rules/recipients");

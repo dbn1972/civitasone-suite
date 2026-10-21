@@ -27,6 +27,7 @@ import * as v from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 import { assertEscalationRecipientExists } from "./recipients.js";
+import { recipientsToVerify } from "../../shared/recipient-changes.js";
 import { resolveUserNames, listDirectoryRoles, listDirectoryUsers } from "../../shared/user-directory.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
@@ -353,7 +354,15 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
     const { id } = v.idParam.parse(req.params);
     const body = v.upsertEscalationRuleBody.parse(req.body);
-    await assertEscalationRecipientExists(ctx.tenantId, body);
+    // The editor sends the whole rule on every save, so only a recipient that is being CHANGED (or every
+    // recipient of a rule being switched back ON) is re-verified. A rule whose role was retired or whose
+    // manager left can still be tuned, and above all DISABLED -- same semantics as the task-escalation
+    // rules (shared/recipient-changes.ts). A PUT for an id with no stored rule is a create: all verified.
+    const current = await repo.getEscalationRuleRecipients(ctx.tenantId, id);
+    await assertEscalationRecipientExists(
+      ctx.tenantId,
+      recipientsToVerify(current, { recipientRole: body.recipientRole, recipientId: body.recipientId, enabled: body.enabled ?? true }),
+    );
     await assertNoDuplicateEscalationRule(ctx.tenantId, body, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateEscalationRule(ctx, id, body));
   });
