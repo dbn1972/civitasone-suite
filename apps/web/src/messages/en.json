@@ -4774,10 +4774,10 @@
     "frequencyYearly": "Yearly"
   },
   "lwfConfigForm": {
-    "overwriteWarning": "{state} already has an LWF configuration. Amounts or frequency you enter replace the stored values; blank fields keep the current value.",
+    "overwriteWarning": "{state} already has an LWF configuration. Saving replaces the stored values you changed; the others are kept.",
     "formTitle": "Add / Update LWF Configuration",
     "stateCodeLabel": "State Code",
-    "stateCodePlaceholder": "e.g. KA",
+    "stateCodePlaceholder": "Select a state / UT",
     "employeeContributionLabel": "Employee Contribution (₹)",
     "employerContributionLabel": "Employer Contribution (₹)",
     "submitBtn": "Save LWF Configuration",
@@ -4793,8 +4793,11 @@
     "frequencyQuarterly": "Quarterly",
     "frequencyHalfYearly": "Half-yearly",
     "frequencyYearly": "Yearly",
-    "blankKeepsCurrentHint": "Leave a field blank to keep the value already saved for this state.",
-    "unchangedValue": "unchanged"
+    "unchangedValue": "unchanged",
+    "amountRequiredError": "Enter the amount in rupees. Type 0 if no contribution applies.",
+    "amountInvalidError": "Enter a valid amount in rupees (at most 2 decimal places).",
+    "noChangesError": "Nothing has changed from the saved configuration.",
+    "amountsRequiredHint": "Both amounts are required; type 0 if no contribution applies. For a state that is already configured, the saved values are filled in and only the values you change are updated."
   },
   "medicalClaims": {
     "title": "Medical Claims",
@@ -5030,7 +5033,9 @@
     "totalContributionsLabel": "Total Contributions",
     "unknownEmployee": "Unknown employee",
     "missingContribNote": "{count, plural, one {# statement has} other {# statements have}} a missing contribution figure — shown as — and left out of the totals.",
-    "loadingHeading": "NPS Statements"
+    "loadingHeading": "NPS Statements",
+    "colContributionBase": "Contribution base",
+    "contributionBaseNote": "Contribution base: the Basic + DA that the employee and employer percentages were applied to (for a suspended employee, only the regular days' share). Statements from before the base was recorded show —."
   },
   "offCycle": {
     "loadingAriaLabel": "Loading…",

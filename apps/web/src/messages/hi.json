@@ -4716,10 +4716,10 @@
     "frequencyYearly": "वार्षिक"
   },
   "lwfConfigForm": {
-    "overwriteWarning": "{state} के लिए एलडब्ल्यूएफ विन्यास पहले से मौजूद है। आपके द्वारा दर्ज राशि या आवृत्ति संग्रहीत मानों को बदल देगी; खाली फ़ील्ड वर्तमान मान बनाए रखेंगे।",
+    "overwriteWarning": "{state} के लिए एलडब्ल्यूएफ विन्यास पहले से मौजूद है। सहेजने पर आपके बदले हुए संग्रहीत मान बदल जाएँगे; बाकी वैसे ही रहेंगे।",
     "formTitle": "LWF विन्यास जोड़ें / अद्यतन करें",
     "stateCodeLabel": "राज्य कोड",
-    "stateCodePlaceholder": "उदा. KA",
+    "stateCodePlaceholder": "राज्य / केंद्रशासित प्रदेश चुनें",
     "employeeContributionLabel": "कर्मचारी अंशदान (₹)",
     "employerContributionLabel": "नियोक्ता अंशदान (₹)",
     "submitBtn": "LWF विन्यास सहेजें",
@@ -4735,8 +4735,11 @@
     "frequencyQuarterly": "त्रैमासिक",
     "frequencyHalfYearly": "अर्धवार्षिक",
     "frequencyYearly": "वार्षिक",
-    "blankKeepsCurrentHint": "इस राज्य के लिए पहले से सहेजा गया मान रखने के लिए फ़ील्ड खाली छोड़ें।",
-    "unchangedValue": "अपरिवर्तित"
+    "unchangedValue": "अपरिवर्तित",
+    "amountRequiredError": "राशि रुपये में दर्ज करें। यदि कोई अंशदान लागू नहीं है तो 0 लिखें।",
+    "amountInvalidError": "रुपये में मान्य राशि दर्ज करें (अधिकतम दो दशमलव अंक)।",
+    "noChangesError": "सहेजे गए विन्यास से कुछ भी नहीं बदला है।",
+    "amountsRequiredHint": "दोनों राशियाँ आवश्यक हैं; कोई अंशदान लागू न हो तो 0 लिखें। जिस राज्य का विन्यास पहले से है, उसके सहेजे गए मान भर दिए जाते हैं और केवल आपके बदले हुए मान अद्यतन होते हैं।"
   },
   "medicalClaims": {
     "title": "चिकित्सा दावे",
@@ -4971,7 +4974,9 @@
     "totalContributionsLabel": "कुल अंशदान",
     "unknownEmployee": "अज्ञात कर्मचारी",
     "missingContribNote": "{count, plural, one {# विवरण में} other {# विवरणों में}} अंशदान राशि अनुपलब्ध है — इसे — के रूप में दिखाया गया है और योग में शामिल नहीं किया गया है।",
-    "loadingHeading": "NPS विवरण"
+    "loadingHeading": "NPS विवरण",
+    "colContributionBase": "अंशदान आधार",
+    "contributionBaseNote": "अंशदान आधार: वह मूल वेतन + महंगाई भत्ता जिस पर कर्मचारी और नियोक्ता प्रतिशत लागू हुए (निलंबित कर्मचारी के लिए केवल सामान्य दिनों का हिस्सा)। आधार दर्ज होने से पहले के विवरणों में — दिखता है।"
   },
   "offCycle": {
     "loadingAriaLabel": "लोड हो रहा है…",
