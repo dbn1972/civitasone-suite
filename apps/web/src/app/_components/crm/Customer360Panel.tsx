@@ -148,7 +148,7 @@ export function Customer360Panel({ subjectType, subjectId }: Props) {
             icon="⭐"
             tone="warn"
             label="Score"
-            value={source === "loading" ? "…" : isError || v?.score === null || v?.score === undefined ? "—" : String(v.score)}
+            value={isError || v?.score === null || v?.score === undefined ? "—" : String(v.score)}
           />
         </StatGrid>
 
@@ -336,7 +336,7 @@ export function Customer360Panel({ subjectType, subjectId }: Props) {
           </div>
         </section>
 
-        {source !== "loading" && !isError && v && v.activities.length === 0 && v.communicationItems.length === 0 && v.communications.total === 0 && v.campaignActivity.responses === 0 && v.deals.length === 0 ? (
+        {!isError && v && v.activities.length === 0 && v.communicationItems.length === 0 && v.communications.total === 0 && v.campaignActivity.responses === 0 && v.deals.length === 0 ? (
           <EmptyState icon="🧭" title="Nothing linked yet" message="Log activity, communications or deals to build this 360° view." />
         ) : null}
       </div>
