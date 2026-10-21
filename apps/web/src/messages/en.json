@@ -8051,7 +8051,9 @@
     "loadingSub": "Loading case details…",
     "notFoundTitle": "Disciplinary Case",
     "notFoundEmptyTitle": "Case not found",
-    "notFoundEmptyMessage": "This disciplinary case may have been removed or the ID is invalid."
+    "notFoundEmptyMessage": "This disciplinary case may have been removed or the ID is invalid.",
+    "loadErrorArea": "disciplinary case",
+    "eofficeSubject": "Disciplinary case {caseLabel}"
   },
   "goals": {
     "title": "Goals & Development",
