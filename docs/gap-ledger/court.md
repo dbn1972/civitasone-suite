@@ -251,7 +251,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CASES-CASEID-01  ·  HIGH  ·  partly  ·  theme CONFIRM
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 2026-10-17: partly closed by #2117 — Submit for approval now uses ConfirmDialog (was single-click), so every CaseConsole order/hearing action uses ds ConfirmDialog. REMAINING: Fix step 1 not done — the dialogs are still re-implemented in CaseConsole, OrdersConsole and HearingsConsole rather than one shared court/_components; extraction is a follow-up refactor.)
 - **W0 note:** partly fixed by #1923 — Adjourn/Outcome and Approve&issue/Send back/Recall in CaseConsole now use ds ConfirmDialog (recall/adjourn require reason); remaining: dialogs are re-implemented inside CaseConsole rather than one shared court/_components used by OrdersConsole/HearingsConsole, and 'Submit for approval' on the case page is still single-click
 - **First-pass claim:** Irreversible acts have no confirmation here: Approve & issue (DSC), Recall, Adjourn and Record outcome use inline forms in CaseConsole.tsx while the standalone /court/orders and /court/hearings consoles gate the same actions with ConfirmDialog (danger) — two UX contracts for one action (CaseConsole.tsx:486-854 vs OrdersConsole.tsx:586).
 - **Verified evidence:** Not 'no confirmation': CaseConsole uses a two-step inline pattern. Approve & issue opens a DSC panel with 'Confirm approve & issue' (CaseConsole.tsx:736,~756-790), Recall requires reason and 'Confirm recall' (:805-826, button disabled without reason), Adjourn requires reason and 'Confirm adjourn' (:500-525). Outcome (Held/Cancelled) has a Save button with no reason (:527-552). What is true is inconsistency with ConfirmDialog in OrdersConsole.tsx:584,743 and HearingsConsole.tsx:465,558. Lifecycle transition (:233-275) and Submit for approval (:715-728) are single click. Maker!=checker is enforced server-side (error text at ~:771).
@@ -405,7 +405,7 @@ Counts: ACTION 35, BACKEND-VERIFY 1
 
 ### GAP-COURT-CAUSE-LIST-04  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 2026-10-17: partly closed by #2118 — items whose case is outside the 100-row fetch are resolved via fetchCase(caseId) (404 = not found, em-dashes; other failures retried, concurrency capped at 5), so title/type/stage render. REMAINING: no purpose column — the cause-list items API does not return purpose, needs a backend/product decision.)
 - **W0 note:** partly fixed by #1923 — Type and Stage columns added from the matched case; remaining: cases are still fetched with limit=100 and an item whose case is outside it falls back to 'Case' + id prefix (no getCase(id) resolve), no purpose column
 - **First-pass claim:** Listed-items table shows only CNR/id: no case title, purpose or parties for the bench (CauseListConsole.tsx items map).
 - **Verified evidence:** Table (CauseListConsole.tsx:187-204) does show case title and CNR via cases.find(x=>x.id===it.caseId), falling back to 'Case' and caseId.slice(0,8) if the case is not in the 100-row fetch (loaders.ts:191). Missing: hearing purpose, parties and stage. Items endpoint fields for purpose unknown (CauseListItem type not extended).

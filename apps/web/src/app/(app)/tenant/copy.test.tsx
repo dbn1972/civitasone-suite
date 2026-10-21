@@ -13,7 +13,6 @@ vi.mock("../_data", () => ({
   getTenantCodeLists: empty,
   getTenantConsentExchange: empty,
   getTenantDataMigration: empty,
-  getTenantOrgHierarchy: empty,
   getTenantOverview: empty,
   getTenantPlans: empty,
 }));
@@ -21,7 +20,6 @@ vi.mock("../_data", () => ({
 import CodeListsPage from "./code-lists/page";
 import ConsentPage from "./consent-exchange/page";
 import DataMigrationPage from "./data-migration/page";
-import OrgHierarchyPage from "./org-hierarchy/page";
 import OverviewPage from "./overview/page";
 import PlansPage from "./plans/page";
 
@@ -29,7 +27,6 @@ const PAGES: Array<{ gap: string; name: string; Page: () => Promise<JSX.Element>
   { gap: "CODE-LISTS-06", name: "Code Lists", Page: CodeListsPage },
   { gap: "CONSENT-EXCHANGE-06", name: "Consent Exchange", Page: ConsentPage },
   { gap: "DATA-MIGRATION-06", name: "Data Migration", Page: DataMigrationPage },
-  { gap: "ORG-HIERARCHY-06", name: "Org Hierarchy", Page: OrgHierarchyPage },
   { gap: "OVERVIEW-07", name: "Overview", Page: OverviewPage },
   { gap: "PLANS-06", name: "Plans", Page: PlansPage },
 ];

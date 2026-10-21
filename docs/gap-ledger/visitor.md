@@ -337,9 +337,9 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 ---
 ## Backend verification items (service code absent from snapshot)
 
-### GAP-VISITOR-HOME-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-VISITOR-HOME-02  ·  HIGH  ·  partial  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 PQ: partially verified by #2122; NEEDS OWNER DECISION. Web gates: visitor/admin/layout.tsx and visitor/guard/layout.tsx use requireAnyRole; visitor/page.tsx hides tiles. Server: POST /v1/visitor/config is tenant_admin/super_admin only, tests: services/visitor-service/tests/all-routes.test.ts "POST /v1/visitor/config → 403 wrong role" (employee); approve is host-scoped, tests: services/visitor-service/tests/visit-request-approval-idor.integration.test.ts "403s an approve from an actor who is not the visit request's host". NOT met: the acceptance says an employee token must get 403 on POST check-ins, but check-in/check-out WRITE_ROLES (check-in/routes.ts:45-46) and web VISITOR_GUARD_ROLES (roleGuard.ts:735) both deliberately include `employee`. Left open until the owner decides whether plain employees may operate the gate)
 - **First-pass claim:** No role gate anywhere in the segment: visitor/layout.tsx is ModuleGate only, so every tenant user gets the Admin Configuration tile and Guard Console. Whether services/visitor-service rejects non-admin writes is undeterminable (service absent from snapshot).
 - **Service:** `visitor-service`  ·  **Endpoint(s):** `['POST /v1/visitor/config', 'POST /v1/visitor/check-ins', 'POST /v1/visitor/visit-requests/:id/approve']`
 - **Question:** Does visitor-service enforce per-endpoint roles (admin, guard, host) rather than trusting the web tiles?
@@ -348,9 +348,9 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 - **Impact if wrong:** Privilege escalation across visitor functions.
 - **Web change if wrong:** Add role-gated layouts for visitor/admin and visitor/guard; show tiles only for permitted roles in visitor/page.tsx.
 
-### GAP-VISITOR-ADMIN-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-VISITOR-ADMIN-02  ·  HIGH  ·  partial  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 PQ: partially verified by #2122. Proven: config write is tenant_admin/super_admin only (config-registry/routes.ts:21), test services/visitor-service/tests/all-routes.test.ts "POST /v1/visitor/config → 403 wrong role"; web gate requireAnyRole(VISITOR_ADMIN_ROLES) on visitor/admin/layout.tsx. NOT proven: (a) config.changed audit with before/after: the consumer (config-registry/consumer.ts) emits an audit.event.record with action "process" and optional reason, with NO before/after values; (b) stale expectedVersion returns 409: the consumer throws NonRetryableError VERSION_CONFLICT (async, after the 202), no test covers it and it is not an HTTP 409. Left open pending a before/after audit payload and a config-consumer VERSION_CONFLICT test)
 - **First-pass claim:** No role gate on the segment (visitor/layout.tsx is ModuleGate only); any user who can open /visitor/admin can POST config. Service enforcement and audit-logging of config writes are undeterminable (services/visitor-service not in snapshot).
 - **Service:** `visitor-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/visitor/config (client.ts setConfig)', 'GET /api/v1/visitor/config/:namespace']`
 - **Question:** Does POST /v1/visitor/config require an admin role, honour expectedVersion (409 on stale) and emit an audit event with old/new value?
@@ -359,9 +359,9 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 - **Impact if wrong:** Any tenant user can change visitor approval/security policy without trace.
 - **Web change if wrong:** Add requireAnyRole gate in visitor/admin (page or admin/layout.tsx) and hide the Admin tile in visitor/page.tsx.
 
-### GAP-VISITOR-GUARD-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-VISITOR-GUARD-01  ·  HIGH  ·  closed  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2122. getRoster uses GET /v1/visitor/check-ins/active (loaders.ts:143-156), a normal guard endpoint; evacuation/roster stays IP-allowlisted for break-glass. Tests: services/visitor-service/tests/active-checkins.integration.test.ts "returns the two checked-in visitors, excluding the checked-out one", "is tenant/RLS scoped"; services/visitor-service/tests/all-routes.test.ts "GET /v1/visitor/check-ins/active → 200" and "→ 401 without token")
 - **First-pass claim:** The roster behind "Inside Now", "Overstays" and Check out is an emergency break-glass endpoint that is fail-closed IP-allowlisted (loaders.ts:128-136); from an ordinary BFF the guard console's core panel lands in ErrorState with "emergency IP allowlist" text (GuardConsole.tsx:308-318). Service side is undeterminable (visitor-service not in snapshot).
 - **Service:** `visitor-service`  ·  **Endpoint(s):** `['GET /api/v1/visitor/evacuation/roster?locationId= (loaders.ts:138)']`
 - **Question:** Is the emergency roster fail-closed IP-allowlisted by design, and does a normal (non-break-glass) roster/inside-now endpoint exist for guards?
@@ -370,9 +370,9 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 - **Impact if wrong:** Guard console core panel is permanently broken, or the break-glass roster gets opened to ordinary traffic.
 - **Web change if wrong:** Switch GuardConsole/getRoster to a non-emergency inside-now endpoint; keep evacuation roster for a break-glass flow only.
 
-### GAP-VISITOR-GUARD-06  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-VISITOR-GUARD-06  ·  MEDIUM  ·  closed  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2122. Web: ConfirmDialog on Admit & check in and on Check out, tests GuardConsole.test.tsx "Admit confirm dialog" (open/cancel/confirm-once) and the check-out dialog test. Backend, new tests services/visitor-service/tests/guard-check-in-out-audit-idempotency.test.ts: check-in emits exactly one check_in audit (it was nested inside the auto-print-badge toggle and was silently skipped when that was off; fixed in check-in/consumer.ts); second check-in of a checked-in pass is rejected (PASS_ALREADY_CHECKED_IN), no row, no audit; check-out of a not-checked-in pass rejected (PASS_NOT_CHECKED_IN); idempotent replay writes/audits nothing; non-gate role 403 in all-routes.test.ts "Check-in routes — role gate". Note: the API is CQRS so POST returns 202 and the duplicate is rejected by the consumer, not as an HTTP 409. `employee` is an allowed gate role, see HOME-02)
 - **First-pass claim:** Check out (GuardConsole.tsx:348) and Admit & check in (GuardConsole.tsx:241) are single-tap mutations with no ConfirmDialog; audit trail on POST /check-ins|/check-outs is undeterminable here.
 - **Service:** `visitor-service`  ·  **Endpoint(s):** `['POST /api/proxy/v1/visitor/check-ins', 'POST /api/proxy/v1/visitor/check-outs (client.ts:59,63)']`
 - **Question:** Do check-in and check-out emit an audit event (actor, passId, gateId, timestamp), reject duplicates idempotently, and require guard role?
@@ -381,9 +381,9 @@ Counts: ACTION 19, BACKEND-VERIFY 5
 - **Impact if wrong:** Wrong occupancy roster and no audit trail for physical access.
 - **Web change if wrong:** Add ConfirmDialog to Check out (GuardConsole.tsx:348) and Admit (GuardConsole.tsx:241) or an undo path.
 
-### GAP-VISITOR-HOST-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
+### GAP-VISITOR-HOST-01  ·  HIGH  ·  closed  ·  theme BACKEND
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [x] **Status** (W2 PQ: closed by #2122. The pending list is scoped SERVER-side: visit-request/routes.ts:207-213 forces non-elevated callers to their own hosted requests; approve/reject/cancel enforce assertOwnsRequest (routes.ts:86, 235-260). Tests: services/visitor-service/tests/visit-request-list-host-scope.integration.test.ts "a plain employee sees ONLY their own hosted request, not other hosts'"; services/visitor-service/tests/visit-request-approval-idor.integration.test.ts "403s an approve/reject/cancel from an actor who is not the visit request's host" and "the request's own host (role: employee) CAN still approve". Web: host/page.tsx only filters expectedToday (display); HostPortal.tsx:72 canAction only gates the buttons; neither is the access control)
 - **First-pass claim:** "Awaiting Your Approval" is not scoped to the host: page.tsx fetches all pending_approval requests (host/page.tsx:12, loaders.ts:101-113 — no hostEmployeeId param) and HostPortal renders Approve/Reject on every one. Unless the service filters by caller (undeterminable, visitor-service absent), any user can approve visitors raised for others.
 - **Service:** `visitor-service`  ·  **Endpoint(s):** `['GET /api/v1/visitor/visit-requests?status=pending_approval (loaders.ts:106)', 'POST /api/proxy/v1/visitor/visit-requests/:id/approve|reject (client.ts:76-80)']`
 - **Question:** Does the list endpoint scope pending_approval to the calling host (or accept hostEmployeeId), and does approve/reject verify caller is the request's host or a delegate/admin?

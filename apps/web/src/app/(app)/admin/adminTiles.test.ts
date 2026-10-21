@@ -4,6 +4,7 @@ import { join } from "node:path";
 import en from "@/messages/en.json";
 import hi from "@/messages/hi.json";
 import * as adminRoles from "@/lib/auth/adminRoles";
+import * as tenantRoleModule from "../tenant/_roles";
 import { ADMIN_TILES, visibleAdminTiles } from "./adminTiles";
 
 type Msgs = { admin: { sections: Record<string, string>; tiles: Record<string, { title: string; description: string }> } };
@@ -79,7 +80,13 @@ describe("tile roles are pinned to the destination page gate", () => {
     expect(gate, `no role gate found for ${tile.href}`).toBeTruthy();
     // a local literal list (tenant-admin layout) is compared by value
     const literal = /const ALLOWED = (\[[^\]]*\])/.exec(src)?.[1];
-    const expected = roleConsts[gate!] ?? (literal ? (JSON.parse(literal) as string[]) : undefined);
+    // a gate constant aliased to a role list imported from a sibling _roles module
+    // (tenant-admin layout -> tenant/_roles) is resolved by import and compared by value
+    const alias = new RegExp(`const ${gate} = ([A-Z_]+);`).exec(src)?.[1];
+    const importedFrom = alias ? new RegExp(`import \\{[^}]*\\b${alias}\\b[^}]*\\} from "([^"]+)"`).exec(src)?.[1] : undefined;
+    const siblingModules: Record<string, Record<string, readonly string[]>> = { "../tenant/_roles": tenantRoleModule };
+    const imported = alias && importedFrom ? siblingModules[importedFrom]?.[alias] : undefined;
+    const expected = roleConsts[gate!] ?? imported ?? (literal ? (JSON.parse(literal) as string[]) : undefined);
     expect(expected, `${gate} is not an exported role list`).toBeDefined();
     expect([...tile.roles].sort()).toEqual([...expected!].sort());
   });
