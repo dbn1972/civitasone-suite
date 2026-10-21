@@ -4,11 +4,14 @@ import { eq, and, inArray } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
-import { scopedRead } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { randomUUID } from "node:crypto";
 import { isKnownEngagementType, resolveKnownEngagementTypeSets } from "../employee/engagement-policy.js";
 import { hrmsEmployees } from "../employee/schema.js";
+import { emitAudit } from "../recruitment/audit-emit.js";
+import * as importRepo from "./repo.js";
+import { IMPORT_FAILURE } from "./failure.js";
 
 const HR_ROLES = ["hr_admin", "super_admin", "admin"];
 
@@ -130,40 +133,58 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ code: "VALIDATION_FAILED", message: "Bulk import has errors", fieldErrors, correlationId: ctx.correlationId });
     }
 
-    // Queue each employee creation
-    for (const emp of body.employees) {
-      const id = randomUUID();
-      const { managerEmployeeNo, ...rest } = emp;
-      await queue.publish("hrms.employee.create", {
-        messageId: id, type: "hrms.employee.create",
-        tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-        payload: {
-          id, tenantId: ctx.tenantId, ...rest, currency: "INR",
-          ...(managerEmployeeNo ? { managerId: managerIdByNo.get(managerEmployeeNo) } : {}),
-        },
+    // GAP-HR-EMPLOYEES-IMPORT-02: record the batch -- one pending row per employee -- BEFORE
+    // anything is queued. The batchId in the 202 is then a real, pollable record, and the create
+    // consumer has a row to mark 'created' (atomically with the employee insert) or 'failed'.
+    // The row id doubles as the create command's messageId and as the new employee's id.
+    const items = body.employees.map((emp, idx) => ({ emp, id: randomUUID(), rowNo: idx + 1 }));
+    await db.transaction(async (tx) => {
+      await importRepo.insertBatch(tx, {
+        id: batchId, tenantId: ctx.tenantId, requestedBy: ctx.actorId, correlationId: ctx.correlationId ?? null,
+        rows: items.map((i) => ({ messageId: i.id, rowNo: i.rowNo, employeeNo: i.emp.employeeNo })),
       });
+      await emitAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId },
+        "hrms.employee.bulk_import_requested", "employee_import_batch", batchId, { total: items.length });
+    });
+
+    // Queue each employee creation
+    let queued = 0;
+    try {
+      for (const { emp, id } of items) {
+        const { managerEmployeeNo, ...rest } = emp;
+        await queue.publish("hrms.employee.create", {
+          messageId: id, type: "hrms.employee.create",
+          tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+          payload: {
+            id, tenantId: ctx.tenantId, ...rest, currency: "INR", importBatchId: batchId,
+            ...(managerEmployeeNo ? { managerId: managerIdByNo.get(managerEmployeeNo) } : {}),
+          },
+        });
+        queued++;
+      }
+    } catch (err) {
+      // The queue broke part-way. Rows never handed to it will never be processed: mark them failed
+      // (best effort) so the batch can finish instead of reading "processing" forever, then surface
+      // the error. The row whose publish threw is included -- if it was in fact delivered, the
+      // consumer's markRowCreated still wins (created overrides failed).
+      await db.transaction(async (tx) => {
+        for (const { id } of items.slice(queued)) await importRepo.markRowFailed(tx, ctx.tenantId, id, IMPORT_FAILURE.NOT_QUEUED);
+      }).catch((markErr) => req.log.error({ markErr }, "could not mark un-queued import rows"));
+      throw err;
     }
 
     return sendAccepted(reply, acceptedResponseSchema, { id: batchId, status: "accepted" as const, correlationId: ctx.correlationId });
   });
 
-  app.get("/v1/hrms/employees/bulk/status/:batchId", async (req, reply) => {
+  // GAP-HR-EMPLOYEES-IMPORT-02: real per-row state. ImportForm polls this every couple of seconds,
+  // hence the explicit (generous) per-route limit. 404 for an id that is not a batch of THIS tenant.
+  app.get("/v1/hrms/employees/bulk/status/:batchId", { config: { rateLimit: { max: 120, timeWindow: "1 minute" } } }, async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    // NOT WIRED TO REAL STATE (pre-existing -- left as-is by the HRMS
-    // role-based review's finding-2 fix, which is scoped to making
-    // ImportForm.tsx call the bulk endpoint correctly, not to building batch
-    // tracking). This always answers "completed" regardless of what the
-    // queued hrms.employee.create messages actually did -- there is no
-    // import_batches table or equivalent behind it, and batchId isn't even
-    // persisted anywhere by the POST handler above, so this route cannot
-    // presently distinguish a real batch id from a made-up one. Do not wire
-    // ImportForm.tsx (or any client) to poll this expecting per-row
-    // success/failure -- it would report "completed" even when every queued
-    // row failed downstream. Needs a real import_batches table (or
-    // equivalent) written by employee/consumer.ts per processed row before
-    // this can honestly answer per-row status.
-    return reply.send({ batchId: (req.params as any).batchId, status: "completed", message: "Batch processed via CQRS" });
+    const { batchId } = z.object({ batchId: z.string().uuid() }).parse(req.params);
+    const status = await importRepo.getBatchStatus(ctx.tenantId, batchId);
+    if (!status) throw new HttpError(404, "NOT_FOUND", "import batch not found");
+    return reply.send(status);
   });
 
   app.setErrorHandler((err, req, reply) => {

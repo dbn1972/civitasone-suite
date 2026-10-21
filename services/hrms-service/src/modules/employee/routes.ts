@@ -15,6 +15,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { isExitedStatus } from "./status.js";
+import { assertEligibleManager } from "./manager-eligibility.js";
 
 const HR_ROLES    = ["hr_admin", "hr_officer", "super_admin"];
 const READER_ROLES = [...HR_ROLES, "manager"];
@@ -111,7 +112,7 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     const managerScope = PAYROLL_DIRECTORY_ROLES.some((r) => ctx.roles.includes(r))
       ? undefined
       : await resolveManagerScope(ctx, req);
-    sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType, managerScope, q.q, q.ids, q.status));
+    sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType, managerScope, q.q, q.ids, q.status, q.excludeStatuses));
   });
 
   app.post("/v1/hrms/employees", async (req, reply) => {
@@ -321,6 +322,20 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
     if (isExitedStatus(emp.status)) {
       throw new HttpError(409, "EMPLOYEE_EXITED", `employee has status '${emp.status}' and can no longer be updated via this endpoint`);
+    }
+    // GAP-HR-EMPLOYEES-DETAIL-EDIT-05: a CHANGED managerId must be a real,
+    // serving colleague who does not (transitively) report to this employee --
+    // never self, never exited staff. An unchanged value is not re-validated, so
+    // an unrelated edit is not blocked because the existing manager has since left.
+    if (body.managerId !== undefined && body.managerId !== emp.managerId) {
+      await assertEligibleManager(
+        async (eid) => {
+          const row = await repo.findById(eid, ctx.tenantId);
+          return row ? { status: row.status, managerId: row.managerId ?? null } : null;
+        },
+        id,
+        body.managerId,
+      );
     }
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateEmployee(ctx, id, body));
   });

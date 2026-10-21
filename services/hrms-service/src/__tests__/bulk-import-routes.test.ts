@@ -33,6 +33,17 @@ import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import type { FastifyInstance } from "fastify";
 
+// GAP-HR-EMPLOYEES-IMPORT-02: the route now records the batch (bulk-import/repo.ts) and an audit event
+// inside db.transaction before queueing. This suite mocks the DB, so those two collaborators are mocked
+// too; their real behaviour is covered against Postgres in tests/bulk-import-batches-real-db.test.ts.
+vi.mock("../modules/bulk-import/repo.js", () => ({
+  insertBatch: vi.fn(async () => {}),
+  markRowFailed: vi.fn(async () => {}),
+  markRowCreated: vi.fn(async () => {}),
+  getBatchStatus: vi.fn(async () => null),
+}));
+vi.mock("../modules/recruitment/audit-emit.js", () => ({ emitAudit: vi.fn(async () => {}) }));
+
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-0001-4000-8000-000000000011";
 
@@ -83,6 +94,8 @@ vi.mock("../shared/db.js", () => {
 import { buildApp } from "../app.js";
 import { sqlClient } from "../shared/db.js";
 import { queue } from "../shared/infra.js";
+import * as importRepo from "../modules/bulk-import/repo.js";
+import { emitAudit } from "../modules/recruitment/audit-emit.js";
 
 afterAll(async () => { await sqlClient.end(); });
 
@@ -193,6 +206,131 @@ describe("POST /v1/hrms/employees/bulk", () => {
       payload: { employees: [validEmployee()] },
     });
     await app.close();
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe("POST /v1/hrms/employees/bulk — existing employee numbers (GAP-HR-EMPLOYEES-IMPORT-02)", () => {
+  it("400 — an employeeNo that already exists in the tenant is rejected with a row-level message BEFORE anything is recorded or queued", async () => {
+    // 3rd scopedRead = the one-query existing-employeeNo lookup (after the two engagement-type reads).
+    H.queryResults = [CANONICAL_TYPES, NO_TENANT_TYPES, [{ employeeNo: "E9002" }]];
+    const publishSpy = vi.spyOn(queue, "publish");
+    const app: FastifyInstance = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/employees/bulk",
+      headers: { authorization: `Bearer ${adminTok}` },
+      payload: { employees: [validEmployee(), validEmployee({ employeeNo: "E9002", fullName: "Already Here" })] },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json<{ fieldErrors: { field: string; message: string }[] }>();
+    expect(body.fieldErrors).toEqual([
+      expect.objectContaining({ field: "employees.1.employeeNo", message: expect.stringContaining("Already exists in this tenant") }),
+    ]);
+    expect(publishSpy).not.toHaveBeenCalled();
+    expect(importRepo.insertBatch).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /v1/hrms/employees/bulk — batch record (GAP-HR-EMPLOYEES-IMPORT-02)", () => {
+  beforeEach(() => {
+    vi.mocked(importRepo.insertBatch).mockClear();
+    vi.mocked(importRepo.markRowFailed).mockClear();
+    vi.mocked(emitAudit).mockClear();
+  });
+
+  it("202 — records the batch (id = the 202's id, one pending row per employee keyed by the create messageId) BEFORE queueing, and tags each create with importBatchId", async () => {
+    const order: string[] = [];
+    vi.mocked(importRepo.insertBatch).mockImplementationOnce(async () => { order.push("insertBatch"); });
+    const publishSpy = vi.spyOn(queue, "publish").mockImplementation(async () => { order.push("publish"); return "message-id"; });
+    const app: FastifyInstance = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/employees/bulk",
+      headers: { authorization: `Bearer ${adminTok}` },
+      payload: { employees: [validEmployee(), validEmployee({ employeeNo: "E9003", fullName: "Second" })] },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(202);
+    const batchId = res.json<{ id: string }>().id;
+    expect(order).toEqual(["insertBatch", "publish", "publish"]);
+
+    expect(importRepo.insertBatch).toHaveBeenCalledTimes(1);
+    const batch = vi.mocked(importRepo.insertBatch).mock.calls[0]![1];
+    expect(batch).toMatchObject({ id: batchId, tenantId: TENANT, requestedBy: "bulk-import-test-user" });
+    expect(batch.rows.map((r) => [r.rowNo, r.employeeNo])).toEqual([[1, "E9001"], [2, "E9003"]]);
+
+    const published = publishSpy.mock.calls.map((c) => c[1] as unknown as { messageId: string; payload: { id: string; importBatchId: string } });
+    expect(published.map((m) => m.messageId)).toEqual(batch.rows.map((r) => r.messageId));
+    expect(published.every((m) => m.payload.id === m.messageId && m.payload.importBatchId === batchId)).toBe(true);
+
+    expect(emitAudit).toHaveBeenCalledWith(
+      expect.anything(), expect.objectContaining({ tenantId: TENANT }), "hrms.employee.bulk_import_requested", "employee_import_batch", batchId, { total: 2 },
+    );
+  });
+
+  it("a queue failure part-way marks the rows that were never queued as failed (NOT_QUEUED) and surfaces a 500 instead of leaving the batch 'processing' forever", async () => {
+    let n = 0;
+    vi.spyOn(queue, "publish").mockImplementation(async () => {
+      n++;
+      if (n === 2) throw new Error("broker down");
+      return "message-id";
+    });
+    const app: FastifyInstance = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/employees/bulk",
+      headers: { authorization: `Bearer ${adminTok}` },
+      payload: { employees: [validEmployee(), validEmployee({ employeeNo: "E9004", fullName: "Two" }), validEmployee({ employeeNo: "E9005", fullName: "Three" })] },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(500);
+    const rows = vi.mocked(importRepo.insertBatch).mock.calls[0]![1].rows;
+    // row 1 was queued; rows 2 (the publish that threw) and 3 never were.
+    const failedIds = vi.mocked(importRepo.markRowFailed).mock.calls.map((c) => [c[2], c[3]]);
+    expect(failedIds).toEqual([[rows[1]!.messageId, "NOT_QUEUED"], [rows[2]!.messageId, "NOT_QUEUED"]]);
+  });
+});
+
+describe("GET /v1/hrms/employees/bulk/status/:batchId (GAP-HR-EMPLOYEES-IMPORT-02)", () => {
+  const BATCH = "bbbbbbbb-0001-4000-8000-000000000001";
+  const get = async (url: string, token = adminTok) => {
+    const app: FastifyInstance = await buildApp();
+    const res = await app.inject({ method: "GET", url, headers: { authorization: `Bearer ${token}` } });
+    await app.close();
+    return res;
+  };
+
+  it("404 NOT_FOUND for an id that is not a batch of this tenant -- not a made-up 'completed'", async () => {
+    vi.mocked(importRepo.getBatchStatus).mockResolvedValueOnce(null);
+    const res = await get(`/v1/hrms/employees/bulk/status/${BATCH}`);
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toMatchObject({ code: "NOT_FOUND" });
+    expect(importRepo.getBatchStatus).toHaveBeenCalledWith(TENANT, BATCH);
+  });
+
+  it("400 for an id that is not a uuid", async () => {
+    const res = await get("/v1/hrms/employees/bulk/status/not-a-uuid");
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("200 — returns the real counts and the named failed rows", async () => {
+    const status = {
+      batchId: BATCH, status: "processing" as const, total: 3, created: 1, failed: 1, pending: 1,
+      failedRows: [{ rowNo: 2, employeeNo: "E9003", code: "EMPLOYEE_NO_EXISTS" }],
+    };
+    vi.mocked(importRepo.getBatchStatus).mockResolvedValueOnce(status);
+    const res = await get(`/v1/hrms/employees/bulk/status/${BATCH}`);
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual(status);
+  });
+
+  it.each(["employee", "hr_officer", "manager"])("403 for %s (same role gate as the POST)", async (role) => {
+    const res = await get(`/v1/hrms/employees/bulk/status/${BATCH}`, tok([role]));
     expect(res.statusCode).toBe(403);
   });
 });
