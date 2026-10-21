@@ -65,6 +65,25 @@ describe("CRM_MERGE_ROLES (Duplicate Candidates Merge gate)", () => {
     expect(CRM_MERGE_ROLES).not.toContain("crm_user");
     expect(CRM_MERGE_ROLES).not.toContain("tenant_admin");
   });
+
+  // Every surface that renders the Merge control gates it on the ONE exported list: the contacts list used to render
+  // <MergeButton> to every CRM role although POST /v1/crm/contacts/merge is crm_admin / super_admin only.
+  it.each([
+    "../../app/(app)/crm/contacts/page.tsx",
+    "../../app/(app)/crm/accounts/page.tsx",
+    "../../app/(app)/crm/dedup-candidates/page.tsx",
+  ])("%s gates the Merge control on CRM_MERGE_ROLES, not a local copy", (file) => {
+    const page = readFileSync(resolve(__dirname, file), "utf8");
+    expect(page).toContain("CRM_MERGE_ROLES");
+    expect(page).not.toMatch(/const [A-Z_]*MERGE_ROLES\b/);
+  });
+
+  it("no page renders <MergeButton> without a canMerge gate", () => {
+    for (const file of ["../../app/(app)/crm/contacts/page.tsx", "../../app/(app)/crm/accounts/page.tsx"]) {
+      const page = readFileSync(resolve(__dirname, file), "utf8");
+      expect(page, file).toMatch(/canMerge && [^\n]*<MergeButton/);
+    }
+  });
 });
 
 /**

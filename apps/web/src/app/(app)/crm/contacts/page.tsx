@@ -4,7 +4,7 @@ import { LeadFilters } from "../../../_components/crm/LeadFilters";
 import type { MergeOption } from "../../../_components/crm/MergeDialog";
 import { getTranslations } from "next-intl/server";
 import { getCrmContacts } from "../../../_data/loaders";
-import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES, CRM_CONTACTS_BULK_EXPORT_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES, CRM_CONTACTS_BULK_EXPORT_ROLES, CRM_MERGE_ROLES } from "@/lib/auth/roleGuard";
 import { displayMaskedEmail, displayMaskedPhone } from "@/lib/crm/maskedPii";
 import { ContactToolbar } from "./ContactToolbar";
 import { ContactsTable } from "./ContactsTable";
@@ -58,6 +58,11 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
   // GAP-CRM-CONTACTS-01: only permitted roles may bulk-export, and the export
   // must respect the active filters rather than dumping the whole registry.
   const canExport = hasAnyRole(sessionRoles, CRM_CONTACTS_BULK_EXPORT_ROLES);
+  // POST /v1/crm/contacts/merge is crm_admin / super_admin only and the merge is irreversible
+  // (CRM_MERGE_ROLES is pinned to the server list), so the control is offered to exactly those
+  // roles - not to every CRM role, which would walk a crm_user through a danger confirmation
+  // and then end in a 403.
+  const canMerge = hasAnyRole(sessionRoles, CRM_MERGE_ROLES);
   const exportQuery: Record<string, string> = {};
   for (const [key, value] of Object.entries(searchParams ?? {})) {
     if (typeof value === "string" && value.trim()) exportQuery[key] = value;
@@ -123,7 +128,7 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
           source: searchParams?.source,
         }}
       />
-      {mergeOptions.length >= 2 ? <MergeButton entity="contacts" options={mergeOptions} label="Merge duplicate contacts" /> : null}
+      {canMerge && mergeOptions.length >= 2 ? <MergeButton entity="contacts" options={mergeOptions} label="Merge duplicate contacts" /> : null}
       <StatGrid>
         <StatCard icon="▣" tone="info" label="Total Contacts" value={stat(contacts.length)} />
         <StatCard icon="△" tone="bad" label="Priority Contacts" value={stat(contacts.filter(c => c.priority === "high").length)} />
