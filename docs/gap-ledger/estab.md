@@ -494,7 +494,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DASHBOARD-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was UUID)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: dashboard/page.test.tsx 'lists recent files newest-first by createdDate regardless of API order')
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: dashboard/page.test.tsx 'lists recent files newest-first by createdDate regardless of API order'; W2 estab rescan evidence: estab-service now orders the register list newest-first before the limit (modules/files/repo.ts listFilesByTenant; real-DB test files-read-only-detail-contract-real-db.test.ts), dashboard page.test.tsx covers the 8-cap, dash-last and same-day order) (W2 estab rescan: completed by #PRNUM)
 - **First-pass claim:** "Recent files" is the first 8 of the register response with no sort (page.tsx:24); it is only recent if the API happens to order by creation time.
 - **Verified evidence:** dashboard/page.tsx:24 takes files.slice(0,8) from getEstabFiles() (loaders.ts:3658, no sort/limit params, GET /api/v1/estab/files). No client sort by createdDate, and EstabFileSummary rows expose createdDate, so ordering is whatever the API returns. DataTable sortable only reorders after render.
 - **Files to change:** `apps/web/src/app/(app)/estab/dashboard/page.tsx`
@@ -548,7 +548,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DFA-02  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W2 PQ: closed by #2037)
+- [x] **Status** (W2 PQ: closed by #2037; W2 estab rescan evidence: the approver's remarks reach the service and the dfa.approved audit event (dfa-approve-remarks-real-db.test.ts), consumer-level maker-checker on sign, DfaPanel.test.tsx asserts Confirm stays disabled until remarks are typed and that { reason } is posted) (W2 estab rescan: completed by #PRNUM)
 - **W0 note:** partly fixed by #1949 — Approve requireReason added; no createdBy/canApprove from server; maker-checker backend unverified.
 - **First-pass claim:** Approve and Sign are offered to whoever opens the page; nothing in the UI separates drafter from approver or signer (DfaPanel.tsx:128-171). Approve has no remarks field, only a confirm. Server enforcement cannot be verified (estab-service absent).
 - **Verified evidence:** DfaPanel.tsx actionsFor (:143-181) renders Approve/Return for every viewer when status is pending_approval, Sign for approved, with no role/actor check; Dfa type (:22-31) carries no drafter/approver id so UI cannot compare. Approve uses ActionButton with confirm only (:156-158), no requireReason (Return has it :159). Sign confirm exists (:166-169) already. Server-side maker!=checker cannot be verified (estab-service absent).
@@ -616,7 +616,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DFA-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1949, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 re-confirmed in W2 PQ-A #2037 (files touched, behaviour re-checked, tests green); was W0 PROVISIONAL: closed by #1949, verified on main 9c5e9e9e9; W2 estab rescan evidence: bounded, abortable, single-owner poll with a Refreshing indicator that also works inside status tabs; DfaPanel.poll.test.tsx covers a 1.5 s lagging read, the filtered tab, give-up, supersede, unmount and tab switch) (W2 estab rescan: completed by #PRNUM)
 - **First-pass claim:** Create then reload uses a fixed 800 ms timeout for an eventually-consistent write (DfaPanel.tsx:103,125); the new draft may not appear.
 - **Verified evidence:** DfaPanel.tsx:118 (create) and :140 (act) use setTimeout(() => void load(), 800) after the POST returns; not cleared on unmount, and if the read model lags more than 800 ms the draft/status change is not shown. Whether writes are eventually consistent (CQRS) cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/estab/dfa/DfaPanel.tsx`
@@ -704,7 +704,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-DETAIL-01  ·  HIGH  ·  confirmed  ·  theme STATE (was OTHER)
 
-- [x] **Status** (W1 SF-06 re-confirmed on this branch (FileDetailActions.tsx no longer guards on the dead 'closed' status; FileDetailActions.test.tsx terminal-state tests pass): closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W1 SF-06 re-confirmed on this branch (FileDetailActions.tsx no longer guards on the dead 'closed' status; FileDetailActions.test.tsx terminal-state tests pass): closed by #1916, verified on main 9c5e9e9e9; W2 estab rescan evidence: closed (what the service writes on close) is read-only in the UI and the register keeps it distinct; the service answers 409 FILE_READ_ONLY on noting/submit/sign/move for closed/archived files and its consumers refuse them too (files-read-only-detail-contract-real-db.test.ts); FileDetailActions.test.tsx, page.test.tsx) (W2 estab rescan: completed by #PRNUM)
 - **First-pass claim:** Write actions are hidden only for status "closed" (FileDetailActions.tsx:183) but the register vocabulary is active/pending/archived/disposed (list/page.tsx:9-11); archived and disposed files still offer Sign, Submit and Refer, and "closed" may never occur.
 - **Verified evidence:** FileDetailActions.tsx:183 `if (status === "closed") return null;` but mapEstabFileSummaries (_data/apiMappers.ts:726-731) normalises status to only active|pending|archived|disposed, so 'closed' can never occur and archived/disposed files always render Save note, Submit, Sign and Refer. Server rejection for such files cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/estab/files/[id]/FileDetailActions.tsx`, `apps/web/src/app/(app)/estab/files/[id]/page.tsx`
@@ -735,7 +735,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-DETAIL-03  ·  MEDIUM  ·  partly  ·  theme CONFIRM (was OTHER)
 
-- [ ] **Status** (change to `[x]` when done, `[~]` if blocked + reason)
+- [~] **Status** (W2 estab rescan: PARTIAL, NEEDS OWNER DECISION. Done: the draft Submit/Sign act on is the latest yellow DRAFT by timestamp (page.test.tsx covers several drafts, submitted and green notes); Submit/Sign on a closed or archived file are refused (see FILES-DETAIL-01). Not done: server allowedActions (canSubmit/canSign) and any current-approver/author check on POST /v1/estab/files/:id/notings/:notingId/sign (today any estab role may sign any draft), because who may sign directly is an approval-chain policy decision. OWNER QUESTION: may a yellow draft be signed directly by (a) its author, (b) only the current approver of the SO > US > DS workflow task, or (c) any estab officer as today? And is Submit for the author only? Once answered: add canSubmit/canSign to GET /v1/estab/files/:id and gate the route and the notingSign consumer on the same rule.)
 - **W2 note:** W2 estab re-check: still decision-first (who may sign directly vs submit; server allowedActions). Draft selection is already latest-first. Left open. (#2052)
 - **W0 note:** partly fixed by #1916 — Helper text clarified, draft chosen explicitly; no server allowedActions.
 - **First-pass claim:** Submit for approval and Sign note both act on the first draft yellow note (page.tsx:51-53). "Sign at your level" (FileDetailActions.tsx:209-211) lets one officer create a green note without the workflow task, so it is unclear which path is the approved chain.
@@ -772,7 +772,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9; W2 estab rescan evidence: estab-service now sends each note's signedAt, the When column shows date and time, EstabFileDetailSchema no longer rejects or strips the real payload (loaders.estab.test.ts; service contract test parses the live response with it)) (W2 estab rescan: completed by #PRNUM)
 - **First-pass claim:** Note sheet rows show content and officer only — no timestamp, no e-sign hash/time (page.tsx:69-80,143-150); Officer is the raw ns.author.
 - **Verified evidence:** page.tsx:70-80 builds NoteRow with idx, content, author, type, status only; mapper already supplies timestamp (apiMappers.ts:769) but it is unused; e-sign is only a ' · e-Signed' suffix (:77) with no signer time/hash (mapper does not carry them). author is ns.author raw (:76) and is not passed through <OfficerName>; whether it is a UUID or name is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/estab/files/[id]/page.tsx`, `apps/web/src/app/_data/apiMappers.ts`
@@ -789,7 +789,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-DETAIL-06  ·  MEDIUM  ·  confirmed  ·  theme TYPES (was OTHER)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W1 SF-17b #2033: closed by #1916, verified on main 9c5e9e9e9; W2 estab rescan evidence: EstabFileDetailSchema now covers noteType/noteStatus/eSigned/signedAt/dakNo/dueBy/movementHistory and matches the wire shape; mapper unit tests apiMappers.estabFile.test.ts and loader test loaders.estab.test.ts) (W2 estab rescan: completed by #PRNUM)
 - **First-pass claim:** Page reads noteType, noteStatus, eSigned, movementHistory, dakNo, dueBy through casts (page.tsx:51-67) because EstabFileDetail lacks them — type drift that hides API-shape changes.
 - **Verified evidence:** page.tsx:51-53, 56-68, 71 cast noteSheets and the file to ad-hoc shapes for noteType, noteStatus, eSigned, dakNo, dueBy, movementHistory; the mapper also builds them and returns via an `as` cast (_data/apiMappers.ts:~809-815). EstabFileDetail is imported from @civitasone/types but that package is not in this snapshot (only packages/ui-kit), so the canonical type cannot be inspected.
 - **Files to change:** `packages/types (EstabFileDetail, not in snapshot)`, `apps/web/src/app/_data/apiMappers.ts`, `apps/web/src/app/(app)/estab/files/[id]/page.tsx`
@@ -828,7 +828,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-FILES-NEW-01  ·  HIGH  ·  confirmed  ·  theme CLASSIFICATION (was CAP)
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: files/new/page.test.tsx: only the four server tiers offered, selected value posted unchanged)
+- [~] **Status** (W2 estab rescan: PARTIAL, NEEDS OWNER DECISION. Done: the form posts the selected value unchanged (no CLASS_MAP) and the DAK open-file dialog no longer hard-codes public; files/new/page.test.tsx asserts payload.classification === selected option. Not done: the acceptance "creating a Restricted file stores/returns restricted" - estab-service's classification enum, its DB CHECK (migrations/0001_init.sql) and the clearance ranks (operators/eligibility.ts CLASSIFICATION_RANK public=1 < confidential=2 < secret=3 < top_secret=4, with desk clearance_level 1..4) have no restricted tier, so the form offers only the four server tiers. OWNER QUESTION: is a restricted tier required (the web register labels already name it)? If yes, where does it sit in the clearance ladder (between public and confidential?), who may open restricted files, how are existing desk clearance levels renumbered, and how are files already stored as confidential that were meant as Restricted to be re-marked (not recoverable automatically)? Until decided, nothing is added: a new tier is an access-control change.)
 - **First-pass claim:** Classification is remapped client-side: Unclassified→public, Restricted→confidential, Confidential→confidential (CLASS_MAP, files/new/page.tsx:8-14). Restricted and Confidential become indistinguishable in the stored file, and the label "public" for an internal government file is never shown to the officer.
 - **Verified evidence:** files/new/page.tsx:8-14 CLASS_MAP sends unclassified->public, restricted->confidential, confidential->confidential (used at :42), so Restricted is lost. On read, mapEstabFileSummaries (apiMappers.ts:719-725) maps public->unclassified and also accepts a stored 'restricted', which suggests the API vocabulary includes restricted; the accepted server enum is cannot-verify (estab-service absent). dak/page.tsx:89 also hard-codes classification 'public'.
 - **Files to change:** `apps/web/src/app/(app)/estab/files/new/page.tsx`, `apps/web/src/app/(app)/estab/dak/page.tsx`, `estab-service classification enum (not in snapshot)`
@@ -2722,7 +2722,7 @@ Counts: ACTION 159, BACKEND-VERIFY 4, CANNOT-VERIFY 1
 
 ### GAP-ESTAB-DASHBOARD-05  ·  LOW  ·  partly  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: dashboard/page.test.tsx: vehiclesInUse shown in the snapshot, Avg Pendency not duplicated)
+- [x] **Status** (W0 2026-10-13, re-confirmed in W2 estab #2042: closed by #1916; evidence: dashboard/page.test.tsx: vehiclesInUse shown in the snapshot, Avg Pendency not duplicated; W2 estab rescan evidence: the pendency snapshot repeats none of the stat tiles any more: it shows Open files (all stages), Oldest open file (days) and Vehicles in use, the first two new on GET /v1/estab/dashboard; real-DB test dashboard-sla-pendency-real-db.test.ts, page.test.tsx) (W2 estab rescan: completed by #PRNUM)
 - **First-pass claim:** Pendency snapshot repeats four of the six tiles (page.tsx:99-102), and vehiclesInUse is loaded but never displayed.
 - **Service:** `estab-service`  ·  **Endpoint(s):** `['GET /api/v1/estab/dashboard']`
 - **Question:** 
