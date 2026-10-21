@@ -14,6 +14,14 @@ import {
 
 export type DataQualityEntity = "contacts" | "leads" | "accounts";
 export type DataQualityFilter = "missing" | "invalid" | "stale";
+/**
+ * What the caller asked the report to list: one filter, or `all` to get the rows
+ * of every filter in a single response (GAP-CRM-DATA-QUALITY-03: the screen
+ * switches tabs client-side instead of re-fetching the counts on every click).
+ */
+export type DataQualityFilterRequest = DataQualityFilter | "all";
+
+export const DATA_QUALITY_FILTERS: readonly DataQualityFilter[] = ["missing", "invalid", "stale"];
 
 export interface FieldWeight {
   field: string;
@@ -129,10 +137,33 @@ export interface RecordInput {
 
 export interface RecordClassification {
   id: string;
+  /** Display name (contact / account name) or null when the record carries none. */
+  name: string | null;
   score: number;
   hasMissing: boolean;
   hasInvalid: boolean;
   isStale: boolean;
+  /**
+   * Machine-readable reasons the record was flagged, so the screen can render
+   * localised text: `missing:<field>`, `invalid:<field>`, `stale`.
+   */
+  issues: string[];
+}
+
+/** One drill-down row of the report (GAP-CRM-DATA-QUALITY-01: carries the name, not just an id). */
+export interface DataQualityRecordRow {
+  id: string;
+  name: string | null;
+  /** Completeness as a 0..1 fraction (the screen renders it as a percentage). */
+  score: number;
+  issues: string[];
+}
+
+function displayName(attributes: Record<string, unknown>): string | null {
+  const raw = attributes.name;
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 /** Classify one record for the dashboard. */
@@ -144,12 +175,20 @@ export function classifyRecord(
 ): RecordClassification {
   const completeness = computeCompletenessWith(record.attributes, COMPLETENESS_PROFILES[entity]);
   const violations = collectFormatViolations(record.attributes, FORMAT_SPECS[entity]);
+  const stale = isStale(record.lastActivityAt, staleDays, now);
+  const issues = [
+    ...completeness.missingFields.map((f) => `missing:${f}`),
+    ...violations.map((v) => `invalid:${v.field}`),
+    ...(stale ? ["stale"] : []),
+  ];
   return {
     id: record.id,
+    name: displayName(record.attributes),
     score: completeness.score,
     hasMissing: completeness.missingFields.length > 0,
     hasInvalid: violations.length > 0,
-    isStale: isStale(record.lastActivityAt, staleDays, now),
+    isStale: stale,
+    issues,
   };
 }
 
@@ -158,24 +197,46 @@ export interface DataQualityReport {
   total: number;
   distribution: Record<string, number>;
   counts: { missing: number; invalid: number; stale: number };
-  filter: DataQualityFilter | null;
+  filter: DataQualityFilterRequest | null;
+  /** Ids matching a single requested filter (empty for `all` / no filter). */
   filteredIds: string[];
+  /** Drill-down rows (id + display name + score + issues) for a single requested filter. */
+  records: DataQualityRecordRow[];
+  /** Rows for every filter, present only when `filter=all` was requested. */
+  recordsByFilter?: Record<DataQualityFilter, DataQualityRecordRow[]>;
+}
+
+function toRow(c: RecordClassification): DataQualityRecordRow {
+  return { id: c.id, name: c.name, score: c.score / 100, issues: c.issues };
+}
+
+function matchesFilter(c: RecordClassification, filter: DataQualityFilter): boolean {
+  return (
+    (filter === "missing" && c.hasMissing) ||
+    (filter === "invalid" && c.hasInvalid) ||
+    (filter === "stale" && c.isStale)
+  );
 }
 
 /**
- * Build the full data-quality report over a set of records, optionally
- * returning the ids matching a `missing|invalid|stale` filter.
+ * Build the full data-quality report over a set of records. A single `filter`
+ * (`missing|invalid|stale`) lists that filter's matching records (`filteredIds`
+ * and `records`); `all` lists every filter's rows under `recordsByFilter` so a
+ * client can switch tabs without asking again. Each list is capped at `idLimit`.
  */
 export function buildReport(
   records: readonly RecordInput[],
   entity: DataQualityEntity,
-  opts: { staleDays: number; filter?: DataQualityFilter | null; now?: Date; idLimit?: number },
+  opts: { staleDays: number; filter?: DataQualityFilterRequest | null; now?: Date; idLimit?: number },
 ): DataQualityReport {
   const now = opts.now ?? new Date();
   const distribution = emptyDistribution();
   const counts = { missing: 0, invalid: 0, stale: 0 };
   const filteredIds: string[] = [];
+  const rows: DataQualityRecordRow[] = [];
+  const byFilter: Record<DataQualityFilter, DataQualityRecordRow[]> = { missing: [], invalid: [], stale: [] };
   const idLimit = opts.idLimit ?? 500;
+  const filter = opts.filter ?? null;
 
   for (const rec of records) {
     const c = classifyRecord(rec, entity, opts.staleDays, now);
@@ -184,12 +245,13 @@ export function buildReport(
     if (c.hasInvalid) counts.invalid++;
     if (c.isStale) counts.stale++;
 
-    if (opts.filter && filteredIds.length < idLimit) {
-      const match =
-        (opts.filter === "missing" && c.hasMissing) ||
-        (opts.filter === "invalid" && c.hasInvalid) ||
-        (opts.filter === "stale" && c.isStale);
-      if (match) filteredIds.push(c.id);
+    if (filter === "all") {
+      for (const f of DATA_QUALITY_FILTERS) {
+        if (byFilter[f].length < idLimit && matchesFilter(c, f)) byFilter[f].push(toRow(c));
+      }
+    } else if (filter && filteredIds.length < idLimit && matchesFilter(c, filter)) {
+      filteredIds.push(c.id);
+      rows.push(toRow(c));
     }
   }
 
@@ -198,7 +260,9 @@ export function buildReport(
     total: records.length,
     distribution,
     counts,
-    filter: opts.filter ?? null,
+    filter,
     filteredIds,
+    records: rows,
+    ...(filter === "all" ? { recordsByFilter: byFilter } : {}),
   };
 }

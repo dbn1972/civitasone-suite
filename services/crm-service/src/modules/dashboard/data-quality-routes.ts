@@ -1,12 +1,15 @@
 /**
  * Data-quality dashboard route (DQ-004).
  *   GET /v1/crm/data-quality?entity=contacts|leads|accounts
- *                            &filter=missing|invalid|stale
+ *                            &filter=missing|invalid|stale|all
  *                            &staleDays=90
  *
  * Returns the completeness-score distribution, counts of records with
  * missing-required / invalid-format / stale attributes, and — when `filter` is
- * given — the ids of the matching records.
+ * given — the matching records as `{id, name, score (0..1), issues[]}` rows
+ * (plus the legacy `filteredIds`). `filter=all` returns the rows of every
+ * filter under `recordsByFilter` so the screen can switch tabs without
+ * re-fetching the counts (GAP-CRM-DATA-QUALITY-01/03).
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -17,7 +20,7 @@ const ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 
 const querySchema = z.object({
   entity: z.enum(["contacts", "leads", "accounts"]).default("contacts"),
-  filter: z.enum(["missing", "invalid", "stale"]).optional(),
+  filter: z.enum(["missing", "invalid", "stale", "all"]).optional(),
   staleDays: z.coerce.number().int().min(1).max(3650).default(90),
 });
 

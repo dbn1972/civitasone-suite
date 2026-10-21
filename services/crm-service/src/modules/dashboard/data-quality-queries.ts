@@ -8,7 +8,7 @@ import { contacts, accounts } from "../contacts/schema.js";
 import {
   buildReport,
   type DataQualityEntity,
-  type DataQualityFilter,
+  type DataQualityFilterRequest,
   type RecordInput,
   type DataQualityReport,
 } from "./data-quality.js";
@@ -88,7 +88,7 @@ async function loadAccountRecords(tenantId: string): Promise<RecordInput[]> {
 export async function getDataQuality(
   tenantId: string,
   entity: DataQualityEntity,
-  opts: { staleDays: number; filter?: DataQualityFilter | null },
+  opts: { staleDays: number; filter?: DataQualityFilterRequest | null },
 ): Promise<DataQualityReport> {
   const records =
     entity === "accounts" ? await loadAccountRecords(tenantId) : await loadContactRecords(tenantId);
