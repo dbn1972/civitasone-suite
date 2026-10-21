@@ -1,6 +1,6 @@
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 const fetchJsonMock = vi.fn();
@@ -80,6 +80,40 @@ function mockFor(path: string) {
   const m = /\/employees\/([^/?]+)/.exec(path);
   return { data: employeeFor(m?.[1] ?? "emp-1"), source: "api" };
 }
+
+// GAP-HR-ONBOARDING-DETAIL-06: "overdue" is decided against the IST calendar date, the same date
+// hrms-service's tenant-wide summary now uses, so the detail page and the list agree through the
+// 00:00-05:30 IST window where the UTC date is still "yesterday".
+describe("OnboardingDetailPage overdue uses the IST date", () => {
+  const PENDING_DAY_ONE = [{ id: "task-x", title: "Collect ID proof", dueByDay: 1, status: "pending" }];
+  function mockWith(tasks: typeof PENDING_DAY_ONE) {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/onboarding-tasks")) return Promise.resolve({ data: tasks, source: "api" });
+      if (path.includes("/onboarding-documents")) return Promise.resolve({ data: [], source: "api" });
+      return Promise.resolve({ data: employeeDetail({ joiningDate: "2026-08-01" }), source: "api" });
+    });
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("is not overdue on the due date itself, even at 23:59 IST (UTC 18:29)", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-02T18:29:00Z")); // 23:59 IST on 2 Aug == due date (1 Aug + 1 day)
+    mockWith(PENDING_DAY_ONE);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+    expect(screen.queryByLabelText("has overdue tasks")).not.toBeInTheDocument();
+  });
+
+  it("flips to overdue at 00:10 IST the next day, while the UTC date is still the due date", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-08-02T18:40:00Z")); // 00:10 IST on 3 Aug; UTC date still 2 Aug
+    mockWith(PENDING_DAY_ONE);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{await OnboardingDetailPage({ params: { id: "emp-1" } })}</NextIntlClientProvider>);
+    expect(screen.getByLabelText("has overdue tasks")).toBeInTheDocument();
+  });
+});
 
 describe("OnboardingDetailPage", () => {
   it("renders the employee's real onboarding tasks, not invented placeholder progress", async () => {

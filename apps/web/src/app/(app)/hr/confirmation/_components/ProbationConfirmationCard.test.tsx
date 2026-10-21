@@ -140,6 +140,40 @@ describe("ProbationConfirmationCard", () => {
     expect(screen.getByRole("button", { name: "Extend probation" })).toBeDisabled();
   });
 
+  // GAP-HR-CONFIRMATION-05: the probation length is no longer a hard-coded 2 years -- the
+  // server derives it per employee type, and the card shows the configured length.
+  it("shows the configured probation period beside the Probation End, not an assumed 2 years", () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <ProbationConfirmationList rows={[{ ...ROW, probationMonths: 12, probationEnd: "2025-01-01" }]} />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByText("12 months probation")).toBeInTheDocument();
+    expect(screen.queryByText(/2-year/i)).not.toBeInTheDocument();
+  });
+
+  it("singularises a one-month period and omits the hint when the API sends no period", () => {
+    const { rerender } = render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <ProbationConfirmationList rows={[{ ...ROW, probationMonths: 1 }]} />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByText("1 month probation")).toBeInTheDocument();
+    rerender(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <ProbationConfirmationList rows={[ROW]} />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.queryByText(/month probation|months probation/)).not.toBeInTheDocument();
+  });
+
+  it("the empty state no longer promises a fixed 2-year probation", () => {
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ProbationConfirmationList rows={[]} /></NextIntlClientProvider>);
+    expect(screen.getByText("No employees currently on probation")).toBeInTheDocument();
+    expect(screen.getByText("Employees on probation appear here once added to the service book.")).toBeInTheDocument();
+    expect(screen.queryByText(/2-year/i)).not.toBeInTheDocument();
+  });
+
   // GAP-HR-CONFIRMATION-09: recommendation badge and status badge no longer
   // rely on a bare emoji for meaning -- redundant announcement fixed via
   // aria-hidden on the glyph, with the text label carrying the real name.

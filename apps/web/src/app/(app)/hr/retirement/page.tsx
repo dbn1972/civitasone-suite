@@ -10,7 +10,7 @@ import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getEmployeeById } from "../../../_data/loaders";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
-import { isUpcoming, SEPARATION_TYPES } from "@/lib/retirement";
+import { partitionRetirements, SEPARATION_TYPES } from "@/lib/retirement";
 import { humanizeStatus } from "@/lib/formatters";
 import type { RetirementRow } from "./_components/RetirementDashboard";
 import { RetirementCaseWorkspace } from "./_components/RetirementCaseWorkspace";
@@ -87,7 +87,12 @@ export default async function RetirementPage({
   const errored = source === "error";
   const items = rawItems.map((i) => ({ ...i, separationTypeLabel: typeLabel(i.separationType) }));
 
-  const upcoming = items.filter((i) => isUpcoming(i)).length;
+  // GAP-HR-RETIREMENT-05: the same partition the dashboard cards and the wizard
+  // use, so the KPIs and the dashboard's own "n upcoming / n overdue" line can
+  // never disagree.
+  const { upcoming: upcomingRows, overdue: overdueRows } = partitionRetirements(items);
+  const upcoming = upcomingRows.length;
+  const overdue = overdueRows.length;
   // GAP-HR-RETIREMENT-03: "Processed" counted status === "completed", which
   // nothing in this codebase ever sets (hrms_separations.status defaults to
   // "initiated" and no code path advances it -- confirmed by grep). Shown
@@ -105,15 +110,16 @@ export default async function RetirementPage({
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr" backLabel="Back to HR"
+        back="/hr" backLabel={t("backLabel")}
         actions={<InitiateSeparationAction prefillEmployeeId={prefillEmployeeId} prefillEmployeeName={prefillEmployeeName} prefillEmployeeStatus={prefillEmployeeStatus} />}
       />
-      <DataSourceBadge source={source} message="Couldn't load retirement records — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
       {/* KPI strip */}
       <StatGrid>
         <StatCard icon="👴" iconBg="var(--infobg)" label={t("statTotal")}     value={errored ? null : items.length} />
         <StatCard icon="📅" iconBg="var(--warnbg)" label={t("statUpcoming")} value={errored ? null : upcoming} />
+        <StatCard icon="⏰" iconBg="var(--badbg)" label={t("statOverdue")} value={errored ? null : overdue} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statInitiated")} value={errored ? null : initiatedCount} />
         <StatCard icon="📝" iconBg="var(--bg)" label={t("statVrs")}          value={errored ? null : vrs} />
       </StatGrid>

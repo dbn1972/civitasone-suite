@@ -8,7 +8,7 @@
 import { useTranslations } from "next-intl";
 import { StatusPill, Button } from "@/app/_components/ds";
 import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
-import { isUpcoming, isOverdue, sortByDateAsc, todayDateOnly, SEPARATION_TYPES } from "@/lib/retirement";
+import { partitionRetirements, todayDateOnly, SEPARATION_TYPES } from "@/lib/retirement";
 
 export type RetirementRow = {
   id: string;
@@ -78,14 +78,13 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
   // already defines (initiateSeparation.separationType_*) instead of a
   // second, parallel copy of the same five translations.
   const tType = useTranslations("initiateSeparation");
-  const upcoming = sortByDateAsc(rows.filter((r) => isUpcoming(r)));
   // GAP-HR-RETIREMENT-05: a separation whose effective date has passed but
   // whose status is still "initiated" (nothing currently advances it, see
   // GAP-HR-RETIREMENT-03) previously vanished from this dashboard the
   // moment "upcoming" stopped matching it -- visible only in the full
-  // register below, easy to lose track of.
-  const overdue = sortByDateAsc(rows.filter((r) => isOverdue(r)));
-  const combined = [...overdue, ...upcoming];
+  // register below, easy to lose track of. The partition is shared with the
+  // page KPIs and the wizard so all three always show the same counts.
+  const { overdue, upcoming, cases: combined } = partitionRetirements(rows);
 
   if (combined.length === 0) {
     return (
@@ -98,104 +97,110 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
   }
 
   return (
-    <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))" }}>
-      {combined.map((row) => {
-        const days = daysLeft(row.superannuationDate);
-        const overdueRow = days < 0;
-        const yos = calcYOS(row);
-        const selected = row.id === selectedId;
-        return (
-          <article
-            key={row.id}
-            className="card"
-            style={{
-              marginBottom: 0,
-              borderInlineStart: `4px solid ${borderColor(days)}`,
-              outline: selected ? "2px solid var(--primary)" : "none",
-              outlineOffset: -1,
-            }}
-            aria-label={t("cardAriaLabel", { name: row.employee })}
-            aria-current={selected ? "true" : undefined}
-          >
-            <div className="card-h" style={{ alignItems: "flex-start", gap: 10 }}>
-              <div
-                aria-hidden="true"
-                style={{
-                  width: 42, height: 42, borderRadius: "50%",
-                  background: "var(--infobg)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 20, flexShrink: 0,
-                }}
-              >
-                👴
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <h3 style={{ margin: 0, fontSize: "0.9375rem", fontWeight: 600 }}>{row.employee}</h3>
-                <p style={{ margin: "2px 0 0", fontSize: "0.8125rem", color: "var(--ink2)" }}>
-                  {row.designation ?? "—"}
-                  {row.department ? ` · ${row.department}` : ""}
-                </p>
-              </div>
-              <StatusPill status={row.status} />
-            </div>
-
-            {overdueRow && (
-              <div style={{ margin: "10px 16px 0", padding: "6px 10px", borderRadius: 6, background: "var(--badbg)", fontSize: "0.75rem", fontWeight: 600, color: "var(--bad)" }}>
-                {t("overdueLabel")}
-              </div>
-            )}
-
-            <dl style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px", margin: "12px 16px 0", padding: 0, fontSize: "0.8125rem" }}>
-              <div>
-                <dt style={{ color: "var(--mut)", marginBottom: 2 }}>{t("colRetirementDate")}</dt>
-                <dd style={{ margin: 0, fontWeight: 600, color: days <= 30 ? "var(--bad)" : "var(--ink)" }}>
-                  {formatIndianDate(row.superannuationDate)}
-                </dd>
-              </div>
-              <div>
-                <dt style={{ color: "var(--mut)", marginBottom: 2 }}>{t("colDaysRemaining")}</dt>
-                {/* GAP-HR-RETIREMENT-07: urgency is now also conveyed in
-                    text (not colour alone), and pluralised via ICU. */}
-                <dd style={{ margin: 0, fontWeight: 600, color: days <= 30 ? "var(--bad)" : days <= 90 ? "var(--warn)" : "var(--ink)" }}>
-                  {overdueRow ? t("overdueByDays", { count: Math.abs(days) }) : t("daysRemaining", { count: days })}
-                  {days >= 0 && days <= 30 && <span> · {t("urgentLabel")}</span>}
-                </dd>
-              </div>
-              <div>
-                <dt style={{ color: "var(--mut)", marginBottom: 2 }}>{t("colYearsOfService")}</dt>
-                <dd style={{ margin: 0, fontWeight: 600 }}>{yos > 0 ? t("yearsValue", { count: yos }) : "—"}</dd>
-              </div>
-              <div>
-                <dt style={{ color: "var(--mut)", marginBottom: 2 }}>{t("colType")}</dt>
-                <dd style={{ margin: 0 }}>{typeLabel(row.separationType, t, tType)}</dd>
-              </div>
-            </dl>
-
-            {/*
-              GAP-HR-RETIREMENT-02: the "Pending Clearances" block (Library/
-              Store/IT/Finance chips) is removed entirely -- there is no
-              clearance data source anywhere in hrms-service (grep finds no
-              "clearance" concept), so every chip always read "pending"
-              regardless of reality. Reintroduce once a real clearance
-              tracking source exists (see the item's own fix notes), not as
-              a UI-only fabrication.
-            */}
-
-            {onSelect && (
-              <div style={{ padding: "14px 16px 14px" }}>
-                <Button
-                  variant={selected ? "primary" : "ghost"}
-                  style={{ width: "100%", minHeight: 40, fontSize: "0.8125rem" }}
-                  aria-pressed={selected}
-                  onClick={() => onSelect(row)}
+    <div>
+      {/* The same two numbers as the page's "Next 6 Months" and "Overdue" KPI cards. */}
+      <p style={{ margin: "0 0 12px", fontSize: "0.8125rem", color: "var(--mut)" }}>
+        {t("summaryCounts", { upcoming: upcoming.length, overdue: overdue.length })}
+      </p>
+      <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))" }}>
+        {combined.map((row) => {
+          const days = daysLeft(row.superannuationDate);
+          const overdueRow = days < 0;
+          const yos = calcYOS(row);
+          const selected = row.id === selectedId;
+          return (
+            <article
+              key={row.id}
+              className="card"
+              style={{
+                marginBottom: 0,
+                borderInlineStart: `4px solid ${borderColor(days)}`,
+                outline: selected ? "2px solid var(--primary)" : "none",
+                outlineOffset: -1,
+              }}
+              aria-label={t("cardAriaLabel", { name: row.employee })}
+              aria-current={selected ? "true" : undefined}
+            >
+              <div className="card-h" style={{ alignItems: "flex-start", gap: 10 }}>
+                <div
+                  aria-hidden="true"
+                  style={{
+                    width: 42, height: 42, borderRadius: "50%",
+                    background: "var(--infobg)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 20, flexShrink: 0,
+                  }}
                 >
-                  {selected ? t("processingThisButton") : t("processThisButton")}
-                </Button>
+                  👴
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <h3 style={{ margin: 0, fontSize: "0.9375rem", fontWeight: 600 }}>{row.employee}</h3>
+                  <p style={{ margin: "2px 0 0", fontSize: "0.8125rem", color: "var(--ink2)" }}>
+                    {row.designation ?? "—"}
+                    {row.department ? ` · ${row.department}` : ""}
+                  </p>
+                </div>
+                <StatusPill status={row.status} />
               </div>
-            )}
-          </article>
-        );
-      })}
+
+              {overdueRow && (
+                <div style={{ margin: "10px 16px 0", padding: "6px 10px", borderRadius: 6, background: "var(--badbg)", fontSize: "0.75rem", fontWeight: 600, color: "var(--bad)" }}>
+                  {t("overdueLabel")}
+                </div>
+              )}
+
+              <dl style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 16px", margin: "12px 16px 0", padding: 0, fontSize: "0.8125rem" }}>
+                <div>
+                  <dt style={{ color: "var(--mut)", marginBottom: 2 }}>{t("colRetirementDate")}</dt>
+                  <dd style={{ margin: 0, fontWeight: 600, color: days <= 30 ? "var(--bad)" : "var(--ink)" }}>
+                    {formatIndianDate(row.superannuationDate)}
+                  </dd>
+                </div>
+                <div>
+                  <dt style={{ color: "var(--mut)", marginBottom: 2 }}>{t("colDaysRemaining")}</dt>
+                  {/* GAP-HR-RETIREMENT-07: urgency is now also conveyed in
+                      text (not colour alone), and pluralised via ICU. */}
+                  <dd style={{ margin: 0, fontWeight: 600, color: days <= 30 ? "var(--bad)" : days <= 90 ? "var(--warn)" : "var(--ink)" }}>
+                    {overdueRow ? t("overdueByDays", { count: Math.abs(days) }) : t("daysRemaining", { count: days })}
+                    {days >= 0 && days <= 30 && <span> · {t("urgentLabel")}</span>}
+                  </dd>
+                </div>
+                <div>
+                  <dt style={{ color: "var(--mut)", marginBottom: 2 }}>{t("colYearsOfService")}</dt>
+                  <dd style={{ margin: 0, fontWeight: 600 }}>{yos > 0 ? t("yearsValue", { count: yos }) : "—"}</dd>
+                </div>
+                <div>
+                  <dt style={{ color: "var(--mut)", marginBottom: 2 }}>{t("colType")}</dt>
+                  <dd style={{ margin: 0 }}>{typeLabel(row.separationType, t, tType)}</dd>
+                </div>
+              </dl>
+
+              {/*
+                GAP-HR-RETIREMENT-02: the "Pending Clearances" block (Library/
+                Store/IT/Finance chips) is removed entirely -- there is no
+                clearance data source anywhere in hrms-service (grep finds no
+                "clearance" concept), so every chip always read "pending"
+                regardless of reality. Reintroduce once a real clearance
+                tracking source exists (see the item's own fix notes), not as
+                a UI-only fabrication.
+              */}
+
+              {onSelect && (
+                <div style={{ padding: "14px 16px 14px" }}>
+                  <Button
+                    variant={selected ? "primary" : "ghost"}
+                    style={{ width: "100%", minHeight: 40, fontSize: "0.8125rem" }}
+                    aria-pressed={selected}
+                    onClick={() => onSelect(row)}
+                  >
+                    {selected ? t("processingThisButton") : t("processThisButton")}
+                  </Button>
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </div>
     </div>
   );
 }

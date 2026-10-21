@@ -67,6 +67,56 @@ describe("DocumentsPanel", () => {
     );
   });
 
+  // GAP-HR-ONBOARDING-DETAIL-02: the verify/reject write is async (202 -> queue consumer), so the panel polls the
+  // documents list until the committed status is visible, then refreshes the page so the card re-adopts it.
+  it("after Verify, polls the documents list and refreshes the page once 'verified' is visible", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let polls = 0;
+      global.fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PATCH") return { ok: true } as Response;
+        polls += 1;
+        // First poll: consumer has not applied the write yet. Second: it has.
+        const status = polls >= 2 ? "verified" : "uploaded";
+        return { ok: true, json: async () => ({ data: [{ docType: "pan_card", status }] }) } as Response;
+      }) as unknown as typeof fetch;
+
+      render(<DocumentsPanel employeeId="emp-1" documents={[UPLOADED_DOC]} />);
+      fireEvent.click(screen.getByRole("button", { name: "Verify" }));
+
+      await vi.advanceTimersByTimeAsync(3000);
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/proxy/v1/hrms/employees/emp-1/onboarding-documents",
+        expect.objectContaining({ cache: "no-store" }),
+      );
+      expect(polls).toBe(2);
+      expect(refreshMock).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not refresh while the polled status is still the old one, and says it is still being applied", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      global.fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PATCH") return { ok: true } as Response;
+        return { ok: true, json: async () => ({ data: [{ docType: "pan_card", status: "uploaded" }] }) } as Response;
+      }) as unknown as typeof fetch;
+
+      render(<DocumentsPanel employeeId="emp-1" documents={[UPLOADED_DOC]} />);
+      fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+
+      await vi.advanceTimersByTimeAsync(20000);
+
+      expect(refreshMock).not.toHaveBeenCalled();
+      expect(screen.getByText(/still processing/i)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("shows a clerk-safe inline error, and does not throw, when verify fails", async () => {
     global.fetch = vi.fn().mockResolvedValueOnce({ ok: false, status: 500, clone: () => ({ json: async () => ({}) }) } as unknown as Response);
     render(<DocumentsPanel employeeId="emp-1" documents={[UPLOADED_DOC]} />);

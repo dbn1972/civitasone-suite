@@ -15,6 +15,30 @@ export function canTerminate(status: string, roles: string[]): boolean {
   return status === "active" && roles.some((r) => CONTRACT_HR_ROLES.includes(r));
 }
 
+/** A contract still in force that ends within this many days counts as "expiring" (mirrors hrms-service CONTRACT_EXPIRING_WINDOW_DAYS). */
+export const EXPIRING_WINDOW_DAYS = 30;
+
+export type ContractExpiryState = "expired" | "expiring" | "active" | "none";
+
+/**
+ * GAP-HR-CONTRACTUAL-04: where a contract stands against today, from its status AND its end date
+ * (`daysToExpiry` = whole IST calendar days from today to the end date; negative once past it; null when the
+ * date is missing/unparseable). The same classes hrms-service uses for the register's counts
+ * (contracts/repo.ts summarizeContracts), so a row's badge and the stat cards can never disagree:
+ *   none      terminated / renewed / draft, or an unreadable end date on an open contract -- not in force
+ *   expired   status 'expired', or still open (active/expiring/escalated) and past its end date
+ *   expiring  in force and ending within EXPIRING_WINDOW_DAYS (or flagged 'expiring' by the scheduler)
+ *   active    in force, further out
+ */
+export function contractExpiryState(status: string, daysToExpiry: number | null): ContractExpiryState {
+  if (status === "terminated" || status === "renewed" || status === "draft") return "none";
+  if (status === "expired") return "expired";
+  if (daysToExpiry === null) return "none";
+  if (daysToExpiry < 0) return "expired";
+  if (status === "expiring" || daysToExpiry <= EXPIRING_WINDOW_DAYS) return "expiring";
+  return "active";
+}
+
 export type HistoryRow = { id: string; contractNo: string; startDate: string; endDate: string; status: string };
 
 /**

@@ -44,6 +44,32 @@ describe("TaskCalendar", () => {
     expect(headings).toEqual(["Day 1", "Day 30"]);
   });
 
+  // GAP-HR-ONBOARDING-DETAIL-06: the column date is joining + dueByDay -- the same date the overdue rule uses.
+  it("labels each column with its real due date (joining date + dueByDay), not one day earlier", () => {
+    render(
+      <TaskCalendar
+        joiningDate="2026-03-01"
+        tasks={[
+          task({ id: "t1", title: "Day one", dueByDay: 1 }),
+          task({ id: "t2", title: "Mid review", dueByDay: 14 }),
+        ]}
+      />,
+    );
+    // 1 March + 1 day = 2 March; 1 March + 14 days = 15 March.
+    expect(screen.getByText("Day 1").parentElement).toHaveTextContent("2 Mar");
+    expect(screen.getByText("Day 14").parentElement).toHaveTextContent("15 Mar");
+  });
+
+  it("rolls the date label across a month boundary", () => {
+    render(<TaskCalendar joiningDate="2026-01-30" tasks={[task({ id: "t1", title: "Review", dueByDay: 3 })]} />);
+    expect(screen.getByText("Day 3").parentElement).toHaveTextContent("2 Feb");
+  });
+
+  it("shows no date line when the joining date is unknown", () => {
+    render(<TaskCalendar tasks={[task({ id: "t1", title: "Review", dueByDay: 3 })]} />);
+    expect(screen.getByText("Day 3").parentElement).not.toHaveTextContent(/\d+ [A-Z][a-z]{2}/);
+  });
+
   it("shows the 'No tasks' state when given an empty list", () => {
     render(<TaskCalendar tasks={[]} />);
     expect(screen.getByText("No tasks")).toBeInTheDocument();
