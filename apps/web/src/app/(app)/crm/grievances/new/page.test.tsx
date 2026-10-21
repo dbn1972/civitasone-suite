@@ -100,6 +100,94 @@ describe("NewGrievancePage", () => {
     expect(pushMock).not.toHaveBeenCalled();
   });
 
+  // GAP-CRM-GRIEVANCES-NEW-01 — an async contact search links the grievance to an
+  // existing CRM contact; the chosen contactId is sent on the create, and a contact
+  // that already has open grievances raises a (non-blocking) duplicate warning that
+  // links to each of them.
+  describe("link existing contact + duplicate-open warning (GAP-CRM-GRIEVANCES-NEW-01)", () => {
+    function mockApi(openForContact: Array<{ id: string; referenceNo: string; subject: string }>) {
+      return vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        if (url.includes("/v1/crm/contacts/lookup")) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ data: [{ id: "ct-9", name: "Meera Devi", phone: "98XXXXX210" }] }), { status: 200 }),
+          );
+        }
+        if (url.includes("/v1/crm/grievances?")) {
+          return Promise.resolve(
+            new Response(JSON.stringify({ data: openForContact, meta: { total: openForContact.length } }), { status: 200 }),
+          );
+        }
+        if (url.includes("/v1/crm/grievance-categories")) {
+          return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+        }
+        void init;
+        return Promise.resolve(new Response(JSON.stringify({ data: { id: "g-linked" } }), { status: 201 }));
+      });
+    }
+
+    async function pickContact() {
+      const picker = screen.getByRole("combobox", { name: /link existing contact/i });
+      fireEvent.change(picker, { target: { value: "Meera" } });
+      fireEvent.mouseDown(await screen.findByText("Meera Devi"));
+    }
+
+    it("sends the chosen contactId on the create", async () => {
+      const fetchSpy = mockApi([]);
+      render(<NewGrievancePage />);
+      await pickContact();
+      fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Meera Devi" } });
+      fireEvent.change(screen.getByLabelText(/category/i), { target: { value: "Water Supply" } });
+      fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "No water" } });
+      fireEvent.click(screen.getByRole("button", { name: "Submit Grievance" }));
+
+      await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/grievances/g-linked"));
+      const post = fetchSpy.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "POST");
+      expect(JSON.parse((post![1] as RequestInit).body as string).contactId).toBe("ct-9");
+      expect(screen.queryByRole("status", { name: /possible duplicate/i })).not.toBeInTheDocument();
+    });
+
+    it("omits contactId when no contact is linked", async () => {
+      const fetchSpy = mockApi([]);
+      render(<NewGrievancePage />);
+      fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Ravi" } });
+      fireEvent.change(screen.getByLabelText(/category/i), { target: { value: "Water Supply" } });
+      fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "No water" } });
+      fireEvent.click(screen.getByRole("button", { name: "Submit Grievance" }));
+      await waitFor(() => expect(pushMock).toHaveBeenCalled());
+      const post = fetchSpy.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "POST");
+      expect(JSON.parse((post![1] as RequestInit).body as string)).not.toHaveProperty("contactId");
+    });
+
+    it("warns, with links, when the linked contact already has open grievances", async () => {
+      const fetchSpy = mockApi([
+        { id: "g-old-1", referenceNo: "DARPG/2026/000001", subject: "No water for 3 days" },
+        { id: "g-old-2", referenceNo: "DARPG/2026/000002", subject: "Broken pipe" },
+      ]);
+      render(<NewGrievancePage />);
+      await pickContact();
+
+      const warning = await screen.findByRole("status", { name: /possible duplicate/i });
+      expect(warning).toHaveTextContent(/This contact already has 2 open grievances/i);
+      expect(screen.getByRole("link", { name: "DARPG/2026/000001" })).toHaveAttribute("href", "/crm/grievances/g-old-1");
+      expect(screen.getByRole("link", { name: "DARPG/2026/000002" })).toHaveAttribute("href", "/crm/grievances/g-old-2");
+      const lookup = fetchSpy.mock.calls.map(([u]) => String(u)).find((u) => u.includes("/v1/crm/grievances?"));
+      expect(lookup).toBe("/api/proxy/v1/crm/grievances?contactId=ct-9&open=true&limit=5");
+    });
+
+    it("is advisory: the grievance can still be filed while the warning is showing", async () => {
+      mockApi([{ id: "g-old-1", referenceNo: "DARPG/2026/000001", subject: "No water" }]);
+      render(<NewGrievancePage />);
+      await pickContact();
+      await screen.findByRole("status", { name: /possible duplicate/i });
+      fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Meera Devi" } });
+      fireEvent.change(screen.getByLabelText(/category/i), { target: { value: "Water Supply" } });
+      fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Different issue" } });
+      fireEvent.click(screen.getByRole("button", { name: "Submit Grievance" }));
+      await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/grievances/g-linked"));
+    });
+  });
+
   // GAP-CRM-GRIEVANCES-NEW-02 — a server rejection for citizenEmail renders
   // beside the Email field, not just the top banner.
   it("renders a server field error for citizenEmail beside the Email field", async () => {

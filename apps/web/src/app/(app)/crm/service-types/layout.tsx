@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { requireAnyRole, CRM_STRICT_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 
 /**
  * GAP-CRM-SERVICE-REQUESTS-NEW-02: the service-type master is platform-wide
@@ -15,9 +15,7 @@ import { requireAnyRole } from "@/lib/auth/roleGuard";
 // admin and platform_admin are accepted by none of those routes, so admitting
 // them here gave a wired Save/Delete UI that 403'd on write. Narrowed to the
 // server set so the gate and the route agree (parity).
-const ALLOWED_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
-
 export default function ServiceTypesLayout({ children }: { children: ReactNode }) {
-  requireAnyRole(ALLOWED_ROLES, "/crm");
+  requireAnyRole(CRM_STRICT_ADMIN_ROLES, "/crm");
   return <>{children}</>;
 }

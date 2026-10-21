@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { requireAnyRole, CRM_STRICT_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 
 /**
  * GAP-CRM-PRODUCTS-01: the product catalogue drives quotation prices and tax
@@ -17,9 +17,7 @@ import { requireAnyRole } from "@/lib/auth/roleGuard";
 // product route, so admitting them here gave those roles a fully-wired
 // Save/Delete price/tax editor whose every mutation 403'd. Narrowed to the
 // server set so the gate and the route agree (parity).
-const ALLOWED_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
-
 export default function ProductsLayout({ children }: { children: ReactNode }) {
-  requireAnyRole(ALLOWED_ROLES, "/crm");
+  requireAnyRole(CRM_STRICT_ADMIN_ROLES, "/crm");
   return <>{children}</>;
 }

@@ -165,7 +165,7 @@ export function ReasonCodesEditor() {
     return (
       <div className="card">
         <div className="card-h">
-          <h3 id={headingId}>{t("heading")}</h3>
+          <h3 id={headingId}>{t("title")}</h3>
           <DataSourceBadge source="error" />
         </div>
         <ErrorState error={toHumanError("load", { area: "reason codes" })} onRetry={() => void load()} />

@@ -1,7 +1,7 @@
 import { formatIndianDateTime } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 import { fetchJson } from "../../../../_data/apiClient";
-import { PageHeader, StatusPill, Card, LoadErrorState, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatusPill, Card, LoadErrorState, EmptyState, Masked } from "../../../../_components/ds";
 import { getSessionRoles, hasAnyRole, CRM_GRIEVANCE_CLOSE_ROLES, CRM_PII_READ_ROLES } from "@/lib/auth/roleGuard";
 import { GrievanceActions } from "./GrievanceActions";
 
@@ -148,7 +148,10 @@ export default async function GrievanceDetailPage({
 }) {
   const t = await getTranslations("crmGrievanceDetail");
   const result = await fetchJson<unknown, GrievanceDetail | null>(
-    `/api/v1/crm/grievances/${params.id}`,
+    // GAP-CRM-GRIEVANCES-DETAIL-05: ask the server to mask citizen contact for EVERY
+    // role (`pii=masked`); a PII-read role then reveals a value on demand through the
+    // audited reveal, so the clear phone/email is never in this page's payload.
+    `/api/v1/crm/grievances/${params.id}?pii=masked`,
     null,
     { revalidateSeconds: 0, telemetryKey: "crm.grievance.detail",
       mapResponse: (p) => {
@@ -335,21 +338,45 @@ export default async function GrievanceDetailPage({
               <dd style={{ fontWeight: 600 }}>{g.citizenName}</dd>
               <dt style={{ color: "var(--ink2)" }}>{t("phone")}</dt>
               <dd>
-                {g.citizenPhone ?? "—"}
+                <Masked
+                  value={g.citizenPhone}
+                  kind="phone"
+                  fallback="—"
+                  onReveal={{
+                    canReveal: canRevealPii,
+                    resourceType: "grievance",
+                    resourceId: g.id,
+                    field: "citizenPhone",
+                    label: t("revealLabelPhone"),
+                  }}
+                />
               </dd>
               <dt style={{ color: "var(--ink2)" }}>{t("email")}</dt>
               <dd style={{ wordBreak: "break-all" }}>
-                {g.citizenEmail ?? "—"}
+                <Masked
+                  value={g.citizenEmail}
+                  kind="email"
+                  fallback="—"
+                  onReveal={{
+                    canReveal: canRevealPii,
+                    resourceType: "grievance",
+                    resourceId: g.id,
+                    field: "citizenEmail",
+                    label: t("revealLabelEmail"),
+                  }}
+                />
               </dd>
             </dl>
             {/* GAP-CRM-GRIEVANCES-DETAIL-05 / F1-01+F1-06: DPDP — citizen
-                contact is personal data. The SERVER masks it for roles outside
-                the CRM PII-read set and sends the clear value only to those
-                roles, so the page simply renders what the server returned
-                (no client-side masking). */}
-            {(g.citizenPhone || g.citizenEmail) && !canRevealPii && (
+                contact is personal data. The page asks the SERVER to mask it for
+                every role (`?pii=masked`), so no clear value is ever in this
+                payload. A role in the CRM PII-read set gets a Reveal control that
+                calls the audited POST /v1/crm/pii/reveal (reason required, a
+                `pii_reveal` audit event written with the read); everyone else
+                just sees the masked value and is told who to ask. */}
+            {(g.citizenPhone || g.citizenEmail) && (
               <p style={{ margin: "0 16px 12px", fontSize: 11, color: "var(--ink2)", lineHeight: 1.5 }}>
-                {t("maskedNotice")}
+                {canRevealPii ? t("revealNotice") : t("maskedNotice")}
               </p>
             )}
           </Card>
