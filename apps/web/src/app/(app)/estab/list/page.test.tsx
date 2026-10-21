@@ -165,6 +165,6 @@ describe("EstabFilesListPage — office-wide tiles share the dashboard's definit
     fetchJsonMock.mockResolvedValueOnce({ data: [], source: "api" });
     const { container } = render(await EstabFilesListPage());
     const tile = Array.from(container.querySelectorAll(".stat")).find((el) => el.querySelector(".lab")?.textContent === "Active Files");
-    expect(tile?.getAttribute("title")).toMatch(/same count as Active Files on the File Register/);
+    expect(tile?.getAttribute("title")).toMatch(/same count as Active Files on the Dashboard/);
   });
 });

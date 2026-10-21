@@ -36,11 +36,13 @@ type Props = {
 
 /**
  * A file in a terminal register state (archived or disposed) is read-only: no
- * further noting, submission, signing or referral is permitted. The audit
- * snapshot's `status === "closed"` guard was dead — the register vocabulary is
- * active | pending | archived | disposed (see mapEstabFileSummaries), so
- * "closed" never occurs and archived/disposed files wrongly kept their write
- * controls. This helper is the single source of truth for that read-only test.
+ * further noting, submission, signing or referral is permitted. The register
+ * vocabulary is the service's status (draft, active, pending, transferred,
+ * closed, archived, disposed; mapEstabFileSummaries keeps it as is), and this
+ * test covers archived and disposed only. A "closed" file is not yet treated as
+ * read-only here: that was already so before the status was kept, and whether it
+ * should be is a separate decision. This helper is the single source of truth
+ * for that read-only test.
  */
 export function isFileReadOnly(status: string): boolean {
   return status === "archived" || status === "disposed";

@@ -178,8 +178,8 @@ describe("DAK-03: register form fields and validation", () => {
   });
 
   it("Given a valid form, When submitted, Then it posts the chosen fields and the message says the number appears once processed", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.method === "POST") return Promise.resolve(jsonResponse({ id: "x", status: "accepted" }, 202));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((...args: [RequestInfo | URL, RequestInit?]) => {
+      if (args[1]?.method === "POST") return Promise.resolve(jsonResponse({ id: "x", status: "accepted" }, 202));
       return Promise.resolve(jsonResponse({ data: [] }));
     });
     render(<DakRegistryPage />);
@@ -321,9 +321,10 @@ describe("DAK-03: the allocated DAK number and barcode reach the success message
       if (init?.method === "POST") return Promise.resolve(jsonResponse({ id: "new-1", status: "accepted" }, 202));
       const q = url.searchParams.get("q");
       if (q) {
-        // a lookup of the new row by its subject
+        // a lookup of the new row by its subject or number; like the service, refuse a term over 100 characters
         polls += 1;
         lookups.push(q);
+        if (q.length > 100) return Promise.resolve(jsonResponse({ error: { code: "VALIDATION" } }, 400));
         const present = opts.appearsOnPoll !== null && polls >= opts.appearsOnPoll;
         return Promise.resolve(jsonResponse({ data: present ? [opts.row ?? NEW_ROW] : [], pagination: { total: present ? 1 : 0 } }));
       }
@@ -332,12 +333,12 @@ describe("DAK-03: the allocated DAK number and barcode reach the success message
     return { fetchSpy, polls: () => polls, lookups };
   }
 
-  async function register(dakNo = "") {
+  async function register(dakNo = "", subject = "Fresh memo") {
     render(<DakRegistryPage />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Register DAK" })).toBeInTheDocument());
     if (dakNo) fireEvent.change(screen.getByLabelText(/^DAK number/i), { target: { value: dakNo } });
     fireEvent.change(screen.getByLabelText(/^From/i), { target: { value: "Home Ministry" } });
-    fireEvent.change(screen.getByLabelText(/^Subject/i), { target: { value: "Fresh memo" } });
+    fireEvent.change(screen.getByLabelText(/^Subject/i), { target: { value: subject } });
     fireEvent.click(screen.getByRole("button", { name: "Register DAK" }));
     await screen.findByText(/registered\./);
   }
@@ -364,6 +365,28 @@ describe("DAK-03: the allocated DAK number and barcode reach the success message
     expect(await screen.findByText("DAK D-77 registered. Barcode DAK-D-77.")).toBeInTheDocument();
   });
 
+  it("Given a typed DAK number, Then the lookup is by that number, not by the subject", async () => {
+    const h = installService({ appearsOnPoll: 1, row: { ...NEW_ROW, dakNo: "D-77", barcode: "DAK-D-77" } });
+    await register("D-77");
+    await tick(1000);
+    await screen.findByText("DAK D-77 registered. Barcode DAK-D-77.");
+    expect(h.lookups).toEqual(["D-77"]);
+  });
+
+  it("Given a subject over 100 characters, When the row appears, Then the lookup term is cut to 100 characters and the barcode still shows", async () => {
+    const longSubject = "Request for the sanction of an advance for the annual conference of the department, with the budget head and the proposed venue, dates and delegates listed in the enclosed note";
+    expect(longSubject.length).toBeGreaterThan(100);
+    const h = installService({ appearsOnPoll: 2, row: { ...NEW_ROW, subject: longSubject } });
+    await register("", longSubject);
+    await tick(1000); // lookup 1: not processed yet
+    await tick(1000); // lookup 2: processed
+    expect(await screen.findByText("DAK DAK/2026/0042 registered. Barcode DAK-DAK-2026-0042.")).toBeInTheDocument();
+    // the first 100 characters, trimmed (the service trims the term too)
+    const term = longSubject.slice(0, 100).trim();
+    expect(h.lookups).toEqual([term, term]);
+    expect(h.lookups.every((q) => q.length <= 100)).toBe(true);
+  });
+
   it("Given the row never appears, Then the message stays the honest 'appears once processed' text and the lookups stop", async () => {
     const h = installService({ appearsOnPoll: null });
     await register();
@@ -376,8 +399,7 @@ describe("DAK-03: the allocated DAK number and barcode reach the success message
 
   it("stops looking when the page is closed", async () => {
     const h = installService({ appearsOnPoll: null });
-    const view = (render(<DakRegistryPage />), null);
-    void view;
+    render(<DakRegistryPage />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Register DAK" })).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/^From/i), { target: { value: "Home Ministry" } });
     fireEvent.change(screen.getByLabelText(/^Subject/i), { target: { value: "Fresh memo" } });

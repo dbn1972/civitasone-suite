@@ -335,8 +335,9 @@ export function ApprovalMatrixPanel() {
       <div role="status" aria-live="polite">
         {message ? <p style={{ color: "var(--good)", fontSize: "0.875rem" }}>{message}</p> : null}
         {bandWarning ? <p style={{ color: "var(--warn)", fontSize: "0.875rem" }}>{bandWarning}</p> : null}
-        {error ? <p style={{ color: "var(--bad)", fontSize: "0.875rem" }}>{error}</p> : null}
       </div>
+      {/* A validation or save error is a field-level error: role="alert", outside the polite status region. */}
+      {error ? <p role="alert" style={{ color: "var(--bad)", fontSize: "0.875rem", margin: 0 }}>{error}</p> : null}
 
       {/* New rule form */}
       <div className="card">

@@ -18,7 +18,7 @@ import { useEstabT } from "@/lib/estab/useEstabT";
 import { useEstabDivisions } from "@/lib/estab/useEstabDivisions";
 import { usePagedRegister } from "@/lib/estab/usePagedRegister";
 import { startBoundedPoll } from "@/lib/estab/boundedPoll";
-import { DAK_MODES, EMPTY_DAK_FORM, validateDakForm, type DakFormState } from "@/lib/estab/dakForm";
+import { DAK_MODES, EMPTY_DAK_FORM, dakLookupTerm, validateDakForm, type DakFormState } from "@/lib/estab/dakForm";
 
 // GAP-ESTAB-DAK-01: classification is no longer hard-coded; the clerk chooses.
 const CLASSIFICATIONS = ["public", "confidential", "secret", "top_secret"] as const;
@@ -91,14 +91,15 @@ export default function DakRegistryPage() {
 
   /**
    * GAP-ESTAB-DAK-03: the 202 carries only the row id, because the DAK number and barcode are
-   * allocated when the service processes the registration. Look the row up by that id (the
-   * register search finds it by its subject, whatever its received date) a bounded number of
-   * times, and put the number and barcode in the message once it is there.
+   * allocated when the service processes the registration. Look the row up by that id a bounded
+   * number of times, and put the number and barcode in the message once it is there. `term` is
+   * what the register search finds the row by (dakLookupTerm: the typed number, else the start of
+   * the subject, cut to the 100 characters the search accepts), whatever its received date.
    */
-  function watchRegistration(rowId: string, subject: string) {
+  function watchRegistration(rowId: string, term: string) {
     const cancel = startBoundedPoll<InwardRow>({
       check: async () => {
-        const res = await fetch(`/api/proxy/v1/estab/inward?limit=${PAGE_SIZE}&q=${encodeURIComponent(subject)}`);
+        const res = await fetch(`/api/proxy/v1/estab/inward?limit=${PAGE_SIZE}&q=${encodeURIComponent(term)}`);
         if (!res.ok) return null;
         const body = (await res.json()) as { data?: InwardRow[] };
         return (body.data ?? []).find((r) => r.id === rowId) ?? null;
@@ -152,7 +153,8 @@ export default function DakRegistryPage() {
       setForm({ ...EMPTY_DAK_FORM });
       setMessage(form.dakNo.trim() ? t("dakRegisteredNo", { dakNo: form.dakNo.trim() }) : t("dakRegisteredAuto"));
       await reg.reload();
-      if (rowId) watchRegistration(rowId, checked.payload.subject ?? "");
+      const term = dakLookupTerm(checked.payload);
+      if (rowId && term) watchRegistration(rowId, term);
     } catch (err) {
       setActionError(formError.fromException("save", err).message);
     }

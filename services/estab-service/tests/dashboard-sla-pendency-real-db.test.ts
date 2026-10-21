@@ -150,4 +150,3 @@ describe("GET /v1/estab/dashboard — IST calendar days, not UTC dates (GAP-ESTA
     expect((res.json() as { avgPendencyDays: number }).avgPendencyDays).toBe(0.5);
   });
 });
-

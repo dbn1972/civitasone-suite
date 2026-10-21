@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { DataTable, Segmented, StatusPill } from "@/app/_components/ds";
-import { formatIndianDate, todayIST } from "@/lib/formatters";
+import { formatIndianDate } from "@/lib/formatters";
+import { isClosedStatus, isOverdue } from "@/lib/estab/sla";
 
 export type FileRow = {
   id: string;
@@ -33,8 +34,6 @@ const CLASSIFICATION_TONE: Record<string, "good" | "info" | "bad" | "mut" | "war
 export function FilesTable({ rows }: { rows: FileRow[] }) {
   const [seg, setSeg] = useState("All");
 
-  const today = todayIST();
-
   const filtered = rows.filter((r) => {
     switch (seg) {
       case "Active":
@@ -43,7 +42,8 @@ export function FilesTable({ rows }: { rows: FileRow[] }) {
       case "Pending":
         return r.statusRaw === "pending";
       case "Closed":
-        return r.statusRaw === "archived" || r.statusRaw === "disposed";
+        // The same finished-file rule as the Closed tile and the dashboard: closed, archived or disposed.
+        return isClosedStatus(r.statusRaw);
       default:
         return true;
     }
@@ -79,7 +79,8 @@ export function FilesTable({ rows }: { rows: FileRow[] }) {
             label: "Due",
             render: (row: FileRow) => {
               if (!row.dueDate) return <span style={{ color: "var(--ink2)" }}>—</span>;
-              const overdue = row.dueDate < today && row.statusRaw !== "archived" && row.statusRaw !== "disposed";
+              // One overdue definition for the module (lib/estab/sla.ts): a finished file is never overdue.
+              const overdue = isOverdue({ dueDate: row.dueDate, status: row.statusRaw });
               return (
                 <span style={overdue ? { color: "var(--bad)", fontWeight: 600 } : undefined}>
                   {formatIndianDate(row.dueDate)}

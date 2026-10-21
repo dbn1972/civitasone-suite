@@ -62,7 +62,8 @@ export function InboxPanel({ rows }: { rows: InboxRow[] }) {
             key: "dueDate",
             label: "SLA",
             render: (r) => {
-              const sla = computeSla(r.dueDate);
+              // A finished file has no SLA: show it neutral, never as overdue (lib/estab/sla.ts).
+              const sla: Sla = isClosedStatus(r.statusRaw) ? { label: "—", tone: "mut" } : computeSla(r.dueDate);
               return <span className={`pill ${TONE_CLASS[sla.tone]}`}>{sla.label}</span>;
             },
           },

@@ -4,6 +4,7 @@ import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState, Term } f
 import { toHumanError } from "@/lib/messages";
 import { formatDays } from "@/lib/formatters";
 import { isClosedStatus } from "@/lib/estab/sla";
+import { MASKED_CLASSIFICATIONS } from "@/lib/estab/classification";
 import { FilesTable, type FileRow } from "./FilesTable";
 import Link from "next/link";
 
@@ -16,12 +17,10 @@ const CLASSIFICATION_LABEL: Record<string, string> = {
   top_secret: "Top Secret",
 };
 
-// GAP-ESTAB-LIST-01: subjects above 'restricted' are masked for everyone
-// since clearance claims are not available in the web session today.
-// DECISION: mask subject for secret / top_secret; show a generic placeholder.
-// When the backend exposes clearance per-actor (GET /v1/estab/files/classifications),
-// this can be relaxed web-side. For now: safest default is mask.
-const MASKED_CLASSIFICATIONS = new Set(["secret", "top_secret"]);
+// GAP-ESTAB-LIST-01: subjects of secret / top_secret files are masked for everyone (see
+// MASKED_CLASSIFICATIONS in lib/estab/classification.ts, shared with the approvals queue) since
+// clearance claims are not available in the web session today. When the backend exposes clearance
+// per-actor (GET /v1/estab/files/classifications), this can be relaxed web-side.
 
 export default async function EstabFilesListPage() {
   const tFallback = await getTranslations("employeeFallback");
@@ -102,7 +101,7 @@ export default async function EstabFilesListPage() {
         <span aria-hidden="true">📁</span> <b>eOffice integration.</b> Digital files with signed note sheets, full movement trail — no physical files.
       </div>
       <StatGrid>
-        <StatCard icon="📁" tone="good" hint={t("dashActiveFilesHint")} label="Active Files" value={dashErrored ? "—" : dash.filesActive.toLocaleString("en-IN")} />
+        <StatCard icon="📁" tone="good" hint={t("listActiveFilesHint")} label="Active Files" value={dashErrored ? "—" : dash.filesActive.toLocaleString("en-IN")} />
         <StatCard icon="⏱" tone="warn" label="Avg Pendency" value={dashErrored ? "—" : avgPendencyDisplay} />
         <StatCard icon="🟡" tone="warn" label="Pending" value={errored ? "—" : pending.toLocaleString("en-IN")} />
         {/* GAP-ESTAB-LIST-02: label "Closed", not "Closed (MTD)" */}

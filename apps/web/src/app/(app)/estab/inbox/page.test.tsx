@@ -118,4 +118,3 @@ describe("EstabInboxPage — 'Active on desk' uses the service status (GAP-ESTAB
     expect(tileValue("Awaiting receipt")).toBe("1");
   });
 });
-

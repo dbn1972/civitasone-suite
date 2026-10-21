@@ -9,6 +9,7 @@ import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
 import { useEstabT } from "@/lib/estab/useEstabT";
 import { startBoundedPoll } from "@/lib/estab/boundedPoll";
+import { isMaskedClassification } from "@/lib/estab/classification";
 import { APPROVAL_RECORDS_COPY, APPROVE_BUTTON_LABEL } from "../_shared/signatureCopy";
 import { latestNoteOf, noteExcerpt, type NoteSheetLike, type LatestNote } from "./latestNote";
 import { outcomeFromInstanceTasks, type InstanceTask, type ApprovalOutcome } from "./approvalOutcome";
@@ -24,8 +25,12 @@ type WorkflowTask = {
   instanceId?: string | null;
 };
 
-/** File metadata resolved per estab task so the approver sees context, not a UUID slice. */
-type FileMeta = { fileNo?: string; subject?: string; latestNote?: LatestNote };
+/**
+ * File metadata resolved per estab task so the approver sees context, not a UUID slice. For a
+ * secret or top-secret file only the number is kept (`classified`): its subject and note text are
+ * masked in every list, so they are neither stored nor shown here.
+ */
+type FileMeta = { fileNo?: string; subject?: string; latestNote?: LatestNote; classified?: boolean };
 
 /** A queue row: the task plus the file context it resolves to. */
 type ApprovalRow = WorkflowTask & { fileNo: string; subject: string; noteText: string };
@@ -103,17 +108,21 @@ export function EstabApprovalsPanel() {
 
       // GAP-ESTAB-APPROVALS-03: resolve file no, subject and the latest note for each task so the
       // approver decides with context (and the dialog can name the item). GET /v1/estab/files/:id
-      // returns the file as a bare object (not wrapped in { data }), with its note sheets.
+      // returns the file as a bare object (not wrapped in { data }), with its note sheets and
+      // classification. The register masks the subject of a secret or top-secret file as
+      // "[Classified]"; the queue does the same and shows no note text for it.
       const refIds = [...new Set(collected.map((task) => task.refId).filter((v): v is string => Boolean(v)))];
       const metas = await Promise.all(
         refIds.map(async (id) => {
           try {
             const r = await fetch(`/api/proxy/v1/estab/files/${encodeURIComponent(id)}`, { signal });
             if (!r.ok) return [id, {} as FileMeta] as const;
-            const b = (await r.json()) as { fileNo?: unknown; subject?: unknown; noteSheets?: NoteSheetLike[] };
+            const b = (await r.json()) as { fileNo?: unknown; subject?: unknown; classification?: unknown; noteSheets?: NoteSheetLike[] };
+            const fileNo = typeof b.fileNo === "string" ? { fileNo: b.fileNo } : {};
+            if (isMaskedClassification(b.classification)) return [id, { ...fileNo, classified: true } as FileMeta] as const;
             const latest = latestNoteOf(b.noteSheets);
             const meta: FileMeta = {
-              ...(typeof b.fileNo === "string" ? { fileNo: b.fileNo } : {}),
+              ...fileNo,
               ...(typeof b.subject === "string" ? { subject: b.subject } : {}),
               ...(latest ? { latestNote: latest } : {}),
             };
@@ -207,11 +216,11 @@ export function EstabApprovalsPanel() {
         return {
           ...task,
           fileNo: meta?.fileNo ?? (task.refId ? `${task.refId.slice(0, 8)}…` : "—"),
-          subject: meta?.subject ?? "—",
+          subject: meta?.classified ? t("classifiedSubject") : meta?.subject ?? "—",
           noteText: meta?.latestNote ? noteExcerpt(meta.latestNote.content, ROW_NOTE_CHARS) : "",
         };
       }),
-    [tasks, files],
+    [tasks, files, t],
   );
 
   return (
@@ -259,7 +268,8 @@ export function EstabApprovalsPanel() {
               label: t("colLatestNote"),
               sortable: false,
               render: (row) => {
-                const note = row.refId ? files[row.refId]?.latestNote : undefined;
+                const meta = row.refId ? files[row.refId] : undefined;
+                const note = meta?.latestNote;
                 return (
                   <div style={{ display: "grid", gap: 2, fontSize: "0.8125rem" }}>
                     {note ? (
@@ -270,10 +280,16 @@ export function EstabApprovalsPanel() {
                         </span>
                       </>
                     ) : (
-                      <span className="mut">{t("noNoteAvailable")}</span>
+                      <span className="mut">{meta?.classified ? t("classifiedNote") : t("noNoteAvailable")}</span>
                     )}
                     {row.refId ? (
-                      <Link href={`/estab/files/${encodeURIComponent(row.refId)}`} target="_blank" rel="noopener noreferrer" style={{ color: "var(--indigo)", fontSize: "0.75rem" }}>
+                      <Link
+                        href={`/estab/files/${encodeURIComponent(row.refId)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={t("openNoteNewTabFor", { fileNo: row.fileNo })}
+                        style={{ color: "var(--indigo)", fontSize: "0.75rem" }}
+                      >
                         {t("openNoteNewTab")}
                       </Link>
                     ) : null}
@@ -288,7 +304,8 @@ export function EstabApprovalsPanel() {
               sortable: false,
               render: (row) => {
                 const meta = row.refId ? files[row.refId] : undefined;
-                const named = meta?.fileNo ? `file ${meta.fileNo}${meta.subject ? ` — ${meta.subject}` : ""}` : "this noting";
+                const shownSubject = meta?.classified ? t("classifiedSubject") : meta?.subject;
+                const named = meta?.fileNo ? `file ${meta.fileNo}${shownSubject ? ` — ${shownSubject}` : ""}` : "this noting";
                 const note = meta?.latestNote;
                 return (
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -304,6 +321,8 @@ export function EstabApprovalsPanel() {
                               <br />
                               {noteExcerpt(note.content, DIALOG_NOTE_CHARS)}
                             </blockquote>
+                          ) : meta?.classified ? (
+                            <p style={{ margin: "0 0 8px", fontSize: "0.8125rem" }}>{t("classifiedNote")}</p>
                           ) : null}
                           {APPROVAL_RECORDS_COPY}
                         </>

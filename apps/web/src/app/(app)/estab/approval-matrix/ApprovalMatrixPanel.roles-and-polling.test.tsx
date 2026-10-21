@@ -98,6 +98,9 @@ describe("ApprovalMatrixPanel — approver-role catalogue (GAP-ESTAB-APPROVAL-MA
     await fillRule();
     fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
     expect(await screen.findByText("Choose at least one approver role.")).toBeInTheDocument();
+    // a field error is announced as an alert, not through the polite status region
+    expect(screen.getByRole("alert")).toHaveTextContent("Choose at least one approver role.");
+    expect(screen.getByRole("status")).not.toHaveTextContent("Choose at least one approver role.");
     expect(h.posts).toHaveLength(0);
   });
 
@@ -109,6 +112,7 @@ describe("ApprovalMatrixPanel — approver-role catalogue (GAP-ESTAB-APPROVAL-MA
     fireEvent.change(screen.getByPlaceholderText("director, cto, ceo"), { target: { value: "Dep Secretary" } });
     fireEvent.click(screen.getByRole("button", { name: "Add rule" }));
     expect(await screen.findByText(/Enter at least one approver role as lowercase codes/)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/Enter at least one approver role as lowercase codes/);
     expect(h.posts).toHaveLength(0);
   });
 
