@@ -28,6 +28,21 @@ export async function configRegistryRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, CONFIG_WRITE_ROLES);
     const body = setConfigBody.parse(req.body);
+    // Fast-fail optimistic-lock check (GAP-VISITOR-ADMIN-02): the write itself is
+    // asynchronous (202 + consumer), so a stale expectedVersion would otherwise
+    // only surface as a dead-lettered VERSION_CONFLICT. Surface it as a
+    // synchronous 409 when we can already see the mismatch. This is a best-effort
+    // pre-check (a concurrent write between here and the consumer is still
+    // caught, authoritatively, by the consumer's version guard).
+    if (body.expectedVersion !== undefined) {
+      const current = await repo.getConfig(ctx.tenantId, body.namespace, body.configKey);
+      if (current && current.version !== body.expectedVersion) {
+        throw new HttpError(
+          409, "VERSION_CONFLICT",
+          `config ${body.namespace}/${body.configKey} expected v${body.expectedVersion}, found v${current.version}`,
+        );
+      }
+    }
     const result = await commands.setConfig(ctx, body);
     return reply.code(202).send(result);
   });

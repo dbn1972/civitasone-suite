@@ -336,6 +336,7 @@ export function CauseListConsole({
                       <th style={labelStyle}>Case</th>
                       <th style={labelStyle}>Type</th>
                       <th style={labelStyle}>Stage</th>
+                      <th style={labelStyle}>Purpose</th>
                       <th style={labelStyle}>Slot</th>
                       <th style={labelStyle}>Courtroom</th>
                     </tr>
@@ -358,6 +359,7 @@ export function CauseListConsole({
                             </td>
                             <td data-label="Type">{c ? humanize(c.caseType) : "—"}</td>
                             <td data-label="Stage">{c?.stage ? humanize(c.stage) : "—"}</td>
+                            <td data-label="Purpose">{humanize(it.purpose)}</td>
                             {/* GAP-COURT-CAUSE-LIST-03: slot shown VERBATIM (no humanize). */}
                             <td data-label="Slot" style={mono}>
                               {it.slot ?? "—"}

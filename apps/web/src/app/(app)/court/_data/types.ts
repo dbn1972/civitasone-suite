@@ -188,6 +188,8 @@ export interface CauseListItem {
   slot: string | null;
   courtroom: string | null;
   listDate: string | null;
+  /** Purpose of the item's hearing on the list date (GAP-COURT-CAUSE-LIST-04); null/absent when none. */
+  purpose?: string | null;
   version: number;
 }
 
