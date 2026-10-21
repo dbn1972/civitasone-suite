@@ -3,8 +3,9 @@
  * StageAgeingDashboard — OP-005. Shows opportunities that have sat in a stage
  * longer than its configured limit (days-in-stage vs limit, worst first) and,
  * below, a CRUD editor for the per-stage day limits that drive the alert. Every
- * count/age is gated on source === "error": a failed fetch renders "—" + the
- * saved-info badge, never a fabricated "0 breaches" as fact.
+ * count/age is gated on source === "error": a failed fetch renders ONE message with
+ * a Retry (no "0 breaches" fabricated as fact, no badge stacked on top of it, and no
+ * claim of "saved information" — nothing is cached here).
  */
 import { useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -36,6 +37,7 @@ function toRow(l: StageLimit): LimitRow {
 
 export function StageAgeingDashboard({ canConfig = true }: { canConfig?: boolean } = {}) {
   const t = useTranslations("crmStageAgeingDashboard");
+  const tOwner = useTranslations("crmOwner");
   const [rows, setRows] = useState<StageAgeingRow[]>([]);
   const [ageingSource, setAgeingSource] = useState<OpSource | "loading">("loading");
   const [limits, setLimits] = useState<LimitRow[]>([]);
@@ -187,7 +189,9 @@ export function StageAgeingDashboard({ canConfig = true }: { canConfig?: boolean
       <div className="card">
         <div className="card-h">
           <h3 id={headingId}>Opportunities exceeding their stage limit</h3>
-          {ageingSource === "error" ? <DataSourceBadge source="error" /> : null}
+          {/* GAP-CRM-OPPORTUNITY-AGEING-04: no DataSourceBadge here. A failed ageing load
+              renders the single EmptyState + Retry below; the badge ("Couldn't load —
+              showing nothing") said the same thing a second time in the same card. */}
         </div>
         {ageingSource === "loading" ? (
           <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", padding: "0 12px" }}>
@@ -230,7 +234,10 @@ export function StageAgeingDashboard({ canConfig = true }: { canConfig?: boolean
                           /crm/deals/:id (as used by DealCard). */}
                       {r.id ? <Link href={`/crm/deals/${r.id}`}>{r.name}</Link> : r.name}
                     </td>
-                    <td>{r.ownerName ?? "—"}</td>
+                    {/* GAP-CRM-OPPORTUNITY-AGEING-03: the owner to chase. The server resolves the
+                        owner's NAME; a deal with no owner says so, and an owner id that could
+                        not be resolved says "Unknown user" — never a raw id and never a dash. */}
+                    <td>{r.ownerName ?? (r.ownerId ? tOwner("unknownUser") : tOwner("unassigned"))}</td>
                     <td>{r.stageName}</td>
                     <td className="num">{r.daysInStage}</td>
                     <td className="num">{r.limitDays}</td>

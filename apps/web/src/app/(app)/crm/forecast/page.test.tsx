@@ -136,4 +136,16 @@ describe("ForecastPage — GoI redesign", () => {
     expect(screen.getByText(/all open engagements/i)).toBeInTheDocument();
     expect(screen.queryByText(/open deals/i)).not.toBeInTheDocument();
   });
+
+  // GAP-CRM-PIPELINE-04 (W2 rescan): the board has ONE name across the CRM hub and the
+  // forecast. The forecast header used to call it "Engagement Board" while the hub tile
+  // said something else. The hub tile reads "Engagement Pipeline Board" (GAP-CRM-HOME-02)
+  // and the forecast link reads that same hub key, so it carries exactly that name and
+  // never the stray "Engagement Board".
+  it("links to the pipeline board under the same name the CRM hub uses", async () => {
+    render(await ForecastPage({}));
+    const link = screen.getByRole("link", { name: "Engagement Pipeline Board" });
+    expect(link).toHaveAttribute("href", "/crm/pipeline");
+    expect(screen.queryByText("Engagement Board")).not.toBeInTheDocument();
+  });
 });

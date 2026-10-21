@@ -26,6 +26,7 @@ vi.mock("@/lib/crm/quotation", async (orig) => {
     deletePriceBook: vi.fn(),
     resolvePriceBook: vi.fn(),
     getProducts: vi.fn(),
+    getPriceBookHistory: vi.fn(),
   };
 });
 
@@ -47,6 +48,7 @@ beforeEach(() => {
   vi.mocked(qp.updatePriceBook).mockReset();
   vi.mocked(qp.deletePriceBook).mockReset();
   vi.mocked(qp.resolvePriceBook).mockReset();
+  vi.mocked(qp.getPriceBookHistory).mockReset().mockResolvedValue({ data: [], source: "api" });
 });
 
 describe("PriceBookEditor (QP-002)", () => {
@@ -114,15 +116,180 @@ describe("PriceBookEditor (QP-002)", () => {
   // GAP-CRM-PRICE-BOOKS-01: version + who/when must be visible per book.
   it("shows the version and last-changed author/date for a book", async () => {
     vi.mocked(qp.getPriceBooks).mockResolvedValue({
-      data: [{ ...book, version: 4, updatedBy: "ravi.admin", updatedAt: "2026-03-10T08:00:00.000Z" }],
+      data: [{ ...book, version: 4, updatedBy: "0c1d2e3f-0000-4000-8000-0000000000aa", updatedByName: "Ravi Admin", updatedAt: "2026-03-10T08:00:00.000Z" }],
       source: "api",
     });
     render(<NextIntlClientProvider locale="en" messages={enMessages}><PriceBookEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByText("Government")).toBeInTheDocument());
     expect(screen.getByText("v4")).toBeInTheDocument();
     const audit = screen.getByLabelText(/last changed for government/i);
-    expect(audit).toHaveTextContent("ravi.admin");
+    expect(audit).toHaveTextContent("Ravi Admin");
     expect(audit).toHaveTextContent(/IST/);
+  });
+
+  // GAP-CRM-PRICE-BOOKS-01 (W2 rescan): crm.price_books.updated_by is a uuid. When the API cannot
+  // resolve it to a name the editor says "Unknown user" — it never prints the id.
+  it("never prints the raw editor id: an unresolved editor reads 'Unknown user'", async () => {
+    const uuid = "0c1d2e3f-0000-4000-8000-0000000000bb";
+    vi.mocked(qp.getPriceBooks).mockResolvedValue({
+      data: [{ ...book, version: 2, updatedBy: uuid, updatedAt: "2026-03-10T08:00:00.000Z" }],
+      source: "api",
+    });
+    render(<PriceBookEditor />);
+    await waitFor(() => expect(screen.getByText("Government")).toBeInTheDocument());
+    const audit = screen.getByLabelText(/last changed for government/i);
+    expect(audit).toHaveTextContent("Unknown user");
+    expect(audit.textContent).not.toContain(uuid);
+    expect(audit.textContent).not.toContain("0c1d2e3f");
+  });
+
+  // GAP-CRM-PRICE-BOOKS-01 (W2 rescan): the reason typed for a LIVE-book edit used to be required
+  // by the dialog and then discarded. It now travels with the save so the server can record it.
+  it("sends the live-edit reason with the save (and none for a disabled book)", async () => {
+    vi.mocked(qp.updatePriceBook).mockResolvedValue(undefined);
+    vi.mocked(qp.getPriceBooks).mockResolvedValue({ data: [{ ...book, version: 2, enabled: true }], source: "api" });
+    render(<PriceBookEditor />);
+    await waitFor(() => expect(screen.getByText("Government")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/why are you changing this live price book/i), {
+      target: { value: "  Annual rate revision  " },
+    });
+    fireEvent.click(within(dialog).getByRole("button", { name: /edit prices/i }));
+    await screen.findByDisplayValue("Government");
+    fireEvent.click(screen.getByRole("button", { name: /save book/i }));
+    await waitFor(() => expect(qp.updatePriceBook).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(qp.updatePriceBook).mock.calls[0][0]).toBe("b1");
+    expect(vi.mocked(qp.updatePriceBook).mock.calls[0][2]).toEqual({ reason: "Annual rate revision" });
+  });
+
+  it("sends no reason when a disabled book is edited", async () => {
+    vi.mocked(qp.updatePriceBook).mockResolvedValue(undefined);
+    vi.mocked(qp.getPriceBooks).mockResolvedValue({ data: [{ ...book, enabled: false }], source: "api" });
+    render(<PriceBookEditor />);
+    await waitFor(() => expect(screen.getByText("Government")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    await screen.findByDisplayValue("Government");
+    fireEvent.click(screen.getByRole("button", { name: /save book/i }));
+    await waitFor(() => expect(qp.updatePriceBook).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(qp.updatePriceBook).mock.calls[0][2]).toEqual({});
+  });
+
+  // GAP-CRM-PRICE-BOOKS-01 (W2 rescan): per-book change history (who / when / why / what moved).
+  describe("change history panel", () => {
+    const WIDGET = { id: "pr1", category: "", code: "P1", name: "Widget", unit: "each", taxRateBps: 0, priceMinor: "0", currency: "INR", activeFrom: "", activeTo: "", enabled: true };
+    const history: qp.PriceBookHistoryEntry[] = [
+      {
+        id: "h2", version: 3, action: "update", changedByName: "Rohit Sen", changedAt: "2026-03-10T08:00:00.000Z",
+        reason: "Revised FY27 tariff",
+        fields: [{ field: "priority", from: 5, to: 9 }, { field: "segment", from: null, to: "government" }],
+        prices: [
+          { productId: "pr1", fromMinor: "90000", toMinor: "85000" },
+          { productId: "pr9", fromMinor: null, toMinor: "70000" },
+        ],
+        priceChangeCount: 5,
+      },
+      { id: "h1", version: 1, action: "create", changedAt: "2026-03-01T08:00:00.000Z", fields: [], prices: [], priceChangeCount: 0 },
+    ];
+
+    async function openPanel() {
+      vi.mocked(qp.getPriceBooks).mockResolvedValue({ data: [{ ...book, version: 3 }], source: "api" });
+      vi.mocked(qp.getProducts).mockResolvedValue({ data: [WIDGET], source: "api" });
+      render(<PriceBookEditor />);
+      await waitFor(() => expect(screen.getByText("Government")).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: /change history for price book government/i }));
+    }
+
+    it("shows who, when, why and which fields / prices moved — by name, never by id", async () => {
+      vi.mocked(qp.getPriceBookHistory).mockResolvedValue({ data: history, source: "api" });
+      await openPanel();
+      const panel = await screen.findByRole("region", { name: /change history — government/i });
+      expect(qp.getPriceBookHistory).toHaveBeenCalledWith("b1");
+      await waitFor(() => expect(panel).toHaveTextContent("Rohit Sen"));
+      expect(panel).toHaveTextContent("v3 · Edited by Rohit Sen");
+      expect(panel).toHaveTextContent(/IST/);
+      expect(panel).toHaveTextContent("Reason: Revised FY27 tariff");
+      expect(panel).toHaveTextContent("Priority: 5 → 9");
+      expect(panel).toHaveTextContent("Segment: any → government");
+      // Known product by name with money in INR; unknown product never as an id.
+      expect(panel).toHaveTextContent(/Widget: ₹900\.00 → ₹850\.00/);
+      expect(panel).toHaveTextContent(/Unknown product: added at ₹700\.00/);
+      expect(panel).toHaveTextContent("+3 more price changes not listed");
+      // The create row has no resolvable editor name: Unknown user, no blank.
+      expect(panel).toHaveTextContent("v1 · Created by Unknown user");
+    });
+
+    it("says so when nothing is recorded yet", async () => {
+      await openPanel();
+      expect(await screen.findByText(/no changes recorded yet/i)).toBeInTheDocument();
+    });
+
+    it("shows a retryable error — not an empty history — when the history cannot be loaded", async () => {
+      vi.mocked(qp.getPriceBookHistory)
+        .mockResolvedValueOnce({ data: [], source: "error" })
+        .mockResolvedValue({ data: history, source: "api" });
+      await openPanel();
+      expect(await screen.findByText(/change history couldn.t be loaded/i)).toBeInTheDocument();
+      expect(screen.queryByText(/no changes recorded yet/i)).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /^retry$/i }));
+      expect(await screen.findByText("Reason: Revised FY27 tariff")).toBeInTheDocument();
+    });
+
+    it("toggles closed from the same button", async () => {
+      vi.mocked(qp.getPriceBookHistory).mockResolvedValue({ data: history, source: "api" });
+      await openPanel();
+      await screen.findByRole("region", { name: /change history — government/i });
+      fireEvent.click(screen.getByRole("button", { name: /change history for price book government/i }));
+      expect(screen.queryByRole("region", { name: /change history — government/i })).not.toBeInTheDocument();
+    });
+  });
+
+  // GAP-CRM-PRICE-BOOKS-02 (W2 rescan): a free typo can still be typed (no master list exists),
+  // but the form now warns instead of staying silent.
+  describe("scope typo warnings (non-blocking)", () => {
+    async function openNew() {
+      vi.mocked(qp.getPriceBooks).mockResolvedValue({ data: [book], source: "api" });
+      render(<PriceBookEditor />);
+      await waitFor(() => expect(screen.getByText("Government")).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: /new price book/i }));
+      return screen.getAllByLabelText(/^segment$/i)[0] as HTMLInputElement;
+    }
+
+    it("warns when no other book uses the typed value, and still lets the book be saved", async () => {
+      vi.mocked(qp.createPriceBook).mockResolvedValue(undefined);
+      const segment = await openNew();
+      fireEvent.change(screen.getByLabelText(/price book name/i), { target: { value: "Typo book" } });
+      fireEvent.change(segment, { target: { value: "govrnment" } });
+      expect(await screen.findByText(/no other price book uses “govrnment”/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: /create book/i }));
+      await waitFor(() => expect(qp.createPriceBook).toHaveBeenCalledWith(expect.objectContaining({ segment: "govrnment" })));
+    });
+
+    it("does not warn for a value another book already uses, or for a blank (wildcard) field", async () => {
+      const segment = await openNew();
+      fireEvent.change(segment, { target: { value: "government" } });
+      expect(screen.queryByText(/no other price book uses/i)).not.toBeInTheDocument();
+      expect(screen.queryByText(/differs only in letter case/i)).not.toBeInTheDocument();
+      fireEvent.change(segment, { target: { value: "  " } });
+      expect(screen.queryByText(/no other price book uses/i)).not.toBeInTheDocument();
+    });
+
+    it("points out a letter-case difference, since matching is exact", async () => {
+      const segment = await openNew();
+      fireEvent.change(segment, { target: { value: "Government" } });
+      expect(await screen.findByText(/differs only in letter case from “government”/i)).toBeInTheDocument();
+    });
+
+    it("does not treat the book being edited as evidence for its own value", async () => {
+      vi.mocked(qp.getPriceBooks).mockResolvedValue({ data: [{ ...book, enabled: false }], source: "api" });
+      render(<PriceBookEditor />);
+      await waitFor(() => expect(screen.getByText("Government")).toBeInTheDocument());
+      fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+      const geo = (await screen.findByRole("combobox", { name: /^geography$/i })) as HTMLInputElement;
+      // "north" is only this book's own value — no OTHER book uses it.
+      expect(geo.value).toBe("north");
+      expect(await screen.findByText(/no other price book uses “north”/i)).toBeInTheDocument();
+    });
   });
 
   // GAP-CRM-PRICE-BOOKS-01: editing a live book needs an explicit reason first.

@@ -9,7 +9,11 @@
  *
  * GAP-CRM-PRODUCTS-01: prices/tax flow straight into quotations, so this screen
  * is admin-gated by (app)/crm/products/layout.tsx. A "Last changed" column
- * surfaces updatedBy/updatedAt; Delete steers the admin to soft-disable.
+ * surfaces the editor's NAME and date (the API resolves the name; an unresolved
+ * editor reads "Unknown", never the user id). The row action is "Disable":
+ * the server never erases a product (it sets enabled=false so historical
+ * quotations keep their reference), and the confirm dialog says how many
+ * quotations and price books reference the product before the admin confirms.
  *
  * GAP-CRM-PRODUCTS-02 (tax classification): the Tax % free input is replaced by
  * a GST-slab select (0/5/12/18/28) plus an explicit "Custom…" path that caps the
@@ -40,9 +44,11 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  getProductUsage,
   isProductSelectable,
   ALLOWED_CURRENCIES,
   type Product,
+  type ProductUsage,
   type QpSource,
 } from "@/lib/crm/quotation";
 
@@ -61,6 +67,8 @@ interface Row extends Omit<Product, "priceMinor" | "taxRateBps"> {
   taxCustom: boolean;
   /** JSON snapshot of the saved payload fields, for dirty detection (GAP-05). */
   snapshot: string;
+  /** Whether the product is enabled on the SERVER (not the unsaved checkbox). Disabling is a no-op when false. */
+  savedEnabled: boolean;
 }
 let SEQ = 0;
 
@@ -79,6 +87,7 @@ function toRow(p: Product): Row {
     priceRupees: priceMinor && priceMinor !== "0" ? rupees : "",
     taxPercent,
     taxCustom,
+    savedEnabled: p.enabled,
   };
   return { ...base, snapshot: snapshotOf({ ...base, activeFrom: base.activeFrom ?? "", activeTo: base.activeTo ?? "" }) };
 }
@@ -95,6 +104,12 @@ export function ProductCatalogueEditor() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [confirmKey, setConfirmKey] = useState<string | null>(null);
+  // GAP-CRM-PRODUCTS-01 (rescan): quotations / price books that reference the product being
+  // disabled, read when its confirm dialog opens. "error" means unknown — never shown as unused.
+  const [usage, setUsage] = useState<{ status: "loading" | "ready" | "error"; data: ProductUsage | null }>({
+    status: "loading",
+    data: null,
+  });
   // GAP-CRM-PRODUCTS-03: a typed-0 price saves only after this acknowledgement.
   const [confirmZeroKey, setConfirmZeroKey] = useState<string | null>(null);
   const headingId = useId();
@@ -113,6 +128,21 @@ export function ProductCatalogueEditor() {
       live = false;
     };
   }, []);
+
+  // Read the usage of the product whose Disable dialog is open.
+  const confirmProductId = rows.find((r) => r.key === confirmKey)?.id;
+  useEffect(() => {
+    if (!confirmProductId) return;
+    let live = true;
+    setUsage({ status: "loading", data: null });
+    void getProductUsage(confirmProductId).then(({ data, source: s }) => {
+      if (!live) return;
+      setUsage(s === "error" || !data ? { status: "error", data: null } : { status: "ready", data });
+    });
+    return () => {
+      live = false;
+    };
+  }, [confirmProductId]);
 
   function update(key: string, patch: Partial<Row>) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
@@ -233,7 +263,12 @@ export function ProductCatalogueEditor() {
     await persist(row, buildPayload(row, priceMinor, taxRateBps));
   }
 
-  async function doDelete(row: Row) {
+  /**
+   * "Disable" a saved product. The server's DELETE is a soft-disable (enabled=false, audited), not
+   * an erase, so quotations that already reference the product keep working; the product just
+   * stops being selectable / priceable. An unsaved row has nothing server-side and is simply removed.
+   */
+  async function doDisable(row: Row) {
     if (!row.id) {
       setRows((prev) => prev.filter((r) => r.key !== row.key));
       setConfirmKey(null);
@@ -243,11 +278,11 @@ export function ProductCatalogueEditor() {
     setError("");
     try {
       await deleteProduct(row.id);
-      setMessage(`Product “${row.name}” deleted.`);
+      setMessage(t("disabledMessage", { name: row.name }));
       setConfirmKey(null);
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not delete the product.");
+      setError(e instanceof Error ? e.message : t("disableFailed"));
     } finally {
       setBusyKey(null);
     }
@@ -436,7 +471,8 @@ export function ProductCatalogueEditor() {
                         <span style={{ color: "#b45309", fontWeight: 600 }} aria-label={t("unsavedAria", { n })}>{t("unsaved")}</span>
                       ) : row.id && (row.updatedAt || row.updatedBy) ? (
                         <span aria-label={t("lastChangedAria", { n })}>
-                          {row.updatedBy ? row.updatedBy : t("unknownUser")}
+                          {/* The editor's NAME (resolved by the API); never the user id. */}
+                          {row.updatedByName ?? t("unknownUser")}
                           {row.updatedAt ? ` · ${formatIndianDate(row.updatedAt)}` : ""}
                         </span>
                       ) : (
@@ -448,9 +484,25 @@ export function ProductCatalogueEditor() {
                         <Button type="button" size="sm" onClick={() => void save(row)} disabled={busy}>
                           {busy ? "…" : row.id ? "Save" : "Create"}
                         </Button>
-                        <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmKey(row.key)} disabled={busy} aria-label={`Delete product ${n}`}>
-                          Delete
-                        </Button>
+                        {/* The server never erases a product: DELETE retires it (enabled=false). The
+                            action is named for what it does. An unsaved row is just removed; an
+                            already-disabled product has nothing left to disable. */}
+                        {row.id ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setConfirmKey(row.key)}
+                            disabled={busy || !row.savedEnabled}
+                            aria-label={t("disableAria", { n })}
+                          >
+                            {t("disable")}
+                          </Button>
+                        ) : (
+                          <Button type="button" variant="ghost" size="sm" onClick={() => void doDisable(row)} disabled={busy} aria-label={t("removeAria", { n })}>
+                            {t("remove")}
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -470,21 +522,27 @@ export function ProductCatalogueEditor() {
       <ConfirmDialog
         open={confirmRow !== null}
         danger
-        title={confirmRow ? `Delete product “${confirmRow.name || confirmRow.code || "(new)"}”?` : ""}
+        title={confirmRow ? t("disableTitle", { name: confirmRow.name || confirmRow.code || t("newLabel") }) : ""}
         description={
           <>
-            <p style={{ margin: "0 0 8px" }}>
-              {t("deleteWarning")}
+            {/* GAP-CRM-PRODUCTS-01: say how many quotations / price books reference the product
+                BEFORE the admin confirms. An unreadable count is "unknown", never "unused". */}
+            <p style={{ margin: "0 0 8px", fontWeight: 600 }} role="status" aria-live="polite">
+              {usage.status === "loading"
+                ? t("usageLoading")
+                : usage.status === "error" || !usage.data
+                  ? t("usageUnknown")
+                  : usage.data.quotations + usage.data.priceBooks === 0
+                    ? t("usageNone")
+                    : t("usageCounts", { quotations: usage.data.quotations, priceBooks: usage.data.priceBooks })}
             </p>
-            <p style={{ margin: 0, fontWeight: 600 }}>
-              {t.rich("deletePrefer", { em: (chunks) => <em>{chunks}</em> })}
-            </p>
+            <p style={{ margin: 0 }}>{t("disableExplain")}</p>
           </>
         }
-        confirmLabel={t("deleteAnyway")}
+        confirmLabel={t("disableConfirm")}
         busy={confirmRow ? busyKey === confirmRow.key : false}
         onCancel={() => setConfirmKey(null)}
-        onConfirm={() => confirmRow && void doDelete(confirmRow)}
+        onConfirm={() => confirmRow && void doDisable(confirmRow)}
       />
 
       <ConfirmDialog
