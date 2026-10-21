@@ -14,7 +14,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HOME-01  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM) Hub tiles now come from crm/hubTiles.ts with a per-tile access (all/admin/strictAdmin) and sections with no visible tile are dropped, so crm_user loses Document Types, Pipelines, Lead Forms, Products, Service Types, Grievance Categories and the admin Configuration tiles but keeps Data Quality and Connected Accounts; hubTiles.test.ts reads every destination layout.tsx and fails on drift; nine config layouts use the shared CRM_ADMIN_ROLES and three use new CRM_STRICT_ADMIN_ROLES (no local role arrays). Step 4: crm-service pipeline POST/PATCH/DELETE admitted any crm_user; now crm_admin/super_admin only (pipelines-write-roles.test.ts).
 - **First-pass claim:** All 35 tiles render for every CRM role, but ten routes (Custom Fields, Matching Rules, Lead Scoring, Qualification Frameworks, Lead Stage Reasons, Assignment Rules, Assignment Directory, Escalation Rules, Task Escalation, Document Types) sit behind requireAnyRole(crm_admin, admin, super_admin, platform_admin, tenant_admin) and silently redirect a crm_user back to /crm, so the tile looks broken; Agent Workload, also labelled admin in its own source comment, has no gate at all (app/(app)/crm/page.tsx:53, app/(app)/crm/custom-fields/layout.tsx:8, app/(app)/crm/assignment-rules/layout.tsx:11).
 - **Verified evidence:** page.tsx:53-62 lists all 35 tiles unfiltered; ten route layouts call requireAnyRole(['crm_admin','admin','super_admin','platform_admin','tenant_admin'],'/crm') (custom-fields, lead-scoring, qualification-frameworks, lead-reason-codes, assignment-rules, assignment-directory, escalation-rules, task-escalation, document-types) and dedup-rules redirects to /crm/data-quality (not /crm). CRM layout allows crm_user (layout.tsx:5) so a crm_user is bounced. agent-workload has no layout; page.tsx:4 comment says 'admin'. Server enforcement in crm-service is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/crm/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`, `apps/web/src/app/(app)/crm/agent-workload/layout.tsx (new)`, `apps/web/src/app/_components/LinkTiles.tsx`
@@ -31,7 +31,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HOME-02  ·  MEDIUM  ·  confirmed  ·  theme COPY (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM) Every hub tile title now equals its destination page title (hubTiles.test.ts resolves each page's PageHeader title and compares); pipelines page/loading/error renamed Sales Pipelines -> Engagement Pipelines, board page Engagement Pipeline Board, and tiles CRM Dashboard, Campaign Performance, Executive Control Tower, Duplicate Matching Rules, Lead Escalation Rules aligned. navRouteManifest holds routes only, so no label sync is needed.
 - **First-pass claim:** Vocabulary conflicts with the rest of the module: hub says "Deals", "Sales Pipelines", "Quotations" while the Deals page is titled "Vendor / Stakeholder Engagements" and the dashboard notes the module is "not a commercial sales pipeline" (app/(app)/crm/page.tsx:21).
 - **Verified evidence:** page.tsx:13 'Deals', :18 'Sales & Pipeline', :21 'Sales Pipelines', :25 'Quotations' vs deals/page.tsx:16 title 'Vendor / Stakeholder Engagements' and crm/dashboard/page.tsx:44-47 'not a commercial sales pipeline'. Tile description at :13 already says 'Engagements'.
 - **Files to change:** `apps/web/src/app/(app)/crm/page.tsx`, `apps/web/src/app/(app)/crm/deals/page.tsx`, `apps/web/messages/en.json`
@@ -3089,7 +3089,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM) Detail read now requests `?pii=masked` (new additive query on GET /v1/crm/grievances/:id) so even a PII-read role gets masked phone/email in the payload and reveals one field at a time through the audited POST /v1/crm/pii/reveal (reason required, pii_reveal audit in the same tx); tests: crm-service pii-masking-reveal.test.ts + page.test.tsx. Owner question: ratify CRM_PII_READ_ROLES as the reveal set (crm_user excluded).
 - **First-pass claim:** Citizen phone and email are shown in full to every CRM role, with no masking or role gate (DPDP), alongside a free-text description that may contain further personal data (page.tsx:227-230).
 - **Verified evidence:** page.tsx:227-230 (Citizen card) prints g.citizenPhone and g.citizenEmail verbatim; the page has no requireAnyRole/getSessionRoles call and no reveal/audit. Description is printed pre-wrapped in full (line ~179-191). No shared masking component exists: only page-local maskPhone in telephony/calls/page.tsx:37 and a MaskedInput in hr/employees/new/steps/Step4.tsx. Also the list table exports citizenName to CSV (see -LIST-05).
 - **Files to change:** `apps/web/src/app/_components/ds/Masked.tsx`, `apps/web/src/app/_components/ds/index.ts`, `apps/web/src/app/(app)/crm/grievances/[id]/page.tsx`
@@ -3162,7 +3162,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-NEW-01  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 closed by #1859; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: PHONE_RE/EMAIL_RE inline validation and the DPDP notice are present)
+- [x] **Status** (W0 closed by #1859; PROVISIONAL cleared by W1 SF-19 re-check against 9e34d2e4a: PHONE_RE/EMAIL_RE inline validation and the DPDP notice are present) (W2 crm rescan: completed by #PRNUM) Create form now links an existing CRM contact (EntityPicker over GET /v1/crm/contacts/lookup, sends contactId) and warns, with links, when that contact already has open grievances (new additive contactId/open filters on GET /v1/crm/grievances). Not built: a phone/email-keyed duplicate warning (contact lookup cannot match encrypted phone/email, and an equality filter on grievance phone would let a non-PII role confirm guessed numbers against masked data). Owner questions: DPO-approved DPDP notice wording; whether a phone-keyed duplicate check is wanted and for which roles.
 - **First-pass claim:** Citizen phone and email are collected with no purpose or consent notice and no format check beyond the input type, although this is personal data under DPDP; the record is not linked to an existing CRM contact and no duplicate check is run (grievances/new/page.tsx:113-147).
 - **Verified evidence:** grievances/new/page.tsx:113-147: Phone is `type='tel' maxLength=32`, Email `type='email' maxLength=320`; no pattern, no purpose or consent text anywhere on the page, and body (lines 23-31) posts only the raw fields; no contact lookup or duplicate check code exists. Backend duplicate/contact linking is cannot-verify (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/new/page.tsx`
@@ -3345,7 +3345,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM) ?followUp=1 now opens the prefilled follow-up dialog on scored accounts too (scored branch ignored it); crm.health.logFollowUp added to the live src/messages en/hi (the button rendered the raw key inside a provider). The follow-up target is the account-prefilled service-request dialog because /crm/activities/new does not exist.
 - **First-pass claim:** The list has no owner, last-contact or next-action column and no way to start a follow-up from a row; the only action is to open the account first (WatchlistTable.tsx:31-38).
 - **Verified evidence:** WatchlistTable.tsx:30-39 columns are Account, Band, Health Score, Last Scored only; rowHref (:41) is the only action. AccountHealthEntry carries no owner/last-contact (types in @civitasone/types; health.ts). Owner/next-action need crm account/activity data not in the payload.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/WatchlistTable.tsx`, `apps/web/src/app/(app)/crm/health/health.ts`, `apps/web/src/app/(app)/crm/health/page.tsx`
@@ -3414,7 +3414,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-ACCOUNTID-03  ·  MEDIUM  ·  partly  ·  theme WIRING (was PII)
 
-- [x] **Status** (W0 2026-10-13, W1 SF-14a re-confirmed against main d0b65c3b5 (feature still present after the Field/Input conversion): closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W1 SF-14a re-confirmed against main d0b65c3b5 (feature still present after the Field/Input conversion): closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM) relatedAccountId is now persisted (migration 0165 adds crm.service_requests.related_account_id; createBody accepts it, tenant-validated 422 ACCOUNT_NOT_FOUND, returned on create/detail, on the created event + audit), shown as a link on the service-request detail page; contact-name placeholder no longer says Citizen. Owner question: build a dedicated account follow-up endpoint/entity instead of reusing the citizen service-request API (citizenName/citizenPhone are still posted).
 - **First-pass claim:** The follow-up reuses the citizen service-request API: it posts citizenName / citizenPhone for what is an account representative, and offers service types 'New Water Connection' and 'New Electricity Connection' for an account-health action, so the resulting record is mis-typed (FollowUpModal.tsx:77-85, 234-247).
 - **Verified evidence:** True: FollowUpModal.tsx:77-85 (file lines ~204-212) POSTs {citizenName, citizenPhone, serviceType, subject, description, priority, relatedAccountId} to /api/proxy/v1/crm/service-requests, the citizen service-request API; select options (file ~363-374) include 'New Water Connection' and 'New Electricity Connection' next to health-specific ones. Softening: the name field label is 'Contact Name' with placeholder 'Citizen or account representative name', so it is partly acknowledged. Phone is optional. Whether the endpoint accepts these free-text service types, or a dedicated account follow-up endpoint exists, is cannot-verify (crm-service absent). Theme PII is mis-tagged; the issue is domain mis-typing.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/[accountId]/FollowUpModal.tsx`
@@ -3445,7 +3445,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-ACCOUNTID-05  ·  MEDIUM  ·  partly  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM) Value column now reads `72 out of 100` (every signal is clamped to 0..100 in recommendation-service scoring-domain.ts); Clamped HelpTip and `+18 pts` contribution already in place. Owner question: scoring-model owner sign-off on the `out of 100` wording.
 - **First-pass claim:** Value, Weight and Contribution print raw with no unit or scale, and 'Clamped' is unexplained jargon, so a clerk cannot tell why an account scored what it did or what to fix (page.tsx:101-108).
 - **Verified evidence:** page.tsx:84-112: Weight is NOT raw - it is `Math.round(factor.weight*100)%` (line 102). True: Value (101) and Contribution (103) print `factor.value` and `factor.contribution` with no unit, scale, or explanation of what value range means (payload types absent, so the scale is cannot-verify). The column header is 'Data Quality' and the cell is a StatusPill 'Clamped' vs 'Reported' (105-107), with no tooltip or legend explaining that Clamped means the raw signal was capped to its allowed range. No guidance on what to fix per signal.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/[accountId]/page.tsx`, `apps/web/src/app/(app)/crm/health/health.ts`
@@ -3495,7 +3495,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-FORMS-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM) Rotate key added: new POST /v1/crm/lead-capture-forms/:id/rotate-key (admin, rate-limited) replaces the key in place via a CQRS command (form id and lead attribution preserved, old URL dead immediately, version bumped, audit action rotate_key, neither key on any event) and a confirm-gated Rotate key row action shows the new URL once; tests: lead-capture-forms-rotate.test.ts, LeadFormsTable.test.tsx. Owner question: should the old key keep working for a grace period (not built; rotation is immediate).
 - **First-pass claim:** The empty state tells the user to 'Register a lead-capture form to mint a public key', but the page has no register, edit, pause or rotate control at all (page.tsx:21-26, no actions; LeadFormsTable.tsx:48-50); a consent-gap form flagged here cannot be fixed from this screen.
 - **Verified evidence:** lead-forms/page.tsx:21-37 has PageHeader with no actions and a read-only table; LeadFormsTable.tsx:48-50 emptyMessage says 'Register a lead-capture form to mint a public key' but no control exists. Grep of apps/web shows the only reference to lead-capture-forms outside loaders is the export filename, so no create/update/rotate client exists. Backend POST/PATCH endpoints are cannot-verify (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/lead-forms/page.tsx`, `apps/web/src/app/(app)/crm/lead-forms/LeadFormsTable.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/lib/crm/leadForms.ts (new client)`
@@ -3528,7 +3528,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-FORMS-03  ·  MEDIUM  ·  confirmed  ·  theme STATUS (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM) Status pill and stat tile both say `Consent gap` (kept equal in en and hi by a test); confirm dialog and success toast no longer call the form lawful/unlawful. Owner question: DPO sign-off on the consent-gap wording and the DPDP note.
 - **First-pass claim:** The status value 'unlawful' is printed verbatim as the pill label and the tile says 'Consent gaps', giving two names for the same condition; the DPDP reason (enabled but requireConsent is false) is not stated anywhere on the page (LeadFormsTable.tsx:37; leadForms.ts:17-24).
 - **Verified evidence:** LeadFormsTable.tsx:37 passes label={row.health} so pill shows 'unlawful' verbatim (StatusPill label override); page.tsx:31 tile says 'Consent gaps'. formHealth (leadForms.ts:21-25) returns 'unlawful' when enabled && !requireConsent; no page copy explains DPDP reason. 'Unlawful' is also a legal conclusion the UI should not assert.
 - **Files to change:** `apps/web/src/app/(app)/crm/lead-forms/LeadFormsTable.tsx`, `apps/web/src/app/(app)/crm/lead-forms/page.tsx`, `apps/web/src/app/(app)/crm/lead-forms/leadForms.ts`
@@ -3662,7 +3662,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-REASON-CODES-05  ·  LOW  ·  confirmed  ·  theme COPY (was STATUS)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM) The editor's load-error card heading now uses the same `Lead Stage Reasons` title (the separate `heading` key was removed from en/hi); test added.
 - **First-pass claim:** The same screen is 'Lead Stage Reasons' (page title), 'Reason codes' (card) and 'Lead Reason Codes' (loading.tsx and error area); the status dropdown shows raw enum text such as 'disqualified' (page.tsx:9; loading.tsx; editor:141).
 - **Verified evidence:** Names: page.tsx:9 'Lead Stage Reasons'; editor h3 :98 'Reason codes'; loading.tsx:6 h1 'Lead Reason Codes'; error.tsx:12 area 'CRM Lead Reason Codes'; hub tile 'Lead Stage Reasons'. Status option renders raw enum s (:142); LEAD_STATUSES are lowercase (leadQualification.ts:18+). Not a StatusPill issue.
 - **Files to change:** `apps/web/src/app/(app)/crm/lead-reason-codes/page.tsx`, `apps/web/src/app/(app)/crm/lead-reason-codes/loading.tsx`, `apps/web/src/app/(app)/crm/lead-reason-codes/error.tsx`, `apps/web/src/app/_components/crm/ReasonCodesEditor.tsx`
