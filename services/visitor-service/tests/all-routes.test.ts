@@ -620,6 +620,23 @@ describe("Check-in routes — role gate", () => {
 });
 
 describe("Check-in routes — happy paths", () => {
+  // GAP-VISITOR-HOME-02 (owner decision): plain `employee` has no gate access.
+  it("employee gets 403 on POST /v1/visitor/check-ins", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/visitor/check-ins", headers: headers(["employee"]), payload: { passId: FAKE_ID, gateId: GATE_ID } });
+    expect(res.statusCode).toBe(403);
+  });
+  it("employee gets 403 on POST /v1/visitor/check-outs", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/visitor/check-outs", headers: headers(["employee"]), payload: { passId: FAKE_ID, gateId: GATE_ID } });
+    expect(res.statusCode).toBe(403);
+  });
+  it("employee gets 403 on POST /v1/visitor/passes/verify", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/visitor/passes/verify", headers: headers(["employee"]), payload: { qrPayload: "x", gateId: GATE_ID } });
+    expect(res.statusCode).toBe(403);
+  });
+  it("employee gets 403 on GET /v1/visitor/gate-sync/:gateId", async () => {
+    const res = await app.inject({ method: "GET", url: `/v1/visitor/gate-sync/${GATE_ID}`, headers: headers(["employee"]) });
+    expect(res.statusCode).toBe(403);
+  });
   it("GET /v1/visitor/check-ins/active → 200", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/visitor/check-ins/active", headers: headers(["security_admin"]) });
     expect(res.statusCode).toBe(200);
@@ -985,6 +1002,15 @@ describe("Config-registry routes — happy paths", () => {
   });
   it("POST /v1/visitor/config/presets/:preset → 202", async () => {
     const res = await app.inject({ method: "POST", url: "/v1/visitor/config/presets/secretariat", headers: headers(), payload: { reason: "Onboarding a secretariat office" } });
+    expect(res.statusCode).toBe(202);
+  });
+  it("POST /v1/visitor/config with stale expectedVersion → 409 VERSION_CONFLICT (ADMIN-02)", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/visitor/config", headers: headers(), payload: { namespace: "visitor_policy", configKey: "max_lead_days", value: "31", expectedVersion: 7 } });
+    expect(res.statusCode).toBe(409);
+    expect(JSON.stringify(res.json())).toContain("VERSION_CONFLICT");
+  });
+  it("POST /v1/visitor/config with matching expectedVersion → 202 (ADMIN-02)", async () => {
+    const res = await app.inject({ method: "POST", url: "/v1/visitor/config", headers: headers(), payload: { namespace: "visitor_policy", configKey: "max_lead_days", value: "31", expectedVersion: 1 } });
     expect(res.statusCode).toBe(202);
   });
   it("PATCH /v1/visitor/config/:id/deactivate → 202", async () => {

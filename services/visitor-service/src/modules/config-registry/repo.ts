@@ -29,18 +29,38 @@ export async function insertConfig(tx: Writer, row: ConfigEntryInsert): Promise<
  * write. `namespace` is returned so the deactivate path can invalidate the
  * correct (tenant, namespace) read cache without a second round-trip.
  */
+export type ConfigForUpdate = {
+  version: number;
+  active: boolean;
+  namespace: string;
+  configKey: string;
+  value: unknown;
+  label: string | null;
+  description: string | null;
+  sortOrder: number;
+  effectiveFrom: string | null;
+  effectiveTo: string | null;
+};
+
 export async function getConfigForUpdate(
   tx: Writer, tenantId: string, id: string,
-): Promise<{ version: number; active: boolean; namespace: string } | undefined> {
+): Promise<ConfigForUpdate | undefined> {
   const rows = await tx.select({
     version: configEntries.version,
     active: configEntries.active,
     namespace: configEntries.namespace,
+    configKey: configEntries.configKey,
+    value: configEntries.value,
+    label: configEntries.label,
+    description: configEntries.description,
+    sortOrder: configEntries.sortOrder,
+    effectiveFrom: configEntries.effectiveFrom,
+    effectiveTo: configEntries.effectiveTo,
   })
     .from(configEntries)
     .where(and(eq(configEntries.tenantId, tenantId), eq(configEntries.id, id)))
     .limit(1);
-  return rows[0];
+  return rows[0] as ConfigForUpdate | undefined;
 }
 
 /**
