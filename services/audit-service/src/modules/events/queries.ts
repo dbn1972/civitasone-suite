@@ -21,6 +21,16 @@ export async function listEvents(tenantId: string, from: Date, to: Date, type?: 
   return repo.listEvents(tenantId, from, to, type, limit, offset, filters);
 }
 
+/** GAP-HR-AUDIT-LOG-04: total events matching the same filters as listEvents. */
+export async function countEvents(tenantId: string, from: Date, to: Date, type?: string, filters: EventFilters = {}): Promise<number> {
+  return repo.countEvents(tenantId, from, to, type, filters);
+}
+
+/** GAP-HR-AUDIT-LOG-04: all matching events (narrow projection) for a CSV export; at most `max + 1` rows. */
+export async function listEventsForExport(tenantId: string, from: Date, to: Date, type: string | undefined, filters: EventFilters, max: number): Promise<repo.ExportEventRow[]> {
+  return repo.listEventsForExport(tenantId, from, to, type, filters, max);
+}
+
 export async function summarizeEvents(tenantId: string): Promise<repo.AuditEventSummary> {
   return repo.summarizeEvents(tenantId);
 }
