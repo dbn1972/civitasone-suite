@@ -261,3 +261,171 @@ describe("GAP-PAYROLL-RETURNS-06: whole rupees exist only inside the TRACES flat
     expect(r.body.trim().split("\r\n").pop()).toMatch(/\|35000\.00$/); // FT total
   });
 });
+
+// ---------------------------------------------------------------------------
+// Q4 Annexure II (Form 16 Part B salary detail per deductee)
+// ---------------------------------------------------------------------------
+// The Q4 24Q and its force-file result carry an `annexureII` array. It used to
+// spread the display-rupee Form 16 Part B (grossSalary, taxableIncome,
+// totalTdsDeducted ... as whole-rupee numbers) into the same payload as the
+// paise `tdsDeductedMinor`, so Rs 35,000 appeared as 35000 in one place and
+// 3500000 in another: the 100x risk RETURNS-06 exists to remove. Here the real
+// buildForm16 runs against the read queue (only the DB reads and HRMS are
+// mocked), so the annexure's paise are what the real Form 16 computation yields.
+
+/** FY 2026-27 months, Apr..Mar: buildForm16 reads TDS rows one month at a time. */
+const FY_2026_27_MONTHS = [
+  "2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09",
+  "2026-10", "2026-11", "2026-12", "2027-01", "2027-02", "2027-03",
+];
+
+/** Rs 15,00,000 gross for the year, as the one approved slip's paise. */
+const GROSS_PAISE = 150_000_000n;
+
+/**
+ * The 17 reads buildForm16 makes for one deductee with no tax declaration (new
+ * regime): runs, slips, 12 monthly TDS reads (the Rs 35,000 sits in 2027-01, a Q4
+ * month), declaration, proof-plan, statutory config.
+ */
+function queueForm16() {
+  const runs = [{ id: "run-1", status: "approved" }];
+  readQueue.push(runs);
+  readQueue.push([{ runId: "run-1", grossMinor: GROSS_PAISE }]);
+  for (const month of FY_2026_27_MONTHS) {
+    readQueue.push(month === "2027-01" ? [{ runId: "run-1", tdsMinor: BigInt(TDS_PAISE) }] : []);
+  }
+  readQueue.push([]);   // no declaration -> new regime (the 80C/80D caps below only bind in the old regime)
+  readQueue.push({});   // verification plan: unused without a declaration
+  readQueue.push({ sec80cCapMinor: 0n, sec80dCapMinor: 0n });
+}
+
+/** A Q4 24Q build for FY 2026-27: Rs 35,000 deducted and deposited in January, then one Annexure II row. */
+function queue24QQ4() {
+  const runs = [{ id: "run-1", status: "approved" }];
+  const tdsRows = [{ employeeId: "e1", runId: "run-1", period: "2027-01", tdsMinor: BigInt(TDS_PAISE) }];
+  readQueue.push(runs);        // deducteeWiseTds: runs
+  readQueue.push(tdsRows);     // deducteeWiseTds: tds rows
+  readQueue.push(runs);        // challan summary: runs
+  readQueue.push(tdsRows);     // challan summary: tds rows
+  queueForm16();               // Annexure II: buildForm16 for e1
+  readQueue.push([]);          // recorded filings
+  readQueue.push([]);          // challan CINs
+}
+
+/**
+ * Form 16 Part B for Rs 15,00,000 gross in the new regime, FY 2026-27, derived by
+ * hand from the slabs the suite registers (tests/setup-tax-config.ts, the
+ * migration-0012 seed): taxable = 15,00,000 - 75,000 standard deduction =
+ * 14,25,000; slab tax = 0 (to 4L) + 5% of 4L (20,000) + 10% of 4L (40,000) +
+ * 15% of 2,25,000 (33,750) = 93,750; no 87A rebate (above the Rs 12,00,000 cap)
+ * and no surcharge; cess 4% = 3,750; total 97,500; less TDS 35,000 = 62,500 due.
+ */
+const ANNEXURE_II_PAISE = {
+  grossSalaryMinor: 150_000_000,
+  perquisitesMinor: 0,
+  prevEmployerSalaryMinor: 0,
+  otherSourcesIncomeMinor: 0,
+  standardDeductionMinor: 7_500_000,
+  hraExemptMinor: 0,
+  section80cMinor: 0,
+  section80dMinor: 0,
+  otherDeductionsMinor: 0,
+  totalChapterViAMinor: 0,
+  taxableIncomeMinor: 142_500_000,
+  taxOnIncomeMinor: 9_375_000,
+  rebate87AMinor: 0,
+  surchargeMinor: 0,
+  cessMinor: 375_000,
+  totalTaxLiabilityMinor: 9_750_000,
+  totalTdsDeductedMinor: TDS_PAISE,
+  prevEmployerTdsMinor: 0,
+  balanceTaxPayableMinor: 6_250_000,
+  refundDueMinor: 0,
+  regime: "new",
+};
+
+/** Numeric payload keys that are counts, not amounts. Every other numeric key must be a `...Minor` amount. */
+const NON_MONEY_NUMBERS = new Set(["deducteeCount", "filingRevision", "challanCount"]);
+
+/** Every numeric leaf whose key does NOT end in `Minor` and is not a known count: a unit-less (rupee?) amount. */
+function unsuffixedNumbers(value: unknown, path = "$"): string[] {
+  if (Array.isArray(value)) return value.flatMap((v, i) => unsuffixedNumbers(v, `${path}[${i}]`));
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).flatMap(([k, v]) =>
+      typeof v === "number" && !/Minor$/.test(k) && !NON_MONEY_NUMBERS.has(k)
+        ? [`${path}.${k}`]
+        : unsuffixedNumbers(v, `${path}.${k}`));
+  }
+  return [];
+}
+
+const Q4_URL = "/v1/payroll/statutory/form24q?fy=2026-27&quarter=Q4";
+const forceFileQ4 = () => app.inject({
+  method: "POST", url: "/v1/payroll/statutory/form24q/force-file",
+  headers: { authorization: `Bearer ${tok()}`, "content-type": "application/json" },
+  payload: { fy: "2026-27", quarter: "Q4", confirmForce: true, reason: "TRACES reconciliation pending a corrected challan" },
+});
+
+describe("GAP-PAYROLL-RETURNS-06: Q4 Annexure II is paise too, on 24Q and force-file", () => {
+  it("GET form24q Q4: Rs 35,000 TDS is 3,500,000 paise in the Annexure II row, beside the deductee row", async () => {
+    queue24QQ4();
+    const r = await get(Q4_URL);
+    expect(r.statusCode, r.body).toBe(200);
+    const b = r.json();
+    expect(b.annexureII).toHaveLength(1);
+    const { employeeId, pan, name, ...partB } = b.annexureII[0];
+    expect({ employeeId, pan, name }).toEqual({ employeeId: "e1", pan: "ABCDE1234F", name: "Asha Verma" });
+    expect(partB.totalTdsDeductedMinor).toBe(3_500_000);
+    // The same Rs 35,000 reads the same on the deductee row, the quarter total and the annexure.
+    expect(new Set([b.deductees[0].tdsDeductedMinor, b.totalTdsDeductedMinor, partB.totalTdsDeductedMinor])).toEqual(new Set([3_500_000]));
+    expect(partB).toEqual(ANNEXURE_II_PAISE);
+  });
+
+  it("POST form24q/force-file Q4 (unreconciled): the same Annexure II paise, and still audited", async () => {
+    state.matched = false;
+    queue24QQ4();
+    const r = await forceFileQ4();
+    expect(r.statusCode, r.body).toBe(200);
+    const b = r.json();
+    const { employeeId: _e, pan: _p, name: _n, ...partB } = b.annexureII[0];
+    expect(partB).toEqual(ANNEXURE_II_PAISE);
+    expect(b.reconciliation.matched).toBe(false);
+    expect(mockPublish.mock.calls.filter((c) => c[0] === "audit.event.record")).toHaveLength(1);
+  });
+
+  it("no Annexure II field is a bare (unsuffixed) rupee number: every amount is a *Minor integer", async () => {
+    queue24QQ4();
+    const b = (await get(Q4_URL)).json();
+    const row = b.annexureII[0] as Record<string, unknown>;
+    // The display-rupee Form 16 names must not appear at all.
+    for (const k of [
+      "grossSalary", "perquisites", "prevEmployerSalary", "otherSourcesIncome", "standardDeduction", "hraExempt",
+      "section80c", "section80d", "otherDeductions", "totalChapterViA", "taxableIncome", "taxOnIncome", "rebate87A",
+      "surcharge", "cess", "totalTaxLiability", "totalTdsDeducted", "prevEmployerTds", "balanceTaxPayable", "refundDue",
+    ]) expect(row, k).not.toHaveProperty(k);
+    for (const [k, v] of Object.entries(row)) {
+      if (["employeeId", "pan", "name", "regime"].includes(k)) continue;
+      expect(k, k).toMatch(/Minor$/);
+      expect(Number.isInteger(v), k).toBe(true);
+    }
+    // ... and nothing else anywhere in the Q4 payload is an unsuffixed number either.
+    expect(unsuffixedNumbers(b)).toEqual([]);
+  });
+
+  it("the force-file Q4 payload has no unsuffixed number either", async () => {
+    state.matched = false;
+    queue24QQ4();
+    expect(unsuffixedNumbers((await forceFileQ4()).json())).toEqual([]);
+  });
+
+  it("the Q4 flat file's A2 line is the same whole rupees as before, derived from the paise at the file edge", async () => {
+    queue24QQ4();
+    const r = await get(`${Q4_URL}&format=file`);
+    expect(r.statusCode, r.body).toBe(200);
+    const lines = r.body.split("\r\n");
+    // gross 15,00,000 | taxable income 14,25,000 | total tax 97,500
+    expect(lines.filter((l) => l.startsWith("A2|"))).toEqual(["A2|1|ABCDE1234F|Asha Verma|1500000.00|1425000.00|97500.00"]);
+    // The deductee and trailer records are unchanged by Q4.
+    expect(lines.filter((l) => l.startsWith("DD|"))).toEqual(["DD|1|ABCDE1234F|Asha Verma|35000.00|35000.00"]);
+  });
+});

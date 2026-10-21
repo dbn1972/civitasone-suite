@@ -12,7 +12,7 @@ import { payrollTds, payrollNps, payrollTdsNonSalary, payrollTdsChallan } from "
 import { perquisiteComponents } from "../tax/schema.js";
 import { payrollRuns } from "../payroll/schema.js";
 import { taxDeclarations } from "../tax/schema.js";
-import { buildForm16, parseFy } from "../tax/form16.js";
+import { buildForm16WithMinor, parseFy, type Form16PartBMinor } from "../tax/form16.js";
 import { fetchPayrollInput, HrmsUnavailableError, type PayrollInputEmployee } from "../../shared/hrms-client.js";
 import { reconcilePeriod, reconcileNonSalaryPeriod, type Reconciliation } from "./challan-routes.js";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
@@ -108,6 +108,23 @@ function minorToNumber(minor: bigint): number {
  */
 function wholeRupees(minor: number): number {
   return Math.round(minor / 100);
+}
+
+/**
+ * Form 16 Part B as it sits on the 24Q Annexure II wire: the exact-paise
+ * figures from buildForm16WithMinor, every amount a JSON number of paise under a
+ * `...Minor` key (the display-rupee Form 16 fields are NOT repeated beside them).
+ * Only `regime` is not an amount.
+ */
+type Form16PartBOnWire = { [K in Exclude<keyof Form16PartBMinor, "regime">]: number } & { regime: Form16PartBMinor["regime"] };
+
+type AnnexureIIRow = { employeeId: string; pan: string; name: string } & Form16PartBOnWire;
+
+function partBOnWire(p: Form16PartBMinor): Form16PartBOnWire {
+  const { regime, ...amounts } = p;
+  const wire = {} as Record<string, number>;
+  for (const [k, v] of Object.entries(amounts)) wire[k] = minorToNumber(v as bigint);
+  return { ...(wire as Omit<Form16PartBOnWire, "regime">), regime };
 }
 
 /**
@@ -271,17 +288,17 @@ async function buildForm24Q(
   const totalTdsDepositedMinor = minorToNumber(challanBigs.reduce((s, c) => s + c.minor, 0n));
 
   // Q4: Annexure II — salary detail per deductee (Form 16 Part B figures).
-  let annexureII: Array<Record<string, unknown>> | undefined;
+  let annexureII: AnnexureIIRow[] | undefined;
   if (q === "Q4") {
     annexureII = [];
     for (const d of deductees) {
       try {
-        const f16 = await buildForm16(ctx.tenantId, d.employeeId, fyRaw);
+        const { form16: f16, partBMinor } = await buildForm16WithMinor(ctx.tenantId, d.employeeId, fyRaw);
         annexureII.push({
           employeeId: d.employeeId,
           pan: f16.form16PartA.deductee.pan,
           name: f16.form16PartA.deductee.name,
-          ...f16.form16PartB,
+          ...partBOnWire(partBMinor),
         });
       } catch (err) {
         // M4: never silently drop a deductee because HRMS is down — fail the export.
@@ -320,8 +337,10 @@ async function buildForm24Q(
     // challanSummary[].tdsDeposited -- which a client could mistake for paise,
     // or multiply back up as ForceFileButton once did). Whole rupees now exist
     // only inside the TRACES flat file, derived at that edge (wholeRupees()).
-    // annexureII (Q4) is the exception: it carries Form 16 Part B salary
-    // figures, which buildForm16 produces in whole rupees by design.
+    // annexureII (Q4) follows the same rule: its Form 16 Part B figures come
+    // from buildForm16WithMinor's exact paise (grossSalaryMinor,
+    // taxableIncomeMinor, totalTaxLiabilityMinor, totalTdsDeductedMinor ...),
+    // never from the display-rupee Form 16 fields.
     totalTdsDeductedMinor,
     totalTdsDepositedMinor,
     ...(annexureII ? { annexureII } : {}),
@@ -370,9 +389,12 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
     });
     if (annexureII) {
       annexureII.forEach((a, i) => {
+        // Whole rupees derived from the exact paise here, at the file edge
+        // (gross, taxable income and total tax are whole-rupee by construction,
+        // so this is exact and byte-identical to the previous A2 lines).
         lines.push(["A2", i + 1, pipeSafe(a.pan), pipeSafe(a.name),
-          Number(a.grossSalary ?? 0).toFixed(2), Number(a.taxableIncome ?? 0).toFixed(2),
-          Number(a.totalTaxLiability ?? 0).toFixed(2)].join("|"));
+          wholeRupees(a.grossSalaryMinor).toFixed(2), wholeRupees(a.taxableIncomeMinor).toFixed(2),
+          wholeRupees(a.totalTaxLiabilityMinor).toFixed(2)].join("|"));
       });
     }
     // File Trailer (FT)
