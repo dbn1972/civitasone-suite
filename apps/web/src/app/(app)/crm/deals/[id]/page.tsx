@@ -8,6 +8,7 @@ import { getTranslations } from "next-intl/server";
 import { toHumanError } from "@/lib/messages";
 import { DealDetailActions } from "./DealDetailActions";
 import { getSessionRoles, hasAnyRole, CRM_OPPORTUNITY_CLOSE_ROLES } from "@/lib/auth/roleGuard";
+import { OPEN_STAGE_PATH } from "@/lib/crm/dealStages";
 
 export default async function Page({ params }: { params: { id: string } }) {
   const { data: deal, source, status } = await getDealById(params.id);
@@ -61,7 +62,9 @@ export default async function Page({ params }: { params: { id: string } }) {
   // open path, so a qualification deal fell back to the index-0 'Prospecting'
   // guard — the current marker landed on the wrong step. Include it between
   // prospecting and proposal so such a deal shows 'Qualification' as current.
-  const OPEN_PATH = ["prospecting", "qualification", "proposal", "negotiation"] as const;
+  // GAP-CRM-DEALS-NEW-02: the open path comes from the shared stage vocabulary
+  // (lib/crm/dealStages) rather than a local copy.
+  const OPEN_PATH = OPEN_STAGE_PATH;
   const isWon = deal.status === "won";
   const isLost = deal.status === "lost";
   const terminal: { key: string; label: string; cue?: string; cueTone?: "won" | "lost" } = isWon
@@ -84,8 +87,8 @@ export default async function Page({ params }: { params: { id: string } }) {
   return (
     <>
       <PageHeader
-        title={`Engagement ${deal.dealName}`}
-        subtitle="Stakeholder Engagement System: leads, deals and pipeline."
+        title={t("pageTitle", { name: deal.dealName })}
+        subtitle={t("pageSubtitle")}
         back="/crm/deals"
         actions={
           <DealDetailActions
@@ -101,14 +104,14 @@ export default async function Page({ params }: { params: { id: string } }) {
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">
-            <div className="card-h"><h3>Engagement Details</h3></div>
+            <div className="card-h"><h3>{t("detailsHeading")}</h3></div>
             <div className="fields">
               {/* GAP-CRM-DEALS-DETAIL-05: the value is contactName ?? company (a
                   person OR an organisation), so the label is "Contact /
                   Organisation", not "Account". When a contactId is known the
                   name links to the contact record; otherwise it is plain text. */}
               <div className="fld">
-                <div className="l">Contact / Organisation</div>
+                <div className="l">{t("contactOrganisation")}</div>
                 <div className="v">
                   {deal.contactId ? (
                     <Link href={`/crm/contacts/${deal.contactId}`}>{deal.contactName ?? "—"}</Link>
@@ -117,18 +120,18 @@ export default async function Page({ params }: { params: { id: string } }) {
                   )}
                 </div>
               </div>
-              <div className="fld"><div className="l">Value</div><div className="v">{formatMoney(deal.amount)}</div></div>
-              <div className="fld"><div className="l">Stage</div><div className="v"><StatusPill status={deal.stage} label={deal.stage.replace(/_/g, " ")} /></div></div>
-              <div className="fld"><div className="l">Status</div><div className="v"><StatusPill status={deal.status} /></div></div>
-              <div className="fld"><div className="l">Owner</div><div className="v">{deal.owner}</div></div>
-              <div className="fld"><div className="l">Close Date</div><div className="v">{deal.closeDate ? formatIndianDate(deal.closeDate) : "—"}</div></div>
-              <div className="fld"><div className="l">Probability</div><div className="v">{deal.probability}%</div></div>
+              <div className="fld"><div className="l">{t("labelValue")}</div><div className="v">{formatMoney(deal.amount)}</div></div>
+              <div className="fld"><div className="l">{t("labelStage")}</div><div className="v"><StatusPill status={deal.stage} label={deal.stage.replace(/_/g, " ")} /></div></div>
+              <div className="fld"><div className="l">{t("labelStatus")}</div><div className="v"><StatusPill status={deal.status} /></div></div>
+              <div className="fld"><div className="l">{t("labelOwner")}</div><div className="v">{deal.owner}</div></div>
+              <div className="fld"><div className="l">{t("labelCloseDate")}</div><div className="v">{deal.closeDate ? formatIndianDate(deal.closeDate) : "—"}</div></div>
+              <div className="fld"><div className="l">{t("labelProbability")}</div><div className="v">{deal.probability}%</div></div>
             </div>
           </div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="card">
-            <div className="card-h"><h3>Workflow</h3></div>
+            <div className="card-h"><h3>{t("workflowHeading")}</h3></div>
             <div className="pad">
               <ul className="tl">
                 {steps.map((step, i) => (

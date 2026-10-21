@@ -10,11 +10,11 @@ export default async function Page() {
   return (
     <>
       <PageHeader
-        title="Vendor / Stakeholder Engagements"
+        title={t("title")}
         subtitle={t("subtitle")}
         back="/crm"
         actions={
-          <a className="btn primary" href="/crm/deals/new">+ New Engagement</a>
+          <a className="btn primary" href="/crm/deals/new">{t("newEngagement")}</a>
         }
       />
       {/* GAP-CRM-DEALS-03/04: the stat cards, the data-source badge and the

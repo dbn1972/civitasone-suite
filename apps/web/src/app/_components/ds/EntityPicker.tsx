@@ -57,6 +57,13 @@ export interface EntityPickerProps {
    * not exist. Adapters signal failure by throwing; see lib/entityAdapters.
    */
   searchErrorText?: string;
+  /**
+   * Opt-in (GAP-CRM-DEALS-NEW-04): when set, a failed search also renders a
+   * button with this label beside the error alert that re-runs the last query,
+   * so the user is not left to retype to recover from a transient failure.
+   * Omitted by every existing caller, which keeps today's alert-only behaviour.
+   */
+  retryText?: string;
   removeOptionAriaLabel?: (label: string) => string;
   /** Accessible name for standalone use (no ancestor Field, no visible label). Ignored when a Field label already provides one. */
   "aria-label"?: string;
@@ -127,6 +134,7 @@ export function EntityPicker({
   noResultsText = "No matches",
   searchingText = "Searching…",
   searchErrorText = "Couldn\u2019t load results. Please try again.",
+  retryText,
   removeOptionAriaLabel = (label: string) => `Remove ${label}`,
   "aria-label": ariaLabel,
   id,
@@ -144,6 +152,8 @@ export function EntityPicker({
   const abortRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resolvedIdsRef = useRef<Set<string>>(new Set());
+  // The last query handed to search(), so the opt-in Retry button can re-run it.
+  const lastQueryRef = useRef("");
 
   // Lazy-initialized from `initialOptions` at mount time (not via a
   // useEffect) so `known` is already correct before the resolve()-fallback
@@ -209,6 +219,7 @@ export function EntityPicker({
 
   const runSearch = useCallback(
     (q: string) => {
+      lastQueryRef.current = q;
       abortRef.current?.abort();
       setFailed(false);
       if (q.trim().length < minQueryLength) {
@@ -410,6 +421,16 @@ export function EntityPicker({
       >
         {showStatus ? (loading ? searchingText : failed ? searchErrorText : noResultsText) : ""}
       </span>
+      {showStatus && failed && !loading && retryText ? (
+        <button
+          type="button"
+          className="btn ghost"
+          style={{ justifySelf: "start", padding: "0 8px", fontSize: 12 }}
+          onClick={() => runSearch(lastQueryRef.current)}
+        >
+          {retryText}
+        </button>
+      ) : null}
 
       {open && results.length > 0 && (
         <ul

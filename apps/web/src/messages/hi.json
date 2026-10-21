@@ -1988,11 +1988,13 @@
       "stageLabel": "चरण",
       "contactLabel": "संपर्क (वैकल्पिक)",
       "contactPlaceholder": "नाम या संगठन से संपर्क खोजें…",
-      "contactHint": "किसी मौजूदा संपर्क को जोड़ें, या बिना संपर्क के सौदा बनाने के लिए खाली छोड़ें।",
+      "contactHint": "किसी मौजूदा संपर्क को जोड़ें, या बिना संपर्क के सहभागिता बनाने के लिए खाली छोड़ें।",
       "closeLabel": "अपेक्षित समापन तिथि (वैकल्पिक)",
       "probabilityLabel": "संभावना (%)",
       "creating": "बनाया जा रहा है…",
-      "create": "सहभागिता बनाएँ"
+      "create": "सहभागिता बनाएँ",
+      "contactSearchError": "संपर्क लोड नहीं हो सके। फिर प्रयास करें, या इसे खाली छोड़कर बाद में संपर्क जोड़ें।",
+      "contactRetry": "पुनः प्रयास करें"
     },
     "consent": {
       "incompleteNew": "सहेजने से पहले उद्देश्य चुनें और यह भी कि सहमति किस माध्यम से दर्ज की गई।",
@@ -13110,8 +13112,34 @@
       "won": "सफल",
       "lost": "असफल"
     },
-    "detailTitle": "सौदा विवरण",
-    "loadArea": "यह सौदा"
+    "detailTitle": "सहभागिता विवरण",
+    "loadArea": "यह सहभागिता",
+    "pageTitle": "सहभागिता {name}",
+    "pageSubtitle": "हितधारक सहभागिता प्रणाली: लीड, सहभागिताएँ और पाइपलाइन।",
+    "detailsHeading": "सहभागिता विवरण",
+    "contactOrganisation": "संपर्क / संगठन",
+    "labelValue": "मूल्य",
+    "labelStage": "चरण",
+    "labelStatus": "स्थिति",
+    "labelOwner": "स्वामी",
+    "labelCloseDate": "समापन तिथि",
+    "labelProbability": "संभावना",
+    "workflowHeading": "कार्यप्रवाह",
+    "activityLogged": "गतिविधि दर्ज की गई।",
+    "logActivityFor": "{name} के लिए गतिविधि दर्ज करें",
+    "fieldType": "प्रकार",
+    "typeCall": "कॉल",
+    "typeMeeting": "बैठक",
+    "typeEmail": "ईमेल",
+    "typeTask": "कार्य",
+    "typeNote": "नोट",
+    "fieldSubject": "विषय",
+    "subjectPlaceholder": "संक्षिप्त सार",
+    "fieldNotes": "टिप्पणियाँ",
+    "notesPlaceholder": "क्या हुआ?",
+    "saveActivity": "गतिविधि सहेजें",
+    "saving": "सहेजा जा रहा है…",
+    "cancel": "रद्द करें"
   },
   "crmDedupRulesEditor": {
     "field": {
@@ -14074,7 +14102,9 @@
     "backLabel": "संपर्क"
   },
   "crmDealsPage": {
-    "subtitle": "उच्च-मूल्य विक्रेता संलग्नताएँ, खरीद अवसर और सरकारी हितधारक इंटरैक्शन ट्रैक करें"
+    "subtitle": "उच्च-मूल्य विक्रेता संलग्नताएँ, खरीद अवसर और सरकारी हितधारक इंटरैक्शन ट्रैक करें",
+    "title": "विक्रेता / हितधारक सहभागिताएँ",
+    "newEngagement": "+ नई सहभागिता"
   },
   "crmContactsPage": {
     "subtitle": "विक्रेता, लाभार्थी, NGO और सरकारी संपर्क — संपर्क पंजी",
@@ -14123,21 +14153,33 @@
     "statActive": "सक्रिय सहभागिताएँ",
     "statActiveValue": "सक्रिय खरीद मूल्य",
     "statConcludedValue": "संपन्न मूल्य",
-    "statLapsed": "समाप्त सहभागिताएँ"
+    "statLapsed": "समाप्त सहभागिताएँ",
+    "heading": "सहभागिताएँ",
+    "colEngagement": "सहभागिता",
+    "colValue": "मूल्य",
+    "colStage": "चरण",
+    "colExpectedClose": "अपेक्षित समापन",
+    "colProbability": "संभावना",
+    "colOwner": "स्वामी",
+    "emptyTitle": "कोई सहभागिता नहीं मिली",
+    "emptyMessage": "अपनी खरीद पाइपलाइन को ट्रैक करने के लिए सहभागिताएँ जोड़ना शुरू करें।",
+    "filterPlaceholder": "सहभागिताएँ फ़िल्टर करें…"
   },
   "crmDealError": {
     "backLabel": "सहभागिताओं पर वापस जाएँ",
-    "area": "सौदा"
+    "area": "सहभागिता",
+    "listBackLabel": "CRM पर वापस जाएँ",
+    "listArea": "CRM सहभागिताएँ"
   },
   "crmDealNewPage": {
-    "nameRequired": "सौदे का नाम दर्ज करें।",
+    "nameRequired": "सहभागिता का नाम दर्ज करें।",
     "invalidAmount": "मान्य राशि दर्ज करें (रुपये, दशमलव के बाद अधिकतम 2 अंक)।",
     "valuePlaceholder": "उदा. 1234567.89",
     "valuePreview": "{value} के रूप में सहेजा जाएगा",
     "valueHint": "मान्य रुपये की राशि दर्ज करें (दशमलव के बाद अधिकतम 2 अंक)।",
     "contactAria": "संपर्क (वैकल्पिक)",
     "searchContacts": "नाम या संगठन से संपर्क खोजें…",
-    "contactHint": "किसी मौजूदा संपर्क को जोड़ें, या उसके बिना सौदा बनाने के लिए खाली छोड़ें।"
+    "contactHint": "किसी मौजूदा संपर्क को जोड़ें, या बिना संपर्क के सहभागिता बनाने के लिए खाली छोड़ें।"
   },
   "crmDedupCandidates": {
     "unnamed": "बिना नाम",
