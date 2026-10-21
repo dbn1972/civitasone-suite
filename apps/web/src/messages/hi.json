@@ -989,7 +989,9 @@
     "reconcileNoChallan": "कोई चालान नहीं",
     "reconcilePendingFinalisation": "रन अंतिम नहीं",
     "filingBlockedMismatchBody": "{period} के लिए काटा गया TDS जमा किए गए {formType} चालानों से मेल नहीं खाता। {formType} फाइल करने से पहले अंतर दूर करें।",
-    "filingBlockedPendingBody": "{period} का TDS अभी अंतिम नहीं हुआ है (पेरोल रन लंबित है)। अंतिम और मिलान होने तक {formType} फाइल नहीं किया जा सकता।"
+    "filingBlockedPendingBody": "{period} का TDS अभी अंतिम नहीं हुआ है (पेरोल रन लंबित है)। अंतिम और मिलान होने तक {formType} फाइल नहीं किया जा सकता।",
+    "colFormType": "फॉर्म",
+    "reconcileNotMatched": "मिलान नहीं हुआ"
   },
   "checkinLog": {
     "title": "चेक-इन लॉग",

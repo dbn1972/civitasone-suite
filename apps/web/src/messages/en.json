@@ -1005,7 +1005,9 @@
     "reconcileNoChallan": "No challan",
     "reconcilePendingFinalisation": "Run not finalised",
     "filingBlockedMismatchBody": "TDS deducted for {period} does not match the {formType} challans deposited. Resolve the difference before filing {formType}.",
-    "filingBlockedPendingBody": "TDS for {period} is not finalised yet (the payroll run is still pending). {formType} cannot be filed until it is finalised and reconciled."
+    "filingBlockedPendingBody": "TDS for {period} is not finalised yet (the payroll run is still pending). {formType} cannot be filed until it is finalised and reconciled.",
+    "colFormType": "Form",
+    "reconcileNotMatched": "Not matched"
   },
   "checkinLog": {
     "title": "Check-In Log",

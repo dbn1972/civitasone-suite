@@ -279,6 +279,9 @@ export async function challanRoutes(app: FastifyInstance): Promise<void> {
       period, formType: ft, count: rows.length,
       challans: rows.map((c) => ({
         cin: c.cin, bsrCode: c.bsrCode, challanSerial: c.challanSerial,
+        // GAP-PAYROLL-STATUTORY-CHALLANS-04: each row names its own form (24Q / 26Q),
+        // so the UI can show a Form column and a mixed list is never ambiguous.
+        formType: c.formType,
         depositDate: c.depositDate, section: c.section,
         tdsAmountMinor: String(c.tdsAmountMinor), totalAmountMinor: String(c.totalAmountMinor),
         status: c.status,
