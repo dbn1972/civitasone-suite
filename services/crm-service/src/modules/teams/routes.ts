@@ -8,6 +8,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { commandId } from "../../shared/idempotency.js";
 import { scopedRead } from "../../shared/db.js";
+import { fetchUserNames } from "../../shared/identity-client.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { sql } from "drizzle-orm";
@@ -125,7 +126,17 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
       `) as unknown as Array<Record<string, unknown>>;
     });
 
-    return reply.send({ data: agents });
+    // GAP-CRM-AGENT-WORKLOAD-05: the workload table keeps only the agent id, so the
+    // roster would render every agent as "Unnamed agent". Enrich each row with the
+    // display name from identity-service (best effort: an unresolved id simply has
+    // no `name`, it is never replaced by the raw id).
+    const names = await fetchUserNames(ctx.tenantId);
+    const data = agents.map((a) => {
+      const name = names.get(a.agentId as string);
+      return name ? { ...a, name } : a;
+    });
+
+    return reply.send({ data });
   });
 
   app.patch("/v1/crm/teams/agents/:agentId/capacity", async (req, reply) => {

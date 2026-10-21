@@ -22,3 +22,45 @@ export async function isActiveTenantUser(tenantId: string, userId: string): Prom
     return undefined;
   }
 }
+
+/**
+ * Display names for a tenant's users (id -> name), so a CRM roster/directory never has to
+ * show a raw user uuid (GAP-CRM-AGENT-WORKLOAD-05: crm.agent_workload stores only the
+ * agent_id). Display-only enrichment over identity-service's internal user-summaries
+ * lookup (id + name only, no email/PII), using the same x-internal + x-service-secret +
+ * x-tenant-id elevation as the other peer-service clients. Fails OPEN to an empty Map: an
+ * unreachable identity-service degrades to "no name" (the UI then shows a neutral label);
+ * it never breaks the CRM read.
+ *
+ * A successful lookup is cached per tenant for a minute: the web agent pickers call the
+ * roster on every keystroke, and the directory (up to ~2000 users) is not worth fetching
+ * each time. A failed lookup is never cached, so recovery is immediate.
+ */
+const NAME_TTL_MS = 60_000;
+const nameCache = new Map<string, { at: number; names: Map<string, string> }>();
+
+/** Test hook: forget every cached directory. */
+export function clearUserNameCache(): void {
+  nameCache.clear();
+}
+
+export async function fetchUserNames(tenantId: string): Promise<Map<string, string>> {
+  const hit = nameCache.get(tenantId);
+  if (hit && Date.now() - hit.at < NAME_TTL_MS) return hit.names;
+  try {
+    const res = await fetch(`${IDENTITY_URL}/identity/internal/user-summaries`, {
+      headers: { "x-internal": "1", "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "", "x-tenant-id": tenantId },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return new Map();
+    const rows = (await res.json()) as Array<{ id?: unknown; name?: unknown }>;
+    const names = new Map<string, string>();
+    for (const r of rows) {
+      if (typeof r.id === "string" && typeof r.name === "string" && r.name.trim()) names.set(r.id, r.name.trim());
+    }
+    nameCache.set(tenantId, { at: Date.now(), names });
+    return names;
+  } catch {
+    return new Map();
+  }
+}

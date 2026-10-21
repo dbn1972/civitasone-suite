@@ -90,18 +90,30 @@ export function registerMergeConsumers(queue: Queue): void {
         }
       }
       // Only adopt the duplicate's parent if the primary has none, and never
-      // point an account at itself.
-      if (!primary.parentId && duplicate.parentId && duplicate.parentId !== p.primaryId) {
+      // point an account at itself or at one of its own descendants (that would
+      // close a hierarchy loop: primary -> parent -> ... -> primary).
+      if (
+        !primary.parentId &&
+        duplicate.parentId &&
+        duplicate.parentId !== p.primaryId &&
+        !(await mergeRepo.isSelfOrAncestor(tx, p.primaryId, duplicate.parentId, p.tenantId))
+      ) {
         patch.parentId = duplicate.parentId;
       }
       await mergeRepo.mergeUpdateAccount(tx, p.primaryId, p.tenantId, patch, msg.actorId);
-      await mergeRepo.reassignAccountChildren(tx, p.duplicateId, p.primaryId, p.tenantId);
+      await mergeRepo.reassignAccountChildren(
+        tx, p.duplicateId, p.primaryId, p.tenantId, msg.actorId, duplicate.parentId ?? null,
+      );
       await mergeRepo.softDeleteAccount(tx, p.duplicateId, p.tenantId, msg.actorId);
 
+      // The audit row names BOTH ends of the merge: resourceId is the surviving
+      // primary, metadata.mergedFrom the tombstoned duplicate, so the trail alone
+      // answers "which account was merged away".
       await emit(
         tx, msg, EVENTS.accountMerged,
         { accountId: p.primaryId, mergedFrom: p.duplicateId },
         "merge", "account", p.primaryId,
+        { mergedFrom: p.duplicateId },
       );
     });
     await cache.invalidateResource(msg.tenantId, ACCOUNT_RESOURCE);
@@ -151,6 +163,7 @@ async function emit(
   action: string,
   resourceType: string,
   resourceId: string,
+  auditMetadata?: Record<string, unknown>,
 ): Promise<void> {
   const t = tx as Parameters<typeof enqueue>[0];
   await enqueue(t, {
@@ -161,7 +174,10 @@ async function emit(
   await enqueue(t, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "crm", action, resourceType, resourceId, outcome: "success" },
+    payload: {
+      service: "crm", action, resourceType, resourceId, outcome: "success",
+      ...(auditMetadata ? { metadata: auditMetadata } : {}),
+    },
   });
 }
 
