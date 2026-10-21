@@ -1,7 +1,7 @@
 import { escapeHtml as esc } from "../../shared/html.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopeEmployeeId, staffRolesOf } from "../../shared/employee-scope.js";
@@ -262,7 +262,9 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
     try { parseFy(body.fy); }
     catch { throw new HttpError(400, "VALIDATION_FAILED", "fy must be in format YYYY-YY e.g. 2025-26"); }
 
-    // Check for duplicate running job for same tenant + FY
+    // Check for duplicate running job for same tenant + FY. A re-run leaves the
+    // earlier (completed/failed) rows in place, so look specifically for a row
+    // that is still in flight rather than an arbitrary one.
     const [existingJob] = await scopedRead((tx) => tx
       .select({ id: form16BulkJobs.id, status: form16BulkJobs.status })
       .from(form16BulkJobs)
@@ -270,11 +272,12 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
         and(
           eq(form16BulkJobs.tenantId, ctx.tenantId),
           eq(form16BulkJobs.fy, body.fy),
+          inArray(form16BulkJobs.status, ["pending", "processing"]),
         ),
       )
       .limit(1));
 
-    if (existingJob && (existingJob.status === "pending" || existingJob.status === "processing")) {
+    if (existingJob) {
       throw new HttpError(409, "BULK_JOB_IN_PROGRESS", `A bulk Form 16 generation job is already running for FY ${body.fy}`);
     }
 
@@ -315,6 +318,9 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
       fy: z.string().regex(/^\d{4}-\d{2}$/),
     }).parse(req.query);
 
+    // Newest job first: a re-run for the same FY leaves the earlier rows in place,
+    // and an unordered LIMIT 1 could hand back the OLD completed one while the new
+    // job is still generating (the wizard would then offer a stale download).
     const [job] = await scopedRead((tx) => tx
       .select()
       .from(form16BulkJobs)
@@ -324,6 +330,7 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
           eq(form16BulkJobs.fy, q.fy),
         ),
       )
+      .orderBy(desc(form16BulkJobs.createdAt), desc(form16BulkJobs.id))
       .limit(1));
 
     if (!job) {
@@ -358,7 +365,8 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
       fy: z.string().regex(/^\d{4}-\d{2}$/),
     }).parse(req.query);
 
-    // Find the completed job
+    // Find the latest job for the FY (same ordering as bulk-status, so the page,
+    // the wizard and the download all talk about the same job).
     const [job] = await scopedRead((tx) => tx
       .select()
       .from(form16BulkJobs)
@@ -368,6 +376,7 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
           eq(form16BulkJobs.fy, q.fy),
         ),
       )
+      .orderBy(desc(form16BulkJobs.createdAt), desc(form16BulkJobs.id))
       .limit(1));
 
     if (!job) {

@@ -45,6 +45,17 @@ export type ListRunsQuery = z.infer<typeof listRunsQuery>;
 
 export const idParam = z.object({ id: z.string().uuid() });
 
+/**
+ * GAP-PAYROLL-DETAIL-02: the optional body of PATCH /runs/:id/{approve,disburse,revert}.
+ * The web dialog collects a reason (>= 10 chars) for each irreversible step; it is
+ * recorded on the audit event. Absent is fine (older callers); present must be a real
+ * sentence, not a character.
+ */
+export const runActionBody = z.object({
+  reason: z.string().trim().min(10).max(1000).optional(),
+});
+export type RunActionBody = z.infer<typeof runActionBody>;
+
 // Multi-DDO admin
 export const createDdoBody = z.object({
   ddoCode: z.string().min(1).max(32),

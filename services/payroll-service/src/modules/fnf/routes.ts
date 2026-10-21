@@ -59,6 +59,11 @@ const TRANSITION_BODIES = {
     paymentReference: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9/-]{3,63}$/, "4-64 letters, digits, '/' or '-'"),
     paymentDate: isoDate.refine((v) => v <= todayIst(), "payment date cannot be in the future"),
     note: z.string().trim().max(512).optional(),
+    // GAP-PAYROLL-FNF-01: why the payment is being recorded (the web dialog
+    // requires >= 10 characters). Optional on the wire so existing callers keep
+    // working; when present it travels on the command and lands in the audit
+    // event (consumer.ts writes `reason` for every transition that carries one).
+    reason: z.string().trim().min(10).max(512).optional(),
   }),
 } as const;
 

@@ -211,6 +211,12 @@ export async function getRunDetail(id: string, tenantId: string) {
     status: mapRunStatus(run.status),
     // payroll-critical fix: see the matching field in listRuns above.
     failureReason: run.status === "failed" ? (run.lastError ?? null) : null,
+    // GAP-PAYROLL-DETAIL-02: who made and who checked this run (user ids, no
+    // names/PII), so the web tier can disable Approve for the maker and
+    // Disburse for the approver with an explanation instead of letting them
+    // click into a guaranteed 403. approvedBy is null until the run is approved.
+    createdBy: run.createdBy,
+    approvedBy: run.approvedBy ?? null,
     // BUG-2 fix: this payload's grossAmount/netAmount/deductions above are
     // already rupees (/100 of the minor-unit column), and the frontend's
     // run-detail view (SalarySlipsClientTable.tsx) renders these embedded
@@ -229,6 +235,13 @@ export async function getRunDetail(id: string, tenantId: string) {
       gross: Number(s.grossMinor) / 100,
       deductions: Number(s.totalDeductionsMinor) / 100,
       net: Number(s.netPayMinor) / 100,
+      // GAP-PAYROLL-HOME-01: the authoritative integer-paise values (bigint
+      // strings) next to the rupee numbers above, so the run-detail table
+      // renders with formatMoney instead of re-deriving paise from a float.
+      // Additive: the rupee fields are unchanged.
+      grossMinor: s.grossMinor.toString(),
+      deductionsMinor: s.totalDeductionsMinor.toString(),
+      netMinor: s.netPayMinor.toString(),
       status: s.status,
       issues: readiness.get(s.employeeId) ?? [],
     })),

@@ -302,6 +302,57 @@ describe("POST /v1/payroll/tax/form16/bulk-generate — duplicate", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// A re-run of the same FY (GAP-PAYROLL-FORM16-04): earlier rows stay in place
+// ═══════════════════════════════════════════════════════════════════
+
+describe("form16 bulk jobs — a re-run for an FY that already has an older completed job", () => {
+  const fy = "2017-18";
+  const oldJobId = randomUUID();
+  const newJobId = randomUUID();
+
+  it("bulk-status and bulk-download talk about the NEWEST job, and the in-flight guard sees it", async () => {
+    // Inserted old-first so a bare unordered LIMIT 1 would return the OLD,
+    // completed row (exactly the stale answer the wizard used to be handed).
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(form16BulkJobs).values({
+        id: oldJobId, tenantId: TENANT, fy, status: "completed", storagePrefix: `form16/${TENANT}/${fy}`,
+        createdAt: new Date("2026-01-01T00:00:00Z"), completedAt: new Date("2026-01-01T00:05:00Z"), createdBy: UUID,
+      });
+      await tx.insert(form16BulkJobs).values({
+        id: newJobId, tenantId: TENANT, fy, status: "processing",
+        createdAt: new Date("2026-02-01T00:00:00Z"), createdBy: UUID,
+      });
+    }));
+
+    const app = await buildApp();
+    const status = await app.inject({
+      method: "GET", url: `/v1/payroll/tax/form16/bulk-status?fy=${fy}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    expect(status.statusCode).toBe(200);
+    expect(status.json().data.jobId).toBe(newJobId);
+    expect(status.json().data.status).toBe("processing");
+
+    // The newest job is not finished, so there is nothing to download yet (not the old ZIP).
+    const download = await app.inject({
+      method: "GET", url: `/v1/payroll/tax/form16/bulk-download?fy=${fy}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    expect(download.statusCode).toBe(422);
+    expect(download.json().code).toBe("JOB_NOT_COMPLETED");
+
+    // A third generation is refused while the newest is in flight, even though an older row is completed.
+    const again = await app.inject({
+      method: "POST", url: "/v1/payroll/tax/form16/bulk-generate",
+      headers: { authorization: `Bearer ${adminToken()}` }, payload: { fy },
+    });
+    await app.close();
+    expect(again.statusCode).toBe(409);
+    expect(again.json().code).toBe("BULK_JOB_IN_PROGRESS");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // POST /v1/payroll/tax/form16/bulk-generate — auth rejection
 // ═══════════════════════════════════════════════════════════════════
 

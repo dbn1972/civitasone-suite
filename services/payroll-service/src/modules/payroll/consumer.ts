@@ -32,6 +32,7 @@ import { computePtMonthMinor, periodEndOf, ptGenderUnresolved, todayIst, type Pt
 import { registerPayGroupConsumers } from "./pay-group-consumer.js";
 import { claimRunEmployees, findDoubleRunEmployees, resolveMonthMembers } from "./pay-group-repo.js";
 import { receiptRuleViolation } from "./fin03-domain.js";
+import { MAKER_CHECKER_MESSAGES, MAKER_CHECKER_VIOLATION, runMakerCheckerDenial } from "./run-maker-checker.js";
 
 /** DOM-008: sentinel tenant_id for the platform-default statutory config row (see migration 0038). */
 const PLATFORM_TENANT_ID = "00000000-0000-0000-0000-000000000000";
@@ -727,7 +728,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
   }, { visibilityTimeout: 300 });
 
   queue.subscribe(COMMANDS.runApprove, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; approvedBy: string };
+    const p = msg.payload as { id: string; tenantId: string; approvedBy: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const run = await repo.findRunByIdTx(tx, p.id);
@@ -783,17 +784,24 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
           variables: { runId: p.id, month: run.month },
         }),
       });
-      await audit(tx, msg, "approve", "payroll_run", p.id);
+      await audit(tx, msg, "approve", "payroll_run", p.id, p.reason ? { reason: p.reason } : undefined);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
   });
 
   queue.subscribe(COMMANDS.runDisburse, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string };
+    const p = msg.payload as { id: string; tenantId: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const run = await repo.findRunByIdTx(tx, p.id);
       if (!run) throw new Error(`payroll run ${p.id} not found`);
+      // GAP-PAYROLL-DETAIL-02: maker-checker -- whoever approved the run cannot
+      // be the one who releases the money. commands.ts rejects this
+      // synchronously (403); this re-asserts it under the transaction so a
+      // replayed or racing command can never bypass it.
+      if (runMakerCheckerDenial("disburse", msg.actorId, { createdBy: run.createdBy, approvedBy: run.approvedBy })) {
+        throw new DomainError(MAKER_CHECKER_VIOLATION, MAKER_CHECKER_MESSAGES.disburse);
+      }
       assertRunStatusTransition(run.status, "disbursed");
       // Iter2: reconcile the disbursed amount against the authoritative slip sum,
       // never the denormalized counter (which the audit found could drift).
@@ -825,7 +833,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
           pfmsTxnId: `PAYROLL-${p.id.slice(0, 8)}`,
         },
       });
-      await audit(tx, msg, "disburse", "payroll_run", p.id);
+      await audit(tx, msg, "disburse", "payroll_run", p.id, p.reason ? { reason: p.reason } : undefined);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_run", p.id));
   });

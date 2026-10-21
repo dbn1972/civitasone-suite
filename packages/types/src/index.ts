@@ -972,13 +972,21 @@ export type PayrollRunDetail = {
   runDate: string;
   payPeriod: string;
   employeeCount: number;
+  /** Legacy rupee float. Money screens use the *Minor fields below (GAP-PAYROLL-HOME-01). */
   grossAmount: number;
   netAmount: number;
   deductions: number;
+  /** GAP-PAYROLL-HOME-01: authoritative integer-paise totals (bigint strings); render with formatMoney. */
+  grossMinor?: string;
+  netMinor?: string;
+  deductionsMinor?: string;
   status: "draft" | "processing" | "completed" | "paid" | "disbursed" | "failed";
 };
 
 export type PayrollRunFullDetail = PayrollRunDetail & {
+  /** GAP-PAYROLL-DETAIL-02: user ids of the run's maker and checker (approvedBy is null until approved). */
+  createdBy?: string | null;
+  approvedBy?: string | null;
   salarySlips: Array<{
     id: string;
     employeeId: string;
@@ -986,6 +994,10 @@ export type PayrollRunFullDetail = PayrollRunDetail & {
     gross: number;
     deductions: number;
     net: number;
+    /** GAP-PAYROLL-HOME-01: integer-paise strings; render with formatMoney. */
+    grossMinor?: string;
+    deductionsMinor?: string;
+    netMinor?: string;
     status: string;
   }>;
 };
