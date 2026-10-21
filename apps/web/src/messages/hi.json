@@ -13099,7 +13099,8 @@
     "chooseFile": "या CSV फ़ाइल चुनें (अधिकतम 2 MB)",
     "tooManyRowsAlert": "बहुत अधिक पंक्तियाँ ({count})। एक बार में अधिकतम {max} आयात करें; फ़ाइल को बाँटकर भागों में आयात करें।",
     "previewHeading": "पूर्वावलोकन",
-    "previewShowing": " — {count} में से पहली 50 दिखाई जा रही हैं"
+    "previewShowing": " — {count} में से पहली 50 दिखाई जा रही हैं",
+    "existingContactUnnamed": "मौजूदा संपर्क"
   },
   "crmCustomFieldsManager": {
     "sensitiveLabel": "संवेदनशील (रिकॉर्ड में मास्क करें)",
@@ -13656,12 +13657,12 @@
   "crmDirectoryUserSelect": {
     "searchLabel": "नाम से लोगों को खोजें",
     "searchPlaceholder": "नाम से खोजें (कम से कम {min} अक्षर)…",
-    "truncatedNote": "पहले {count} लोग दिखाए जा रहे हैं। किसी और को खोजने के लिए नाम से खोजें।",
+    "truncatedNote": "पहले {count, plural, one {# व्यक्ति} other {# लोग}} दिखाए जा रहे हैं। किसी और को खोजने के लिए नाम से खोजें।",
     "searching": "खोजा जा रहा है…",
     "noMatches": "“{query}” से कोई मेल नहीं खाता।",
     "moreMatches": "पहले {count} परिणाम दिखाए जा रहे हैं। सूची छोटी करने के लिए नाम का और हिस्सा लिखें।",
     "searchFailed": "खोज अभी उपलब्ध नहीं है। फिर से प्रयास करें।",
-    "resultsFound": "{count} लोग मिले"
+    "resultsFound": "{count, plural, one {# व्यक्ति मिला} other {# लोग मिले}}"
   },
   "crmOwnerPicker": {
     "onLeave": "अवकाश पर",

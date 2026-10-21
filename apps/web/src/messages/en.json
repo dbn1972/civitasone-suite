@@ -13605,7 +13605,8 @@
     "chooseFile": "Or choose a CSV file (max 2 MB)",
     "tooManyRowsAlert": "Too many rows ({count}). Import at most {max} at a time; split the file and import in parts.",
     "previewHeading": "Preview",
-    "previewShowing": " — showing first 50 of {count}"
+    "previewShowing": " — showing first 50 of {count}",
+    "existingContactUnnamed": "Existing contact"
   },
   "crmCustomFieldsManager": {
     "sensitiveLabel": "Sensitive (mask on records)",

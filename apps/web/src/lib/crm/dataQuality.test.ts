@@ -5,6 +5,8 @@ import {
   parseMissingMandatoryFields,
   parseDqIssue,
   normaliseCandidates,
+  toMatchPercent,
+  DuplicateCheckError,
   normaliseRules,
   normaliseReport,
   duplicateCheck,
@@ -68,6 +70,68 @@ describe("normaliseCandidates", () => {
     expect(normaliseCandidates([{ score: 1 }, null, "x"])).toEqual([]);
     expect(normaliseCandidates({ data: "nope" })).toEqual([]);
     expect(normaliseCandidates(undefined)).toEqual([]);
+  });
+});
+
+// crm-service scores a duplicate as the whole-number SUM of the matched rules' weights, capped at 100 (30 = phone,
+// 70 = email + phone). The web keeps ONE scale, a whole percent 0-100, and maps whatever arrives onto it once; the
+// panel then prints the number as it is. (It used to multiply by 100 and print "Match 7000%".)
+describe("duplicate score scale (toMatchPercent / normaliseCandidates)", () => {
+  it("keeps crm-service's whole 0-100 scores as they are", () => {
+    expect([0, 1, 15, 30, 70, 100].map(toMatchPercent)).toEqual([0, 1, 15, 30, 70, 100]);
+    const out = normaliseCandidates({ data: [{ id: "a", score: 30 }, { id: "b", score: 70 }, { id: "c", score: 100 }] });
+    expect(out.map((c) => c.score)).toEqual([100, 70, 30]);
+  });
+
+  it("reads a legacy 0-1 share (older callers and mocks) as the same percent", () => {
+    expect(toMatchPercent(0.92)).toBe(92);
+    expect(toMatchPercent(0.4)).toBe(40);
+    expect(toMatchPercent(0.005)).toBe(1);
+    const out = normaliseCandidates([{ id: "a", score: 0.4 }, { id: "b", score: 0.92 }]);
+    expect(out.map((c) => [c.id, c.score])).toEqual([["b", 92], ["a", 40]]);
+  });
+
+  it("ranks identically on either scale", () => {
+    const server = normaliseCandidates({ data: [{ id: "x", score: 30 }, { id: "y", score: 70 }] });
+    const legacy = normaliseCandidates([{ id: "x", score: 0.3 }, { id: "y", score: 0.7 }]);
+    expect(server.map((c) => [c.id, c.score])).toEqual(legacy.map((c) => [c.id, c.score]));
+  });
+
+  it("rounds, clamps to 0-100 and treats junk as 0", () => {
+    expect(toMatchPercent(69.6)).toBe(70);
+    expect(toMatchPercent(150)).toBe(100);
+    expect(toMatchPercent(-3)).toBe(0);
+    expect(toMatchPercent("70")).toBe(70);
+    expect(toMatchPercent("abc")).toBe(0);
+    expect(toMatchPercent(undefined)).toBe(0);
+    expect(toMatchPercent(Number.NaN)).toBe(0);
+  });
+
+  it("a bare 1 is a server score of 1 (a one-point rule), not 100%", () => {
+    expect(toMatchPercent(1)).toBe(1);
+  });
+
+  it("keeps the server's name (trimmed) and leaves it absent when blank - never the id", () => {
+    const out = normaliseCandidates({ data: [{ id: "a", name: "  Asha Rao ", score: 30 }, { id: "b", name: "  ", score: 20 }, { id: "c", score: 10 }] });
+    expect(out.map((c) => c.name)).toEqual(["Asha Rao", undefined, undefined]);
+  });
+});
+
+describe("duplicateCheck failure carries the HTTP status", () => {
+  it("throws a DuplicateCheckError with status 403 for a refused role, so a caller can tell 'not allowed' from 'broken'", async () => {
+    fetchMock.mockResolvedValueOnce(fail(403, { code: "FORBIDDEN", message: "requires one of: crm_user, crm_admin, super_admin" }));
+    const err = await duplicateCheck({ phone: "9876543210" }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(DuplicateCheckError);
+    expect((err as DuplicateCheckError).status).toBe(403);
+    // the server's own text is still never shown
+    expect((err as Error).message).not.toMatch(/requires one of|crm_user/);
+  });
+
+  it("carries 500 and 429 the same way", async () => {
+    fetchMock.mockResolvedValueOnce(fail(500, { code: "INTERNAL" }));
+    expect(await duplicateCheck({}).catch((e: unknown) => (e as DuplicateCheckError).status)).toBe(500);
+    fetchMock.mockResolvedValueOnce(fail(429, { error: "TOO_MANY_REQUESTS" }));
+    expect(await duplicateCheck({}).catch((e: unknown) => (e as DuplicateCheckError).status)).toBe(429);
   });
 });
 

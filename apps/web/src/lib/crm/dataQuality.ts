@@ -24,12 +24,19 @@ export interface DuplicateCheckInput {
   pan?: string;
 }
 
-/** One ranked potential duplicate returned by duplicate-check. */
+/**
+ * One ranked potential duplicate returned by duplicate-check.
+ *
+ * crm-service answers `{ id, name?, matchedFields, score }` and nothing else about the contact. `score` here is
+ * ALWAYS a whole PERCENT 0-100 (normaliseCandidates maps whatever arrives onto it, once); `name` is absent when
+ * the contact has none, and a screen must then say "Existing contact" - never show the id.
+ */
 export interface DuplicateCandidate {
   id: string;
   matchedFields: string[];
+  /** Whole percent, 0-100. */
   score: number;
-  /** Optional display fields the backend may include for preview. */
+  /** The contact's display name (the only contact value the server sends). */
   name?: string;
   email?: string;
   phone?: string;
@@ -234,6 +241,19 @@ function defaultFieldMessage(code: FieldErrorCode): string {
 }
 
 /**
+ * Map a duplicate-check score onto a whole percent, once. crm-service sends a WHOLE NUMBER 0-100 (the sum of the
+ * matched rules' weights, capped at 100), so that is the scale. Older callers and mocks used a 0-1 share; a value
+ * that is not a whole number and is below 1 can only be such a share, so it is read as one (0.92 -> 92). Anything
+ * else is a percent, rounded and clamped. A bare 1 is a server score of 1, not 100%.
+ */
+export function toMatchPercent(raw: unknown): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  const percent = !Number.isInteger(n) && n < 1 ? n * 100 : n;
+  return Math.min(100, Math.round(percent));
+}
+
+/**
  * Normalise duplicate-check responses: a bare array, `{ candidates }`, or `{ data }`. The last is what
  * POST /v1/crm/contacts/duplicate-check actually answers (`reply.send({ data: matches })`); without it every
  * real response parsed to "no duplicates", so no pre-save duplicate warning could ever show.
@@ -252,8 +272,8 @@ export function normaliseCandidates(raw: unknown): DuplicateCandidate[] {
     out.push({
       id: r.id,
       matchedFields: Array.isArray(r.matchedFields) ? r.matchedFields.map(String) : [],
-      score: typeof r.score === "number" ? r.score : Number(r.score) || 0,
-      name: typeof r.name === "string" ? r.name : undefined,
+      score: toMatchPercent(r.score),
+      name: typeof r.name === "string" && r.name.trim() ? r.name.trim() : undefined,
       email: typeof r.email === "string" ? r.email : undefined,
       phone: typeof r.phone === "string" ? r.phone : undefined,
       company: typeof r.company === "string" ? r.company : undefined,
@@ -262,13 +282,21 @@ export function normaliseCandidates(raw: unknown): DuplicateCandidate[] {
   return out.sort((a, b) => b.score - a.score);
 }
 
+/** A failed duplicate-check call, carrying the HTTP status so a caller can tell "refused" (403) from "broken". */
+export class DuplicateCheckError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+    this.name = "DuplicateCheckError";
+  }
+}
+
 /** DQ-001: find potential duplicates before saving a new contact. */
 export async function duplicateCheck(input: DuplicateCheckInput): Promise<DuplicateCandidate[]> {
   const res = await browserFetch("v1/crm/contacts/duplicate-check", {
     method: "POST",
     body: JSON.stringify(input),
   });
-  if (!res.ok) throw new Error(await errorMessageFromResponse(res));
+  if (!res.ok) throw new DuplicateCheckError(await errorMessageFromResponse(res), res.status);
   return normaliseCandidates(await res.json());
 }
 
