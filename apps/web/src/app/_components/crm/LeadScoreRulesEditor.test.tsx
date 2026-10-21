@@ -2,7 +2,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { renderWithIntl } from "@/lib/testUtils/intl";
 import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { LeadScoreRulesEditor } from "./LeadScoreRulesEditor";
 import * as lq from "@/lib/crm/leadQualification";
 
@@ -19,9 +19,10 @@ beforeEach(() => {
   vi.mocked(lq.previewScoreRules).mockReset();
 });
 
-/** Walk through the GAP-04 confirm dialog that now gates every Save. */
+/** Walk through the GAP-04 confirm dialog that now gates every Save (its button is also "Save rules"). */
 async function confirmSave() {
-  fireEvent.click(await screen.findByRole("button", { name: /save and re-score/i }));
+  const dialog = await screen.findByRole("alertdialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: /^save rules$/i }));
 }
 
 describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
@@ -106,7 +107,7 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
     expect(await screen.findByText(/needs an attribute, a whole-number weight/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /save and re-score/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(lq.saveScoreRules).not.toHaveBeenCalled();
   });
 
@@ -152,7 +153,7 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     expect((screen.getByRole("option", { name: "madeUpField" }) as HTMLOptionElement).disabled).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
     expect(await screen.findByText(/needs an attribute, a whole-number weight/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /save and re-score/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(lq.saveScoreRules).not.toHaveBeenCalled();
   });
 
@@ -186,8 +187,9 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
   });
 
   // GAP-CRM-LEAD-SCORING-04: a running total and per-rule share are shown, and
-  // Save is gated by a confirm that says it re-scores every lead.
-  it("shows the running weight total and share, and confirms before re-scoring", async () => {
+  // Save is gated by a confirm that says truthfully what Save does: it stores the rules, it does
+  // not re-score existing leads in bulk (a lead's stored score updates when that lead changes).
+  it("shows the running weight total and share, and confirms before saving", async () => {
     vi.mocked(lq.getScoreRules).mockResolvedValue({
       data: [
         { ...rule, attribute: "leadSource", weight: 30 },
@@ -202,7 +204,11 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     expect(screen.getByLabelText(/share for rule 1/i)).toHaveTextContent("75%");
     // Save opens the confirm; the API is not called until confirmed.
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
-    expect(await screen.findByText(/re-scores every lead/i)).toBeInTheDocument();
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(/applies these rules from now on/i);
+    expect(dialog).toHaveTextContent(/updates the next time that lead is changed/i);
+    // No code path re-scores on Save, so the confirm must not promise it.
+    expect(dialog).not.toHaveTextContent(/re-scores every lead|existing scores are recalculated|save and re-score/i);
     expect(lq.saveScoreRules).not.toHaveBeenCalled();
     await confirmSave();
     await waitFor(() => expect(lq.saveScoreRules).toHaveBeenCalled());
@@ -279,7 +285,7 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     fireEvent.change(screen.getByLabelText(/attribute for rule 1/i), { target: { value: "company" } });
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
     expect(await screen.findByText(/needs an attribute, a whole-number weight/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /save and re-score/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(lq.saveScoreRules).not.toHaveBeenCalled();
   });
 
@@ -502,8 +508,11 @@ describe("LeadScoreRulesEditor weights + impact preview (GAP-CRM-LEAD-SCORING-04
     expect(lq.previewScoreRules).toHaveBeenCalledTimes(1);
     expect(vi.mocked(lq.previewScoreRules).mock.calls[0][0].map((r) => [r.attribute, r.weight])).toEqual([["leadSource", 30], ["company", 25]]);
     expect(summary).toHaveTextContent(/scored 120 of 120 leads/i);
-    expect(summary).toHaveTextContent(/52\.5 now, 31\.2 after/i);
+    expect(summary).toHaveTextContent(/52\.5 now, 31\.2 with these rules/i);
     expect(summary).toHaveTextContent(/10 leads would score higher and 70 lower/i);
+    // The column is the score each lead WOULD get; nothing has been re-scored, so it is not "After".
+    expect(within(summary).getByRole("columnheader", { name: "With these rules" })).toBeInTheDocument();
+    expect(within(summary).queryByRole("columnheader", { name: /^after$/i })).not.toBeInTheDocument();
     const rows = screen.getAllByRole("row").map((r) => r.textContent);
     expect(rows.some((r) => /80-100\s*16\s*0/.test(r ?? ""))).toBe(true);
     // Preview is read-only: nothing was saved.
@@ -570,6 +579,6 @@ describe("LeadScoreRulesEditor weights + impact preview (GAP-CRM-LEAD-SCORING-04
     await screen.findByRole("region", { name: /impact preview/i });
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
     const dialog = await screen.findByRole("alertdialog");
-    expect(dialog).toHaveTextContent(/80 of 120 scored leads would change score/i);
+    expect(dialog).toHaveTextContent(/80 of 120 leads would score differently once re-scored/i);
   });
 });

@@ -79,6 +79,25 @@ export const createDealBody = z.object({
 });
 export type CreateDealBody = z.infer<typeof createDealBody>;
 
+/** Most deal ids one `?ids=` lookup may carry. */
+export const MAX_DEAL_LOOKUP_IDS = 50;
+
+/**
+ * GET /v1/crm/deals `ids` (comma-separated uuids): look specific deals up in ONE request, the
+ * same as GET /v1/crm/accounts?ids=. The onboarding pages name a page of cases by deal id; they
+ * used to page the whole deals list for it, and one deal that no longer exists (deleted or
+ * cancelled deals are never listed) made them read it to the end. A deal that is not live is
+ * simply absent from the answer, so absence is definitive.
+ */
+export const dealIdsQuery = z.object({
+  ids: z
+    .string()
+    .max(MAX_DEAL_LOOKUP_IDS * 37)
+    .transform((v) => v.split(",").map((s) => s.trim()).filter((s) => s.length > 0))
+    .pipe(z.array(z.string().uuid()).min(1).max(MAX_DEAL_LOOKUP_IDS))
+    .optional(),
+});
+
 export const updateDealStageBody = z.object({
   stage: dealStage,
   stageId: z.string().uuid().optional(),

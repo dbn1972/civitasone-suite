@@ -3,7 +3,7 @@ import { z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createDealBody, updateDealStageBody, updateDealBody, idParam, dealsListSchema } from "./validators.js";
+import { createDealBody, updateDealStageBody, updateDealBody, idParam, dealsListSchema, dealIdsQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
@@ -117,7 +117,9 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     // GAP-CRM-PIPELINE-05: optional pipelineId scopes the board to one pipeline;
     // the response's pagination.total lets the UI show "N of M" accurately.
     const { pipelineId } = pipelineScopeQuery.parse(req.query ?? {});
-    sendValidated(reply, dealsListSchema, await queries.listDeals(ctx.tenantId, q.limit, q.offset, pipelineId));
+    // GAP-CRM-ONBOARDING-01: optional `ids` looks specific deals up by id (<= 50, one request).
+    const { ids } = dealIdsQuery.parse(req.query ?? {});
+    sendValidated(reply, dealsListSchema, await queries.listDeals(ctx.tenantId, q.limit, q.offset, pipelineId, ids));
   });
 
   // OP-005: stage-ageing dashboard — opportunities exceeding their configured stage limit.

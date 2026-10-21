@@ -172,6 +172,21 @@ describe("DealsTable", () => {
     expect(within(table).getByText("—")).toBeInTheDocument();
     expect(within(table).getByText("0%")).toBeInTheDocument();
   });
+
+  // GAP-CRM-OPPORTUNITIES-NEW-06: a missing probability is a dash, only a real 0 reads 0%.
+  it("renders a dash, not 0%, for a deal with no probability (and 0% for a real zero)", () => {
+    const mixed: Deal[] = [
+      { id: "1", dealName: "No probability", contactId: "c1", contactName: "Officer A", amount: "5000000", stage: "prospecting", status: "open", owner: "U1", closeDate: "2026-03-31" },
+      { id: "2", dealName: "Real zero", contactId: "c2", contactName: "Officer B", amount: "1000000", stage: "prospecting", status: "open", owner: "U2", closeDate: "2026-03-31", probability: 0 },
+    ];
+    seed(mixed, "live");
+    render(<DealsTable deals={mixed} source="api" />);
+    const table = screen.getByRole("table");
+    const rowOf = (name: string) => within(table).getByText(name).closest("tr") as HTMLElement;
+    expect(within(rowOf("No probability")).getByText("—")).toBeInTheDocument();
+    expect(within(rowOf("No probability")).queryByText("0%")).not.toBeInTheDocument();
+    expect(within(rowOf("Real zero")).getByText("0%")).toBeInTheDocument();
+  });
 });
 
 describe("DealsTable sorting (GAP-CRM-DEALS-07)", () => {

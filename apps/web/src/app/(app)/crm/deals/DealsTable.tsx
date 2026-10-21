@@ -40,7 +40,8 @@ type DealRow = {
   // cell type, so sorting compares ISO strings (chronological) rather than the
   // formatted "dd Mon yyyy" text, which sorts alphabetically by day number.
   closeDate: string | null;
-  probability: number;
+  /** Undefined when the deal has no probability: shown as a dash, never a made-up 0%. */
+  probability: number | undefined;
 };
 
 // GAP-CRM-DEALS-01: the Stage column is driven by a canonical-key -> label map
@@ -126,7 +127,9 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
       // none by the DataTable date cell), and the win probability as a
       // whole-number percentage.
       closeDate: d.closeDate || null,
-      probability: typeof d.probability === "number" ? d.probability : 0,
+      // GAP-CRM-OPPORTUNITIES-NEW-06: a deal with no probability stays unset (a dash), the
+      // same as the detail page, kanban and views; only a real 0 reads "0%".
+      probability: typeof d.probability === "number" ? d.probability : undefined,
     }));
 
   // GAP-CRM-DEALS-06: a bespoke exportCsv() used to live here. It was dead code
@@ -185,7 +188,7 @@ export function DealsTable({ deals, source = "api" }: { deals: Deal[]; source?: 
               { key: "amount", label: t("colValue"), align: "right", cellType: "amount" },
               { key: "stage", label: t("colStage"), cellType: "status" },
               { key: "closeDate", label: t("colExpectedClose"), cellType: "date" },
-              { key: "probability", label: t("colProbability"), align: "right", render: (row) => `${row.probability}%` },
+              { key: "probability", label: t("colProbability"), align: "right", render: (row) => (typeof row.probability === "number" ? `${row.probability}%` : "—") },
               { key: "owner", label: t("colOwner") },
             ]}
             rows={tableRows}

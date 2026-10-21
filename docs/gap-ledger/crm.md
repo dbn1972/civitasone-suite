@@ -3714,7 +3714,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-SCORING-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W2 crm rescan: completed by #PRNUM)
+- [x] **Status** (W2 crm rescan: completed by #PRNUM. Rework: the backend now enforces the same per-score-function params contract as the editor (400 with a field error on rules.<i>.params... for PUT and preview), so a direct API call can no longer save params the scorer cannot read, e.g. recency {tiers: 5}, which made buildScoreFn throw and aborted every recalculation and preview for the tenant until the rule was repaired.)
 - **First-pass claim:** Params is a raw JSON text box with no schema, example per score function or preview; admins must know the params contract of linear/step/boolean (opaque Record<string, unknown>) to configure a rule, and the only guard is 'is a JSON object' (editor:45-54, 213-216; lib/crm/leadQualification.ts:196-202).
 - **Verified evidence:** Params is a plain text input (LeadScoreRulesEditor.tsx:208-217, placeholder '{"max":100}'); parseParams (:45-54) only checks JSON object; type is Record<string, unknown> (leadQualification.ts:196-202). Param contract per linear/step/boolean is in crm-service, cannot-verify.
 - **Files to change:** `apps/web/src/app/_components/crm/LeadScoreRulesEditor.tsx`, `apps/web/src/lib/crm/leadQualification.ts`
@@ -3745,7 +3745,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-SCORING-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W2 crm rescan: completed by #PRNUM. Rework: the dry-run preview scores the proposed list OVERLAID on the saved rules, because Save (PUT) is an additive upsert by attribute and never deletes a rule the list omits; so the before/after numbers, the 'N of M leads would change' line and the weight ceiling are what Save will really produce (a real-DB test saves the proposal, rescores through the recalc consumer and compares), and the preview says how many saved rules it kept. A rule dropped from the editor therefore keeps scoring - the confirm now says so and points to turning the rule off. OWNER QUESTION (does not reopen this item): should Save delete rules the list omits? That would change the PUT contract and its empty-list/clear-all path, so it is not done here.)
+- [x] **Status** (W2 crm rescan: completed by #PRNUM. Rework: the dry-run preview scores the proposed list OVERLAID on the saved rules, because Save (PUT) is an additive upsert by attribute and never deletes a rule the list omits; so the numbers, the 'N of M leads would score differently' line and the weight ceiling describe the rule set Save will leave behind (a real-DB test saves the proposal, rescores each lead through the recalc consumer and compares), and the preview says how many saved rules it kept. A rule dropped from the editor therefore keeps scoring - the confirm now says so and points to turning the rule off. Save stores the rules only: it does NOT re-score existing leads in bulk (nothing publishes crm.lead.score_recalculate for every lead, and the worker has no scheduler for it), so a lead's stored score updates the next time that lead changes (crm.contact.updated) or on a per-lead recalculation; the confirm, the 'Save rules' button and the preview column ('With these rules') now say that instead of promising a re-score. NOT BUILT (product call, cost and timing of re-scoring every lead): a bulk re-score after Save. OWNER QUESTION (does not reopen this item): should Save delete rules the list omits? That would change the PUT contract and its empty-list/clear-all path, so it is not done here.)
 - **First-pass claim:** Weights are independent 0-100 numbers with no total, normalisation hint, or preview of the resulting score distribution; the change applies to every lead after Save with no impact summary (editor:164, 236-239).
 - **Verified evidence:** Weight inputs (:197-207) are int 0-100 each; no sum, normalisation hint or preview; Save (:235-240) applies to all leads per note. Preview needs backend.
 - **Files to change:** `apps/web/src/app/_components/crm/LeadScoreRulesEditor.tsx`
@@ -3892,7 +3892,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W2 crm rescan: completed by #PRNUM. Rework: account names are looked up by id (GET /v1/crm/accounts?ids=, one request per 50 ids, an inactive or missing account answers definitively) instead of paging the accounts list; the deals list is still paged only until the page's deals are found.)
+- [x] **Status** (W2 crm rescan: completed by #PRNUM. Rework: account names are looked up by id (GET /v1/crm/accounts?ids=, one request per 50 ids, an inactive or missing account answers definitively) instead of paging the accounts list, and deal names the same way (GET /v1/crm/deals?ids=, new: a deleted, cancelled or missing deal is simply absent from the answer), so a case whose deal is gone no longer makes every list load walk the deals list.)
 - **First-pass claim:** The list identifies a case only by the first 8 characters of a record id; Account is likewise an id fragment and the deal is not shown, so a clerk cannot tell which customer a row is without opening it (OnboardingList.tsx:30-32, 114, 122).
 - **Verified evidence:** apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx:30-32 shortId slices to 8 chars; used for case link text (114) and Account (122); no deal column; model has no names (lib/crm/onboarding.ts:195-208). Clerks cannot tell customers apart.
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx`, `apps/web/src/lib/crm/onboarding.ts`
@@ -4279,7 +4279,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-NEW-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W2 crm rescan: completed by #PRNUM)
+- [x] **Status** (W2 crm rescan: completed by #PRNUM. Rework: the deals list (DealsTable) also keeps a missing probability unset and shows a dash, as the detail page, kanban and views already did; only a real 0 reads 0%.)
 - **First-pass claim:** Probability and quantity default to 0 when left blank rather than unset, so an untouched form saves a 0% deal (OpportunityForm.tsx:121-122).
 - **Verified evidence:** Payload uses probability: probability.trim()===''?0:probNum and quantity same (apps/web/src/app/_components/crm/OpportunityForm.tsx:112,114; finding cited 121-122). An untouched form saves 0% / 0 quantity, indistinguishable from a real 0.
 - **Files to change:** `apps/web/src/app/_components/crm/OpportunityForm.tsx`, `apps/web/src/lib/crm/opportunity.ts`

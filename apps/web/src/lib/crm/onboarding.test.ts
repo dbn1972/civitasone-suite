@@ -255,19 +255,24 @@ describe("onboarding HTTP client", () => {
   });
 
   // Efficiency (rework): naming cases must not page the whole accounts list.
-  it("getOnboardingLookups(cases) names accounts by id in one request (no account paging) and pages deals only until found", async () => {
+  it("getOnboardingLookups(cases) names accounts AND deals by id, one request each (no list paging)", async () => {
     fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), "http://localhost");
-      if (url.pathname.endsWith("/v1/crm/deals")) return res({ data: [{ id: "d1", name: "Acme renewal" }], meta: { total: 1 } });
+      if (url.pathname.endsWith("/v1/crm/deals")) return res({ data: [{ id: "d1", name: "Acme renewal" }], pagination: { total: 1 } });
       if (url.pathname.endsWith("/v1/crm/accounts")) return res({ data: [{ id: "a1", name: "Acme Corp" }] });
       return res({}, { status: 404 });
     });
-    const lk = await onb.getOnboardingLookups([{ dealId: "d1", accountId: "a1" }, { dealId: "d1", accountId: "gone" }]);
+    const lk = await onb.getOnboardingLookups([{ dealId: "d1", accountId: "a1" }, { dealId: "d1", accountId: "gone" }, { dealId: "d-deleted", accountId: null }]);
     expect(lk).toEqual({ dealNames: { d1: "Acme renewal" }, accountNames: { a1: "Acme Corp" } });
-    const accountCalls = fetchMock.mock.calls.map((c) => new URL(String(c[0]), "http://localhost")).filter((u) => u.pathname.endsWith("/v1/crm/accounts"));
+    const callsTo = (suffix: string) => fetchMock.mock.calls.map((c) => new URL(String(c[0]), "http://localhost")).filter((u) => u.pathname.endsWith(suffix));
+    const accountCalls = callsTo("/v1/crm/accounts");
     expect(accountCalls).toHaveLength(1); // the unknown account "gone" did not force a walk of the list
     expect(accountCalls[0]!.searchParams.get("ids")).toBe("a1,gone");
     expect(accountCalls[0]!.searchParams.has("offset")).toBe(false);
+    const dealCalls = callsTo("/v1/crm/deals");
+    expect(dealCalls).toHaveLength(1); // the deleted deal "d-deleted" did not force a walk of the list either
+    expect(dealCalls[0]!.searchParams.get("ids")).toBe("d1,d-deleted");
+    expect(dealCalls[0]!.searchParams.has("offset")).toBe(false);
   });
 
   it("getOnboardingCaseLookups names ONE case with the deal by id and the account by id - two requests, no list paging", async () => {
@@ -387,17 +392,33 @@ describe("getOnboardingLookups pages within the server cap (GAP-CRM-ONBOARDING-0
     expect(urlsFor("/accounts")).toHaveLength(1);
   });
 
-  it("stops as soon as every wanted id has been seen (no needless extra pages)", async () => {
+  it("finds a deal deep in the list with one lookup by id, wherever it sits (no paging to reach it)", async () => {
     serve(filler("d", 450).concat([{ id: "d-wanted", name: "Acme renewal" }]), [{ id: "a-wanted", name: "Acme Corp" }]);
-    // d-wanted is the very last deal, so all three pages are needed for deals ...
-    await onb.getOnboardingLookups(wanted);
-    expect(urlsFor("/deals")).toHaveLength(3);
-    // ... but the accounts list (one page) is read once.
+    // d-wanted is the very last of 451 deals; the old lookup needed all three pages for it.
+    const lk = await onb.getOnboardingLookups(wanted);
+    expect(lk.dealNames["d-wanted"]).toBe("Acme renewal");
+    const calls = urlsFor("/deals").map((u) => new URL(u, "http://localhost").searchParams);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.get("ids")).toBe("d-wanted");
+    expect(calls[0]!.has("offset")).toBe(false);
     expect(urlsFor("/accounts")).toHaveLength(1);
-    fetchMock.mockReset();
-    serve([{ id: "d-wanted", name: "Acme renewal" }, ...filler("d", 450)], [{ id: "a-wanted", name: "Acme Corp" }]);
-    await onb.getOnboardingLookups(wanted);
-    expect(urlsFor("/deals")).toHaveLength(1); // found on page one, pages two and three never requested
+  });
+
+  it("a deal that is deleted, cancelled or missing costs the same single lookup (it never walks the whole list)", async () => {
+    // Deleted and cancelled deals are never listed, so d-wanted is absent from the 450 deals served.
+    serve(filler("d", 450), [{ id: "a-wanted", name: "Acme Corp" }]);
+    const lk = await onb.getOnboardingLookups(wanted);
+    expect(lk.dealNames).toEqual({});
+    expect(lk.accountNames).toEqual({ "a-wanted": "Acme Corp" });
+    expect(urlsFor("/deals")).toHaveLength(1);
+  });
+
+  it("looks a long list of deals up 50 ids to a request", async () => {
+    const many = Array.from({ length: 120 }, (_, i) => ({ id: `d-${i}`, name: `Deal ${i}` }));
+    serve(many, []);
+    const lk = await onb.getOnboardingLookups(many.map((d) => ({ dealId: d.id, accountId: null })));
+    expect(Object.keys(lk.dealNames)).toHaveLength(120);
+    expect(urlsFor("/deals")).toHaveLength(3); // 50 + 50 + 20
   });
 
   it("does not fetch a list at all when no case references it", async () => {

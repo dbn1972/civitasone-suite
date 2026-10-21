@@ -16,6 +16,10 @@
  * Every score is clamped to 0-100 by the scorer, so an out-of-range score is rejected
  * here rather than silently clamped. Map keys are matched against the LOWER-CASED lead
  * value, so a key with upper-case letters could never match and is rejected too.
+ *
+ * crm-service enforces the same contract on PUT and preview (400 on `rules.<i>.params...`,
+ * leads/score-rules-validators.ts); this module only gives the form the same answer per field
+ * before the request is sent. Change the two together.
  */
 import type { ScoreFnType } from "./leadQualification";
 

@@ -114,6 +114,7 @@ export async function listByTenant(
   limit: number,
   offset: number,
   pipelineId?: string,
+  ids?: readonly string[],
 ): Promise<DealView[]> {
   const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({ deal: deals, contactName: contacts.name })
     .from(deals)
@@ -122,6 +123,7 @@ export async function listByTenant(
       eq(deals.tenantId, tenantId),
       sql`${deals.status} NOT IN ('deleted','cancelled')`,
       ...(pipelineId ? [eq(deals.pipelineId, pipelineId)] : []),
+      ...(ids ? [inArray(deals.id, [...ids])] : []),
     ))
     .orderBy(desc(deals.updatedAt))
     .limit(limit)
@@ -134,13 +136,14 @@ export async function listByTenant(
  * pipeline), matching the SAME population listByTenant pages over, so the board
  * can show "N of M" rather than inferring truncation from a full page.
  */
-export async function countByTenant(tenantId: string, pipelineId?: string): Promise<number> {
+export async function countByTenant(tenantId: string, pipelineId?: string, ids?: readonly string[]): Promise<number> {
   const rows = await tenantTransaction(db, tenantId, (tx) => (tx as typeof db).select({ total: sql<string>`count(*)` })
     .from(deals)
     .where(and(
       eq(deals.tenantId, tenantId),
       sql`${deals.status} NOT IN ('deleted','cancelled')`,
       ...(pipelineId ? [eq(deals.pipelineId, pipelineId)] : []),
+      ...(ids ? [inArray(deals.id, [...ids])] : []),
     )));
   return Number(rows[0]?.total ?? 0);
 }
