@@ -38,6 +38,11 @@ vi.mock("@/lib/auth/roleGuard", () => ({
   getSessionUserId: () => "u1",
 }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
+// The loaded-case state also renders these two client components; they need a
+// NextIntlClientProvider and carry their own copy, which is not what this file
+// is about (the page's own server-rendered breadcrumbs / headings are).
+vi.mock("./_components/CaseActions", () => ({ CaseActions: () => null }));
+vi.mock("@/app/_components/RaiseEOfficeNote", () => ({ RaiseEOfficeNote: () => null }));
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -69,7 +74,7 @@ describe("disciplinary case detail: locale-aware breadcrumbs and loading text (G
   it("translates the breadcrumbs, heading and empty state when the locale is hi", async () => {
     mockLocale = "hi";
     render(await DisciplinaryCaseDetailPage({ params: { id: "c1" } }));
-    const nav = screen.getByRole("navigation", { name: "Breadcrumb" });
+    const nav = screen.getByRole("navigation", { name: hi.disciplinaryDetail.breadcrumbLabel });
     expect(nav).toHaveTextContent(hi.disciplinaryDetail.crumbDisciplinary);
     expect(nav).toHaveTextContent(hi.disciplinaryDetail.crumbNotFound);
     expect(nav).not.toHaveTextContent("Not found");
@@ -98,6 +103,19 @@ describe("disciplinary case detail: locale-aware breadcrumbs and loading text (G
     }
   });
 
+  it("breadcrumbLabel exists in both catalogues and the Hindi value is actually translated", () => {
+    expect(en.disciplinaryDetail.breadcrumbLabel).toBe("Breadcrumb");
+    expect(hi.disciplinaryDetail.breadcrumbLabel).toBeTruthy();
+    expect(hi.disciplinaryDetail.breadcrumbLabel).not.toBe(en.disciplinaryDetail.breadcrumbLabel);
+    expect(hi.disciplinaryDetail.breadcrumbLabel).toMatch(/[\u0900-\u097F]/); // Devanagari, not Latin
+  });
+
+  it("page.tsx takes every nav's accessible name from messages, with no aria-label string literal (grep guard)", () => {
+    const page = readFileSync(join(DIR, "page.tsx"), "utf8");
+    expect(page).not.toMatch(/aria-label="/);
+    expect(page.match(/<nav aria-label=\{t\("breadcrumbLabel"\)\}/g)).toHaveLength(3);
+  });
+
   it("page.tsx and loading.tsx contain no literal English UI props or text (grep guard)", () => {
     const page = readFileSync(join(DIR, "page.tsx"), "utf8");
     const loading = readFileSync(join(DIR, "loading.tsx"), "utf8");
@@ -110,4 +128,49 @@ describe("disciplinary case detail: locale-aware breadcrumbs and loading text (G
     expect(loading).not.toContain("Loading case details");
     expect(loading).not.toContain(">Disciplinary Case<");
   });
+});
+
+describe("disciplinary case detail: breadcrumb navigation label comes from messages in every page state (GAP-HR-DISCIPLINARY-DETAIL-07)", () => {
+  const CASE = {
+    id: "c1", tenantId: "t1", employeeId: "emp-1", caseNo: "DC/2026/0007", proceedingType: "major",
+    status: "inquiry_appointed", allegation: "x", createdBy: "u1", version: 1,
+  };
+
+  type State = { name: string; caseResult: unknown };
+  const STATES: State[] = [
+    { name: "case not found (404)", caseResult: { data: null, source: "error", status: 404 } },
+    { name: "load error (500)", caseResult: { data: null, source: "error", status: 500 } },
+    { name: "case loaded", caseResult: { data: CASE, source: "api" } },
+  ];
+
+  function mockCaseLoaders(caseResult: unknown) {
+    fetchJsonMock.mockImplementation((url: string) => {
+      if (url.includes("/disciplinary-cases/") && url.includes("/events")) return Promise.resolve({ data: [], source: "api" });
+      if (url.includes("/disciplinary-cases/")) return Promise.resolve(caseResult);
+      if (url.includes("/employees/")) return Promise.resolve({ data: { id: "emp-1", employeeId: "E-100", name: "A. Kumar" }, source: "api" });
+      return Promise.resolve({ data: null, source: "error", status: 404 });
+    });
+  }
+
+  beforeEach(() => {
+    mockLocale = "en";
+    fetchJsonMock.mockReset();
+  });
+
+  for (const { name, caseResult } of STATES) {
+    it(`${name}: en nav is named from en.json`, async () => {
+      mockCaseLoaders(caseResult);
+      render(await DisciplinaryCaseDetailPage({ params: { id: "c1" } }));
+      expect(screen.getByRole("navigation", { name: en.disciplinaryDetail.breadcrumbLabel })).toBeInTheDocument();
+    });
+
+    it(`${name}: hi nav is named from hi.json and the English literal is gone`, async () => {
+      mockLocale = "hi";
+      mockCaseLoaders(caseResult);
+      render(await DisciplinaryCaseDetailPage({ params: { id: "c1" } }));
+      expect(screen.getByRole("navigation", { name: hi.disciplinaryDetail.breadcrumbLabel })).toBeInTheDocument();
+      expect(screen.queryByRole("navigation", { name: "Breadcrumb" })).not.toBeInTheDocument();
+      expect(document.querySelector('nav[aria-label="Breadcrumb"]')).toBeNull();
+    });
+  }
 });

@@ -8049,6 +8049,7 @@
     "crumbHr": "HR",
     "crumbDisciplinary": "Disciplinary",
     "crumbNotFound": "Not found",
+    "breadcrumbLabel": "Breadcrumb",
     "backLabel": "Back to Disciplinary",
     "loadingTitle": "Disciplinary Case",
     "loadingSub": "Loading case details…",
