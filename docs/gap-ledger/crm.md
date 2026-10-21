@@ -4316,7 +4316,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITY-AGEING-03  ·  MEDIUM  ·  confirmed  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Ageing breaches show the opportunity name as plain text with no link to the record and no owner column, so a manager cannot see who to chase (StageAgeingDashboard.tsx:163).
 - **Verified evidence:** apps/web/src/app/_components/crm/StageAgeingDashboard.tsx:161-163 renders <td>{r.name}</td> plain text; StageAgeingRow (opportunity.ts:477-486) has no owner/id link field and normaliseAgeing (:488-514) drops any owner in the payload. Opportunity detail route exists at /crm/opportunities (list) and deals detail at /crm/deals/[id] (used by DealCard). Whether the ageing endpoint returns an owner cannot be verified (crm-service absent).
 - **Files to change:** `apps/web/src/app/_components/crm/StageAgeingDashboard.tsx`, `apps/web/src/lib/crm/opportunity.ts`
@@ -4331,7 +4331,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITY-AGEING-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** The ageing error says "Showing saved information" while the badge says "Couldn't load — showing nothing"; nothing is cached, so the two messages contradict (StageAgeingDashboard.tsx:135, DataSourceBadge.tsx:47).
 - **Verified evidence:** apps/web/src/app/_components/crm/StageAgeingDashboard.tsx:135 shows <DataSourceBadge source='error'/> (DataSourceBadge.tsx:47-48 -> 'Couldn't load — showing nothing') while :142 EmptyState says 'Ageing could not be loaded. Showing saved information.' Nothing is cached (getStageAgeing returns data:[] on error, opportunity.ts:517-526). Same false 'saved information' line in PriceBookEditor.tsx:337.
 - **Files to change:** `apps/web/src/app/_components/crm/StageAgeingDashboard.tsx`, `apps/web/src/app/_components/crm/PriceBookEditor.tsx`
@@ -4433,7 +4433,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINE-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 crm rescan: PARTIAL, NEEDS OWNER DECISION — the pipeline screen now uses ONE noun, "Engagement", everywhere a user can see it: the three stragglers (kanban load-error line, probability-replace checkbox, version-conflict banner) and the hub tile / forecast link ("Engagement Board" vs the hub's "Pipeline Board") are fixed and a test fails on any "deal(s)" in the pipeline message namespaces. NOT decided: which noun the CRM standardises on. /crm/opportunities, the hub tile "Opportunities" and the OPPORTUNITIES ledger items say "Opportunity"; /crm/deals, the dashboard and this screen say "Engagement". OWNER QUESTION: Engagement or Opportunity? Whichever is chosen is a copy-only change in apps/web/src/messages/{en,hi}.json (namespaces crmPipelinePage, crmKanbanBoard, crmStageColumn, crmDealCard, crmPipelineEditor and the crm hub tiles) — no shared term constant was introduced because the answer decides its shape. See also the Deal-vs-Engagement item above.)
 - **First-pass claim:** Vocabulary splits within the screen: header and cards say "Engagement", the empty state and columns say "deals" ("No deals in pipeline", "Create Deal", "Drop deals here"), and the sister page calls the same records "Opportunities" (KanbanBoard.tsx:164, StageColumn.tsx:80).
 - **Verified evidence:** Header 'Engagement Pipeline' and cards say Engagement (page.tsx:26-38, DealCard aria-label); KanbanBoard.tsx:212-214 'No deals in pipeline','Create Deal'; StageColumn.tsx:74 'deals' and :98 'Drop deals here'; sister page is /crm/opportunities. (Observation cites KanbanBoard.tsx:164, actual :212.)
 - **Files to change:** `apps/web/src/app/(app)/crm/pipeline/_components/KanbanBoard.tsx`, `apps/web/src/app/(app)/crm/pipeline/_components/StageColumn.tsx`, `apps/web/src/app/(app)/crm/pipeline/page.tsx`
@@ -4447,7 +4447,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINE-05  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Only pipelines[0] is rendered with no selector, and deals are fetched with limit=200 with no truncation notice, so a second pipeline or the 201st deal is invisible (pipeline/page.tsx:15, loaders.ts:2901).
 - **Verified evidence:** pipeline/page.tsx:11 uses pipelines[0] with no selector; loaders.ts:2901 fetches /api/v1/crm/deals?limit=200 with no total or truncation notice; stat cards (:17-21) are computed from those 200. Deals of a second pipeline would also be matched by stage name in the first pipeline's columns (KanbanBoard.tsx:259-261).
 - **Files to change:** `apps/web/src/app/(app)/crm/pipeline/page.tsx`, `apps/web/src/app/_data/loaders.ts`, `apps/web/src/app/(app)/crm/pipeline/_components/KanbanBoard.tsx`
@@ -4462,7 +4462,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINE-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** The deal-name link inside each card has tabIndex -1, so keyboard users can move a card but cannot open its record (DealCard.tsx:56).
 - **Verified evidence:** DealCard.tsx:52-58 the <a href='/crm/deals/:id'> has tabIndex={-1}; the card is role=button tabIndex=0 whose keydown handler handles arrows/Enter only for moving. No keyboard path to the record.
 - **Files to change:** `apps/web/src/app/(app)/crm/pipeline/_components/DealCard.tsx`
@@ -4499,7 +4499,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINES-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 crm rescan: PARTIAL, NEEDS OWNER DECISION — fix step 3 is now done: crm-service POST/PATCH/DELETE /v1/crm/pipelines require crm_admin or super_admin (a crm_user gets 403 straight from the API; GETs stay open to every CRM role so the board, quotation builder and ageing editor still work; tests in services/crm-service/tests/crm-cluster08-gaps.test.ts). Still open: ROLE PARITY. The layout (shared CRM_ADMIN_ROLES) admits admin / platform_admin / tenant_admin, but the pipelines API accepts none of them (it 403s them on every call, GET included — unchanged from before). OWNER QUESTION: should tenant_admin (and admin / platform_admin) be able to configure pipelines? If yes add them to the server role lists in services/crm-service/src/modules/pipelines/routes.ts; if no narrow apps/web/src/app/(app)/crm/pipelines/layout.tsx to crm_admin / super_admin like the products layout. Not changed here because either way grants or removes access.)
 - **First-pass claim:** Pipeline configuration is open to every CRM user; qualification-frameworks and task-escalation use an admin-only layout but this route relies on the broad CRM layout (crm/layout.tsx:5).
 - **Verified evidence:** crm/layout.tsx:5-8 only requires CRM_ROLES incl. crm_user; pipelines/ has error/loading/page and no layout.tsx, unlike task-escalation and qualification-frameworks (requireAnyRole admin list). PipelineEditor exposes create, edit, delete. Server enforcement cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/crm/pipelines/layout.tsx`
@@ -4514,7 +4514,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINES-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 crm rescan: PARTIAL, NEEDS OWNER DECISION — Gate has its HelpTip, and the per-stage Product scope now suggests the product catalogue (enabled products, by name, labelled with the code) alongside values other stages already use; a failed catalogue load degrades to the used values. It stays FREE TEXT on purpose: crm-service matches pipeline scope by exact string equality (pipelines/repo.ts) and nothing in the repo says what a deal's / pipeline's `product` string holds (catalogue name, code or id), so a strict <select> over getProducts() could silently stop matching. OWNER QUESTION: what value identifies a product in `product` scope — the catalogue name, the code, or the id? Once decided, the datalist becomes a select of that field and the value is validated server-side. Region / business unit stay free text with used-value suggestions until master data exists.)
 - **First-pass claim:** "Gate" is a bare checkbox with no explanation; the meaning ("requires an explicit review before the deal may pass") lives only in a type comment, and scope inputs (Product/Region/Business unit) are free text with no picker (PipelineEditor.tsx:255, lib/crm/opportunity.ts:101).
 - **Verified evidence:** apps/web/src/app/_components/crm/PipelineEditor.tsx:261-269 bare 'Gate' checkbox, no help text; :299-321 product/region/business unit are free-text inputs. Meaning of gate is only in lib/crm/opportunity.ts:101 comment. No lookup source visible for scope values (cannot verify a catalogue API).
 - **Files to change:** `apps/web/src/app/_components/crm/PipelineEditor.tsx`
@@ -4567,7 +4567,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRICE-BOOKS-01  ·  HIGH  ·  partly  ·  theme AUDIT (was DATEFMT)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 crm rescan: PARTIAL, NEEDS OWNER DECISION — DONE: crm-service resolves updated_by to a display NAME (identity user-summaries, fail-open) so the editor shows "Last changed by <name> on <date> (IST)" and an unresolved editor reads "Unknown user" (never the uuid); the reason typed to edit a live book is sent with the save and stored with the version; every version bump (book edit, prices-only edit, single-price PUT/DELETE, create) appends a row to the new append-only crm.price_book_history (migration 0171) and the editor has a per-book History panel (who / when / why / which fields and product prices moved, admin-only endpoint GET /v1/crm/price-books/:id/history); a prices-only edit now bumps version/updated_by too. Existing quotations keep their captured price (quotation line items snapshot unit_price_minor). NOT built: effective-from / effective-to dates on a price book. They change which book a quotation resolves on a given day (overlap rules, back-dating, what happens at expiry) — a pricing-policy decision. OWNER QUESTION: do price books need effective dates, and if so what are the overlap / back-dating / expiry rules for resolve? Until answered the migration slot 0172-0173 is unused.)
 - **First-pass claim:** Price books that drive quotation prices are edited in place with no effective dates, version, or change history shown: saving a new rate overwrites the one in force for every quotation built afterwards, and nothing on the page shows who changed a price or when (apps/web/src/app/_components/crm/PriceBookEditor.tsx:104-135, lib/crm/quotation.ts:203-224).
 - **Verified evidence:** PriceBook (lib/crm/quotation.ts:151-160) has no effective-from/to or version, and apps/web/src/app/_components/crm/PriceBookEditor.tsx:126-131 sends a PATCH overwrite (quotation.ts:213-217); the page shows no changed-by/at. True for the UI. Whether crm-service versions or audits price books cannot be verified (absent). The DATEFMT theme is wrong.
 - **Files to change:** `apps/web/src/app/_components/crm/PriceBookEditor.tsx`, `apps/web/src/lib/crm/quotation.ts`
@@ -4583,7 +4583,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRICE-BOOKS-02  ·  MEDIUM  ·  partly  ·  theme VALIDATION (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 crm rescan: PARTIAL, NEEDS OWNER DECISION — Segment / Geography / Channel stay free text with a datalist of values already used by other books, and the form now WARNS (non-blocking, role=status) when a typed value is one no other book uses, and points out a letter-case-only difference since matching is exact; the resolve panel already says "No price book matches these criteria". A free typo can still be saved: acceptance wants choosing from a list, and no master list or enum of segments / channels / geographies exists in the repo (the server accepts any 1-120 char string). OWNER QUESTION: where do segment, channel and geography values come from (a tenant-managed master list, a fixed enum, or the state / district geography master)? Once decided, replace the three inputs with selects over that list and validate it server-side.)
 - **First-pass claim:** Segment, Geography and Channel are free-text fields (placeholders "government", "north", "direct"), and the resolver matches on the same typed text, so a typo yields a book that can never resolve; geography examples do not match state/district geography (PriceBookEditor.tsx:262-285).
 - **Verified evidence:** apps/web/src/app/_components/crm/PriceBookEditor.tsx:236,244,248 Segment/Geography/Channel are free-text inputs with placeholders 'government','north','direct'; resolvePriceBook passes the trimmed text (:158-168). Typo risk is real; 'fabricated' theme is wrong (placeholders, not data). Geography 'north' vs state/district taxonomy cannot be verified without master data.
 - **Files to change:** `apps/web/src/app/_components/crm/PriceBookEditor.tsx`
@@ -4648,7 +4648,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRODUCTS-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Any CRM user can change a product price or tax rate, which flows straight into quotations; the catalogue shows no last-changed-by/at, and Delete removes a product with no indication of how many quotations or price books reference it (apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx:99-125,262).
 - **Verified evidence:** products/ has no layout.tsx (only crm/layout.tsx crm_user); apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx:94-118 saves price/tax to the catalogue and :120-138 deletes; the table (:172-187) has no updated-by/at column and the delete dialog (:263-272) shows a generic description. Server audit/references cannot be verified (absent).
 - **Files to change:** `apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx`, `apps/web/src/app/(app)/crm/products/layout.tsx`
