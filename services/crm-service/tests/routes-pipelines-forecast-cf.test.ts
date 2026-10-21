@@ -60,7 +60,9 @@ describe("POST /v1/crm/pipelines", () => {
   it("returns 400 with fewer than 3 stages", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/crm/pipelines",
-      headers: authHeader(["crm_user"]),
+      // GAP-CRM-PIPELINES-03: pipeline writes are admin-only, so the validation path is
+      // exercised as an admin (a crm_user is now refused 403 before validation runs).
+      headers: authHeader(["crm_admin"]),
       payload: {
         name: "Pipeline",
         stages: [{ id: "aaaaaaaa-0001-4000-8000-000000000001", name: "Lead", probability: 10, ordinal: 1 }],
@@ -72,7 +74,7 @@ describe("POST /v1/crm/pipelines", () => {
   it("returns 400 with missing name", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/crm/pipelines",
-      headers: authHeader(["crm_user"]),
+      headers: authHeader(["crm_admin"]),
       payload: {
         stages: [
           { id: "aaaaaaaa-0001-4000-8000-000000000001", name: "A", probability: 10, ordinal: 1 },

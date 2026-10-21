@@ -9,6 +9,7 @@ import { commandId } from "../../shared/idempotency.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { ALLOWED_CURRENCIES } from "../deals/quotation-domain.js";
+import { resolveUserNames } from "../../shared/identity-names.js";
 import * as repo from "./repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
@@ -54,7 +55,11 @@ const updateBody = z.object({
   priority: z.number().int().min(0).max(100000).optional(),
   enabled: z.boolean().optional(),
   entries: entriesField,
-}).refine((b) => Object.keys(b).length > 0, { message: "at least one field required" });
+  // GAP-CRM-PRICE-BOOKS-01: why a LIVE book is being edited (the editor requires it for an
+  // enabled book). Recorded against the new version in crm.price_book_history; it is not a
+  // change to the book itself, so it does not count towards "at least one field".
+  reason: z.string().trim().min(1).max(500).optional(),
+}).refine((b) => Object.keys(b).some((k) => k !== "reason"), { message: "at least one field required" });
 
 const resolveQuery = z.object({
   segment: z.string().min(1).max(120).optional(),
@@ -68,6 +73,18 @@ const listQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+/**
+ * GAP-CRM-PRICE-BOOKS-01: updated_by is an identity user uuid -- the editor must show WHO,
+ * not a uuid. Attach `updatedByName` (null when identity cannot resolve it; fail-open).
+ */
+async function withUpdaterNames<T extends { updatedBy: string }>(
+  tenantId: string,
+  books: T[],
+): Promise<Array<T & { updatedByName: string | null }>> {
+  const names = await resolveUserNames(tenantId, books.map((b) => b.updatedBy));
+  return books.map((b) => ({ ...b, updatedByName: names.get(b.updatedBy) ?? null }));
+}
+
 export async function priceBookRoutes(app: FastifyInstance): Promise<void> {
   // Resolve must precede /:id so 'resolve' is not parsed as an id.
   app.get("/v1/crm/price-books/resolve", async (req, reply) => {
@@ -77,7 +94,8 @@ export async function priceBookRoutes(app: FastifyInstance): Promise<void> {
     const book = await repo.resolve(ctx.tenantId, q);
     if (!book) return reply.send({ data: null });
     const items = await repo.listItems(ctx.tenantId, book.id);
-    return reply.send({ data: { ...book, items } });
+    const [named] = await withUpdaterNames(ctx.tenantId, [book]);
+    return reply.send({ data: { ...named!, items } });
   });
 
   app.post("/v1/crm/price-books", async (req, reply) => {
@@ -106,7 +124,8 @@ export async function priceBookRoutes(app: FastifyInstance): Promise<void> {
     // below. PERF-005: this used to be one repo.listItems() call per book row (N+1) --
     // batched into a single query via listItemsByBookIds.
     const itemsByBook = await repo.listItemsByBookIds(ctx.tenantId, rows.map((book) => book.id));
-    const data = rows.map((book) => ({ ...book, items: itemsByBook.get(book.id) ?? [] }));
+    const named = await withUpdaterNames(ctx.tenantId, rows);
+    const data = named.map((book) => ({ ...book, items: itemsByBook.get(book.id) ?? [] }));
     return reply.send({ data, meta: { limit: q.limit, offset: q.offset, total } });
   });
 
@@ -117,7 +136,25 @@ export async function priceBookRoutes(app: FastifyInstance): Promise<void> {
     const book = await repo.findById(ctx.tenantId, id);
     if (!book) throw new HttpError(404, "NOT_FOUND", "price book not found");
     const items = await repo.listItems(ctx.tenantId, id);
-    return reply.send({ data: { ...book, items } });
+    const [named] = await withUpdaterNames(ctx.tenantId, [book]);
+    return reply.send({ data: { ...named!, items } });
+  });
+
+  // GAP-CRM-PRICE-BOOKS-01: the change history behind the editor's "History" drawer -- one
+  // row per version (who, when, why, and which fields / product prices moved), newest first.
+  // Admin-only: it carries the maker's stated reason and the before/after prices. Reads the
+  // append-only crm.price_book_history written by the price-book consumer.
+  app.get("/v1/crm/price-books/:id/history", { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const q = listQuery.parse(req.query ?? {});
+    const book = await repo.findById(ctx.tenantId, id);
+    if (!book) throw new HttpError(404, "NOT_FOUND", "price book not found");
+    const { rows, total } = await repo.listHistory(ctx.tenantId, id, q.limit, q.offset);
+    const names = await resolveUserNames(ctx.tenantId, rows.map((r) => r.changedBy));
+    const data = rows.map((r) => ({ ...r, changedByName: names.get(r.changedBy) ?? null }));
+    return reply.send({ data, meta: { limit: q.limit, offset: q.offset, total } });
   });
 
   app.patch("/v1/crm/price-books/:id", async (req, reply) => {

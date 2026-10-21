@@ -9,11 +9,19 @@ import * as repo from "./repo.js";
 import * as dealsRepo from "../deals/repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
+// GAP-CRM-PIPELINES-03: pipeline CONFIGURATION (create / edit / delete, stage gates,
+// mandatory fields, scope) is an admin control -- the web route is admin-gated
+// (crm/pipelines/layout.tsx), so the server must not stay open to every crm_user via the
+// API. Reads stay on CRM_ROLES because the Kanban board, the opportunity views, the
+// stage-limit editor and the quotation builder all read pipelines as a plain crm_user.
+// Strictly narrower than the previous write set (CRM_ROLES minus crm_user): no role is
+// granted anything new here.
+const ADMIN_ROLES = ["crm_admin", "super_admin"];
 
 export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/crm/pipelines", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, CRM_ROLES);
+    requireRole(ctx, ADMIN_ROLES);
     const body = createPipelineBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPipeline(ctx, body));
   });
@@ -41,7 +49,7 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
 
   app.patch("/v1/crm/pipelines/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, CRM_ROLES);
+    requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updatePipelineBody.parse(req.body);
 
@@ -75,7 +83,7 @@ export async function pipelineRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete("/v1/crm/pipelines/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, CRM_ROLES);
+    requireRole(ctx, ADMIN_ROLES);
     const { id } = idParam.parse(req.params);
 
     // GAP-CRM-PIPELINES-01: deleting a pipeline that still holds open deals would orphan
