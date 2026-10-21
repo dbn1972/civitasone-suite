@@ -5368,7 +5368,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** The status PATCH omits the `version` the page fetched, so two officers acting at once silently overwrite each other; the Audit card shows only two timestamps, no actor or status history (ServiceRequestActions.tsx:18, [id]/page.tsx:148-152).
 - **Verified evidence:** ServiceRequestDetail declares version (page.tsx:23) but ServiceRequestActions receives only id and status (page.tsx:95) and setStatus body is {status, resolution?} (Actions:37) - no version/If-Match, so last write wins (whether the service would enforce it is cannot-verify). Audit card (page.tsx:143-148) shows only Logged and Last updated timestamps, no actor or status history; the detail type has no createdBy/updatedBy/history fields to render.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/[id]/page.tsx`, `apps/web/src/app/(app)/crm/service-requests/[id]/ServiceRequestActions.tsx`
@@ -5386,7 +5386,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-DETAIL-05  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** assignedTo is loaded but never shown, there is no assign/reassign action, and Due is a plain date with no overdue indicator; a "cancelled" status is treated as terminal yet no action sets it (service-requests/[id]/page.tsx:17,112, ServiceRequestActions.tsx:24).
 - **Verified evidence:** assignedTo is in ServiceRequestDetail (page.tsx:17) but not rendered anywhere in the JSX; there is no assign/reassign ActionButton in ServiceRequestActions.tsx (only Start work, Mark pending, Resolve, Close). Due renders fmt(r.dueAt) (page.tsx:114) as date-time with no overdue cue or SLA state. Actions:31 treats 'cancelled' as terminal, yet no action calls setStatus('cancelled'). Observation line numbers are off by a few lines.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/[id]/page.tsx`, `apps/web/src/app/(app)/crm/service-requests/[id]/ServiceRequestActions.tsx`, `apps/web/src/app/(app)/crm/service-requests/ServiceRequestsTable.tsx`
@@ -5461,7 +5461,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme DATAMODEL (was VALIDATION)
 
-- [~] **Status** NEEDS OWNER DECISION — requires backend contactId/duplicate-check endpoint; no owner decision yet
+- [x] **Status** (W2 crm rescan: completed by #PRNUM)
 - **W0-10 note:** review found the W0 tick partly — Contact link done (new/page.tsx:18-26,198,325-341) but no open-request/phone/email duplicate check or 'Possible duplicate: SR-xxx' warning; only a static possibleContactNote (:346); no test for duplicate warning
 - **First-pass claim:** The request is not linked to an existing CRM contact or account and there is no duplicate check, so the same citizen filing twice creates two unrelated records (service-requests/new/page.tsx:26-34).
 - **Verified evidence:** The POST body (new/page.tsx:48-56) has only citizenName, citizenPhone, citizenEmail, serviceType, subject, description, priority: no contactId/accountId and no lookup or duplicate check before submit. The list loader row type also has no contact link. Whether the service dedups is cannot-verify. Theme VALIDATION is loose; this is a data-linking gap.
@@ -5500,7 +5500,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-TASK-ESCALATION-01  ·  HIGH  ·  confirmed  ·  theme VALIDATION (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Manager role and Manager user are free-text (placeholders "sales_manager", "user id (optional)"), so a mistyped role or id saves as valid and tasks escalate to nobody; the rule shows no resolved name, no preview and no dry run (apps/web/src/app/_components/crm/TaskEscalationEditor.tsx:106,150-165).
 - **Verified evidence:** TaskEscalationEditor.tsx:156 (Manager role, placeholder 'e.g. sales_manager') and :160 (Manager user, placeholder 'user id (optional)') are free-text inputs; rowValid (34-36) only checks non-empty, so a mistyped role/id saves. The rule shows no resolved name, no preview and no dry run. Server-side validation is cannot-verify (crm-service absent). Theme FABRICATED is wrong: it is a validation/picker issue.
 - **Files to change:** `apps/web/src/app/_components/crm/TaskEscalationEditor.tsx`, `apps/web/src/lib/crm/activityAccount.ts`
@@ -5517,7 +5517,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-TASK-ESCALATION-02  ·  HIGH  ·  partly  ·  theme IDLEAK (was FAILMASK)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** The Owner column can print a raw owner id (uuid) because the loader falls back owner → actorName → ownerId, and the overdue list has no limit or paging (apps/web/src/lib/crm/activityAccount.ts:282, OverdueTaskAlerts.tsx:80).
 - **Verified evidence:** activityAccount.ts:284 sets owner from r.owner ?? r.actorName ?? r.ownerId, so an opaque id is printed if the API sends no name; OverdueTaskAlerts.tsx:86 renders t.owner directly. getOverdueTasks (activityAccount.ts ~getOverdueTasks) calls v1/crm/activities?type=task&status=open&overdue=true with no limit/page, and the table renders all rows with no paging. Error handling is actually correct (isError shows '—' and badge), so theme FAILMASK is wrong. Line refs in the observation (282, 80) are off.
 - **Files to change:** `apps/web/src/lib/crm/activityAccount.ts`, `apps/web/src/app/_components/crm/OverdueTaskAlerts.tsx`
@@ -5534,7 +5534,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-TASK-ESCALATION-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 crm rescan: partly done (previously ticked closed). FIXED: the overdue monitor is linked from the CRM hub for every CRM role (tile), crm_user/crm_admin/tenant_admin can read it (tenant_admin was admitted by the web layout but refused by the API), owner names and the Reassign picker work for non-admins (server-side ownerName + /v1/crm/directory/users), and a test proves crm_user opens the list but is redirected from the rule editor. REMAINING: the API still returns tenant-wide rows to any CRM role; it does not scope by team. OWNER QUESTION: should a manager see only their team's overdue tasks (and how is a team derived: crm.teams membership or owner hierarchy), or is tenant-wide visibility for CRM roles acceptable?)
 - **First-pass claim:** The route is admin-only as a whole, so the managers who receive escalations cannot open the overdue list unless they hold crm_admin; monitoring and configuration are bundled on one page (task-escalation/layout.tsx:8, page.tsx:17).
 - **Verified evidence:** task-escalation/layout.tsx:11-14 allows only crm_admin, admin, super_admin, platform_admin, tenant_admin (requireAnyRole with redirect to /crm); page.tsx:31-34 puts OverdueTaskAlerts and TaskEscalationEditor on that single admin-gated route, so a crm_user manager cannot see the overdue list. Whether escalation-target managers hold crm_admin is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/crm/task-escalation/layout.tsx`, `apps/web/src/app/(app)/crm/task-escalation/page.tsx`, `apps/web/src/app/(app)/crm/overdue-tasks/page.tsx (new, name to decide)`
@@ -5606,7 +5606,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-VOICE-OF-CUSTOMER-01  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** The Partial-window card tells readers to "Narrow the period to read an exact figure", but the page has no period control and calls the loader with no from/to, so the advice cannot be followed and truncated figures stay approximate (apps/web/src/app/(app)/crm/voice-of-customer/page.tsx:20,72-80, _data/loaders.ts:3065).
 - **Verified evidence:** apps/web/src/app/(app)/crm/voice-of-customer/page.tsx:17 calls getCrmSentimentSummary() with no args; the Partial-window Card at :73-81 says 'Narrow the period'. The loader (apps/web/src/app/_data/loaders.ts:3065-3072) already accepts range {from,to} and forwards them as query params to /api/v1/crm/sentiment/summary, but the page has no searchParams or date control, so the advice cannot be followed.
 - **Files to change:** `apps/web/src/app/(app)/crm/voice-of-customer/page.tsx`, `apps/web/src/app/(app)/crm/voice-of-customer/PeriodFilter.tsx (new)`
@@ -5727,7 +5727,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-03  ·  HIGH  ·  partly  ·  theme PII
 
-- [~] **Status** NEEDS OWNER DECISION — blocked by FEEDBACK-01 backend decision; DPDP notice wording needs legal sign-off
+- [~] **Status** (W2 crm rescan: partly done. FIXED: every label, the rating words and the cancel link now go through i18n (en + hi) and a test proves the DPDP notice renders in Hindi; choosing Registered Citizen now says plainly that no name/phone/ID is collected by this form and points at the Regarding field. REMAINING (needs a decision, not built): no identifier is collected for a Registered Citizen (the API has no field for it); no consent record, notice version or purpose id is stored; the notice has no retention, rights or grievance-officer text; there is no Odia locale (platform locales are en, hi, kn, ta, te). OWNER QUESTIONS: (1) which identifier (mobile, citizen id, service-request reference) and how is it stored and masked; (2) legal sign-off on the notice wording incl. retention, rights and the grievance officer; (3) is a consent version/purpose id to be stored, against which consent register; (4) is Odia to be added as a platform locale?)
 - **First-pass claim:** "Registered Citizen" is offered but no name, contact or identifier field appears, and the subtitle promises "confidential" while the consent text promises no third-party sharing; there is no consent record, purpose id or Odia/Hindi wording for the DPDP notice (feedback/page.tsx:145-195).
 - **Verified evidence:** Radio 'Registered Citizen' (feedback/page.tsx:187-190) is offered but no name/contact/identifier input follows; subtitle says 'Your response is confidential' (109) while consent text (234-238) says data is not shared with third parties without further consent; consent is English-only, one checkbox, no consent id/purpose id. All true, but since submission is disabled (see -01) nothing is actually collected, so severity high is overstated. Hindi/Odia wording absent - true, no i18n keys used.
 - **Files to change:** `apps/web/src/app/(app)/crm/voice-of-customer/feedback/page.tsx`
@@ -5936,7 +5936,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-DETAIL-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 2026-10-16: verified in crm-service, W2 crm: closed by #notify-consumer.ts emits notification event on status=resolved; failure logged and response includes notified:false)
+- [~] **Status** (W2 crm rescan: partly done (previously ticked closed). FIXED: the notify consumer now authenticates to notification-service (x-internal + x-service-secret), looks the template up by name in the tenant's own templates and sends its UUID, records sent|failed|no_template|no_contact on the request (migration 0177, no version bump), the status PATCH response reports queued|no_contact, and the detail page shows the outcome. REMAINING: no platform-default template exists, so a tenant that has not created an active `service_request_resolution` template (email and/or SMS) gets the honest outcome `no_template` and no message is sent. OWNER QUESTION: should the platform ship default system templates for this notice (wording needs sign-off; SMS needs DLT registration), or must each tenant author its own?)
 - **First-pass claim:** Resolve promises "The citizen is notified." but nothing in the route sends or confirms a notification; whether the service does is undeterminable (ServiceRequestActions.tsx:57).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['PATCH /v1/crm/service-requests/:id/status']`
 - **Question:** When status becomes resolved, does the service publish a notification event to the citizen (email/SMS) and is a failure surfaced?
@@ -5947,7 +5947,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-NEW-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 crm rescan: partly done (previously ticked closed). FIXED: intake channel and an optional target date are captured; the create response now says where the due date came from (dueSource: explicit | sla | none) and the detail page says `No target date set` instead of a bare dash. REMAINING (policy, not built): dueAt is still NULL when the service type is not in the master or has no sla_hours; priority does not change the SLA; no SLA class is stored on the request. OWNER QUESTIONS: (1) should priority shorten the SLA (e.g. urgent = x% of sla_hours) and by how much; (2) what default SLA applies when a type has none, or must creation be refused; (3) is an SLA class to be stored per request?)
 - **First-pass claim:** No due date, SLA class or intake channel (walk-in, phone, portal) is captured, and priority is freely chosen per request; the due date shown later on the detail page has no visible source here (undeterminable server default) (service-requests/new/page.tsx:120-135).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['POST /v1/crm/service-requests']`
 - **Question:** Does the create handler derive dueDate/SLA class from serviceType and priority server-side, and are channel/dueDate accepted in the schema?
