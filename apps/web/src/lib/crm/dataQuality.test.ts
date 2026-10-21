@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   parseFieldError,
+  parseFieldErrors,
+  parseMissingMandatoryFields,
+  parseDqIssue,
   normaliseCandidates,
   normaliseRules,
   normaliseReport,
@@ -88,6 +91,135 @@ describe("normaliseReport", () => {
   it("omits name (not empty string) when the backend does not send one", () => {
     const r = normaliseReport({ records: [{ id: "u-2", score: 0.4, issues: [] }] });
     expect(r.records[0].name).toBeUndefined();
+  });
+});
+
+describe("parseFieldErrors (real crm-service 400 body)", () => {
+  // Exact shape produced by services/crm-service/src/modules/contacts/routes.ts
+  // setErrorHandler for a ZodError: the format code is the zod issue MESSAGE.
+  const realBody = {
+    code: "VALIDATION_FAILED",
+    message: "invalid request",
+    correlationId: "c-1",
+    retryable: false,
+    fieldErrors: [{ field: "phone", message: "INVALID_MOBILE" }],
+  };
+
+  it("lands INVALID_MOBILE under phone when it only appears in fieldErrors", () => {
+    // The top-level code is VALIDATION_FAILED, so parseFieldError alone sees nothing.
+    expect(parseFieldError({ code: realBody.code, message: realBody.message })).toBeNull();
+    expect(parseFieldErrors(realBody)).toEqual({ phone: "Enter a valid 10-digit Indian mobile number." });
+  });
+
+  it("maps every format code to its field in one pass", () => {
+    const out = parseFieldErrors({
+      code: "VALIDATION_FAILED",
+      fieldErrors: [
+        { field: "phone", message: "INVALID_MOBILE" },
+        { field: "pincode", message: "INVALID_PINCODE" },
+        { field: "gstin", message: "INVALID_GSTIN" },
+        { field: "pan", message: "INVALID_PAN" },
+      ],
+    });
+    expect(Object.keys(out).sort()).toEqual(["gstin", "pan", "phone", "pincode"]);
+  });
+
+  it("still reads the legacy top-level { code, message } shape", () => {
+    expect(parseFieldErrors({ code: "INVALID_PAN", message: "bad pan" })).toEqual({ pan: "bad pan" });
+  });
+
+  it("ignores unrelated validation messages and malformed entries", () => {
+    expect(parseFieldErrors({ code: "VALIDATION_FAILED", fieldErrors: [{ field: "email", message: "Invalid email" }, null, 7, {}] })).toEqual({});
+    expect(parseFieldErrors(null)).toEqual({});
+    expect(parseFieldErrors("INVALID_MOBILE")).toEqual({});
+  });
+
+  it("does not treat Object.prototype keys as format codes", () => {
+    expect(parseFieldError({ code: "toString" })).toBeNull();
+    expect(parseFieldErrors({ fieldErrors: [{ field: "x", message: "constructor" }] })).toEqual({});
+  });
+});
+
+describe("parseMissingMandatoryFields (GAP-CRM-CONTACTS-NEW-01)", () => {
+  it("returns the named fields from a 422 MANDATORY_FIELDS_MISSING message", () => {
+    expect(
+      parseMissingMandatoryFields({ code: "MANDATORY_FIELDS_MISSING", message: "missing mandatory field(s): city, phone" }),
+    ).toEqual(["city", "phone"]);
+  });
+
+  it("only ever returns known field names, never raw server text", () => {
+    expect(
+      parseMissingMandatoryFields({
+        code: "MANDATORY_FIELDS_MISSING",
+        message: "missing mandatory field(s): city, <script>alert(1)</script>, leadSource, city",
+      }),
+    ).toEqual(["city", "leadSource"]);
+  });
+
+  it("returns nothing for another code or a message without field names", () => {
+    expect(parseMissingMandatoryFields({ code: "OTHER", message: "missing mandatory field(s): city" })).toEqual([]);
+    expect(parseMissingMandatoryFields({ code: "MANDATORY_FIELDS_MISSING", message: "no names here" })).toEqual([]);
+    expect(parseMissingMandatoryFields(undefined)).toEqual([]);
+  });
+});
+
+describe("parseDqIssue", () => {
+  it("splits machine-readable issue codes", () => {
+    expect(parseDqIssue("missing:email")).toEqual({ kind: "missing", field: "email" });
+    expect(parseDqIssue("invalid:gstin")).toEqual({ kind: "invalid", field: "gstin" });
+    expect(parseDqIssue("stale")).toEqual({ kind: "stale" });
+  });
+  it("passes free text through untouched", () => {
+    expect(parseDqIssue("no email")).toEqual({ kind: "other", raw: "no email" });
+    expect(parseDqIssue("missing:")).toEqual({ kind: "other", raw: "missing:" });
+  });
+});
+
+describe("normaliseReport against the real crm-service envelope (GAP-CRM-DATA-QUALITY-01/03)", () => {
+  // Shape of GET /v1/crm/data-quality?filter=all from data-quality-routes.ts.
+  const wire = {
+    data: {
+      entity: "contacts",
+      total: 3,
+      distribution: { "0-20": 1, "21-40": 0, "41-60": 0, "61-80": 1, "81-100": 1 },
+      counts: { missing: 1, invalid: 1, stale: 0 },
+      filter: "all",
+      filteredIds: [],
+      records: [],
+      recordsByFilter: {
+        missing: [{ id: "m1", name: "Asha Verma", score: 0.2, issues: ["missing:email"] }],
+        invalid: [{ id: "i1", name: null, score: 1, issues: ["invalid:phone"] }],
+        stale: [],
+      },
+    },
+  };
+
+  it("unwraps { data }, reads the record-shaped distribution and every filter's rows", () => {
+    const r = normaliseReport(wire);
+    expect(r.counts).toEqual({ missing: 1, invalid: 1, stale: 0 });
+    expect(r.distribution.map((b) => b.count)).toEqual([1, 0, 0, 1, 1]);
+    expect(r.distribution[0]).toEqual({ label: "0-20%", count: 1 });
+    expect(r.recordsByFilter.missing).toEqual([{ id: "m1", name: "Asha Verma", score: 0.2, issues: ["missing:email"] }]);
+    // a null name from the service is omitted, not rendered as "null"
+    expect(r.recordsByFilter.invalid[0]).toEqual({ id: "i1", score: 1, issues: ["invalid:phone"] });
+    expect(r.recordsByFilter.stale).toEqual([]);
+  });
+
+  it("files a single-filter response under that filter's tab", () => {
+    const r = normaliseReport({
+      data: { filter: "invalid", counts: { invalid: 1 }, records: [{ id: "i1", name: "Ira", score: 0.9, issues: ["invalid:pan"] }] },
+    });
+    expect(r.recordsByFilter.invalid.map((x) => x.id)).toEqual(["i1"]);
+    expect(r.recordsByFilter.missing).toEqual([]);
+  });
+
+  it("getDataQuality asks for filter=all by default and normalises the wrapped body", async () => {
+    fetchMock.mockResolvedValueOnce(ok(wire));
+    const res = await getDataQuality("contacts");
+    expect(fetchMock.mock.calls[0][0]).toContain("v1/crm/data-quality?entity=contacts&filter=all");
+    expect(res.source).toBe("api");
+    expect(res.data.counts.missing).toBe(1);
+    expect(res.data.recordsByFilter.missing[0]?.name).toBe("Asha Verma");
   });
 });
 

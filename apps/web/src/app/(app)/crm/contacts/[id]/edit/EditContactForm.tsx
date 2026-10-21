@@ -9,7 +9,7 @@ import { buildContactPatch, isEmptyPatch } from "@/lib/crm/contactPatch";
 import { ClassificationFields, type ClassificationFormValue } from "../../../../../_components/crm/ClassificationFields";
 import { ConsentField, type ConsentValue } from "../../../../../_components/crm/ConsentField";
 import { DuplicateCheckPanel } from "../../../../../_components/crm/DuplicateCheckPanel";
-import { duplicateCheck, parseFieldError, type DuplicateCandidate, type ValidatedField } from "@/lib/crm/dataQuality";
+import { duplicateCheck, parseFieldErrors, readJsonBody, type DuplicateCandidate, type ValidatedField } from "@/lib/crm/dataQuality";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { Button, ConfirmDialog, EntityPicker, type EntityOption } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
@@ -374,11 +374,14 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
         });
         if (!res.ok) {
           // GAP-CRM-CONTACTS-DETAIL-EDIT-05: surface a format error (e.g.
-          // INVALID_MOBILE) under its field instead of one generic banner.
-          const parsed = (await res.json().catch(() => null)) as { code?: string; message?: string } | null;
-          const fe = parseFieldError({ code: parsed?.code, message: parsed?.message });
-          if (fe) {
-            setFieldErrors({ [fe.field]: fe.message });
+          // INVALID_MOBILE) under its field instead of one generic banner. The
+          // real crm-service 400 carries the code in fieldErrors[].message under
+          // VALIDATION_FAILED, which parseFieldErrors reads (a top-level-code-only
+          // parse never matched a real response). Read a clone so the generic
+          // fallback below can still read the body.
+          const fes = parseFieldErrors(await readJsonBody(res));
+          if (Object.keys(fes).length > 0) {
+            setFieldErrors(fes);
             return;
           }
           throw new Error(await errorMessageFromResponse(res));
@@ -513,11 +516,14 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
               id="edit-gstin"
               value={form.gstin}
               onChange={(e) => setForm({ ...form, gstin: e.target.value.toUpperCase() })}
-              placeholder="29ABCDE1234F1Z5"
+              placeholder="21ABCDE1234F1Z5"
               style={inputStyle}
               aria-invalid={fieldErrors.gstin ? true : undefined}
-              aria-describedby={fieldErrors.gstin ? gstinErrId : undefined}
+              aria-describedby={[fieldErrors.gstin ? gstinErrId : null, "edit-gstin-note"].filter(Boolean).join(" ")}
             />
+            {/* GAP-CRM-CONTACTS-NEW-03: why we collect this + that access is role-scoped
+                (same notice as the New Contact form, read via aria-describedby). */}
+            <p id="edit-gstin-note" style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>{t("gstinNote")}</p>
             {fieldErrors.gstin ? <p id={gstinErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{fieldErrors.gstin}</p> : null}
           </div>
           <div>
@@ -529,8 +535,10 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
               placeholder="ABCDE1234F"
               style={inputStyle}
               aria-invalid={fieldErrors.pan ? true : undefined}
-              aria-describedby={fieldErrors.pan ? panErrId : undefined}
+              aria-describedby={[fieldErrors.pan ? panErrId : null, "edit-pan-note"].filter(Boolean).join(" ")}
             />
+            {/* GAP-CRM-CONTACTS-NEW-03: PAN of an individual is personal data under DPDP. */}
+            <p id="edit-pan-note" style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>{t("panNote")}</p>
             {fieldErrors.pan ? <p id={panErrId} role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{fieldErrors.pan}</p> : null}
           </div>
           <div>

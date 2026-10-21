@@ -13603,7 +13603,29 @@
     "kindContact": "contact record",
     "kindAccount": "account record",
     "unnamedRecord": "Unnamed record",
-    "distributionBarAria": "{label}: {pct} of records"
+    "distributionBarAria": "{label}: {pct} of records",
+    "entityContacts": "Contacts & leads",
+    "entityAccounts": "Accounts",
+    "issueMissing": "Missing {field}",
+    "issueInvalid": "Invalid {field}",
+    "issueStale": "Not updated recently",
+    "fieldLabel": {
+      "name": "Name",
+      "email": "Email",
+      "phone": "Phone",
+      "company": "Organisation",
+      "designation": "Designation",
+      "city": "City",
+      "leadSource": "Lead source",
+      "pincode": "PIN code",
+      "gstin": "GSTIN",
+      "pan": "PAN",
+      "industry": "Industry",
+      "website": "Website"
+    },
+    "truncatedNote": "Showing the first {shown} of {total} flagged records.",
+    "nothingFlaggedMessage": "No {entity} match this data-quality filter.",
+    "loadingDistribution": "Loading distribution…"
   },
   "crmDealDetail": {
     "logActivity": "Log Activity",
@@ -13674,7 +13696,9 @@
     "searchAccounts": "Search accounts…",
     "linkedTo": "Linked to <strong>{name}</strong>. Unlink it to type a new organisation instead.",
     "unlinkAccount": "Unlink account",
-    "typeNewOrg": "Or type a new organisation"
+    "typeNewOrg": "Or type a new organisation",
+    "gstinNote": "Collected for invoicing and tax (KYC). Access is role-scoped and logged.",
+    "panNote": "Personal data collected for KYC/tax. Access is role-scoped and logged."
   },
   "crmFollowUpModal": {
     "defaultSubject": "Account health follow-up — {account}",
@@ -14629,7 +14653,18 @@
     "gstinNote": "Collected for invoicing and tax (KYC). Access is role-scoped and logged.",
     "panNote": "Personal data collected for KYC/tax. Access is role-scoped and logged.",
     "marketingConsent": "I consent to marketing communications (DPDP Act, 2023)",
-    "created": "Created"
+    "created": "Created",
+    "missingMandatory": "Please fill in the required field(s): {fields}.",
+    "fieldRequired": "{field} is required.",
+    "fieldLabel": {
+      "name": "Full name",
+      "email": "Email",
+      "phone": "Phone (mobile)",
+      "company": "Organisation",
+      "designation": "Designation",
+      "city": "City",
+      "leadSource": "Lead source"
+    }
   },
   "crmControlTowerPage": {
     "title": "Executive Control Tower",
