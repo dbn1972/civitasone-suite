@@ -99,7 +99,8 @@ function escapeLike(v: string): string {
   return v.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
-export async function listEvents(tenantId: string, from: Date, to: Date, type?: string, limit = 50, offset = 0, filters: ListEventsFilters = {}): Promise<AuditEventView[]> {
+/** WHERE conditions shared by listEvents / countEvents / listEventsForExport so all three always agree on what "matching" means. */
+function eventConditions(tenantId: string, from: Date, to: Date, type: string | undefined, filters: ListEventsFilters) {
   const conditions = [
     eq(auditEvents.tenantId, tenantId),
     gte(auditEvents.occurredAt, from),
@@ -116,11 +117,71 @@ export async function listEvents(tenantId: string, from: Date, to: Date, type?: 
     const like = `%${escapeLike(filters.actor)}%`;
     conditions.push(sql`(${auditEvents.actor}->>'actorId' = ${filters.actor} OR ${auditEvents.actor}->>'email' ILIKE ${like} OR ${auditEvents.actor}->>'name' ILIKE ${like})`);
   }
+  return conditions;
+}
+
+export async function listEvents(tenantId: string, from: Date, to: Date, type?: string, limit = 50, offset = 0, filters: ListEventsFilters = {}): Promise<AuditEventView[]> {
+  const conditions = eventConditions(tenantId, from, to, type, filters);
   const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(auditEvents)
     .where(and(...conditions))
     .orderBy(desc(auditEvents.occurredAt))
     .limit(limit).offset(offset)));
   return rows.map(toView);
+}
+
+/**
+ * GAP-HR-AUDIT-LOG-04: the number of events matching exactly the filters
+ * listEvents applies, so a paged view can say "Showing 41-60 of N" with N
+ * being the real tenant-scoped row count rather than the size of one page.
+ */
+export async function countEvents(tenantId: string, from: Date, to: Date, type?: string, filters: ListEventsFilters = {}): Promise<number> {
+  const conditions = eventConditions(tenantId, from, to, type, filters);
+  const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select({ total: sql<number>`count(*)::int` })
+    .from(auditEvents)
+    .where(and(...conditions))));
+  return Number(rows[0]?.total ?? 0);
+}
+
+/** The narrow projection a CSV export needs -- never the whole payload / CERT-In columns. */
+export type ExportEventRow = {
+  id: string;
+  type: string;
+  actor: Record<string, unknown>;
+  target: string | null;
+  severity: string;
+  occurredAt: Date;
+  service: string | null;
+  action: string | null;
+  resourceType: string | null;
+  resourceId: string | null;
+  outcome: string | null;
+};
+
+/**
+ * GAP-HR-AUDIT-LOG-04: every event matching the filters (same conditions as
+ * listEvents), newest first with a stable (occurred_at, id) order, in ONE
+ * query -- so there is no offset drift against a table that keeps growing.
+ * Capped at `max + 1` rows: the caller refuses to export when more than `max`
+ * come back instead of silently truncating an audit trail.
+ */
+export async function listEventsForExport(tenantId: string, from: Date, to: Date, type: string | undefined, filters: ListEventsFilters, max: number): Promise<ExportEventRow[]> {
+  const conditions = eventConditions(tenantId, from, to, type, filters);
+  return runWithTenant(tenantId, () => db.transaction((tx) => tx.select({
+    id: auditEvents.id,
+    type: auditEvents.type,
+    actor: auditEvents.actor,
+    target: auditEvents.target,
+    severity: auditEvents.severity,
+    occurredAt: auditEvents.occurredAt,
+    service: sql<string | null>`${auditEvents.payload}->>'service'`,
+    action: sql<string | null>`${auditEvents.payload}->>'action'`,
+    resourceType: sql<string | null>`${auditEvents.payload}->>'resourceType'`,
+    resourceId: sql<string | null>`${auditEvents.payload}->>'resourceId'`,
+    outcome: sql<string | null>`${auditEvents.payload}->>'outcome'`,
+  }).from(auditEvents)
+    .where(and(...conditions))
+    .orderBy(desc(auditEvents.occurredAt), desc(auditEvents.id))
+    .limit(max + 1)));
 }
 
 export type AuditEventSummary = { total: number; failures: number; success: number; last24h: number; asOf: string };

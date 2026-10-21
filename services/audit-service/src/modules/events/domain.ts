@@ -52,3 +52,26 @@ export function computeHash(
     .digest("hex")
     .slice(0, 64);
 }
+
+/**
+ * GAP-HR-AUDIT-LOG-04: the outcome column of the CSV export. The producer's own
+ * `payload.outcome` wins; only without one is it inferred from the severity (the
+ * same error/critical -> failure, info/warning -> success rule the list routes
+ * use), and anything else is "unknown" rather than a guess.
+ */
+export function exportOutcome(outcome: string | null | undefined, severity: string | null | undefined): string {
+  if (outcome) return outcome;
+  if (severity === "error" || severity === "critical") return "failure";
+  if (severity === "info" || severity === "warning") return "success";
+  return "unknown";
+}
+
+/** Human-readable actor for the export: the email, else the name, else the bare actor id; "system" when none. */
+export function exportActorLabel(actor: Record<string, unknown> | null | undefined): string {
+  if (!actor) return "system";
+  for (const k of ["email", "name", "actorId"] as const) {
+    const v = actor[k];
+    if (typeof v === "string" && v.length > 0) return v;
+  }
+  return "system";
+}
