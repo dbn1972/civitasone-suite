@@ -234,6 +234,24 @@ export function buildValidationSchema(draft: CustomFieldDraft): CustomFieldValid
 }
 
 /**
+ * True when the server copy `f` already carries every editable value of `draft`,
+ * i.e. a queued (202) edit has actually landed. Compares the saved name, type,
+ * ordinal and the normalised validation blob (required, options, sensitive,
+ * visibleToRoles), so an edit to ANY of them is only reported as reflected once
+ * the list shows it - a same-id/same-type row alone proves nothing about a
+ * rename, a reorder or a changed option list (GAP-CRM-CUSTOM-FIELDS-03).
+ */
+export function fieldReflectsDraft(draft: CustomFieldDraft, f: CustomField): boolean {
+  const server = toDraft(f);
+  return (
+    server.fieldName.trim() === draft.fieldName.trim() &&
+    server.fieldType === draft.fieldType &&
+    server.ordinal === draft.ordinal &&
+    JSON.stringify(buildValidationSchema(server)) === JSON.stringify(buildValidationSchema(draft))
+  );
+}
+
+/**
  * Validate a draft. fieldName is always required (it is the label/key). A
  * select / multi_select field must carry at least one non-empty option.
  *
