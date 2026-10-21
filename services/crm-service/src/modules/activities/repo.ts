@@ -106,10 +106,19 @@ export async function listOverdueTasks(
   tenantId: string,
   limit: number,
   offset: number,
+  minAgeMinutes?: number,
 ): Promise<{ rows: Array<Record<string, unknown>>; total: number }> {
   return scopedRead(async (tx) => {
+    // `minAgeMinutes` mirrors the escalation scheduler: a task-type activity's DATE
+    // due_date is treated as end-of-day UTC, and a rule fires once the task is at
+    // least `threshold` minutes past that instant.
+    const ageF =
+      minAgeMinutes !== undefined && minAgeMinutes > 0
+        ? sql`AND now() >= ((a.due_date + time '23:59:59') AT TIME ZONE 'UTC') + make_interval(mins => ${minAgeMinutes})`
+        : sql``;
     const where = sql`a.tenant_id = ${tenantId} AND a.type = 'task' AND a.status = 'open'
-      AND a.due_date IS NOT NULL AND a.due_date < (now() AT TIME ZONE 'Asia/Kolkata')::date`;
+      AND a.due_date IS NOT NULL AND a.due_date < (now() AT TIME ZONE 'Asia/Kolkata')::date
+      ${ageF}`;
     const rows = (await tx.execute(sql`
       SELECT a.id, a.subject, a.text, a.due_date::text AS "dueDate",
              COALESCE(a.owner_id, a.created_by) AS "ownerId",
