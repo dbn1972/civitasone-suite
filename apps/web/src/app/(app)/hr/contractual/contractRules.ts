@@ -34,7 +34,7 @@ export type ContractExpiryState = "expired" | "expiring" | "active" | "none";
 export function contractExpiryState(status: string, daysToExpiry: number | null): ContractExpiryState {
   if (status === "terminated" || status === "renewed" || status === "draft") return "none";
   if (status === "expired") return "expired";
-  if (daysToExpiry === null) return "none";
+  if (daysToExpiry === null || Number.isNaN(daysToExpiry)) return "none";
   if (daysToExpiry < 0) return "expired";
   if (daysToExpiry <= EXPIRING_WINDOW_DAYS) return "expiring";
   return "active";
@@ -67,28 +67,26 @@ export function validateNewEndDate(newEndDate: string, currentEndDate: string): 
 /**
  * GAP-HR-WORKFORCE-CONTRACTUAL-01: the "Expiring ≤30d" window carried over
  * from the retired /hr/workforce/contractual page (GFR 2017 Ch. 8 renewal
- * alerts).
+ * alerts). It IS EXPIRING_WINDOW_DAYS -- one constant, so the tile, the per-row
+ * badge and the pill can never use different windows.
  */
-export const EXPIRING_SOON_DAYS = 30;
+export const EXPIRING_SOON_DAYS = EXPIRING_WINDOW_DAYS;
 
 /**
  * True only for a LIVE engagement (active, already flagged "expiring" by
  * hrms-service's expiry consumer, or "escalated" by it) whose end date is today
- * or within the next `windowDays`. The backend flips active -> expiring at <=90
- * days, so the `expiring` status alone is NOT a 30-day signal; and a contract
- * whose end date has already passed (negative `daysToExpiry`) is ended, not
- * expiring, even if its stored status has not been swept yet. Terminated /
- * renewed / expired contracts never count. A missing end date (null) never
- * counts. This is the SAME rule as hrms-service's summarizeContracts (the
- * register's "Expiring <=30d" tile), so the tile can never disagree with it.
+ * or within the next EXPIRING_WINDOW_DAYS. The backend flips active -> expiring
+ * at <=90 days, so the `expiring` status alone is NOT a 30-day signal; and a
+ * contract whose end date has already passed (negative `daysToExpiry`) is
+ * ended, not expiring, even if its stored status has not been swept yet.
+ * Terminated / renewed / expired / draft contracts never count. A missing or
+ * unreadable end date never counts. This delegates to contractExpiryState --
+ * the one implementation of the end-date rule, which is also hrms-service's
+ * summarizeContracts rule (the register's "Expiring <=30d" tile) -- so the two
+ * cannot drift.
  */
-export function isExpiringSoon(
-  status: string,
-  daysToExpiry: number | null,
-  windowDays: number = EXPIRING_SOON_DAYS,
-): boolean {
-  if (daysToExpiry === null || Number.isNaN(daysToExpiry)) return false;
-  return (status === "active" || status === "expiring" || status === "escalated") && daysToExpiry >= 0 && daysToExpiry <= windowDays;
+export function isExpiringSoon(status: string, daysToExpiry: number | null): boolean {
+  return contractExpiryState(status, daysToExpiry) === "expiring";
 }
 
 /** The pseudo-status shown on the register's status badge for a contract ending within 30 days. */

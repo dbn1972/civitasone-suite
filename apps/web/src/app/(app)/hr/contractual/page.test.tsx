@@ -260,6 +260,17 @@ describe("/hr/contractual expiring <=30d tile (GAP-HR-WORKFORCE-CONTRACTUAL-01)"
     expect(tile("Expired")).toHaveTextContent("1");
   });
 
+  it("an ended draft contract is in no tile -- the loaded-rows tally matches the server summary", async () => {
+    await renderRegister([
+      contractEnding("c1", "Ended Draft", "draft", -3),
+      contractEnding("c2", "Draft Ending Soon", "draft", 5),
+      contractEnding("c3", "Ended Expiring", "expiring", -2),
+    ]);
+    expect(tile("Expired")).toHaveTextContent("1"); // only c3
+    expect(tile("Expiring ≤30d")).toHaveTextContent("0");
+    expect(tile("Active")).toHaveTextContent("0");
+  });
+
   it("an ended contract still stored as active is not counted as Active", async () => {
     await renderRegister([contractEnding("c1", "Ended Active", "active", -3), contractEnding("c2", "Live", "active", 200)]);
     expect(tile("Active")).toHaveTextContent("1");

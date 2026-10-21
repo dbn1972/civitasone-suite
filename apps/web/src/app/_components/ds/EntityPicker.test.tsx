@@ -210,6 +210,15 @@ describe("EntityPicker", () => {
       expect(screen.queryByRole("button")).not.toBeInTheDocument();
     });
 
+    it("a caller that sets BOTH searchRetryLabel and retryText gets exactly one retry button (the inline one)", async () => {
+      render(<Harness search={vi.fn(async () => { throw new Error("boom"); })} searchErrorText="Could not load the list." searchRetryLabel="Try again" retryText="Retry" />);
+      fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "x" } });
+      const alert = await screen.findByRole("alert");
+      expect(screen.getAllByRole("button")).toHaveLength(1);
+      expect(within(alert).getByRole("button", { name: "Try again" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+    });
+
     it("reports the failed state to the form: true after a failed search, false once a later one succeeds", async () => {
       const seen: boolean[] = [];
       const search = vi

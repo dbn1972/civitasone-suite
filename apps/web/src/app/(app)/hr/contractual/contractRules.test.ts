@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { EXPIRING_SOON_STATUS, canRenew, canTerminate, contractDisplayStatus, contractExpiryState, isExpiringSoon, validateNewEndDate } from "./contractRules";
+import { EXPIRING_SOON_DAYS, EXPIRING_SOON_STATUS, EXPIRING_WINDOW_DAYS, canRenew, canTerminate, contractDisplayStatus, contractExpiryState, isExpiringSoon, validateNewEndDate } from "./contractRules";
 
 describe("contract action rules (GAP-HR-CONTRACTUAL-05)", () => {
   it("renew: active/expiring only, HR or manager", () => {
@@ -64,6 +64,20 @@ describe("contractExpiryState (GAP-HR-CONTRACTUAL-04)", () => {
 });
 
 describe("expiry rules (GAP-HR-WORKFORCE-CONTRACTUAL-01)", () => {
+  it("an unreadable end date (NaN) is not in force, like a missing one", () => {
+    expect(contractExpiryState("active", Number.NaN)).toBe("none");
+    expect(contractExpiryState("expired", Number.NaN)).toBe("expired");
+  });
+
+  it("isExpiringSoon is exactly contractExpiryState(...) === 'expiring' (one rule, one window)", () => {
+    const statuses = ["draft", "active", "expiring", "expired", "renewed", "terminated", "escalated"];
+    const days = [null, Number.NaN, -400, -1, 0, 1, 29, 30, 31, 45, 90, 400];
+    for (const s of statuses) for (const d of days) {
+      expect(isExpiringSoon(s, d), `${s} @ ${d}`).toBe(contractExpiryState(s, d) === "expiring");
+    }
+    expect(EXPIRING_SOON_DAYS).toBe(EXPIRING_WINDOW_DAYS);
+  });
+
   it("isExpiringSoon: live contract ending today..30d only", () => {
     expect(isExpiringSoon("active", 10)).toBe(true);
     expect(isExpiringSoon("expiring", 0)).toBe(true);

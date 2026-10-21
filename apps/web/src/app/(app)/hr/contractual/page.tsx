@@ -5,7 +5,7 @@ import { daysUntilIST } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 import { requireAnyRole } from "@/lib/auth/roleGuard";
 import { HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
-import { contractExpiryState, contractDisplayStatus, isExpiringSoon, EXPIRING_SOON_STATUS, EXPIRING_WINDOW_DAYS } from "./contractRules";
+import { contractExpiryState, contractDisplayStatus, EXPIRING_SOON_STATUS, EXPIRING_WINDOW_DAYS } from "./contractRules";
 
 type ApiContract = {
   id: string;
@@ -113,8 +113,10 @@ function tallyLoadedRows(rows: Row[]): ContractSummary {
   const hasEnded = (r: Row) => r.daysToExpiry !== null && r.daysToExpiry < 0;
   return {
     active: rows.filter((r) => r.rawStatus === "active" && !hasEnded(r)).length,
-    expiring: rows.filter((r) => isExpiringSoon(r.rawStatus, r.daysToExpiry)).length,
-    expired: rows.filter((r) => r.rawStatus === "expired" || (hasEnded(r) && r.rawStatus !== "terminated" && r.rawStatus !== "renewed")).length,
+    // contractExpiryState is the single end-date rule (draft / terminated / renewed are in none of the classes, as in
+    // summarizeContracts), so an ended `draft` contract is not counted as expired here either.
+    expiring: rows.filter((r) => contractExpiryState(r.rawStatus, r.daysToExpiry) === "expiring").length,
+    expired: rows.filter((r) => contractExpiryState(r.rawStatus, r.daysToExpiry) === "expired").length,
     agencies: new Set(rows.map((r) => r.agency).filter((a) => a !== "—")).size,
   };
 }
