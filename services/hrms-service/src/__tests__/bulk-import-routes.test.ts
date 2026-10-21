@@ -197,6 +197,88 @@ describe("POST /v1/hrms/employees/bulk", () => {
     expect(publishSpy).toHaveBeenCalledTimes(1);
   });
 
+  // GAP-HR-EMPLOYEES-IMPORT-05: managerEmployeeNo is resolved server-side, within
+  // the caller's tenant, to a real managerId before anything is queued. The
+  // scopedRead mock answers in call order: canonical types, tenant types,
+  // existing employeeNos, then the manager rows.
+  describe("managerEmployeeNo (GAP-HR-EMPLOYEES-IMPORT-05)", () => {
+    const MANAGER_ID = "33333333-3333-4333-8333-333333333333";
+
+    async function post(employees: Record<string, unknown>[]) {
+      const app: FastifyInstance = await buildApp();
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/hrms/employees/bulk",
+        headers: { authorization: `Bearer ${adminTok}` },
+        payload: { employees },
+      });
+      await app.close();
+      return res;
+    }
+
+    it("202 — an existing manager's employeeNo is resolved to managerId on the queued create message", async () => {
+      H.queryResults = [CANONICAL_TYPES, NO_TENANT_TYPES, [], [{ id: MANAGER_ID, employeeNo: "M-1" }]];
+      const publishSpy = vi.spyOn(queue, "publish");
+      const res = await post([validEmployee({ managerEmployeeNo: "M-1" })]);
+
+      expect(res.statusCode).toBe(202);
+      expect(publishSpy).toHaveBeenCalledTimes(1);
+      const [, message] = publishSpy.mock.calls[0] as unknown as [string, { payload: Record<string, unknown> }];
+      expect(message.payload.managerId).toBe(MANAGER_ID);
+      // The human-readable number is an input only; it is not forwarded as a column value.
+      expect(message.payload).not.toHaveProperty("managerEmployeeNo");
+    });
+
+    it("202 — a row with no manager queues no managerId at all", async () => {
+      const publishSpy = vi.spyOn(queue, "publish");
+      const res = await post([validEmployee()]);
+
+      expect(res.statusCode).toBe(202);
+      const [, message] = publishSpy.mock.calls[0] as unknown as [string, { payload: Record<string, unknown> }];
+      expect(message.payload).not.toHaveProperty("managerId");
+    });
+
+    it("400 — an unknown manager number is a row-level error on that row's managerEmployeeNo, and nothing is queued", async () => {
+      H.queryResults = [CANONICAL_TYPES, NO_TENANT_TYPES, [], []];
+      const publishSpy = vi.spyOn(queue, "publish");
+      const res = await post([validEmployee({ employeeNo: "E9100" }), validEmployee({ employeeNo: "E9101", managerEmployeeNo: "NOPE-1" })]);
+
+      expect(res.statusCode).toBe(400);
+      const body = res.json<{ fieldErrors: { field: string; message: string }[] }>();
+      expect(body.fieldErrors).toEqual([
+        expect.objectContaining({ field: "employees.1.managerEmployeeNo", message: expect.stringContaining("Unknown manager employee number: NOPE-1") }),
+      ]);
+      expect(publishSpy).not.toHaveBeenCalled();
+    });
+
+    it("400 — an employee cannot be their own manager", async () => {
+      H.queryResults = [CANONICAL_TYPES, NO_TENANT_TYPES, [], [{ id: MANAGER_ID, employeeNo: "E9200" }]];
+      const publishSpy = vi.spyOn(queue, "publish");
+      const res = await post([validEmployee({ employeeNo: "E9200", managerEmployeeNo: "E9200" })]);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json<{ fieldErrors: { field: string; message: string }[] }>().fieldErrors).toEqual([
+        expect.objectContaining({ field: "employees.0.managerEmployeeNo", message: expect.stringContaining("own manager") }),
+      ]);
+      expect(publishSpy).not.toHaveBeenCalled();
+    });
+
+    it("400 — a manager who is only another row of the same file cannot be resolved yet (no ordering guarantee between queued rows)", async () => {
+      H.queryResults = [CANONICAL_TYPES, NO_TENANT_TYPES, [], []];
+      const publishSpy = vi.spyOn(queue, "publish");
+      const res = await post([
+        validEmployee({ employeeNo: "E9300" }),
+        validEmployee({ employeeNo: "E9301", managerEmployeeNo: "E9300" }),
+      ]);
+
+      expect(res.statusCode).toBe(400);
+      expect(res.json<{ fieldErrors: { field: string; message: string }[] }>().fieldErrors).toEqual([
+        expect.objectContaining({ field: "employees.1.managerEmployeeNo", message: expect.stringContaining("same file") }),
+      ]);
+      expect(publishSpy).not.toHaveBeenCalled();
+    });
+  });
+
   it("403 — a role outside HR_ROLES cannot bulk-import", async () => {
     const app: FastifyInstance = await buildApp();
     const res = await app.inject({

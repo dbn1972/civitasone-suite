@@ -4,12 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
+import { formatMoney } from "@/lib/formatters";
 import { Button, Field, Input } from "../../../../_components/ds";
 import { downloadCsvFile } from "@/lib/export/csvExport";
+import { parseCsv } from "./csv";
 
 type Row = Record<string, string> & { lineNo: number };
 
-// Hoisted so the handleSubmit validation and the JSX hint text below share
+// Hoisted so the review-step validation and the JSX hint text below share
 // one list instead of two independently-maintained copies drifting apart.
 const REQUIRED_COLUMNS = ["employeeNo", "fullName", "departmentCode", "designationCode", "employeeType", "dateOfJoining", "basicPay"];
 // GAP-HR-EMPLOYEES-IMPORT-05: optional, resolved server-side (bulk-import/
@@ -17,43 +19,28 @@ const REQUIRED_COLUMNS = ["employeeNo", "fullName", "departmentCode", "designati
 // a required column, so omitting it (most rows) is fine.
 const OPTIONAL_COLUMNS = ["managerEmployeeNo"];
 
-// GAP-HR-EMPLOYEES-IMPORT-03: the previous `line.split(",")` shifted every
-// later column whenever a value legitimately contained a comma (a quoted
-// "Das, Rashmi Ranjan" name, or a thousands-separated amount) -- this is a
-// minimal RFC 4180 reader (quoted fields, embedded commas, "" as an escaped
-// quote) rather than a dependency, since this file only ever needs to read
-// one flat CSV shape.
-function parseCsvLine(line: string): string[] {
-  const cells: string[] = [];
-  let cur = "";
-  let inQuotes = false;
-  for (let i = 0; i < line.length; i++) {
-    const c = line[i];
-    if (inQuotes) {
-      if (c === '"') {
-        if (line[i + 1] === '"') { cur += '"'; i++; } else { inQuotes = false; }
-      } else {
-        cur += c;
-      }
-    } else if (c === '"') {
-      inQuotes = true;
-    } else if (c === ",") {
-      cells.push(cur);
-      cur = "";
-    } else {
-      cur += c;
-    }
-  }
-  cells.push(cur);
-  return cells.map((c) => c.trim());
-}
-
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Same shape the Add Employee wizard accepts (new/wizardTypes.ts MOBILE_RE),
+// so the two entry paths agree on what a valid mobile number looks like.
+const MOBILE_RE = /^\+?[\d\s\-()]{7,15}$/;
 const GENDER_VALUES = new Set(["male", "female", "other", ""]);
 
 // The bulk endpoint (POST /v1/hrms/employees/bulk) caps a single request at
 // 500 employees (bulkImportBody in hrms-service's bulk-import/routes.ts).
 const BULK_MAX_PER_REQUEST = 500;
+// GAP-HR-EMPLOYEES-IMPORT-03 (fix step 4): the review step shows the first
+// few rows of the file so a person can see at a glance that the columns lined
+// up, without rendering a 500-row table.
+const PREVIEW_ROWS = 10;
+
+/** A YYYY-MM-DD string that is also a real calendar date (2024-13-45 and 2023-02-30 are not). */
+function isRealIsoDate(value: string): boolean {
+  if (!DATE_RE.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number) as [number, number, number];
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+}
 
 type ResolvedRow = {
   lineNo: number;
@@ -61,50 +48,37 @@ type ResolvedRow = {
   body: Record<string, unknown>;
 };
 
+type ErrorRow = { lineNo: number; fullName: string; message: string };
+
+type PreviewRow = {
+  lineNo: number;
+  employeeNo: string;
+  fullName: string;
+  departmentCode: string;
+  designationCode: string;
+  dateOfJoining: string;
+  basicPay: string;
+  ok: boolean;
+};
+
 /**
- * Bulk CSV import form — parses the file client-side, validates rows, then
- * submits them to the backend. Shows progress and error summary.
- *
- * departmentId/designationId on both POST /v1/hrms/employees and POST
- * /v1/hrms/employees/bulk are strict UUIDs (createEmployeeBody and
- * bulkImportBody in hrms-service) — neither does any code-based resolution
- * server-side. The CSV template this page hands out uses human codes like
- * "FIN"/"JC" in departmentCode/designationCode, so this form resolves codes
- * to ids client-side against the same masters lists the rest of HR already
- * uses, with a clear per-row error when a code isn't found (rather than a
- * bare status code). This step stays even though submission below now goes
- * through the bulk endpoint — that endpoint expects ids too.
- *
- * FINDING-2 (HRMS role-based review): submission used to be one
- * POST /v1/hrms/employees call per row (a working fix for the code-vs-id
- * 400 above, but it left the dedicated bulk endpoint entirely unused). Now
- * resolved rows are sent to POST /v1/hrms/employees/bulk in chunks of up to
- * BULK_MAX_PER_REQUEST — one request per chunk instead of one per row, so a
- * typical import (well under 500 rows) is a single request. The bulk
- * endpoint validates the whole chunk before queueing any of it (duplicate
- * employeeNo within the file, unknown employeeType, malformed fields), so a
- * chunk-level 400 is resolved per-row via its `fieldErrors` (field:
- * "employees.<index>.<field>") and only the bad rows are dropped before
- * retrying the rest of that chunk — a network-chunk boundary never fails an
- * otherwise-good row.
- *
- * GAP-HR-EMPLOYEES-IMPORT-02: the single-row endpoint writes synchronously,
- * so a 2xx meant "the row is in the database". The bulk endpoint only
- * validates synchronously and then queues creation (hrms.employee.create,
- * consumed by employee/consumer.ts) — a 2xx means "accepted and queued", not
- * "created". Each accepted chunk now returns a batch id whose real per-row
- * state is persisted by the consumer, so after the last chunk this form polls
- * GET .../bulk/status/:batchId (every `pollIntervalMs`, for at most
- * `pollMaxMs`), shows "N submitted" immediately, and only reports "N created"
- * — plus a named, downloadable list of the rows that failed — once every batch
- * reports "completed". If the budget runs out (or the server sent no batch id)
- * the result stays "submitted" and says so; a green "created" is never shown
- * on the strength of a 202 alone.
- *
- * GAP-HR-EMPLOYEES-IMPORT-01: a 403 on any chunk means the caller is not
- * allowed to bulk-import; it is reported once, as a single permission message,
- * and no further chunk is sent.
+ * GAP-HR-EMPLOYEES-IMPORT-03: what the review step hands to the confirm step.
+ * Nothing in here has been sent to the server yet.
  */
+type Review = {
+  /** Data rows read from the file (header excluded). */
+  fileRows: number;
+  /** Rows that passed every client-side check and will be posted on confirm. */
+  valid: ResolvedRow[];
+  /** The first PREVIEW_ROWS rows of the file, valid or not, for the on-screen table. */
+  sample: PreviewRow[];
+  /** Plain-language messages for every row that will be skipped. */
+  errs: string[];
+  errRows: ErrorRow[];
+};
+
+type Phase = "idle" | "parsing" | "preview" | "uploading" | "processing" | "done" | "error";
+
 /** One accepted POST /bulk chunk, kept so its status can be polled and its rows named in the report. */
 type AcceptedBatch = { batchId: string; rows: ResolvedRow[] };
 
@@ -146,22 +120,74 @@ const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 const DEFAULT_POLL_INTERVAL_MS = 2000;
 const DEFAULT_POLL_MAX_MS = 60_000;
 
+/**
+ * Bulk CSV import form -- two deliberate steps:
+ *
+ *  1. REVIEW (GAP-HR-EMPLOYEES-IMPORT-03): parse the file (RFC 4180, see
+ *     csv.ts), resolve department/designation codes, validate every row
+ *     client-side, and show a preview -- the first rows, the total, how many
+ *     are valid and how many will be skipped. NOTHING is sent to the server
+ *     in this step.
+ *  2. CONFIRM: only an explicit "Import N valid rows" click posts the valid
+ *     rows (rows with errors are skipped, never posted).
+ *
+ * departmentId/designationId on both POST /v1/hrms/employees and POST
+ * /v1/hrms/employees/bulk are strict UUIDs (createEmployeeBody and
+ * bulkImportBody in hrms-service) — neither does any code-based resolution
+ * server-side. The CSV template this page hands out uses human codes like
+ * "FIN"/"JC" in departmentCode/designationCode, so this form resolves codes
+ * to ids client-side against the same masters lists the rest of HR already
+ * uses, with a clear per-row error when a code isn't found (rather than a
+ * bare status code). This step stays even though submission below now goes
+ * through the bulk endpoint — that endpoint expects ids too.
+ *
+ * FINDING-2 (HRMS role-based review): submission used to be one
+ * POST /v1/hrms/employees call per row (a working fix for the code-vs-id
+ * 400 above, but it left the dedicated bulk endpoint entirely unused). Now
+ * resolved rows are sent to POST /v1/hrms/employees/bulk in chunks of up to
+ * BULK_MAX_PER_REQUEST — one request per chunk instead of one per row, so a
+ * typical import (well under 500 rows) is a single request. The bulk
+ * endpoint validates the whole chunk before queueing any of it (duplicate
+ * employeeNo within the file, unknown employeeType, malformed fields), so a
+ * chunk-level 400 is resolved per-row via its `fieldErrors` (field:
+ * "employees.<index>.<field>") and only the bad rows are dropped before
+ * retrying the rest of that chunk — a network-chunk boundary never fails an
+ * otherwise-good row.
+ *
+ * GAP-HR-EMPLOYEES-IMPORT-02: the single-row endpoint writes synchronously,
+ * so a 2xx meant "the row is in the database". The bulk endpoint only
+ * validates synchronously and then queues creation (hrms.employee.create,
+ * consumed by employee/consumer.ts) — a 2xx means "accepted and queued", not
+ * "created". Each accepted chunk now returns a batch id whose real per-row
+ * state is persisted by the consumer, so after the last chunk this form polls
+ * GET .../bulk/status/:batchId (every `pollIntervalMs`, for at most
+ * `pollMaxMs`), shows "N submitted" immediately, and only reports "N created"
+ * — plus a named, downloadable list of the rows that failed — once every batch
+ * reports "completed". If the budget runs out (or the server sent no batch id)
+ * the result stays "submitted" and says so; a green "created" is never shown
+ * on the strength of a 202 alone.
+ *
+ * GAP-HR-EMPLOYEES-IMPORT-01: a 403 on any chunk means the caller is not
+ * allowed to bulk-import; it is reported once, as a single permission message,
+ * and no further chunk is sent.
+ */
 export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxMs = DEFAULT_POLL_MAX_MS }: { pollIntervalMs?: number; pollMaxMs?: number } = {}) {
   const t = useTranslations("employeeImportForm");
   const fileRef = useRef<HTMLInputElement>(null);
-  const [status, setStatus] = useState<"idle" | "parsing" | "uploading" | "processing" | "done" | "error">("idle");
+  const [status, setStatus] = useState<Phase>("idle");
   const [progress, setProgress] = useState({ total: 0, success: 0, failed: 0 });
-  // GAP-HR-EMPLOYEES-IMPORT-02: what the status route has actually reported. `confirmed`
-  // is true only when EVERY accepted chunk reached "completed"; until then the result is
-  // worded as "submitted", never as a green "created".
-  const [outcome, setOutcome] = useState({ submitted: 0, created: 0, asyncFailed: 0, polled: false, confirmed: false });
   const [errors, setErrors] = useState<string[]>([]);
   // GAP-HR-EMPLOYEES-IMPORT-06: structured alongside the plain display
   // strings above (which stay exactly as before, so the existing on-screen
   // wording/tests are untouched) so a real CSV can be built from them --
   // the display strings themselves are already fully-formed sentences, not
   // suitable for re-splitting into columns.
-  const [errorRows, setErrorRows] = useState<{ lineNo: number; fullName: string; message: string }[]>([]);
+  const [errorRows, setErrorRows] = useState<ErrorRow[]>([]);
+  const [review, setReview] = useState<Review | null>(null);
+  // GAP-HR-EMPLOYEES-IMPORT-02: what the status route has actually reported. `confirmed`
+  // is true only when EVERY accepted chunk reached "completed"; until then the result is
+  // worded as "submitted", never as a green "created".
+  const [outcome, setOutcome] = useState({ submitted: 0, created: 0, asyncFailed: 0, polled: false, confirmed: false });
   const formError = useFormError("employee row");
   // Polling must stop if the page is left mid-import. The flag is reset on every mount, not just
   // set in the cleanup: React StrictMode (reactStrictMode: true, so `next dev`) runs mount ->
@@ -181,12 +207,27 @@ export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxM
     downloadCsvFile("import-errors.csv", csvLines.join("\n"));
   }
 
-  async function loadCodeMap(path: string): Promise<Map<string, string>> {
-    const res = await fetch(path);
-    if (!res.ok) return new Map();
-    const body = (await res.json()) as { data?: { id: string; code: string }[] } | { id: string; code: string }[];
-    const rows = Array.isArray(body) ? body : (body.data ?? []);
-    return new Map(rows.map((r) => [r.code, r.id]));
+  /** null = the master could not be loaded (distinct from "loaded, and empty"). */
+  async function loadCodeMap(path: string): Promise<Map<string, string> | null> {
+    try {
+      const res = await fetch(path);
+      if (!res.ok) return null;
+      const body = (await res.json()) as { data?: { id: string; code: string }[] } | { id: string; code: string }[];
+      const rows = Array.isArray(body) ? body : (body.data ?? []);
+      return new Map(rows.map((r) => [r.code, r.id]));
+    } catch {
+      return null;
+    }
+  }
+
+  /** Picking a different file discards any review/result from the previous one. */
+  function resetForNewFile() {
+    setStatus("idle");
+    setReview(null);
+    setErrors([]);
+    setErrorRows([]);
+    setProgress({ total: 0, success: 0, failed: 0 });
+    setOutcome({ submitted: 0, created: 0, asyncFailed: 0, polled: false, confirmed: false });
   }
 
   /** Batch id out of a 202 body ({ id } flat, or { data: { id } }); null when the server did not send one. */
@@ -200,7 +241,7 @@ export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxM
     }
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleReview(e: React.FormEvent) {
     e.preventDefault();
     // One import at a time: the button is disabled while busy, but a second submit
     // (Enter key, programmatic) must not start a second run either.
@@ -211,84 +252,116 @@ export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxM
     setStatus("parsing");
     setErrors([]);
     setErrorRows([]);
+    setReview(null);
     setOutcome({ submitted: 0, created: 0, asyncFailed: 0, polled: false, confirmed: false });
     const text = await file.text();
-    // GAP-HR-EMPLOYEES-IMPORT-03: a header-only BOM/CRLF is trimmed by the
-    // same per-line .trim() already used below; splitting on "\n" alone
-    // (not a full line-based CSV tokenizer) is unaffected by CRLF since the
-    // trailing \r ends up trimmed too.
-    const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
-    if (lines.length < 2) { setStatus("error"); setErrors([t("errMinRows")]); return; }
+    // GAP-HR-EMPLOYEES-IMPORT-03: the whole text is read as one RFC 4180
+    // stream (csv.ts) rather than split on "\n" first, so a quoted value
+    // that contains a comma OR a line break stays in one cell; a BOM and
+    // CRLF line endings are handled there too.
+    const { records, unterminatedQuoteLine } = parseCsv(text);
+    if (unterminatedQuoteLine !== null) {
+      setStatus("error");
+      setErrors([t("errUnterminatedQuote", { lineNo: unterminatedQuoteLine })]);
+      return;
+    }
+    if (records.length < 2) { setStatus("error"); setErrors([t("errMinRows")]); return; }
 
-    const headers = parseCsvLine(lines[0]);
+    const headers = (records[0] as { cells: string[] }).cells;
     const missing = REQUIRED_COLUMNS.filter((c) => !headers.includes(c));
     if (missing.length) { setStatus("error"); setErrors([t("errMissingColumns", { columns: missing.join(", ") })]); return; }
-
-    // Parse rows. `lineNo` (number) deliberately sits alongside the
-    // Record<string, string> CSV-column fields, which the index signature
-    // can't express — building it as `any` here is the narrowest way to
-    // bridge that, matching how this file already handled it.
-    // GAP-HR-EMPLOYEES-IMPORT-03: a row whose cell count doesn't match the
-    // header count (e.g. an unquoted embedded comma still shifting columns,
-    // or a short/ragged line) is now flagged as its own error instead of
-    // being silently padded with "" for the missing trailing columns.
-    const errs: string[] = [];
-    const errRows: { lineNo: number; fullName: string; message: string }[] = [];
-    const rows: Row[] = [];
-    lines.slice(1).forEach((line, idx) => {
-      const lineNo = idx + 2;
-      const vals = parseCsvLine(line);
-      if (vals.length !== headers.length) {
-        const fullNameGuess = vals[headers.indexOf("fullName")] ?? "";
-        const msg = t("errColumnCountRow", { lineNo, expected: headers.length, found: vals.length });
-        errs.push(msg);
-        errRows.push({ lineNo, fullName: fullNameGuess, message: msg });
-        return;
-      }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const obj = { lineNo } as any;
-      headers.forEach((h, i) => { obj[h] = vals[i] ?? ""; });
-      rows.push(obj as Row);
-    });
 
     const [deptByCode, desigByCode] = await Promise.all([
       loadCodeMap("/api/proxy/v1/hrms/departments"),
       loadCodeMap("/api/proxy/v1/hrms/designations"),
     ]);
+    // A master that could not be loaded must not read as "every code in your
+    // file is wrong" -- that would put a transient fetch failure on the
+    // person's spreadsheet.
+    if (!deptByCode || !desigByCode) { setStatus("error"); setErrors([t("errLoadMasters")]); return; }
 
-    setStatus("uploading");
-    setProgress({ total: rows.length, success: 0, failed: errs.length });
-    let success = 0;
-    // GAP-HR-EMPLOYEES-IMPORT-01: a 403 means the caller may not bulk-import at all. It is
-    // reported ONCE (not once per row) and stops the run -- retrying the next chunk cannot help.
-    let forbidden = false;
-    const accepted: AcceptedBatch[] = [];
+    const errs: string[] = [];
+    const errRows: ErrorRow[] = [];
+    const valid: ResolvedRow[] = [];
+    const sample: PreviewRow[] = [];
+    const firstLineOfEmployeeNo = new Map<string, number>();
+    const dataRecords = records.slice(1);
 
-    // Resolve codes to ids and validate client-side (see header comment) --
-    // rows an unknown code or an invalid field makes un-submittable are
-    // reported here and never sent, rather than silently reaching the
-    // server as NaN/garbage (GAP-HR-EMPLOYEES-IMPORT-03: basicPay in
-    // particular used to become NaN -> null on any non-numeric input).
-    const resolved: ResolvedRow[] = [];
-    for (const row of rows) {
+    for (const rec of dataRecords) {
+      const lineNo = rec.lineNo;
+      const vals = rec.cells;
+      const pushSample = (p: Omit<PreviewRow, "lineNo">) => {
+        if (sample.length < PREVIEW_ROWS) sample.push({ lineNo, ...p });
+      };
+
+      // GAP-HR-EMPLOYEES-IMPORT-03: a row whose cell count doesn't match the
+      // header count (e.g. an unquoted embedded comma still shifting columns,
+      // or a short/ragged line) is flagged as its own error instead of being
+      // silently padded with "" for the missing trailing columns.
+      if (vals.length !== headers.length) {
+        const fullNameGuess = vals[headers.indexOf("fullName")] ?? "";
+        const msg = t("errColumnCountRow", { lineNo, expected: headers.length, found: vals.length });
+        errs.push(msg);
+        errRows.push({ lineNo, fullName: fullNameGuess, message: msg });
+        pushSample({
+          employeeNo: vals[headers.indexOf("employeeNo")] ?? "", fullName: fullNameGuess,
+          departmentCode: "", designationCode: "", dateOfJoining: "", basicPay: "", ok: false,
+        });
+        continue;
+      }
+
+      // `lineNo` (number) deliberately sits alongside the Record<string,
+      // string> CSV-column fields, which the index signature can't express.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const obj = { lineNo } as any;
+      headers.forEach((h, i) => { obj[h] = vals[i] ?? ""; });
+      const row = obj as Row;
+
+      // Resolve codes to ids and validate client-side (see header comment) --
+      // rows an unknown code or an invalid field makes un-submittable are
+      // reported here and never sent, rather than silently reaching the
+      // server as NaN/garbage (GAP-HR-EMPLOYEES-IMPORT-03: basicPay in
+      // particular used to become NaN -> null on any non-numeric input).
       const departmentId = deptByCode.get(row.departmentCode);
       const designationId = desigByCode.get(row.designationCode);
       const rowErrors: string[] = [];
-      if (!departmentId) rowErrors.push(t("errUnknownDept", { code: row.departmentCode }));
-      if (!designationId) rowErrors.push(t("errUnknownDesig", { code: row.designationCode }));
-      if (row.dateOfJoining && !DATE_RE.test(row.dateOfJoining)) rowErrors.push(t("errInvalidDate", { value: row.dateOfJoining }));
+      if (!row.employeeNo) rowErrors.push(t("errRequiredField", { field: "employeeNo" }));
+      if (!row.fullName) rowErrors.push(t("errRequiredField", { field: "fullName" }));
+      if (row.employeeNo) {
+        const firstLine = firstLineOfEmployeeNo.get(row.employeeNo);
+        if (firstLine !== undefined) rowErrors.push(t("errDuplicateEmployeeNo", { value: row.employeeNo, firstLine }));
+        else firstLineOfEmployeeNo.set(row.employeeNo, lineNo);
+      }
+      if (!row.departmentCode) rowErrors.push(t("errRequiredField", { field: "departmentCode" }));
+      else if (!departmentId) rowErrors.push(t("errUnknownDept", { code: row.departmentCode }));
+      if (!row.designationCode) rowErrors.push(t("errRequiredField", { field: "designationCode" }));
+      else if (!designationId) rowErrors.push(t("errUnknownDesig", { code: row.designationCode }));
+      if (!row.dateOfJoining) rowErrors.push(t("errRequiredField", { field: "dateOfJoining" }));
+      else if (!isRealIsoDate(row.dateOfJoining)) rowErrors.push(t("errInvalidDate", { value: row.dateOfJoining }));
       if (row.gender && !GENDER_VALUES.has(row.gender)) rowErrors.push(t("errInvalidGender", { value: row.gender }));
+      // Contact details are PII: the message names the problem and the row, never
+      // echoes the value (the on-screen list and the downloadable error report
+      // would otherwise carry a person's raw email / phone number).
+      if (row.email && !EMAIL_RE.test(row.email)) rowErrors.push(t("errInvalidEmail"));
+      if (row.mobile && !MOBILE_RE.test(row.mobile)) rowErrors.push(t("errInvalidMobile"));
       const basicMinorStr = rupeesToMinorString(row.basicPay ?? "");
       if (!basicMinorStr) rowErrors.push(t("errInvalidBasicPay", { value: row.basicPay }));
 
+      pushSample({
+        employeeNo: row.employeeNo, fullName: row.fullName,
+        departmentCode: row.departmentCode, designationCode: row.designationCode,
+        dateOfJoining: row.dateOfJoining,
+        basicPay: basicMinorStr ? formatMoney(basicMinorStr) : row.basicPay,
+        ok: rowErrors.length === 0,
+      });
+
       if (rowErrors.length > 0) {
         const bad = rowErrors.join(t("andJoiner"));
-        const msg = t("errUnknownRow", { lineNo: row.lineNo, fullName: row.fullName, bad });
-        errs.push(msg);
+        errs.push(t("errRowInvalid", { lineNo: row.lineNo, fullName: row.fullName, bad }));
         errRows.push({ lineNo: row.lineNo, fullName: row.fullName, message: bad });
         continue;
       }
-      resolved.push({
+      valid.push({
         lineNo: row.lineNo,
         fullName: row.fullName,
         body: {
@@ -307,7 +380,32 @@ export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxM
         },
       });
     }
-    setProgress({ total: rows.length, success, failed: errs.length });
+
+    // Nothing has been sent. The person decides what happens next.
+    setReview({ fileRows: dataRecords.length, valid, sample, errs, errRows });
+    setErrors(errs);
+    setErrorRows(errRows);
+    setProgress({ total: dataRecords.length, success: 0, failed: errs.length });
+    setStatus("preview");
+  }
+
+  async function handleConfirm() {
+    if (!review || review.valid.length === 0) return;
+    // One import at a time (see handleReview).
+    if (status === "uploading" || status === "processing") return;
+    const { valid: resolved, fileRows } = review;
+    // Rows already rejected in the review step carry through to the final tally.
+    const errs: string[] = [...review.errs];
+    const errRows: ErrorRow[] = [...review.errRows];
+    let success = 0;
+    // GAP-HR-EMPLOYEES-IMPORT-01: a 403 means the caller may not bulk-import at all. It is
+    // reported ONCE (not once per row) and stops the run -- retrying the next chunk cannot help.
+    let forbidden = false;
+    const accepted: AcceptedBatch[] = [];
+
+    setStatus("uploading");
+    setOutcome({ submitted: 0, created: 0, asyncFailed: 0, polled: false, confirmed: false });
+    setProgress({ total: fileRows, success, failed: errs.length });
 
     // Submit a chunk to the bulk endpoint. On a validation failure with
     // per-row detail, drop the bad rows (reporting each) and retry the rest
@@ -330,7 +428,7 @@ export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxM
           errs.push(msg);
           errRows.push({ lineNo: r.lineNo, fullName: r.fullName, message: t("errRowNetworkShort") });
         }
-        setProgress({ total: rows.length, success, failed: errs.length });
+        setProgress({ total: fileRows, success, failed: errs.length });
         return;
       }
 
@@ -340,7 +438,7 @@ export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxM
         success += chunk.length;
         const batchId = await readBatchId(res);
         if (batchId) accepted.push({ batchId, rows: chunk });
-        setProgress({ total: rows.length, success, failed: errs.length });
+        setProgress({ total: fileRows, success, failed: errs.length });
         return;
       }
 
@@ -365,7 +463,7 @@ export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxM
           errs.push(t("errRowSave", { lineNo: r.lineNo, fullName: r.fullName, message: resolvedErr.message }));
           errRows.push({ lineNo: r.lineNo, fullName: r.fullName, message: resolvedErr.message });
         }
-        setProgress({ total: rows.length, success, failed: errs.length });
+        setProgress({ total: fileRows, success, failed: errs.length });
         return;
       }
 
@@ -374,7 +472,7 @@ export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxM
         errs.push(t("errRowSave", { lineNo: row.lineNo, fullName: row.fullName, message }));
         errRows.push({ lineNo: row.lineNo, fullName: row.fullName, message });
       }
-      setProgress({ total: rows.length, success, failed: errs.length });
+      setProgress({ total: fileRows, success, failed: errs.length });
 
       const goodRows = chunk.filter((_, i) => !badIdx.has(i));
       await submitChunk(goodRows);
@@ -391,6 +489,7 @@ export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxM
       setErrors(success > 0 ? [...errs, t("errForbidden")] : [t("errForbidden")]);
       setErrorRows(success > 0 ? errRows : []);
       setOutcome({ submitted: success, created: 0, asyncFailed: 0, polled: false, confirmed: false });
+      setReview(null);
       setStatus(success > 0 ? "done" : "error");
       return;
     }
@@ -447,24 +546,38 @@ export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxM
       }
     }
 
-    setProgress({ total: rows.length, success, failed: errs.length });
+    setProgress({ total: fileRows, success, failed: errs.length });
     setOutcome({ submitted: success, created, asyncFailed, polled: accepted.length > 0, confirmed });
     setErrors(errs);
     setErrorRows(errRows);
+    setReview(null);
     setStatus("done");
   }
 
+  const reviewing = status === "preview" && review !== null;
+  const validCount = review?.valid.length ?? 0;
+  const skippedCount = review ? review.fileRows - validCount : 0;
   const busy = status === "uploading" || status === "processing";
   const pendingCount = Math.max(0, outcome.submitted - outcome.created - outcome.asyncFailed);
+  // Colour of the live-region result: green only when nothing failed; muted while we are still
+  // waiting on (or could not get) the server's word; red when any row failed.
+  const resultColor =
+    status === "processing" || (status === "done" && outcome.polled && !outcome.confirmed)
+      ? "var(--mut)"
+      : status === "done"
+        ? (outcome.polled ? errors.length === 0 : progress.failed === 0) ? "var(--good)" : "var(--bad)"
+        : "var(--ink2)";
 
   return (
-    <form noValidate onSubmit={handleSubmit}>
+    <form noValidate onSubmit={handleReview}>
       <Field id="import-csv-file" label={t("fileLabel")} required style={{ marginBottom: 12 }}>
         <Input
           ref={fileRef}
           type="file"
           accept=".csv,text/csv"
           aria-describedby="import-csv-hint"
+          disabled={busy}
+          onChange={resetForNewFile}
         />
         <p id="import-csv-hint" style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>
           {t("requiredColumnsHint", { columns: REQUIRED_COLUMNS.join(", ") })}
@@ -474,41 +587,108 @@ export function ImportForm({ pollIntervalMs = DEFAULT_POLL_INTERVAL_MS, pollMaxM
         </p>
       </Field>
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <Button type="submit" variant="primary" disabled={busy} style={{ minHeight: 44 }}>
-          {status === "uploading"
-            ? t("importingProgress", { success: progress.success, total: progress.total })
-            : status === "processing"
-              ? t("processingProgress", { done: outcome.created + outcome.asyncFailed, submitted: outcome.submitted })
-              : t("uploadBtn")}
+        <Button type="submit" variant="primary" disabled={status === "parsing" || busy} style={{ minHeight: 44 }}>
+          {status === "parsing" ? t("reviewingBtn") : t("reviewBtn")}
         </Button>
-        {/* Shown at once when the server accepts the rows, and kept while the status route is polled. */}
-        {status === "processing" && (
-          <span role="status" style={{ fontSize: 13, color: "var(--mut)" }}>
-            {t("submittedProcessing", { submitted: outcome.submitted })}
-          </span>
-        )}
-        {status === "done" && !outcome.polled && (
-          <span style={{ fontSize: 13, color: progress.failed === 0 ? "var(--good)" : "var(--bad)" }}>
-            {t("resultImported", { success: progress.success })}
-            {progress.failed > 0 ? t("resultFailedSuffix", { failed: progress.failed }) : ""}
-          </span>
-        )}
-        {status === "done" && outcome.polled && outcome.confirmed && (
-          <span style={{ fontSize: 13, color: errors.length === 0 ? "var(--good)" : "var(--bad)" }}>
-            {t("resultCreated", { created: outcome.created })}
-            {progress.failed > 0 ? t("resultFailedSuffix", { failed: progress.failed }) : ""}
-          </span>
-        )}
-        {/* Not confirmed (timed out, or the status could not be read): never a green check. */}
-        {status === "done" && outcome.polled && !outcome.confirmed && (
-          <span role="status" style={{ fontSize: 13, color: "var(--mut)" }}>
-            {t("resultUnconfirmed", { submitted: outcome.submitted, created: outcome.created, pending: pendingCount })}
-          </span>
-        )}
+        {/* Polite live region, mounted from the start so a screen reader
+            announces the review summary, the "submitted / waiting" progress and
+            the final result as each fills in. One region, so exactly one status
+            is ever announced. GAP-HR-EMPLOYEES-IMPORT-02: "created" is worded
+            only from the status route's own confirmation. */}
+        <span
+          role="status"
+          aria-live="polite"
+          style={{ fontSize: 13, color: resultColor }}
+        >
+          {reviewing && review
+            ? t("previewSummary", { total: review.fileRows, valid: validCount, invalid: skippedCount })
+            : status === "processing"
+              ? t("submittedProcessing", { submitted: outcome.submitted })
+              : status === "done" && !outcome.polled
+                ? <>
+                    {t("resultImported", { success: progress.success })}
+                    {progress.failed > 0 ? t("resultFailedSuffix", { failed: progress.failed }) : ""}
+                  </>
+                : status === "done" && outcome.confirmed
+                  ? <>
+                      {t("resultCreated", { created: outcome.created })}
+                      {progress.failed > 0 ? t("resultFailedSuffix", { failed: progress.failed }) : ""}
+                    </>
+                  : /* Not confirmed (timed out, or the status could not be read): never a green check. */
+                    status === "done"
+                      ? t("resultUnconfirmed", { submitted: outcome.submitted, created: outcome.created, pending: pendingCount })
+                      : null}
+        </span>
       </div>
+
+      {/* GAP-HR-EMPLOYEES-IMPORT-03: nothing below this point has been sent to
+          the server. The explicit confirm button is the only thing that posts. */}
+      {(reviewing || busy) && review && (
+        <div style={{ marginTop: 16 }}>
+          {/* Only true before the confirm click; once rows are on the wire it would be wrong. */}
+          {reviewing && <p style={{ fontSize: 12.5, color: "var(--mut)", margin: "0 0 8px" }}>{t("previewNote")}</p>}
+          <div style={{ overflowX: "auto", marginBottom: 8 }}>
+            <table className="tbl" style={{ fontSize: 13 }}>
+              <caption style={{ textAlign: "start", fontSize: 12, color: "var(--mut)", paddingBottom: 4 }}>
+                {t("previewCaption", { shown: review.sample.length, total: review.fileRows })}
+              </caption>
+              <thead>
+                <tr>
+                  <th>{t("previewColRow")}</th>
+                  <th>employeeNo</th>
+                  <th>fullName</th>
+                  <th>departmentCode</th>
+                  <th>designationCode</th>
+                  <th>dateOfJoining</th>
+                  <th>basicPay</th>
+                  <th>{t("previewColCheck")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {review.sample.map((r) => (
+                  <tr key={r.lineNo}>
+                    <td>{r.lineNo}</td>
+                    <td>{r.employeeNo || "—"}</td>
+                    <td>{r.fullName || "—"}</td>
+                    <td>{r.departmentCode || "—"}</td>
+                    <td>{r.designationCode || "—"}</td>
+                    <td>{r.dateOfJoining || "—"}</td>
+                    <td>{r.basicPay || "—"}</td>
+                    <td style={{ color: r.ok ? "var(--good)" : "var(--bad)" }}>{r.ok ? t("previewRowReady") : t("previewRowSkipped")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {validCount === 0 && (
+            <p role="alert" style={{ fontSize: 13, color: "var(--bad)", margin: "0 0 8px" }}>{t("previewNothingToImport")}</p>
+          )}
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <Button
+              type="button"
+              variant="primary"
+              onClick={() => void handleConfirm()}
+              disabled={busy || validCount === 0}
+              style={{ minHeight: 44 }}
+            >
+              {status === "uploading"
+                ? t("importingProgress", { success: progress.success, total: progress.total })
+                : status === "processing"
+                  ? t("processingProgress", { done: outcome.created + outcome.asyncFailed, submitted: outcome.submitted })
+                  : t("confirmBtn", { count: validCount })}
+            </Button>
+            {!busy && (
+              <Button type="button" variant="ghost" onClick={() => { if (fileRef.current) fileRef.current.value = ""; resetForNewFile(); }} style={{ minHeight: 44 }}>
+                {t("cancelReviewBtn")}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
       {errors.length > 0 && (
         <div style={{ marginTop: 12 }}>
-          <div role="alert" style={{ padding: "10px 14px", borderRadius: 8, background: "var(--badbg)", border: "1px solid var(--badbd)", fontSize: 12.5, color: "var(--bad)", maxHeight: 200, overflow: "auto" }}>
+          <div role={status === "error" || status === "done" ? "alert" : undefined} style={{ padding: "10px 14px", borderRadius: 8, background: "var(--badbg)", border: "1px solid var(--badbd)", fontSize: 12.5, color: "var(--bad)", maxHeight: 200, overflow: "auto" }}>
             {errors.map((e, i) => <div key={i}>{e}</div>)}
           </div>
           {/* GAP-HR-EMPLOYEES-IMPORT-06: errors only ever lived in local
