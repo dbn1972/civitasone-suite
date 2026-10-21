@@ -118,8 +118,8 @@ function inUseBody(req: FastifyRequest, refs: TargetReferences) {
  * trigger + threshold + recipient) synchronously, before enqueueing the CQRS
  * command, so the admin gets an immediate 409 rather than a silently-dropped
  * async write. The unique index uq_escalation_rules_dedupe (migration 0106) is
- * the hard DB backstop; this pre-check mirrors assertNotReferencedByRules above
- * so the UI sees a 409 it can map to a clear message. `excludeId` lets a PUT
+ * the hard DB backstop; this pre-check mirrors the IN_USE guard above
+ * (findReferences / inUseBody) so the UI sees a 409 it can map to a clear message. `excludeId` lets a PUT
  * update a rule without colliding with itself.
  */
 async function assertNoDuplicateEscalationRule(
