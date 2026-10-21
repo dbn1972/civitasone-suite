@@ -1,9 +1,10 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState, LoadErrorState } from "../../../../../_components/ds";
+import { Alert, PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState, LoadErrorState } from "../../../../../_components/ds";
 import { getFinanceBillById } from "../../../../../_data/loaders";
 import { formatIndianDate, formatMoney, formatEntityRef } from "@/lib/formatters";
 import { canWrite, BILL_APPROVE_ROLES } from "@/lib/finance/writeRoles";
-import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
+import { payerBlock } from "@/lib/finance/paymentSod";
 import { BillPassPayActions } from "../../../_components/FinanceActions";
 import { ScannedDocumentsSection } from "../../../_components/scanned/ScannedDocumentsSection";
 import { BillLineItemsTable } from "./BillLineItemsTable";
@@ -33,6 +34,9 @@ export default async function BillDetailPage({ params }: { params: { id: string 
     );
   }
 
+  // GAP-FINANCE-PAYMENTS-01: the officer who created or passed this bill may not release its payment.
+  const block = bill.status === "passed" ? payerBlock(bill, getSessionUserId()) : null;
+
   return (
     <>
       <PageHeader
@@ -47,10 +51,12 @@ export default async function BillDetailPage({ params }: { params: { id: string 
               status={bill.status}
               threeWayMatch={bill.threeWayMatch}
               canPass={canWrite(getSessionRoles(), BILL_APPROVE_ROLES)}
+              canRelease={block === null}
             />
           </>
         }
       />
+      {block ? <Alert variant="info">{t(block === "creator" ? "payerBlockedCreator" : "payerBlockedPasser")}</Alert> : null}
 
       <StatGrid>
         <StatCard icon="₹" tone="good" label={t("amount")} value={formatMoney(bill.amount)} />

@@ -812,6 +812,10 @@ export type BillSummary = {
   status: "pending" | "passed" | "approved" | "paid" | "rejected" | "on_hold" | "under_review";
   poRef?: string;
   threeWayMatch: "matched" | "pending" | "partial" | "unmatched" | "na";
+  /** GAP-FINANCE-PAYMENTS-01: actor id of the bill's creator (maker). */
+  createdBy?: string;
+  /** GAP-FINANCE-PAYMENTS-01: actor id of the officer who passed the bill, while status is "passed". */
+  passedBy?: string;
 };
 
 export type BillDetail = BillSummary & {

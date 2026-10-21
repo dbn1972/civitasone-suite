@@ -149,6 +149,20 @@ export async function listPayments(tenantId: string, limit: number, offset: numb
   });
 }
 
+/**
+ * GAP-FINANCE-PAYMENTS-01: the maker (creator) and, once passed, the passer of a
+ * bill, as ids only (the web compares them with the signed-in user). They let the
+ * payment UI hide "Release payment" from an officer the server would refuse
+ * anyway (assertDistinctMakerChecker / assertPayerNotPasser in the initiate
+ * consumer stay the authority). The passer is `updatedBy` while status=passed.
+ */
+function billActors(row: { status: string; createdBy: string | null; updatedBy: string | null }): { createdBy?: string; passedBy?: string } {
+  return {
+    ...(row.createdBy ? { createdBy: row.createdBy } : {}),
+    ...(mapBillStatus(row.status) === "passed" && row.updatedBy ? { passedBy: row.updatedBy } : {}),
+  };
+}
+
 function mapBillStatus(status: string): "pending" | "passed" | "paid" | "rejected" | "on_hold" | "under_review" {
   if (status === "approved" || status === "passed") return "passed";
   if (status === "paid") return "paid";
@@ -183,6 +197,7 @@ export async function listBillSummaries(tenantId: string, limit: number, offset 
       status: mapBillStatus(row.status),
       poRef: row.poRef ?? undefined,
       threeWayMatch: "na" as const,
+      ...billActors(row),
     };
   });
 }
@@ -279,5 +294,6 @@ export async function getBillDetail(id: string, tenantId: string) {
     grnRef: row.grnRef ?? undefined,
     threeWayMatch,
     lineItems: [],
+    ...billActors(row),
   };
 }

@@ -405,6 +405,9 @@ export function registerPaymentsConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; billId: string; ddoCode: string; mode: string;
       amountMinor: number | string | bigint; currency?: string; eftRef?: string; bankAccountId?: string;
+      // Optional here (a command queued before `reason` became mandatory at the
+      // route must still process); the route enforces it for every new request.
+      reason?: string;
     };
     assertValidDdoCode(p.ddoCode);
     const paymentAmount = BigInt(p.amountMinor);
@@ -490,7 +493,14 @@ export function registerPaymentsConsumers(queue: Queue): void {
         receiptMinor: 0n, paymentMinor: payAmount, bankOrCash: "bank",
         reference: `payment:${p.id}`, actorId: msg.actorId,
       });
-      await audit(tx, msg, "initiate", "payment", p.id);
+      // GAP-FINANCE-PAYMENTS-01: the audit event carries what was authorised (the exact
+      // paise amount, mode, bill, DDO) and why (the officer's reason); the actor is on
+      // the envelope. Paise are a decimal string (bigint-safe, no JSON number).
+      await audit(tx, msg, "initiate", "payment", p.id, "success", {
+        billId: p.billId, ddoCode: p.ddoCode.toUpperCase(), mode: p.mode,
+        amountMinor: paymentAmount.toString(), currency: p.currency ?? "INR",
+        ...(p.reason ? { reason: p.reason } : {}),
+      });
     });
     // BUG FIX (cache poisoning): previously cached a PARTIAL placeholder
     // ({id, status}) with no tenantId field. getPayment()'s tenant-isolation

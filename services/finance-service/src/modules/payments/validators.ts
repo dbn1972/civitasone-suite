@@ -49,6 +49,13 @@ export const approveBillBody = z.object({
 });
 export type ApproveBillBody = z.infer<typeof approveBillBody>;
 
+/** GET /v1/finance/actors?ids=<uuid,uuid,...>: non-UUID entries are dropped, at most 50 are looked up. */
+export const actorsQuery = z.object({
+  ids: z.string().max(5000).optional().transform((raw) =>
+    [...new Set((raw ?? "").split(",").map((s) => s.trim()).filter((s) => z.string().uuid().safeParse(s).success))].slice(0, 50),
+  ),
+});
+
 export const initiateEftBody = z.object({
   billId:      z.string().uuid(),
   ddoCode:     ddoCodeField,
@@ -66,6 +73,10 @@ export const initiateEftBody = z.object({
   currency:    z.string().length(3).default("INR"),
   eftRef:      z.string().optional(),
   bankAccountId: z.string().uuid().optional(),
+  // GAP-FINANCE-PAYMENTS-01: releasing public money is an authorising act, so the
+  // officer states why. It is carried into the payment's audit event (with the
+  // amount) so the trail answers "who paid how much, and on what authority".
+  reason:      z.string().trim().min(10, "Give the reason for this payment (at least 10 characters)").max(500),
 });
 export type InitiateEftBody = z.infer<typeof initiateEftBody>;
 

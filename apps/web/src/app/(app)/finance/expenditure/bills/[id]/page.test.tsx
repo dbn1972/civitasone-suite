@@ -5,7 +5,8 @@ import { ToastProvider } from "@/app/_components/ds/Toast";
 const render = (ui: React.ReactElement) => rtlRender(<ToastProvider>{ui}</ToastProvider>);
 
 const rolesMock = vi.fn<() => string[]>();
-vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock() }));
+const viewerMock = vi.fn<() => string | null>(() => null);
+vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock(), getSessionUserId: () => viewerMock() }));
 const loaderMock = vi.fn();
 vi.mock("../../../../../_data/loaders", () => ({ getFinanceBillById: () => loaderMock() }));
 vi.mock("./BillLineItemsTable", () => ({ BillLineItemsTable: () => null }));
@@ -54,5 +55,40 @@ describe("BillDetailPage", () => {
     rolesMock.mockReturnValue(["accounts_officer"]);
     render(await BillDetailPage({ params: { id: "b1" } }));
     expect(screen.getByRole("button", { name: /pass bill/i })).toBeInTheDocument();
+  });
+});
+
+// GAP-FINANCE-PAYMENTS-01: finance-service refuses a payment released by the bill's creator or passer
+// (MAKER_CHECKER_VIOLATION / PAYER_IS_PASSER), so the UI must not offer "Release payment" to them.
+describe("BillDetailPage release-payment segregation of duties", () => {
+  const MAKER = "aaaaaaaa-0000-4000-8000-00000000000a";
+  const PASSER = "bbbbbbbb-0000-4000-8000-00000000000b";
+  const OTHER = "cccccccc-0000-4000-8000-00000000000c";
+  const PASSED = { ...BILL, status: "passed", createdBy: MAKER, passedBy: PASSER };
+
+  beforeEach(() => {
+    rolesMock.mockReturnValue(["finance_officer"]);
+    loaderMock.mockResolvedValue({ data: PASSED, source: "api" });
+  });
+
+  it("shows Release payment to an officer who neither created nor passed the bill", async () => {
+    viewerMock.mockReturnValue(OTHER);
+    render(await BillDetailPage({ params: { id: "b1" } }));
+    expect(screen.getByRole("link", { name: "Release payment" })).toBeInTheDocument();
+    expect(screen.queryByText(/a different officer must release/i)).not.toBeInTheDocument();
+  });
+
+  it("hides Release payment from the bill's creator and says why", async () => {
+    viewerMock.mockReturnValue(MAKER);
+    render(await BillDetailPage({ params: { id: "b1" } }));
+    expect(screen.queryByRole("link", { name: "Release payment" })).not.toBeInTheDocument();
+    expect(screen.getByText("You created this bill, so a different officer must release its payment.")).toBeInTheDocument();
+  });
+
+  it("hides Release payment from the officer who passed the bill and says why", async () => {
+    viewerMock.mockReturnValue(PASSER);
+    render(await BillDetailPage({ params: { id: "b1" } }));
+    expect(screen.queryByRole("link", { name: "Release payment" })).not.toBeInTheDocument();
+    expect(screen.getByText("You passed this bill, so a different officer must release its payment.")).toBeInTheDocument();
   });
 });

@@ -688,6 +688,11 @@ export const BillSummarySchema = z.object({
   poRef: z.string().optional(),
   // The list emits "na"; the detail query emits matched | pending | na.
   threeWayMatch: z.enum(["matched", "pending", "partial", "unmatched", "na"]).default("na"),
+  // GAP-FINANCE-PAYMENTS-01: actor ids (not names) of the bill's creator and, while it is
+  // passed, its passer. The payment UI hides "Release payment" from either of them; the
+  // server's segregation-of-duties check is the authority. Optional for older servers.
+  createdBy: z.string().optional(),
+  passedBy: z.string().optional(),
 });
 export const BillSummaryListSchema = z.array(BillSummarySchema);
 
