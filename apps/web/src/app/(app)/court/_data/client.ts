@@ -72,6 +72,21 @@ export async function fetchCases(status?: CaseStatus): Promise<CourtCase[]> {
   return out.items ?? [];
 }
 
+/**
+ * Resolve one case by id. Resolves `null` when the case does not exist (404)
+ * or when a 2xx body carries no case id. THROWS on any other non-OK status
+ * and on an invalid JSON body, so callers can tell "not found" (permanent)
+ * from "failed" (transient, retryable).
+ */
+export async function fetchCase(caseId: string): Promise<CourtCase | null> {
+  const res = await browserFetch(`v1/court/cases/${encodeURIComponent(caseId)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(readError("load"));
+  const out = (await res.json()) as Record<string, unknown>;
+  const row = ((out as { data?: CourtCase }).data ?? out) as CourtCase;
+  return row?.id ? row : null;
+}
+
 export async function fetchCaseOrders(caseId: string): Promise<CourtOrder[]> {
   const out = await get<{ items?: CourtOrder[] }>(`v1/court/cases/${caseId}/orders`);
   return out.items ?? [];

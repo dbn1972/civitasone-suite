@@ -463,50 +463,6 @@ export function mapPlanRows(payload: unknown): ModuleRowSummary[] {
   return mapped;
 }
 
-// GAP-TENANT-ORG-HIERARCHY-01: /api/v1/tenant/org/hierarchy returns org units
-// with parentId + level. The old flat mapper dropped the hierarchy entirely.
-// Build depth from parentId and indent the name so the tree is legible in the
-// existing table (a full <OrgTree> is a follow-up — see HUMAN REVIEW).
-const orgUnitSchema = z.object({
-  id: z.string(),
-  parentId: z.string().nullish(),
-  name: z.string().optional(),
-  code: z.string().optional(),
-  type: z.string().optional(),
-  level: z.number().nullish(),
-});
-
-export function mapOrgHierarchyRows(payload: unknown): ModuleRowSummary[] {
-  const rows = extractRows(payload);
-  const parsed = rows
-    .map((r) => orgUnitSchema.safeParse(r))
-    .filter((p): p is z.SafeParseSuccess<z.infer<typeof orgUnitSchema>> => p.success)
-    .map((p) => p.data);
-  // Compute depth from the parent chain so children indent under their parent.
-  const byId = new Map(parsed.map((u) => [u.id, u]));
-  const depthOf = (u: (typeof parsed)[number]): number => {
-    let depth = 0;
-    let cur: string | null | undefined = u.parentId;
-    const seen = new Set<string>();
-    while (cur && byId.has(cur) && !seen.has(cur)) {
-      seen.add(cur);
-      depth += 1;
-      cur = byId.get(cur)?.parentId;
-    }
-    return depth;
-  };
-  return parsed.map((u, index) => {
-    const depth = typeof u.level === "number" && u.level > 0 ? u.level - 1 : depthOf(u);
-    const indent = depth > 0 ? `${"\u00A0\u00A0".repeat(depth)}↳ ` : "";
-    return {
-      id: u.id ?? u.code ?? `row-${index + 1}`,
-      label: `${indent}${u.name ?? u.code ?? `Unit ${index + 1}`}`,
-      ...(u.type ? { sublabel: humanize(u.type) } : {}),
-      ...(u.code ? { meta: u.code } : {}),
-    };
-  });
-}
-
 // GAP-TENANT-OVERVIEW-01 / OVERVIEW-02: /api/v1/tenant/current returns a single
 // tenant profile object. The generic extractRows wraps it as a one-row list
 // and the old mapper could fall back to the raw tenant UUID as the Name. Map
@@ -560,7 +516,6 @@ function tenantLoader(
 export const getTenantOverview = tenantLoader("/api/v1/tenant/current", "tenant.overview", mapOverviewRows);
 export const getTenantQuotas = tenantLoader("/api/v1/tenant/usage", "tenant.quotas", mapQuotaRows);
 export const getTenantSettings = tenantLoader("/api/v1/tenant/settings", "tenant.settings", mapSettingRows);
-export const getTenantOrgHierarchy = tenantLoader("/api/v1/tenant/org/hierarchy", "tenant.org-hierarchy", mapOrgHierarchyRows);
 export const getTenantSubscriptions = tenantLoader(
   "/api/v1/tenant/subscription/current",
   "tenant.subscriptions",

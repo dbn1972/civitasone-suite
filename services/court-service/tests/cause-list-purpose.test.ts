@@ -46,10 +46,10 @@ describe("pickItemPurpose", () => {
   });
   it("is null for other cases, no purpose, or no scheduled date", () => {
     const d = new Date("2026-07-11T05:00:00Z");
-    const it = { caseId: CASE_A, listDate: "2026-07-11" };
-    expect(pickItemPurpose(it, [{ caseId: CASE_B, scheduledDate: d, purpose: "x" }])).toBeNull();
-    expect(pickItemPurpose(it, [{ caseId: CASE_A, scheduledDate: d, purpose: null }])).toBeNull();
-    expect(pickItemPurpose(it, [{ caseId: CASE_A, scheduledDate: null, purpose: "x" }])).toBeNull();
+    const target = { caseId: CASE_A, listDate: "2026-07-11" };
+    expect(pickItemPurpose(target, [{ caseId: CASE_B, scheduledDate: d, purpose: "x" }])).toBeNull();
+    expect(pickItemPurpose(target, [{ caseId: CASE_A, scheduledDate: d, purpose: null }])).toBeNull();
+    expect(pickItemPurpose(target, [{ caseId: CASE_A, scheduledDate: null, purpose: "x" }])).toBeNull();
   });
   it("ambiguous: two different purposes the same IST day => null", () => {
     const d = new Date("2026-07-11T05:00:00Z");

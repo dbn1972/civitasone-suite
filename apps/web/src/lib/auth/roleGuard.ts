@@ -447,10 +447,25 @@ export const AUDIT_OBSERVATION_REVIEW_ROLES = ["audit_admin", "super_admin"];
 export const INSTALL_VIEW_ROLES = ["install_user", "install_admin", "super_admin", "tenant_admin"];
 
 /**
+ * GAP-INSTALL-SILOS-04: roles that may READ silo provision records. Mirrors
+ * install-service GET /v1/install/silo-provisions READER_ROLES
+ * (modules/provisioning/routes.ts: install_admin, super_admin, platform_admin,
+ * install_user). NOTE this is NOT the same set as INSTALL_VIEW_ROLES:
+ * tenant_admin reaches the /install segment but the silo route 403s it, and
+ * platform_admin is accepted by the silo route but not by the /install
+ * segment. Owner decision pending on aligning the two; until then the silos
+ * page uses this exact backend set so it never shows a list the API refuses.
+ */
+export const INSTALL_SILO_READ_ROLES = ["install_admin", "super_admin", "platform_admin", "install_user"];
+
+/**
  * GAP-INSTALL-HOME-03 / GAP-INSTALL-DOMAIN-PACKS-01: roles permitted to RUN
  * install mutations — run/skip/retry a step and activate a Domain Pack (Stage
- * 3 tenant provisioning). The install-service accepts the same set for reads
- * and writes today, so this currently equals INSTALL_VIEW_ROLES; it is kept as
+ * 3 tenant provisioning). The orchestrator and stages routes accept the same
+ * set for reads and writes, so this currently equals INSTALL_VIEW_ROLES; the
+ * exception is GET /v1/install/silo-provisions, whose READER_ROLES (see
+ * INSTALL_SILO_READ_ROLES) include platform_admin and exclude tenant_admin.
+ * It is kept as
  * a separate constant so the write surface can be narrowed (e.g. drop
  * install_user) without touching the read gate, and so the UI can hide
  * mutation controls from a hypothetical read-only install role. The server

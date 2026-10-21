@@ -34,7 +34,6 @@ const CASES = {
   heldAgreeing: randomUUID(),
   noHearing: randomUUID(),
 } as const;
-const ITEM_OF: Record<string, string> = {};
 
 const token = (tid: string) =>
   signToken({ sub: ACTOR, tid, roles: ["registrar"], sid: "sess-pur" }, SECRET, 3600);
@@ -50,11 +49,10 @@ describe.skipIf(!RUN)("court-service cause-list item purpose (e2e, RLS)", () => 
       await sql`insert into court.courts (id, tenant_id, name, court_type) values (${COURT_ID}, ${T}, ${"Purpose Court"}, ${"revenue"})`;
       await sql`insert into court.cause_lists (id, tenant_id, court_id, list_date, status) values (${LIST_ID}, ${T}, ${COURT_ID}, ${LIST_DATE}, ${"draft"})`;
       let n = 0;
-      for (const [name, caseId] of Object.entries(CASES)) {
+      for (const caseId of Object.values(CASES)) {
         n += 1;
         await sql`insert into court.cases (id, tenant_id, cnr_number) values (${caseId}, ${T}, ${"CNR" + randomUUID().slice(0, 12)})`;
         const itemId = randomUUID();
-        ITEM_OF[name] = itemId;
         await sql`insert into court.cause_list_items (id, tenant_id, cause_list_id, case_id, item_number, slot, courtroom, list_date)
                   values (${itemId}, ${T}, ${LIST_ID}, ${caseId}, ${n}, ${"S-" + n}, ${"R" + n}, ${LIST_DATE})`;
       }

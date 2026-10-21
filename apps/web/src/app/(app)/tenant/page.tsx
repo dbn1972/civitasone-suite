@@ -11,7 +11,7 @@ export default function Page() {
         { href: "/tenant/overview", label: "Overview", icon: "🏢", note: "Current office profile and isolation posture" },
         { href: "/tenant/quotas", label: "Quotas & Usage", icon: "📊", note: "Resource limits and consumption dashboard" },
         { href: "/tenant/settings", label: "Settings", icon: "⚙️", note: "Office-scoped configuration keys" },
-        { href: "/tenant/org-hierarchy", label: "Org Hierarchy", icon: "🌳", note: "Organisation units and subtree views" },
+        { href: "/tenant/org-hierarchy", label: "Org Hierarchy", icon: "🌳", note: "Organisation structure (redirects to Administration view)" },
         { href: "/tenant/subscriptions", label: "Subscriptions", icon: "🧾", note: "Current subscription and lifecycle" },
         { href: "/tenant/plans", label: "Plans", icon: "📦", note: "Available plans and feature comparison" },
         { href: "/tenant/code-lists", label: "Code Lists", icon: "📒", note: "Reference codes and their dated values" },
