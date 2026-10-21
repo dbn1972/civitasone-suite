@@ -101,6 +101,38 @@ function actorRoleFor(functionalRole: string, override: boolean): string {
   return override ? "super_admin" : functionalRole;
 }
 
+const AUDIT = "audit.event.record";
+
+/**
+ * GAP-HR-AUDIT-LOG-08: every APAR mutation emits exactly one
+ * `audit.event.record` into the transactional outbox, in the SAME transaction
+ * as the write (the caller passes its open `tx`), so the central audit row
+ * exists iff the change does. `markProcessed` at the top of the transaction
+ * makes a redelivered command a no-op, so the event is never duplicated.
+ *
+ * The payload carries ids, stage names and counts only. The self-appraisal,
+ * pen-picture, remarks, representation text and the awarded grade/band stay on
+ * the appraisal and its stage history (DPDP: the audit log is read by a wider
+ * audience than the confidential report), mirroring the disciplinary consumer.
+ * `tenantId` / `actorId` ride on the envelope, not the payload.
+ */
+async function auditApar(
+  tx: Parameters<typeof enqueue>[0],
+  msg: { tenantId: string; actorId: string; correlationId: string },
+  action: string,
+  resourceId: string,
+  detail: Record<string, string | number | boolean | null>,
+): Promise<void> {
+  await enqueue(tx, {
+    topic: AUDIT, eventType: AUDIT,
+    tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+    payload: {
+      service: "hrms", action, resourceType: "apar", resourceId,
+      outcome: "success", ...detail,
+    },
+  });
+}
+
 export function registerF3_apar_Consumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
     const p = msg.payload as Record<string, any>;
@@ -159,6 +191,10 @@ export function registerF3_apar_Consumers(queue: Queue): void {
                     actorId: msg.actorId, actorRole: "initiator",
                     remarks: "APAR initiated", payload: { officers: body },
                   });
+            await auditApar(tx, msg, "create", id, {
+              employeeId: String(body.employeeId), appraisalPeriod: String(body.appraisalPeriod),
+              fromStage: null, toStage: "self_pending",
+            });
             break;
           }
           case "apar_routes__1": {
@@ -174,6 +210,10 @@ export function registerF3_apar_Consumers(queue: Queue): void {
                     remarks: "self-appraisal submitted",
                     payload: { selfAppraisal: body.selfAppraisal },
                   });
+            await auditApar(tx, msg, "self_appraisal", appraisalId, {
+              employeeId: a.employeeId, fromStage: a.status, toStage: "reporting_officer",
+              actorRole: actorRoleFor("appraisee", override), override,
+            });
             break;
           }
           case "apar_routes__2": {
@@ -199,6 +239,11 @@ export function registerF3_apar_Consumers(queue: Queue): void {
                     remarks: "scores + pen-picture recorded",
                     payload: { penPicture: body.penPicture, scores: body.scores },
                   });
+            await auditApar(tx, msg, "reporting", appraisalId, {
+              employeeId: a.employeeId, fromStage: a.status, toStage: "reviewing_officer",
+              actorRole: actorRoleFor("reporting_officer", override), override,
+              scoreCount: body.scores.length,
+            });
             break;
           }
           case "apar_routes__3": {
@@ -227,6 +272,12 @@ export function registerF3_apar_Consumers(queue: Queue): void {
                     actorId: msg.actorId, actorRole: actorRoleFor("reviewing_officer", override), override,
                     remarks: body.remarks, payload: { decision: body.decision, variations: body.variations ?? [] },
                   });
+            await auditApar(tx, msg, "reviewing", appraisalId, {
+              employeeId: a.employeeId, fromStage: a.status, toStage: "accepting_authority",
+              actorRole: actorRoleFor("reviewing_officer", override), override,
+              decision: String(body.decision),
+              variationCount: body.decision === "vary" ? (body.variations?.length ?? 0) : 0,
+            });
             break;
           }
           case "apar_routes__4": {
@@ -271,6 +322,10 @@ export function registerF3_apar_Consumers(queue: Queue): void {
                     remarks: body.remarks,
                     payload: { computed: { overallGrade: grade.overallGrade, band: grade.band, totalWeight: grade.totalWeight, attributeCount: grade.attributeCount } },
                   });
+            await auditApar(tx, msg, "accept", appraisalId, {
+              employeeId: a.employeeId, fromStage: a.status, toStage: "disclosed",
+              actorRole: actorRoleFor("accepting_authority", override), override,
+            });
             break;
           }
           case "apar_routes__5": {
@@ -286,6 +341,10 @@ export function registerF3_apar_Consumers(queue: Queue): void {
                     remarks: "representation filed",
                     payload: { representation: body.representation },
                   });
+            await auditApar(tx, msg, "representation", appraisalId, {
+              employeeId: a.employeeId, fromStage: a.status, toStage: "representation",
+              actorRole: actorRoleFor("appraisee", override), override,
+            });
             break;
           }
           case "apar_routes__6": {
@@ -298,6 +357,10 @@ export function registerF3_apar_Consumers(queue: Queue): void {
                     tenantId: p.tenantId, appraisalId, fromStage: a.status, toStage: "finalised",
                     actorId: msg.actorId, actorRole: "hr", remarks: "APAR finalised", payload: {},
                   });
+            await auditApar(tx, msg, "finalise", appraisalId, {
+              employeeId: a.employeeId, fromStage: a.status, toStage: "finalised",
+              actorRole: "hr", override: false,
+            });
             break;
           }
         }
