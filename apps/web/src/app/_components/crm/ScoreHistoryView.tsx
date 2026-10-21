@@ -7,6 +7,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
+import { PanelSkeleton } from "./PanelSkeleton";
 import { EmptyState } from "../ds";
 import { getScoreHistory, type ScoreHistoryEntry, type LqSource } from "@/lib/crm/leadQualification";
 
@@ -54,9 +55,7 @@ export function ScoreHistoryView({ leadId }: { leadId: string }) {
       </div>
 
       {source === "loading" ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", padding: "0 12px 12px" }}>
-          Loading score history…
-        </p>
+        <PanelSkeleton style={{ padding: "0 12px 12px" }} />
       ) : history.length === 0 ? (
         <EmptyState
           icon="📈"

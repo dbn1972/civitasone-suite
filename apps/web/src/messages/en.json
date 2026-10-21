@@ -2022,6 +2022,9 @@
       "channelLabel": "Captured via *",
       "selectChannel": "Select a channel…",
       "lastRecorded": "Last recorded {when}.",
+      "recordAria": "Consent record",
+      "purposeLine": "Purpose: {purpose}",
+      "sourceLine": "Captured via: {channel}",
       "purposes": {
         "marketing": "Marketing communications",
         "transactional": "Transactional messages",
@@ -14578,12 +14581,18 @@
     "emptyTitle": "No contacts yet",
     "emptyMessage": "Add your first contact to get started.",
     "newContact": "+ New Contact",
-    "colTemperature": "Temperature"
+    "colTemperature": "Temperature",
+    "fieldPhone": "phone number",
+    "fieldEmail": "email address"
   },
   "crmContactDetailPage": {
     "title": "Contact Detail",
     "loadArea": "contact",
-    "backLabel": "Contacts"
+    "backLabel": "Contacts",
+    "fieldPhone": "phone number",
+    "fieldEmail": "email address",
+    "maskedPhoneAria": "Masked phone number",
+    "maskedEmailAria": "Masked email address"
   },
   "crmDealsPage": {
     "subtitle": "Track high-value vendor engagements, procurement opportunities, and government stakeholder interactions"
@@ -14593,7 +14602,9 @@
     "filteredToAccount": "Filtered to one account",
     "filteredToAccountNamed": "Filtered to one account: {name}",
     "clearAccountFilterAria": "Clear account filter",
-    "clearAccountFilter": "Clear ✕"
+    "clearAccountFilter": "Clear ✕",
+    "piiBannerReveal": "Personal data in this registry is protected under the Digital Personal Data Protection Act, 2023. Phone numbers and email addresses are masked; revealing one needs a stated reason and is recorded in the audit trail.",
+    "piiBannerMasked": "Personal data in this registry is protected under the Digital Personal Data Protection Act, 2023. Phone numbers and email addresses are masked for your role."
   },
   "crmContactNewPage": {
     "contactArea": "contact",

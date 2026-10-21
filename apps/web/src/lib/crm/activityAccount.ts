@@ -755,6 +755,10 @@ export interface NextAction360 {
 export interface Consent360 {
   marketing: boolean | null;
   updatedAt?: string;
+  /** DPDP: what the consent was given for (marketing / transactional / service_updates / research). */
+  purpose?: string;
+  /** DPDP: the channel/source it was captured through (web_form / email / phone / in_person / import). */
+  channel?: string;
 }
 /** Honest external stub: counts are null when the source isn't wired live. */
 export interface External360 {
@@ -928,7 +932,13 @@ export function normaliseCampaignActivity360(raw: unknown): CampaignActivity360 
 }
 
 export function normalise360(raw: unknown): Customer360 {
-  const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const outer = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  // crm-service answers both 360 endpoints as `{ data: { ... } }`; reading the
+  // top level of that envelope found no activities, deals, consent or score on a
+  // live response. Unwrap it (a bare payload, as the unit fixtures use, still works).
+  const r = (
+    outer.data && typeof outer.data === "object" && !Array.isArray(outer.data) ? outer.data : outer
+  ) as Record<string, unknown>;
   const consentRaw = r.consent && typeof r.consent === "object" ? (r.consent as Record<string, unknown>) : null;
   return {
     activities: normaliseActivities(r.activities),
@@ -946,8 +956,19 @@ export function normalise360(raw: unknown): Customer360 {
     addresses: normaliseAddresses(r.addresses),
     consent: consentRaw
       ? {
-          marketing: typeof consentRaw.marketing === "boolean" ? consentRaw.marketing : null,
-          ...(optStr(consentRaw.updatedAt) ? { updatedAt: str(consentRaw.updatedAt) } : {}),
+          // The contact 360 sends `marketingConsent` / `consentDate` (+ purpose,
+          // channel, updatedAt); `marketing` / `updatedAt` are the older names.
+          marketing:
+            typeof consentRaw.marketing === "boolean"
+              ? consentRaw.marketing
+              : typeof consentRaw.marketingConsent === "boolean"
+                ? consentRaw.marketingConsent
+                : null,
+          ...(optStr(consentRaw.updatedAt ?? consentRaw.consentDate)
+            ? { updatedAt: str(consentRaw.updatedAt ?? consentRaw.consentDate) }
+            : {}),
+          ...(optStr(consentRaw.purpose) ? { purpose: str(consentRaw.purpose) } : {}),
+          ...(optStr(consentRaw.channel) ? { channel: str(consentRaw.channel) } : {}),
         }
       : null,
     score: numOrNull(r.score),

@@ -102,6 +102,21 @@ describe("assignment normalisers", () => {
     expect(a[1].name).not.toBe("a2");
   });
 
+  // GAP-CRM-CONTACTS-DETAIL-01: GET /v1/crm/teams/agents now carries the person's
+  // display `name` (identity-service summaries) next to the workload columns it
+  // always had, so the owner pickers label people instead of "Unnamed agent".
+  it("normaliseAgents keeps the display name from the real teams/agents row shape", () => {
+    const a = normaliseAgents({
+      data: [
+        { id: "w1", agentId: "u7", name: "Nita Shah", maxLeads: 10, currentLoad: 2, available: true, skills: [], version: 1 },
+        { id: "w2", agentId: "u8", maxLeads: 10, currentLoad: 5, available: true, skills: [], version: 1 },
+      ],
+    });
+    expect(a[0]).toMatchObject({ agentId: "u7", name: "Nita Shah", activeLeads: 2 });
+    // an agent identity could not name keeps the honest placeholder, never the uuid
+    expect(a[1]).toMatchObject({ agentId: "u8", name: "Unnamed agent" });
+  });
+
   it("normaliseEscalationRules coerces trigger", () => {
     const r = normaliseEscalationRules([{ trigger: "unattended", thresholdMinutes: 30 }, { trigger: "x" }]);
     expect(r[0].trigger).toBe("unattended");

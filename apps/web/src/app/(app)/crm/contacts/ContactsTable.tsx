@@ -1,6 +1,6 @@
 "use client";
 
-import { DataTable, EmptyState } from "../../../_components/ds";
+import { DataTable, EmptyState, Masked } from "../../../_components/ds";
 import { RefreshErrorState } from "../../../_components/ds/RefreshErrorState";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useTranslations } from "next-intl";
@@ -38,7 +38,48 @@ type ContactRow = {
   tags: string;
 };
 
-export function ContactsTable({ contacts, source = "api", filtered = false }: { contacts: Contact[]; source?: "api" | "error"; filtered?: boolean }) {
+/** One masked phone/email cell: "—" when absent, otherwise the masked text with an audited Reveal for permitted roles. */
+function MaskedCell({
+  kind,
+  value,
+  id,
+  field,
+  label,
+  canReveal,
+}: {
+  kind: "phone" | "email";
+  value: string;
+  id: string | undefined;
+  field: "phone" | "email";
+  label: string;
+  canReveal: boolean;
+}) {
+  if (!value || value === "—") return <>—</>;
+  return (
+    <Masked
+      kind={kind}
+      value={value}
+      onReveal={{ canReveal: canReveal && Boolean(id), resourceType: "contact", resourceId: id ?? "", field, label }}
+    />
+  );
+}
+
+export function ContactsTable({
+  contacts,
+  source = "api",
+  filtered = false,
+  canReveal = false,
+}: {
+  contacts: Contact[];
+  source?: "api" | "error";
+  filtered?: boolean;
+  /**
+   * GAP-CRM-CONTACTS-02: viewer holds a PII-read role, so each masked phone/email
+   * gets a per-value Reveal that goes through the audited reveal endpoint. False
+   * (the default) renders the masked text with no reveal control at all.
+   */
+  canReveal?: boolean;
+}) {
   const t = useTranslations("crmContactsTable");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Contact[]>(
     "crm.contacts",
@@ -51,9 +92,9 @@ export function ContactsTable({ contacts, source = "api", filtered = false }: { 
     ...(c.id ? { id: c.id } : {}),
     name: c.name,
     account: c.account ?? "—",
-    // GAP-CRM-CONTACTS-02: DPDP — phone/email arrive ALREADY masked by the server
-    // page for non-privileged roles (page.tsx), so the clear value is never in
-    // props, the offline seed cache or the DOM for them. Shown as received.
+    // GAP-CRM-CONTACTS-02: DPDP - phone/email arrive ALREADY masked by the server
+    // page for every role (page.tsx), so the clear value is never in props, the
+    // offline seed cache or the DOM. Shown as received; Reveal is per value.
     phone: c.phone || "—",
     email: c.email || "—",
     leadStatus: c.leadStatus ?? "—",
@@ -108,7 +149,13 @@ export function ContactsTable({ contacts, source = "api", filtered = false }: { 
           columns={[
             { key: "name", label: "Name" },
             { key: "account", label: "Organisation" },
-            { key: "phone", label: "Phone" },
+            {
+              key: "phone",
+              label: "Phone",
+              render: (row) => (
+                <MaskedCell kind="phone" value={row.phone} id={row.id} field="phone" label={t("fieldPhone")} canReveal={canReveal} />
+              ),
+            },
             // GAP-CRM-CONTACTS-06: render the lead status as a toned pill with
             // the SHARED canonical label so the list, New and Edit forms all
             // name a status identically (no more raw "qualified").
@@ -124,7 +171,13 @@ export function ContactsTable({ contacts, source = "api", filtered = false }: { 
             // the DOM + CSV); name/phone/status/priority stay visible.
             { key: "segment", label: "Segment", hideOnMobile: true },
             { key: "expectedValue", label: "Expected Value", align: "right", hideOnMobile: true },
-            { key: "email", label: "Email" },
+            {
+              key: "email",
+              label: "Email",
+              render: (row) => (
+                <MaskedCell kind="email" value={row.email} id={row.id} field="email" label={t("fieldEmail")} canReveal={canReveal} />
+              ),
+            },
             { key: "lastActivity", label: "Last Activity", hideOnMobile: true },
             { key: "tags", label: "Tags", hideOnMobile: true },
           ]}

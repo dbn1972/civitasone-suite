@@ -392,4 +392,43 @@ describe("loaders + mutations", () => {
     expect(a.source).toBe("error");
     expect(a.data.external.source).toBe("external");
   });
+
+  // crm-service answers GET /v1/crm/{contacts,accounts}/:id/360 as `{ data: {...} }`.
+  it("normalise360: unwraps the live { data } envelope (a bare payload still works)", () => {
+    const live = normalise360({
+      data: {
+        score: 41,
+        deals: [{ id: "d9", name: "Live Deal", stage: "closed_won" }],
+        consent: { marketingConsent: false, consentDate: null, purpose: null, channel: null, updatedAt: null },
+      },
+    });
+    expect(live.score).toBe(41);
+    expect(live.deals[0].id).toBe("d9");
+    expect(live.consent?.marketing).toBe(false);
+    expect(normalise360({ score: 41 }).score).toBe(41);
+  });
+
+  it("normalise360: reads the contact 360 consent record (marketingConsent / purpose / channel / updatedAt)", () => {
+    const v = normalise360({
+      data: {
+        consent: {
+          marketingConsent: true,
+          consentDate: "2026-03-01",
+          purpose: "research",
+          channel: "web_form",
+          updatedAt: "2026-03-01T10:00:00.000Z",
+        },
+      },
+    });
+    expect(v.consent).toEqual({
+      marketing: true,
+      updatedAt: "2026-03-01T10:00:00.000Z",
+      purpose: "research",
+      channel: "web_form",
+    });
+    // consent that predates updatedAt falls back to the bare consentDate
+    const legacy = normalise360({ consent: { marketingConsent: true, consentDate: "2024-01-01" } });
+    expect(legacy.consent?.updatedAt).toBe("2024-01-01");
+    expect(legacy.consent?.purpose).toBeUndefined();
+  });
 });

@@ -9,6 +9,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { commandId } from "../../shared/idempotency.js";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
+import { resolveUserNames } from "../../shared/identity-client.js";
 import { COMMANDS } from "../../topics.js";
 import { sql } from "drizzle-orm";
 import * as commands from "./commands.js";
@@ -125,7 +126,17 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
       `) as unknown as Array<Record<string, unknown>>;
     });
 
-    return reply.send({ data: agents });
+    // GAP-CRM-CONTACTS-DETAIL-01: crm.agent_workload holds ids only, so the
+    // owner pickers (assign / transfer) could not show a person. Decorate each
+    // row with the user's display NAME from identity-service (id + name only,
+    // best-effort: when identity is unreachable the field is simply omitted).
+    const names = await resolveUserNames(ctx.tenantId, agents.map((a) => a.agentId as string));
+    const data = agents.map((a) => {
+      const name = names.get(a.agentId as string);
+      return name ? { ...a, name } : a;
+    });
+
+    return reply.send({ data });
   });
 
   app.patch("/v1/crm/teams/agents/:agentId/capacity", async (req, reply) => {

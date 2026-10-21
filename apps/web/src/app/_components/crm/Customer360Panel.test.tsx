@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
+import { renderWithIntl as render } from "@/lib/testUtils/intl";
 import { Customer360Panel } from "./Customer360Panel";
 import * as aa from "@/lib/crm/activityAccount";
 
@@ -155,5 +156,51 @@ describe("Customer360Panel (CM-004)", () => {
     render(<Customer360Panel subjectType="account" subjectId="a1" />);
     const commStat = (await screen.findByText("Communications")).closest(".stat")!;
     expect(within(commStat as HTMLElement).getByText("3")).toBeInTheDocument();
+  });
+
+  // GAP-CRM-CONTACTS-DETAIL-07: the stage reads like a label, not an enum with spaces.
+  it("title-cases the deal stage (Closed Won, not 'closed won')", async () => {
+    vi.mocked(aa.getContact360).mockResolvedValue({
+      data: aa.normalise360({ deals: [{ id: "d1", name: "Big Deal", stage: "closed_won", amount: 100 }] }),
+      source: "api",
+    });
+    render(<Customer360Panel subjectType="contact" subjectId="c1" />);
+    expect(await screen.findByText("Closed Won")).toBeInTheDocument();
+    expect(screen.queryByText("closed won")).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-CONTACTS-DETAIL-02: the consent block shows what it was given for and where it came from.
+  it("shows the consent purpose and capture source when the backend sends them (live { data } envelope)", async () => {
+    vi.mocked(aa.getContact360).mockResolvedValue({
+      data: aa.normalise360({
+        data: {
+          consent: {
+            marketingConsent: true,
+            consentDate: "2026-03-01",
+            purpose: "service_updates",
+            channel: "phone",
+            updatedAt: "2026-03-01T10:00:00.000Z",
+          },
+        },
+      }),
+      source: "api",
+    });
+    render(<Customer360Panel subjectType="contact" subjectId="c1" />);
+    const consent = await screen.findByRole("region", { name: "Consent" });
+    expect(within(consent).getByText(/Marketing consent given on/)).toBeInTheDocument();
+    expect(within(consent).getByText("Purpose: Service updates")).toBeInTheDocument();
+    expect(within(consent).getByText("Captured via: Phone")).toBeInTheDocument();
+  });
+
+  it("shows no purpose/source lines for consent that predates those fields", async () => {
+    vi.mocked(aa.getContact360).mockResolvedValue({
+      data: aa.normalise360({ consent: { marketingConsent: true, consentDate: "2024-01-01", purpose: null, channel: null } }),
+      source: "api",
+    });
+    render(<Customer360Panel subjectType="contact" subjectId="c1" />);
+    const consent = await screen.findByRole("region", { name: "Consent" });
+    expect(within(consent).getByText(/Marketing consent given/)).toBeInTheDocument();
+    expect(within(consent).queryByText(/Purpose:/)).not.toBeInTheDocument();
+    expect(within(consent).queryByText(/Captured via:/)).not.toBeInTheDocument();
   });
 });
