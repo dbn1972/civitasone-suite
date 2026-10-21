@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { RequestContext } from "@civitasone/types";
 import { ZodError, z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
-import { leaveListResponseSchema, LeaveRequestDetailListSchema } from "@civitasone/schemas/web";
+import { leaveListResponseSchema, LeaveRequestDetailListSchema, LeaveRequestPageSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
@@ -389,6 +389,10 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
       // as any other row that scope excludes today.
       ids: z.string().optional().transform((v) => (v ? v.split(",").filter(Boolean) : undefined))
         .pipe(z.array(z.string().uuid()).max(50).optional()),
+      // GAP-HR-LEAVE-03: opt in to `{ data, meta }` (real total + per-status
+      // counts over the caller's whole visible set). Absent = the bare array
+      // every existing caller already parses.
+      withMeta: z.enum(["1", "true"]).optional(),
     }).parse(req.query);
     // IDOR fix (GAP-HR-SF-16): this route returned every employee's leave
     // request detail tenant-wide to ANY ALL_ROLES-holding caller (including
@@ -429,6 +433,21 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
       }
       const allowed = found.filter((r) => inScope(r) || viaTask.has(r.id));
       sendValidated(reply, LeaveRequestDetailListSchema, allowed);
+      return;
+    }
+    if (q.withMeta) {
+      const result = await queries.getLeaveRequestPage(ctx.tenantId, q.limit, q.offset, employeeIds);
+      sendValidated(reply, LeaveRequestPageSchema, {
+        data: result.data,
+        meta: {
+          page: Math.floor(q.offset / q.limit) + 1,
+          pageSize: q.limit,
+          offset: q.offset,
+          total: result.total,
+          hasMore: q.offset + result.data.length < result.total,
+          statusCounts: result.statusCounts,
+        },
+      });
       return;
     }
     const rows = await queries.listLeaveRequestDetails(ctx.tenantId, q.limit, q.offset, employeeIds);

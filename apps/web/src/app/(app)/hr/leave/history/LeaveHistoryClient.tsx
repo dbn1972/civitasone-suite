@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   PageHeader, StatGrid, StatCard, Card, EmptyState, ErrorState, ConfirmDialog, useConfirmAction,
-  DataTable, StatusPill,
+  DataTable, StatusPill, EntityPicker,
 } from "../../../../_components/ds";
 import { DataSourceBadge, type DataSource } from "../../../../_components/DataSourceBadge";
 import { useTranslations } from "next-intl";
@@ -13,8 +13,8 @@ import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
 import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
+import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 
-type EmployeeOption = { id: string; name: string; employeeNo: string };
 type LeaveApp = {
   id: string;
   employeeName?: string;
@@ -65,7 +65,6 @@ export default function LeaveHistoryClient({ roles, myEmployeeId, initialEmploye
   // which let a manager cancel an arbitrary direct report's approved leave
   // from the default view, with no reason required, and never showed the
   // manager their OWN history by default.
-  const [employees, setEmployees]   = useState<EmployeeOption[]>([]);
   const [empId, setEmpId]           = useState(initialEmployeeId ?? myEmployeeId ?? "");
   const [apps, setApps]             = useState<LeaveApp[]>([]);
   const [total, setTotal]           = useState(0);
@@ -74,12 +73,6 @@ export default function LeaveHistoryClient({ roles, myEmployeeId, initialEmploye
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
   const [source, setSource]         = useState<"api" | "error">("api");
-  // GAP-HR-LEAVE-BALANCE-05 (fix step 4: "apply the same empError split in
-  // LeaveHistoryClient"): the employee-list fetch failure used to set the
-  // same source==="error" as a balance/history fetch failure, and its Retry
-  // (reloadTick) never re-ran the employees effect at all -- see that
-  // effect's own dependency array below.
-  const [empError, setEmpError]     = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
   const [pendingCancel, setPendingCancel] = useState<LeaveApp | null>(null);
   const formError = useFormError("leave application");
@@ -96,31 +89,14 @@ export default function LeaveHistoryClient({ roles, myEmployeeId, initialEmploye
     draft: t("chipDraft"),
   };
 
-  useEffect(() => {
-    if (!isAdminOrManager) return;
-    const controller = new AbortController();
-    setEmpError(false);
-    fetch("/api/proxy/v1/hrms/employees?limit=500", { signal: controller.signal })
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((body) => {
-        const rows: EmployeeOption[] = Array.isArray(body) ? body : (body.data ?? []);
-        setEmployees(rows);
-        // GAP-HR-LEAVE-HISTORY-04 (fix step 1): no more setEmpId(rows[0].id)
-        // here -- a manager used to land on an arbitrary direct report (HR
-        // on an arbitrary tenant employee) by default, and could cancel
-        // their approved leave with no reason from that very first screen.
-        // `empId` is now seeded once, from `initialEmployeeId ?? myEmployeeId`,
-        // by the useState initializer above.
-      })
-      .catch((e) => { if (e.name !== "AbortError") { setEmpError(true); } });
-    return () => controller.abort();
-    // `reloadTick` is a dependency so Retry on an employee-list failure
-    // actually re-fires this effect -- previously Retry only bumped
-    // reloadTick, which the balance/history fetch effect depended on but
-    // this one didn't, so Retry silently did nothing after this specific
-    // failure (GAP-HR-LEAVE-BALANCE-05, fix step 4: "apply the same
-    // empError split in LeaveHistoryClient").
-  }, [isAdminOrManager, reloadTick]);
+  // GAP-HR-LEAVE-ALLOCATE-04: the employee <select> used to be filled by a
+  // one-shot GET /v1/hrms/employees?limit=500 -- an unordered first 500, so on a
+  // larger tenant the people beyond that were simply unreachable, with no
+  // search and no hint. The picker below searches the directory by name/number
+  // as the user types (lib/entityAdapters/employee.ts, the same adapter the
+  // balance and allocate pages use), so nothing is capped and a failed search
+  // is reported by the picker itself ("Couldn't load results"), never shown as
+  // "no matches". No employee list is preloaded here any more.
 
   useEffect(() => {
     if (!empId) { setApps([]); setTotal(0); setStatusCounts({}); return; }
@@ -247,31 +223,23 @@ export default function LeaveHistoryClient({ roles, myEmployeeId, initialEmploye
                 <label htmlFor="emp-select" style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--ink2)" }}>
                   {t("employeeLabel")}
                 </label>
-                {empError ? (
-                  <ErrorState error={toHumanError("load", { area: "employee list" })} onRetry={() => setReloadTick((n) => n + 1)} />
-                ) : (
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                    <select
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <div style={{ minWidth: 260, maxWidth: 400, flex: "1 1 260px" }}>
+                    <EntityPicker
                       id="emp-select"
-                      value={empId}
-                      onChange={(e) => setEmpId(e.target.value)}
-                      style={{
-                        width: "100%", maxWidth: 400, padding: "8px 12px", borderRadius: 6,
-                        border: "1px solid var(--line)", fontSize: 14, background: "var(--bg)", color: "var(--ink)",
-                      }}
-                    >
-                      <option value="">{t("selectEmployeePrompt")}</option>
-                      {employees.map((e) => (
-                        <option key={e.id} value={e.id}>{e.name} ({e.employeeNo})</option>
-                      ))}
-                    </select>
-                    {myEmployeeId && empId !== myEmployeeId && (
-                      <button type="button" className="btn ghost" onClick={() => setEmpId(myEmployeeId)}>
-                        {t("viewMyHistoryLink")}
-                      </button>
-                    )}
+                      value={empId || null}
+                      onChange={(v) => setEmpId(typeof v === "string" ? v : "")}
+                      search={searchEmployees}
+                      resolve={resolveEmployees}
+                      placeholder={t("selectEmployeePrompt")}
+                    />
                   </div>
-                )}
+                  {myEmployeeId && empId !== myEmployeeId && (
+                    <button type="button" className="btn ghost" onClick={() => setEmpId(myEmployeeId)}>
+                      {t("viewMyHistoryLink")}
+                    </button>
+                  )}
+                </div>
               </div>
             </Card>
           )}

@@ -200,6 +200,7 @@ import {
   HRDashboardSchema,
   JobOpeningSummaryListSchema,
   LeaveRequestDetailListSchema,
+  LeaveRequestPageSchema,
   OrgChartSchema,
   PayrollRunDetailListSchema,
   PayrollRunFullDetailSchema,
@@ -3171,6 +3172,58 @@ export async function getLeaveRequestDetails(): Promise<LoaderResult<LeaveReques
     responseSchema: LeaveRequestDetailListSchema,
     mapResponse: (p) => getArrayPayload(p) as LeaveRequestDetail[] | null,
   });
+}
+
+/**
+ * GAP-HR-LEAVE-03: one page of the caller's visible leave requests with the real
+ * total and per-status counts over the WHOLE visible set. The plain
+ * getLeaveRequestDetails() above sent no limit/offset, so the backend's default
+ * page (50) silently truncated both the table and the stat tiles that counted
+ * it. `withMeta=1` is the backend's opt-in for the `{ data, meta }` envelope;
+ * every other caller of the endpoint keeps the bare array.
+ */
+export const LEAVE_REQUESTS_PAGE_SIZE = 100;
+
+export type LeaveRequestPage = {
+  rows: LeaveRequestDetail[];
+  total: number;
+  hasMore: boolean;
+  /** 1-based page number actually served. */
+  page: number;
+  pageSize: number;
+  /** Keyed by the same mapped status the rows carry (pending / approved / rejected / cancelled / routing_failed). */
+  statusCounts: Record<string, number>;
+};
+
+const EMPTY_LEAVE_REQUEST_PAGE: LeaveRequestPage = {
+  rows: [], total: 0, hasMore: false, page: 1, pageSize: LEAVE_REQUESTS_PAGE_SIZE, statusCounts: {},
+};
+
+export async function getLeaveRequestPage(opts: { page?: number; pageSize?: number } = {}): Promise<LoaderResult<LeaveRequestPage>> {
+  const pageSize = opts.pageSize ?? LEAVE_REQUESTS_PAGE_SIZE;
+  const page = Math.max(1, Math.floor(opts.page ?? 1));
+  const offset = (page - 1) * pageSize;
+  return fetchJson<unknown, LeaveRequestPage>(
+    `/api/v1/hrms/leave-requests?withMeta=1&limit=${pageSize}&offset=${offset}`,
+    { ...EMPTY_LEAVE_REQUEST_PAGE, page, pageSize },
+    {
+      revalidateSeconds: 60,
+      telemetryKey: "hr.leave.page",
+      responseSchema: LeaveRequestPageSchema,
+      mapResponse: (p) => {
+        if (!isRecord(p) || !Array.isArray(p.data) || !isRecord(p.meta)) return null;
+        const meta = p.meta as { total?: number; hasMore?: boolean; statusCounts?: Record<string, number> };
+        return {
+          rows: p.data as LeaveRequestDetail[],
+          total: typeof meta.total === "number" ? meta.total : p.data.length,
+          hasMore: meta.hasMore === true,
+          page,
+          pageSize,
+          statusCounts: meta.statusCounts ?? {},
+        };
+      },
+    },
+  );
 }
 
 export async function getPayrollRunDetails(

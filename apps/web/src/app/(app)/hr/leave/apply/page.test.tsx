@@ -104,8 +104,10 @@ describe("ApplyLeavePage — role-based employee resolution", () => {
 
     await render(ApplyLeavePage({ searchParams: {} }));
 
-    expect(screen.getByRole("option", { name: /asha verma/i })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: /rahul singh/i })).toBeInTheDocument();
+    // GAP-HR-LEAVE-ALLOCATE-04: with several employees the control is a
+    // type-ahead picker (no longer a <select> listing the first page), which
+    // starts on the first employee when the viewer has no record of their own.
+    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("Asha Verma");
     expect(screen.queryByText(/couldn't load/i)).not.toBeInTheDocument();
     expect(getMyProfileMock).toHaveBeenCalled();
   });
@@ -123,7 +125,7 @@ describe("ApplyLeavePage — role-based employee resolution", () => {
 
     await render(ApplyLeavePage({ searchParams: {} }));
 
-    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("emp-self");
+    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("Priya Nair");
     expect(screen.getByText(/myself/i)).toBeInTheDocument();
   });
 
@@ -185,6 +187,6 @@ describe("ApplyLeavePage — role-based employee resolution", () => {
 
     await render(ApplyLeavePage({ searchParams: { empId: "emp-2" } }));
 
-    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("emp-2");
+    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("Rahul Singh");
   });
 });

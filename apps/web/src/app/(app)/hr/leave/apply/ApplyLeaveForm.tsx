@@ -6,7 +6,8 @@ import type { EmployeeSummary } from "@civitasone/types";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
 import { trackActivation } from "@/lib/activation";
 import { useToast } from "@/app/_components/ds/Toast";
-import { ConfirmDialog, Field, Input, Select, Textarea } from "@/app/_components/ds";
+import { ConfirmDialog, EntityPicker, Field, Input, Select, Textarea } from "@/app/_components/ds";
+import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { useTranslations } from "next-intl";
 import {
   useFieldValidation,
@@ -62,10 +63,40 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
   // roster, not the single-row self-service fallback below), default to
   // "myself" instead — the common case (an HR admin applying for their own
   // leave) no longer requires finding themselves in a long list first.
+  // GAP-HR-LEAVE-ALLOCATE-04: with more than one employee to choose from (HR /
+  // manager), the control is a type-ahead picker over the whole directory, not
+  // a <select> of whatever first page the server happened to send. The
+  // single-row self-service case keeps the plain select: there is nobody else
+  // to find.
+  const pickerMode = employees.length > 1;
   const preselected = initialEmployeeId && employees.some((e) => e.id === initialEmployeeId)
     ? initialEmployeeId
     : (myEmployeeId && employees.some((e) => e.id === myEmployeeId) ? myEmployeeId : employees[0]?.id ?? "");
   const [employeeId, setEmployeeId] = useState(preselected);
+  // An ?empId= deep link to someone beyond the server-sent page is honoured too,
+  // but only once the directory confirms that person exists and is visible to
+  // this viewer -- a bogus or out-of-scope id leaves the normal default in place
+  // instead of loading a context for a stranger. Mount-time only.
+  useEffect(() => {
+    if (!pickerMode || !initialEmployeeId || employees.some((e) => e.id === initialEmployeeId)) return;
+    let cancelled = false;
+    resolveEmployees([initialEmployeeId])
+      .then((opts) => { if (!cancelled && opts.some((o) => o.id === initialEmployeeId)) setEmployeeId(initialEmployeeId); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Label of the picked person when they are not in the server-sent `employees`
+  // list (found by search / deep link), for the "applying on behalf of" note.
+  const [pickedLabel, setPickedLabel] = useState("");
+  useEffect(() => {
+    if (!pickerMode || !employeeId || employees.some((e) => e.id === employeeId)) { setPickedLabel(""); return; }
+    let cancelled = false;
+    resolveEmployees([employeeId])
+      .then((opts) => { if (!cancelled) setPickedLabel(opts[0]?.label ?? ""); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [pickerMode, employeeId, employees]);
   const [leaveContext, setLeaveContext] = useState<LeaveContext | null>(null);
   const [status, setStatus] = useState<
     "idle" | "loading" | "submitting" | "accepted" | "error"
@@ -385,6 +416,37 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
       >
         {/* Employee selector (not validated — always has a default) */}
         <Field id="leave-employee" label={t("employeeLabel")}>
+          {pickerMode ? (
+            <>
+              <EntityPicker
+                value={employeeId || null}
+                onChange={(v) => setEmployeeId(typeof v === "string" ? v : "")}
+                search={searchEmployees}
+                resolve={resolveEmployees}
+                initialOptions={employees.map((emp) => ({
+                  id: emp.id,
+                  label: emp.employeeNo ? `${emp.name} (${emp.employeeNo})` : emp.name,
+                  sublabel: emp.department || undefined,
+                }))}
+                placeholder={t("employeePickerPlaceholder")}
+                searchingText={t("employeePickerSearching")}
+                noResultsText={t("employeePickerNoResults")}
+              />
+              {myEmployeeId && employeeId !== myEmployeeId && (
+                <button
+                  type="button"
+                  className="btn ghost"
+                  style={{ marginTop: 6, justifySelf: "start" }}
+                  onClick={() => setEmployeeId(myEmployeeId)}
+                >
+                  {t("applyForMyselfLink")}
+                </button>
+              )}
+              {myEmployeeId && employeeId === myEmployeeId && (
+                <span className="mt-1 text-xs" style={{ color: "var(--mut)" }}>{t("myselfSuffix")}</span>
+              )}
+            </>
+          ) : (
           <Select
             value={employeeId}
             onChange={(e) => setEmployeeId(e.target.value)}
@@ -399,12 +461,13 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
               ))
             )}
           </Select>
+          )}
           {/* GAP-HR-LEAVE-APPLY-03: only shown once there's someone else it
               could possibly mean — employees.length===1 is always the
               self-service case (page.tsx's own single-row fallback). */}
-          {employees.length > 1 && employeeId && employeeId !== myEmployeeId && (
+          {employees.length > 1 && employeeId && employeeId !== myEmployeeId && (employees.find((e) => e.id === employeeId)?.name ?? pickedLabel) && (
             <p className="mt-1 text-xs" style={{ color: "var(--mut)", margin: 0 }}>
-              {t("onBehalfOfNote", { name: employees.find((e) => e.id === employeeId)?.name ?? "" })}
+              {t("onBehalfOfNote", { name: employees.find((e) => e.id === employeeId)?.name ?? pickedLabel })}
             </p>
           )}
         </Field>

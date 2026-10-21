@@ -23,8 +23,11 @@ async function renderPage() {
       <LeaveHistoryClient roles={["hr_admin"]} myEmployeeId={null} noLinkedProfile={false} profileSource="api" />
     </NextIntlClientProvider>,
   );
-  const select = await screen.findByLabelText("Employee");
-  fireEvent.change(select, { target: { value: "emp-1" } });
+  // GAP-HR-LEAVE-ALLOCATE-04: the employee control is now a type-ahead picker
+  // (EntityPicker over the directory search), not a <select> of a preloaded list.
+  const picker = await screen.findByLabelText("Employee");
+  fireEvent.change(picker, { target: { value: "Asha" } });
+  fireEvent.mouseDown(await screen.findByText("Asha Verma (E001)"));
   return utils;
 }
 
@@ -293,5 +296,68 @@ describe("LeaveHistoryClient — DataTable sort/filter/reason (GAP-HR-LEAVE-HIST
     await renderPage();
     const reasonCell = await screen.findByTitle(LONG_REASON);
     expect(reasonCell).toHaveTextContent(LONG_REASON);
+  });
+});
+
+/**
+ * GAP-HR-LEAVE-ALLOCATE-04: the employee <select> was filled by one
+ * GET /v1/hrms/employees?limit=500 (unordered), so anyone past the first 500 of
+ * a larger tenant could not be chosen at all, and there was no way to search.
+ */
+describe("LeaveHistoryClient — employee picker is a search, not a capped list (GAP-HR-LEAVE-ALLOCATE-04)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function renderHr() {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <LeaveHistoryClient roles={["hr_admin"]} myEmployeeId={null} noLinkedProfile={false} profileSource="api" />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("does not preload any employee list on mount (no limit=500 fetch)", async () => {
+    const fetchMock = mockFetch([]);
+    vi.stubGlobal("fetch", fetchMock);
+    renderHr();
+    await screen.findByLabelText("Employee");
+    const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+    expect(urls.filter((u) => u.includes("/hrms/employees"))).toEqual([]);
+  });
+
+  it("searches the directory by what is typed, and loads the picked employee's history even when they are far beyond position 500", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/hrms/employees?q=")) {
+        return { ok: true, status: 200, json: async () => ({ data: [{ id: "emp-9042", employeeNo: "E9042", name: "Zubin Khan", department: "Audit" }] }) } as Response;
+      }
+      if (url.includes("/hrms/employees?ids=")) {
+        return { ok: true, status: 200, json: async () => ({ data: [{ id: "emp-9042", employeeNo: "E9042", name: "Zubin Khan" }] }) } as Response;
+      }
+      if (url.includes("/hrms/leave/applications")) {
+        return { ok: true, status: 200, json: async () => ({ data: [{ id: "a1", leaveType: "Casual Leave", fromDate: "2026-09-01", toDate: "2026-09-02", status: "pending" }] }) } as Response;
+      }
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderHr();
+
+    fireEvent.change(await screen.findByLabelText("Employee"), { target: { value: "zubin" } });
+    fireEvent.mouseDown(await screen.findByText("Zubin Khan (E9042)"));
+
+    await screen.findByText("Casual Leave");
+    const urls = fetchMock.mock.calls.map((c) => String((c as unknown[])[0]));
+    expect(urls).toContain("/api/proxy/v1/hrms/employees?q=zubin&limit=20");
+    expect(urls.some((u) => u.includes("/leave/applications?empId=emp-9042"))).toBe(true);
+    expect(urls.some((u) => u.includes("limit=500"))).toBe(false);
+  });
+
+  it("a failed search says so; it does not read as 'no matches'", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.includes("/hrms/employees?q=")) throw new Error("network down");
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
+    }));
+    renderHr();
+    fireEvent.change(await screen.findByLabelText("Employee"), { target: { value: "zub" } });
+    expect(await screen.findByText(/couldn.t load results/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no matches/i)).not.toBeInTheDocument();
   });
 });

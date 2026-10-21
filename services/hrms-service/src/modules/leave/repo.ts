@@ -114,6 +114,24 @@ export async function findLeaveAppsByTenant(
     .limit(limit).offset(offset));
 }
 
+/**
+ * GAP-HR-LEAVE-03: per-status counts over the caller's WHOLE visible set (same
+ * tenant + `employeeIds` scope as findLeaveAppsByTenant), not just the page that
+ * was returned -- so a stat tile / "Showing N of M" never under-reports once a
+ * tenant has more requests than one page. `employeeIds`: `undefined` =
+ * unscoped (HR); an explicit empty array = no rows, no DB round-trip.
+ */
+export async function countLeaveAppsByTenantByStatus(tenantId: string, employeeIds?: string[]): Promise<Record<string, number>> {
+  if (employeeIds && employeeIds.length === 0) return {};
+  const conditions = [eq(hrmsLeaveApps.tenantId, tenantId)];
+  if (employeeIds) conditions.push(inArray(hrmsLeaveApps.employeeId, employeeIds));
+  const rows = await scopedRead((tx) => tx.select({ status: hrmsLeaveApps.status, count: sql<number>`count(*)::int` })
+    .from(hrmsLeaveApps)
+    .where(and(...conditions))
+    .groupBy(hrmsLeaveApps.status));
+  return Object.fromEntries(rows.map((r) => [r.status, r.count]));
+}
+
 /** GAP-HR-LEAVE-APPROVALS-04: tenant-scoped fetch of specific applications by id (bounded by the caller's <=50 ids). */
 export async function findLeaveAppsByIds(tenantId: string, ids: string[]): Promise<LeaveAppRow[]> {
   if (ids.length === 0) return [];

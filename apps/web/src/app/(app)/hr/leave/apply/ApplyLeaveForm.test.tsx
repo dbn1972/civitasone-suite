@@ -65,22 +65,87 @@ describe("ApplyLeaveForm — deep-link preselection", () => {
     stubContextAndPreview();
   }
 
+  // GAP-HR-LEAVE-ALLOCATE-04: with several employees to pick from (HR / manager)
+  // the control is a type-ahead picker; the selected person shows as its text.
   it("defaults to the first employee when no initialEmployeeId is given", () => {
     stubLeaveContextFetch();
     renderForm({ employees: EMPLOYEES });
-    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("emp-1");
+    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("Asha Verma");
   });
 
   it("preselects the employee named by ?empId= (via initialEmployeeId), not just the first in the list", () => {
     stubLeaveContextFetch();
     renderForm({ employees: EMPLOYEES, initialEmployeeId: "emp-2" });
-    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("emp-2");
+    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("Rahul Singh");
   });
 
-  it("falls back to the first employee if initialEmployeeId isn't in the list", () => {
+  it("falls back to the first employee if initialEmployeeId isn't in the list and the directory does not know it either", async () => {
     stubLeaveContextFetch();
     renderForm({ employees: EMPLOYEES, initialEmployeeId: "does-not-exist" });
-    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("emp-1");
+    await waitFor(() => expect(fetch).toHaveBeenCalledWith(expect.stringContaining("/hrms/employees?ids=does-not-exist")));
+    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("Asha Verma");
+  });
+});
+
+/**
+ * GAP-HR-LEAVE-ALLOCATE-04: the HR/manager employee control used to be a plain
+ * <select> over getEmployees()' default page (50, arbitrary order) -- anyone
+ * further down a larger tenant could not be chosen, and there was no search.
+ */
+describe("ApplyLeaveForm — employee picker searches the directory (GAP-HR-LEAVE-ALLOCATE-04)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubDirectory() {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/hrms/employees?q=")) {
+        return { ok: true, status: 200, json: async () => ({ data: [{ id: "emp-9042", employeeNo: "E9042", name: "Zubin Khan", department: "Audit", designation: "Auditor" }] }) } as Response;
+      }
+      if (url.includes("/hrms/employees?ids=")) {
+        const ids = new URL(`http://x${url}`).searchParams.get("ids");
+        return { ok: true, status: 200, json: async () => ({ data: ids === "emp-9042" ? [{ id: "emp-9042", employeeNo: "E9042", name: "Zubin Khan", department: "Audit" }] : [] }) } as Response;
+      }
+      if (url.includes("/leave-requests/preview")) return { ok: true, json: async () => ({ computedDays: 0, engineApplied: false }) } as Response;
+      return { ok: true, json: async () => ({ employee: {}, leaveTypes: [], allocations: [] }) } as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("finds an employee who is not in the server-sent page by typing, and loads THEIR leave context", async () => {
+    const fetchMock = stubDirectory();
+    renderForm({ employees: EMPLOYEES });
+
+    const picker = screen.getByRole("combobox", { name: /employee/i });
+    fireEvent.change(picker, { target: { value: "zubin" } });
+    fireEvent.mouseDown(await screen.findByText("Zubin Khan (E9042)"));
+
+    await waitFor(() => expect(picker).toHaveValue("Zubin Khan (E9042)"));
+    await waitFor(() => {
+      const urls = fetchMock.mock.calls.map((c) => String((c as unknown[])[0]));
+      expect(urls.some((u) => u.includes("/leave-context?employeeId=emp-9042"))).toBe(true);
+    });
+    // ...and the "on behalf of" note names them, though they were never in `employees`.
+    expect(await screen.findByText("Applying on behalf of Zubin Khan (E9042).")).toBeInTheDocument();
+  });
+
+  it("honours an ?empId= deep link to someone beyond the server page, once the directory confirms them", async () => {
+    stubDirectory();
+    renderForm({ employees: EMPLOYEES, initialEmployeeId: "emp-9042" });
+    await waitFor(() => expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("Zubin Khan (E9042)"));
+  });
+
+  it("offers 'Apply for myself' when the viewer's own record is known and someone else is selected", async () => {
+    stubDirectory();
+    renderForm({ employees: EMPLOYEES, myEmployeeId: "emp-1", initialEmployeeId: "emp-2" });
+    fireEvent.click(await screen.findByRole("button", { name: /apply for myself/i }));
+    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("Asha Verma");
+    expect(screen.queryByRole("button", { name: /apply for myself/i })).not.toBeInTheDocument();
+  });
+
+  it("keeps the plain select for the single-row self-service case (nobody else to find)", () => {
+    stubDirectory();
+    renderForm({ employees: [EMPLOYEES[0]] as never, myEmployeeId: "emp-1" });
+    expect(screen.getByRole("combobox", { name: /employee/i }).tagName).toBe("SELECT");
   });
 });
 
