@@ -4682,7 +4682,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRODUCTS-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by #1859, verified on main 9c5e9e9e9) [custom non-slab GST rate now warns inline and needs a confirm before saving (re-asked only when the rate changes); 81 is warned, 18 accepted; HSN/SAC saved. OWNER NOTE (not blocking): the slab list is 0/5/12/18/28 -- confirm whether it should follow the current GST rate structure] (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Tax is a single free-text percentage per product: no HSN/SAC code, no GST slab list, and no CGST/SGST/IGST split, so a mistyped rate (e.g. 81) saves as valid and invoices cannot be tied to a tax classification (ProductCatalogueEditor.tsx:66,215).
 - **Verified evidence:** apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx:77-80 taxBpsOf uses percentToBps (money.ts:68-77), which accepts any non-negative number up to 2 decimals, so 81 (8100 bps) is valid; Product has only taxRateBps (quotation.ts:70), no HSN/SAC or CGST/SGST/IGST fields.
 - **Files to change:** `apps/web/src/app/_components/crm/ProductCatalogueEditor.tsx`, `apps/web/src/lib/crm/quotation.ts`
@@ -4798,7 +4798,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-QUALIFICATION-FRAMEWORKS-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [~] **Status** PARTLY (W2 crm rescan): DONE -- business line is stored trimmed+lowercase on web AND crm-service, the list filter compares lower(btrim(business_line)) so legacy mixed-case rows still match without a data migration, a line no saved framework uses needs a confirm that names the near-match (goverment -> government), and saved lines with no ACTIVE framework are listed. STILL OPEN (owner decision): there is no authoritative business-line list (crm-service keeps it an open vocabulary, no CHECK/master table), so the field is still a free-text input with a datalist, not a select fed by a canonical list; and a lead has no business-line attribute, so QualifyPanel (contacts/[id]) still loads every active framework instead of matching on the lead. QUESTION: what is the source of truth for business lines (a tenant-configured master list, or an existing lead attribute such as segment), and which lead field is the lead business line?
 - **First-pass claim:** Business line is a free-text field (placeholder "government, psu") not tied to any business-line list, so frameworks can silently never match leads (QualificationFrameworksEditor.tsx:238).
 - **Verified evidence:** Business line is a free-text <input> (QFE:206-207, placeholder 'e.g. government, psu'), saved verbatim after only a trim check (116). No business-line list exists in apps/web (grep for BUSINESS_LINES/business-line found nothing), and QualifyPanel/getFrameworks (leadQualification.ts:142-144) filters by the raw string, so a typo or case difference means the framework never matches a lead's businessLine. The theme tag FABRICATED is wrong; this is a free-text-vs-controlled-vocabulary issue.
 - **Files to change:** `apps/web/src/app/_components/crm/QualificationFrameworksEditor.tsx`, `apps/web/src/lib/crm/leadQualification.ts`
@@ -5010,7 +5010,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-06  ·  LOW  ·  confirmed  ·  theme COPY (was WIRING)
 
-- [x] **Status** (W2 2026-10-16: closed by #TBD, W2 crm: closed by #93e2de01d)
+- [x] **Status** (W2 2026-10-16: closed by #TBD, W2 crm: closed by #93e2de01d) (W2 crm rescan: completed by #PRNUM)
 - **W0-10 note:** review found the W0 tick partly — lib/crm/rti.ts sectionLabel + test exist and detail page imports it, but RtiTable.tsx:82-86 and new/page.tsx:12-15 keep local maps (i18n keys): table shows "§6 Information" vs detail/new "§6 — Information Request", filters namespace shows "§6 — Information" - acceptance "all screens show the same label" unmet
 - **First-pass claim:** Section reads "§6 Information" here but "§6 — Information Request" on the detail and new-request screens (RtiTable.tsx:55, rti/[id]/page.tsx:37).
 - **Verified evidence:** RtiTable.tsx:436-440 sectionLabel returns '§6 Information' / '§11 Third-party' while detail (page.tsx:34-37) and new (new/page.tsx:8-11) use '§6 — Information Request' / '§11 — Third-party Information'. Three separate label maps; theme WIRING is wrong (pure label drift).
@@ -5050,7 +5050,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-DETAIL-02  ·  HIGH  ·  partly  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9; W1 SF-12 re-confirmed on #2003)
+- [~] **Status** PARTLY (W2 crm rescan): DONE -- Respond is a compose-then-read-back two-step (min 20 chars, exact text shown, Back to edit keeps the draft, nothing sent until Send response), audit events are emitted on forward and respond in the same tx, and the action gate is the CRM ACL. STILL OPEN (owner decision): the CPIO/APIO distinction is not modelled anywhere (crm-service gates forward/respond by CRM_ROLES only), so a plain crm_user still sees Forward/Respond. QUESTION: which roles are the RTI CPIO and APIO (new role names or an existing CRM role), and may APIO respond or only forward? Once agreed, gate rti-route.ts forward/respond and the canAct prop on those roles
 - **First-pass claim:** Forward, Respond and First Appeal are offered to every CRM user: the CPIO/APIO roles are not modelled, and the recorded response (a statutory document) needs only a 1-character "Response text" with no draft, attachment or preview (RtiActions.tsx:35-75, ds/ConfirmDialog.tsx:72).
 - **Verified evidence:** True: Forward/Respond/First Appeal (RtiActions.tsx:239-271) are shown to any user who reaches the page by status only; no role/CPIO/APIO check (header lists CPIO only in comments). Respond uses ActionButton requireReason with default minReasonLength=1 (ConfirmDialog.tsx:72,174), so a 1-char response is accepted, no attachment/preview/draft. Overstated: all three actions do go through a ConfirmDialog (ActionButton) and Forward/Respond require non-empty text. Whether the server enforces roles and emits audit events is cannot-verify. Cited ConfirmDialog line 72 is the minReasonLength default.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/[id]/RtiActions.tsx`, `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`
@@ -5067,7 +5067,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-DETAIL-03  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9; W1 SF-12 re-confirmed on #2003)
+- [x] **Status** (W0 2026-10-13: closed by #1858, verified on main 9c5e9e9e9; W1 SF-12 re-confirmed on #2003) [RTI detail is requested with ?maskPii=true so no viewer is sent the clear name/contact; PII-read roles reveal through the audited POST /v1/crm/pii/reveal (reason + pii_reveal audit event), others get no Reveal control. OWNER NOTE (not blocking): plain crm_user (CPIO staff who must phone the applicant) has no reveal path today -- say whether that role should get reveal-with-reason] (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Applicant name and contact (phone/email) print in clear to all CRM users with no masking or reveal-with-reason; under DPDP the applicant's identity and contact should be role-gated and access-logged (rti/[id]/page.tsx:160-170).
 - **Verified evidence:** Detail page prints applicantName and applicantContact in clear to any viewer (page.tsx:162-165) with no masking or access logging; the list does the same (RtiTable.tsx:511-517). There is no shared <Masked> component in ds (only ad-hoc secretMasked strings in admin/integrations). Whether the server audit-logs reads is cannot-verify. Line refs 160-170 are approximately right.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`, `apps/web/src/app/_components/ds/index.ts`
@@ -5085,7 +5085,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9; W1 SF-12 re-confirmed on #2003)
+- [x] **Status** (W0 2026-10-13: closed by #1859, verified on main 9c5e9e9e9; W1 SF-12 re-confirmed on #2003) [Forward now records previous_department_ref + transferred_at (migration 0174), returns them on the detail and shows Transferred from X on <date>; the timeline note names both ends. The authority LIST source is still the built-in fallback and is tracked under GAP-CRM-RTI-NEW-04] (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Forward asks for a free-text "Department / Office" that overwrites departmentRef; there is no department picker, no record of the previous department, and no check of the s.6(3) transfer window (RtiActions.tsx:39).
 - **Verified evidence:** Forward (RtiActions.tsx:242-248) uses the ConfirmDialog reason box labelled 'Department / Office' and sends {departmentRef:dept} to PATCH /forward; the value is free text that replaces departmentRef (page.tsx:100 shows only the current value). The UI keeps no previous-department history and does not check the s.6(3) 5-day transfer window (only text in the description). Backend behaviour on history is cannot-verify. Cited line 39 is wrong; correct 242-248.
 - **Files to change:** `apps/web/src/app/(app)/crm/rti/[id]/RtiActions.tsx`, `apps/web/src/app/(app)/crm/rti/[id]/page.tsx`
@@ -5172,7 +5172,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** NEEDS OWNER DECISION — web part done (canonicaliseAuthority, commit 936241a8d); backend tenant-authorities endpoint requires owner decision before combobox can be wired
+- [~] **Status** PARTLY (W2 crm rescan): DONE -- the New RTI form and the Forward Other path both fold a typed authority to the canonical listed name (ministry of finance  -> Ministry of Finance, tested) and normalise spacing; New and Forward share one list. STILL OPEN (owner decision): the list is the built-in 7-entry central-bodies fallback (rtiAuthorities.ts), there is no tenant/org public-authority source, so a configured state department is not suggested. QUESTION: where should the tenant public-authority list come from -- a new CRM authority master (config screen + table), the citizen-service CPIO directory (public_authority, currently not readable by CRM roles), or the distinct departmentRef values already used in the tenant RTI register? Once chosen, swap the source behind rtiAuthorities.ts
 - **W0-10 note:** review found the W0 tick partly — rtiAuthorities.ts is still a hard-coded central-bodies list (DECISION noted), not tenant/org sourced, so a configured state department does not appear; new/page.tsx:101 uses normaliseAuthority (trim/collapse only), not canonicaliseAuthority, so ministry of finance does not fold to canonical casing
 - **First-pass claim:** "Department / Public Authority" is free text with a datalist of central bodies (Ministry of Finance, UIDAI, Department of Posts); a state department's own public authorities are not offered and typos fracture the register (rti/new/page.tsx:15-24,150).
 - **Verified evidence:** new/page.tsx:13-22 SAMPLE_DEPARTMENTS is a hard-coded list of 8 central bodies fed to a <datalist> (164-168) on a free text input (156-163, required, maxLength 200); anything can be typed, so typos fracture the register and state authorities are not offered. Cited lines 15-24,150 are roughly right (13-22,156).
@@ -5262,7 +5262,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-03  ·  MEDIUM  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) [owner column shows the directory name (Assigned if unresolvable), Overdue-only, Assigned-to-me and sort-by-due-date filters are server-side (overdue=true / assignedTo / sort=dueAt, CSV export honours overdue)] (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** dueAt and assignedTo are fetched but never shown, so the list cannot show which requests are past due or who owns them, the two things a citizen-service desk sorts by (loaders.ts:1499).
 - **Verified evidence:** CrmServiceRequestRow includes assignedTo and dueAt and the loader maps them (loaders.ts ~1493-1494, mapping ~1552-1553), but ServiceRequestsTable.tsx columns (105-152) render only ref, citizen, service type, subject, priority, status, logged, View. No overdue signal or owner.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/ServiceRequestsTable.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -5351,7 +5351,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9) [service-request detail is requested with ?maskPii=true; phone/email show masked and PII-read roles get the audited Reveal control (reason + pii_reveal audit event); others get no Reveal. OWNER NOTE (not blocking): which roles may reveal is still the existing PII-read set] (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Citizen phone and email print in clear to every CRM user; contact details of citizens should be masked or reveal-on-demand with access logging under DPDP (service-requests/[id]/page.tsx:140-146).
 - **Verified evidence:** [id]/page.tsx:138-140 renders r.citizenPhone and r.citizenEmail as plain text in the Citizen card, visible to every user passing the CRM layout (crm_user etc.). No masking helper or access log. No shared <Masked> exists in ds (only a local maskPhone in telephony/calls/page.tsx:37). Observation's line range 140-146 is slightly off.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/[id]/page.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`, `apps/web/src/app/_components/ds/index.ts`
@@ -5914,7 +5914,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-QUOTATIONS-05  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W2 2026-10-16: verified in crm-service, W2 crm: closed by #quotations-routes.ts enforces discountPct <= maxDiscountBps/100 at line 380-396; returns 422 on excess)
+- [~] **Status** PARTLY (W2 crm rescan): DONE -- the send gate already derives the effective discount server-side from line prices vs the catalogue price and returns 422 APPROVAL_REQUIRED above the tenant threshold or while an approval is pending (qp-http tests); the builder now shows each line list price, the discount against it and an overall effective-discount banner. STILL OPEN (owner decision, no business rule invented): (1) the reference is the catalogue price (crm.products.price_minor), not the price-book price the builder seeds from, because a quotation carries no price-book selection criteria; (2) lines without a productId have no reference and are never scored; (3) the gate only runs when an enabled discount threshold row exists, with none configured a deep discount sends unchecked (the approval-request path already assumes any discount needs sign-off in that case); (4) create / new-version do not reject or flag below-limit prices, enforcement is at send only. QUESTIONS: should the reference be the price-book price (and how is the book chosen), should free-text lines be blocked or scored, what default threshold applies to a tenant with none configured (none / 0 bps / a seeded value), and should create or new-version also flag a below-limit price?
 - **First-pass claim:** Unit price and tax % on each line are freely editable after the product picks its price-book price, so a discount can be given by typing a lower price without any approval request; whether the server catches this is undeterminable (QuotationBuilder.tsx:355-370).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['POST /v1/crm/quotations', 'POST /v1/crm/quotations/:id/new-version', 'GET /v1/crm/price-books']`
 - **Question:** Does POST/new-version compare each line unitPrice/discount to the price-book price and require an approval (or reject) when it is below the allowed discount threshold?
