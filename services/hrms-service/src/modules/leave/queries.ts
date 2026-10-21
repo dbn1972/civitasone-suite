@@ -172,6 +172,35 @@ export async function listLeaveRequestDetails(tenantId: string, limit: number, o
 }
 
 /**
+ * GAP-HR-LEAVE-03: one page of the caller's visible leave requests PLUS the real
+ * total and per-status counts over the whole visible set, so the UI can show a
+ * pager / "Showing 1-100 of 340" instead of silently truncating at the page
+ * size and counting only what came back. Rows and counts are cached together in
+ * ONE entry so a page and the numbers beside it always come from the same
+ * instant. Counts are keyed by the same mapped status the rows carry
+ * (mapLeaveStatus), so a tile can never disagree with its own table.
+ */
+export async function getLeaveRequestPage(tenantId: string, limit: number, offset = 0, employeeIds?: string[]) {
+  if (employeeIds && employeeIds.length === 0) {
+    return { data: [], total: 0, statusCounts: {} as Record<string, number> };
+  }
+  const scopeKey = employeeIds ? [...employeeIds].sort().join(",") : "all";
+  return cache.listOrLoad(tenantId, "leave_request_detail", `page:${limit}:${offset}:${scopeKey}`, async () => {
+    const [rows, rawCounts] = await Promise.all([
+      repo.findLeaveAppsByTenant(tenantId, limit, offset, employeeIds),
+      repo.countLeaveAppsByTenantByStatus(tenantId, employeeIds),
+    ]);
+    const statusCounts: Record<string, number> = {};
+    for (const [raw, n] of Object.entries(rawCounts)) {
+      const mapped = mapLeaveStatus(raw);
+      statusCounts[mapped] = (statusCounts[mapped] ?? 0) + n;
+    }
+    const total = Object.values(statusCounts).reduce((sum, n) => sum + n, 0);
+    return { data: await toLeaveRequestDetails(tenantId, rows), total, statusCounts };
+  });
+}
+
+/**
  * GAP-HR-LEAVE-APPROVALS-04: id-based detail read (<=50 ids, tenant-scoped).
  * Uncached on purpose -- the result set depends on the caller's authorisation.
  * Returns the raw employeeId alongside each row so the route can authorise

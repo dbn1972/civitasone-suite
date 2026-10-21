@@ -4286,7 +4286,14 @@
     "colToDate": "समाप्ति तिथि",
     "colDays": "दिन",
     "colStatus": "स्थिति",
-    "filterPlaceholder": "कर्मचारी, प्रकार या स्थिति के अनुसार खोजें…"
+    "filterPlaceholder": "कर्मचारी, प्रकार या स्थिति के अनुसार खोजें…",
+    "pagerLabel": "अवकाश अनुरोधों के पृष्ठ",
+    "pagerShowing": "{total} अनुरोधों में से {from}–{to} दिखाए जा रहे हैं",
+    "pagerEmptyPage": "इस पृष्ठ पर कोई अनुरोध नहीं है। कुल {total} अनुरोध हैं।",
+    "pagerPrev": "← पिछला",
+    "pagerNext": "अगला →",
+    "pagerNote": "ऊपर के कुल योग आपको दिखने वाले सभी अनुरोधों की गिनती करते हैं। खोज और क्रम केवल इसी पृष्ठ पर लागू होते हैं।",
+    "managerOwnRequestsHintRich": "इस सूची में आपके अधीनस्थ कर्मचारियों के अनुरोध दिखते हैं। आपके स्वयं के अवकाश अनुरोध <historyLink>इतिहास</historyLink> पृष्ठ पर हैं।"
   },
   "leaveAllocate": {
     "title": "छुट्टी आवंटित करें",
@@ -4377,7 +4384,11 @@
     "allocationOption": "{name} ({balance} दिन शेष)",
     "charsCount": "{count} / 20+ अक्षर",
     "balanceWarning": "आप {days} दिन की छुट्टी मांग रहे हैं लेकिन आपके पास केवल {balance} दिन शेष हैं। यह गणना अनुमानित है (कैलेंडर दिवस); वास्तविक कटौती भिन्न हो सकती है। जारी रखें?",
-    "calendarDaysDisclaimer": "अनुमानित — सप्ताहांत व छुट्टियाँ शामिल नहीं।"
+    "calendarDaysDisclaimer": "अनुमानित — सप्ताहांत व छुट्टियाँ शामिल नहीं।",
+    "employeePickerPlaceholder": "नाम या कर्मचारी संख्या से खोजें…",
+    "employeePickerSearching": "खोजा जा रहा है…",
+    "employeePickerNoResults": "कोई मिलता-जुलता कर्मचारी नहीं",
+    "applyForMyselfLink": "अपने लिए आवेदन करें"
   },
   "leaveApprovals": {
     "title": "अवकाश अनुमोदन",
