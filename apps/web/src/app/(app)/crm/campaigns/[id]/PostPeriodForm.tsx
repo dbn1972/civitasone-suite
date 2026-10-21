@@ -24,11 +24,14 @@ const MAX_RESPONSES = 100_000_000;
 
 export function PostPeriodForm({
   campaignId,
-  currency,
+  currency: initialCurrency,
+  currencyEditable = false,
   campaignName: currentName = "",
 }: {
   campaignId: string;
   currency: string;
+  /** First period of a campaign with no figures yet: its currency is not known, so let the poster set it. */
+  currencyEditable?: boolean;
   /** The campaign's current name (if it has one), pre-filled so a post keeps it. */
   campaignName?: string;
 }) {
@@ -36,6 +39,7 @@ export function PostPeriodForm({
   const formError = useFormError("campaign period");
   const router = useRouter();
   const [campaignName, setCampaignName] = useState(currentName);
+  const [currency, setCurrency] = useState(initialCurrency);
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
   const [costRupees, setCostRupees] = useState("");
@@ -96,6 +100,16 @@ export function PostPeriodForm({
           <Field label={t("periodEnd")}>
             <Input type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
           </Field>
+          {currencyEditable ? (
+            <Field label={t("currency")} required>
+              <Input
+                value={currency}
+                maxLength={3}
+                autoCapitalize="characters"
+                onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+              />
+            </Field>
+          ) : null}
           <Field label={t("spend", { currency })}>
             <Input inputMode="decimal" placeholder="0.00" value={costRupees} onChange={(e) => setCostRupees(e.target.value)} />
           </Field>

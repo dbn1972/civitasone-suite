@@ -1,7 +1,7 @@
 import { Card, LoadErrorState, PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { getCrmCampaignRoiSummary } from "../../../_data/loaders";
 import { getTranslations } from "next-intl/server";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoneyIn } from "@/lib/formatters";
 import { CampaignRoiTable } from "./CampaignRoiTable";
 import { formatRoiPercent, portfolioTotals, rankByNet } from "./campaigns";
 
@@ -93,13 +93,13 @@ export default async function CampaignsPage() {
           icon="💸"
           tone="bad"
           label="Total Spend"
-          value={mixedCurrency ? "—" : formatMoney(totals.costMinor)}
+          value={mixedCurrency ? "—" : formatMoneyIn(totals.costMinor, singleCurrency)}
         />
         <StatCard
           icon="💰"
           tone="good"
           label="Attributed Revenue"
-          value={mixedCurrency ? "—" : formatMoney(totals.revenueMinor)}
+          value={mixedCurrency ? "—" : formatMoneyIn(totals.revenueMinor, singleCurrency)}
         />
         <StatCard icon="📈" tone="warn" label="Portfolio ROI" value={formatRoiPercent(portfolioRoiPercent)} />
       </StatGrid>
@@ -109,7 +109,7 @@ export default async function CampaignsPage() {
           {t("unmeasuredNote", {
             n: totals.unmeasuredCampaigns,
             countText: totals.unmeasuredCampaigns.toLocaleString("en-IN"),
-            amount: formatMoney(totals.unmeasuredRevenueMinor),
+            amount: formatMoneyIn(totals.unmeasuredRevenueMinor, singleCurrency),
             currencySuffix: singleCurrency && singleCurrency !== "INR" ? ` ${singleCurrency}` : "",
           })}
         </p>

@@ -48,6 +48,15 @@ export class CampaignPeriodValidationError extends Error {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** Minor-unit exponent of an ISO 4217 code (2 for INR/USD, 0 for JPY); 2 if Intl does not know the code. */
+function minorUnitDigits(code: string): number {
+  try {
+    return new Intl.NumberFormat("en", { style: "currency", currency: code }).resolvedOptions().maximumFractionDigits ?? 2;
+  } catch {
+    return 2;
+  }
+}
+
 /**
  * Build the request body for the performance upsert, converting rupees to
  * paise strings. Throws CampaignPeriodValidationError on bad input so the form
@@ -76,6 +85,14 @@ export function buildPerformanceBody(input: PostPeriodInput): {
   // The form caps the field at the server maximum; the slice is a backstop so an
   // over-long value can never turn into a 400 for something the user cannot see.
   const campaignName = (input.campaignName ?? "").trim().slice(0, MAX_CAMPAIGN_NAME_LENGTH);
+  const currency = (input.currency ?? "INR").trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    throw new CampaignPeriodValidationError("Enter a three-letter currency code, for example INR.");
+  }
+  if (minorUnitDigits(currency) !== 2) {
+    // rupeesToMinorString scales by 100; a 0- or 3-decimal currency would be mis-stated.
+    throw new CampaignPeriodValidationError("Only currencies with two decimal places can be posted here.");
+  }
   const costMinor = rupeesToMinorString(input.costRupees, { allowZero: true });
   if (costMinor === null) {
     throw new CampaignPeriodValidationError("Enter the spend as rupees (up to two decimal places).");
@@ -93,7 +110,7 @@ export function buildPerformanceBody(input: PostPeriodInput): {
     costMinor,
     revenueMinor,
     responses: input.responses,
-    currency: (input.currency ?? "INR").toUpperCase(),
+    currency,
     ...(campaignName ? { campaignName } : {}),
   };
 }

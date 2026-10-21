@@ -81,3 +81,26 @@ describe("CampaignRoiTable export notice (GAP-CRM-CAMPAIGNS-05)", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("CampaignRoiTable per-row currency (GAP-CRM-CAMPAIGNS-DETAIL-03)", () => {
+  it("formats a USD row in dollars with no rupee symbol, and an INR row in rupees", () => {
+    const { container } = render(
+      <CampaignRoiTable
+        rows={[
+          row({ campaignId: "usd-1", name: "Global Webinar", currency: "USD", costMinor: "12345", revenueMinor: "50000", netMinor: "37655", costPerResponseMinor: "1234" }),
+          row({ campaignId: "inr-1", name: "Diwali Outreach", currency: "INR", costMinor: "100000", revenueMinor: "250000", netMinor: "150000" }),
+        ]}
+      />,
+    );
+    const rows = Array.from(container.querySelectorAll("tbody tr"));
+    const usdRow = rows.find((r) => r.textContent?.includes("Global Webinar"));
+    const inrRow = rows.find((r) => r.textContent?.includes("Diwali Outreach"));
+    expect(usdRow).toBeTruthy();
+    expect(inrRow).toBeTruthy();
+    expect(usdRow!.textContent).toContain("$123.45");
+    expect(usdRow!.textContent).toContain("$376.55");
+    expect(usdRow!.textContent).toContain("$12.34");
+    expect(usdRow!.textContent).not.toContain("₹");
+    expect(inrRow!.textContent).toContain("₹");
+  });
+});

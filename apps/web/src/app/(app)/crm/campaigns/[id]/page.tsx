@@ -58,12 +58,17 @@ export default async function CampaignRoiPage({ params }: { params: { id: string
     }
     return (
       <>
-        <PageHeader title={t("performanceTitle")} back="/crm/campaigns" backLabel="Campaigns" />
+        <PageHeader title={t("performanceTitle")} back="/crm/campaigns" backLabel={t("backLabel")} />
         <EmptyState
           icon="📣"
-          title="No performance recorded"
-          message="This campaign has no cost, revenue or response figures posted against it yet."
+          title={t("noPerformanceTitle")}
+          message={t("noPerformanceMessage")}
         />
+        {/* GAP-CRM-CAMPAIGNS-DETAIL-04: a campaign with no periods answers 404, so
+            the form must live on this branch too or its first period could never
+            be posted. The currency is not known yet, so it defaults to the
+            service default (INR) and is editable for this first period. */}
+        <PostPeriodForm campaignId={params.id} currency="INR" currencyEditable />
       </>
     );
   }
@@ -138,8 +143,8 @@ export default async function CampaignRoiPage({ params }: { params: { id: string
           exportFilename={`crm-campaign-${campaign.campaignId}-roi`}
           exportNotice="Exports leave the system; handle spend and revenue figures per policy."
           emptyIcon="🗓️"
-          emptyTitle="No periods recorded"
-          emptyMessage="Post a reporting period's cost and revenue to see the breakdown."
+          emptyTitle={t("noPeriodsTitle")}
+          emptyMessage={t("noPeriodsMessage")}
         />
       </Card>
 

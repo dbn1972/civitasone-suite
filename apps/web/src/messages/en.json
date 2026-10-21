@@ -2040,6 +2040,7 @@
       "title": "Post a reporting period",
       "periodStart": "Period start",
       "periodEnd": "Period end (optional)",
+      "currency": "Currency (ISO code)",
       "spend": "Spend ({currency})",
       "revenue": "Revenue ({currency})",
       "responses": "Responses",
@@ -13498,7 +13499,11 @@
     "copyId": "Copy ID",
     "copyIdAria": "Copy the full campaign ID",
     "copied": "Copied",
-    "copyFailed": "Couldn’t copy. Please copy it manually."
+    "copyFailed": "Couldn’t copy. Please copy it manually.",
+    "noPerformanceTitle": "No performance recorded",
+    "noPerformanceMessage": "This campaign has no cost, revenue or response figures posted against it yet. Use the form below to post its first reporting period.",
+    "noPeriodsTitle": "No periods recorded",
+    "noPeriodsMessage": "No reporting periods have been recorded for this campaign."
   },
   "crmCampaignRoiTable": {
     "unnamedCampaign": "Unnamed campaign",
