@@ -23,9 +23,10 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db } from "../../shared/db.js";
 import { writeAuditLog } from "../../shared/audit.js";
 import * as repo from "./repo.js";
-import { computeOverallGrade, type ScoreInput } from "./engine.js";
+import { computeOverallGrade, GRADE_BANDS, type ScoreInput } from "./engine.js";
 import type { AppraisalRow } from "../appraisals/schema.js";
 import type { AparScoreRow } from "./schema.js";
+import type { EmployeeRow } from "../employee/schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { getPolicy } from "../policy-settings/repo.js";
 import { aparDeadline } from "./deadlines.js";
@@ -196,7 +197,14 @@ function trueActorRole(ctx: RequestContext, functionalRole: string, override: bo
  *              link, which fails CLOSED rather than falling back to "see
  *              everyone", mirroring resolveManagerScope's `null` case.
  */
-async function resolveAparReadScope(ctx: RequestContext, req: FastifyRequest): Promise<string[] | null> {
+async function resolveAparReadScope(
+  ctx: RequestContext,
+  req: FastifyRequest,
+  // GAP-HR-APAR-DETAIL-03: the list route now resolves the acting employee
+  // itself (to redact the viewer's own pre-disclosure row), so it hands the
+  // result in instead of paying for a second identical lookup.
+  preResolved?: { emp: EmployeeRow | undefined },
+): Promise<string[] | null> {
   if (HR_ROLES.some((r) => ctx.roles.includes(r))) return null;
 
   const allowed = new Set<string>();
@@ -205,7 +213,7 @@ async function resolveAparReadScope(ctx: RequestContext, req: FastifyRequest): P
   // "manager" roles must not pay for (or risk divergent results from) two
   // separate lookups of their own record.
   const ownEmp = needsOwnEmployee
-    ? await resolveEmployeeForActor(ctx.tenantId, ctx.actorId)
+    ? (preResolved ? preResolved.emp : await resolveEmployeeForActor(ctx.tenantId, ctx.actorId))
     : undefined;
 
   if (ctx.roles.includes("employee") && ownEmp) {
@@ -248,6 +256,35 @@ function assertReadable(scope: string[] | null, a: AppraisalRow, actingEmployeeI
 
 /** Statuses reached before the grade/pen-picture/remarks are disclosed to the appraisee. */
 const PRE_DISCLOSURE_STATUSES = new Set(["self_pending", "reporting_officer", "reviewing_officer", "accepting_authority"]);
+
+/** Stages whose outgoing stage-history row carries an officer's confidential input. */
+const OFFICER_FROM_STAGES = new Set(["reporting_officer", "reviewing_officer", "accepting_authority"]);
+
+/**
+ * GAP-HR-APAR-DETAIL-03: the stage-history rows are a second route to the
+ * very same confidential content `redactForAppraiseePreDisclosure` hides on
+ * the appraisal row: the reporting-to-reviewing row's payload carries the
+ * pen-picture and every score remark, the reviewing-to-accepting row's
+ * `remarks` IS the Reviewing Officer's remark (its payload the concur/vary
+ * decision and variations), and the accepting-to-disclosed row carries the
+ * grade and the Accepting Authority's remarks. Rows an officer produced are
+ * therefore stripped of `remarks` and `payload` for the appraisee before
+ * disclosure; the row itself (stage, actor, time) stays so the appraisee can
+ * still follow where the case is. Rows the appraisee or HR produced
+ * (initiation, self-appraisal) are untouched.
+ */
+function redactHistoryForAppraisee<H extends { fromStage: string | null; remarks: string | null; payload: unknown }>(
+  history: H[],
+  status: string,
+  isAppraisee: boolean,
+): H[] {
+  if (!isAppraisee || !PRE_DISCLOSURE_STATUSES.has(status)) return history;
+  return history.map((h) =>
+    h.fromStage !== null && OFFICER_FROM_STAGES.has(h.fromStage)
+      ? { ...h, remarks: null, payload: {} }
+      : h,
+  );
+}
 
 /**
  * GAP-HR-APAR-DETAIL-03: the appraisee must not see the Reporting Officer's
@@ -296,10 +333,16 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const q = z.object({
       status: z.string().max(24).optional(),
       period: z.string().min(1).max(16).optional(),
+      // GAP-HR-APAR-06: appraisee name / employee-number search.
+      q: z.string().trim().min(1).max(100).optional(),
       limit: z.coerce.number().int().min(1).max(500).default(100),
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
-    const scope = await resolveAparReadScope(ctx, req);
+    // Resolved once up front: it feeds both the read scope below and the
+    // viewer's-own-row redaction further down (GAP-HR-APAR-DETAIL-03).
+    const actingEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+    const actingEmployeeId = actingEmp?.id ?? null;
+    const scope = await resolveAparReadScope(ctx, req, { emp: actingEmp });
     // exactOptionalPropertyTypes: only assign status/period when actually
     // present -- ListAppraisalsOptions' fields are optional (key may be
     // omitted) but not nullable-to-undefined (an explicit `status: undefined`
@@ -308,6 +351,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const listOpts: repo.ListAppraisalsOptions = { limit: q.limit, offset: q.offset };
     if (q.status) listOpts.status = q.status;
     if (q.period) listOpts.period = q.period;
+    if (q.q) listOpts.q = q.q;
     const [{ rows, total }, counts] = await Promise.all([
       repo.listAppraisals(ctx.tenantId, scope, listOpts),
       repo.countAparsByStatusGroup(ctx.tenantId, scope),
@@ -323,15 +367,23 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const names = await batchEmployees(ctx.tenantId, ids);
     // GAP-HR-APAR-03: per-stage due date from the tenant's apar_deadlines policy.
     const deadlinePolicy = await getPolicy(ctx.tenantId, "apar_deadlines");
-    const enriched = rows.map((r) => ({
-      ...r,
-      deadline: aparDeadline(r, deadlinePolicy),
-      employeeName: names.get(r.employeeId)?.fullName,
-      employeeNo: names.get(r.employeeId)?.employeeNo,
-      reportingOfficerName: r.reportingOfficerId ? names.get(r.reportingOfficerId)?.fullName : undefined,
-      reviewingOfficerName: r.reviewingOfficerId ? names.get(r.reviewingOfficerId)?.fullName : undefined,
-      acceptingAuthorityName: r.acceptingAuthorityId ? names.get(r.acceptingAuthorityId)?.fullName : undefined,
-    }));
+    const enriched = rows.map((rawRow) => {
+      // GAP-HR-APAR-DETAIL-03: the list returns whole appraisal rows, so the
+      // viewer's OWN not-yet-disclosed record must be redacted here exactly
+      // as on GET /:id -- otherwise the pen-picture / officer remarks / grade
+      // the detail view withholds would still be one list call away.
+      const isOwnRow = actingEmployeeId !== null && actingEmployeeId === rawRow.employeeId;
+      const r = redactForAppraiseePreDisclosure(rawRow, [], isOwnRow).appraisal;
+      return {
+        ...r,
+        deadline: aparDeadline(r, deadlinePolicy),
+        employeeName: names.get(r.employeeId)?.fullName,
+        employeeNo: names.get(r.employeeId)?.employeeNo,
+        reportingOfficerName: r.reportingOfficerId ? names.get(r.reportingOfficerId)?.fullName : undefined,
+        reviewingOfficerName: r.reviewingOfficerId ? names.get(r.reviewingOfficerId)?.fullName : undefined,
+        acceptingAuthorityName: r.acceptingAuthorityId ? names.get(r.acceptingAuthorityId)?.fullName : undefined,
+      };
+    });
     return reply.send({
       data: enriched,
       total,
@@ -513,8 +565,12 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     // GAP-HR-APAR-DETAIL-03: redact officer-only fields from the appraisee's
     // own view until disclosure. HR/officers (anyone resolveAparReadScope
     // gave unrestricted `null` scope to) always see the full record.
-    const isAppraisee = scope !== null && actingEmployeeId === a.employeeId;
+    // Identity-based, NOT scope-based: an HR-role user who is themselves the
+    // appraisee gets unrestricted (null) read scope, but must not read their
+    // own confidential report early either.
+    const isAppraisee = actingEmployeeId !== null && actingEmployeeId === a.employeeId;
     const redacted = redactForAppraiseePreDisclosure(a, scores, isAppraisee);
+    const redactedHistory = redactHistoryForAppraisee(history, a.status, isAppraisee);
 
     // GAP-HR-APAR-DETAIL-01: so the web layer never has to guess ownership
     // (see computeAparActions's own doc comment for the two-action-slot
@@ -536,7 +592,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       reviewingOfficerName: redacted.appraisal.reviewingOfficerId ? names.get(redacted.appraisal.reviewingOfficerId)?.fullName : undefined,
       acceptingAuthorityName: redacted.appraisal.acceptingAuthorityId ? names.get(redacted.appraisal.acceptingAuthorityId)?.fullName : undefined,
     };
-    const enrichedHistory = history.map((h) => ({ ...h, actorName: names.get(h.actorId)?.fullName }));
+    const enrichedHistory = redactedHistory.map((h) => ({ ...h, actorName: names.get(h.actorId)?.fullName }));
 
     // GAP-HR-APAR-DETAIL-07 (DPDP): data-access audit event on every read of
     // a named appraisal record. writeAuditLog is fire-and-forget and never
@@ -554,7 +610,11 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       ipAddr: req.ip,
     });
 
-    return reply.send({ appraisal: enrichedAppraisal, scores: redacted.scores, history: enrichedHistory, actions });
+    // GAP-HR-APAR-DETAIL-05: the grade scale, from the engine's own table.
+    return reply.send({
+      appraisal: enrichedAppraisal, scores: redacted.scores, history: enrichedHistory, actions,
+      gradeBands: GRADE_BANDS,
+    });
   });
 
   app.setErrorHandler((err, req, reply) => {
