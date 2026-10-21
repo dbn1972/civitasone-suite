@@ -14,27 +14,29 @@ import {
   SCORE_MAX,
   SCORE_MIN,
   formatAverageScore,
+  isCalendarDate,
   moodOf,
   rankThemes,
   shareOf,
   themeLabel,
+  toApiWindow,
   topConcern,
 } from "./voc";
 
-/** ISO yyyy-mm-dd (what the date inputs / presets produce). */
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
 /**
- * Keep only a well-formed window. An invalid or inverted range (from > to) is
- * dropped entirely rather than sent to the server — the page then shows the
- * full aggregate and a validation note, never a half-applied filter.
+ * Read the period from the URL. A window that is not a real calendar day
+ * ("2026-13-45"), or is inverted (from > to), is INVALID: the page then says so and
+ * fetches nothing - never a half-applied filter, and never a silently different
+ * (all-time) answer to the question the reader asked.
  */
 function parseRange(sp?: { from?: string; to?: string }): { range: { from?: string; to?: string }; invalid: boolean } {
-  const from = sp?.from && ISO_DATE.test(sp.from) ? sp.from : undefined;
-  const to = sp?.to && ISO_DATE.test(sp.to) ? sp.to : undefined;
-  const malformed = (sp?.from != null && sp.from !== "" && !from) || (sp?.to != null && sp.to !== "" && !to);
-  if (from && to && from > to) return { range: {}, invalid: true };
-  return { range: { ...(from ? { from } : {}), ...(to ? { to } : {}) }, invalid: malformed };
+  const rawFrom = sp?.from ?? "";
+  const rawTo = sp?.to ?? "";
+  const from = rawFrom && isCalendarDate(rawFrom) ? rawFrom : undefined;
+  const to = rawTo && isCalendarDate(rawTo) ? rawTo : undefined;
+  const malformed = (rawFrom !== "" && !from) || (rawTo !== "" && !to);
+  if (malformed || (from && to && from > to)) return { range: {}, invalid: true };
+  return { range: { ...(from ? { from } : {}), ...(to ? { to } : {}) }, invalid: false };
 }
 
 export default async function VoiceOfCitizenPage({
@@ -44,7 +46,27 @@ export default async function VoiceOfCitizenPage({
 }) {
   const t = await getTranslations("crmVoiceOfCitizen");
   const { range, invalid } = parseRange(searchParams);
-  const { data: summary, source } = await getCrmSentimentSummary(range);
+  if (invalid) {
+    // No fetch for a window we cannot send: say so and leave the control in place to fix it.
+    return (
+      <>
+        <PageHeader
+          title="Voice of Citizen"
+          subtitle={t("subtitle", { window: t("windowInvalid") })}
+          back="/crm"
+          actions={<PeriodFilter />}
+        />
+        <div role="alert" className="flex items-start gap-2.5 mt-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+          <span aria-hidden="true">⚠</span>
+          <span>{t("invalidPeriod")}</span>
+        </div>
+      </>
+    );
+  }
+  // The control works in calendar days; crm-service's filters are ISO instants. The summary and
+  // the export share this one conversion so the file always matches the figures.
+  const apiWindow = toApiWindow(range);
+  const { data: summary, source } = await getCrmSentimentSummary(apiWindow);
   // GAP-CRM-VOICE-OF-CUSTOMER-FEEDBACK-05: citizen self-reported ratings, kept
   // SEPARATE from the model-scored sentiment aggregate above.
   const { data: ratings, source: ratingsSource } = await getCrmCitizenRatings();
@@ -86,10 +108,7 @@ export default async function VoiceOfCitizenPage({
             <ServerExportButton
               endpointPath="v1/crm/sentiment/export"
               filenameBase="voice-of-customer"
-              filters={{
-                from: range.from ? `${range.from}T00:00:00.000Z` : undefined,
-                to: range.to ? `${range.to}T23:59:59.999Z` : undefined,
-              }}
+              filters={{ from: apiWindow.from, to: apiWindow.to }}
               kind="voc"
             />
             <a className="btn" href="/crm/voice-of-customer/feedback">
@@ -120,12 +139,6 @@ export default async function VoiceOfCitizenPage({
         <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1.3 }}>🛡</span>
         <span>Citizen feedback is anonymised in aggregate reporting. Individual feedback access is subject to DPDP Act 2023 provisions.</span>
       </div>
-      {invalid && (
-        <div role="alert" className="flex items-start gap-2.5 mt-2 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
-          <span aria-hidden="true">⚠</span>
-          <span>{t("invalidPeriod")}</span>
-        </div>
-      )}
       {source === "error" && <DataSourceBadge source={source} />}
 
       <StatGrid>

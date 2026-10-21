@@ -17,8 +17,8 @@ vi.mock("@/lib/auth/roleGuard", async () => {
 
 // LinkTiles renders the tiles; keep it real-ish but light.
 vi.mock("../../_components/LinkTiles", () => ({
-  LinkTiles: ({ tiles }: { tiles: Array<{ title: string }> }) => (
-    <ul>{tiles.map((t) => <li key={t.title}>{t.title}</li>)}</ul>
+  LinkTiles: ({ tiles }: { tiles: Array<{ title: string; href: string }> }) => (
+    <ul>{tiles.map((t) => <li key={t.title}><a href={t.href}>{t.title}</a></li>)}</ul>
   ),
 }));
 
@@ -144,5 +144,27 @@ describe("CRM hub i18n (GAP-CRM-HOME-03)", () => {
     render(await Page());
     expect(screen.getByRole("heading", { level: 1, name: "CRM" })).toBeInTheDocument();
     expect(screen.queryByText("Citizen Services")).not.toBeInTheDocument();
+  });
+});
+
+// GAP-CRM-TASK-ESCALATION-03: the overdue-task monitor is reachable from the hub for EVERY CRM
+// role. It used to be linked only from the admin-only Task Escalation page, so the managers who
+// receive escalations had no way to find it.
+describe("CRM hub - Overdue Tasks tile (GAP-CRM-TASK-ESCALATION-03)", () => {
+  beforeEach(() => mockRoles.mockReset());
+
+  it("shows the Overdue Tasks tile, linking to /crm/overdue-tasks, to a plain crm_user", async () => {
+    mockRoles.mockReturnValue(["crm_user"]);
+    render(await Page());
+    expect(screen.getByRole("link", { name: "Overdue Tasks" })).toHaveAttribute("href", "/crm/overdue-tasks");
+    // ...while the admin-only rule editor stays hidden from them.
+    expect(screen.queryByText("Task Escalation")).not.toBeInTheDocument();
+  });
+
+  it("shows both the monitor and the rule editor tile to crm_admin", async () => {
+    mockRoles.mockReturnValue(["crm_admin"]);
+    render(await Page());
+    expect(screen.getByRole("link", { name: "Overdue Tasks" })).toHaveAttribute("href", "/crm/overdue-tasks");
+    expect(screen.getByRole("link", { name: "Task Escalation" })).toHaveAttribute("href", "/crm/task-escalation");
   });
 });

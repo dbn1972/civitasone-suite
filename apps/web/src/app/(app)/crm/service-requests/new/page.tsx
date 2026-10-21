@@ -1,9 +1,10 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, PageHeader, EntityPicker, type EntityOption } from "../../../../_components/ds";
+import { Button, ConfirmDialog, PageHeader, EntityPicker, type EntityOption } from "../../../../_components/ds";
+import { humanizeStatus } from "@/lib/formatters";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
 import { getServiceTypes, serviceTypeOptions, DEFAULT_SERVICE_TYPES } from "@/lib/crm/serviceTypes";
@@ -23,6 +24,31 @@ async function searchContacts(query: string, signal: AbortSignal): Promise<Entit
   return (body.data ?? [])
     .filter((c): c is { id: string; name: string; email?: string | null; phone?: string | null } => Boolean(c.id && c.name))
     .map((c) => ({ id: c.id, label: c.name, ...(c.email || c.phone ? { sublabel: [c.phone, c.email].filter(Boolean).join(" · ") } : {}) }));
+}
+
+/**
+ * GAP-CRM-SERVICE-REQUESTS-NEW-04: an OPEN request already on file for the phone / email being
+ * entered. References only - crm-service returns no citizen contact data here.
+ */
+interface DuplicateMatch {
+  id: string;
+  referenceNo: string;
+  serviceType: string;
+  status: string;
+}
+
+function parseDuplicates(body: unknown): DuplicateMatch[] {
+  const rows = body && typeof body === "object" ? (body as { data?: unknown }).data : null;
+  if (!Array.isArray(rows)) return [];
+  return rows.filter(
+    (r): r is DuplicateMatch =>
+      !!r &&
+      typeof r === "object" &&
+      typeof (r as DuplicateMatch).id === "string" &&
+      typeof (r as DuplicateMatch).referenceNo === "string" &&
+      typeof (r as DuplicateMatch).serviceType === "string" &&
+      typeof (r as DuplicateMatch).status === "string",
+  );
 }
 
 /**
@@ -109,6 +135,18 @@ export default function NewServiceRequestPage() {
   const [selectedType, setSelectedType] = useState<string>("");
   const [dueAtValue, setDueAtValue] = useState<string>("");
   const [dueAtDerived, setDueAtDerived] = useState(false);
+  // GAP-CRM-SERVICE-REQUESTS-NEW-04: open requests already on file for this phone / email. This
+  // WARNS; it only asks for a confirmation when the same service type is already open for the
+  // same citizen, and the clerk can always go ahead (a valid repeat request must not be blocked).
+  const [duplicates, setDuplicates] = useState<DuplicateMatch[]>([]);
+  const [dupCheckFailed, setDupCheckFailed] = useState(false);
+  const [pendingBody, setPendingBody] = useState<Record<string, unknown> | null>(null);
+  // The submit handler awaits a lookup that is still in flight, so it must read the LATEST answer,
+  // not the `duplicates` its render closed over - hence the ref beside the state.
+  const duplicatesRef = useRef<DuplicateMatch[]>([]);
+  const dupKey = useRef("");
+  const dupSeq = useRef(0);
+  const dupInFlight = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -152,6 +190,59 @@ export default function NewServiceRequestPage() {
     }
   }, [selectedType, slaByLabel, dueAtValue, dueAtDerived]);
 
+  function publishDuplicates(list: DuplicateMatch[], failed: boolean) {
+    duplicatesRef.current = list;
+    setDuplicates(list);
+    setDupCheckFailed(failed);
+  }
+
+  /**
+   * Look up open requests for the phone / email currently in the form (on blur, for whichever of
+   * them is well-formed). A change since the last lookup is the only thing that triggers another,
+   * and a slow earlier answer can never overwrite a newer one. A failed lookup never blocks filing.
+   */
+  function checkDuplicates(form: HTMLFormElement | null) {
+    if (!form) return;
+    const fd = new FormData(form);
+    const phoneRaw = ((fd.get("citizenPhone") as string | null) ?? "").trim();
+    const emailRaw = ((fd.get("citizenEmail") as string | null) ?? "").trim();
+    const phone = phoneRaw && !phoneFormatError(phoneRaw) ? normaliseMobile(phoneRaw) : undefined;
+    const email = emailRaw && !emailFormatError(emailRaw) ? emailRaw : undefined;
+    if (!phone && !email) {
+      dupKey.current = "";
+      dupSeq.current += 1;
+      publishDuplicates([], false);
+      return;
+    }
+    const key = `${phone ?? ""}|${email ?? ""}`;
+    if (key === dupKey.current) return;
+    dupKey.current = key;
+    const seq = ++dupSeq.current;
+    const run = (async () => {
+      try {
+        const res = await browserFetch("v1/crm/service-requests/duplicate-check", {
+          method: "POST",
+          body: JSON.stringify({ ...(phone ? { phone } : {}), ...(email ? { email } : {}) }),
+        });
+        if (!res.ok) throw new Error("duplicate-check failed");
+        const found = parseDuplicates(await res.json());
+        if (seq !== dupSeq.current) return;
+        publishDuplicates(found, false);
+      } catch {
+        if (seq !== dupSeq.current) return;
+        dupKey.current = "";
+        publishDuplicates([], true);
+      }
+    })();
+    dupInFlight.current = run;
+    void run.finally(() => {
+      if (dupInFlight.current === run) dupInFlight.current = null;
+    });
+  }
+
+  /** An open request of the SAME service type for the same citizen - worth a second look. */
+  const hardDuplicate = selectedType ? duplicates.find((d) => d.serviceType === selectedType) : undefined;
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     formError.clear();
@@ -159,6 +250,9 @@ export default function NewServiceRequestPage() {
     setPhoneMsg(null);
     setEmailMsg(null);
     const fd = new FormData(e.currentTarget);
+    // A lookup started by the blur that submitting just caused may still be in flight: wait for
+    // it so the same-type check below sees its answer.
+    if (dupInFlight.current) await dupInFlight.current;
     const citizenPhoneRaw = (fd.get("citizenPhone") as string | null)?.trim() || "";
     const citizenEmailRaw = (fd.get("citizenEmail") as string | null)?.trim() || "";
 
@@ -183,7 +277,6 @@ export default function NewServiceRequestPage() {
       return;
     }
 
-    setSaving(true);
     const body = {
       citizenName: fd.get("citizenName"),
       citizenPhone,
@@ -205,6 +298,18 @@ export default function NewServiceRequestPage() {
       })(),
     };
 
+    // Same citizen, same service type, still open: confirm before filing another.
+    const chosenType = String(fd.get("serviceType") ?? "");
+    const same = chosenType ? duplicatesRef.current.find((d) => d.serviceType === chosenType) : undefined;
+    if (same) {
+      setPendingBody(body);
+      return;
+    }
+    await postRequest(body);
+  }
+
+  async function postRequest(body: Record<string, unknown>) {
+    setSaving(true);
     try {
       const res = await fetch("/api/proxy/v1/crm/service-requests", {
         method: "POST",
@@ -287,6 +392,7 @@ export default function NewServiceRequestPage() {
                     style={FIELD}
                     aria-invalid={phoneMsg || contactError ? true : undefined}
                     onChange={() => phoneMsg && setPhoneMsg(null)}
+                    onBlur={(e) => checkDuplicates(e.currentTarget.form)}
                   />
                   <span style={{ fontSize: 12, color: "var(--ink2)" }}>{t("phoneHint")}</span>
                   {phoneMsg && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{phoneMsg}</span>}
@@ -306,6 +412,7 @@ export default function NewServiceRequestPage() {
                     style={FIELD}
                     aria-invalid={emailMsg || contactError ? true : undefined}
                     onChange={() => emailMsg && setEmailMsg(null)}
+                    onBlur={(e) => checkDuplicates(e.currentTarget.form)}
                   />
                   {emailMsg && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{emailMsg}</span>}
                   {formError.fieldError("citizenEmail") && (
@@ -315,6 +422,38 @@ export default function NewServiceRequestPage() {
               </div>
               {contactError && (
                 <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{contactError}</span>
+              )}
+              {/* GAP-CRM-SERVICE-REQUESTS-NEW-04: open requests already on file for this phone /
+                  email - a warning with a link to each, never a block. */}
+              {duplicates.length > 0 && (
+                <div
+                  role="status"
+                  aria-live="polite"
+                  style={{
+                    padding: "10px 14px",
+                    background: "var(--warnbg)",
+                    border: "1px solid var(--warnbd)",
+                    borderRadius: "var(--r)",
+                    fontSize: 13,
+                    color: "var(--ink)",
+                  }}
+                >
+                  <strong>{t("dupHeading")}</strong>
+                  <p style={{ margin: "4px 0 6px" }}>{t("dupIntro", { count: duplicates.length })}</p>
+                  <ul style={{ margin: 0, paddingInlineStart: 18 }}>
+                    {duplicates.map((d) => (
+                      <li key={d.id}>
+                        {t("dupLabel")}{" "}
+                        <a href={`/crm/service-requests/${encodeURIComponent(d.id)}`}>{d.referenceNo}</a>
+                        {" — "}
+                        {d.serviceType} ({humanizeStatus(d.status)})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {dupCheckFailed && (
+                <span role="status" style={{ fontSize: 12, color: "var(--ink2)" }}>{t("dupCheckFailed")}</span>
               )}
               {/* GAP-CRM-SERVICE-REQUESTS-NEW-04: optionally link to an existing
                   CRM contact via async server search, so a repeat caller is tied
@@ -462,6 +601,19 @@ export default function NewServiceRequestPage() {
             </Button>
           </div>
         </form>
+        <ConfirmDialog
+          open={pendingBody !== null}
+          title={t("dupConfirmTitle")}
+          description={t("dupConfirmDescription", { ref: hardDuplicate?.referenceNo ?? "" })}
+          confirmLabel={t("dupConfirmLabel")}
+          busy={saving}
+          onCancel={() => setPendingBody(null)}
+          onConfirm={() => {
+            const body = pendingBody;
+            setPendingBody(null);
+            if (body) void postRequest(body);
+          }}
+        />
       </div>
     </>
   );

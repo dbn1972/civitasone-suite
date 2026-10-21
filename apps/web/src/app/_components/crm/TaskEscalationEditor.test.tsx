@@ -24,11 +24,11 @@ vi.mock("@/lib/crm/activityAccount", async (orig) => {
     deleteTaskEscalationRule: vi.fn(),
     getEscalationRoles: vi.fn(),
     getEscalationUsers: vi.fn(),
-    getOverdueTasks: vi.fn(),
+    getOverdueMatchCount: vi.fn(),
   };
 });
 
-const rule: aa.TaskEscalationRule = { id: "e1", thresholdMinutes: 1440, managerRole: "sales_manager", managerId: "", enabled: true };
+const rule: aa.TaskEscalationRule = { id: "e1", name: "After a day", thresholdMinutes: 1440, managerRole: "sales_manager", managerId: "", enabled: true };
 
 const ROLES: aa.EscalationRole[] = [
   { key: "sales_manager", label: "Sales Manager" },
@@ -46,13 +46,12 @@ beforeEach(() => {
   vi.mocked(aa.deleteTaskEscalationRule).mockReset();
   vi.mocked(aa.getEscalationRoles).mockReset().mockResolvedValue({ data: ROLES, source: "api" });
   vi.mocked(aa.getEscalationUsers).mockReset().mockResolvedValue({ data: USERS, source: "api" });
-  vi.mocked(aa.getOverdueTasks).mockReset().mockResolvedValue({
-    data: [
-      { id: "t1", subject: "a", dueAt: "2026-08-01T00:00:00Z", ageMinutes: 100 },
-      { id: "t2", subject: "b", dueAt: "2026-08-01T00:00:00Z", ageMinutes: 200 },
-    ],
-    source: "api",
-  });
+  // GAP-CRM-TASK-ESCALATION-01: the preview is the server's count of tasks overdue by at least
+  // THIS rule's threshold - one number per threshold, not the length of a capped list.
+  vi.mocked(aa.getOverdueMatchCount).mockReset().mockImplementation(async (minutes: number) => ({
+    data: minutes >= 2880 ? 1 : 2,
+    source: "api" as const,
+  }));
 });
 
 describe("TaskEscalationEditor (AC-005)", () => {
@@ -111,7 +110,7 @@ describe("TaskEscalationEditor (AC-005)", () => {
   // manager are rejected with an inline message.
   it("blocks a duplicate enabled rule (same threshold + manager)", async () => {
     vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({
-      data: [{ id: "e1", thresholdMinutes: 1440, managerRole: "sales_manager", managerId: "", enabled: true }],
+      data: [{ id: "e1", name: "After a day", thresholdMinutes: 1440, managerRole: "sales_manager", managerId: "", enabled: true }],
       source: "api",
     });
     render(<TaskEscalationEditor />);
@@ -152,9 +151,11 @@ describe("TaskEscalationEditor (AC-005)", () => {
       expect(within(screen.getByLabelText(/manager user for rule 1/i)).getByRole("option", { name: "Priya Nair" })).toBeInTheDocument(),
     );
     fireEvent.change(screen.getByLabelText(/manager user for rule 1/i), { target: { value: "u-100" } });
-    // Resolved name + preview count rendered.
+    // Resolved name + preview count rendered. The count is what THIS rule's threshold (1 day by
+    // default) matches right now, from the server - not the length of a capped overdue list.
     expect(screen.getByText(/Escalates to/)).toHaveTextContent("Priya Nair");
-    expect(screen.getByText(/currently overdue/)).toHaveTextContent("2 tasks currently overdue");
+    await waitFor(() => expect(screen.getByText(/already overdue by at least/)).toHaveTextContent("2 tasks are already overdue by at least this long"));
+    expect(aa.getOverdueMatchCount).toHaveBeenCalledWith(1440);
     fireEvent.click(screen.getByRole("button", { name: /create/i }));
     await waitFor(() => expect(aa.createTaskEscalationRule).toHaveBeenCalled());
     expect(vi.mocked(aa.createTaskEscalationRule).mock.calls[0][0]).toMatchObject({ managerId: "u-100" });
@@ -164,12 +165,117 @@ describe("TaskEscalationEditor (AC-005)", () => {
   // flagged, not shown as if it were valid.
   it("flags a saved rule whose manager role no longer exists", async () => {
     vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({
-      data: [{ id: "e9", thresholdMinutes: 60, managerRole: "ghost_role", managerId: "", enabled: true }],
+      data: [{ id: "e9", name: "Ghost", thresholdMinutes: 60, managerRole: "ghost_role", managerId: "", enabled: true }],
       source: "api",
     });
     render(<TaskEscalationEditor />);
     await waitFor(() => expect(screen.getByText(/fix this before it can escalate/i)).toBeInTheDocument());
     expect(screen.getByText(/Escalates to/)).toHaveTextContent('Unknown role "ghost_role"');
+  });
+
+  // GAP-CRM-TASK-ESCALATION-01 — crm-service REQUIRES a rule name and only knows recipientRole /
+  // recipientId; the editor used to post neither, so every create 400'd.
+  it("a new rule starts with a default name, and what is sent carries the name the reader gave it", async () => {
+    vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [], source: "api" });
+    vi.mocked(aa.createTaskEscalationRule).mockResolvedValue(undefined);
+    render(<TaskEscalationEditor />);
+    await waitFor(() => expect(screen.getByText(/no task-escalation rules yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add task-escalation rule/i }));
+    const name = screen.getByLabelText(/name for rule 1/i) as HTMLInputElement;
+    expect(name.value).toBe("Escalate overdue tasks");
+    fireEvent.change(name, { target: { value: "  Chase after two days " } });
+    fireEvent.change(screen.getByLabelText(/manager user for rule 1/i), { target: { value: "u-200" } });
+    fireEvent.click(screen.getByRole("button", { name: /create/i }));
+    await waitFor(() => expect(aa.createTaskEscalationRule).toHaveBeenCalled());
+    expect(vi.mocked(aa.createTaskEscalationRule).mock.calls[0][0]).toMatchObject({
+      name: "Chase after two days",
+      thresholdMinutes: 1440,
+      managerId: "u-200",
+      managerRole: "",
+    });
+  });
+
+  it("blocks a rule with no name", async () => {
+    vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [], source: "api" });
+    render(<TaskEscalationEditor />);
+    await waitFor(() => expect(screen.getByText(/no task-escalation rules yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add task-escalation rule/i }));
+    fireEvent.change(screen.getByLabelText(/manager user for rule 1/i), { target: { value: "u-200" } });
+    fireEvent.change(screen.getByLabelText(/name for rule 1/i), { target: { value: "   " } });
+    fireEvent.click(screen.getByRole("button", { name: /create/i }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/needs a name/i);
+    expect(aa.createTaskEscalationRule).not.toHaveBeenCalled();
+  });
+
+  it("shows a saved rule's manager and name as read back from crm-service", async () => {
+    vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({
+      data: [{ id: "e2", name: "Chase the head", thresholdMinutes: 2880, managerRole: "", managerId: "u-200", enabled: true }],
+      source: "api",
+    });
+    render(<TaskEscalationEditor />);
+    expect(await screen.findByDisplayValue("Chase the head")).toBeInTheDocument();
+    expect((screen.getByLabelText(/manager user for rule 1/i) as HTMLSelectElement).value).toBe("u-200");
+    expect(screen.getByText(/Escalates to/)).toHaveTextContent("Arjun Rao");
+  });
+
+  // GAP-CRM-TASK-ESCALATION-01 — each rule previews ITS OWN threshold's match count.
+  it("previews a separate overdue count per rule threshold, asking the server once per distinct threshold", async () => {
+    vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({
+      data: [
+        { id: "a", name: "After a day", thresholdMinutes: 1440, managerRole: "sales_manager", managerId: "", enabled: true },
+        { id: "b", name: "After two days", thresholdMinutes: 2880, managerRole: "ops_manager", managerId: "", enabled: true },
+        { id: "c", name: "Also two days", thresholdMinutes: 2880, managerRole: "sales_manager", managerId: "", enabled: false },
+      ],
+      source: "api",
+    });
+    render(<TaskEscalationEditor />);
+    await waitFor(() => expect(screen.getAllByText(/already overdue by at least/)).toHaveLength(3));
+    const previews = screen.getAllByText(/already overdue by at least/).map((el) => el.textContent);
+    // Sorted by threshold: 1 day (2 matches), then the two 2-day rules (1 match each).
+    expect(previews[0]).toContain("2 tasks are");
+    expect(previews[1]).toContain("1 task is");
+    expect(previews[2]).toContain("1 task is");
+    expect(vi.mocked(aa.getOverdueMatchCount).mock.calls.map((c) => c[0]).sort((x, y) => x - y)).toEqual([1440, 2880]);
+  });
+
+  it("asks for a new count when a threshold is edited, and never for an invalid one", async () => {
+    vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [rule], source: "api" });
+    render(<TaskEscalationEditor />);
+    await waitFor(() => expect(aa.getOverdueMatchCount).toHaveBeenCalledWith(1440));
+    fireEvent.change(screen.getByLabelText(/threshold unit for rule 1/i), { target: { value: "hours" } });
+    fireEvent.change(screen.getByLabelText(/threshold value for rule 1/i), { target: { value: "72" } });
+    await waitFor(() => expect(aa.getOverdueMatchCount).toHaveBeenCalledWith(4320));
+    const calls = vi.mocked(aa.getOverdueMatchCount).mock.calls.length;
+    fireEvent.change(screen.getByLabelText(/threshold value for rule 1/i), { target: { value: "" } });
+    await new Promise((r) => setTimeout(r, 450));
+    expect(vi.mocked(aa.getOverdueMatchCount).mock.calls.length).toBe(calls);
+  });
+
+  it("falls back to the plain preview (no invented number) when the count cannot be loaded", async () => {
+    vi.mocked(aa.getOverdueMatchCount).mockResolvedValue({ data: 0, source: "error" });
+    vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [rule], source: "api" });
+    render(<TaskEscalationEditor />);
+    await waitFor(() => expect(aa.getOverdueMatchCount).toHaveBeenCalled());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByText(/Escalates to/)).toHaveTextContent("Sales Manager");
+    expect(screen.queryByText(/already overdue by at least/)).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-TASK-ESCALATION-01 — "keep server validation authoritative; surface its errors".
+  it("words the server's refusal of a recipient in plain language, not a generic failure", async () => {
+    vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [rule], source: "api" });
+    vi.mocked(aa.updateTaskEscalationRule).mockRejectedValue(new aa.TaskEscalationRuleRejected("INVALID_RECIPIENT_ROLE", "generic"));
+    render(<TaskEscalationEditor />);
+    await waitFor(() => expect(screen.getByLabelText(/manager role for rule 1/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/isn.t one of this office.s roles any more/i);
+  });
+
+  it("says so when the role and user directory cannot be loaded, instead of showing silently empty pickers", async () => {
+    vi.mocked(aa.getEscalationRoles).mockResolvedValue({ data: [], source: "error" });
+    vi.mocked(aa.getTaskEscalationRules).mockResolvedValue({ data: [], source: "api" });
+    render(<TaskEscalationEditor />);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could not be loaded, so a manager can.t be chosen/i);
   });
 
   it("deletes a rule via ConfirmDialog", async () => {

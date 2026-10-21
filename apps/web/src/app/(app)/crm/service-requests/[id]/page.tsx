@@ -19,6 +19,23 @@ import { CaseStatusTimeline, type CaseHistoryEntry } from "../../../../_componen
  * button. The page never holds a clear value for anyone.
  */
 
+/**
+ * GAP-CRM-SERVICE-REQUESTS-DETAIL-05: who may assign / reassign. Mirrors crm-service's
+ * ADMIN_ROLES for PATCH .../assign (the same tier that may close or cancel); the server is the
+ * authority and refuses anyone else, this only decides whether to offer the button.
+ */
+const ASSIGN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
+
+/**
+ * GAP-CRM-SERVICE-REQUESTS-DETAIL-04: what became of the notice to the citizen, as recorded on
+ * the request by crm-service. `outcome` null with a channel means the notice is still queued.
+ */
+interface CitizenNotification {
+  channel: "email" | "sms" | null;
+  outcome: "sent" | "failed" | "no_template" | "no_contact" | null;
+  at: string | null;
+}
+
 interface ServiceRequestDetail {
   id: string;
   referenceNo: string;
@@ -30,7 +47,16 @@ interface ServiceRequestDetail {
   description?: string;
   priority: string;
   status: string;
-  assignedTo?: string;
+  assignedTo?: string | null;
+  /** Display name of the assignee, resolved server-side (GAP-CRM-SERVICE-REQUESTS-DETAIL-05). */
+  assignedToName?: string | null;
+  /** GAP-CRM-SERVICE-REQUESTS-NEW-04: the CRM contact this request is linked to, if any. */
+  contactId?: string | null;
+  contactName?: string | null;
+  /** GAP-CRM-SERVICE-REQUESTS-DETAIL-03: who logged / last changed the request (display names). */
+  createdByName?: string | null;
+  updatedByName?: string | null;
+  citizenNotification?: CitizenNotification | null;
   resolution?: string;
   statusNote?: string;
   // GAP-CRM-HEALTH-ACCOUNTID-03: set when the request is an account follow-up
@@ -106,6 +132,18 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
     ? t(`priority_${priorityKey}`)
     : undefined;
   const canRevealPii = hasAnyRole(roles, CRM_PII_READ_ROLES);
+  const canAssign = ASSIGN_ROLES.some((role) => roles.includes(role));
+  const nameUnavailable = t("nameUnavailable");
+  const note = r.citizenNotification ?? null;
+  const noteChannel = note?.channel ? t(`channel_${note.channel}`) : "";
+  let noteText: string | null = null;
+  if (note) {
+    if (note.outcome === "sent") noteText = t("notifySent", { channel: noteChannel, when: fmt(note.at ?? undefined) });
+    else if (note.outcome === "failed") noteText = t("notifyFailed", { channel: noteChannel });
+    else if (note.outcome === "no_template") noteText = t("notifyNoTemplate", { channel: noteChannel });
+    else if (note.outcome === "no_contact") noteText = t("notifyNoContact");
+    else if (note.channel) noteText = t("notifyQueued", { channel: noteChannel });
+  }
 
   // F6-01: status timeline — a separate GET so the detail contract is unchanged.
   const { data: history } = await fetchJson<unknown, CaseHistoryEntry[]>(
@@ -130,7 +168,16 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
         subtitle={r.subject}
         back="/crm/service-requests"
         backLabel={t("backLabel")}
-        actions={<ServiceRequestActions id={r.id} status={r.status} version={r.version} />}
+        actions={
+          <ServiceRequestActions
+            id={r.id}
+            status={r.status}
+            version={r.version}
+            assignedTo={r.assignedTo ?? null}
+            assignedToName={r.assignedToName ?? null}
+            canAssign={canAssign}
+          />
+        }
       />
       {source === "error" && <DataSourceBadge source={source} />}
 
@@ -151,7 +198,9 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
               <Field label={t("status")}><StatusPill status={r.status ?? "open"} /></Field>
               <Field label={t("assignedTo")}>
                 {r.assignedTo ? (
-                  t("assigned")
+                  // The officer's NAME (resolved server-side); never the raw id. If the name
+                  // cannot be resolved, say so rather than print the id.
+                  (r.assignedToName ?? t("assignedNameUnavailable"))
                 ) : (
                   <span style={{ color: "var(--ink2)" }}>{t("unassigned")}</span>
                 )}
@@ -164,6 +213,9 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
               <Field label={t("due")}>
                 {(() => {
                   const od = overdueDays(r.dueAt, r.status ?? "open");
+                  // GAP-CRM-SERVICE-REQUESTS-NEW-03: a request with no due date says so, instead of
+                  // a bare dash that reads like a load failure.
+                  if (!r.dueAt) return <span style={{ color: "var(--ink2)" }}>{t("noDueDate")}</span>;
                   if (od === null) return fmt(r.dueAt);
                   return (
                     <span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -211,6 +263,19 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
               </p>
             </Card>
           ) : null}
+
+          {/* GAP-CRM-SERVICE-REQUESTS-DETAIL-04: resolving or closing queues a notice to the
+              citizen; say what became of it so an officer never assumes a citizen was told. */}
+          {noteText ? (
+            <Card title={t("notificationCard")}>
+              <p
+                role={note?.outcome === "failed" || note?.outcome === "no_template" || note?.outcome === "no_contact" ? "alert" : "status"}
+                style={{ fontSize: 14, color: "var(--ink)", margin: 0 }}
+              >
+                {noteText}
+              </p>
+            </Card>
+          ) : null}
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -247,6 +312,15 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
                   }}
                 />
               </Field>
+              {/* GAP-CRM-SERVICE-REQUESTS-NEW-04: the CRM contact this request was linked to at
+                  intake, so a repeat caller is traceable to their record. */}
+              {r.contactId ? (
+                <Field label={t("linkedContact")}>
+                  <a href={`/crm/contacts/${encodeURIComponent(r.contactId)}`}>
+                    {r.contactName ?? t("contactNameUnavailable")}
+                  </a>
+                </Field>
+              ) : null}
               {r.citizenPhone || r.citizenEmail ? (
                 <p style={{ fontSize: 12, color: "var(--ink2)", margin: 0 }}>
                   {canRevealPii ? t("piiRevealNote") : t("piiMasked")}
@@ -257,7 +331,9 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
           <Card title={t("auditCard")}>
             <dl style={{ display: "flex", flexDirection: "column", gap: 12, margin: 0 }}>
               <Field label={t("logged")}>{fmt(r.createdAt)}</Field>
+              <Field label={t("loggedBy")}>{r.createdByName ?? nameUnavailable}</Field>
               <Field label={t("lastUpdated")}>{fmt(r.updatedAt)}</Field>
+              <Field label={t("lastUpdatedBy")}>{r.updatedByName ?? nameUnavailable}</Field>
             </dl>
           </Card>
           {/* F6-01: status transition timeline. */}
