@@ -9,7 +9,28 @@ import { useSeededResource } from "@/lib/sync/resource";
 import { formatRupees } from "@/lib/formatters";
 import { payrollRunStatusLabel, payrollRunStatusVariant } from "@/lib/payroll/statusLabels";
 
-export function PayrollRunsTable({ runs, source = "api", canAdminister = false }: { runs: PayrollRunDetail[]; source?: "api" | "error"; canAdminister?: boolean }) {
+type PayrollRunsTableProps = { runs: PayrollRunDetail[]; source?: "api" | "error"; canAdminister?: boolean };
+
+/**
+ * GAP-PAYROLL-HOME-06: useSeededResource keeps the rows in useState seeded
+ * from `runs` ONCE (its sync effect only re-runs on cacheKey/serverSource, not
+ * when the `runs` prop is replaced), so after CreatePayrollRunForm's
+ * router.refresh() -- the pay-group "created N runs" branch and the no-id
+ * fallback, both of which stay on this page -- the server re-rendered with the
+ * new run but this table kept showing the old rows. Keying the body on the
+ * data itself remounts it (re-seeding from the fresh props, and re-writing the
+ * offline copy) whenever the server hands over a different run list, without
+ * touching the shared hook that many other screens share. Same data in,
+ * same key: ordinary parent re-renders do not remount.
+ */
+export function PayrollRunsTable(props: PayrollRunsTableProps) {
+  const seedKey = props.runs
+    .map((r) => [r.id, r.payPeriod, r.status, r.employeeCount, r.grossAmount, r.netAmount].join(":"))
+    .join("|");
+  return <PayrollRunsTableBody key={seedKey} {...props} />;
+}
+
+function PayrollRunsTableBody({ runs, source = "api", canAdminister = false }: PayrollRunsTableProps) {
   const t = useTranslations("payrollRunsTable");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<PayrollRunDetail[]>(
     "hr.payroll.runs",

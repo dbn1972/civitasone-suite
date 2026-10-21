@@ -10,6 +10,7 @@ import { getActiveDdos, getActiveGroups } from "./pay-groups/payGroupData";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
+import { bucketPayrollRuns, isPaidPayrollRunStatus, latestPayrollRun } from "@/lib/payroll/statusLabels";
 
 export default async function PayrollPage() {
   const t = await getTranslations("payroll");
@@ -63,18 +64,21 @@ export default async function PayrollPage() {
   // counted again each month, and completed-but-unpaid runs folded into a
   // tile literally labelled "Paid". Use only the single most recent
   // ACTUALLY-paid run instead.
-  const paidRuns = errored ? [] : runs.filter((r) => r.status === "paid");
-  const latestPaidRun = paidRuns.length > 0
-    ? paidRuns.reduce((a, b) => (b.payPeriod > a.payPeriod ? b : a))
-    : null;
+  //
+  // GAP-PAYROLL-PERIOD-02: the paid/pending split and the "latest run" pick
+  // come from the same @/lib/payroll/statusLabels helpers the Period screen
+  // uses, so the two screens cannot bucket one set of runs differently.
+  const paidRuns = errored ? [] : runs.filter((r) => isPaidPayrollRunStatus(r.status));
+  const latestPaidRun = latestPayrollRun(paidRuns);
+  const buckets = errored ? null : bucketPayrollRuns(runs);
 
-  const totalRuns = errored ? null : runs.length;
+  const totalRuns = buckets ? buckets.total : null;
   const totalEmployeesPaid = errored ? null : (latestPaidRun?.employeeCount ?? 0);
   const totalGross = errored ? null : (latestPaidRun?.grossAmount ?? 0);
   // "Pending" now means every run not yet actually paid (draft, processing,
   // completed-awaiting-disbursement, or failed) -- it and the paid-run
   // count above always sum to totalRuns.
-  const pending = errored ? null : runs.length - paidRuns.length;
+  const pending = buckets ? buckets.total - buckets.paid : null;
   const existingPeriods = runs.map((r) => r.payPeriod);
 
   return (

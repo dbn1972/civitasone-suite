@@ -7,6 +7,8 @@ import { formatRupees } from "@/lib/formatters";
 
 type Row = {
   id: string;
+  /** hrms employee id: the drill-in target (GAP-PAYROLL-INCOME-TAX-03). `id` is a declaration id OR an employee id, so it cannot be used. */
+  employeeId?: string;
   employee: string;
   department: string;
   grossIncome: string;
@@ -69,6 +71,10 @@ export function IncomeTaxTable({ items }: { items: Row[] }) {
     <DataTable<Row>
       columns={columns}
       rows={items}
+      // GAP-PAYROLL-INCOME-TAX-03: row -> employee profile (same target every
+      // other payroll list uses). No link when the API gave no employeeId.
+      rowHref={(r) => (r.employeeId ? `/hr/employees/${encodeURIComponent(r.employeeId)}` : undefined)}
+      identifyingColumnKey="employee"
       sortable
       filterable
       filterPlaceholder={t("filterPlaceholder")}

@@ -1,9 +1,15 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
+import { PageHeader, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getPayrollRunDetails } from "@/app/_data/loaders";
 import type { PayrollRunDetail } from "@civitasone/types";
 import { toHumanError } from "@/lib/messages";
-import { payrollRunStatusLabel } from "@/lib/payroll/statusLabels";
+import type { PillVariant } from "@/app/_components/ds/StatusPill";
+import {
+  bucketPayrollRuns,
+  latestPayrollRun,
+  payrollRunStatusLabel,
+  payrollRunStatusVariant,
+} from "@/lib/payroll/statusLabels";
 import { getTranslations } from "next-intl/server";
 
 // This page used to call GET /api/v1/finance/periods -- Finance's GL
@@ -27,6 +33,14 @@ import { getTranslations } from "next-intl/server";
 // (PERIOD-02/03/04/05 below), which is the lower-risk half of the catalog's
 // two offered options. Whether this route should eventually be redirected
 // or merged with /hr/payroll/runs remains a product decision.
+//
+// GAP-PAYROLL-PERIOD-01 (W2 payroll rescan): the page title, card title,
+// empty-state copy and the HR dashboard tile all promised period management
+// ("Payroll Periods", "Period closing and control") that this read-only run
+// history does not offer -- there is no payroll period open/close/lock
+// endpoint. They now say what the page is: payroll runs listed by pay period.
+// (en/hi: payrollPeriod.* and hr.payrollPeriod*.) Whether the route should
+// still be redirected or merged into /hr/payroll/runs stays the owner's call.
 
 type Row = {
   id: string;
@@ -37,6 +51,15 @@ type Row = {
   netPayout: number;
   deductions: number;
   status: string;
+};
+
+type PeriodColumn = {
+  key: keyof Row & string;
+  label: string;
+  cellType?: "status" | "rupees" | "date";
+  align?: "left" | "right";
+  statusLabels?: Record<string, string>;
+  statusVariants?: Record<string, PillVariant>;
 };
 
 function toRow(run: PayrollRunDetail): Row {
@@ -55,29 +78,36 @@ function toRow(run: PayrollRunDetail): Row {
 export default async function PayrollPeriodPage() {
   const t = await getTranslations("payrollPeriod");
   // GAP-PAYROLL-PERIOD-05: reuses payrollRunsTable's existing status.*
-  // translations (via DataTable's statusLabels column option) instead of a
-  // third, independently drifting status rendering -- Home, Runs and
-  // Period now show the identical translated text for the same run.
+  // translations AND payrollRunStatusVariant (via DataTable's statusLabels /
+  // statusVariants column options) instead of a third, independently drifting
+  // status rendering -- Home, Runs and Period now show the identical
+  // translated text AND tone for the same run. Without the variant a
+  // "completed" (approved, awaiting disbursement) run was green here (the
+  // global STATUS_MAP) but info-blue on Home/Runs.
   const tStatus = await getTranslations("payrollRunsTable");
   const { data: runs, source } = await getPayrollRunDetails();
   const errored = source === "error";
   const items = runs.map(toRow);
-  const statusLabels = Object.fromEntries(
-    Array.from(new Set(items.map((i) => i.status))).map((s) => [s, payrollRunStatusLabel(s, tStatus)]),
-  );
+  const statuses = Array.from(new Set(items.map((i) => i.status)));
+  const statusLabels = Object.fromEntries(statuses.map((s) => [s, payrollRunStatusLabel(s, tStatus)]));
+  const statusVariants: Record<string, PillVariant> = {};
+  for (const s of statuses) {
+    const variant = payrollRunStatusVariant(s);
+    if (variant) statusVariants[s] = variant;
+  }
 
-  // GAP-PAYROLL-PERIOD-02: this used to sum employeesProcessed across EVERY
-  // run (the same employees counted again each month) and split Completed/
-  // Processing on a status pair that silently dropped the wire's real
+  // GAP-PAYROLL-PERIOD-02: the tiles used to sum employeesProcessed across
+  // EVERY run (the same employees counted again each month) and split
+  // Completed/Processing on a status pair that dropped the wire's real
   // "completed" (approved, awaiting disbursement -- see HOME-04) and
-  // "failed" values from both buckets, so the two tiles never summed to the
-  // total run count. "Completed" here now means actually paid; "Processing"
-  // means everything else (draft/processing/completed-awaiting-disbursement/
-  // failed), so the two always sum to the total.
-  const paidCount = errored ? 0 : items.filter((i) => i.status === "paid").length;
-  const notYetPaidCount = errored ? 0 : items.length - paidCount;
+  // "failed" values, so the tiles never summed to the run count. The shared
+  // bucketPayrollRuns() helper (also used by Payroll home) now splits every
+  // run into paid / in progress / failed -- three disjoint buckets that always
+  // sum to Total -- and the headcount is the LATEST run's, not a cross-month sum.
+  const buckets = errored ? null : bucketPayrollRuns(runs);
+  const latestRun = errored ? null : latestPayrollRun(runs);
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "rupees" | "date"; align?: "left" | "right"; statusLabels?: Record<string, string> }[] = [
+  const columns: PeriodColumn[] = [
     { key: "month", label: t("colMonth") },
     // GAP-PAYROLL-PERIOD-03: this used to print the raw API date string
     // (e.g. "2026-08-31T00:00:00Z") with no formatting at all, unlike the
@@ -98,8 +128,8 @@ export default async function PayrollPeriodPage() {
     { key: "deductions", label: t("colDeductions"), align: "right", cellType: "rupees" },
     // GAP-PAYROLL-PERIOD-05: raw, untranslated enum before (cellType:
     // "status" had no label option) -- now carries the same translated
-    // label Home/Runs show for the same status value.
-    { key: "status", label: t("colStatus"), cellType: "status", statusLabels },
+    // label and tone Home/Runs show for the same status value.
+    { key: "status", label: t("colStatus"), cellType: "status", statusLabels, statusVariants },
   ];
 
   return (
@@ -108,19 +138,21 @@ export default async function PayrollPeriodPage() {
           route (was "/hr", alone among them). */}
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel="Payroll" />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
-      <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statCompleted")} value={errored ? null : paidCount} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statProcessing")} value={errored ? null : notYetPaidCount} />
-        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statEmployees")} value={errored ? null : items.reduce((s, i) => s + (Number(i.employeesProcessed) || 0), 0).toLocaleString("en-IN")} />
-      </StatGrid>
+      {/* Five tiles: the shared 4-column StatGrid would orphan the fifth on its own row. */}
+      <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }}>
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={buckets ? buckets.total : null} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statPaid")} value={buckets ? buckets.paid : null} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statInProgress")} value={buckets ? buckets.inProgress : null} />
+        <StatCard icon="⚠️" tone="bad" label={t("statFailed")} value={buckets ? buckets.failed : null} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statEmployeesLatest")} value={latestRun ? latestRun.employeeCount.toLocaleString("en-IN") : null} />
+      </div>
       <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "payroll periods" })} backHref="/hr" />
           </div>
         ) : (
-          // GAP-PAYROLL-PERIOD-01/03: rows now link to the run detail page,
+          // GAP-PAYROLL-PERIOD-01/03: rows link to the run detail page,
           // same as Home/Runs, instead of being inert text.
           <DataTable<Row>
             columns={columns}
