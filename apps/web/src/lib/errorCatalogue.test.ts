@@ -179,6 +179,16 @@ describe("error catalogue: standard wording", () => {
     expect(resolveHumanError({ status: 409, code: "DUPLICATE_CODE", ctx: { locale: "en" } }).what).toBe("This code is already in use.");
   });
 
+  // GAP-FINANCE-JOURNAL-ENTRY-06
+  it("DUPLICATE_VOUCHER reads as a voucher-number conflict in en and hi, not the generic duplicate copy", () => {
+    const en = resolveHumanError({ status: 409, code: "DUPLICATE_VOUCHER", ctx: { locale: "en", area: "journal entry" } });
+    expect(en.what).toBe("This voucher number is already in use.");
+    expect(en.next).toMatch(/leave it blank to auto-number/);
+    const hi = resolveHumanError({ status: 409, code: "DUPLICATE_VOUCHER", ctx: { locale: "hi", area: "journal entry" } });
+    expect(hi.what).toBe("यह वाउचर नंबर पहले से इस्तेमाल में है।");
+    expect(hi.what).not.toBe(en.what);
+  });
+
   it("the duplicate copy exists in hi with matching placeholders, and renders", () => {
     const { en, hi } = DUPLICATE_RECORD_MESSAGE;
     expect(placeholders(hi.what)).toEqual(placeholders(en.what));

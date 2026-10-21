@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import type { AccountSummary } from "@civitasone/types";
 import { formatMoney } from "@/lib/formatters";
 
@@ -399,5 +399,33 @@ describe("JournalEntryForm voucher number (GAP-FINANCE-JOURNAL-ENTRY-06)", () =>
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
     const body = JSON.parse((fetchSpy.mock.calls[0][1] as RequestInit).body as string);
     expect(body.voucherNo).toBe("AUTO");
+  });
+
+  // finance-service answers 409 DUPLICATE_VOUCHER (with a voucherNo field error) before
+  // anything is queued, for a typed number that is already used in the tenant.
+  it("a 409 DUPLICATE_VOUCHER closes the dialog, shows the message under the voucher field and focuses it", async () => {
+    const serverMsg = "This voucher number is already in use. Enter a different number, or leave it blank to auto-number.";
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ code: "DUPLICATE_VOUCHER", message: "voucher number already exists", fieldErrors: [{ field: "voucherNo", message: serverMsg }] }),
+        { status: 409 },
+      ),
+    );
+    render(<JournalEntryForm accounts={accounts} />);
+    fillBalancedLines(); // voucher "JV-TEST-001"
+    fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
+    await waitFor(() => expect(screen.getByText("Post this journal entry?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason / authority for posting (maker-checker)"), { target: { value: "Month-end" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post entry" }));
+
+    await waitFor(() => expect(screen.queryByText("Post this journal entry?")).not.toBeInTheDocument());
+    const voucherInput = screen.getByLabelText("Voucher Number", { selector: "input" });
+    const fieldWrap = voucherInput.closest(".field") as HTMLElement;
+    expect(within(fieldWrap).getByText(serverMsg)).toHaveAttribute("role", "alert");
+    expect(voucherInput).toHaveFocus();
+    // The typed value is kept so the officer can correct it; nothing was posted or reset.
+    expect((voucherInput as HTMLInputElement).value).toBe("JV-TEST-001");
+    expect(screen.queryByText(/Journal entry accepted/)).not.toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });

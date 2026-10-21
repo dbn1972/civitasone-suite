@@ -289,6 +289,16 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
     const resolved = await formError.fromResponse(res, "save");
     setStatus("error");
     setMessage(resolved.message);
+    // GAP-FINANCE-JOURNAL-ENTRY-06: a 409 DUPLICATE_VOUCHER is a problem with ONE
+    // field the dialog covers. Close the dialog so the inline error under
+    // "Voucher Number" is visible, and put the cursor there to fix it. Nothing
+    // was queued (the server refuses before enqueueing), so the same
+    // idempotency key is safe to reuse for the corrected submit.
+    if (res.status === 409 && resolved.fieldErrors.voucherNo) {
+      setConfirmOpen(false);
+      document.getElementById("jv-voucher")?.focus();
+      return;
+    }
     // Surface the error inside the dialog by throwing for ConfirmDialog's busy/error flow.
     throw UserFacingError.from(resolved);
   }

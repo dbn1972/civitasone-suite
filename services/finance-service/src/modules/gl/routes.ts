@@ -1,10 +1,12 @@
+import { idempotentId } from "@civitasone/auth";
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { GLEntrySummaryListSchema, FinancialStatementSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import { findControlAccountRefs } from "../budget/repo.js";
-import { assertNoControlAccounts, DomainError } from "./domain.js";
+import { assertNoControlAccounts, DomainError, isAutoVoucherNo } from "./domain.js";
+import { findJournalByVoucherNo } from "./repo.js";
 import { postJournalBody, ledgerQueryParams, reverseParam, ledgerPageQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -54,6 +56,21 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     } catch (err) {
       if (err instanceof DomainError) throw new HttpError(400, err.code, err.message);
       throw err;
+    }
+    // GAP-FINANCE-JOURNAL-ENTRY-06: a hand-typed voucher number must be unique
+    // per tenant (finance_journals UNIQUE (tenant_id, voucher_no)). Without this
+    // pre-check a duplicate got a 202 and then tripped the constraint in the
+    // async consumer, so the officer never heard about it. The unique index stays
+    // the authority for a true race (the consumer records that as a failure
+    // audit). A replay of THIS request's own draft (same idempotency key, so the
+    // same journal id) is not a duplicate: it dedupes at the consumer.
+    if (!isAutoVoucherNo(body.voucherNo)) {
+      const taken = await findJournalByVoucherNo(ctx.tenantId, body.voucherNo);
+      if (taken && taken.id !== idempotentId(ctx)) {
+        throw new HttpError(409, "DUPLICATE_VOUCHER", "voucher number already exists", [
+          { field: "voucherNo", message: "This voucher number is already in use. Enter a different number, or leave it blank to auto-number." },
+        ]);
+      }
     }
     // DOM-024: this now creates a pending_approval draft, not a posted
     // journal — see gl/commands.ts createJournal() / gl/consumer.ts

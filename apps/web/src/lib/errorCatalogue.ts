@@ -345,6 +345,19 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
     },
     actions: ["retry", "help"],
   },
+  // GAP-FINANCE-JOURNAL-ENTRY-06: finance-service POST /v1/finance/journals answers
+  // 409 DUPLICATE_VOUCHER when a hand-typed voucher number is already used in the tenant.
+  DUPLICATE_VOUCHER: {
+    en: {
+      what: "This voucher number is already in use.",
+      next: "Enter a different number, or leave it blank to auto-number.",
+    },
+    hi: {
+      what: "यह वाउचर नंबर पहले से इस्तेमाल में है।",
+      next: "कोई अलग नंबर दर्ज करें, या खाली छोड़ दें ताकि नंबर अपने-आप बन जाए।",
+    },
+    actions: ["retry", "help"],
+  },
   // GAP-TENANT-ADMIN-USERS-07: identity-service POST /identity/users answers
   // 409 DUPLICATE_EMAIL when the email is already in the tenant's directory.
   DUPLICATE_EMAIL: {
