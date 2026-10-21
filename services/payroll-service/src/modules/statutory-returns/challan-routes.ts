@@ -291,7 +291,9 @@ export async function challanRoutes(app: FastifyInstance): Promise<void> {
 
   /**
    * GET /v1/payroll/statutory/reconcile?fy=2026-27&quarter=Q1   (or &period=YYYY-MM)
-   * Reconcile TDS deducted (payroll_tds, finalised runs) vs deposited (challans).
+   * Reconcile TDS deducted vs deposited (challans) for the selected form (default 24Q):
+   *   24Q (formType omitted/other): salary TDS (payroll_tds, finalised runs) vs 24Q challans.
+   *   26Q (formType=26Q): non-salary TDS (payroll_tds_nonsalary) vs 26Q challans.
    */
   app.get("/v1/payroll/statutory/reconcile", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -318,8 +320,16 @@ export async function challanRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "VALIDATION_FAILED", "provide period=YYYY-MM or fy+quarter");
     }
 
+    // GAP-PAYROLL-STATUTORY-CHALLANS-04: the DEDUCTED side depends on the form, not only the
+    // deposited side. 24Q = salary TDS (payroll_tds); 26Q = non-salary TDS (payroll_tds_nonsalary),
+    // the same basis the 26Q return itself reconciles on (routes.ts). Comparing 26Q deposits with
+    // salary TDS gave the wrong Reconciliation Status tile and the wrong "filing blocked" verdict.
     const perPeriod: Reconciliation[] = [];
-    for (const mo of months) perPeriod.push(await reconcilePeriod(ctx.tenantId, mo, ft));
+    for (const mo of months) {
+      perPeriod.push(ft === "26Q"
+        ? await reconcileNonSalaryPeriod(ctx.tenantId, mo)
+        : await reconcilePeriod(ctx.tenantId, mo, "24Q"));
+    }
 
     const sumStr = (k: keyof Reconciliation) =>
       perPeriod.reduce((s, r) => s + BigInt(r[k] as string), 0n).toString();
@@ -338,8 +348,8 @@ export async function challanRoutes(app: FastifyInstance): Promise<void> {
       matched: allMatched,
       filingBlocked: !allMatched,
       note: allMatched
-        ? "TDS deducted equals deposited; 24Q may be filed."
-        : "TDS deducted does NOT match deposited challans; resolve before filing 24Q.",
+        ? `TDS deducted equals deposited; ${ft} may be filed.`
+        : `TDS deducted does NOT match deposited challans; resolve before filing ${ft}.`,
     });
   });
 }
