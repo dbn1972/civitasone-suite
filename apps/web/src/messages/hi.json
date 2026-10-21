@@ -2022,6 +2022,7 @@
       "title": "रिपोर्टिंग अवधि दर्ज करें",
       "periodStart": "अवधि प्रारंभ",
       "periodEnd": "अवधि समाप्ति (वैकल्पिक)",
+      "currency": "मुद्रा (ISO कोड)",
       "spend": "व्यय ({currency})",
       "revenue": "राजस्व ({currency})",
       "responses": "प्रतिक्रियाएँ",
@@ -12987,7 +12988,11 @@
     "backLabel": "अभियान",
     "loadArea": "अभियान प्रदर्शन",
     "fallbackTitle": "अभियान",
-    "campaignId": "अभियान आईडी"
+    "campaignId": "अभियान आईडी",
+    "noPerformanceTitle": "कोई प्रदर्शन दर्ज नहीं",
+    "noPerformanceMessage": "इस अभियान के विरुद्ध अभी तक कोई लागत, राजस्व या प्रतिक्रिया आँकड़े दर्ज नहीं हैं। इसकी पहली रिपोर्टिंग अवधि दर्ज करने के लिए नीचे दिए गए प्रपत्र का उपयोग करें।",
+    "noPeriodsTitle": "कोई अवधि दर्ज नहीं",
+    "noPeriodsMessage": "इस अभियान के लिए अभी तक कोई रिपोर्टिंग अवधि दर्ज नहीं की गई है।"
   },
   "crmCampaignRoiTable": {
     "unnamedCampaign": "अनाम अभियान",

@@ -98,4 +98,23 @@ describe("Campaigns list page", () => {
 
     expect(screen.getByLabelText("Mixed currency notice")).toBeInTheDocument();
   });
+
+  it("GAP-CRM-CAMPAIGNS-DETAIL-03: a single non-INR portfolio totals and unmeasured note use that currency, not rupees", async () => {
+    mocked.mockResolvedValue({
+      data: {
+        rows: [
+          row({ campaignId: "m", currency: "USD", costMinor: "12345", revenueMinor: "20000", netMinor: "7655" }),
+          row({ campaignId: "u", currency: "USD", costMinor: "0", revenueMinor: "50000", netMinor: "50000" }),
+        ],
+        total: 2,
+      },
+      source: "api",
+    });
+    const { container } = render(await Page());
+
+    expect(screen.getByText("$123.45")).toBeInTheDocument();
+    expect(screen.getByText("$700.00")).toBeInTheDocument();
+    expect(screen.getByText(/\$500\.00 USD attributed revenue/)).toBeInTheDocument();
+    expect(container.textContent).not.toContain("₹");
+  });
 });

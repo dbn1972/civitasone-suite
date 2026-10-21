@@ -85,4 +85,28 @@ describe("buildPerformanceBody (GAP-CRM-CAMPAIGNS-DETAIL-04)", () => {
       }),
     ).toThrow(CampaignPeriodValidationError);
   });
+
+  it("rejects a malformed currency code", () => {
+    expect(() =>
+      buildPerformanceBody({
+        periodStart: "2026-01-01",
+        costRupees: "1",
+        revenueRupees: "1",
+        responses: 0,
+        currency: "U1",
+      }),
+    ).toThrow(/three-letter currency code/);
+  });
+
+  it("rejects a currency whose minor unit is not two decimals (JPY), instead of mis-scaling by 100", () => {
+    expect(() =>
+      buildPerformanceBody({
+        periodStart: "2026-01-01",
+        costRupees: "1",
+        revenueRupees: "1",
+        responses: 0,
+        currency: "JPY",
+      }),
+    ).toThrow(/two decimal places/);
+  });
 });

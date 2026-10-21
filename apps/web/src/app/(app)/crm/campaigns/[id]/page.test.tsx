@@ -87,4 +87,29 @@ describe("Campaign detail page", () => {
     expect(screen.getByRole("form", { name: /post a reporting period/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /post period/i })).toBeInTheDocument();
   });
+
+  it("GAP-CRM-CAMPAIGNS-DETAIL-04: a campaign with no figures (404) still offers the form for its first period", async () => {
+    mocked.mockResolvedValue({ data: null, source: "error", status: 404 });
+    renderWithIntl(await Page({ params: { id: "7f3a1c2e-0000-4000-8000-000000000000" } }));
+
+    expect(screen.getByText("No performance recorded")).toBeInTheDocument();
+    expect(screen.getByRole("form", { name: /post a reporting period/i })).toBeInTheDocument();
+    // currency is unknown for a brand-new campaign, so it is editable and defaults to INR
+    expect(screen.getByLabelText(/^Currency/)).toHaveValue("INR");
+  });
+
+  it("GAP-CRM-CAMPAIGNS-DETAIL-04: a 500 does not offer the post form", async () => {
+    mocked.mockResolvedValue({ data: null, source: "error", status: 500 });
+    renderWithIntl(await Page({ params: { id: "x" } }));
+
+    expect(screen.queryByRole("form", { name: /post a reporting period/i })).not.toBeInTheDocument();
+  });
+
+  it("GAP-CRM-CAMPAIGNS-DETAIL-04: the empty period table does not tell the reader to post", async () => {
+    mocked.mockResolvedValue({ data: campaign({ periods: [] }), source: "api" });
+    renderWithIntl(await Page({ params: { id: "x" } }));
+
+    expect(screen.getByText("No reporting periods have been recorded for this campaign.")).toBeInTheDocument();
+    expect(screen.queryByText(/Post a reporting period's cost and revenue/)).not.toBeInTheDocument();
+  });
 });
