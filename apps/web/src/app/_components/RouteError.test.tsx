@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
+import hiMessages from "@/messages/hi.json";
 import { RouteError } from "./RouteError";
 
 describe("RouteError", () => {
@@ -93,5 +96,49 @@ describe("RouteError", () => {
   it("has role=alert for screen readers", () => {
     render(<RouteError error={mockError} reset={reset} />);
     expect(screen.getByRole("alert")).toBeInTheDocument();
+  });
+});
+
+// GAP-PAYROLL-SALARY-SLIPS-06: the boundary's own chrome (Try again / Open help / default back label)
+// is localised through next-intl when an intl provider is present, and falls back to English when
+// the boundary renders outside one (isolated tests, a root-level boundary above the layout).
+describe("RouteError chrome is localised", () => {
+  const err = Object.assign(new Error("x"), { digest: "d-1" });
+
+  function inProvider(locale: "en" | "hi", ui: React.ReactElement) {
+    return render(
+      <NextIntlClientProvider locale={locale} messages={(locale === "hi" ? hiMessages : enMessages) as never}>
+        {ui}
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("uses the Hindi catalogue for Try again, Open help and the default back label", () => {
+    inProvider("hi", <RouteError error={err} reset={() => {}} />);
+    expect(screen.getByRole("button", { name: "पुनः प्रयास करें" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "सहायता खोलें" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "डैशबोर्ड पर वापस जाएं" })).toHaveAttribute("href", "/dashboard");
+    expect(screen.queryByText("Try again")).not.toBeInTheDocument();
+    expect(screen.queryByText("Open help")).not.toBeInTheDocument();
+    expect(screen.queryByText("Back to dashboard")).not.toBeInTheDocument();
+  });
+
+  it("keeps the English labels under the English catalogue", () => {
+    inProvider("en", <RouteError error={err} reset={() => {}} />);
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open help" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to dashboard" })).toBeInTheDocument();
+  });
+
+  it("an explicit (already translated) backLabel wins over the default", () => {
+    inProvider("hi", <RouteError error={err} reset={() => {}} backHref="/hr/payroll" backLabel="पेरोल पर वापस जाएं" />);
+    expect(screen.getByRole("link", { name: "पेरोल पर वापस जाएं" })).toHaveAttribute("href", "/hr/payroll");
+    expect(screen.queryByRole("link", { name: "डैशबोर्ड पर वापस जाएं" })).not.toBeInTheDocument();
+  });
+
+  it("renders English defaults, and does not throw, with no intl provider at all", () => {
+    expect(() => render(<RouteError error={err} reset={() => {}} />)).not.toThrow();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to dashboard" })).toBeInTheDocument();
   });
 });

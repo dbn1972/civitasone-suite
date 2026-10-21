@@ -51,6 +51,7 @@ function prevPeriodIso(pp: string): string | null {
 
 export default async function PayrollRunDetailPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("payrollDetail");
+  const tNav = await getTranslations("payrollRouteError");
   // GAP-PAYROLL-DETAIL-08: reuses payrollRunsTable's existing status.*
   // translations instead of adding a parallel, independently-drifting copy
   // under payrollDetail -- the run-list table and this detail page now show
@@ -68,7 +69,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   if (!canView) {
     return (
       <div className="page-main wrap">
-        <PageHeader title={t("titleFallback")} back="/hr/payroll" backLabel="Payroll Runs" />
+        <PageHeader title={t("titleFallback")} back="/hr/payroll" backLabel={tNav("backToPayroll")} />
         <PermissionDenied module="this payroll run" requiredRoles={PAYROLL_READER_ROLES} />
       </div>
     );
@@ -79,7 +80,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   if (!run) {
     return (
       <div className="page-main wrap">
-        <PageHeader title={t("titleFallback")} back="/hr/payroll" backLabel="Payroll Runs" />
+        <PageHeader title={t("titleFallback")} back="/hr/payroll" backLabel={tNav("backToPayroll")} />
         <DataSourceBadge source={source} message={t("loadErrorMessage")} />
         <Card padding>
           <p style={{ textAlign: "center", color: "var(--mut)", padding: "24px 0" }}>
@@ -116,7 +117,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
         title={t("title", { period: run.payPeriod })}
         subtitle={t("subtitle", { date: formatIndianDate(run.runDate) })}
         back="/hr/payroll"
-        backLabel="Payroll Runs"
+        backLabel={tNav("backToPayroll")}
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       {canViewRegister && (

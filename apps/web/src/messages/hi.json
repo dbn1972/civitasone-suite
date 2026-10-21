@@ -5239,6 +5239,29 @@
       "failed": "विफल"
     }
   },
+  "payrollRouteError": {
+    "backToHr": "HR पर वापस जाएँ",
+    "backToPayroll": "पेरोल पर वापस जाएं",
+    "backToSalarySlips": "वेतन पर्चियों पर वापस जाएं",
+    "backToMyPayslips": "मेरी वेतन पर्चियों पर वापस जाएं",
+    "areaHr": "HR पृष्ठ",
+    "areaSalarySlip": "वेतन पर्ची",
+    "areaPayrollComparison": "पेरोल तुलना",
+    "areaCostAllocation": "लागत आवंटन",
+    "areaCtcConfiguration": "CTC विन्यास",
+    "areaDdoManagement": "DDO प्रबंधन",
+    "areaFlexBenefits": "फ्लेक्स लाभ",
+    "areaFullAndFinal": "पूर्ण एवं अंतिम निपटान",
+    "areaPayGroups": "वेतन समूह",
+    "areaPayrollRegister": "पेरोल रजिस्टर",
+    "areaReimbursements": "प्रतिपूर्ति",
+    "areaPayStructures": "वेतन संरचनाएं",
+    "areaTaxConfiguration": "कर विन्यास",
+    "areaTdsReturns": "TDS विवरणियां"
+  },
+  "routeError": {
+    "backToDashboard": "डैशबोर्ड पर वापस जाएं"
+  },
   "payrollDetail": {
     "exceptionMissingPan": "PAN उपलब्ध नहीं है। इसके बिना कर उच्च दर (धारा 206AA) पर काटा जाता है।",
     "exceptionInvalidPan": "PAN का प्रारूप मान्य नहीं है (5 अक्षर, 4 अंक, 1 अक्षर)।",

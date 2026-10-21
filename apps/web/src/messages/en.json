@@ -5195,6 +5195,29 @@
       "failed": "Failed"
     }
   },
+  "payrollRouteError": {
+    "backToHr": "Back to HR",
+    "backToPayroll": "Back to Payroll",
+    "backToSalarySlips": "Back to Salary Slips",
+    "backToMyPayslips": "Back to My Payslips",
+    "areaHr": "HR page",
+    "areaSalarySlip": "Salary Slip",
+    "areaPayrollComparison": "Payroll Comparison",
+    "areaCostAllocation": "Cost Allocation",
+    "areaCtcConfiguration": "CTC Configuration",
+    "areaDdoManagement": "DDO Management",
+    "areaFlexBenefits": "Flex Benefits",
+    "areaFullAndFinal": "Full & Final Settlement",
+    "areaPayGroups": "Pay Groups",
+    "areaPayrollRegister": "Payroll Register",
+    "areaReimbursements": "Reimbursements",
+    "areaPayStructures": "Pay Structures",
+    "areaTaxConfiguration": "Tax Configuration",
+    "areaTdsReturns": "TDS Returns"
+  },
+  "routeError": {
+    "backToDashboard": "Back to dashboard"
+  },
   "payrollLoans": {
     "loadingAriaLabel": "Loading…",
     "errorBackLabel": "Back to Payroll",

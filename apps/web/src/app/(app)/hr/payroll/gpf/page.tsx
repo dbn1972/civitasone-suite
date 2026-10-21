@@ -23,6 +23,7 @@ type GpfRow = {
 
 export default async function GpfStatementsPage() {
   const t = await getTranslations("gpfStatements");
+  const tNav = await getTranslations("payrollRouteError");
   // GAP-PAYROLL-GPF-05: hr/layout.tsx admits employee/manager to every
   // /hr/payroll* route, and this ledger lists every employee's GPF
   // contributions. Gate on the same READER_ROLES payroll-service enforces on
@@ -80,7 +81,7 @@ export default async function GpfStatementsPage() {
       <PageHeader
         title={t.rich("title", { term: () => <Term name="GPF" /> })}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel="Back to Payroll"
+        back="/hr/payroll" backLabel={tNav("backToPayroll")}
         help="payroll"
       />
 
