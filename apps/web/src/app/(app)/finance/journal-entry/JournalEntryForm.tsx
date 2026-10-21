@@ -1,7 +1,7 @@
 "use client";
 
 import { UserFacingError } from "@/lib/userFacingError";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { AccountSummary } from "@civitasone/types";
 import { formatMoney, todayIST } from "@/lib/formatters";
@@ -131,6 +131,16 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
   const [status,  setStatus]  = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // GAP-FINANCE-JOURNAL-ENTRY-06: set when a 409 DUPLICATE_VOUCHER closes the confirm dialog and the
+  // cursor should land on the Voucher Number field. Focus cannot move in the same tick as the close:
+  // the page behind an open Modal is `inert` (a browser ignores focus() on it) and Modal restores focus
+  // to the button that opened it when it unmounts. This effect runs after both of those are undone.
+  const focusVoucherAfterClose = useRef(false);
+  useEffect(() => {
+    if (confirmOpen || !focusVoucherAfterClose.current) return;
+    focusVoucherAfterClose.current = false;
+    document.getElementById("jv-voucher")?.focus();
+  }, [confirmOpen]);
   // GAP-FINANCE-VOUCHERS-NEW-02: after a successful post with a redirectTo the
   // clerk stays on a success panel (no instant hard navigation) and chooses
   // between viewing the GL and posting another voucher.
@@ -295,8 +305,8 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
     // was queued (the server refuses before enqueueing), so the same
     // idempotency key is safe to reuse for the corrected submit.
     if (res.status === 409 && resolved.fieldErrors.voucherNo) {
+      focusVoucherAfterClose.current = true;
       setConfirmOpen(false);
-      document.getElementById("jv-voucher")?.focus();
       return;
     }
     // Surface the error inside the dialog by throwing for ConfirmDialog's busy/error flow.

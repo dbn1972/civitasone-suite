@@ -13,8 +13,21 @@ describe("employeeDirectoryForRoles", () => {
     expect(employeeDirectoryForRoles(["finance_officer"])).toBe("payroll");
     expect(employeeDirectoryForRoles(["finance_officer", "audit_officer"])).toBe("payroll");
   });
-  it("prefers the HRMS directory when the user has both kinds of role", () => {
-    expect(employeeDirectoryForRoles(["finance_officer", "employee"])).toBe("hrms");
+  // The HRMS list is tenant-wide only for HR staff and payroll admin/officer; employee and manager are
+  // scoped to direct reports by the service, so they must not displace the tenant-wide payroll lookup.
+  it("keeps the tenant-wide payroll lookup for a finance_officer who also holds employee or manager", () => {
+    expect(employeeDirectoryForRoles(["finance_officer", "employee"])).toBe("payroll");
+    expect(employeeDirectoryForRoles(["finance_officer", "manager"])).toBe("payroll");
+    expect(employeeDirectoryForRoles(["employee", "manager", "finance_officer"])).toBe("payroll");
+  });
+  it("prefers the tenant-wide HRMS directory when the user also holds a tenant-wide HRMS role", () => {
+    expect(employeeDirectoryForRoles(["finance_officer", "hr_officer"])).toBe("hrms");
+    expect(employeeDirectoryForRoles(["finance_officer", "payroll_officer"])).toBe("hrms");
+    expect(employeeDirectoryForRoles(["finance_officer", "super_admin"])).toBe("hrms");
+  });
+  it("falls back to the scoped HRMS directory for a finance_admin who also holds employee or manager", () => {
+    expect(employeeDirectoryForRoles(["finance_admin", "employee"])).toBe("hrms");
+    expect(employeeDirectoryForRoles(["finance_admin", "manager"])).toBe("hrms");
   });
   it("says there is no reachable directory for a finance_admin-only user", () => {
     expect(employeeDirectoryForRoles(["finance_admin"])).toBe("none");

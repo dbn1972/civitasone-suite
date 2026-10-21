@@ -382,6 +382,18 @@ describe("RaiseEOfficeNote forward-to directory follows the signed-in role", () 
     expect(JSON.parse((call[1] as RequestInit).body as string).currentWith).toBe("abcdefab-abcd-abcd-abcd-abcdefabcdef");
   });
 
+  it("a finance_officer who also holds employee still picks from the tenant-wide payroll lookup, not the direct-reports-only HR list", async () => {
+    // The HR list scopes employee/manager to direct reports, so it would be empty for this officer.
+    const spy = mockSession(["finance_officer", "employee"], { hrmsStatus: 403 });
+    render(<RaiseEOfficeNote {...props} />);
+    await openForm(spy);
+    fireEvent.change(screen.getByLabelText("Forward to officer"), { target: { value: "Ben" } });
+    fireEvent.mouseDown(await screen.findByText("Ben Iyer (E-002)"));
+    await screen.findByDisplayValue("Ben Iyer (E-002)");
+    expect(urlsOf(spy).some((u) => u.includes("/payroll/employee-lookup?q=Ben"))).toBe(true);
+    expect(urlsOf(spy).some((u) => u.includes("/hrms/employees?q="))).toBe(false);
+  });
+
   it("an HR user still searches the HR employee directory", async () => {
     const spy = mockSession(["hr_admin"]);
     render(<RaiseEOfficeNote {...props} />);

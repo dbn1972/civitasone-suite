@@ -404,6 +404,15 @@ describe("JournalEntryForm voucher number (GAP-FINANCE-JOURNAL-ENTRY-06)", () =>
   // finance-service answers 409 DUPLICATE_VOUCHER (with a voucherNo field error) before
   // anything is queued, for a typed number that is already used in the tenant.
   it("a 409 DUPLICATE_VOUCHER closes the dialog, shows the message under the voucher field and focuses it", async () => {
+    // Model the two browser behaviours that fireEvent.click + jsdom hide: (1) a real click focuses the
+    // trigger first, and Modal restores focus to that trigger when it closes; (2) the page behind an
+    // open Modal is `inert`, and a browser ignores focus() on an inert element. Focus must therefore
+    // land on the voucher field only AFTER the dialog has closed and torn both of those down.
+    const realFocus = HTMLElement.prototype.focus;
+    vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (this: HTMLElement, ...args: Parameters<HTMLElement["focus"]>) {
+      if (this.closest("[inert]")) return;
+      return realFocus.apply(this, args);
+    });
     const serverMsg = "This voucher number is already in use. Enter a different number, or leave it blank to auto-number.";
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(
@@ -413,7 +422,9 @@ describe("JournalEntryForm voucher number (GAP-FINANCE-JOURNAL-ENTRY-06)", () =>
     );
     render(<JournalEntryForm accounts={accounts} />);
     fillBalancedLines(); // voucher "JV-TEST-001"
-    fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
+    const trigger = screen.getByRole("button", { name: "Post Journal Entry" });
+    trigger.focus(); // a real click focuses the button before the click event
+    fireEvent.click(trigger);
     await waitFor(() => expect(screen.getByText("Post this journal entry?")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("Reason / authority for posting (maker-checker)"), { target: { value: "Month-end" } });
     fireEvent.click(screen.getByRole("button", { name: "Post entry" }));
@@ -422,7 +433,8 @@ describe("JournalEntryForm voucher number (GAP-FINANCE-JOURNAL-ENTRY-06)", () =>
     const voucherInput = screen.getByLabelText("Voucher Number", { selector: "input" });
     const fieldWrap = voucherInput.closest(".field") as HTMLElement;
     expect(within(fieldWrap).getByText(serverMsg)).toHaveAttribute("role", "alert");
-    expect(voucherInput).toHaveFocus();
+    await waitFor(() => expect(voucherInput).toHaveFocus());
+    expect(trigger).not.toHaveFocus();
     // The typed value is kept so the officer can correct it; nothing was posted or reset.
     expect((voucherInput as HTMLInputElement).value).toBe("JV-TEST-001");
     expect(screen.queryByText(/Journal entry accepted/)).not.toBeInTheDocument();
