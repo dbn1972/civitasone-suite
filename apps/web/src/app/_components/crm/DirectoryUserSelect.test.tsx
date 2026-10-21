@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { useState, type ComponentProps } from "react";
-import { act, fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, render as rtlRender, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { renderWithIntl } from "@/lib/testUtils/intl";
 import * as aa from "@/lib/crm/activityAccount";
 import { DirectoryUserSelect } from "./DirectoryUserSelect";
@@ -224,3 +226,43 @@ describe("DirectoryUserSelect: a truncated directory says so and can be searched
     expect(search).not.toHaveBeenCalled();
   });
 });
+
+// Hindi has no "1 लोग": the count is an ICU plural, so one person reads as a person and two as people.
+describe("DirectoryUserSelect in Hindi: singular and plural", () => {
+  async function renderHi(users: Array<{ id: string; name: string }>) {
+    const hi = (await import("@/messages/hi.json")).default as unknown as Record<string, unknown>;
+    return rtlRender(
+      <NextIntlClientProvider locale="hi" messages={{ ...enMessages, crmDirectoryUserSelect: hi.crmDirectoryUserSelect } as never}>
+        <DirectoryUserSelect id="pick" value="" onChange={() => {}} users={users} truncated />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("the truncation note says '1 व्यक्ति' for one person and '2 लोग' for two", async () => {
+    const one = await renderHi([{ id: "u-1", name: "Asha Rao" }]);
+    expect(screen.getByRole("status")).toHaveTextContent("पहले 1 व्यक्ति दिखाए जा रहे हैं");
+    expect(screen.getByRole("status").textContent).not.toContain("1 लोग");
+    one.unmount();
+    await renderHi([{ id: "u-1", name: "Asha Rao" }, { id: "u-2", name: "Ravi Das" }]);
+    expect(screen.getByRole("status")).toHaveTextContent("पहले 2 लोग दिखाए जा रहे हैं");
+  });
+
+  it("the results announcement says '1 व्यक्ति मिला' for one match and '2 लोग मिले' for two", async () => {
+    search.mockResolvedValueOnce({ data: [{ id: "u-9", name: "Meera Nair" }], source: "api", truncated: false });
+    await renderHi(BASE);
+    await typeAndSettleHi("me");
+    expect(screen.getByRole("status")).toHaveTextContent("1 व्यक्ति मिला");
+    expect(screen.getByRole("status").textContent).not.toContain("1 लोग");
+
+    search.mockResolvedValueOnce({ data: [{ id: "u-9", name: "Meera Nair" }, { id: "u-8", name: "Meera Rao" }], source: "api", truncated: false });
+    await typeAndSettleHi("mee");
+    expect(screen.getByRole("status")).toHaveTextContent("2 लोग मिले");
+  });
+});
+
+async function typeAndSettleHi(text: string) {
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: text } });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(400);
+  });
+}
