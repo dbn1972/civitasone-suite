@@ -26,9 +26,7 @@ const VISIT_REQUEST_ID = "66666666-6666-6666-6666-666666666666";
 // the pass is valid for exactly one day.
 const VALID_FROM = new Date("2026-01-01T00:00:00.000Z");
 const VALID_UNTIL = new Date("2026-01-02T00:00:00.000Z");
-const BEFORE_WINDOW = new Date("2025-12-31T23:00:00.000Z"); // 1h before validFrom
 const WITHIN_WINDOW = new Date("2026-01-01T12:00:00.000Z"); // mid-window
-const AFTER_WINDOW = new Date("2026-01-02T01:00:00.000Z"); // 1h after validUntil
 
 let passRow: Record<string, unknown> | undefined;
 let visitRow: Record<string, unknown> | undefined;

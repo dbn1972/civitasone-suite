@@ -1,12 +1,12 @@
 {
-  "generatedAt": "2026-10-16T13:10:43.891Z",
+  "generatedAt": "2026-10-21T16:53:07.018Z",
   "counts": {
     "totalNoLoader": 580,
     "renderPassed": 537,
     "renderFailed": 43,
-    "manifestConfirmed": 537
+    "manifestConfirmed": 535
   },
-  "coveragePct": 95.1,
+  "coveragePct": 94.9,
   "results": [
     {
       "module": "admin",
@@ -2693,8 +2693,8 @@
     {
       "module": "notifications",
       "screen": "/notifications/deliveries/[id]",
-      "verdict": "FAIL",
-      "reason": "Cannot read properties of undefined (reading 'replace')"
+      "verdict": "PASS",
+      "reason": "ok"
     },
     {
       "module": "notifications",
@@ -3113,8 +3113,8 @@
     {
       "module": "tenant",
       "screen": "/tenant/org-hierarchy",
-      "verdict": "PASS",
-      "reason": "ok"
+      "verdict": "FAIL",
+      "reason": "rendered no visible text content"
     },
     {
       "module": "tenant",
