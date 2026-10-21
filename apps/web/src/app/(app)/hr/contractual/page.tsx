@@ -5,7 +5,7 @@ import { daysUntilIST } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 import { requireAnyRole } from "@/lib/auth/roleGuard";
 import { HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
-import { contractExpiryState, EXPIRING_WINDOW_DAYS } from "./contractRules";
+import { contractExpiryState, contractDisplayStatus, isExpiringSoon, EXPIRING_SOON_STATUS, EXPIRING_WINDOW_DAYS } from "./contractRules";
 
 type ApiContract = {
   id: string;
@@ -31,9 +31,13 @@ type Row = {
   designation: string;
   contractFrom: string;
   contractTo: string;
+  /** What the status badge shows (see contractDisplayStatus): `expiring_30d`, a swept `expired`, or the raw status. */
   status: string;
   /** Status-cell key for the Expiry column: "expired" | "today" | "d<N>" (days left) | "" when not applicable. */
   expiry: string;
+  /** The status exactly as the API stored it; the loaded-rows fallback tally counts by this, never by the display value. */
+  rawStatus: string;
+  /** Whole IST calendar days until the end date (negative = already ended); null when the end date is missing/unparseable. */
   daysToExpiry: number | null;
 } & Record<string, unknown>;
 
@@ -71,10 +75,16 @@ function parsePage(raw: string | undefined): number {
  */
 function mapContracts(apiItems: ApiContract[]): Row[] {
   return apiItems.map((c) => {
+    // IST calendar-day arithmetic (GAP-HR-WORKFORCE-CONTRACTUAL-01) -- the old
+    // `new Date(todayIST())` vs `new Date(endDate)` diff mixed a UTC-midnight
+    // parse with a possibly-timestamp end date.
     const daysToExpiry = daysUntilIST(c.endDate);
+    const displayStatus = contractDisplayStatus(c.status, daysToExpiry);
     const state = contractExpiryState(c.status, daysToExpiry);
     let expiry = "";
-    if (state === "expired") expiry = "expired";
+    // The status pill already reads "Expired" for a swept contract; only add the Expiry-column badge when it carries
+    // information the pill does not (e.g. an escalated contract past its end date), so a row never shows two "Expired".
+    if (state === "expired") expiry = displayStatus === "expired" ? "" : "expired";
     else if (state !== "none" && daysToExpiry !== null) expiry = daysToExpiry === 0 ? "today" : `d${daysToExpiry}`;
     return {
       id: c.id,
@@ -85,11 +95,27 @@ function mapContracts(apiItems: ApiContract[]): Row[] {
       designation: c.designation,
       contractFrom: c.startDate,
       contractTo: c.endDate,
-      status: c.status,
+      status: displayStatus,
       expiry,
+      rawStatus: c.status,
       daysToExpiry,
     };
   });
+}
+
+/**
+ * Register counts tallied from a complete (unpaged) list, same classes as the server summary except that "Expiring
+ * <=30d" is an end-DATE test: hrms-service flips active -> expiring at <=90 days, so counting every `expiring` row
+ * overstated this tile, and an ended contract still flagged expiring must not count at all.
+ */
+function tallyLoadedRows(rows: Row[]): ContractSummary {
+  const hasEnded = (r: Row) => r.daysToExpiry !== null && r.daysToExpiry < 0;
+  return {
+    active: rows.filter((r) => r.rawStatus === "active" && !hasEnded(r)).length,
+    expiring: rows.filter((r) => isExpiringSoon(r.rawStatus, r.daysToExpiry)).length,
+    expired: rows.filter((r) => r.rawStatus === "expired" || (hasEnded(r) && r.rawStatus !== "terminated" && r.rawStatus !== "renewed")).length,
+    agencies: new Set(rows.map((r) => r.agency).filter((a) => a !== "—")).size,
+  };
 }
 
 async function getContractual(page: number): Promise<LoaderResult<ContractsPage>> {
@@ -105,7 +131,12 @@ async function getContractual(page: number): Promise<LoaderResult<ContractsPage>
       const body = p as { data?: unknown; meta?: { total?: number; summary?: ContractSummary } } | null;
       const arr = Array.isArray(body?.data) ? (body!.data as ApiContract[]) : null;
       if (!arr) return null;
-      return { rows: mapContracts(arr), total: body?.meta?.total ?? arr.length, summary: body?.meta?.summary ?? null };
+      const rows = mapContracts(arr);
+      // A paged response (meta.total present) must bring its own full-scope summary: a count derived from one page would
+      // lie, so no summary means "—". A response with no paging meta at all is the complete, unpaged list, so the loaded
+      // rows ARE the full scope and are tallied here (GAP-HR-WORKFORCE-CONTRACTUAL-01).
+      const summary = body?.meta?.summary ?? (body?.meta?.total === undefined ? tallyLoadedRows(rows) : null);
+      return { rows, total: body?.meta?.total ?? arr.length, summary };
     },
   });
 }
@@ -140,6 +171,11 @@ export default async function ContractualPage({ searchParams }: { searchParams?:
     }
   }
 
+  // Status badge copy + tone for the two expiry states (GAP-HR-WORKFORCE-CONTRACTUAL-01; the shared STATUS_MAP has no
+  // `expiring` entry, so it used to fall through to the neutral info pill).
+  const statusLabels = { expiring: t("statusExpiring"), [EXPIRING_SOON_STATUS]: t("statusExpiring30d") };
+  const statusVariants = { expiring: "warn", [EXPIRING_SOON_STATUS]: "bad" } as const;
+
   const columns: { key: keyof Row & string; label: string; cellType?: "status" | "date"; statusLabels?: Record<string, string>; statusVariants?: Record<string, "good" | "warn" | "mut" | "bad" | "info"> }[] = [
     { key: "name", label: t("colName") },
     { key: "department", label: t("colDepartment") },
@@ -147,7 +183,7 @@ export default async function ContractualPage({ searchParams }: { searchParams?:
     { key: "designation", label: t("colDesignation") },
     { key: "contractFrom", label: t("colFrom"), cellType: "date" },
     { key: "contractTo", label: t("colTo"), cellType: "date" },
-    { key: "status", label: t("colStatus"), cellType: "status" },
+    { key: "status", label: t("colStatus"), cellType: "status", statusLabels, statusVariants },
     { key: "expiry", label: t("colExpiry"), cellType: "status", statusLabels: expiryLabels, statusVariants: expiryVariants },
   ];
 

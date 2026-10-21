@@ -62,3 +62,44 @@ export function validateNewEndDate(newEndDate: string, currentEndDate: string): 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(newEndDate) || Number.isNaN(Date.parse(newEndDate))) return "invalid";
   return newEndDate > currentEndDate ? null : "notAfter";
 }
+
+/**
+ * GAP-HR-WORKFORCE-CONTRACTUAL-01: the "Expiring ≤30d" window carried over
+ * from the retired /hr/workforce/contractual page (GFR 2017 Ch. 8 renewal
+ * alerts).
+ */
+export const EXPIRING_SOON_DAYS = 30;
+
+/**
+ * True only for a LIVE engagement (active, or already flagged "expiring" by
+ * hrms-service's expiry consumer) whose end date is today or within the next
+ * `windowDays`. The backend flips active -> expiring at <=90 days, so the
+ * `expiring` status alone is NOT a 30-day signal; and a contract whose end
+ * date has already passed (negative `daysToExpiry`) is ended, not expiring,
+ * even if its stored status has not been swept yet. Terminated / renewed /
+ * expired contracts never count. A missing end date (null) never counts.
+ */
+export function isExpiringSoon(
+  status: string,
+  daysToExpiry: number | null,
+  windowDays: number = EXPIRING_SOON_DAYS,
+): boolean {
+  if (daysToExpiry === null || Number.isNaN(daysToExpiry)) return false;
+  return (status === "active" || status === "expiring") && daysToExpiry >= 0 && daysToExpiry <= windowDays;
+}
+
+/** The pseudo-status shown on the register's status badge for a contract ending within 30 days. */
+export const EXPIRING_SOON_STATUS = "expiring_30d";
+
+/**
+ * The status the register's badge shows. Raw statuses pass through unchanged
+ * except: a live contract ending within 30 days reads `expiring_30d`
+ * (highlighted), and a live contract already past its end date reads
+ * `expired` (the same rule the Expired tile counts by) instead of a stale
+ * green "Active".
+ */
+export function contractDisplayStatus(status: string, daysToExpiry: number | null): string {
+  if (isExpiringSoon(status, daysToExpiry)) return EXPIRING_SOON_STATUS;
+  if ((status === "active" || status === "expiring") && daysToExpiry !== null && daysToExpiry < 0) return "expired";
+  return status;
+}

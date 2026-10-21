@@ -1733,7 +1733,7 @@
     "colStatus": "स्थिति",
     "statTotalLabel": "कुल संविदा कर्मचारी",
     "statActiveLabel": "सक्रिय",
-    "statExpiringLabel": "≤30 दिन में समाप्त",
+    "statExpiringLabel": "समाप्ति ≤30 दिन",
     "statExpiredLabel": "समाप्त",
     "statAgenciesLabel": "एजेंसियाँ",
     "cardTitle": "संविदा कर्मचारी",
@@ -1749,7 +1749,9 @@
     "pagerAriaLabel": "अनुबंध पृष्ठ",
     "prevPageLink": "← पिछला पृष्ठ",
     "nextPageLink": "अगला पृष्ठ →",
-    "pageLabel": "पृष्ठ {page}"
+    "pageLabel": "पृष्ठ {page}",
+    "statusExpiring": "समाप्त होने वाला",
+    "statusExpiring30d": "समाप्ति ≤30 दिन"
   },
   "corrections": {
     "loadingAriaLabel": "लोड हो रहा है…",
@@ -4221,8 +4223,9 @@
   },
   "hrAuditLog": {
     "title": "मानव संसाधन लेखा-परीक्षा लॉग",
-    "subtitle": "सभी मानव संसाधन कार्रवाइयाँ — अवकाश स्वीकृतियाँ, वेतन निष्पादन, कर्मचारी संपादन, वेतन परिवर्तन। ई-गवर्नेंस दिशानिर्देशों के अंतर्गत आवश्यक।",
-    "cardTitle": "हाल की मानव संसाधन कार्रवाइयाँ",
+    "subtitle": "आपके टेनेंट की मानव संसाधन और पेरोल कार्रवाइयों का लेखा-परीक्षा ट्रेल, नवीनतम पहले। ई-गवर्नेंस दिशानिर्देशों के अंतर्गत आवश्यक।",
+    "cardTitle": "मानव संसाधन कार्रवाइयाँ",
+    "colWhen": "कब",
     "colAction": "कार्रवाई",
     "colResource": "संसाधन",
     "colActor": "द्वारा किया गया",
@@ -4233,7 +4236,19 @@
     "resourceTypeLabel": "संसाधन प्रकार",
     "allResourceTypes": "सभी प्रकार",
     "actorLabel": "कर्ता",
-    "actorPlaceholder": "यूज़र आईडी (सटीक)"
+    "actorPlaceholder": "यूज़र आईडी (सटीक)",
+    "unknownResource": "अज्ञात संसाधन",
+    "fromLabel": "से",
+    "toLabel": "तक",
+    "applyFilter": "लागू करें",
+    "clearFilter": "साफ़ करें",
+    "showingRange": "{from}–{to} दिखाए जा रहे हैं",
+    "showingRangeOfTotal": "कुल {total} में से {from}–{to} दिखाए जा रहे हैं",
+    "prevPage": "← पिछला",
+    "nextPage": "अगला →",
+    "exportCsv": "सभी मिलान वाली घटनाएँ निर्यात करें (CSV)",
+    "exportCsvCount": "सभी {total} मिलान वाली घटनाएँ निर्यात करें (CSV)",
+    "exportTooLarge": "{total} घटनाएँ मिलान करती हैं, जो एक निर्यात में समाने वाली {max} की सीमा से अधिक हैं। निर्यात के लिए तिथि सीमा या फ़िल्टर सीमित करें।"
   },
   "icc": {
     "title": "ICC शिकायतें",
@@ -8804,7 +8819,7 @@
     "statChargeMemoStageLabel": "आरोप पत्र चरण",
     "statUnderInquiryLabel": "जांच में",
     "cardTitle": "सतर्कता मामला रजिस्टर",
-    "filterPlaceholder": "कर्मचारी, विभाग या जांच अधिकारी के अनुसार फ़िल्टर करें…",
+    "filterPlaceholder": "मामला संदर्भ, कर्मचारी, विभाग या जांच अधिकारी…",
     "emptyTitle": "कोई सतर्कता मामला दर्ज नहीं",
     "emptyMessage": "प्रमुख विभागीय कार्यवाही यहाँ दिखाई देती हैं — सतर्कता इकाई द्वारा आरोप पत्र, जांच अधिकारी नियुक्ति और CCS (CCA) नियमों के तहत दंड ट्रैकिंग के साथ पंजीकृत।",
     "confidentialBannerTitle": "गोपनीय — सतर्कता",
@@ -8814,7 +8829,19 @@
     "nextBatch": "अगले 200",
     "statPenaltyAppealLabel": "दंड एवं अपील",
     "statClosedLabel": "बंद",
-    "statDroppedLabel": "वापस लिए गए"
+    "statDroppedLabel": "वापस लिए गए",
+    "filterFormLabel": "सतर्कता मामले फ़िल्टर करें",
+    "filterStatusLabel": "स्थिति",
+    "filterAllStatuses": "सभी स्थितियाँ",
+    "filterSearchLabel": "खोजें",
+    "applyFilter": "लागू करें",
+    "clearFilter": "साफ़ करें",
+    "resultsCount": "{total} मिलान वाले मामले",
+    "emptyFilteredTitle": "कोई मामला मेल नहीं खाता",
+    "emptyFilteredMessage": "इस स्थिति और खोज से कोई सतर्कता मामला मेल नहीं खाता। पूरा रजिस्टर देखने के लिए फ़िल्टर साफ़ करें।",
+    "noCharges": "—",
+    "backToVigilance": "सतर्कता पर वापस जाएँ",
+    "crumbVigilance": "सतर्कता"
   },
   "wfhForm": {
     "ariaLabel": "घर से काम अनुरोध फ़ॉर्म",

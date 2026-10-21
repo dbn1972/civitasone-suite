@@ -194,4 +194,36 @@ describe("DisciplinaryCaseDetailPage", () => {
     expect(screen.queryByRole("button", { name: "Record finding" })).not.toBeInTheDocument();
     expect(screen.getByText(/only the case creator or the assigned inquiry officer/i)).toBeInTheDocument();
   });
+
+  // GAP-HR-VIGILANCE-05: the vigilance register links here with ?from=vigilance.
+  it("Back returns to the disciplinary register by default", async () => {
+    mockLoaders();
+    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
+    render(ui);
+    expect(screen.getByRole("link", { name: "Back to Disciplinary" })).toHaveAttribute("href", "/hr/disciplinary");
+  });
+
+  it("Back returns to /hr/vigilance, with a Vigilance breadcrumb, when opened from the vigilance register", async () => {
+    mockLoaders();
+    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" }, searchParams: { from: "vigilance" } });
+    render(ui);
+    expect(screen.getByRole("link", { name: "Back to Vigilance" })).toHaveAttribute("href", "/hr/vigilance");
+    expect(screen.queryByRole("link", { name: "Back to Disciplinary" })).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toHaveTextContent("Vigilance");
+  });
+
+  it("only the exact value 'vigilance' changes the Back target -- any other ?from= is ignored (no open redirect)", async () => {
+    mockLoaders();
+    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" }, searchParams: { from: "https://evil.example/x" } });
+    render(ui);
+    expect(screen.getByRole("link", { name: "Back to Disciplinary" })).toHaveAttribute("href", "/hr/disciplinary");
+    expect(document.querySelector('a[href*="evil.example"]')).toBeNull();
+  });
+
+  it("the vigilance back target also applies on a not-found case", async () => {
+    mockLoaders({ caseResult: { data: null, source: "error", status: 404 } });
+    const ui = await DisciplinaryCaseDetailPage({ params: { id: "gone" }, searchParams: { from: "vigilance" } });
+    render(ui);
+    expect(screen.getByRole("link", { name: "Back to Vigilance" })).toHaveAttribute("href", "/hr/vigilance");
+  });
 });

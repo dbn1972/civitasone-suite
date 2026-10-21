@@ -333,37 +333,25 @@ export default async function WorkforceAnalyticsPage() {
 
       {/* Retirement risk */}
       <Card title={t('cardRetirementForecast')}>
-        <div style={{ padding: '12px 0', display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+        {/*
+          GAP-HR-WORKFORCE-ANALYTICS-08: the figures' layout and tone are ds
+          classes (civitas-ds.css `.wf-fig*`), not inline styles. GAP-HR-
+          WORKFORCE-ANALYTICS-02 still holds: the tone on error is the
+          NEUTRAL `wf-fig--muted`, never the success green -- a `0` rendered
+          green when the fetch actually failed read as "confirmed zero risk".
+        */}
+        <div className="wf-fig-row">
           <div>
-            <div
-              style={{
-                fontSize: 28,
-                fontWeight: 800,
-                // GAP-HR-WORKFORCE-ANALYTICS-02: neutral colour on error --
-                // a `0` rendered in the SUCCESS green when the fetch actually
-                // failed read as "confirmed zero risk", not "unknown".
-                color: rtErrored ? 'var(--muted)' : retiringSoon > 0 ? 'var(--bad)' : 'var(--good)',
-              }}
-            >
+            <div className={`wf-fig ${rtErrored ? 'wf-fig--muted' : retiringSoon > 0 ? 'wf-fig--bad' : 'wf-fig--good'}`}>
               {rtErrored ? '—' : retiringSoon}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-              {t('retiringWithin6')}
-            </div>
+            <div className="wf-fig-label">{t('retiringWithin6')}</div>
           </div>
           <div>
-            <div
-              style={{
-                fontSize: 28,
-                fontWeight: 800,
-                color: rtErrored ? 'var(--muted)' : retiring12 > 0 ? 'var(--warn)' : 'var(--good)',
-              }}
-            >
+            <div className={`wf-fig ${rtErrored ? 'wf-fig--muted' : retiring12 > 0 ? 'wf-fig--warn' : 'wf-fig--good'}`}>
               {rtErrored ? '—' : retiring12}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-              {t('retiringWithin12')}
-            </div>
+            <div className="wf-fig-label">{t('retiringWithin12')}</div>
           </div>
         </div>
         {/*
@@ -373,16 +361,18 @@ export default async function WorkforceAnalyticsPage() {
           period/retiring_count shape -- there is no per-officer identity in
           the payload to render a name/department column from (see the
           WORKFORCE-05-refuted note: adding one would recreate that exact
-          risk).
+          risk). `mobileStack` collapses each row into a labelled key/value
+          card below 768px instead of horizontally scrolling a shrunk table.
         */}
         {rtErrored ? (
           <RefreshErrorState error={toHumanError('load', { area: 'retirement forecast' })} />
         ) : (
-          <div style={{ marginTop: 12 }}>
+          <div className="wf-table">
             <DataTable<RetirementRow>
               columns={rtCols}
               rows={retirements}
               sortable
+              mobileStack
               pageSize={8}
               caption={t('ariaUpcomingRetirements')}
               emptyIcon="📅"
