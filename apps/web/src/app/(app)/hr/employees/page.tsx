@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, Alert } from "../../../_components/ds";
 import { getEmployees, getHRDashboard } from "../../../_data/loaders";
 import { EmployeesTable, type EmpRow } from "./EmployeesTable";
 import { getTranslations } from "next-intl/server";
@@ -184,6 +184,15 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
           rendered as if they were real tenant-wide numbers. Total/Others mix
           both fetches, so either failing blanks them; Active is derived only
           from the employees page; OnLeave only from the dashboard. */}
+      {/* GAP-HR-EMPLOYEES-02: the dashboard fetch is independent of the
+          employees fetch (whose provenance EmployeesTable's own badge
+          reports), so a dashboard-only failure -- stat cards dashed out, table
+          still listing rows -- needs its own visible signal here. A plain
+          notice, NOT a second DataSourceBadge: the table owns the data-source
+          badge for the rows (UX-012), and this one describes different data. */}
+      {dashboardSource === "error" && (
+        <Alert variant="warning" style={{ marginBottom: 12 }}>{t("dashboardUnavailableNotice")}</Alert>
+      )}
       <StatGrid>
         <StatCard icon="👥" iconBg="var(--goodbg)" label={t("statTotal")} value={source === "error" || dashboardSource === "error" ? "—" : total} />
         <StatCard icon="✅" iconBg="var(--infobg)" label={t("statActive")} value={dashboardSource === "error" || active === null ? "—" : active} />
@@ -192,7 +201,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
       </StatGrid>
       {/* GAP-HR-EMPLOYEES-06: "Others" had no legend -- say what it contains. */}
       <p style={{ margin: "-4px 0 12px", fontSize: 12, color: "var(--mut)" }}>{t("othersLegend")}</p>
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+      <div className="chip-row">
         {TYPE_TABS.map((tab) => (
           <Link
             key={tab.key}
@@ -206,7 +215,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
       </div>
 
       {/* GAP-HR-EMPLOYEES-06: server-side status filter (second chip row). */}
-      <nav aria-label={t("statusFilterLabel")} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+      <nav aria-label={t("statusFilterLabel")} className="chip-row">
         <Link
           href={empPageHref(typeFilter, 0, "")}
           className="chip chip-link"

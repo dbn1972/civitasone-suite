@@ -35,21 +35,22 @@ function toOption(row: EmployeeRow): EntityOption {
  * fix step), so this stays strictly within the already-safe shape.
  *
  * GAP-HR-EMPLOYEES-DETAIL-EDIT-05: `opts.excludeStatuses` is an optional,
- * purely-additive client-side filter applied to the rows this endpoint
- * already returns -- it does NOT add a new backend query param (the
- * underlying GET /v1/hrms/employees has no status filter either, and this
- * directory endpoint has many unrelated callers across the app, so widening
- * its own query surface for one caller's business rule was deliberately
- * avoided; see EditEmployeeForm.tsx's own comment on this same gap for why).
- * Every existing caller that doesn't pass `opts` keeps today's behavior
- * unchanged.
+ * purely-additive filter. It is sent to the server as
+ * `?excludeStatuses=a,b,c` (GET /v1/hrms/employees applies it in the query, so
+ * the 20-row page is never spent on people who cannot be chosen) AND applied
+ * to the returned rows here as a safety net for a backend that predates the
+ * param. Every existing caller that doesn't pass `opts` keeps today's
+ * behavior unchanged (same URL, no filtering).
  */
 export async function searchEmployees(
   query: string,
   signal: AbortSignal,
   opts?: { excludeStatuses?: readonly string[]; onForbidden?: () => void; strict?: boolean },
 ): Promise<EntityOption[]> {
-  const res = await fetch(`/api/proxy/v1/hrms/employees?q=${encodeURIComponent(query)}&limit=20`, { signal });
+  const exclude = opts?.excludeStatuses && opts.excludeStatuses.length > 0
+    ? `&excludeStatuses=${opts.excludeStatuses.map(encodeURIComponent).join(",")}`
+    : "";
+  const res = await fetch(`/api/proxy/v1/hrms/employees?q=${encodeURIComponent(query)}&limit=20${exclude}`, { signal });
   // GAP-PAYROLL-FNF-05 review: GET /v1/hrms/employees is DIRECTORY_ROLES-gated,
   // so e.g. a payroll_admin/finance_officer-only user gets a 403. Callers that
   // pass `onForbidden` can say so explicitly instead of showing a silent

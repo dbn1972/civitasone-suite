@@ -2,10 +2,10 @@ import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill, LoadErrorState, Masked } from "../../../../_components/ds";
 import { getEmployeeById } from "../../../../_data/loaders";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
 import { getSessionRoles, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
 import { EMPLOYEE_ADMIN_ROLES, EMPLOYEE_PII_REVEAL_ROLES, EMPLOYEE_PHONE_REVEAL_ROLES } from "@/lib/auth/workRoles";
-import { isServingStatus, isExitedStatus } from "@/lib/employeeStatus";
+import { isServingStatus, isExitedStatus, employeeStatusVariant } from "@/lib/employeeStatus";
 import { LifecycleTimeline, type LifecycleEvent } from "../../_components/LifecycleTimeline";
 import { fetchJson } from "@/app/_data/apiClient";
 import { EmployeePayGroupCard } from "./EmployeePayGroupCard";
@@ -42,41 +42,58 @@ async function getCostCenterName(id: string): Promise<string | null> {
 }
 
 type TransferItem = {
-  id: string; status: string;
+  id: string; status: string; employeeId?: string;
   toDepartmentName?: string; fromDepartmentName?: string;
   toDeptId?: string; effectiveDate?: string; joinedDate?: string; createdAt?: string;
 } & Record<string, unknown>;
 
 type PromotionItem = {
-  id: string; status: string; toDesignationName?: string;
+  id: string; status: string; employeeId?: string; toDesignationName?: string;
   toDesigId?: string; effectiveDate?: string; createdAt?: string;
 } & Record<string, unknown>;
 
 type DeputationItem = {
-  id: string; status: string; deputationOrg?: string;
+  id: string; status: string; employeeId?: string; deputationOrg?: string;
   fromDate?: string; createdAt?: string;
 } & Record<string, unknown>;
 
-async function getLifecycleEvents(employeeId: string): Promise<LifecycleEvent[]> {
+/**
+ * GAP-HR-EMPLOYEES-DETAIL-01: `unavailable` is true when ANY of the three
+ * lifecycle reads failed (rejected, or resolved with source "error"). An
+ * empty list from a failed read must never be shown as "no lifecycle events
+ * recorded" -- the profile would then claim a clean service history it could
+ * not actually verify.
+ */
+type LifecycleResult = { events: LifecycleEvent[]; unavailable: boolean };
+
+async function getLifecycleEvents(employeeId: string): Promise<LifecycleResult> {
   const events: LifecycleEvent[] = [];
+  const eid = encodeURIComponent(employeeId);
+
+  // Defence in depth for GAP-HR-EMPLOYEES-DETAIL-01: the backend scopes these
+  // lists by ?employeeId=, but a row that names a DIFFERENT employee (an older
+  // backend that ignores the filter and returns the whole tenant) must never
+  // be rendered on this profile -- it would disclose a colleague's posting.
+  const forThisEmployee = <T extends { employeeId?: string }>(rows: T[]): T[] =>
+    rows.filter((r) => r.employeeId === undefined || r.employeeId === null || r.employeeId === employeeId);
 
   // Fetch transfers, promotions, deputations in parallel — best-effort
   const [tRes, pRes, dRes] = await Promise.allSettled([
-    fetchJson<unknown, TransferItem[]>(`/api/v1/hrms/lifecycle/transfers?employeeId=${employeeId}`, [], {
+    fetchJson<unknown, TransferItem[]>(`/api/v1/hrms/lifecycle/transfers?employeeId=${eid}`, [], {
       telemetryKey: "hr.emp.lifecycle.transfers",
       mapResponse: (p) => {
         const arr = Array.isArray(p) ? p : (p as { data?: TransferItem[] })?.data;
         return Array.isArray(arr) ? arr : null;
       },
     }),
-    fetchJson<unknown, PromotionItem[]>(`/api/v1/hrms/lifecycle/promotions?employeeId=${employeeId}`, [], {
+    fetchJson<unknown, PromotionItem[]>(`/api/v1/hrms/lifecycle/promotions?employeeId=${eid}`, [], {
       telemetryKey: "hr.emp.lifecycle.promotions",
       mapResponse: (p) => {
         const arr = Array.isArray(p) ? p : (p as { data?: PromotionItem[] })?.data;
         return Array.isArray(arr) ? arr : null;
       },
     }),
-    fetchJson<unknown, DeputationItem[]>(`/api/v1/hrms/deputation?employeeId=${employeeId}`, [], {
+    fetchJson<unknown, DeputationItem[]>(`/api/v1/hrms/deputation?employeeId=${eid}`, [], {
       telemetryKey: "hr.emp.lifecycle.deputation",
       mapResponse: (p) => {
         const arr = Array.isArray(p) ? p : (p as { data?: DeputationItem[] })?.data;
@@ -85,8 +102,10 @@ async function getLifecycleEvents(employeeId: string): Promise<LifecycleEvent[]>
     }),
   ]);
 
+  const unavailable = [tRes, pRes, dRes].some((r) => r.status === "rejected" || r.value.source === "error");
+
   if (tRes.status === "fulfilled") {
-    for (const t of tRes.value.data) {
+    for (const t of forThisEmployee(tRes.value.data)) {
       events.push({
         id: `t-${t.id}`,
         type: "transfer",
@@ -99,7 +118,7 @@ async function getLifecycleEvents(employeeId: string): Promise<LifecycleEvent[]>
   }
 
   if (pRes.status === "fulfilled") {
-    for (const p of pRes.value.data) {
+    for (const p of forThisEmployee(pRes.value.data)) {
       events.push({
         id: `p-${p.id}`,
         type: "promotion",
@@ -111,7 +130,7 @@ async function getLifecycleEvents(employeeId: string): Promise<LifecycleEvent[]>
   }
 
   if (dRes.status === "fulfilled") {
-    for (const d of dRes.value.data) {
+    for (const d of forThisEmployee(dRes.value.data)) {
       events.push({
         id: `d-${d.id}`,
         type: "deputation",
@@ -122,11 +141,19 @@ async function getLifecycleEvents(employeeId: string): Promise<LifecycleEvent[]>
     }
   }
 
-  return events;
+  return { events, unavailable };
 }
 
-export default async function EmployeeDetailPage({ params }: { params: { id: string } }) {
-  const { data: employee, source, status, errorMessage } = await getEmployeeById(params.id);
+export default async function EmployeeDetailPage({ params, searchParams }: { params: { id: string }; searchParams?: Record<string, string | string[] | undefined> }) {
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-06: the edit form sends the user here with
+  // ?updated=1 once a save was accepted (202). That one navigation reads the
+  // record fresh (skipping the 60 s data cache -- the no-store is scoped to
+  // post-edit arrivals only) and says the change may still be settling,
+  // because the write is applied asynchronously.
+  const justUpdated = searchParams?.updated === "1";
+  const { data: employee, source, status, errorMessage } = justUpdated
+    ? await getEmployeeById(params.id, { fresh: true })
+    : await getEmployeeById(params.id);
   const errored = source === "error";
   const t = await getTranslations("employeeDetail");
   // GAP-HR-EMPLOYEES-DETAIL-EDIT-07: this reuses the edit route's own
@@ -232,9 +259,12 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
     });
   }
 
-  // Fetch additional lifecycle events (best-effort)
-  const lifecycleEvents = await getLifecycleEvents(params.id);
-  const allEvents = [...baseEvents, ...lifecycleEvents];
+  // Fetch additional lifecycle events (best-effort). The transfer / promotion /
+  // deputation lists are HR-staff-only on the backend (hrms-service
+  // lifecycle HR_ROLES), so only those roles ask: everyone else would just
+  // collect a 403 and a permanent, misleading "history unavailable".
+  const lifecycle: LifecycleResult = canAdminister ? await getLifecycleEvents(params.id) : { events: [], unavailable: false };
+  const allEvents = [...baseEvents, ...lifecycle.events];
 
   return (
     <div className="page-main wrap">
@@ -257,9 +287,24 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
       />
       <DataSourceBadge source={source} />
 
+      {justUpdated && (
+        <div role="status" className="card" style={{ padding: "10px 14px", marginBottom: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13 }}>{t("updatedBanner")}</span>
+          <Link href={`/hr/employees/${params.id}`} className="btn ghost sm">{t("updatedBannerDismiss")}</Link>
+        </div>
+      )}
+
       {/* Quick Actions */}
       {(serving || onLeave) && (
         <Card title={t("quickActionsTitle")} padding>
+          {/* GAP-HR-EMPLOYEES-DETAIL-06: someone on leave keeps the self-service
+              links below but not the HR lifecycle actions -- say so instead of
+              leaving an unexplained gap where Transfer / Promotion would be. */}
+          {onLeave && (
+            <p role="note" style={{ margin: "0 0 10px", color: "var(--mut)", fontSize: 13 }}>
+              {t("actionsLimitedOnLeave")}
+            </p>
+          )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             <Link href={`/hr/leave/apply?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
               {t("actionApplyLeave")}
@@ -319,7 +364,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
       {!serving && !onLeave && (
         <Card padding>
           <p style={{ margin: 0, color: "var(--mut)", fontSize: 13 }}>
-            {exited ? t("actionsUnavailableExited") : t("actionsUnavailableOther", { status: employee.status })}
+            {exited ? t("actionsUnavailableExited") : t("actionsUnavailableOther", { status: humanizeStatus(employee.status).toLowerCase() })}
           </p>
         </Card>
       )}
@@ -359,7 +404,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
                   employee status (probation/confirmed/deputation/on_leave/
                   suspended/separated/terminated/retired/no_show) -- no
                   label override needed at all. */}
-              <StatusPill status={employee.status} />
+              <StatusPill status={employee.status} variant={employeeStatusVariant(employee.status)} />
             </span>
           </div>
           {employee.postingLocation && (
@@ -488,6 +533,14 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
 
       {/* Lifecycle Timeline */}
       <Card title={t("lifecycleTitle")}>
+        {/* GAP-HR-EMPLOYEES-DETAIL-01: a failed transfers / promotions /
+            deputation read is an explicit "unavailable" note above whatever did
+            load -- never silently the same as "nothing recorded". */}
+        {lifecycle.unavailable && (
+          <p role="alert" style={{ margin: 0, padding: "12px 16px", color: "var(--bad)", fontSize: 13 }}>
+            {t("lifecycleUnavailable")}
+          </p>
+        )}
         <LifecycleTimeline events={allEvents} />
       </Card>
     </div>

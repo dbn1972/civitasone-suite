@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { DataTable } from "../../../_components/ds";
+import { DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { useTranslations } from "next-intl";
@@ -41,6 +41,24 @@ export function EmployeesTable({ employees, source = "api", canCreate = false }:
   // to "add your first employee".
   const isErrorEmpty = provenance === "error-no-data";
 
+  // GAP-HR-EMPLOYEES-02: a failed load with nothing cached is an error, not
+  // an empty roster. RefreshErrorState gives a real Retry (router.refresh()
+  // re-runs the page's server fetches) and a way back, and never offers the
+  // "add your first employee" call to action -- an HR admin must not be
+  // invited to re-create staff during an outage (duplicate-record risk). It
+  // is the single failure signal, so the provenance badge is not stacked on
+  // top of it.
+  if (isErrorEmpty) {
+    return (
+      <div className="pad">
+        <RefreshErrorState
+          error={{ what: t("emptyErrorTitle"), next: t("emptyErrorMessage"), actions: ["retry", "back", "help"] }}
+          backHref="/hr"
+        />
+      </div>
+    );
+  }
+
   return (
     <>
       {/* UX-012: this badge is the ONLY place that reports data provenance for
@@ -63,12 +81,18 @@ export function EmployeesTable({ employees, source = "api", canCreate = false }:
         // disagreeing paginations and a search box that silently couldn't
         // find anyone outside the current page. The page above now does
         // real server-side search (?q=) and is the only pagination level.
+        // GAP-HR-EMPLOYEES-04: the CSV is built client-side from the rows
+        // this server page returned (at most one page), not the whole
+        // filtered result -- say so next to the button instead of letting
+        // "CSV" imply a full export. The export itself is audit-logged via
+        // exportAudit.
         exportable exportAudit="hr/employees"
-        emptyIcon={isErrorEmpty ? "⚠️" : "👥"}
-        emptyTitle={isErrorEmpty ? t("emptyErrorTitle") : t("emptyTitle")}
-        emptyMessage={isErrorEmpty ? t("emptyErrorMessage") : t("emptyMessage")}
+        exportNotice={t("exportNotice", { count: rows.length })}
+        emptyIcon="👥"
+        emptyTitle={t("emptyTitle")}
+        emptyMessage={t("emptyMessage")}
         emptyAction={
-          !isErrorEmpty && canCreate ? (
+          canCreate ? (
             <Link href="/hr/employees/new" className="btn primary" style={{ marginTop: 10 }}>
               {t("addFirstEmployee")}
             </Link>

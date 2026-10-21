@@ -27,3 +27,15 @@ export function isServingStatus(status: string | undefined | null): boolean {
 export function isExitedStatus(status: string | undefined | null): boolean {
   return !!status && EXITED_STATUSES.has(status);
 }
+
+/**
+ * Pill colour override for the employee's OWN status. The shared StatusPill
+ * map keys on the humanized text, and "on leave" there is deliberately the
+ * calm blue of an approved attendance absence; an employee whose status is
+ * on_leave is a state HR should notice (their lifecycle actions are withheld),
+ * so it reads as a warning on the profile. Everything else keeps the shared
+ * mapping (suspended / no_show bad, separated muted, deputation info, ...).
+ */
+export function employeeStatusVariant(status: string | undefined | null): "warn" | undefined {
+  return status === "on_leave" ? "warn" : undefined;
+}

@@ -116,10 +116,17 @@ describe("EditEmployeeForm — bank account / IFSC mask overwrite guard", () => 
     expect(body).not.toHaveProperty("bankIfsc");
   });
 
+  /** GAP-HR-EMPLOYEES-DETAIL-EDIT-02: the account number is masked, so it is revealed (empty) via Change first. */
+  function changeAccount(value: string, confirm = value) {
+    fireEvent.click(screen.getByRole("button", { name: /change: bank account no\./i }));
+    fireEvent.change(screen.getByLabelText("Bank Account No."), { target: { value } });
+    fireEvent.change(screen.getByLabelText("Confirm bank account no."), { target: { value: confirm } });
+  }
+
   it("includes bankAccountNo/bankIfsc in the outgoing patch (plus the confirmed reason) when they are deliberately changed", async () => {
     fetchMock.mockResolvedValue(new Response("", { status: 500 }));
     renderForm();
-    fireEvent.change(screen.getByLabelText(/bank account/i), { target: { value: "00099988877" } });
+    changeAccount("00099988877");
     fireEvent.change(screen.getByLabelText(/ifsc/i), { target: { value: "hdfc0001234" } });
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
@@ -140,7 +147,7 @@ describe("EditEmployeeForm — bank account / IFSC mask overwrite guard", () => 
   it("does not submit a sensitive change without confirming a reason first", async () => {
     fetchMock.mockResolvedValue(new Response("", { status: 500 }));
     renderForm();
-    fireEvent.change(screen.getByLabelText(/bank account/i), { target: { value: "00099988877" } });
+    changeAccount("00099988877");
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
     await screen.findByLabelText(/reason for change/i);
@@ -154,11 +161,145 @@ describe("EditEmployeeForm — bank account / IFSC mask overwrite guard", () => 
    */
   it("blocks submission client-side when a changed sensitive field still contains '*'", async () => {
     renderForm();
-    fireEvent.change(screen.getByLabelText(/bank account/i), { target: { value: "1234*67890" } });
+    changeAccount("1234*67890");
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
     expect(await screen.findByText(/masked value shown before/i)).toBeInTheDocument();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * GAP-HR-EMPLOYEES-DETAIL-EDIT-02 (acceptance): bank inputs are EMPTY by
+ * default (the masked value is read-only text), a typed account number
+ * without a matching confirmation blocks submit, and the PATCH body never
+ * carries a value with '*'.
+ */
+describe("EditEmployeeForm — masked bank account entry", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const WITH_BANK = { ...EMPLOYEE, phone: "******3210", bankAccountNo: "*******2345", bankIfsc: "SBIN0001234" };
+
+  function renderWithBank() {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        {/* @ts-expect-error minimal fixture, not the full EmployeeDetail type */}
+        <EditEmployeeForm employee={WITH_BANK} />
+      </NextIntlClientProvider>,
+    );
+  }
+  const reveal = () => fireEvent.click(screen.getByRole("button", { name: /change: bank account no\./i }));
+  const type = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
+  const save = () => fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+  it("shows the masked account as read-only text with no input by default", () => {
+    renderWithBank();
+    expect(screen.getByText("Current: *******2345")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Bank Account No.")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Confirm bank account no.")).not.toBeInTheDocument();
+    // nothing in the form is seeded with an asterisk
+    for (const el of Array.from(document.querySelectorAll("input"))) expect((el as HTMLInputElement).value).not.toContain("*");
+  });
+
+  it("reveals EMPTY account + confirmation inputs once Change is clicked", () => {
+    renderWithBank();
+    reveal();
+    expect(screen.getByLabelText("Bank Account No.")).toHaveValue("");
+    expect(screen.getByLabelText("Confirm bank account no.")).toHaveValue("");
+  });
+
+  it("blocks submit when the confirmation does not match, and sends nothing", async () => {
+    renderWithBank();
+    reveal();
+    type("Bank Account No.", "00099988877");
+    type("Confirm bank account no.", "00099988878");
+    save();
+    expect(await screen.findByText("The two account numbers don't match. Re-enter them.")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("blocks submit when the confirmation is left empty", async () => {
+    renderWithBank();
+    reveal();
+    type("Bank Account No.", "00099988877");
+    save();
+    expect(await screen.findByText("The two account numbers don't match. Re-enter them.")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it.each(["12345abc90", "1234 5678 90", "12345678"])("rejects a non-digit or too-short account number %s", async (bad) => {
+    renderWithBank();
+    reveal();
+    type("Bank Account No.", bad);
+    type("Confirm bank account no.", bad);
+    save();
+    expect(await screen.findByText("Enter the account number as digits only (9 to 18 digits).")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed IFSC before sending", async () => {
+    renderWithBank();
+    fireEvent.change(screen.getByLabelText(/ifsc/i), { target: { value: "SBIN1001234" } });
+    save();
+    expect(await screen.findByText(/Enter a valid IFSC/)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("'Keep current' backs out: the typed value and confirmation are discarded and nothing is sent for the account", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 202 }));
+    renderWithBank();
+    reveal();
+    type("Bank Account No.", "00099988877");
+    fireEvent.click(screen.getByRole("button", { name: "Keep current" }));
+    expect(screen.queryByLabelText("Bank Account No.")).not.toBeInTheDocument();
+    type("Email", "keep@example.gov.in");
+    save();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body as string)).toEqual({ email: "keep@example.gov.in" });
+  });
+
+  it("sends the confirmed account number once both entries match and a reason is given -- never a value containing '*'", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 202 }));
+    renderWithBank();
+    reveal();
+    type("Bank Account No.", "00099988877");
+    type("Confirm bank account no.", "00099988877");
+    save();
+    fireEvent.change(await screen.findByLabelText(/reason for change/i), { target: { value: "Employee supplied new passbook" } });
+    fireEvent.click(screen.getByRole("button", { name: /confirm change/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const raw = fetchMock.mock.calls[0]![1].body as string;
+    expect(JSON.parse(raw)).toEqual({ bankAccountNo: "00099988877", reason: "Employee supplied new passbook" });
+    expect(raw).not.toContain("*");
+  });
+
+  it("an email-only save with a masked phone and masked bank account sends only the email -- no '*' anywhere in the body", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 202 }));
+    renderWithBank();
+    type("Email", "only@example.gov.in");
+    save();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const raw = fetchMock.mock.calls[0]![1].body as string;
+    expect(JSON.parse(raw)).toEqual({ email: "only@example.gov.in" });
+    expect(raw).not.toContain("*");
+  });
+
+  it("the masked phone is read-only until Change; a new number is sent as mobile", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 202 }));
+    renderWithBank();
+    expect(screen.getByText("Current: ******3210")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Mobile")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /change: mobile/i }));
+    expect(screen.getByLabelText("Mobile")).toHaveValue("");
+    type("Mobile", "9123456780");
+    save();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    expect(JSON.parse(fetchMock.mock.calls[0]![1].body as string)).toEqual({ mobile: "9123456780" });
   });
 });
 

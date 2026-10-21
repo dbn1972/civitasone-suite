@@ -54,6 +54,17 @@ describe("EditEmployeePage — role gating (Problem A)", () => {
     expect(screen.getByText("Edit Employee")).toBeInTheDocument();
   });
 
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-06: the form's diff-to-patch compares against what it was seeded
+  // with, so the seed must be the current record, not a copy cached up to 60 s ago.
+  it("reads the employee with no data cache (fresh) for hr_admin", async () => {
+    mockRoles = ["hr_admin"];
+    await renderPage();
+    expect(fetchJsonMock).toHaveBeenCalledTimes(1);
+    const [url, , opts] = fetchJsonMock.mock.calls[0]!;
+    expect(url).toBe("/api/v1/hrms/employees/emp-1");
+    expect(opts.revalidateSeconds).toBeUndefined();
+  });
+
   it("denies a manager (READER_ROLES can view, but PATCH's HR_ROLES excludes manager)", async () => {
     mockRoles = ["manager"];
     await renderPage();

@@ -33,6 +33,29 @@ describe("entityAdapters/employee", () => {
   });
 
   // GAP-HR-EMPLOYEES-DETAIL-EDIT-05
+  describe("excludeStatuses sent to the server", () => {
+    beforeEach(() => {
+      fetchMock.mockImplementation(async () => new Response(JSON.stringify({ data: [] }), { status: 200, headers: { "content-type": "application/json" } }));
+    });
+
+    it("forwards the list as ?excludeStatuses=a,b,c so the 20-row page is filtered in the query", async () => {
+      await searchEmployees("Asha", new AbortController().signal, { excludeStatuses: ["terminated", "separated", "retired"] });
+      expect(fetchMock.mock.calls[0]![0]).toBe("/api/proxy/v1/hrms/employees?q=Asha&limit=20&excludeStatuses=terminated,separated,retired");
+    });
+
+    it("sends no excludeStatuses param when none is requested (URL unchanged for every other caller)", async () => {
+      await searchEmployees("Asha", new AbortController().signal);
+      await searchEmployees("Asha", new AbortController().signal, { excludeStatuses: [] });
+      expect(fetchMock.mock.calls[0]![0]).toBe("/api/proxy/v1/hrms/employees?q=Asha&limit=20");
+      expect(fetchMock.mock.calls[1]![0]).toBe("/api/proxy/v1/hrms/employees?q=Asha&limit=20");
+    });
+
+    it("strict mode throws on a failed lookup instead of returning 'no results'", async () => {
+      fetchMock.mockResolvedValue(new Response("", { status: 500 }));
+      await expect(searchEmployees("x", new AbortController().signal, { strict: true })).rejects.toThrow();
+    });
+  });
+
   describe("excludeStatuses", () => {
     const ROWS = [
       { id: "e1", employeeNo: "EMP001", name: "Asha Rao", department: "Finance", status: "confirmed" },

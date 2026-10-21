@@ -1,7 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
+
+// EmployeesTable reads an offline copy on a failed load; keep that deterministic (nothing cached).
+vi.mock("@/lib/sync/responseCache", () => ({
+  readCache: vi.fn().mockResolvedValue(null),
+  writeCache: vi.fn(),
+}));
+vi.mock("@/lib/sync/headers", () => ({ buildSyncHeaders: () => ({}) }));
 
 const getEmployeesMock = vi.fn();
 const getHRDashboardMock = vi.fn();
@@ -118,6 +125,75 @@ describe("EmployeeDirectoryPage", () => {
     expect(screen.getAllByText("—").length).toBe(3);
     expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.queryByText("0")).not.toBeInTheDocument();
+  });
+
+  /**
+   * GAP-HR-EMPLOYEES-02 (acceptance 1): a failed employees fetch is shown
+   * as an error with a Retry control -- never as an empty roster inviting
+   * HR to add the first employee -- and the stat cards dash out.
+   */
+  it("renders a Retry error state, no 'Add first employee', and dashed stat cards when the employees fetch errors", async () => {
+    getEmployeesMock.mockResolvedValue({ data: [], source: "error" });
+    getHRDashboardMock.mockResolvedValue({ data: { headcount: 0, onLeave: 2, employeeTypeBreakdown: [] }, source: "api" });
+    await renderPage();
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByText(/Add first employee/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Your team starts here")).not.toBeInTheDocument();
+    expect(Array.from(document.querySelectorAll(".stat .val")).filter((el) => el.textContent === "—").length).toBe(3);
+  });
+
+  /**
+   * GAP-HR-EMPLOYEES-02 (acceptance 2): the dashboard fetch fails alone --
+   * cards dash out, the list still renders its rows, and a badge says why
+   * (the table's own badge only reports the employees fetch).
+   */
+  it("shows a visible badge, dashed cards and the still-loaded rows when only the dashboard fetch errors", async () => {
+    getEmployeesMock.mockResolvedValue({ data: ONE_EMPLOYEE, source: "api" });
+    getHRDashboardMock.mockResolvedValue({ data: { headcount: 0, onLeave: 0, employeeTypeBreakdown: [] }, source: "error" });
+    await renderPage();
+    expect(screen.getByRole("status")).toHaveTextContent("Summary figures couldn't be loaded");
+    expect(screen.getByText("Priya Sharma")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows no dashboard badge when the dashboard loads", async () => {
+    getEmployeesMock.mockResolvedValue({ data: ONE_EMPLOYEE, source: "api" });
+    getHRDashboardMock.mockResolvedValue({ data: DASH_OK, source: "api" });
+    await renderPage();
+    expect(screen.queryByText(/Summary figures couldn't be loaded/)).not.toBeInTheDocument();
+  });
+
+  /**
+   * GAP-HR-EMPLOYEES-04: one pagination level. The server Prev/Next (with its
+   * range text) is the only paginator; the table adds none of its own, and the
+   * CSV button says it covers this page only.
+   */
+  describe("single paginator and honest export (GAP-HR-EMPLOYEES-04)", () => {
+    const FIFTY = Array.from({ length: 50 }, (_, i) => ({
+      id: `e${i}`, employeeNo: `E${i}`, name: `Person ${i}`, department: "Finance", status: "confirmed", employeeType: "permanent", dateOfJoining: "2021-06-15",
+    }));
+
+    it("renders exactly one pagination nav whose range text matches the rows shown", async () => {
+      getEmployeesMock.mockResolvedValue({ data: FIFTY, source: "api" });
+      getHRDashboardMock.mockResolvedValue({ data: { headcount: 120, onLeave: 1, servingCount: 100, employeeTypeBreakdown: [] }, source: "api" });
+      await renderPage();
+      await waitFor(() => expect(screen.getByText("Person 49")).toBeInTheDocument());
+      const navs = screen.getAllByRole("navigation", { name: "Employee list pagination" });
+      expect(navs).toHaveLength(1);
+      expect(navs[0]).toHaveTextContent("Showing 1–50 of 120 employees");
+      expect(screen.queryByText(/Page \d+ of \d+/)).not.toBeInTheDocument();
+      // every one of the 50 rows is on screen at once: the table does not page them again.
+      expect(screen.getAllByRole("row").length).toBe(51);
+    });
+
+    it("labels the CSV export as covering the current page only", async () => {
+      getEmployeesMock.mockResolvedValue({ data: FIFTY, source: "api" });
+      getHRDashboardMock.mockResolvedValue({ data: { headcount: 120, onLeave: 1, servingCount: 100, employeeTypeBreakdown: [] }, source: "api" });
+      await renderPage();
+      await waitFor(() => expect(screen.getByText("Person 49")).toBeInTheDocument());
+      expect(screen.getByRole("note")).toHaveTextContent("CSV includes only the 50 employees on this page.");
+    });
   });
 
   /**
@@ -261,7 +337,11 @@ describe("EmployeeDirectoryPage", () => {
     });
   });
 
-  /** GAP-HR-EMPLOYEES-08: no inline styles on the chip rows. */
+  /**
+   * GAP-HR-EMPLOYEES-08: no inline styles on the chip rows -- neither on
+   * the chips themselves nor on the wrapper (type row, status nav) that
+   * holds them; layout comes from the DS .chip-row class.
+   */
   it("renders the chip rows without inline style attributes", async () => {
     getEmployeesMock.mockResolvedValue({ data: ONE_EMPLOYEE, source: "api" });
     getHRDashboardMock.mockResolvedValue({ data: DASH_OK, source: "api" });
@@ -269,5 +349,13 @@ describe("EmployeeDirectoryPage", () => {
     const chips = Array.from(document.querySelectorAll("a.chip-link"));
     expect(chips.length).toBeGreaterThan(0);
     expect(chips.every((c) => !c.hasAttribute("style"))).toBe(true);
+
+    const rows = Array.from(document.querySelectorAll(".chip-row")).filter((r) => r.querySelector("a.chip-link"));
+    expect(rows).toHaveLength(2); // type tabs + status filter
+    for (const row of rows) {
+      expect(row.hasAttribute("style")).toBe(false);
+      expect(row.querySelectorAll("[style]")).toHaveLength(0);
+    }
+    expect(screen.getByRole("navigation", { name: "Filter by status" })).toHaveClass("chip-row");
   });
 });
