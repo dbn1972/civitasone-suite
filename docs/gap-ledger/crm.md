@@ -223,7 +223,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-DETAIL-01  ·  HIGH  ·  partly  ·  theme DEADROUTE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Account is resolved with accounts.find over the list response, which hierarchy.ts documents as API-capped; a valid deep link to an account beyond the cap renders "Account not found — does not exist or is no longer active" (app/(app)/crm/accounts/[id]/page.tsx:34, app/(app)/crm/accounts/hierarchy.ts:10).
 - **Verified evidence:** page.tsx:15-34 resolves the account via accounts.find over getCrmAccounts() (list, /api/v1/crm/accounts); hierarchy.ts:9-10 documents that the API caps the list. So a deep link beyond the cap would not be found. However, because ancestors/children are fetched by id (loaders.ts:1431-1448), a truly missing id probably errors first (RefreshErrorState) - and whether a GET /crm/accounts/:id exists or the cap size is cannot-verify (crm service not in snapshot).
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/[id]/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -239,7 +239,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-DETAIL-02  ·  HIGH  ·  partly  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** DocumentsPanel receives canVerify unconditionally, so verify/reject controls show for every crm_user; either the API 403s a normal user or document verification is not role-limited at all — no role check exists in the page or layout (app/(app)/crm/accounts/[id]/page.tsx:147).
 - **Verified evidence:** page.tsx:147 passes canVerify (also contacts/[id]/page.tsx:89) unconditionally; DocumentsPanel shows Verify/Reject when canVerify (DocumentsPanel.tsx:328). Claim 'no role check in layout' is wrong: crm/layout.tsx:5-11 requireAnyRole(['crm_user','crm_admin','platform_admin','super_admin']) - but that is module access, not verify permission, so every crm_user sees Verify/Reject. Server enforcement cannot-verify (crm service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/[id]/page.tsx`, `apps/web/src/app/(app)/crm/contacts/[id]/page.tsx`, `apps/web/src/lib/auth/roleGuard.ts`
@@ -463,7 +463,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACTIVITIES-08  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13, W1 SF-14a re-confirmed against main d0b65c3b5 (feature still present after the Field/Input conversion): closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W1 SF-14a re-confirmed against main d0b65c3b5 (feature still present after the Field/Input conversion): closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Page and stats are titled "Stakeholder Interactions" while the hub and nav call the route "Activities" and the dashboard quick link says "Activities" (app/(app)/crm/activities/page.tsx:21).
 - **Verified evidence:** activities/page.tsx:21 PageHeader title='Stakeholder Interactions', stat 'Total Interactions' (:30), button '+ Log Interaction' (LogActivityButton.tsx:79) and empty state 'No interactions yet', whereas the CRM hub tile is 'Activities' (crm/page.tsx:14) and dashboard quick link is 'Activities' (crm/dashboard/page.tsx:36). The API route and variable names also say activities. Terminology is inconsistent for one screen.
 - **Files to change:** `apps/web/src/app/(app)/crm/activities/page.tsx`, `apps/web/src/app/(app)/crm/activities/LogActivityButton.tsx`, `apps/web/src/app/(app)/crm/activities/ActivitiesTable.tsx`, `apps/web/src/app/(app)/crm/page.tsx`, `apps/web/src/app/(app)/crm/dashboard/page.tsx`
@@ -555,7 +555,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-AGENT-WORKLOAD-05  ·  LOW  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Agent falls back to the raw agentId when name is missing, so a UUID can appear as the agent (lib/crm/assignment.ts:308).
 - **Verified evidence:** assignment.ts:308 `name: str(r.name) || agentId`; AgentWorkloadEditor.tsx:107 renders {a.name} in the first cell and setError/setMessage use agent.name (:63, :73), so when the API omits name a raw agentId (likely a UUID) is shown as the agent identity in the table and toasts. It is a fallback path, it depends on the API omitting name (unverifiable).
 - **Files to change:** `apps/web/src/lib/crm/assignment.ts`, `apps/web/src/app/_components/crm/AgentWorkloadEditor.tsx`
@@ -794,7 +794,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-RULES-05  ·  MEDIUM  ·  partly  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Enabling, disabling or deleting a rule changes routing for all new leads immediately, yet only Delete has a confirmation and nothing on the page shows who changed the chain or when (bare PUT/DELETE) (lib/crm/assignment.ts:129).
 - **Verified evidence:** Delete does use ConfirmDialog (:285-294). Enable/disable is just a checkbox (:260) that changes local state only; it takes effect when the row's Save is pressed (:266), so 'immediately' is overstated, but Save on an enable change has no confirmation. There is no audit/last-changed display: AssignmentRule (lib/crm/assignment.ts:AssignmentRule) carries no updatedBy/updatedAt and the page never shows one; whether the backend returns them cannot be verified. Audit emission on mutation is a backend concern (CLAUDE.md rule 8), not visible here.
 - **Files to change:** `apps/web/src/app/_components/crm/AssignmentRulesEditor.tsx`, `apps/web/src/lib/crm/assignment.ts`
@@ -810,7 +810,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-RULES-06  ·  LOW  ·  confirmed  ·  theme STATE (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** No dirty marker per row; unsaved edits are lost on reload and there is no discard or "unsaved changes" cue (app/_components/crm/AssignmentRulesEditor.tsx:93).
 - **Verified evidence:** Rows are held in useState (:71) with no baseline copy, so there is no dirty flag per row, no Discard, and no beforeunload guard. Worse, every successful save/delete calls load() (:125,:146) which replaces all rows with server data, silently wiping unsaved edits and unsaved new rows in other rows.
 - **Files to change:** `apps/web/src/app/_components/crm/AssignmentRulesEditor.tsx`
@@ -833,7 +833,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CAMPAIGNS-01  ·  HIGH  ·  partly  ·  theme UUID
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 crm rescan: PARTIAL. Done: crm-service now stores an optional campaignName sent on the performance feed (PUT /v1/crm/campaigns/:id/performance, migration 0150 adds crm.campaign_performance.campaign_name) and returns it as `name` from roi-summary and roi; the admin Post-period form can set/keep it; the table shows the name first with the id as a small secondary line, filters by name (tested). Remaining: nothing in the product supplies names yet, so live campaigns still read 'Unnamed campaign' until the feed sends campaignName. NEEDS OWNER DECISION: what is the authoritative source of campaign names - the marketing feed that calls the performance PUT (send campaignName), or a campaign registry such as notification-service bulk campaigns (is crm.campaign_performance.campaign_id that id, and may crm-service read names from it?))
 - **First-pass claim:** Campaigns are identified only by campaignId: the first column, the row link label and the detail subtitle print the raw id (a UUID), so a marketing officer cannot tell which campaign is which; the summary row type carries no name (app/(app)/crm/campaigns/CampaignRoiTable.tsx:42, app/(app)/crm/campaigns/[id]/page.tsx:50).
 - **Verified evidence:** Confirmed for the UI: CampaignRoiTable.tsx:42/85 column 'Campaign' shows row.campaignId, rowHref (:105) links by id, and detail subtitle (:50) prints the id; CampaignRow has no name. Not verifiable: whether CRMCampaignRoiSummaryRow (@civitasone/types, absent) or the API can supply a name, so 'the summary row type carries no name' cannot be checked.
 - **Files to change:** `apps/web/src/app/(app)/crm/campaigns/CampaignRoiTable.tsx`, `apps/web/src/app/(app)/crm/campaigns/page.tsx`, `apps/web/src/app/(app)/crm/campaigns/[id]/page.tsx`, `packages/types (crmCampaignRoiSummarySchema)`
@@ -916,7 +916,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CAMPAIGNS-DETAIL-01  ·  MEDIUM  ·  confirmed  ·  theme UUID (was WIRING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 crm rescan: PARTIAL. Done: the detail title is the campaign's name when the service has one (same optional campaignName as GAP-CRM-CAMPAIGNS-01), generateMetadata names the browser tab, the id shows as a short id with a Copy-ID button, the Post-period form is pre-filled with the name; fallback 'Campaign' + short id is tested. Remaining: no producer sends a name yet, so live pages use the fallback. NEEDS OWNER DECISION: same question as GAP-CRM-CAMPAIGNS-01 (authoritative source of campaign names).)
 - **First-pass claim:** The only identity of the campaign is the raw campaignId in the subtitle ("Campaign 7f3a1c2e-… · INR"); the title is the generic "Campaign Performance", identical to the list page (app/(app)/crm/campaigns/[id]/page.tsx:50).
 - **Verified evidence:** app/(app)/crm/campaigns/[id]/page.tsx:48-53 title is the constant 'Campaign Performance' (same as campaigns/page.tsx:25) and subtitle prints `Campaign ${campaign.campaignId} · ${campaign.currency}`. Whether the API supplies a campaign name cannot be verified: the schema crmCampaignRoiSchema lives in @civitasone/types, absent from the snapshot.
 - **Files to change:** `apps/web/src/app/(app)/crm/campaigns/[id]/page.tsx`, `packages/types (crmCampaignRoiSchema, backend response)`
@@ -5776,7 +5776,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Merge duplicate accounts is a destructive-looking control placed between header and stats for all roles; the dialog (MergeDialog.tsx) was not read, so confirmation and audit of the merge are undeterminable (app/(app)/crm/accounts/page.tsx:44).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['PATCH /v1/crm/accounts/:id/parent', '(merge) MergeDialog uses client lib/crm/dataQuality mergeEntities']`
 - **Question:** Is account merge performed server-side with role gate, confirmation-worthy irreversibility handling and audit, rather than client only?
@@ -5787,7 +5787,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-DIRECTORY-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Deleting a queue, territory, partner or branch says only "no longer available for assignment"; nothing warns when an assignment rule or lead still references it, and the response to that case is undeterminable without the backend (app/_components/crm/OwnershipDirectoryEditor.tsx:200).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['DELETE /v1/crm/{assignment-queues|territories|partners|branches}/:id', 'GET /v1/crm/assignment-rules']`
 - **Question:** Does DELETE of a referenced queue/territory/partner/branch return 409 or cascade, instead of leaving dangling rule/lead references?
