@@ -8,7 +8,7 @@ import { and, eq } from "drizzle-orm";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { hrmsLeaveApps, hrmsLeaveAllocs } from "./schema.js";
 import * as repo from "./repo.js";
-import { assertSufficientLeaveBalance, assertLeaveAppStatusTransition, effectiveBalanceDays, exactAppliedDays, blockingOverlaps, type LeaveDayPart } from "./domain.js";
+import { assertSufficientLeaveBalance, assertLeaveAppStatusTransition, effectiveBalanceDays, exactAppliedDays, blockingOverlaps, DomainError, type LeaveDayPart } from "./domain.js";
 import { resolveAccumulationCap } from "./rules-engine.js";
 import { markLeaveDaysOnAttendance } from "../attendance/leave-sync.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -159,7 +159,48 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
       }
       const alloc = await repo.findAllocByIdTx(tx, p.allocId);
       if (!alloc) throw new Error(`leave alloc ${p.allocId} not found`);
-      assertSufficientLeaveBalance({ totalDays: alloc.totalDays, balanceDays: effectiveBalanceDays(alloc) }, p.daysApplied);
+      try {
+        assertSufficientLeaveBalance({ totalDays: alloc.totalDays, balanceDays: effectiveBalanceDays(alloc) }, p.daysApplied);
+      } catch (err) {
+        if (!(err instanceof DomainError) || err.code !== "INSUFFICIENT_LEAVE_BALANCE") throw err;
+        // GAP-HR-LEAVE-APPLY-04: the API route now rejects an over-balance
+        // request synchronously (422), so this only fires when the balance
+        // dropped between the 202 and this consumer (a concurrent approval or
+        // an HR adjustment). It used to THROW inside the transaction -- a
+        // silent async failure the applicant never heard about, and a
+        // message that retried to the DLQ. Record it as a FAILED audit event
+        // and tell the applicant (same shape as the overlap clash above and
+        // the routing_failed notice below), then commit nothing else.
+        const balanceDays = effectiveBalanceDays(alloc);
+        await enqueue(tx, {
+          topic: AUDIT, eventType: AUDIT,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            service: "hrms", action: "apply", resourceType: "leave_app", resourceId: p.id, outcome: "failure",
+            metadata: {
+              reason: "INSUFFICIENT_LEAVE_BALANCE", allocId: p.allocId,
+              requestedDays: p.daysApplied, balanceDays, fromDate: p.fromDate, toDate: p.toDate,
+            },
+          },
+        });
+        // No dedicated template is registered for this event type; it falls
+        // back to the system default exactly like "hrms.leave.routing_failed".
+        await enqueue(tx, {
+          topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: buildNotificationPayload({
+            eventType: "hrms.leave.apply_failed",
+            recipient: p.employeeId,
+            recipientId: p.employeeId,
+            variables: {
+              leaveAppId: p.id, reason: "INSUFFICIENT_LEAVE_BALANCE",
+              fromDate: p.fromDate, toDate: p.toDate,
+              requestedDays: String(p.daysApplied), balanceDays: String(balanceDays),
+            },
+          }),
+        });
+        return;
+      }
       // GAP-HR-LEAVE-APPLY-05: a fractional request keeps a whole-day CEIL
       // shadow in days_applied and the exact 0.5-unit figure in the new
       // numeric column; whole-day rows leave the new column NULL (unchanged).
