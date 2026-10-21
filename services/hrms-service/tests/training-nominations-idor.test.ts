@@ -53,11 +53,13 @@ async function seedEmployee(opts: { userRef: string; fullName: string; createdBy
 // together, exactly like a real onboarded user.
 const ALICE_ACTOR = randomUUID();
 const CAROL_ACTOR = randomUUID();
+const DAVE_ACTOR = randomUUID();
 const HR_ACTOR = randomUUID();
 
 let app: FastifyInstance;
 let aliceEmpId: string;
 let carolEmpId: string;
+let daveEmpId: string;
 let trainingId: string;
 let nominationId: string;
 
@@ -70,6 +72,9 @@ beforeAll(async () => {
 
   aliceEmpId = await seedEmployee({ userRef: ALICE_ACTOR, fullName: "Alice Employee", createdBy: HR_ACTOR });
   carolEmpId = await seedEmployee({ userRef: CAROL_ACTOR, fullName: "Carol Outsider", createdBy: HR_ACTOR });
+  // Dave is deliberately NEVER nominated by the seed or by any other test in this file: he is the
+  // "not yet nominated" employee that HR nominates on another person's behalf below.
+  daveEmpId = await seedEmployee({ userRef: DAVE_ACTOR, fullName: "Dave Colleague", createdBy: HR_ACTOR });
 
   trainingId = randomUUID();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -174,12 +179,33 @@ describe("training nominations — real-DB identity resolution (employeeId is hr
   });
 
   it("POST /v1/hrms/nominations: HR can still nominate an arbitrary employee (unrestricted, unchanged)", async () => {
+    // Dave has no nomination for this training yet. (Alice already has one -- re-nominating HER is the
+    // duplicate case covered by the next test; this one is the happy path HR relies on.)
     const r = await app.inject({
       method: "POST", url: "/v1/hrms/nominations",
       headers: auth(HR_ACTOR, ["hr_admin"]),
-      payload: { trainingId, employeeId: aliceEmpId },
+      payload: { trainingId, employeeId: daveEmpId },
     });
     expect(r.statusCode).toBe(202);
+    await settle();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const daveRows = await withTenantScope(db, TENANT, (tx: any) => tx.select().from(hrmsNominations)
+      .where(and(eq(hrmsNominations.tenantId, TENANT), eq(hrmsNominations.trainingId, trainingId), eq(hrmsNominations.employeeId, daveEmpId))));
+    expect(daveRows.length).toBe(1);
+  });
+
+  it("POST /v1/hrms/nominations: GAP-HR-TRAINING-01 duplicate guard -- nominating an already-nominated employee is a 409, not a silent no-op", async () => {
+    // Alice has her seeded nomination for this training; Dave was nominated by the previous test.
+    for (const employeeId of [aliceEmpId, daveEmpId]) {
+      const r = await app.inject({
+        method: "POST", url: "/v1/hrms/nominations",
+        headers: auth(HR_ACTOR, ["hr_admin"]),
+        payload: { trainingId, employeeId },
+      });
+      expect(r.statusCode).toBe(409);
+      expect(r.json().code).toBe("DUPLICATE_NOMINATION");
+    }
   });
 
   it("POST /v1/hrms/nominations: a non-HR caller with no linked employee record is rejected, not silently accepted", async () => {

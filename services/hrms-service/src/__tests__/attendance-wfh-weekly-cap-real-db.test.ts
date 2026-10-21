@@ -163,6 +163,8 @@ describe("POST /v1/hrms/wfh-requests — weekly cap is counted in days (GAP-HR-W
     await seedWfh(empId, day(0), day(1), "approved");
     const r = await app.inject({ method: "GET", url: `/v1/hrms/wfh-eligibility?employeeId=${empId}`, headers: auth(EMP_SUB, ["employee"]) });
     expect(r.statusCode).toBe(200);
-    expect(r.json()).toMatchObject({ weeklyWfhCount: 2, weeklyCap: 2 });
+    // weekStart/weekEnd name the Monday-Sunday week the count is for, so the request form applies the
+    // count only to dates inside it (a later week has its own, separate allowance).
+    expect(r.json()).toMatchObject({ weeklyWfhCount: 2, weeklyCap: 2, weekStart: day(0), weekEnd: day(6) });
   });
 });

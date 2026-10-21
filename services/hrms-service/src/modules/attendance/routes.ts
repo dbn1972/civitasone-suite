@@ -714,6 +714,11 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
       gazetted: isGazettedForWfh(payLevel, policy),
       weeklyWfhCount: wfhDaysUsedInWeek(week, today),
       weeklyCap: WFH_WEEKLY_DAY_CAP,
+      // The week (Monday-Sunday, "YYYY-MM-DD") the count above describes. The
+      // cap is per ISO week, so a client must only apply this count to a
+      // request that touches this week -- not to a request for a later one.
+      weekStart: start,
+      weekEnd: end,
     });
   });
 
