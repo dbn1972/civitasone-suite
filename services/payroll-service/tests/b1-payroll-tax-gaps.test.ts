@@ -178,6 +178,53 @@ describe("GAP-PAYROLL-STATUTORY-PT-04 / LWF-02: state rules", () => {
   });
 });
 
+describe("GAP-PAYROLL-STATUTORY-LWF-01: who may change a statutory state rule", () => {
+  const LWF = { stateCode: "MH", lwfEmployee: 2500, lwfEmployer: 7500, lwfFrequency: "half_yearly" };
+
+  it.each([
+    ["employee", ["employee"]],
+    ["manager", ["manager"]],
+    ["hr_admin", ["hr_admin"]],
+    ["finance_officer", ["finance_officer"]],
+    ["a user with no payroll role at all", ["citizen"]],
+  ])("%s gets 403 and nothing is published", async (_label, roles) => {
+    const r = await post("/v1/payroll/statutory/state-rules", MAKER, LWF, roles);
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("FORBIDDEN");
+    expect(mockPublish).not.toHaveBeenCalled();
+  });
+
+  it("an unauthenticated caller gets 401", async () => {
+    const r = await app.inject({ method: "POST", url: "/v1/payroll/statutory/state-rules", payload: LWF });
+    expect(r.statusCode).toBe(401);
+    expect(mockPublish).not.toHaveBeenCalled();
+  });
+
+  it.each([["payroll_admin"], ["super_admin"]])("%s may change an LWF rule: 202 and exactly one command", async (role) => {
+    const r = await post("/v1/payroll/statutory/state-rules", MAKER, LWF, [role]);
+    expect(r.statusCode).toBe(202);
+    expect(mockPublish).toHaveBeenCalledTimes(1);
+    expect(mockPublish.mock.calls[0]![0]).toBe(COMMANDS.stateRulesUpsert);
+  });
+
+  // OWNER DECISION PENDING (ledger GAP-PAYROLL-STATUTORY-LWF-01): payroll_officer has always been allowed
+  // here (the PT-version writes are admin-only). This pins today's behaviour so narrowing it is a
+  // deliberate, one-line change to STATE_RULE_WRITER_ROLES -- and a deliberate edit of this test.
+  it("payroll_officer may currently change an LWF rule (owner decision pending whether to narrow to admin only)", async () => {
+    const r = await post("/v1/payroll/statutory/state-rules", MAKER, LWF, ["payroll_officer"]);
+    expect(r.statusCode).toBe(202);
+  });
+
+  it("the writer role set is a subset of the payroll staff tier -- never hr_admin, finance_officer, manager or employee", async () => {
+    const { STATE_RULE_WRITER_ROLES } = await import("../src/modules/payroll/gap-routes.js");
+    for (const forbidden of ["employee", "manager", "hr_admin", "finance_officer", "citizen"]) {
+      expect(STATE_RULE_WRITER_ROLES).not.toContain(forbidden);
+    }
+    expect(STATE_RULE_WRITER_ROLES).toContain("payroll_admin");
+    expect(STATE_RULE_WRITER_ROLES).toContain("super_admin");
+  });
+});
+
 describe("GAP-PAYROLL-STATUTORY-CHALLANS-01: duplicate challan", () => {
   const body = {
     period: "2026-08", bsrCode: "0510308", challanSerial: "123",

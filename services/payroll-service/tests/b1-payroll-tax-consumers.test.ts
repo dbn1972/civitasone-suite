@@ -133,3 +133,60 @@ describe("GAP-PAYROLL-STATUTORY-LWF-02: stateRulesUpsert preserves omitted LWF f
     expect(lwf?.params).toContain("yearly");
   });
 });
+
+// GAP-PAYROLL-STATUTORY-LWF-01: a statutory-rate change is audited with what it changed FROM and TO.
+describe("GAP-PAYROLL-STATUTORY-LWF-01: stateRulesUpsert audits the before/after of the LWF change", () => {
+  const auditEvent = () => enqueued.find((e) => e.topic === "audit.event.record");
+
+  it("writes oldValue/newValue (paise strings + frequency) from the one upsert statement, in the same transaction as the write", async () => {
+    nextRows = [{
+      before: { lwfEmployeeMinor: "2500", lwfEmployerMinor: "7500", lwfFrequency: "half_yearly" },
+      after: { lwfEmployeeMinor: "3000", lwfEmployerMinor: "7500", lwfFrequency: "half_yearly" },
+    }];
+    await handlers[COMMANDS.stateRulesUpsert]!({
+      ...baseMsg, messageId: "m-lwf-audit-1",
+      payload: { tenantId: TENANT, stateCode: "MH", lwfEmployee: 3000 },
+    });
+    // ONE statement carries the read of the stored row, the upsert and its RETURNING -- no second round trip that could see another value.
+    const stmts = executed.filter((q) => q.text.includes("payroll.payroll_lwf"));
+    expect(stmts).toHaveLength(1);
+    expect(stmts[0]!.text).toMatch(/WITH prev AS .*FOR UPDATE.*up AS \( INSERT INTO payroll\.payroll_lwf .*RETURNING/);
+    expect(auditEvent()?.payload).toMatchObject({
+      service: "payroll", action: "upsert", resourceType: "payroll_state_rules", resourceId: "MH",
+      oldValue: { lwfEmployeeMinor: "2500", lwfEmployerMinor: "7500", lwfFrequency: "half_yearly" },
+      newValue: { lwfEmployeeMinor: "3000", lwfEmployerMinor: "7500", lwfFrequency: "half_yearly" },
+    });
+  });
+
+  it("a first-ever row has no previous value: oldValue is null, newValue is the stored row", async () => {
+    nextRows = [{ before: null, after: { lwfEmployeeMinor: "100", lwfEmployerMinor: "0", lwfFrequency: "half_yearly" } }];
+    await handlers[COMMANDS.stateRulesUpsert]!({
+      ...baseMsg, messageId: "m-lwf-audit-2",
+      payload: { tenantId: TENANT, stateCode: "KA", lwfEmployee: 100 },
+    });
+    const payload = auditEvent()?.payload as Record<string, unknown>;
+    expect(payload.oldValue).toBeNull();
+    expect(payload.newValue).toEqual({ lwfEmployeeMinor: "100", lwfEmployerMinor: "0", lwfFrequency: "half_yearly" });
+  });
+
+  it("still emits the stateRulesUpserted event AND the audit in the same transaction", async () => {
+    nextRows = [{ before: null, after: { lwfEmployeeMinor: "100", lwfEmployerMinor: "0", lwfFrequency: "half_yearly" } }];
+    await handlers[COMMANDS.stateRulesUpsert]!({
+      ...baseMsg, messageId: "m-lwf-audit-3",
+      payload: { tenantId: TENANT, stateCode: "KA", lwfEmployee: 100 },
+    });
+    expect(enqueued.map((e) => e.topic)).toEqual([EVENTS.stateRulesUpserted, "audit.event.record"]);
+  });
+
+  it("a command with no LWF field changes nothing and carries no before/after", async () => {
+    await handlers[COMMANDS.stateRulesUpsert]!({
+      ...baseMsg, messageId: "m-lwf-audit-4",
+      payload: { tenantId: TENANT, stateCode: "KA" },
+    });
+    expect(executed.filter((q) => q.text.includes("payroll.payroll_lwf"))).toHaveLength(0);
+    const payload = auditEvent()?.payload as Record<string, unknown>;
+    expect(payload).not.toHaveProperty("oldValue");
+    expect(payload).not.toHaveProperty("newValue");
+  });
+});
+

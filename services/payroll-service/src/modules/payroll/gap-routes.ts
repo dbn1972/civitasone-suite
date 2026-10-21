@@ -29,6 +29,20 @@ import { PAY_GROUP_BILL_TYPES, todayIst } from "./pay-group-domain.js";
 import { assertActiveDdo } from "./pay-group-guards.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
+/**
+ * Who may CHANGE statutory state rules (LWF employee/employer contribution and
+ * frequency) through POST /v1/payroll/statutory/state-rules. Every change is
+ * audited with its before/after values (payroll consumer, stateRulesUpsert).
+ *
+ * OWNER DECISION PENDING (GAP-PAYROLL-STATUTORY-LWF-01): today this is the
+ * whole payroll staff tier -- payroll_officer included -- which is what the
+ * route has always allowed. The sibling PT-rule writes (pt-versions-routes.ts
+ * PT_ADMIN_ROLES) are payroll_admin + super_admin only. Whether LWF rule
+ * changes should be narrowed to that admin pair too is a policy call this
+ * code does not make: narrowing it removes an existing workflow from officers.
+ * It is a named constant so that decision is a one-line change.
+ */
+export const STATE_RULE_WRITER_ROLES = PAYROLL_ROLES;
 const READER_ROLES = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
 const ALL_ROLES = [...READER_ROLES, "employee"];
 const ALL_STAFF_ROLES = staffRolesOf(ALL_ROLES);
@@ -671,7 +685,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
   // ─── Gap 4: Multi-State PT/LWF (CRUD for state rules) ────────────────────
   app.post("/v1/payroll/statutory/state-rules", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, PAYROLL_ROLES);
+    requireRole(ctx, STATE_RULE_WRITER_ROLES);
     // GAP-PAYROLL-STATUTORY-PT-04: PT slabs are effective-dated, immutable versions now --
     // they are created through POST /v1/payroll/statutory/pt/versions, never overwritten
     // here. Refuse loudly rather than silently dropping them.
