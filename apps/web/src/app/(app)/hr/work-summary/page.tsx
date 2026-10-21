@@ -6,6 +6,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { getTranslations } from "next-intl/server";
 import { HR_SELF_SERVICE_ROLES, HR_STAFF_ROLES } from "@/lib/auth/workRoles";
+import { bucketStatusCounts, countByStatus } from "./statusBuckets";
 
 const HR_ROLES = HR_STAFF_ROLES;
 // GAP-HR-SF09A-016 / GAP-HR-WORK-SUMMARY-04: GET /v1/hrms/work-summaries
@@ -76,15 +77,26 @@ function mapRows(apiItems: ApiRow[]): Row[] {
 // pay-matrix's formatMoney/designations join, social-feed's badge/date
 // formatting): the loader's job is fetching + shaping the wire response,
 // not display formatting.
-type WorkSummaryApiPage = { rows: ApiRow[]; total: number; offset: number };
+type WorkSummaryApiPage = {
+  rows: ApiRow[];
+  total: number;
+  offset: number;
+  /** status -> count over the WHOLE scope (not just this page); absent on an older API. */
+  statusCounts?: Record<string, number>;
+};
 
 async function getData(offset: number): Promise<LoaderResult<WorkSummaryApiPage>> {
   return fetchJson<unknown, WorkSummaryApiPage>(`/api/v1/hrms/work-summaries?offset=${offset}`, { rows: [], total: 0, offset }, {
     telemetryKey: "hr.work-summaries",
     mapResponse: (p) => {
-      const body = p as { data?: ApiRow[]; total?: number; offset?: number };
+      const body = p as { data?: ApiRow[]; total?: number; offset?: number; statusCounts?: Record<string, number> };
       if (!Array.isArray(body?.data)) return null;
-      return { rows: body.data, total: body.total ?? body.data.length, offset: body.offset ?? offset };
+      return {
+        rows: body.data,
+        total: body.total ?? body.data.length,
+        offset: body.offset ?? offset,
+        statusCounts: body.statusCounts && typeof body.statusCounts === "object" ? body.statusCounts : undefined,
+      };
     },
   });
 }
@@ -123,8 +135,10 @@ export default async function WorkSummaryPage({
   const items = mapRows(page.rows);
   const total = page.total;
 
-  const reviewed = items.filter((i) => ["approved", "accepted", "finalised"].includes(i.status)).length;
-  const pending = items.filter((i) => ["pending", "submitted"].includes(i.status)).length;
+  // GAP-HR-WORK-SUMMARY-02: Reviewed + Pending + Other === Total. The
+  // backend's statusCounts covers the whole scope (all pages); only an older
+  // API without it falls back to counting the rows on this page.
+  const { reviewed, pending, other } = bucketStatusCounts(page.statusCounts ?? countByStatus(page.rows));
   const employees = new Set(items.map((i) => i.employeeId)).size;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
@@ -153,6 +167,7 @@ export default async function WorkSummaryPage({
         <StatCard icon="👤" iconBg="var(--bg)" label={t("statEmployees")} value={errored ? null : employees} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statReviewed")} value={errored ? null : reviewed} />
         <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={errored ? null : pending} />
+        <StatCard icon="🔄" iconBg="var(--primary-soft)" label={t("statOther")} value={errored ? null : other} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (

@@ -1015,7 +1015,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/work-summaries", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);
     const scopeId = await resolveOwnEmployeeIdUnlessHr(ctx);
-    if (scopeId === null) return reply.send({ data: [], total: 0, offset: 0 });
+    if (scopeId === null) return reply.send({ data: [], total: 0, offset: 0, statusCounts: {} });
     const q = z.object({ offset: z.coerce.number().int().min(0).default(0) }).parse(req.query ?? {});
     const PAGE_SIZE = 500;
     // GUC fix: appraisal.hrms_appraisals has FORCE ROW LEVEL SECURITY;
@@ -1032,6 +1032,19 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
         WHERE a.tenant_id = $1 ${whereClause}
       `, countParams);
       const total = Number(countRows[0]?.total ?? 0);
+      // GAP-HR-WORK-SUMMARY-02: per-status counts over the SAME scope as
+      // `total` (not just the 500-row page), so the page's stat tiles can
+      // add up to Total for any tenant size -- the tiles used to be derived
+      // from the current page's rows, and only two fixed status lists were
+      // counted at all.
+      const statusRows = await sql.unsafe(`
+        SELECT a.status AS status, COUNT(*)::int AS n
+        FROM appraisal.hrms_appraisals a
+        WHERE a.tenant_id = $1 ${whereClause}
+        GROUP BY a.status
+      `, countParams);
+      const statusCounts: Record<string, number> = {};
+      for (const r of statusRows as unknown as Array<{ status: string; n: number }>) statusCounts[r.status] = Number(r.n);
       // GAP-HR-WORK-SUMMARY-05: clamp a manual ?offset= past the end back to the
       // last real page (snapped to a PAGE_SIZE boundary) -- previously the UI
       // showed a nonsensical "Showing 1001-1000" for offset > total.
@@ -1067,7 +1080,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
         WHERE a.tenant_id = $1 ${whereClause}
         ORDER BY a.appraisal_period DESC, e.full_name LIMIT $${limitIdx} OFFSET $${offsetIdx}
       `, dataParams);
-      return { rows, total, offset };
+      return { rows, total, offset, statusCounts };
     });
     // GAP-HR-WORK-SUMMARY-05 (decision, conservative default): an HR/privileged
     // tenant-wide read of other employees' APAR ratings is itself auditable
@@ -1088,7 +1101,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
         captureError(err, { service: "hrms", event: "audit_emit_failed", action: "hrms.work_summary.list_viewed" });
       }
     }
-    return reply.send({ data: result.rows, total: result.total, offset: result.offset });
+    return reply.send({ data: result.rows, total: result.total, offset: result.offset, statusCounts: result.statusCounts });
   });
 
   // Error handler
