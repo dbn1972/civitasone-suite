@@ -2874,7 +2874,11 @@
     "createType": "प्रकार बनाएँ",
     "saveChanges": "परिवर्तन सहेजें",
     "loadingTitle": "कर्मचारी प्रकार",
-    "loadingSubtitle": "सहभागिता प्रकार परिभाषाएँ।"
+    "loadingSubtitle": "सहभागिता प्रकार परिभाषाएँ।",
+    "colBenefits": "लाभ",
+    "benefitGratuity": "ग्रेच्युटी",
+    "benefitBonus": "बोनस",
+    "benefitLeaveEncashment": "अवकाश नकदीकरण"
   },
   "employeeWizard": {
     "pageTitle": "कर्मचारी जोड़ें",

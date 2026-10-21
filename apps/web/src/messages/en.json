@@ -2898,7 +2898,11 @@
     "createType": "Create type",
     "saveChanges": "Save changes",
     "loadingTitle": "Employee Types",
-    "loadingSubtitle": "Engagement type definitions."
+    "loadingSubtitle": "Engagement type definitions.",
+    "colBenefits": "Benefits",
+    "benefitGratuity": "Gratuity",
+    "benefitBonus": "Bonus",
+    "benefitLeaveEncashment": "Leave encashment"
   },
   "employeeWizard": {
     "pageTitle": "Add Employee",
