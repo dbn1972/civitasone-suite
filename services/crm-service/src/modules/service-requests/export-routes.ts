@@ -18,6 +18,7 @@ import { rowsToCsv, exportFilename, type CsvColumn } from "../../shared/csv-expo
 import { auditBulkExport } from "../../shared/export-audit.js";
 import { maskPhone, maskEmail } from "../../shared/pii-crypto.js";
 import { CRM_PII_READ_ROLES } from "../../shared/pii-reveal.js";
+import { overdueFlag, overdueClause } from "./overdue.js";
 
 const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 
@@ -35,6 +36,9 @@ const exportQuery = z.object({
   priority: z.enum(PRIORITY).optional(),
   serviceType: z.string().max(64).optional(),
   assignedTo: z.string().uuid().optional(),
+  // GAP-CRM-SERVICE-REQUESTS-03: same overdue rule as the register list, so the export
+  // of a filtered register never contains more rows than the list showed.
+  overdue: overdueFlag,
   search: z.string().max(200).optional(),
 });
 
@@ -84,6 +88,7 @@ export async function serviceRequestExportRoutes(app: FastifyInstance): Promise<
     const priorityF = q.priority    ? sql`AND r.priority      = ${q.priority}`          : sql``;
     const typeF     = q.serviceType ? sql`AND r.service_type  = ${q.serviceType}`       : sql``;
     const assignedF = q.assignedTo  ? sql`AND r.assigned_to   = ${q.assignedTo}::uuid`  : sql``;
+    const overdueF  = q.overdue ? overdueClause() : sql``;
     const searchF   = q.search
       ? sql`AND (r.citizen_name ILIKE ${"%" + q.search + "%"}
                  OR r.subject    ILIKE ${"%" + q.search + "%"}
@@ -98,7 +103,7 @@ export async function serviceRequestExportRoutes(app: FastifyInstance): Promise<
              r.due_at AS "dueAt", r.resolved_at AS "resolvedAt", r.created_at AS "createdAt"
       FROM crm.service_requests r
       WHERE r.tenant_id = ${ctx.tenantId}
-        ${statusF} ${priorityF} ${typeF} ${assignedF} ${searchF}
+        ${statusF} ${priorityF} ${typeF} ${assignedF} ${overdueF} ${searchF}
       ORDER BY r.created_at DESC
       LIMIT ${EXPORT_CAP}
     `))) as unknown as SrExportRow[];
@@ -115,6 +120,7 @@ export async function serviceRequestExportRoutes(app: FastifyInstance): Promise<
         ...(q.priority ? { priority: q.priority } : {}),
         ...(q.serviceType ? { serviceType: q.serviceType } : {}),
         ...(q.assignedTo ? { assignedTo: q.assignedTo } : {}),
+        ...(q.overdue ? { overdue: true } : {}),
         ...(q.search ? { search: true } : {}),
       },
       masked: !reveal,

@@ -4,11 +4,12 @@ import { sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { listQuery, windowOf, listEnvelope } from "../../shared/list-query.js";
-import { maskList, maskRecord } from "../../shared/pii-reveal.js";
+import { maskList, maskRecord, maskPiiQuery, rolesForRead } from "../../shared/pii-reveal.js";
 import { recordStatusHistory, listStatusHistory } from "../../shared/case-status-history.js";
 import { enqueue } from "../../shared/outbox.js";
 import { emitWithAudit } from "../../shared/route-audit.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { overdueFlag, overdueClause } from "./overdue.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
@@ -38,6 +39,11 @@ const listParams = listQuery.extend({
   serviceType: z.string().max(64).optional(),
   assignedTo: z.string().uuid().optional(),
   search: z.string().max(200).optional(),
+  // GAP-CRM-SERVICE-REQUESTS-03: desk filters. `overdue=true` keeps only requests
+  // that are past their due date AND still workable (the same rule the web table
+  // uses for its Overdue pill); `sort=dueAt` orders by soonest due date first.
+  overdue: overdueFlag,
+  sort: z.enum(["dueAt"]).optional(),
 });
 
 const updateStatusBody = z.object({
@@ -171,6 +177,13 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
     const priorityF   = q.priority    ? sql`AND r.priority      = ${q.priority}`           : sql``;
     const typeF       = q.serviceType ? sql`AND r.service_type  = ${q.serviceType}`        : sql``;
     const assignedF   = q.assignedTo  ? sql`AND r.assigned_to   = ${q.assignedTo}::uuid`  : sql``;
+    const overdueF    = q.overdue ? overdueClause() : sql``;
+    const orderBy = q.sort === "dueAt"
+      ? sql`r.due_at ASC NULLS LAST,
+        CASE r.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END,
+        r.created_at DESC`
+      : sql`CASE r.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END,
+        r.created_at DESC`;
     const searchF = q.search
       ? sql`AND (r.citizen_name ILIKE ${"%" + q.search + "%"}
                  OR r.subject    ILIKE ${"%" + q.search + "%"}
@@ -186,17 +199,15 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
              r.created_at AS "createdAt", r.updated_at AS "updatedAt", r.version
       FROM crm.service_requests r
       WHERE r.tenant_id = ${ctx.tenantId}
-        ${statusF} ${priorityF} ${typeF} ${assignedF} ${searchF}
-      ORDER BY
-        CASE r.priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END,
-        r.created_at DESC
+        ${statusF} ${priorityF} ${typeF} ${assignedF} ${overdueF} ${searchF}
+      ORDER BY ${orderBy}
       LIMIT ${w.pageSize} OFFSET ${w.offset}
     `))) as unknown as Array<Record<string, unknown>>;
 
     const [ct] = (await scopedRead((tx) => tx.execute(sql`
       SELECT COUNT(*)::int AS total FROM crm.service_requests r
       WHERE r.tenant_id = ${ctx.tenantId}
-        ${statusF} ${priorityF} ${typeF} ${assignedF} ${searchF}
+        ${statusF} ${priorityF} ${typeF} ${assignedF} ${overdueF} ${searchF}
     `))) as unknown as Array<{ total: number }>;
 
     // GAP-CRM-SERVICE-REQUESTS-05: per-status totals for the whole filtered
@@ -207,7 +218,7 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
       SELECT r.status AS status, COUNT(*)::int AS count
       FROM crm.service_requests r
       WHERE r.tenant_id = ${ctx.tenantId}
-        ${priorityF} ${typeF} ${assignedF} ${searchF}
+        ${priorityF} ${typeF} ${assignedF} ${overdueF} ${searchF}
       GROUP BY r.status
     `))) as unknown as Array<{ status: string; count: number }>;
 
@@ -224,6 +235,9 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
+    // GAP-CRM-SERVICE-REQUESTS-DETAIL-02: the detail page asks for masked values
+    // even for a PII-read role, so the clear value only appears via the audited reveal.
+    const { maskPii } = maskPiiQuery.parse(req.query ?? {});
 
     const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT r.id, r.reference_no AS "referenceNo", r.citizen_name AS "citizenName",
@@ -241,7 +255,7 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
     `))) as unknown as Array<Record<string, unknown>>;
 
     if (rows.length === 0) throw new HttpError(404, "NOT_FOUND", "service request not found");
-    return reply.send({ data: maskRecord("service_request", rows[0]!, ctx.roles) });
+    return reply.send({ data: maskRecord("service_request", rows[0]!, rolesForRead(ctx.roles, maskPii)) });
   });
 
   // PATCH /v1/crm/service-requests/:id/status — update status / close
