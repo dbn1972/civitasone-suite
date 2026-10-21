@@ -121,11 +121,12 @@ describe("ForecastPage — GoI redesign", () => {
     }
   });
 
-  // The link to /crm/pipeline carries the CRM hub's own label for that route ("Pipeline
-  // Board"), not a one-off "Engagement Board".
+  // The link to /crm/pipeline carries the CRM hub's own label for that route, not a one-off
+  // "Engagement Board". The hub tile now reads "Engagement Pipeline Board" (it was renamed to
+  // match the destination page title, GAP-CRM-HOME-02); the link reads the same hub key.
   it("labels the link to /crm/pipeline exactly like the CRM hub tile", async () => {
     render(await ForecastPage({}));
-    const link = screen.getByRole("link", { name: "Pipeline Board" });
+    const link = screen.getByRole("link", { name: "Engagement Pipeline Board" });
     expect(link).toHaveAttribute("href", "/crm/pipeline");
     expect(screen.queryByRole("link", { name: /engagement board/i })).not.toBeInTheDocument();
   });
