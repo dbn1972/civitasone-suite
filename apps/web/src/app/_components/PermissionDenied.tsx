@@ -14,6 +14,14 @@ type Props = {
    * slugs and ownership detail); in development it is logged to the console.
    */
   reason?: string;
+  /**
+   * GAP-HR-ID-CARDS-06: first-party, already-localised copy that tells the user WHY this
+   * screen is restricted (e.g. "this register is limited to HR administrators and security
+   * administrators"). Unlike `reason` it is authored by the page itself, never by a
+   * service, so it is safe to show -- but it must be plain language: no role slugs, no
+   * ownership detail, nothing derived from a response.
+   */
+  explanation?: string;
   /** The service's machine-readable code (e.g. SELF_APPROVAL_FORBIDDEN, MAKER_CHECKER) for a specific message. */
   code?: string;
   /**
@@ -34,7 +42,7 @@ type Props = {
  * known code. Server render is English; the user's locale is applied after
  * hydration so markup matches.
  */
-export function PermissionDenied({ reason, code, backHref = "/dashboard", backLabel = "Return to command center" }: Props) {
+export function PermissionDenied({ reason, explanation, code, backHref = "/dashboard", backLabel = "Return to command center" }: Props) {
   const [locale, setLocale] = useState<ErrorLocale>("en");
   useEffect(() => {
     setLocale(getClientLocale());
@@ -55,6 +63,9 @@ export function PermissionDenied({ reason, code, backHref = "/dashboard", backLa
         <p style={{ fontSize: 14, color: "var(--muted)", margin: "0 0 16px" }}>
           {human.what} {human.next}
         </p>
+        {explanation ? (
+          <p style={{ fontSize: 14, color: "var(--muted)", margin: "0 0 16px" }}>{explanation}</p>
+        ) : null}
         <Link href={backHref} className="btn primary">{backLabel}</Link>
       </div>
     </div>
