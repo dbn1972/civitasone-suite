@@ -1495,10 +1495,6 @@
     },
     {
       "module": "tenant",
-      "screen": "/tenant/org-hierarchy"
-    },
-    {
-      "module": "tenant",
       "screen": "/tenant/overview"
     },
     {

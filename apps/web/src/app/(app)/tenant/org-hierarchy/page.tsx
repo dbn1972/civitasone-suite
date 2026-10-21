@@ -1,28 +1,10 @@
-import { ModuleListPage } from "../../../_components/ModuleListPage";
-import { getTenantOrgHierarchy } from "../_data";
-import { getTranslations } from "next-intl/server";
-import { ArrowLeft } from "lucide-react";
+import { redirect } from "next/navigation";
 
+// GAP-TENANT-ORG-HIERARCHY-01: the tenant service's /org/hierarchy payload shape is
+// unconfirmed; a working tree view already exists at /tenant-admin/org-hierarchy.
+// Redirect rather than show a broken flat table.
 export const dynamic = "force-dynamic";
 
-export default async function Page() {
-  const t = await getTranslations("tenantPages");
-  const { data, source } = await getTenantOrgHierarchy();
-  return (
-    <div className="page-main">
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/tenant">{t("office")}</a>
-      </nav>
-      <ModuleListPage
-        title={t("orgHierarchyTitle")}
-        description={t("orgHierarchySubtitle")}
-        rows={data}
-        showId={false}
-        // Pinned: the title is translated, so the offline cache key must not derive from it.
-        cacheKey="module.office-org-hierarchy"
-        source={source}
-        errorArea="org hierarchy"
-      />
-    </div>
-  );
+export default function Page() {
+  redirect("/tenant-admin/org-hierarchy");
 }
