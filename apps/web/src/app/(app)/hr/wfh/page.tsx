@@ -1,4 +1,3 @@
-import { todayIST } from "@/lib/formatters";
 import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -8,11 +7,11 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 import { WFHRequestForm } from "../_components/WFHRequestForm";
 import { WfhRequestsTable, type WfhRow } from "../_components/WfhRequestsTable";
-import { HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
+import { HR_STAFF_MANAGER_ROLES, HR_STAFF_ROLES, WFH_REQUEST_FILER_ROLES } from "@/lib/auth/workRoles";
 
 /**
- * WfhPage — Work From Home requests: self-service create (any role) +
- * manager/HR approve-reject queue.
+ * WfhPage — Work From Home requests: create (HR staff + employee roles; see
+ * WFH_FILER_ROLES) + manager/HR approve-reject queue.
  *
  * CRITICAL fix: this page's only "+ New Request" button used to link to
  * /hr/workforce/wfh, which is role-gated to hr_admin/hr_officer/manager/
@@ -30,33 +29,14 @@ import { HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
 const WFH_APPROVER_ROLES = HR_STAFF_MANAGER_ROLES;
 
 /**
- * GAP-HR-WFH-01 (partial — see routes.ts POST /wfh-requests for what's
- * enforced server-side and what's deliberately left open). Mon-Sun week
- * containing `dateStr`, in UTC — a client-side hint only (the server is
- * authoritative and uses the identical coarse boundary), not a display-facing
- * date computation.
+ * GAP-HR-WFH-02: mirrors POST /v1/hrms/wfh-requests, which requires
+ * [...HR_ROLES, "employee"]. A manager-only session can approve/reject its
+ * team's requests below but cannot file one (the POST answers 403), so it is
+ * shown an explanation instead of a form that can only fail.
  */
-function isoWeekBoundsUtc(dateStr: string): { start: string; end: string } {
-  const d = new Date(`${dateStr}T00:00:00.000Z`);
-  const day = d.getUTCDay();
-  const mondayOffset = day === 0 ? -6 : 1 - day;
-  const monday = new Date(d);
-  monday.setUTCDate(d.getUTCDate() + mondayOffset);
-  const sunday = new Date(monday);
-  sunday.setUTCDate(monday.getUTCDate() + 6);
-  return { start: monday.toISOString().slice(0, 10), end: sunday.toISOString().slice(0, 10) };
-}
-
-/** Count of this employee's own pending/approved WFH requests whose fromDate falls in the current ISO week. */
-function countWeeklyWfh(items: WfhRow[], employeeId: string | undefined): number | undefined {
-  if (!employeeId) return undefined;
-  const { start, end } = isoWeekBoundsUtc(todayIST());
-  return items.filter((i) =>
-    i.employeeId === employeeId &&
-    (i.status === "pending" || i.status === "approved") &&
-    i.fromDate >= start && i.fromDate <= end,
-  ).length;
-}
+const WFH_FILER_ROLES = WFH_REQUEST_FILER_ROLES;
+/** HR staff may file on behalf of any employee; everyone else files for themselves only. */
+const WFH_FILE_FOR_OTHERS_ROLES = HR_STAFF_ROLES;
 
 async function getData(): Promise<LoaderResult<WfhRow[]>> {
   return fetchJson<unknown, WfhRow[]>("/api/v1/hrms/wfh-requests", [], {
@@ -82,28 +62,29 @@ export default async function WfhPage() {
   const roles = getSessionRoles();
   const canApprove = roles.some((r: string) => WFH_APPROVER_ROLES.includes(r));
 
-  // Self-service create, mirroring leave/apply/page.tsx exactly: try the
-  // admin roster first (works for hr_admin/hr_officer/manager/super_admin --
-  // lets them file a WFH request on behalf of any employee, same as
-  // /hr/workforce/wfh already did). A plain `employee` role is correctly
-  // 403'd from that endpoint (by design -- see READER_ROLES in hrms-service's
-  // employee/routes.ts) and falls back to their own self-service profile, so
-  // they get a prefilled form with the employee picker hidden entirely,
-  // instead of the permission wall the old "+ New Request" button routed
-  // them into.
-  const { data: employees } = await getEmployees();
+  // Self-service create. HR staff get the roster picker (file on behalf of
+  // anyone, same as /hr/workforce/wfh always did); a plain `employee` -- with or
+  // without a manager role on top -- is pinned to their own profile (the server
+  // forces non-HR filers onto themselves, so a picker would only produce 403s),
+  // which also gives them a prefilled, picker-free form. A role that cannot file
+  // at all (manager-only) gets no form.
+  const canFile = roles.some((r: string) => WFH_FILER_ROLES.includes(r));
+  const canFileForOthers = roles.some((r: string) => WFH_FILE_FOR_OTHERS_ROLES.includes(r));
   let prefillEmployeeId: string | undefined;
   let noLinkedProfile = false;
-  if (employees.length === 0) {
-    const { data: myProfile } = await getMyProfile();
-    if (myProfile) {
-      prefillEmployeeId = myProfile.id;
-    } else {
-      // Genuinely no employee record linked to this account, and no roster
-      // access either -- a normal, expected state (e.g. a pure admin/test
-      // account), not a fetch failure. Show a clear message instead of a
-      // form that can never be submitted.
-      noLinkedProfile = true;
+  if (canFile) {
+    const rosterEmpty = canFileForOthers ? (await getEmployees()).data.length === 0 : true;
+    if (rosterEmpty) {
+      const { data: myProfile } = await getMyProfile();
+      if (myProfile) {
+        prefillEmployeeId = myProfile.id;
+      } else {
+        // Genuinely no employee record linked to this account, and no roster
+        // access either -- a normal, expected state (e.g. a pure admin/test
+        // account), not a fetch failure. Show a clear message instead of a
+        // form that can never be submitted.
+        noLinkedProfile = true;
+      }
     }
   }
 
@@ -111,11 +92,10 @@ export default async function WfhPage() {
   const approved = items.filter((i) => i.status === "approved").length;
   const pending = items.filter((i) => i.status === "pending").length;
   const rejected = items.filter((i) => ["rejected", "declined"].includes(i.status)).length;
-  // GAP-HR-WFH-01: lets the form's existing weekly-cap banner/submit-disable
-  // actually fire instead of never receiving a count at all. Only computable
-  // for the self-service prefill case — items is already scoped to "my own
-  // requests" there (resolveSelfScopedEmployeeId), same scope this counts.
-  const weeklyWfhCount = countWeeklyWfh(items, prefillEmployeeId);
+  // The weekly-cap banner is NOT derived here: the form asks the server
+  // (GET /v1/hrms/wfh-eligibility) for the figure it actually enforces on POST --
+  // days used in the ISO week, not a count of request rows -- so the page and
+  // the server cannot disagree.
 
   return (
     <div className="page-main wrap">
@@ -138,12 +118,16 @@ export default async function WfhPage() {
           request" form they followed a /new link for actually is. */}
       <div id="new-request">
       <Card title={t("cardNewRequest")}>
-        {noLinkedProfile ? (
+        {!canFile ? (
+          <div role="note" style={{ padding: "20px 24px", fontSize: 13 }}>
+            {t("noFilerRoleMessage")}
+          </div>
+        ) : noLinkedProfile ? (
           <div role="alert" style={{ padding: "20px 24px", fontSize: 13, color: "var(--warn-text)" }}>
             {t("noLinkedProfileMessage")}
           </div>
         ) : (
-          <WFHRequestForm employeeId={prefillEmployeeId} weeklyWfhCount={weeklyWfhCount} redirectHref="/hr/wfh" />
+          <WFHRequestForm employeeId={prefillEmployeeId} redirectHref="/hr/wfh" />
         )}
       </Card>
       </div>
