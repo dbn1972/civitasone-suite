@@ -124,7 +124,11 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
         q.employeeId
           ? and(eq(hrmsPromotions.tenantId, ctx.tenantId), eq(hrmsPromotions.employeeId, q.employeeId))
           : eq(hrmsPromotions.tenantId, ctx.tenantId),
-      ).orderBy(hrmsPromotions.effectiveDate, hrmsPromotions.id).limit(500),
+      // GAP-HR-PROMOTION-01: newest first, like the sibling GET
+      // /v1/hrms/lifecycle/promotions -- this list is capped at 500 and reports
+      // `hasMore`, so ascending order would have cut off the MOST RECENT
+      // promotions in a tenant with a long history.
+      ).orderBy(desc(hrmsPromotions.effectiveDate), desc(hrmsPromotions.id)).limit(500),
     );
     if (rows.length === 0) return reply.send({ data: [] });
     const empIds = [...new Set(rows.map((r) => r.employeeId))];
@@ -148,6 +152,17 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
         toGrade: r.toDesigId ? (desigMap.get(r.toDesigId) ?? "—") : "—",
         effectiveDate: r.effectiveDate,
         orderNo: r.orderRef ?? "—",
+        // GAP-HR-PROMOTION-01: carry the rest of what the raw lifecycle list
+        // carried so nothing is lost by making this enriched list the page's
+        // single source. newBasicMinor is a Postgres bigint (paise): JSON has
+        // no bigint type and this service has no global BigInt serializer, so
+        // it is sent as a decimal string (null when no new basic was recorded)
+        // -- the same shape GET /v1/hrms/lifecycle/promotions sends and the
+        // web formatMoney() accepts.
+        orderRef: r.orderRef ?? null,
+        newBasicMinor: r.newBasicMinor != null ? r.newBasicMinor.toString() : null,
+        currency: r.currency,
+        createdAt: r.createdAt,
         status: r.status,
       };
     });
