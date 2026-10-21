@@ -148,6 +148,8 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "posting", // ST-M01-09 applyPosting consumer (hrms-service)
   "posting_history", // ST-M01-11 payroll posting-history consumer
   "learning_enrollment", // W1 SF-16 learning enrolment read / enrol-on-behalf audit
+  "department", // GAP-HR-DEPARTMENTS-02 department delete (employee F3 consumer)
+  "designation", // GAP-HR-DESIGNATIONS-02 designation delete (employee F3 consumer)
 ] as const;
 
 /** Detail-page route per resource type, for the types that have one keyed by the audited id. */

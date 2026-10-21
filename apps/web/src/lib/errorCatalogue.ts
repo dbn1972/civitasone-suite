@@ -361,6 +361,21 @@ export const DOMAIN_CODE_MESSAGES: Record<string, DomainMessage> = {
     },
     actions: ["back", "help"],
   },
+  // GAP-HR-DEPARTMENTS-02: DELETE /v1/hrms/departments/:id answers 409 with this
+  // code while the department still has sub-departments or active employees.
+  // Without its own entry the generic 409 "changed by someone else" copy was
+  // shown, which tells the clerk the wrong thing to do.
+  DEPARTMENT_IN_USE: {
+    en: {
+      what: "This department still has sub-departments or employees.",
+      next: "Move or reassign them first, then try again.",
+    },
+    hi: {
+      what: "इस विभाग में अभी भी उप-विभाग या कर्मचारी हैं।",
+      next: "पहले उन्हें किसी दूसरे विभाग में भेजें या सौंपें, फिर प्रयास करें।",
+    },
+    actions: ["back", "help"],
+  },
   DUPLICATE_CODE: {
     en: {
       what: "This code is already in use.",

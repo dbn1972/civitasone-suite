@@ -125,9 +125,9 @@
     "codePlaceholder": "उदा. CLERK",
     "nameLabel": "नाम",
     "namePlaceholder": "उदा. उच्च श्रेणी लिपिक",
-    "levelLabel": "वेतन स्तर",
+    "levelLabel": "वेतन स्तर (7वां वेतन आयोग, वैकल्पिक)",
     "levelPlaceholder": "उदा. 4",
-    "payGradeLabel": "वेतन ग्रेड",
+    "payGradeLabel": "वेतन ग्रेड (वैकल्पिक)",
     "payGradePlaceholder": "उदा. पुराना ग्रेड-पे संदर्भ",
     "addingBtn": "जोड़ा जा रहा है…",
     "addBtn": "पदनाम जोड़ें",
@@ -2330,7 +2330,8 @@
     "tileGrievanceCategoriesDesc": "शिकायत वर्गीकरण"
   },
   "dashboardDays": {
-    "count": "{count, plural, one {# दिन} other {# दिन}}"
+    "count": "{count, plural, one {# दिन} other {# दिन}}",
+    "monthEnds": "माह समाप्त होने में {days}"
   },
   "dashboard": {
     "title": "मानव संसाधन डैशबोर्ड",
@@ -2361,7 +2362,7 @@
     "title": "विभाग",
     "subtitle": "आपके कार्यालय की टीमें — वित्त, मानव संसाधन, स्थापना और अन्य। कर्मचारियों और कार्य को सही ढंग से वर्गीकृत करने के लिए विभाग जोड़ें।",
     "backLabel": "मानव संसाधन",
-    "newBtn": "+ नया विभाग",
+    "newBtn": "नया विभाग",
     "breadcrumbHome": "होम",
     "statTotalLabel": "कुल विभाग",
     "statRootLabel": "मूल विभाग",
@@ -2371,7 +2372,9 @@
     "emptyTitle": "अभी तक कोई विभाग नहीं",
     "emptyMessage": "कर्मचारियों को टीमों में शामिल करने के लिए अपना पहला विभाग बनाएँ।",
     "loadingSubtitle": "संगठन के विभाग और इकाइयाँ।",
-    "breadcrumbNavLabel": "ब्रेडक्रम्ब नेविगेशन"
+    "breadcrumbNavLabel": "ब्रेडक्रम्ब नेविगेशन",
+    "statNoEmployeesLabel": "कर्मचारी रहित",
+    "readOnlyNote": "आपके पास केवल देखने की पहुँच है। विभाग जोड़ने या बदलने के लिए HR व्यवस्थापक से कहें।"
   },
   "departmentsTable": {
     "collapseLabel": "संक्षिप्त करें",
@@ -2389,7 +2392,13 @@
     "deleteConfirmTitle": "\"{name}\" हटाएँ?",
     "deleteConfirmDesc": "यह विभाग स्थायी रूप से हटा दिया जाएगा। यह कार्रवाई पूर्ववत नहीं की जा सकती।",
     "deleteConfirmBtn": "विभाग हटाएँ",
-    "rowErrorRequired": "कोड और नाम आवश्यक हैं"
+    "rowErrorRequired": "कोड और नाम आवश्यक हैं",
+    "editAria": "{name} संपादित करें",
+    "deleteAria": "{name} हटाएँ",
+    "deleteBlockedHint": "इस विभाग में अभी भी उप-विभाग या कर्मचारी हैं। हटाने से पहले उन्हें पुनः असाइन करें या हटाएँ।",
+    "deptParentAriaLabel": "मूल विभाग",
+    "parentNone": "कोई नहीं (शीर्ष स्तर)",
+    "employeeCountUnavailable": "कर्मचारी संख्या उपलब्ध नहीं"
   },
   "designations": {
     "title": "पदनाम",
@@ -2434,7 +2443,9 @@
     "tableCaption": "पदनाम",
     "levelEditHint": "खाली छोड़ने पर स्तर हट जाता है (\"—\" के रूप में दिखेगा)।",
     "noMatchTitle": "कोई मेल खाता पदनाम नहीं",
-    "noMatchMessage": "आपकी खोज से कोई पदनाम मेल नहीं खाता।"
+    "noMatchMessage": "आपकी खोज से कोई पदनाम मेल नहीं खाता।",
+    "clearLevelBtn": "स्तर हटाएँ",
+    "deleteInUseHint": "{count, plural, one {# रिकॉर्ड} other {# रिकॉर्ड}} में उपयोग में — हटाने से पहले उन्हें पुनः असाइन करें या हटाएँ।"
   },
   "directory": {
     "title": "कर्मचारी निर्देशिका",
