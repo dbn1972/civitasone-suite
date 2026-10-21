@@ -8,7 +8,8 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
-import { assertJournalBalances, assertJournalHasAmount, assertNoControlAccounts, periodPostingRefusal, voucherNeedsAllocation, DomainError as GlDomainError } from "./domain.js";
+import { assertJournalBalances, assertJournalHasAmount, assertNoControlAccounts, DomainError as GlDomainError } from "./domain.js";
+import { periodPostingRefusal, voucherNeedsAllocation } from "./posting-rules.js";
 import { assertBudgetNotExceeded, availableBalance, DomainError } from "../budget/domain.js";
 import { assertDistinctMakerChecker } from "../payments/domain.js";
 import { getPeriodStatusTx } from "../period-close/repo.js";
@@ -114,7 +115,7 @@ async function postJournal(
   // DOM-010: fail CLOSED on a period the system does not even recognise (e.g. a malformed/garbled YYYY-MM sliced from a
   // bad postingDate) instead of silently treating it as open. getPeriodStatusTx only returns "unknown" for a period
   // string that isn't shaped like a real period at all — a well-formed period with simply no close record yet is still
-  // correctly "open". The rule itself lives in periodPostingRefusal (gl/domain.ts), shared with the synchronous
+  // correctly "open". The rule itself lives in periodPostingRefusal (gl/posting-rules.ts), shared with the synchronous
   // pre-checks in gl/routes.ts so the HTTP caller is told the same thing this authoritative check would say.
   const refusal = periodPostingRefusal(periodStatus, journal.type, period);
   if (refusal) throw new Error(`${refusal.code}: ${refusal.message}`);

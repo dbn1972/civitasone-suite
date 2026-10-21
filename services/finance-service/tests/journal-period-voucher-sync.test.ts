@@ -15,7 +15,7 @@ import { queue } from "../src/shared/infra.js";
 import { scoped } from "./_tenant.js";
 import { financeJournals, financeLedger } from "../src/modules/gl/schema.js";
 import { registerGlConsumers } from "../src/modules/gl/consumer.js";
-import { periodPostingRefusal, voucherNeedsAllocation } from "../src/modules/gl/domain.js";
+import { periodPostingRefusal, voucherNeedsAllocation } from "../src/modules/gl/posting-rules.js";
 import { COMMANDS } from "../src/topics.js";
 import { bearer } from "./_fp02.js";
 
