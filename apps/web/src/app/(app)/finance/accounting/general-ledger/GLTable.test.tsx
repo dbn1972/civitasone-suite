@@ -1,11 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, within, type RenderOptions } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import type { ReactElement, ReactNode } from "react";
+import enMessages from "@/messages/en.json";
 
 const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, refresh: vi.fn() }) }));
 
 import { GLTable } from "./GLTable";
 import { GL_PAGE_SIZE, parseGlView, type GlView } from "./glPage";
+
+// GLTable reads its new copy through next-intl (financeGeneralLedger namespace).
+const withIntl = ({ children }: { children: ReactNode }) => (
+  <NextIntlClientProvider locale="en" messages={enMessages}>{children}</NextIntlClientProvider>
+);
+const render = (ui: ReactElement, options?: Omit<RenderOptions, "wrapper">) => rtlRender(ui, { wrapper: withIntl, ...options });
 
 const ENTRY = (over: Record<string, unknown> = {}) => ({
   id: "j1:1000", voucherNo: "JV-1", date: "2026-06-01", accountCode: "1000", accountName: "Cash",
@@ -81,7 +90,62 @@ describe("GLTable: server-driven (GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03)", ()
     expect(footer()).toHaveTextContent(/— Total Debit:/);
     expect(footer()).not.toHaveTextContent(/Filtered total/);
     a.unmount();
-    render(<GLTable entries={[ENTRY() as never]} pagination={pag(2)} totals={totals() as never} view={view({ tab: "Payment" })} />);
-    expect(footer()).toHaveTextContent(/Filtered total Debit:/);
+    render(<GLTable entries={[ENTRY() as never]} pagination={pag(2)} totals={totals() as never} ledgerTotals={totals() as never} view={view({ tab: "Payment" })} />);
+    expect(footer()).toHaveTextContent(/Filtered total \(2 entries\) Debit:/);
+  });
+});
+
+// GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-04
+describe("GLTable: ledger-wide cards vs filtered footer", () => {
+  beforeEach(() => pushMock.mockReset());
+  const footer = () => screen.getByRole("navigation", { name: "General ledger pages" });
+  // whole FY ledger balances; the filtered set (one account's legs) does not
+  const LEDGER = totals({ entryLines: 40, vouchers: 10, accountsActive: 6, debitMinor: "900000", creditMinor: "900000" });
+  const FILTERED = totals({ entryLines: 3, vouchers: 3, accountsActive: 1, debitMinor: "250000", creditMinor: "0" });
+
+  it("a search shows the ledger-wide Balanced cards and a Filtered footer that differs from them", () => {
+    render(<GLTable entries={[ENTRY() as never]} pagination={pag(3)} totals={FILTERED as never} ledgerTotals={LEDGER as never} view={view({ q: "5100" })} />);
+    // cards: whole ledger, balanced
+    expect(screen.getByText("Vouchers").parentElement).toHaveTextContent("10");
+    expect(screen.getByText("Entry lines").parentElement).toHaveTextContent("40");
+    expect(screen.getByText("Ledger Total Debit").parentElement).toHaveTextContent("₹9,000.00");
+    expect(screen.getByText("Balanced")).toBeInTheDocument();
+    expect(screen.queryByText("Unbalanced")).not.toBeInTheDocument();
+    // footer: filtered legs, different numbers, labelled Filtered, no verdict
+    expect(footer()).toHaveTextContent(/Filtered total \(3 entries\) Debit: ₹2,500\.00 · Credit: ₹0\.00/);
+    expect(within(footer()).queryByText(/Balanced|Unbalanced/)).not.toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent(/cards above show the whole FY .* ledger/);
+  });
+
+  it("a voucher-type tab does the same", () => {
+    render(<GLTable entries={[ENTRY() as never]} pagination={pag(3)} totals={FILTERED as never} ledgerTotals={LEDGER as never} view={view({ tab: "Payment" })} />);
+    expect(screen.getByText("Balanced")).toBeInTheDocument();
+    expect(footer()).toHaveTextContent(/Filtered total \(3 entries\)/);
+  });
+
+  it("filtered totals alone never feed the cards or the balance check (no false Unbalanced)", () => {
+    // server (or an older one) sent no ledger-wide totals while a search is active
+    render(<GLTable entries={[ENTRY() as never]} pagination={pag(3)} totals={FILTERED as never} view={view({ q: "5100" })} />);
+    expect(screen.queryByText("Unbalanced")).not.toBeInTheDocument();
+    expect(screen.queryByText("Balanced")).not.toBeInTheDocument();
+    expect(screen.getByText("Vouchers").parentElement).toHaveTextContent("—");
+    expect(screen.getByText("Ledger Total Debit").parentElement).toHaveTextContent("—");
+    expect(screen.getByRole("note")).toHaveTextContent(/Ledger-wide totals are not available/);
+    // the filtered footer is still shown, as filtered
+    expect(footer()).toHaveTextContent(/Filtered total \(3 entries\) Debit: ₹2,500\.00/);
+  });
+
+  it("an unbalanced WHOLE ledger still says Unbalanced, filtered or not", () => {
+    const bad = totals({ debitMinor: "900000", creditMinor: "800000" });
+    render(<GLTable entries={[ENTRY() as never]} pagination={pag(3)} totals={FILTERED as never} ledgerTotals={bad as never} view={view({ q: "5100" })} />);
+    expect(screen.getByText("Unbalanced")).toBeInTheDocument();
+  });
+
+  it("unfiltered: cards and footer are the same set, labelled Total, with no filtered note", () => {
+    render(<GLTable entries={[ENTRY() as never]} pagination={pag(40)} totals={LEDGER as never} ledgerTotals={LEDGER as never} view={view()} />);
+    expect(screen.getByText("Balanced")).toBeInTheDocument();
+    expect(footer()).toHaveTextContent(/— Total Debit: ₹9,000\.00 · Credit: ₹9,000\.00/);
+    expect(footer()).not.toHaveTextContent(/Filtered/);
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 });

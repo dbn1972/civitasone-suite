@@ -2890,7 +2890,18 @@ export async function getFinanceActorNames(ids: readonly (string | null | undefi
 }
 
 export type GlPageParams = { fy?: string | undefined; type?: string | undefined; q?: string | undefined; page: number; pageSize: number };
-export type GlPageData = { entries: GLEntrySummary[]; pagination: GlLinesPagination; totals: GlLinesTotals | null };
+export type GlPageData = {
+  entries: GLEntrySummary[];
+  pagination: GlLinesPagination;
+  /** Totals over the FILTERED set (fiscal year + type tab + search). */
+  totals: GlLinesTotals | null;
+  /**
+   * Totals over the whole fiscal-year ledger, ignoring the tab and the search
+   * (GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-04). `null` = unknown (older server, or
+   * a malformed amount outside the filtered view): shown as a dash, never as zero.
+   */
+  ledgerTotals: GlLinesTotals | null;
+};
 
 /** GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03: one server-filtered page of ledger lines with whole-set totals. */
 export async function getFinanceGLPage(p: GlPageParams): Promise<LoaderResult<GlPageData>> {
@@ -2898,7 +2909,7 @@ export async function getFinanceGLPage(p: GlPageParams): Promise<LoaderResult<Gl
   if (p.fy) qs.set("fy", p.fy);
   if (p.type) qs.set("type", p.type);
   if (p.q) qs.set("q", p.q);
-  const empty: GlPageData = { entries: [], pagination: { limit: p.pageSize, offset: 0, total: 0, hasMore: false }, totals: null };
+  const empty: GlPageData = { entries: [], pagination: { limit: p.pageSize, offset: 0, total: 0, hasMore: false }, totals: null, ledgerTotals: null };
   return fetchJson<unknown, GlPageData>(`/api/v1/finance/journals/lines?${qs.toString()}`, empty, {
     telemetryKey: "finance.gl.page",
     mapResponse: (raw) => {
@@ -2909,6 +2920,7 @@ export async function getFinanceGLPage(p: GlPageParams): Promise<LoaderResult<Gl
         entries: parsed.data as GLEntrySummary[],
         pagination: raw.pagination as unknown as GlLinesPagination,
         totals: isRecord(raw.totals) ? (raw.totals as unknown as GlLinesTotals) : null,
+        ledgerTotals: isRecord(raw.ledgerTotals) ? (raw.ledgerTotals as unknown as GlLinesTotals) : null,
       };
     },
   });

@@ -15891,5 +15891,11 @@
       "reasonLowConfidence": "Assistant could not answer",
       "reasonGuardrail": "Guardrail flagged the exchange"
     }
+  },
+  "financeGeneralLedger": {
+    "total": "Total",
+    "filteredTotal": "Filtered total ({count, plural, one {# entry} other {# entries}})",
+    "cardsNoteFiltered": "The cards above show the whole FY {fy} ledger. The totals at the foot of the table cover only the entries matching your tab or search.",
+    "cardsNoteUnavailable": "Ledger-wide totals are not available for this view, so the cards show a dash. The totals at the foot of the table cover only the entries matching your tab or search."
   }
 }

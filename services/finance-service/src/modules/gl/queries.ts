@@ -158,7 +158,7 @@ export async function pageGeneralLedger(
   p: { fy?: string | undefined; type?: string | undefined; q?: string | undefined; limit: number; offset: number },
 ) {
   const bounds = p.fy ? fyDateBounds(p.fy) : null;
-  const { rows, totals } = await repo.pageJournalLines({
+  const { rows, totals, ledgerTotals } = await repo.pageJournalLines({
     tenantId, from: bounds?.start, to: bounds?.end, type: p.type, q: p.q, limit: p.limit, offset: p.offset,
   });
   return {
@@ -175,6 +175,9 @@ export async function pageGeneralLedger(
       type: r.type as "payment" | "receipt" | "journal" | "budget",
     })),
     pagination: { limit: p.limit, offset: p.offset, total: totals.entryLines, hasMore: p.offset + rows.length < totals.entryLines },
+    // `totals` covers the FILTERED set (fiscal year + type tab + search); `ledgerTotals` is the same fiscal year with no
+    // tab/search, the only figure a debit = credit balance check is meaningful on (a single account's lines never balance).
     totals,
+    ledgerTotals,
   };
 }
