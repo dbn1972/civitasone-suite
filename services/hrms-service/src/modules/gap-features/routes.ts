@@ -12,7 +12,10 @@ import { resolveOwnEmployeeIdIfBareEmployee, resolveSelfAndReportsScope, resolve
 import * as employeeRepo from "../employee/repo.js";
 import { emitAudit } from "../recruitment/audit-emit.js";
 import { captureError } from "@civitasone/observability";
-import { VIGILANCE_STATUS_GROUPS } from "../disciplinary/state-machine.js";
+import { VIGILANCE_STATUS_GROUPS, type CaseStatus } from "../disciplinary/state-machine.js";
+
+/** Every case status (the stat groups are exhaustive over them), as a zod-enum-able tuple. */
+const VIGILANCE_ALL_STATUSES = Object.values(VIGILANCE_STATUS_GROUPS).flat() as [CaseStatus, ...CaseStatus[]];
 
 const HR_ROLES = ["hr_admin", "super_admin", "hr_officer"];
 const READER_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -934,20 +937,53 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     // legal sign-off (see decision packet).
     // GAP-HR-VIGILANCE-04 (CAP): same unpaginated LIMIT 200 bug as the
     // disciplinary list above — limit/offset are bounded and zod-validated.
-    const { includeDropped, limit, offset } = z.object({
+    // GAP-HR-VIGILANCE-04: `status` and `q` narrow the register SERVER-side, so
+    // they reach every case in the tenant -- a filter applied only to the
+    // already-loaded batch (the client-side table filter) could never find
+    // case 201+. `q` matches case number / employee / department / inquiry
+    // officer and deliberately NEVER the allegation text (DPDP, same reason the
+    // web table keeps that column out of its search). `status` is one exact
+    // case status; "dropped" stays hidden unless includeDropped=true, so a
+    // filter can only narrow what the caller could already see.
+    // GAP-HR-VIGILANCE-01: maskCharges=true withholds the charge text from the
+    // list entirely (charges_summary null) -- the clear text is then only
+    // obtainable through the audited reveal route below.
+    const { includeDropped, limit, offset, status, q, maskCharges } = z.object({
       includeDropped: z.enum(["true", "false"]).optional().transform((v) => v === "true"),
+      maskCharges: z.enum(["true", "false"]).optional().transform((v) => v === "true"),
       limit: z.coerce.number().int().min(1).max(200).default(200),
       offset: z.coerce.number().int().min(0).default(0),
+      status: z.enum(VIGILANCE_ALL_STATUSES).optional(),
+      q: z.string().trim().min(1).max(100).optional(),
     }).parse(req.query);
+    // Only compile-time constants and positional parameters reach this SQL.
+    const params: unknown[] = [ctx.tenantId];
+    const where = ["c.tenant_id = $1", "c.proceeding_type = 'major'"];
+    if (!includeDropped) where.push("c.status <> 'dropped'");
+    if (status) { params.push(status); where.push(`c.status = $${params.length}`); }
+    if (q) {
+      params.push(`%${q.replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`);
+      const n = params.length;
+      where.push(`(c.case_no ILIKE $${n} OR e.full_name ILIKE $${n} OR d.name ILIKE $${n} OR c.inquiry_officer_name ILIKE $${n})`);
+    }
+    const filtered = Boolean(status || q);
+    const fromJoins = `
+        FROM disciplinary.hrms_disciplinary_cases c
+        JOIN employee.hrms_employees e ON e.id = c.employee_id AND e.tenant_id = $1
+        LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1`;
+    const chargesExpr = maskCharges
+      ? "NULL::text"
+      : `CASE WHEN length(c.allegation) > 80 THEN LEFT(c.allegation, 80) || '…' ELSE c.allegation END`;
+    const limitParam = params.length + 1;
+    const offsetParam = params.length + 2;
     const rows = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
       return sql.unsafe(`
         SELECT c.id, c.case_no AS "caseNo", e.full_name AS employee, COALESCE(d.name,'—') AS department,
                -- GAP-HR-VIGILANCE-01 (PII/DPDP): same list-view truncation as
                -- GAP-HR-DISCIPLINARY-01 — full text stays on the detail route.
-               CASE WHEN length(c.allegation) > 80
-                 THEN LEFT(c.allegation, 80) || '…'
-                 ELSE c.allegation END AS charges_summary,
+               ${chargesExpr} AS charges_summary,
+               (c.allegation IS NOT NULL AND btrim(c.allegation) <> '') AS "hasCharges",
                c.charge_memo_date AS "filedDate",
                COALESCE(c.inquiry_officer_name,'Not Appointed') AS "inquiryOfficer",
                -- GAP-HR-VIGILANCE-03: "nextHearing" is a misleading name for a
@@ -957,14 +993,24 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
                -- honestly-named one.
                c.inquiry_appointed_date AS "nextHearing",
                c.inquiry_appointed_date AS "inquiryAppointedDate", c.status
-        FROM disciplinary.hrms_disciplinary_cases c
-        JOIN employee.hrms_employees e ON e.id = c.employee_id AND e.tenant_id = $1
-        LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
-        WHERE c.tenant_id = $1 AND c.proceeding_type = 'major'
-          ${includeDropped ? "" : "AND c.status <> 'dropped'"}
-        ORDER BY COALESCE(c.charge_memo_date, c.created_at) DESC LIMIT $2 OFFSET $3
-      `, [ctx.tenantId, limit, offset]);
+        ${fromJoins}
+        WHERE ${where.join(" AND ")}
+        ORDER BY COALESCE(c.charge_memo_date, c.created_at) DESC, c.id DESC LIMIT $${limitParam} OFFSET $${offsetParam}
+      `, [...params, limit, offset] as (string | number)[]);
     });
+    // GAP-HR-VIGILANCE-04: with a status/q filter the total (and so hasMore)
+    // must count the FILTERED set; without one it is the whole visible
+    // register, which the stats aggregate below already knows.
+    const filteredTotalRows = filtered
+      ? await sqlClient.begin(async (sql) => {
+          await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
+          return sql.unsafe(`
+            SELECT COUNT(*)::int AS n
+            ${fromJoins}
+            WHERE ${where.join(" AND ")}
+          `, params as (string | number)[]);
+        })
+      : null;
     // GAP-HR-VIGILANCE-02/04: stat-card buckets computed server-side, over
     // the whole tenant's major cases -- not just the current page's rows, so
     // they stay exact once results are paginated. Groups come from
@@ -993,7 +1039,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     // driver's generic Row[] return type, not a real "no rows" case.
     const stats = vigilanceStatsRows[0];
     if (!stats) throw new HttpError(500, "INTERNAL", "vigilance stats aggregate returned no rows");
-    const visibleTotal = includeDropped ? stats.total : stats.total - stats.dropped_count;
+    const visibleTotal = filteredTotalRows ? Number(filteredTotalRows[0]?.n ?? 0) : includeDropped ? stats.total : stats.total - stats.dropped_count;
     // GAP-HR-VIGILANCE-01: per-view read audit, same best-effort shape (and
     // same db.transaction() requirement — see the disciplinary list above)
     // as the disciplinary list.
@@ -1001,7 +1047,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
       await db.transaction(async (tx) => {
         await emitAudit(
           tx, { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId },
-          "hrms.vigilance.list_viewed", "vigilance_case_list", ctx.tenantId, { count: rows.length, includeDropped },
+          "hrms.vigilance.list_viewed", "vigilance_case_list", ctx.tenantId, { count: rows.length, includeDropped, filtered, chargesMasked: maskCharges },
         );
       });
     } catch (err) {
@@ -1011,6 +1057,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
       data: rows,
       total: visibleTotal,
       hasMore: offset + rows.length < visibleTotal,
+      chargesMasked: maskCharges,
       stats: {
         chargeMemoStage: stats.charge_memo_stage,
         underInquiry: stats.under_inquiry,
@@ -1020,6 +1067,44 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
         total: stats.total,
       },
     });
+  });
+
+  // GAP-HR-VIGILANCE-01 (PII/DPDP): audited, reason-bearing reveal of ONE
+  // case's charge summary -- the only way to read it when the list is requested
+  // with maskCharges=true. Same shape as the employee PII reveal
+  // (POST /v1/hrms/pii/reveal): HR role gate, mandatory reason, and the audit
+  // event is durably queued BEFORE the text is returned (fail closed -- if the
+  // audit cannot be queued nothing is revealed). The audit carries actor, case
+  // and reason, never the revealed text. What it returns is exactly what the
+  // list would have shown (<= 80 chars); the full allegation stays on the
+  // (separately read-audited) disciplinary case detail route.
+  // OWNER DECISION still open: which roles may reveal (today: the same HR roles
+  // that can already read the list) -- this route does not widen that.
+  app.post("/v1/hrms/vigilance/:id/charges/reveal", { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } }, async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const { reason } = z.object({
+      reason: z.string().trim().min(10, "state why you need the charge text (at least 10 characters)").max(2000),
+    }).parse(req.body ?? {});
+    const found = await sqlClient.begin(async (sql) => {
+      await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
+      return sql.unsafe(`
+        SELECT CASE WHEN length(c.allegation) > 80 THEN LEFT(c.allegation, 80) || '…' ELSE c.allegation END AS charges_summary
+        FROM disciplinary.hrms_disciplinary_cases c
+        WHERE c.id = $1 AND c.tenant_id = $2 AND c.proceeding_type = 'major'
+      `, [id, ctx.tenantId]);
+    });
+    const row = found[0];
+    if (!row) throw new HttpError(404, "NOT_FOUND", "vigilance case not found");
+    // Audit first, fail closed: an error here propagates (500) and no text is returned.
+    await db.transaction(async (tx) => {
+      await emitAudit(
+        tx, { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId },
+        "hrms.vigilance.charges_revealed", "disciplinary_case", id, { field: "charges_summary", reason },
+      );
+    });
+    void reply.header("cache-control", "no-store");
+    return reply.send({ data: { resourceType: "disciplinary_case", resourceId: id, field: "charges_summary", value: (row.charges_summary as string | null) ?? null } });
   });
 
   // ── Gap: Work Summaries (derived from appraisals) ─────────────────────────
