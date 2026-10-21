@@ -256,12 +256,13 @@ export const INVENTORY_ITEM_LINK_ROLES = ["inventory_manager", "inventory_admin"
  * Roles that may reach the CRM platform-wide admin-config routes (Custom
  * Fields, Matching/Dedup Rules, Lead Scoring, Qualification Frameworks, Lead
  * Stage Reasons, Assignment Rules, Assignment Directory, Agent Workload,
- * Escalation Rules, Task Escalation, Document Types). Every one of those route
- * layouts gates on this same set, and the CRM hub (page.tsx) hides the whole
- * Configuration section from anyone outside it, so the tiles and the route
- * guards agree (GAP-CRM-HOME-01 / GAP-CRM-AGENT-WORKLOAD-01). The server
- * remains the authority; this is defence-in-depth + UX. A plain crm_user is
- * deliberately excluded.
+ * Escalation Rules, Task Escalation, Document Types, Grievance Categories,
+ * Pipelines, Website Lead Forms). Every one of those route layouts gates on this
+ * same exported set (no per-layout copies), and the CRM hub filters each tile
+ * through crm/hubTiles.ts against it, so the tiles and the route guards agree
+ * (GAP-CRM-HOME-01 / GAP-CRM-AGENT-WORKLOAD-01). The server remains the
+ * authority; this is defence-in-depth + UX. A plain crm_user is deliberately
+ * excluded.
  */
 export const CRM_ADMIN_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
 
@@ -277,6 +278,18 @@ export const CRM_ADMIN_ROLES = ["crm_admin", "admin", "super_admin", "platform_a
  * fails if the two disagree. The server stays the authority.
  */
 export const CRM_DEDUP_RULES_ROLES = ["crm_admin", "super_admin"];
+
+/**
+ * The route-accurate subset for the three admin screens whose crm-service
+ * routes accept ONLY [crm_admin, super_admin, tenant_admin]: Product Catalogue
+ * (products/routes.ts), Service Types (service-requests/routes.ts) and Agent
+ * Workload (teams/routes.ts). `admin` and `platform_admin` are accepted by none
+ * of those routes, so admitting them to the screen would give a wired editor
+ * whose every mutation 403s (GAP2-CRM-PRODUCTS-07 / GAP2-CRM-SERVICE-TYPES-03 /
+ * GAP2-CRM-AGENT-WORKLOAD-05). Those three layouts and their hub tiles gate on
+ * this set.
+ */
+export const CRM_STRICT_ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
 
 /**
  * Roles crm-service admits on GET /v1/crm/contacts/:id (its CRM_ROLES in

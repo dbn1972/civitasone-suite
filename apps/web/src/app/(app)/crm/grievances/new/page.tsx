@@ -3,9 +3,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { Button, ConfirmDialog, PageHeader } from "../../../../_components/ds";
+import { Button, ConfirmDialog, EntityPicker, PageHeader } from "../../../../_components/ds";
 import { browserFetch } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
+import { searchContacts, getOpenGrievancesForContact, type OpenGrievanceRef } from "@/lib/crm/grievanceContactLink";
 import {
   getGrievanceCategories,
   grievanceCategoryOptions,
@@ -53,6 +54,23 @@ export default function NewGrievancePage() {
       live = false;
     };
   }, []);
+  // GAP-CRM-GRIEVANCES-NEW-01: optionally link the grievance to an existing CRM
+  // contact (sent as contactId) and, when that contact already has open
+  // grievances, warn about a probable duplicate. Both are advisory: neither
+  // blocks filing.
+  const [contactId, setContactId] = useState<string | null>(null);
+  const [openForContact, setOpenForContact] = useState<{ items: OpenGrievanceRef[]; total: number }>({ items: [], total: 0 });
+  useEffect(() => {
+    if (!contactId) {
+      setOpenForContact({ items: [], total: 0 });
+      return;
+    }
+    const ctrl = new AbortController();
+    void getOpenGrievancesForContact(contactId, ctrl.signal).then((r) => {
+      if (!ctrl.signal.aborted) setOpenForContact(r);
+    });
+    return () => ctrl.abort();
+  }, [contactId]);
   // GAP-CRM-GRIEVANCES-NEW-02: client-side inline errors for phone/email, keyed
   // by field name, shown beside the field just like the server ones.
   const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
@@ -120,6 +138,7 @@ export default function NewGrievancePage() {
       citizenName:  fd.get("citizenName"),
       citizenPhone: phone.trim() || undefined,
       citizenEmail: email.trim() || undefined,
+      ...(contactId ? { contactId } : {}),
       category:     fd.get("category"),
       subject:      fd.get("subject"),
       description:  fd.get("description") || undefined,
@@ -272,6 +291,57 @@ export default function NewGrievancePage() {
                     <span id="citizenEmail-error" style={{ fontSize: 12, color: "var(--bad)" }}>{fieldErr("citizenEmail")}</span>
                   )}
                 </label>
+              </div>
+              {/* GAP-CRM-GRIEVANCES-NEW-01: optionally tie the grievance to an
+                  existing CRM contact (server-side name search; the lookup only
+                  ever returns masked phone/email) so a repeat citizen stays on
+                  one record. A "possible existing contact" hint nudges the clerk
+                  to link rather than create a duplicate, but linking is never
+                  required. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ color: "var(--ink)", fontSize: 14 }}>
+                  {t("linkContact")} <span style={{ color: "var(--ink2)", fontWeight: 400 }}>{t("optional")}</span>
+                </span>
+                <EntityPicker
+                  aria-label={t("linkContactAriaLabel")}
+                  value={contactId}
+                  onChange={(v) => {
+                    setContactId(typeof v === "string" ? v : null);
+                    setDirty(true);
+                  }}
+                  search={searchContacts}
+                  placeholder={t("searchContactsPlaceholder")}
+                />
+                <span role="note" style={{ fontSize: 12, color: "var(--ink2)" }}>
+                  {contactId ? t("linkedNote") : t("possibleContactNote")}
+                </span>
+                {openForContact.total > 0 && (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    aria-label={t("duplicateAria")}
+                    style={{
+                      marginTop: 4,
+                      padding: "10px 14px",
+                      fontSize: 13,
+                      lineHeight: 1.5,
+                      color: "var(--ink)",
+                      background: "color-mix(in srgb, var(--warn) 10%, transparent)",
+                      border: "1px solid color-mix(in srgb, var(--warn) 40%, transparent)",
+                      borderRadius: "var(--r)",
+                    }}
+                  >
+                    <strong>{t("duplicateWarning", { count: openForContact.total })}</strong>
+                    <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                      {openForContact.items.map((g) => (
+                        <li key={g.id}>
+                          <Link href={`/crm/grievances/${encodeURIComponent(g.id)}`}>{g.referenceNo}</Link>
+                          {g.subject ? ` — ${g.subject}` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
           </fieldset>

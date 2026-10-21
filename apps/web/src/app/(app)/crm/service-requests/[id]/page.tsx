@@ -31,6 +31,9 @@ interface ServiceRequestDetail {
   assignedTo?: string;
   resolution?: string;
   statusNote?: string;
+  // GAP-CRM-HEALTH-ACCOUNTID-03: set when the request is an account follow-up
+  // (raised from the Account Health screen); null/absent for citizen requests.
+  relatedAccountId?: string | null;
   dueAt?: string;
   resolvedAt?: string;
   createdAt: string;
@@ -151,6 +154,11 @@ export default async function ServiceRequestDetailPage({ params }: { params: { i
                   <span style={{ color: "var(--ink2)" }}>{t("unassigned")}</span>
                 )}
               </Field>
+              {r.relatedAccountId ? (
+                <Field label={t("relatedAccount")}>
+                  <a href={`/crm/accounts/${encodeURIComponent(r.relatedAccountId)}`}>{t("viewRelatedAccount")}</a>
+                </Field>
+              ) : null}
               <Field label={t("due")}>
                 {(() => {
                   const od = overdueDays(r.dueAt, r.status ?? "open");

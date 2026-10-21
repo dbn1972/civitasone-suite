@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 
 vi.mock("next-intl/server", async () => {
   const { createTranslator } = await import("next-intl");
@@ -10,13 +10,9 @@ vi.mock("next-intl/server", async () => {
 });
 
 const mockRoles = vi.fn<() => string[]>();
-vi.mock("@/lib/auth/roleGuard", async (orig) => {
-  const actual = await orig<typeof import("@/lib/auth/roleGuard")>();
-  return {
-    ...actual,
-    getSessionRoles: () => mockRoles(),
-    CRM_ADMIN_ROLES: ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"],
-  };
+vi.mock("@/lib/auth/roleGuard", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/auth/roleGuard")>("@/lib/auth/roleGuard");
+  return { ...actual, getSessionRoles: () => mockRoles() };
 });
 
 // LinkTiles renders the tiles; keep it real-ish but light.
@@ -31,11 +27,10 @@ import Page from "./page";
 describe("CRM hub Configuration gating (GAP-CRM-AGENT-WORKLOAD-01)", () => {
   beforeEach(() => mockRoles.mockReset());
 
-  it("hides the Configuration section (and Agent Workload tile) from a plain crm_user", async () => {
+  it("hides the Agent Workload tile from a plain crm_user", async () => {
     mockRoles.mockReturnValue(["crm_user"]);
     render(await Page());
     expect(screen.queryByText("Agent Workload")).not.toBeInTheDocument();
-    expect(screen.queryByText("Configuration")).not.toBeInTheDocument();
     // Core tiles still visible.
     expect(screen.getByText("Contacts")).toBeInTheDocument();
   });
@@ -55,7 +50,7 @@ describe("CRM hub Matching Rules tile gating (GAP-CRM-DEDUP-RULES-05)", () => {
     for (const role of ["crm_admin", "super_admin"]) {
       mockRoles.mockReturnValue([role]);
       const { unmount } = render(await Page());
-      expect(screen.getByText("Matching Rules")).toBeInTheDocument();
+      expect(screen.getByText("Duplicate Matching Rules")).toBeInTheDocument();
       unmount();
     }
   });
@@ -63,9 +58,52 @@ describe("CRM hub Matching Rules tile gating (GAP-CRM-DEDUP-RULES-05)", () => {
   it("hides the Matching Rules tile from tenant_admin (server 403s dedup-rules for it) but keeps the rest of Configuration", async () => {
     mockRoles.mockReturnValue(["tenant_admin"]);
     render(await Page());
-    expect(screen.queryByText("Matching Rules")).not.toBeInTheDocument();
+    expect(screen.queryByText("Duplicate Matching Rules")).not.toBeInTheDocument();
     expect(screen.getByText("Configuration")).toBeInTheDocument();
     expect(screen.getByText("Agent Workload")).toBeInTheDocument();
+  });
+});
+
+// GAP-CRM-HOME-01: ten Configuration routes (plus Document Types, pipelines,
+// lead forms, products, service types and grievance categories) bounce a
+// crm_user straight back to /crm, so their tiles must not be offered. The
+// Configuration section itself stays for the two tiles every CRM role can open.
+describe("CRM hub role-filtered tiles (GAP-CRM-HOME-01)", () => {
+  beforeEach(() => mockRoles.mockReset());
+
+  const ADMIN_ONLY_TITLES = [
+    "Custom Fields", "Duplicate Matching Rules", "Lead Scoring", "Qualification Frameworks",
+    "Lead Stage Reasons", "Assignment Rules", "Assignment Directory", "Agent Workload",
+    "Lead Escalation Rules", "Task Escalation", "Document Types", "Engagement Pipelines",
+    "Website Lead Forms", "Product Catalogue", "Service Types", "Grievance Categories",
+  ];
+
+  it("shows a crm_user only the tiles they can open (Document Types and the rest hidden)", async () => {
+    mockRoles.mockReturnValue(["crm_user"]);
+    render(await Page());
+    for (const title of ADMIN_ONLY_TITLES) expect(screen.queryByText(title)).not.toBeInTheDocument();
+    // Tiles with no admin gate stay visible, including the two that live in Configuration.
+    for (const title of ["Contacts", "Price Books", "Documents", "Data Quality", "Connected Accounts"]) {
+      expect(screen.getByText(title)).toBeInTheDocument();
+    }
+  });
+
+  it("keeps a Configuration section for a crm_user with exactly Data Quality and Connected Accounts", async () => {
+    mockRoles.mockReturnValue(["crm_user"]);
+    render(await Page());
+    const section = screen.getByRole("region", { name: "Configuration" });
+    expect(within(section).getAllByRole("listitem").map((li) => li.textContent)).toEqual([
+      "Connected Accounts",
+      "Data Quality",
+    ]);
+  });
+
+  it("shows a crm_admin all 12 Configuration tiles and every admin-gated tile", async () => {
+    mockRoles.mockReturnValue(["crm_admin"]);
+    render(await Page());
+    const section = screen.getByRole("region", { name: "Configuration" });
+    expect(within(section).getAllByRole("listitem")).toHaveLength(12);
+    for (const title of ADMIN_ONLY_TITLES) expect(screen.getByText(title)).toBeInTheDocument();
   });
 });
 

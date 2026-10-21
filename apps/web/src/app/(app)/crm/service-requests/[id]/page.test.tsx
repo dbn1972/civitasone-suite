@@ -45,6 +45,24 @@ beforeEach(() => {
   mockRoles.mockReturnValue(["crm_admin"]);
 });
 
+describe("ServiceRequestDetailPage — related account (GAP-CRM-HEALTH-ACCOUNTID-03)", () => {
+  it("links an account follow-up to its account", async () => {
+    mockDetail({ serviceType: "Account Health Follow-up", relatedAccountId: "11111111-1111-4111-8111-111111111111", status: "open" });
+    render(await Page({ params: { id: "sr-1" } }));
+    expect(screen.getByText("Related account")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View account" })).toHaveAttribute(
+      "href",
+      "/crm/accounts/11111111-1111-4111-8111-111111111111",
+    );
+  });
+
+  it("shows no related-account field on an ordinary citizen request", async () => {
+    mockDetail({ relatedAccountId: null, status: "open" });
+    render(await Page({ params: { id: "sr-1" } }));
+    expect(screen.queryByText("Related account")).not.toBeInTheDocument();
+  });
+});
+
 describe("ServiceRequestDetailPage — DETAIL-01 (status note vs resolution)", () => {
   it("a pending request shows a 'Waiting on' card and NO Resolution card / 'Resolved —'", async () => {
     mockDetail({ status: "pending", statusNote: "Awaiting citizen documents" });

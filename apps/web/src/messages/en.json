@@ -2098,7 +2098,7 @@
       },
       "tiles": {
         "dashboard": {
-          "title": "Dashboard",
+          "title": "CRM Dashboard",
           "description": "Overview metrics and activity"
         },
         "contacts": {
@@ -2118,7 +2118,7 @@
           "description": "Calls, meetings, and follow-ups"
         },
         "pipelineBoard": {
-          "title": "Pipeline Board",
+          "title": "Engagement Pipeline Board",
           "description": "Visual kanban of deal stages"
         },
         "pipelines": {
@@ -2154,7 +2154,7 @@
           "description": "Support requests and resolutions"
         },
         "campaigns": {
-          "title": "Campaigns",
+          "title": "Campaign Performance",
           "description": "Outreach campaign performance"
         },
         "voiceOfCustomer": {
@@ -2166,7 +2166,7 @@
           "description": "Relationship health scores"
         },
         "controlTower": {
-          "title": "Control Tower",
+          "title": "Executive Control Tower",
           "description": "Real-time operations overview"
         },
         "leadForms": {
@@ -2202,7 +2202,7 @@
           "description": "Extend data model"
         },
         "dedupRules": {
-          "title": "Matching Rules",
+          "title": "Duplicate Matching Rules",
           "description": "Deduplication logic"
         },
         "leadScoring": {
@@ -2230,7 +2230,7 @@
           "description": "Capacity and utilisation"
         },
         "escalationRules": {
-          "title": "Escalation Rules",
+          "title": "Lead Escalation Rules",
           "description": "SLA breach escalation"
         },
         "taskEscalation": {
@@ -2281,7 +2281,8 @@
       "filterPlaceholder": "Filter by account…",
       "emptyTitle": "No accounts at risk",
       "emptyMessage": "Accounts appear here once they are scored at risk or critical.",
-      "bandLabel": "Health band"
+      "bandLabel": "Health band",
+      "logFollowUp": "Log follow-up"
     },
     "hubSubtitle": "Pipeline and customer operations workspace.",
     "sectionEngagementPipeline": "Engagement Pipeline",
@@ -13447,6 +13448,7 @@
     "reported": "Reported",
     "clampedHelp": "Clamped: the raw value for this signal was outside the allowed range and was capped before it was used in scoring. Reported: the value was used as received.",
     "contributionPts": "{value} pts",
+    "valueOutOf": "{value} out of 100",
     "recomputedTitle": "Score Recomputed From Signals",
     "recomputedBody": "The stored score for this account is {stored}, while recomputing from the signals above gives {score}. The recomputed value is shown so the score, band and signals always agree. A recompute will bring the stored value back in line.",
     "signal_productUsage": "Product usage",
@@ -13760,7 +13762,7 @@
     "accountLabel": "Account: ",
     "closeDialog": "Close dialog",
     "contactName": "Contact Name",
-    "contactNamePlaceholder": "Citizen or account representative name",
+    "contactNamePlaceholder": "Name of the account contact",
     "phone": "Phone",
     "phonePlaceholder": "e.g. 9876543210",
     "serviceType": "Service Type",
@@ -13879,7 +13881,7 @@
     "saved": "Form saved.",
     "paused": "Form paused.",
     "resumed": "Form resumed.",
-    "consentFixed": "Consent is now required — the form is lawful.",
+    "consentFixed": "Consent is now required on this form.",
     "registerForm": "Register form",
     "registered": "Form registered. Its public submit URL is <code>{path}</code> — embed this on your landing page.",
     "colForm": "Form",
@@ -13893,17 +13895,23 @@
     "pause": "Pause",
     "enable": "Enable",
     "fixConsent": "Fix consent",
+    "rotateKey": "Rotate key",
+    "rotateConfirmTitle": "Rotate the key for “{name}”?",
+    "rotateConfirmDescription": "The current public key stops working immediately, so every page that embeds this form will stop accepting submissions until it is updated with the new key. Rotate only if the key may have leaked or you are retiring an old embed. The rotation is recorded in the audit log.",
+    "rotateConfirmLabel": "Rotate key",
+    "rotated": "Key rotated. The new public submit URL is <code>{path}</code> — update every page that embeds this form. The old URL no longer works.",
+    "rotatedNoKey": "Key rotated. Reload the list to see the new submit URL; the old URL no longer works.",
     "emptyTitle": "No website forms registered",
     "emptyMessage": "Register a lead-capture form to mint a public key that landing pages can POST to.",
     "confirmTitle": "Require consent on “{name}”?",
-    "confirmDescription": "This form currently accepts submissions without explicit consent, which is an unlawful-capture risk under DPDP. Requiring consent makes it lawful; submissions without consent will be refused.",
+    "confirmDescription": "This form currently accepts submissions without requiring explicit consent. Once consent is required, submissions that do not include it will be refused.",
     "confirmLabel": "Require consent",
     "anyOrigin": "Any origin",
     "originsMore": "+{count} more",
     "ratePerMinute": "{rate}/min",
     "health_live": "Live",
     "health_paused": "Paused",
-    "health_unlawful": "Consent not required",
+    "health_unlawful": "Consent gap",
     "exportTitle": "Export the lead-form registry?",
     "exportDescription": "This CSV includes each form's public submit URL and origin allow-list. Only download it to a trusted location — the public URL lets anyone post leads into this tenant.",
     "exportConfirmLabel": "Download CSV"
@@ -14217,7 +14225,6 @@
   },
   "crmReasonCodesEditor": {
     "title": "Lead Stage Reasons",
-    "heading": "Reason codes",
     "conflictChanged": "These reason codes were changed by another admin. Reload to see the latest, then re-apply your changes.",
     "couldNotSave": "Could not save the reason codes.",
     "fixHighlightedRows": "Fix the highlighted rows: each reason needs a valid lowercase code, a label and a status, and codes must be unique per status.",
@@ -14420,6 +14427,8 @@
     "backLabel": "Service Requests",
     "title": "Service Request",
     "detailsCard": "Request Details",
+    "relatedAccount": "Related account",
+    "viewRelatedAccount": "View account",
     "serviceType": "Service Type",
     "priority": "Priority",
     "status": "Status",
@@ -14954,6 +14963,9 @@
     "maskedPhone": "Masked citizen phone",
     "maskedEmail": "Masked citizen email",
     "maskedNotice": "Contact details are masked under the DPDP Act 2023. Ask a CRM administrator if you need to reach this citizen.",
+    "revealNotice": "Contact details are masked under the DPDP Act 2023. Use Reveal to see one; you must give a reason and every reveal is recorded in the audit log.",
+    "revealLabelPhone": "citizen phone",
+    "revealLabelEmail": "citizen email",
     "timelineCard": "Status Timeline",
     "timelineAriaLabel": "Grievance lifecycle steps",
     "priority_urgent": "Urgent",
@@ -14983,6 +14995,14 @@
     "category": "Category",
     "selectCategory": "Select category…",
     "standardCategoryNote": "Showing the standard category list. An administrator can tailor it under Grievance Categories.",
+    "linkContact": "Link existing contact",
+    "optional": "(optional)",
+    "linkContactAriaLabel": "Link existing contact (optional)",
+    "searchContactsPlaceholder": "Search contacts by name or organisation…",
+    "linkedNote": "This grievance will be linked to the selected contact. Clear the field to log it against a new citizen instead.",
+    "possibleContactNote": "Possible existing contact? Search above and link it so repeat grievances stay on one record.",
+    "duplicateAria": "Possible duplicate grievances",
+    "duplicateWarning": "This contact already has {count, plural, one {# open grievance} other {# open grievances}}. Check whether this is a duplicate before you file another:",
     "priority": "Priority",
     "priorityLow": "Low",
     "priorityNormal": "Normal",
@@ -15008,7 +15028,7 @@
     "backLabel": "CRM",
     "statForms": "Forms",
     "statLive": "Live",
-    "statConsentGaps": "Consent gaps",
+    "statConsentGaps": "Consent gap",
     "consentGapNote": "Enabled without requiring consent. The DPDP Act 2023 requires consent for marketing-intake forms — require consent or pause these forms.",
     "loadErrorWhat": "The lead-form registry couldn't be loaded.",
     "loadErrorNext": "This is usually temporary. Try again, or go back to CRM.",
@@ -15123,7 +15143,7 @@
     "dropHere": "Drop engagements here"
   },
   "crmPipelinePage": {
-    "title": "Engagement Pipeline",
+    "title": "Engagement Pipeline Board",
     "subtitle": "Move engagements between stages to track procurement progress • पाइपलाइन",
     "newEngagement": "+ New Engagement",
     "truncatedOf": "Showing {shown} of {total} engagements. The board and the figures below cover the loaded engagements only — refine by pipeline to see the rest.",

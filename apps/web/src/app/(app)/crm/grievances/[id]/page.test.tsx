@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as rtlRender, screen } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, within } from "@testing-library/react";
 import { NextIntlClientProvider as __Intl } from "next-intl";
 import __enMessages from "@/messages/en.json";
 function render(ui: React.ReactElement) {
@@ -71,14 +71,70 @@ describe("GrievanceDetailPage", () => {
     expect(screen.getByText(/masked under the DPDP Act/i)).toBeInTheDocument();
   });
 
-  it("shows citizen contact in clear for a PII-read role (server sends the clear value)", async () => {
+  // GAP-CRM-GRIEVANCES-DETAIL-05 — default-masked, audited reveal. Even a PII-read
+  // role asks the server for the masked read (`?pii=masked`), so the clear phone and
+  // email are never in the page payload; they exist only after an audited reveal.
+  it("asks the server to mask for a PII-read role and offers an audited Reveal instead of the clear value", async () => {
     rolesMock.mockReturnValue(["crm_admin"]);
-    fetchJsonMock.mockResolvedValue({ data: grievance(), source: "api" });
+    fetchJsonMock.mockResolvedValue({
+      data: grievance({ citizenPhone: "******3210", citizenEmail: "r***@example.com" }),
+      source: "api",
+    });
+    const ui = await GrievanceDetailPage({ params: { id: ID } });
+    const { container } = render(ui);
+
+    expect(String(fetchJsonMock.mock.calls[0]![0])).toBe(`/api/v1/crm/grievances/${ID}?pii=masked`);
+    expect(screen.getByText("******3210")).toBeInTheDocument();
+    expect(screen.getByText("r***@example.com")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Reveal" })).toHaveLength(2);
+    expect(container.innerHTML).not.toContain("9876543210");
+    expect(container.innerHTML).not.toContain("ravi@example.com");
+    expect(screen.getByText(/every reveal is recorded in the audit log/i)).toBeInTheDocument();
+  });
+
+  it("reveals the phone only through the audited endpoint, naming the grievance and field", async () => {
+    rolesMock.mockReturnValue(["crm_admin"]);
+    fetchJsonMock.mockResolvedValue({
+      data: grievance({ citizenPhone: "******3210", citizenEmail: "r***@example.com" }),
+      source: "api",
+    });
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(new Response(JSON.stringify({ data: { value: "9876543210" } }), { status: 200 }));
     const ui = await GrievanceDetailPage({ params: { id: ID } });
     render(ui);
 
-    expect(screen.getByText("9876543210")).toBeInTheDocument();
-    expect(screen.getByText("ravi@example.com")).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fireEvent.click(screen.getAllByRole("button", { name: "Reveal" })[0]!);
+    fireEvent.change(await screen.findByLabelText(/Reason for revealing/i), { target: { value: "citizen called to chase this case" } });
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Reveal" }));
+
+    expect(await screen.findByText("9876543210")).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/proxy/v1/crm/pii/reveal");
+    expect(JSON.parse(init.body as string)).toEqual({
+      resourceType: "grievance",
+      resourceId: ID,
+      field: "citizenPhone",
+      reason: "citizen called to chase this case",
+    });
+    // The email stays masked: reveal is per field.
+    expect(screen.queryByText("ravi@example.com")).not.toBeInTheDocument();
+    fetchSpy.mockRestore();
+  });
+
+  it("never offers Reveal to a role without PII-read rights", async () => {
+    rolesMock.mockReturnValue(["crm_user"]);
+    fetchJsonMock.mockResolvedValue({
+      data: grievance({ citizenPhone: "******3210", citizenEmail: "r***@example.com" }),
+      source: "api",
+    });
+    const ui = await GrievanceDetailPage({ params: { id: ID } });
+    render(ui);
+
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Ask a CRM administrator/i)).toBeInTheDocument();
   });
 
   // GAP-CRM-GRIEVANCES-DETAIL-04 — forwardedTo, appealReason and a Forwarded

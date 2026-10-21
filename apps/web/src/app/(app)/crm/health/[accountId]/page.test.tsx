@@ -128,6 +128,56 @@ describe("AccountHealthDetailPage title (GAP-CRM-HEALTH-ACCOUNTID-01)", () => {
     expect(screen.getByRole("button", { name: /What is Clamped/i })).toBeInTheDocument();
   });
 
+  // GAP-CRM-HEALTH-ACCOUNTID-05 — Value is a 0-100 signal score (the scoring
+  // domain clamps every signal to 0..100), so the cell states the scale instead
+  // of printing a bare number.
+  it("states the 0-100 scale on the Value column (72 out of 100)", async () => {
+    getBreakdownMock.mockResolvedValue({
+      data: {
+        ...breakdown(),
+        contributingFactors: [
+          { signal: "productUsage", value: 72, weight: 0.25, contribution: 18, clamped: false },
+        ],
+      },
+      source: "api",
+    });
+    getAccountsMock.mockResolvedValue({ data: [account(ACCOUNT_ID, "Bharat Steel")], source: "api" });
+
+    const ui = await AccountHealthDetailPage({ params: { accountId: ACCOUNT_ID } });
+    render(ui);
+
+    expect(screen.getByText("72 out of 100")).toBeInTheDocument();
+    expect(screen.queryByText(/^72$/)).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-HEALTH-05 — the watchlist row link deep-links with ?followUp=1. The
+  // scored branch (the common case) must open the prefilled dialog; it used to
+  // ignore the param and only the "no score yet" branch honoured it.
+  it("opens the prefilled follow-up dialog on a scored account when ?followUp=1", async () => {
+    getBreakdownMock.mockResolvedValue({ data: breakdown(), source: "api" });
+    getAccountsMock.mockResolvedValue({ data: [account(ACCOUNT_ID, "Bharat Steel Ltd")], source: "api" });
+
+    const ui = await AccountHealthDetailPage({
+      params: { accountId: ACCOUNT_ID },
+      searchParams: { followUp: "1" },
+    });
+    render(ui);
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    const subject = screen.getByLabelText(/subject/i) as HTMLInputElement;
+    expect(subject.value).toContain("Bharat Steel Ltd");
+  });
+
+  it("keeps the follow-up dialog closed on a scored account without ?followUp=1", async () => {
+    getBreakdownMock.mockResolvedValue({ data: breakdown(), source: "api" });
+    getAccountsMock.mockResolvedValue({ data: [account(ACCOUNT_ID, "Bharat Steel Ltd")], source: "api" });
+
+    const ui = await AccountHealthDetailPage({ params: { accountId: ACCOUNT_ID } });
+    render(ui);
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   // GAP-CRM-HEALTH-ACCOUNTID-07 — the stored-vs-computed card shows the compute
   // time and uses theme tokens, not a hard-coded #475569 / pastel hex.
   it("shows the compute time inside the recompute card and uses no literal hex", async () => {
