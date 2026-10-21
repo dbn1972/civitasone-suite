@@ -15,10 +15,12 @@
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, ConfirmDialog } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
 export function TravelApprovalActions({ id }: { id: string }) {
+  const t = useTranslations("travel");
   const router = useRouter();
   const [dialog, setDialog] = useState<"approve" | "reject" | null>(null);
   const [busy, setBusy] = useState(false);
@@ -29,7 +31,7 @@ export function TravelApprovalActions({ id }: { id: string }) {
     setBusy(true);
     setError(undefined);
     try {
-      const res = await fetch(`/api/proxy/v1/hrms/travel-requests/${id}/${action}`, {
+      const res = await fetch(`/api/proxy/v1/hrms/travel-requests/${encodeURIComponent(id)}/${action}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(action === "reject" ? { reason } : {}),
@@ -51,17 +53,17 @@ export function TravelApprovalActions({ id }: { id: string }) {
   return (
     <div style={{ display: "flex", gap: 8 }}>
       <Button size="sm" variant="primary" onClick={() => { setDialog("approve"); setError(undefined); }}>
-        Approve
+        {t("approveBtn")}
       </Button>
       <Button size="sm" variant="ghost" onClick={() => { setDialog("reject"); setError(undefined); }}>
-        Reject
+        {t("rejectBtn")}
       </Button>
 
       <ConfirmDialog
         open={dialog === "approve"}
-        title="Approve this travel request?"
-        description="The employee will be notified their travel is approved."
-        confirmLabel="Approve"
+        title={t("approveDialogTitle")}
+        description={t("approveDialogDescription")}
+        confirmLabel={t("approveBtn")}
         busy={busy}
         errorMessage={error}
         onConfirm={() => decide("approve")}
@@ -69,12 +71,12 @@ export function TravelApprovalActions({ id }: { id: string }) {
       />
       <ConfirmDialog
         open={dialog === "reject"}
-        title="Reject this travel request?"
-        description="The employee will be notified, along with the reason below if you provide one."
-        confirmLabel="Reject"
+        title={t("rejectDialogTitle")}
+        description={t("rejectDialogDescription")}
+        confirmLabel={t("rejectBtn")}
         danger
         requireReason
-        reasonLabel="Reason for rejection"
+        reasonLabel={t("rejectReasonLabel")}
         maxReasonLength={500}
         busy={busy}
         errorMessage={error}

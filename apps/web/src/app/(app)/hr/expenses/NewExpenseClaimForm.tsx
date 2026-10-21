@@ -25,9 +25,15 @@ import { parseRupeesToPaise } from "./parseRupeesToPaise";
 // the option text and the eventual table row read the same way.
 const CATEGORIES = ["travel", "food", "accommodation", "transport", "medical", "stationery", "communication", "other"] as const;
 
-export function NewExpenseClaimForm() {
+/**
+ * GAP-HR-TRAVEL-02: `travelRequestId` (from /hr/expenses?travelRequestId=...,
+ * validated by travelLink.ts) pre-links the claim to an approved travel
+ * request: the form opens straight away, says so, and sends the id in the
+ * POST body. The route re-checks ownership server-side.
+ */
+export function NewExpenseClaimForm({ travelRequestId }: { travelRequestId?: string } = {}) {
   const t = useTranslations("expenses");
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(travelRequestId));
   const [category, setCategory] = useState<string>("travel");
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
@@ -67,6 +73,7 @@ export function NewExpenseClaimForm() {
           amount: parsed.amountMinor,
           description: description.trim() || undefined,
           date,
+          ...(travelRequestId ? { travelRequestId } : {}),
         }),
       });
       if (!res.ok) {
@@ -108,6 +115,9 @@ export function NewExpenseClaimForm() {
 
       {open && (
         <form onSubmit={handleSubmit} noValidate style={{ padding: "0 20px 20px", display: "grid", gap: 14 }}>
+          {travelRequestId && (
+            <p role="note" style={{ margin: 0, fontSize: 13, color: "var(--ink2)" }}>{t("formLinkedTravel")}</p>
+          )}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
             <Field label={t("formLabelCategory")} required>
               <Select value={category} onChange={(e) => setCategory(e.target.value)}>

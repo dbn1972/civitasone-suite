@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { createTranslator } from "next-intl";
+import { createTranslator, NextIntlClientProvider } from "next-intl";
 import en from "@/messages/en.json";
 import hi from "@/messages/hi.json";
 import ta from "@/messages/ta.json";
@@ -250,6 +250,84 @@ describe("attendanceConfig locale catalogue (GAP-HR-ATTENDANCE-CONFIG-02)", () =
       expect((t as any)("whWeeklyOffTpl", { pattern: "mon_only" })).toBe("—");
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect((t as any)("coEarnedWhenTpl", { rule: "anything" })).toBe("—");
+    }
+  });
+});
+
+
+// ---------------------------------------------------------------------------
+// HR cluster 07 (GAP-HR-ATTENDANCE-CONFIG-03): an hr_admin (the audience this
+// page is gated to) used to be told to "contact your administrator to
+// customize" values that nothing can customize. en.json was reworded, but
+// hi.json kept the old instruction, so a Hindi-locale hr_admin still saw it.
+// These tests render the real page, inside a client provider, in both locales.
+// ---------------------------------------------------------------------------
+async function renderWithProvider(locale: "en" | "hi") {
+  state.locale = locale;
+  const ui = await AttendanceConfigPage();
+  return render(
+    <NextIntlClientProvider locale={locale} messages={locale === "hi" ? hi : en}>
+      {ui}
+    </NextIntlClientProvider>,
+  );
+}
+
+describe("AttendanceConfigPage defaults notice (GAP-HR-ATTENDANCE-CONFIG-03)", () => {
+  beforeEach(() => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    state.locale = "en";
+  });
+
+  it("an hr_admin never sees 'contact your administrator' (en)", async () => {
+    await renderWithProvider("en");
+    const note = screen.getByRole("note");
+    expect(note).toHaveTextContent(/cannot|nothing to customize/i);
+    expect(note).toHaveTextContent(/change request/i);
+    expect(screen.queryByText(/contact your administrator/i)).toBeNull();
+  });
+
+  it("an hr_admin never sees the Hindi 'contact your administrator' instruction (hi)", async () => {
+    await renderWithProvider("hi");
+    const note = screen.getByRole("note");
+    expect(note.textContent).toBe(hi.attendanceConfig.defaultsNotice);
+    // old wording: "अनुकूलित करने के लिए अपने प्रशासक से संपर्क करें"
+    expect(note.textContent).not.toContain("प्रशासक से संपर्क");
+    expect(note.textContent).toContain("परिवर्तन अनुरोध");
+  });
+
+  it("policy values come from code, not from a translatable literal (hi renders the same 12-hour times and minutes)", async () => {
+    await renderWithProvider("hi");
+    // 09:30 / 18:00 are ATTENDANCE_DEFAULTS, formatted by the page; the hi
+    // strings are templates, so changing a default changes the page in hi too.
+    expect(screen.getByText("09:30 AM")).toBeInTheDocument();
+    expect(screen.getByText("06:00 PM")).toBeInTheDocument();
+    expect(screen.getAllByText("15 मिनट").length).toBeGreaterThan(0);
+    expect(screen.getByText("8.5 घंटे कार्य के बाद")).toBeInTheDocument();
+  });
+
+  it("a non-admin role is denied and sees no notice", async () => {
+    getSessionRolesMock.mockReturnValue(["employee"]);
+    await renderWithProvider("en");
+    expect(screen.queryByRole("note")).toBeNull();
+  });
+});
+
+describe("attendanceConfig locale parity (en <-> hi)", () => {
+  it("hi carries exactly the keys en carries (no stale loadingTitle/loadingSubtitle, none missing)", () => {
+    const enKeys = Object.keys(en.attendanceConfig).sort();
+    const hiKeys = Object.keys(hi.attendanceConfig).sort();
+    expect(hiKeys).toEqual(enKeys);
+  });
+
+  it("every value template in hi keeps the same ICU placeholders as en", () => {
+    const placeholders = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+    const enNs = en.attendanceConfig as Record<string, string>;
+    const hiNs = hi.attendanceConfig as Record<string, string>;
+    for (const key of Object.keys(enNs)) {
+      // Select-templates whose branches are translated prose (weekly off /
+      // approval wording / CO earned-when) differ in their {branch} words by design.
+      if (["whWeeklyOffTpl", "otRequiresApprovalTpl", "coEarnedWhenTpl", "coApprovalRequiredTpl"].includes(key)) continue;
+      expect(placeholders(hiNs[key]!), `placeholders for ${key}`).toEqual(placeholders(enNs[key]!));
     }
   });
 });

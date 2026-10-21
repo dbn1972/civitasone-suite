@@ -30,7 +30,8 @@ export interface ShiftCardProps {
   name: string;
   startTime: string;
   endTime: string;
-  breakDuration: string;
+  /** GAP-HR-SHIFTS-02: grace period (already formatted). There is no break column in the shift model. */
+  gracePeriod: string;
   workingHours: string;
   applicableTo: string;
   status: string;
@@ -52,11 +53,11 @@ function shiftIcon(name: string): string {
   return "⏰";
 }
 
-export function ShiftCard({ name, startTime, endTime, breakDuration, workingHours, applicableTo, status }: ShiftCardProps) {
+export function ShiftCard({ name, startTime, endTime, gracePeriod, workingHours, applicableTo, status }: ShiftCardProps) {
   // GAP-HR-SHIFTS-04: TimeSlot labels below were hard-coded English literals
   // while the rest of this page (shifts/page.tsx) is next-intl.
   const t = useSafeTranslations("shifts", {
-    cardStart: "Start", cardEnd: "End", cardBreak: "Break", cardTotal: "Total",
+    cardStart: "Start", cardEnd: "End", cardGrace: "Grace", cardTotal: "Total",
   });
   return (
     <article
@@ -95,7 +96,7 @@ export function ShiftCard({ name, startTime, endTime, breakDuration, workingHour
       >
         <TimeSlot label={t("cardStart")} value={startTime} />
         <TimeSlot label={t("cardEnd")} value={endTime} />
-        <TimeSlot label={t("cardBreak")} value={breakDuration} />
+        <TimeSlot label={t("cardGrace")} value={gracePeriod} />
         <TimeSlot label={t("cardTotal")} value={workingHours} highlight />
       </dl>
     </article>

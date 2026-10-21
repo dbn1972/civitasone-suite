@@ -73,3 +73,54 @@ describe("NewExpenseClaimForm — GAP-HR-EXPENSES-02", () => {
     expect(alert.textContent).not.toMatch(/\b500\b/);
   });
 });
+
+// GAP-HR-TRAVEL-02: an approved travel request links here with
+// ?travelRequestId=<id>; the claim must be sent linked to it.
+describe("NewExpenseClaimForm — GAP-HR-TRAVEL-02 travel-request link", () => {
+  const TRAVEL_ID = "11111111-2222-4333-8444-555555555555";
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    refreshMock.mockReset();
+    fetchMock.mockReset().mockResolvedValue(new Response(JSON.stringify({ id: "new-id", status: "pending" }), { status: 202 }));
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function renderLinked(id?: string) {
+    return render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <NewExpenseClaimForm {...(id ? { travelRequestId: id } : {})} />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("opens straight away, says the claim is linked, and sends travelRequestId in the POST body", async () => {
+    renderLinked(TRAVEL_ID);
+    // no click needed: the form is already open
+    expect(screen.getByRole("note")).toHaveTextContent(/linked to your approved travel request/i);
+    fireEvent.change(screen.getByLabelText(/amount/i), { target: { value: "450.75" } });
+    fireEvent.change(screen.getByLabelText(/date/i), { target: { value: "2026-11-12" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body.travelRequestId).toBe(TRAVEL_ID);
+    expect(body.amount).toBe(45075);
+  });
+
+  it("without a link the form starts closed and the body carries no travelRequestId", async () => {
+    renderLinked();
+    expect(screen.queryByLabelText(/amount/i)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /new claim/i }));
+    await waitFor(() => expect(screen.getByLabelText(/amount/i)).toBeInTheDocument());
+    expect(screen.queryByRole("note")).toBeNull();
+    fireEvent.change(screen.getByLabelText(/amount/i), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText(/date/i), { target: { value: "2026-11-12" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse((fetchMock.mock.calls[0]![1] as RequestInit).body as string);
+    expect(body).not.toHaveProperty("travelRequestId");
+  });
+});
