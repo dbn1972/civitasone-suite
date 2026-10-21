@@ -443,8 +443,10 @@ export function registerCheckInConsumers(queue: Queue): void {
             visitorCategory: badgeCategory,
           },
         });
-        await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "check_in", resourceType: "check_in", resourceId: p.passId, outcome: "success" } });
       }
+      // Physical-access audit trail: emitted for EVERY committed check-in, not
+      // only when the optional auto-print-badge toggle is on (GAP-VISITOR-GUARD-06).
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "visitor-service", action: "check_in", resourceType: "check_in", resourceId: p.passId, outcome: "success" } });
 
       return {
         locationId: pass.locationId,

@@ -34,7 +34,6 @@ vi.mock("../_data", () => ({
   getTenantStewardship: async () => ({ data: [], source: "error" }),
   getTenantSubscriptions: async () => ({ data: [], source: "error" }),
   getTenantCodeLists: async () => ({ data: [], source: "error" }),
-  getTenantOrgHierarchy: async () => ({ data: [], source: "error" }),
   getTenantConsentExchange: async () => ({ data: [], source: "error" }),
   getTenantDataMigration: async () => ({ data: [], source: "error" }),
   getTenantPlans: async () => ({ data: [], source: "error" }),
