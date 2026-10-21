@@ -168,3 +168,18 @@ export function resourceLabel(type: string | undefined, id: string | undefined, 
   if (type) return humanize(type);
   return null;
 }
+
+/**
+ * Start of the range the HR audit log asks for when the auditor has not picked
+ * a From date: the epoch, i.e. the whole trail. audit-service otherwise
+ * defaults a missing `from` to "now minus 7 days" (GAP-HR-AUDIT-LOG-04).
+ */
+export const HR_AUDIT_ALL_TIME_FROM = "1970-01-01T00:00:00.000Z";
+
+/**
+ * The most events one CSV export will contain. Mirrors audit-service's
+ * EXPORT_MAX_ROWS default (50,000, exports/validators.ts), which stays the
+ * authority -- it answers 413 above its cap. Used here only to explain the
+ * limit instead of offering a download that would be refused.
+ */
+export const AUDIT_EXPORT_MAX_ROWS = 50_000;

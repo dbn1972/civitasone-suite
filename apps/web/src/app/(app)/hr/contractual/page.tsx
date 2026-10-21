@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatIndianDate, todayIST } from "@/lib/formatters";
+import { daysUntilIST } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 import { requireAnyRole } from "@/lib/auth/roleGuard";
 import { HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
+import { EXPIRING_SOON_STATUS, contractDisplayStatus, isExpiringSoon } from "./contractRules";
 
 type ApiContract = {
   id: string;
@@ -27,8 +28,12 @@ type Row = {
   designation: string;
   contractFrom: string;
   contractTo: string;
+  /** What the status badge shows (see contractDisplayStatus): `expiring_30d`, a swept `expired`, or the raw status. */
   status: string;
-  daysToExpiry: number;
+  /** The status exactly as the API stored it; the stat tiles count by this, never by the display value. */
+  rawStatus: string;
+  /** Whole IST calendar days until the end date (negative = already ended); null when the end date is missing/unparseable. */
+  daysToExpiry: number | null;
 } & Record<string, unknown>;
 
 /**
@@ -45,11 +50,11 @@ type Row = {
  * source of record instead of never-populated employee fields.
  */
 function mapContracts(apiItems: ApiContract[]): Row[] {
-  const today = todayIST();
   return apiItems.map((c) => {
-    const end = new Date(c.endDate);
-    const now = new Date(today);
-    const daysToExpiry = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    // IST calendar-day arithmetic (GAP-HR-WORKFORCE-CONTRACTUAL-01) -- the old
+    // `new Date(todayIST())` vs `new Date(endDate)` diff mixed a UTC-midnight
+    // parse with a possibly-timestamp end date.
+    const daysToExpiry = daysUntilIST(c.endDate);
     return {
       id: c.id,
       employeeId: c.employeeId,
@@ -59,7 +64,8 @@ function mapContracts(apiItems: ApiContract[]): Row[] {
       designation: c.designation,
       contractFrom: c.startDate,
       contractTo: c.endDate,
-      status: c.status,
+      status: contractDisplayStatus(c.status, daysToExpiry),
+      rawStatus: c.status,
       daysToExpiry,
     };
   });
@@ -85,20 +91,30 @@ export default async function ContractualPage() {
   // Real contract-status-and-date-driven counts (GAP-HR-CONTRACTUAL-04)
   // instead of comparing employee-lifecycle statuses that this data never
   // carried in the first place.
-  const active = items.filter((i) => i.status === "active").length;
-  const expiringSoon = items.filter((i) => i.status === "expiring" || (i.status === "active" && i.daysToExpiry <= 30 && i.daysToExpiry >= 0)).length;
-  const expired = items.filter((i) => i.status === "expired" || (i.daysToExpiry < 0 && i.status !== "terminated" && i.status !== "renewed")).length;
+  const hasEnded = (i: Row) => i.daysToExpiry !== null && i.daysToExpiry < 0;
+  const active = items.filter((i) => i.rawStatus === "active" && !hasEnded(i)).length;
+  // GAP-HR-WORKFORCE-CONTRACTUAL-01: "Expiring <=30d" is an end DATE test,
+  // not a status test -- hrms-service flips active -> expiring at <=90 days,
+  // so counting every status === "expiring" row overstated this tile, and an
+  // ended contract still flagged expiring must not count at all.
+  const expiringSoon = items.filter((i) => isExpiringSoon(i.rawStatus, i.daysToExpiry)).length;
+  const expired = items.filter((i) => i.rawStatus === "expired" || (hasEnded(i) && i.rawStatus !== "terminated" && i.rawStatus !== "renewed")).length;
   const agencies = new Set(items.map((i) => i.agency).filter((a) => a !== "—")).size;
   const isTruncated = !errored && items.length >= 100;
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "date" }[] = [
+  // Badge copy + tone for the two expiry states (the shared STATUS_MAP has no
+  // `expiring` entry, so it used to fall through to the neutral info pill).
+  const statusLabels = { expiring: t("statusExpiring"), [EXPIRING_SOON_STATUS]: t("statusExpiring30d") };
+  const statusVariants = { expiring: "warn", [EXPIRING_SOON_STATUS]: "bad" } as const;
+
+  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "date"; statusLabels?: Record<string, string>; statusVariants?: Record<string, "good" | "warn" | "mut" | "bad" | "info"> }[] = [
     { key: "name", label: t("colName") },
     { key: "department", label: t("colDepartment") },
     { key: "agency", label: t("colAgency") },
     { key: "designation", label: t("colDesignation") },
     { key: "contractFrom", label: t("colFrom"), cellType: "date" },
     { key: "contractTo", label: t("colTo"), cellType: "date" },
-    { key: "status", label: t("colStatus"), cellType: "status" },
+    { key: "status", label: t("colStatus"), cellType: "status", statusLabels, statusVariants },
   ];
 
   return (

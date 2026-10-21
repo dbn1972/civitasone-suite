@@ -1705,7 +1705,9 @@
     "filterPlaceholder": "Filter by name, agency or department…",
     "emptyTitle": "No contractual staff",
     "emptyMessage": "Contractual employees appear here, showing their engagement terms and contract expiry dates.",
-    "truncatedNotice": "Showing the first {count} contracts — more may exist. Search and filters below only cover this loaded set."
+    "truncatedNotice": "Showing the first {count} contracts — more may exist. Search and filters below only cover this loaded set.",
+    "statusExpiring": "Expiring",
+    "statusExpiring30d": "Expiring ≤30d"
   },
   "corrections": {
     "loadingAriaLabel": "Loading…",
@@ -4107,8 +4109,8 @@
   },
   "hrAuditLog": {
     "title": "HR Audit Log",
-    "subtitle": "Recent audit trail entries for your tenant, most recent first. Required by e-Governance guidelines.",
-    "cardTitle": "Recent HR Actions",
+    "subtitle": "Audit trail of HR and payroll actions for your tenant, most recent first. Required by e-Governance guidelines.",
+    "cardTitle": "HR Actions",
     "colWhen": "When",
     "colAction": "Action",
     "colResource": "Resource",
@@ -4123,12 +4125,16 @@
     "applyFilter": "Apply",
     "clearFilter": "Clear",
     "showingRange": "Showing {from}–{to}",
+    "showingRangeOfTotal": "Showing {from}–{to} of {total}",
     "prevPage": "← Previous",
     "nextPage": "Next →",
     "resourceTypeLabel": "Resource type",
     "allResourceTypes": "All types",
     "actorLabel": "Actor",
-    "actorPlaceholder": "User ID (exact)"
+    "actorPlaceholder": "User ID (exact)",
+    "exportCsv": "Export all matching events (CSV)",
+    "exportCsvCount": "Export all {total} matching events (CSV)",
+    "exportTooLarge": "{total} events match, which is more than the {max} one export can hold. Narrow the date range or filters to export."
   },
   "icc": {
     "title": "ICC Complaints",
@@ -7478,7 +7484,7 @@
     "statChargeMemoStageLabel": "Charge Memo Stage",
     "statUnderInquiryLabel": "Under Inquiry",
     "cardTitle": "Vigilance Cases Register",
-    "filterPlaceholder": "Filter by employee, department or inquiry officer…",
+    "filterPlaceholder": "Case ref, employee, department or inquiry officer…",
     "emptyTitle": "No vigilance cases on record",
     "emptyMessage": "Major departmental proceedings appear here — registered by the Vigilance Unit with charge memos, inquiry officer appointment, and penalty tracking under CCS (CCA) Rules.",
     "confidentialBannerTitle": "Confidential — Vigilance",
@@ -7488,7 +7494,19 @@
     "nextBatch": "Next 200",
     "statPenaltyAppealLabel": "Penalty & Appeal",
     "statClosedLabel": "Closed",
-    "statDroppedLabel": "Dropped"
+    "statDroppedLabel": "Dropped",
+    "filterFormLabel": "Filter vigilance cases",
+    "filterStatusLabel": "Status",
+    "filterAllStatuses": "All statuses",
+    "filterSearchLabel": "Search",
+    "applyFilter": "Apply",
+    "clearFilter": "Clear",
+    "resultsCount": "{total} matching cases",
+    "emptyFilteredTitle": "No cases match",
+    "emptyFilteredMessage": "No vigilance case matches this status and search. Clear the filter to see the whole register.",
+    "noCharges": "—",
+    "backToVigilance": "Back to Vigilance",
+    "crumbVigilance": "Vigilance"
   },
   "wfhForm": {
     "ariaLabel": "Work From Home request form",

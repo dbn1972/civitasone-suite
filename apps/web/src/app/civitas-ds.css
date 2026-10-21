@@ -670,3 +670,16 @@ tr.clickable:hover{background:var(--primary-soft)!important}
    that crushed the map to ~90px on a phone. */
 .map-layout{display:grid;gap:16px;grid-template-columns:minmax(0,1fr);align-items:start}
 @media(min-width:900px){.map-layout{grid-template-columns:minmax(0,1fr) minmax(240px,320px)}}
+
+/* Workforce analytics retirement forecast (GAP-HR-WORKFORCE-ANALYTICS-08): the
+   headline figures and the table wrapper were inline styles. Tone is token-only
+   so it follows the .dark swap; --muted is the neutral "unknown" tone used when
+   the forecast failed to load (never the success green). */
+.wf-fig-row{padding:12px 0;display:flex;gap:24px;flex-wrap:wrap}
+.wf-fig{font-size:28px;font-weight:800}
+.wf-fig--good{color:var(--good)}
+.wf-fig--warn{color:var(--warn)}
+.wf-fig--bad{color:var(--bad)}
+.wf-fig--muted{color:var(--muted)}
+.wf-fig-label{font-size:12px;color:var(--muted)}
+.wf-table{margin-top:12px}

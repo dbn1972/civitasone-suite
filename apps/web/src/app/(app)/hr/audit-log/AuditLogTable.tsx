@@ -48,8 +48,9 @@ export function AuditLogTable({ rows, labels }: Props) {
       sortable
       filterable
       filterPlaceholder={labels.filterPlaceholder}
-      exportable exportAudit="hr/audit-log"
-      exportFilename="hr-audit-log"
+      // No client-side CSV button here (GAP-HR-AUDIT-LOG-04): it could only
+      // export the rows loaded on this page. The page offers a server-side
+      // export of every matching event instead.
       emptyIcon="📋"
       emptyTitle={labels.emptyTitle}
       emptyMessage={labels.emptyMessage}
