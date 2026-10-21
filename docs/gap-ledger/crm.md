@@ -61,7 +61,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HOME-04  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** loading.tsx shows 4 stat tiles and a 288px block wrapped in min-h-screen bg-slate-50, unlike the loaded hub (tile sections) and nested inside the app shell padding (app/(app)/crm/loading.tsx:3).
 - **Verified evidence:** crm/loading.tsx:3 wraps in min-h-screen bg-slate-50 p-6 md:p-8 with 4 stat tiles (h-24) and h-72 block; loaded hub (page.tsx:77-89) is a PageHeader plus five tile sections. Same wrapper pattern in health/loading.tsx:3, so it is systemic.
 - **Files to change:** `apps/web/src/app/(app)/crm/loading.tsx`
@@ -167,7 +167,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-06  ·  LOW  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Hierarchy uses role="tree"/"treeitem" with aria-selected={false} but has no roving focus or arrow-key handling, so it is announced as a widget it does not behave as (app/(app)/crm/accounts/AccountHierarchy.tsx:19).
 - **Verified evidence:** AccountHierarchy.tsx:19-21 renders <ul role='tree'> with <li role='treeitem' aria-selected={false} aria-level=...>. There is no tabIndex/roving focus, no aria-expanded and no key handler anywhere in the component; items are flat (depth by padding-left) with an <a> inside each. Assistive tech announces a tree widget with arrow-key semantics that do not exist.
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/AccountHierarchy.tsx`
@@ -200,7 +200,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-08  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Parent not in the list is rendered as "Reports to another account", giving no clue which one (app/(app)/crm/accounts/AccountsTable.tsx:38).
 - **Verified evidence:** AccountsTable.tsx:38 builds hierarchy as `Reports to ${nameById.get(a.parentId) ?? 'another account'}`; nameById (:35) is built only from the loaded rows, so any parent outside the (possibly capped or cached) list shows the generic text with no name or link. The row itself is a link to the account, and CRMAccountSummary carries only parentId (no parent name). The account detail page has an ancestors loader (getCrmAccountAncestors, loaders.ts:1431) so names are obtainable but not on this list.
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/AccountsTable.tsx`
@@ -312,7 +312,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-DETAIL-07  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Seven independent client panels load below the fold with their own spinners and errors; the loading.tsx skeleton is a single block and does not mirror the two-column layout (app/(app)/crm/accounts/[id]/loading.tsx:7).
 - **Verified evidence:** [id]/loading.tsx:1-11 is a single h-64 block inside min-h-screen wrapper; page has g-main two columns plus 7 client panels (Customer360Panel, AccountRelationshipsEditor, ActivityFeed, CommunicationLog, AddressesEditor, DocumentAlertsView, DocumentsPanel) each with own spinner/error. Loading skeleton doesn't mirror layout.
 - **Files to change:** `apps/web/src/app/(app)/crm/accounts/[id]/loading.tsx`
@@ -362,7 +362,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACTIVITIES-02  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** On a failed load the badge and "—" stats say the load failed, yet the table below still shows "No interactions yet — Schedule your first call…" because ActivitiesTable never receives source (app/(app)/crm/activities/page.tsx:26, app/(app)/crm/activities/ActivitiesTable.tsx:64).
 - **Verified evidence:** activities/page.tsx:26 renders DataSourceBadge when source==='error' and stats show '—' via stat() (:12), but line 36 passes only `activities` and `initialSegment` to ActivitiesTable (no source). ActivitiesTable.tsx:63-64 renders EmptyState 'No interactions yet — Schedule your first call...' whenever activities.length===0, so an outage looks like an empty register; the All/Today/Overdue Segmented control is still shown. Unlike accounts, this table does not use useSeededResource so there is no offline cache either.
 - **Files to change:** `apps/web/src/app/(app)/crm/activities/page.tsx`, `apps/web/src/app/(app)/crm/activities/ActivitiesTable.tsx`
@@ -380,7 +380,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACTIVITIES-03  ·  MEDIUM  ·  confirmed  ·  theme DATEFMT
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** "Today" is computed as new Date().toISOString().slice(0,10), i.e. the UTC date, in both the stat and the segment; between 00:00 and 05:30 IST an Odisha user sees yesterday's items as "Due Today" (app/(app)/crm/activities/page.tsx:14, app/(app)/crm/activities/ActivitiesTable.tsx:40).
 - **Verified evidence:** activities/page.tsx:14 (server) and ActivitiesTable.tsx:40 (client) both use new Date().toISOString().slice(0,10), i.e. the UTC calendar date. Between 00:00 and 05:30 IST that is the previous IST day, so 'Due Today' and the Today segment match yesterday's dueDate. Two more issues: server (UTC host) and client (browser) can disagree, and the equality assumes dueDate is a bare YYYY-MM-DD (format not verifiable, schema absent). formatters.ts has formatIndianDate but no today-in-IST helper; lib/fiscalYear.ts already references Asia/Kolkata.
 - **Files to change:** `apps/web/src/lib/formatters.ts`, `apps/web/src/app/(app)/crm/activities/page.tsx`, `apps/web/src/app/(app)/crm/activities/ActivitiesTable.tsx`
@@ -447,7 +447,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACTIVITIES-07  ·  LOW  ·  partly  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Error/empty states inside the segment view fall back to DataTable's generic "No records found — There are no items to display yet." (app/(app)/crm/activities/ActivitiesTable.tsx:76).
 - **Verified evidence:** ActivitiesTable.tsx:76-89 passes no emptyTitle/emptyMessage to DataTable, so DataTable's defaults 'No records found / There are no items to display yet.' (ds/DataTable.tsx:184-185) appear. Correction: this only happens when a segment filter yields zero rows (Today/Overdue with nothing due) because activities.length===0 is caught earlier by the page-specific EmptyState (:63-64); the error state never reaches DataTable. So the true defect is generic, non-contextual copy for empty segments, not an outage mask (that is ACTIVITIES-02).
 - **Files to change:** `apps/web/src/app/(app)/crm/activities/ActivitiesTable.tsx`
@@ -503,7 +503,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-AGENT-WORKLOAD-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Saving one row calls load() which replaces all rows from the server, discarding unsaved edits the user made on other rows (app/_components/crm/AgentWorkloadEditor.tsx:72).
 - **Verified evidence:** AgentWorkloadEditor.tsx:72 calls `await load()` after a successful save; load() (:34-40) does setSource('loading') which makes the component return only the 'Loading agent workload…' paragraph (:88-94), then setAgents(data) replaces all rows from the server. Any unsaved edits (maxLeads, available, onLeave) on other rows are discarded, the table unmounts (focus lost) and the success message set after the reload. Same pattern in OwnershipDirectoryEditor (see ASSIGNMENT-DIRECTORY-05/06).
 - **Files to change:** `apps/web/src/app/_components/crm/AgentWorkloadEditor.tsx`
@@ -571,7 +571,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-AGENT-WORKLOAD-06  ·  LOW  ·  confirmed  ·  theme A11Y (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Row controls are labelled by position ("Max leads for agent 3") and every Save button reads just "Save"; screen-reader users cannot tell whose row they are editing after a sort or reload (app/_components/crm/AgentWorkloadEditor.tsx:132).
 - **Verified evidence:** AgentWorkloadEditor.tsx:132 label 'Max leads for agent {n}' where n = index+1 (:98), checkboxes aria-label 'Available for agent {n}' / 'On leave for agent {n}' (:142,:149), and every Save button is just 'Save' with no aria-label (:154-156). The name is in a plain <td> not a row header (:107). After any reload the index-to-agent mapping can change, and the screen-reader user hears positions rather than names. Not an i18n issue (theme corrected).
 - **Files to change:** `apps/web/src/app/_components/crm/AgentWorkloadEditor.tsx`
@@ -589,7 +589,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-AGENT-WORKLOAD-07  ·  LOW  ·  partly  ·  theme STATE (was CAP)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Load happens client-side on mount with a bare text line; unlike server-loaded CRM lists there is no cached copy or offline fallback (app/_components/crm/AgentWorkloadEditor.tsx:84).
 - **Verified evidence:** Accurate description: AgentWorkloadEditor.tsx:44-51 loads via getAgents() (browserFetch) in useEffect, and shows a bare 'Loading agent workload…' paragraph (:88-94) with no skeleton; agent-workload/page.tsx is a static server component so nothing is server-seeded and there is no useSeededResource/offline cache (unlike accounts). Overstated as a defect: this is an admin configuration screen where a stale cached capacity table could be misleading, and failure is handled with 'Workload unavailable' + badge (:113-119). The real improvement is a proper loading skeleton and not resetting to the loading state on refresh (ties to WORKLOAD-02).
 - **Files to change:** `apps/web/src/app/_components/crm/AgentWorkloadEditor.tsx`
@@ -1287,7 +1287,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-DETAIL-EDIT-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** The edit page ignores the loader source: an API outage renders "Contact not found" with no message and no badge, so a temporary failure looks like a deleted record (app/(app)/crm/contacts/[id]/edit/page.tsx:6).
 - **Verified evidence:** edit/page.tsx:6 destructures only `data`; any null (outage, 403, 404, invalid payload) renders EmptyState 'Contact not found' (:11) with no badge or message, contrary to the detail page which at least shows the badge. fetchJson supplies `status`/`errorMessage` that are ignored.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/[id]/edit/page.tsx`
@@ -1375,7 +1375,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-IMPORT-02  ·  HIGH  ·  confirmed  ·  theme DEFAULTS (was CONFIRM)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1858, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** The textarea opens pre-filled with "Sample User, user@example.com, 9900000000, Acme Corp"; the Import button is already enabled, so one click creates a junk contact (app/(app)/crm/contacts/import/page.tsx:44).
 - **Verified evidence:** import/page.tsx:43-45 initialises csv state to a header plus 'Sample User,user@example.com,9900000000,Acme Corp,new'. parseCsv yields 1 row, so the submit Button (l.163-172, disabled only when busy or 0 rows) is enabled on load and one click POSTs a junk contact. No confirm step.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/import/page.tsx`
@@ -1392,7 +1392,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-IMPORT-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Parsing is line.split(",") with the first line always discarded: a quoted value with a comma (e.g. "Housing & Urban Development, Odisha") silently shifts every later column, and a file without a header loses its first contact; neither is reported (app/(app)/crm/contacts/import/page.tsx:25).
 - **Verified evidence:** import/page.tsx:20 `csv.trim().split("\n").slice(1)` always drops line 1 (header assumed), and l.24-26 `line.split(",")` has no quote handling, so quoted commas shift columns; CRLF leaves a trailing \r on the last field. Neither case is reported.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/import/page.tsx`, `apps/web/src/lib/crm/parseCsv.ts`
@@ -1409,7 +1409,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-IMPORT-04  ·  MEDIUM  ·  confirmed  ·  theme FEEDBACK (was DATEFMT)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** The result is only "Import accepted — N contacts queued" followed by a redirect after 800 ms; because the command is queue-backed there is no per-row outcome, error download or count of rejected rows (app/(app)/crm/contacts/import/page.tsx:73).
 - **Verified evidence:** import/page.tsx:72-73 sets message `Import accepted — ${contacts.length} contacts queued.` and router.push('/crm/contacts') after 800 ms. The response body is never read (only res.ok, l.71) so no job id, rejected count or error file. Whether the backend returns per-row results is not visible (crm-service absent). Theme DATEFMT is wrong.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/import/page.tsx`
@@ -1426,7 +1426,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-IMPORT-05  ·  MEDIUM  ·  confirmed  ·  theme CAP
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Only paste input is supported (no file picker, no size cap); the preview shows 50 rows while the POST sends every valid row in a single request, so a large paste is neither reviewed nor chunked (app/(app)/crm/contacts/import/page.tsx:59).
 - **Verified evidence:** import/page.tsx:59-65 posts all preview rows in one request; the preview table shows preview.slice(0,50) (l.188). Input is a textarea only (l.138-151), no file input, no size or row cap. A reusable app/_components/FileUpload.tsx exists.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/import/page.tsx`
@@ -1443,7 +1443,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-IMPORT-06  ·  LOW  ·  confirmed  ·  theme FEEDBACK (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Skipped rows are counted but never shown or explained beyond "(missing name)"; invalid emails or phones are not flagged at all (app/(app)/crm/contacts/import/page.tsx:159).
 - **Verified evidence:** import/page.tsx:157-161 shows '{n} valid rows ready · {m} rows skipped (missing name)'. Skipped rows are counted (l.28-29) but not listed; email/phone are not validated in parseCsv, so nothing flags them. Theme PII is wrong.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/import/page.tsx`
@@ -1555,7 +1555,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTACTS-NEW-07  ·  LOW  ·  confirmed  ·  theme COPY (was LOADING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** error.tsx names the area "CRM New", so the boundary reads "We couldn't open CRM New." (app/(app)/crm/contacts/new/error.tsx:12).
 - **Verified evidence:** new/error.tsx:12 passes area="CRM New" to RouteError, which renders 'We couldn't open CRM New.' (RouteError.tsx sentence). Same string used in crm/deals/new, opportunities/new error.tsx.
 - **Files to change:** `apps/web/src/app/(app)/crm/contacts/new/error.tsx`, `apps/web/src/app/(app)/crm/deals/new/error.tsx`, `apps/web/src/app/(app)/crm/opportunities/new/error.tsx`, `apps/web/src/app/(app)/crm/deals/[id]/error.tsx`
@@ -1576,7 +1576,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTROL-TOWER-01  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** The card is titled "GIS — pipeline by region" and the empty state says regions "appear on the heat map", but the code renders a plain table with no map or heat colouring (app/(app)/crm/control-tower/page.tsx:70).
 - **Verified evidence:** control-tower/page.tsx:57 Card title 'GIS — pipeline by region', :70 emptyMessage '...appear on the heat map', :47 subtitle 'Regional pipeline heat'; the body is a DataTable (l.58-72) with no map or colour scale.
 - **Files to change:** `apps/web/src/app/(app)/crm/control-tower/page.tsx`
@@ -1589,7 +1589,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTROL-TOWER-02  ·  MEDIUM  ·  partly  ·  theme DATA-QUALITY (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Regions come from the contact "region" field, which the contact forms capture as free text with placeholder "e.g. South, West"; the same district spelt two ways splits the pipeline into separate rows (app/_components/crm/ClassificationFields.tsx:83, app/(app)/crm/control-tower/page.tsx:70).
 - **Verified evidence:** ClassificationFields.tsx region input is free text with placeholder 'e.g. South, West'. Region aggregation for control tower is done by the backend (getCrmControlTower -> /api/v1/crm/dashboard/control-tower, loaders.ts:3109); page only renders data.regions (page.tsx:26-32). Whether the backend normalises/case-folds cannot be verified. Split rows for spelling variants is plausible but unproven. Theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/_components/crm/ClassificationFields.tsx`, `apps/web/src/app/(app)/crm/control-tower/page.tsx`
@@ -1603,7 +1603,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTROL-TOWER-03  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** When the feed fails the whole page becomes "Control tower unavailable" with a small badge and no Retry or Back action, unlike the RefreshErrorState used on account detail; the title also changes to "Control Tower" (app/(app)/crm/control-tower/page.tsx:20).
 - **Verified evidence:** page.tsx:16-24: `if (!data)` returns PageHeader title 'Control Tower' plus EmptyState 'Control tower unavailable' (no action), and the badge only if source==='error'. Success title is 'Executive Control Tower' (l.45). RefreshErrorState (ds/RefreshErrorState.tsx) is available for server pages. Also l.102 `source==="error" &&` is effectively dead because error yields data=null.
 - **Files to change:** `apps/web/src/app/(app)/crm/control-tower/page.tsx`, `apps/web/src/lib/messages.ts`
@@ -1618,7 +1618,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTROL-TOWER-04  ·  MEDIUM  ·  partly  ·  theme ROBUSTNESS (was LOADING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** rankRegions calls BigInt(pipelineMinor || "0") without a guard; a decimal or malformed string throws during render and takes down the whole route to error.tsx (app/(app)/crm/control-tower/tower.ts:5).
 - **Verified evidence:** tower.ts:5-6 `BigInt(a.pipelineMinor || "0")` throws SyntaxError on '12.5' or 'abc', which would bubble to error.tsx. Whether crmControlTowerSchema (from @civitasone/types, absent from snapshot, imported loaders.ts:219) already constrains pipelineMinor to an integer string cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/crm/control-tower/tower.ts`
@@ -1633,7 +1633,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTROL-TOWER-05  ·  LOW  ·  partly  ·  theme LABELS (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** "Exception volume" adds counts across different exception types, so one dormant, overdue account is counted several times and the total is not a number of records (app/(app)/crm/control-tower/tower.ts:19).
 - **Verified evidence:** tower.ts:19-21 totalExceptionCount sums e.count across all exception types and page.tsx:105 shows it as 'Exception volume'. Overlap between types (same account in several) depends on backend definitions and cannot be verified; summing counts is code-true.
 - **Files to change:** `apps/web/src/app/(app)/crm/control-tower/tower.ts`, `apps/web/src/app/(app)/crm/control-tower/page.tsx`
@@ -1646,7 +1646,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-CONTROL-TOWER-06  ·  LOW  ·  partly  ·  theme NAV/SECURITY (was NAVUX)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** The Open button uses a plain <a href={row.href}> with the API-supplied string, no allow-list or client navigation, so it reloads the app and trusts the feed for the target (app/(app)/crm/control-tower/ExceptionTable.tsx:21).
 - **Verified evidence:** ExceptionTable.tsx:21 `<a className="btn" href={row.href}>Open</a>`: full page load and unvalidated href from the feed. Risk is low because the feed is the app's own API; javascript: URLs would be an issue only if the backend were compromised.
 - **Files to change:** `apps/web/src/app/(app)/crm/control-tower/ExceptionTable.tsx`
@@ -2141,7 +2141,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme COPY (was LOADING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** error.tsx passes area='CRM [Id]' to RouteError, so the user-facing sentence is 'We couldn't open CRM [Id]' (deals/[id]/error.tsx:17).
 - **Verified evidence:** deals/[id]/error.tsx:17 area='CRM [Id]'; RouteError.tsx:63 prints 'We couldn't open {area}.' giving 'We couldn't open CRM [Id]'.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/[id]/error.tsx`
@@ -2339,7 +2339,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-CANDIDATES-02  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [~] **Status** (W2 crm rescan: PARTIAL - Swap, a mandatory reviewer reason (>=10 chars in the dialog; validated and persisted by crm-service), and an audit trail naming BOTH contacts (merge on the primary, merge_into on the absorbed duplicate, reason on both) are done and tested; also fixed a latent bug where a merge that backfilled the primary's missing email rolled back on the unique email index. NOT built (item fix step 3, flagged as follow-up): per-field winner selection. NEEDS OWNER DECISION: which fields may a reviewer take from the duplicate over the primary's value (email/phone are PII and unique-indexed), and should the reason be mandatory server-side rather than only in the UI?)
+- [~] **Status** (W2 crm rescan: PARTIAL - Swap, a mandatory reviewer reason (>=10 chars in the dialog; validated and persisted by crm-service), and an audit trail naming BOTH contacts (merge on the primary, merge_into on the absorbed duplicate, reason on both) are done and tested; also fixed a latent bug where a merge that backfilled the primary's missing email rolled back on the unique email index. NOT built (item fix step 3, flagged as follow-up): per-field winner selection. NEEDS OWNER DECISION: which fields may a reviewer take from the duplicate over the primary's value (email/phone are PII and unique-indexed), and should the reason be mandatory server-side rather than only in the UI?) (W2 crm stabilise: Merge and Swap are now offered only to CRM_MERGE_ROLES = {crm_admin, super_admin}, the roles POST /v1/crm/contacts/merge admits; a plain crm_user used to be walked into a 403. A crm_user still reviews and dismisses pairs. page.test.tsx pins both sides and crmRoles.test.ts reads the server's ADMIN_ROLES to fail on drift.)
 - **First-pass claim:** Merge is irreversible ('cannot be undone') yet always keeps the left contact and only backfills its empty fields; the reviewer cannot swap sides or choose per-field winners even though differing fields are highlighted (page.tsx:139, 296; lib/crm/dedupCandidates.ts:60-66).
 - **Verified evidence:** Merge button 'Merge → keep left' (page.tsx:139), ConfirmDialog at :291-305 says 'cannot be undone' and has no reason; mergeDedupPair(left.id,right.id) (dedupCandidates.ts:67-73) posts {primaryId,duplicateId}; left is always primary and only empty fields backfilled (:61-66). No swap or per-field choice; backend carry-over rules (merge-consumer) not verifiable.
 - **Files to change:** `apps/web/src/app/(app)/crm/dedup-candidates/page.tsx`, `apps/web/src/lib/crm/dedupCandidates.ts`
@@ -2699,7 +2699,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 ### GAP-CRM-ESCALATION-RULES-01  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION
 
 - [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.) (W2 crm rescan: completed by #PRNUM)
-- **W2 crm rescan note:** (1) No free-text fallback any more: role and user are always pickers fed by the new GET /v1/crm/escalation-rules/recipients (crm-service reads policy-service roles + identity-service active users server-side over x-internal; the old policy/roles and identity/users?limit=500 calls were tenant_admin-only and the latter 400'd on the 200 cap, which is why crm_admin always landed on free text). When a directory is unavailable the pickers are empty, an alert + Retry says so, and a recipient that cannot be verified is not saved. (2) POST/PUT now reject an unknown role / inactive user with 422 INVALID_RECIPIENT and fail closed with 503 DIRECTORY_UNAVAILABLE (assignment/recipients.ts, shared/directory-client.ts). (3) Fixed a latent wiring bug found on the way: the editor sent no `name` (required) and "" for an unset recipientId (must be a UUID), so every save was a 400; lib/crm/assignment.ts escalationRuleBody now sends a derived name and omits unset recipients. Saved rules show the user's NAME in the picker. Tests: tests/escalation-recipients.test.ts + tests/directory-client.test.ts (real DB / stubbed fetch), EscalationRulesEditor.test.tsx, lib/crm/escalationRecipients.test.ts.
+- **W2 crm rescan note:** (1) No free-text fallback any more: role and user are always pickers fed by the new GET /v1/crm/escalation-rules/recipients (crm-service reads policy-service roles + identity-service active users server-side over x-internal; the old policy/roles and identity/users?limit=500 calls were tenant_admin-only and the latter 400'd on the 200 cap, which is why crm_admin always landed on free text). When a directory is unavailable the pickers are empty, an alert + Retry says so, and a recipient that cannot be verified is not saved. (2) POST/PUT now reject an unknown role / inactive user with 422 INVALID_RECIPIENT and fail closed with 503 DIRECTORY_UNAVAILABLE (assignment/recipients.ts, shared/user-directory.ts). (3) Fixed a latent wiring bug found on the way: the editor sent no `name` (required) and "" for an unset recipientId (must be a UUID), so every save was a 400; lib/crm/assignment.ts escalationRuleBody now sends a derived name and omits unset recipients. Saved rules show the user's NAME in the picker. Tests: tests/escalation-recipients.test.ts + tests/user-directory.test.ts (real DB / stubbed fetch), EscalationRulesEditor.test.tsx, lib/crm/escalationRecipients.test.ts. Stabilisation: the four parallel tenant-directory clients (identity-client names, identity-names, user-directory, directory-client) are now ONE module, shared/user-directory.ts: display names (all users, deactivated included, 60s success cache, 10s failure cache), ACTIVE-only user picker with the truncation flag, active roles. GET /v1/crm/escalation-rules/recipients and GET /v1/crm/directory/{users,roles} serve the same directory with the same semantics (the web shares one set of types and parsers, lib/crm/directory.ts). OWNER SIGN-OFF STILL NEEDED: GET /v1/crm/directory/users is readable by a plain crm_user, i.e. any CRM user can list the names of all active tenant staff (id + name only).
 - **First-pass claim:** Recipient user is a free-text raw user id ('user id (optional)') and recipient role a free-text string ('e.g. sales_manager'); there is no picker or validation against real users/roles, so a typo saves and leads escalate to nobody (EscalationRulesEditor.tsx:200-205).
 - **Verified evidence:** apps/web/src/app/_components/crm/EscalationRulesEditor.tsx:198-205 recipientRole is free text (placeholder 'e.g. sales_manager') and recipientId free text ('user id (optional)'); rowValid (38-44) only requires one to be non-empty. No lookup exists. Whether backend validates ids/roles cannot be verified (crm-service absent).
 - **Files to change:** `apps/web/src/app/_components/crm/EscalationRulesEditor.tsx`, `apps/web/src/lib/crm/assignment.ts`
@@ -2792,7 +2792,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ESCALATION-RULES-07  ·  LOW  ·  partly  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Two similarly named admin routes exist for escalation (this lead escalation and /crm/task-escalation for tasks); the page title and subtitle do not say 'lead' in the heading (page.tsx:9).
 - **Verified evidence:** page.tsx:9-10 title is 'Escalation Rules' but the subtitle explicitly says 'Escalate leads...', so the subtitle does mention leads; the title alone is ambiguous. A sibling route apps/web/src/app/(app)/crm/task-escalation exists (verified by listing), so ambiguity is real but smaller than described.
 - **Files to change:** `apps/web/src/app/(app)/crm/escalation-rules/page.tsx`, `apps/web/src/app/(app)/crm/escalation-rules/error.tsx`, `apps/web/src/app/(app)/crm/escalation-rules/loading.tsx`
@@ -2995,7 +2995,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-07  ·  LOW  ·  confirmed  ·  theme FABRICATED
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** loading.tsx has no stat-tile placeholders while the loaded page leads with four tiles, causing layout shift (grievances/loading.tsx).
 - **Verified evidence:** grievances/loading.tsx renders a breadcrumb bar, a title bar and one h-80 block. The loaded page (page.tsx:52-57) shows a StatGrid with four StatCards between header and table, so the skeleton lacks the tile row and the table below shifts down on load. Same hard-coded slate-200 / max-w-7xl styling as other loading files. Theme FABRICATED does not apply.
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/loading.tsx`
@@ -3054,7 +3054,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-DETAIL-03  ·  MEDIUM  ·  confirmed  ·  theme ROLEGATE
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Every failed action, whether 403, 409 or 5xx, throws the same catalogued 'save' message via grievanceActionError() (no status passed), so a permission refusal looks like a transient error (GrievanceActions.tsx:15-18, 52-54).
 - **Verified evidence:** GrievanceActions.tsx:15-18 grievanceActionError() takes no argument and always returns toHumanError('save', {area:'grievance'}) = "We couldn't save your grievance. Nothing was changed. Please try again in a moment." Lines 52-54 throw it for any !res.ok, so 403, 409, 422 and 5xx are identical; useConfirmAction (ds/ActionButton.tsx) shows e.message in the dialog. lib/messages.ts has no forbidden/conflict MessageKind, so a new kind or a dedicated string is needed.
 - **Files to change:** `apps/web/src/lib/messages.ts`, `apps/web/src/app/(app)/crm/grievances/[id]/GrievanceActions.tsx`
@@ -3242,7 +3242,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-NEW-06  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** loading.tsx is max-w-7xl with a full-width block while the form is a 640px card, so the skeleton and loaded page have different widths (grievances/new/loading.tsx; page.tsx:66).
 - **Verified evidence:** grievances/new/loading.tsx renders `mx-auto max-w-7xl` with header bars and an `h-80 rounded-xl` block; the loaded page (page.tsx:60-67) is PageHeader plus a card with maxWidth 640. It is byte-identical to grievances/loading.tsx, so the new-form route shows a table-shaped skeleton. It also uses hard-coded Tailwind slate-200 / min-h-screen rather than tokens (dark-mode mismatch).
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/new/loading.tsx`
@@ -3314,7 +3314,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-03  ·  MEDIUM  ·  confirmed  ·  theme DATA-JOIN (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Names are joined from getCrmAccounts (one unparameterised call), so any account not in that response appears as 'Unknown account' with no id or link text to identify it, and can also be picked as 'Call First' (health/health.ts:86-95, page.tsx:16-18).
 - **Verified evidence:** health.ts:86-95 joins by accounts.id from getCrmAccounts() (loaders.ts:1421, no params, 30s cache) and falls back to 'Unknown account' (:93). page.tsx:16-18 picks worstName from that joined list so a missing account can be 'Call First'; row shows no id. Note the fallback is deliberate (doc comment :80-84 avoids hiding accounts). Whether getCrmAccounts is itself paginated/capped is cannot-verify (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/health/health.ts`, `apps/web/src/app/(app)/crm/health/page.tsx`, `apps/web/src/app/(app)/crm/health/WatchlistTable.tsx`
@@ -3345,7 +3345,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM) ?followUp=1 now opens the prefilled follow-up dialog on scored accounts too (scored branch ignored it); crm.health.logFollowUp added to the live src/messages en/hi (the button rendered the raw key inside a provider). The follow-up target is the account-prefilled service-request dialog because /crm/activities/new does not exist.
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.) (W2 crm rescan: completed by #PRNUM) ?followUp=1 now opens the prefilled follow-up dialog on scored accounts too (scored branch ignored it); crm.health.logFollowUp added to the live src/messages en/hi (the button rendered the raw key inside a provider). The follow-up target is the account-prefilled service-request dialog because /crm/activities/new does not exist.
 - **First-pass claim:** The list has no owner, last-contact or next-action column and no way to start a follow-up from a row; the only action is to open the account first (WatchlistTable.tsx:31-38).
 - **Verified evidence:** WatchlistTable.tsx:30-39 columns are Account, Band, Health Score, Last Scored only; rowHref (:41) is the only action. AccountHealthEntry carries no owner/last-contact (types in @civitasone/types; health.ts). Owner/next-action need crm account/activity data not in the payload.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/WatchlistTable.tsx`, `apps/web/src/app/(app)/crm/health/health.ts`, `apps/web/src/app/(app)/crm/health/page.tsx`
@@ -3414,7 +3414,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-HEALTH-ACCOUNTID-03  ·  MEDIUM  ·  partly  ·  theme WIRING (was PII)
 
-- [x] **Status** (W0 2026-10-13, W1 SF-14a re-confirmed against main d0b65c3b5 (feature still present after the Field/Input conversion): closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM) relatedAccountId is now persisted (migration 0165 adds crm.service_requests.related_account_id; createBody accepts it, tenant-validated 422 ACCOUNT_NOT_FOUND, returned on create/detail, on the created event + audit), shown as a link on the service-request detail page; contact-name placeholder no longer says Citizen. Owner question: build a dedicated account follow-up endpoint/entity instead of reusing the citizen service-request API (citizenName/citizenPhone are still posted).
+- [x] **Status** (W0 2026-10-13, W1 SF-14a re-confirmed against main d0b65c3b5 (feature still present after the Field/Input conversion): closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM) relatedAccountId is now persisted (migration 0165 adds crm.service_requests.related_account_id; createBody accepts it, tenant-validated 422 ACCOUNT_NOT_FOUND, returned on create/detail, on the created event + audit), shown as a link on the service-request detail page; contact-name placeholder no longer says Citizen. Owner question: build a dedicated account follow-up endpoint/entity instead of reusing the citizen service-request API (citizenName/citizenPhone are still posted). Stabilisation (review finding): the link now survives an account merge (reassignAccountChildren re-points crm.service_requests.related_account_id from the merged-away duplicate to the survivor, so 'View related account' no longer lands on 'Account not found'; real-DB test in account-merge-gap-accounts-05.test.ts) and a NEW follow-up can no longer be linked to an inactive (merged-away) account (create check is status = 'active'; test in service-request-related-account.test.ts).
 - **First-pass claim:** The follow-up reuses the citizen service-request API: it posts citizenName / citizenPhone for what is an account representative, and offers service types 'New Water Connection' and 'New Electricity Connection' for an account-health action, so the resulting record is mis-typed (FollowUpModal.tsx:77-85, 234-247).
 - **Verified evidence:** True: FollowUpModal.tsx:77-85 (file lines ~204-212) POSTs {citizenName, citizenPhone, serviceType, subject, description, priority, relatedAccountId} to /api/proxy/v1/crm/service-requests, the citizen service-request API; select options (file ~363-374) include 'New Water Connection' and 'New Electricity Connection' next to health-specific ones. Softening: the name field label is 'Contact Name' with placeholder 'Citizen or account representative name', so it is partly acknowledged. Phone is optional. Whether the endpoint accepts these free-text service types, or a dedicated account follow-up endpoint exists, is cannot-verify (crm-service absent). Theme PII is mis-tagged; the issue is domain mis-typing.
 - **Files to change:** `apps/web/src/app/(app)/crm/health/[accountId]/FollowUpModal.tsx`
@@ -3543,7 +3543,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-FORMS-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** On an outage the tiles show '—' but the table still says 'No website forms registered', reading as an empty registry (LeadFormsTable.tsx:48-50; page.tsx:17).
 - **Verified evidence:** page.tsx:34 passes only ranked rows; on source==='error' forms=[] so LeadFormsTable shows emptyTitle 'No website forms registered' (LeadFormsTable.tsx:48-50) while tiles show '—' (page.tsx:17).
 - **Files to change:** `apps/web/src/app/(app)/crm/lead-forms/page.tsx`
@@ -3575,7 +3575,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-FORMS-06  ·  LOW  ·  confirmed  ·  theme LOADING (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** loading.tsx is a bare text line with no heading or skeleton, unlike the sibling loading screens; icons in the tiles are emoji on hard-coded hex backgrounds (lead-forms/loading.tsx; page.tsx:29-31).
 - **Verified evidence:** lead-forms/loading.tsx is 3 lines: page-main with a <p>Loading website lead forms…</p>, no heading/skeleton unlike lead-scoring/loading.tsx. page.tsx:29-31 use emoji icons with #e0f2fe/#dcfce7/#fee2e2 backgrounds (same StatCard pattern as HEALTH-06).
 - **Files to change:** `apps/web/src/app/(app)/crm/lead-forms/loading.tsx`, `apps/web/src/app/(app)/crm/lead-forms/page.tsx`
@@ -3787,7 +3787,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-SCORING-07  ·  LOW  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9; W2 crm rework re-confirmed: Save after removal still asks confirm with the dropped-rule count (LeadScoreRulesEditor.test.tsx 'tells the admin a rule dropped from the list is NOT deleted by Save'); the copy no longer claims the rule stops scoring)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9; W2 crm rework re-confirmed: Save after removal still asks confirm with the dropped-rule count (LeadScoreRulesEditor.test.tsx 'tells the admin a rule dropped from the list is NOT deleted by Save'); the copy no longer claims the rule stops scoring) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** loading.tsx shows four stat tiles and a 280px block the page never renders; Remove deletes a rule immediately with no confirmation (lead-scoring/loading.tsx; editor:108, 226).
 - **Verified evidence:** lead-scoring/loading.tsx:9-16 4 tiles + 280px block; loaded page has no tiles. removeRule (:108) fires from button :226 with no confirm; local only until Save, so partly reversible.
 - **Files to change:** `apps/web/src/app/(app)/crm/lead-scoring/loading.tsx`, `apps/web/src/app/_components/crm/LeadScoreRulesEditor.tsx`
@@ -3809,7 +3809,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LINKED-ACCOUNTS-02  ·  MEDIUM  ·  confirmed  ·  theme STATUS (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Every status renders in the same 'pill info' regardless of value, so 'Needs attention' and 'Disconnected' look identical to 'Connected' (panel:157).
 - **Verified evidence:** apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx:157 renders every row as <span className="pill info">{STATUS_LABEL[a.status]}</span>; STATUS_LABEL (28-33) distinguishes pending/connected/error/revoked by text only. CSS has .pill.good/.warn/.bad/.mut variants unused here.
 - **Files to change:** `apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx`
@@ -3825,7 +3825,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LINKED-ACCOUNTS-03  ·  MEDIUM  ·  partly  ·  theme COPY (was I18N)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** The button says 'Connect provider' although nothing is connected: the request stays pending and no items are imported; the honest wording is in small grey text above the form rather than on the action or in the success message beyond the first sentence (panel:105-108, 132).
 - **Verified evidence:** Button label is 'Connect provider' (apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx:132) while nothing syncs. But the honest wording exists: paragraph at 105-107 (13px muted, above the form) and the success message at 73 is the full sentence 'Connection requested. It is pending — automatic sync is not live yet.' so 'beyond the first sentence' is overstated. Strings are hardcoded English (no next-intl), so the I18N tag is loosely right but the real issue is copy.
 - **Files to change:** `apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx`
@@ -3841,7 +3841,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LINKED-ACCOUNTS-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK (was PII)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** After a failed load the list says 'Connections unavailable' but the connect form stays enabled, so a user can add a link (possibly a duplicate) without seeing existing ones; duplicates for the same provider and email are not prevented client-side (panel:143-147, 114-134).
 - **Verified evidence:** When getLinkedAccounts fails (source==='error', apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx:143-146) the form (110-137) is still enabled; submit only checks EMAIL_RE (66) and busy. No client-side check for an existing provider+email (accounts state is empty on error, and even on success connect() at 72 does not compare). Whether the backend (v1/crm/linked-accounts, crm-service absent from snapshot) rejects duplicates: cannot verify.
 - **Files to change:** `apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx`
@@ -3857,7 +3857,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LINKED-ACCOUNTS-05  ·  LOW  ·  confirmed  ·  theme LOADING (was OTHER)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** The DataSourceBadge is shown twice on failure (card header and inline) (panel:102, 145).
 - **Verified evidence:** DataSourceBadge source="error" is rendered in the card header (apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx:102) and again inside the 'Connections unavailable' paragraph (145).
 - **Files to change:** `apps/web/src/app/_components/crm/LinkedAccountsPanel.tsx`
@@ -4040,7 +4040,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9; W2 crm rework re-confirmed: OnboardingDetail.test.tsx 'offers Retry on a failed load and re-fetches when clicked' passes on the reworked load path)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9; W2 crm rework re-confirmed: OnboardingDetail.test.tsx 'offers Retry on a failed load and re-fetches when clicked' passes on the reworked load path) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** On a failed load the EmptyState says 'Try again in a moment' but offers no retry control, so the clerk must reload the browser (OnboardingDetail.tsx:221-235).
 - **Verified evidence:** apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx:221-235: on isError with item==null, EmptyState says 'Try again in a moment' but has no action prop, no retry (reload exists at 107 but unused). Note not-found is separated correctly (getOnboardingCase returns 'not-found' on 404, lib:286).
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx`
@@ -4073,7 +4073,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-DETAIL-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9; W2 crm rework re-confirmed: OnboardingDetail.test.tsx 'polls after a 202 until the version advances, then settles' passes and now also asserts the names are looked up once across the polls)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9; W2 crm rework re-confirmed: OnboardingDetail.test.tsx 'polls after a 202 until the version advances, then settles' passes and now also asserts the names are looked up once across the polls) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Accepted (202) mutations show 'may take a moment to take effect' but the case is reloaded immediately, so the panel can still show the old stage or KYC status (OnboardingDetail.tsx:107-109, 136-143, 192-199).
 - **Verified evidence:** applyKyc (137-142) and applyStage (192-199) show 'may take a moment to take effect' when result.accepted (HTTP 202) then immediately call reload(), so the fetched case may still be stale; no polling. Stage/KYC selects reset, so the user sees old values with a success message.
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx`
@@ -4516,7 +4516,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PIPELINES-03  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [~] **Status** (W2 crm rescan: PARTIAL, NEEDS OWNER DECISION — fix step 3 is now done: crm-service POST/PATCH/DELETE /v1/crm/pipelines require crm_admin or super_admin (a crm_user gets 403 straight from the API; GETs stay open to every CRM role so the board, quotation builder and ageing editor still work; tests in services/crm-service/tests/crm-cluster08-gaps.test.ts). Still open: ROLE PARITY. The layout (shared CRM_ADMIN_ROLES) admits admin / platform_admin / tenant_admin, but the pipelines API accepts none of them (it 403s them on every call, GET included — unchanged from before). OWNER QUESTION: should tenant_admin (and admin / platform_admin) be able to configure pipelines? If yes add them to the server role lists in services/crm-service/src/modules/pipelines/routes.ts; if no narrow apps/web/src/app/(app)/crm/pipelines/layout.tsx to crm_admin / super_admin like the products layout. Not changed here because either way grants or removes access.)
+- [x] **Status** (W2 crm stabilise: completed by #PRNUM. Fix step 3 was done in the rescan: crm-service POST/PATCH/DELETE /v1/crm/pipelines require crm_admin or super_admin (a crm_user gets 403 straight from the API; GETs stay open to every CRM role so the board, quotation builder and ageing editor still work; tests in services/crm-service/tests/crm-cluster08-gaps.test.ts). ROLE PARITY is now closed by narrowing the WEB gate to the server's own set: the /crm/pipelines layout and the hub Pipelines tile gate on CRM_PIPELINE_WRITE_ROLES = {crm_admin, super_admin}. tenant_admin used to clear the broader CRM_ADMIN_ROLES gate and get a fully wired editor whose every call answered 403 (it is in neither the pipelines read nor write set); admin / platform_admin never clear the parent CRM layout. Narrowing changes nobody's real access. pipelines/layout.test.tsx pins the redirect for crm_user, tenant_admin, admin, platform_admin and reads the server constant to fail on drift; hubTiles.test.ts pins the tile access. NOT done, by design: letting tenant_admin configure pipelines would WIDEN access and needs the backend role lists changed first plus security sign-off.)
 - **First-pass claim:** Pipeline configuration is open to every CRM user; qualification-frameworks and task-escalation use an admin-only layout but this route relies on the broad CRM layout (crm/layout.tsx:5).
 - **Verified evidence:** crm/layout.tsx:5-8 only requires CRM_ROLES incl. crm_user; pipelines/ has error/loading/page and no layout.tsx, unlike task-escalation and qualification-frameworks (requireAnyRole admin list). PipelineEditor exposes create, edit, delete. Server enforcement cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/crm/pipelines/layout.tsx`
@@ -5311,7 +5311,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-SERVICE-REQUESTS-06  ·  LOW  ·  confirmed  ·  theme LOADING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** loading.tsx is the generic three-bar template with no tiles or table shape, unlike the list it precedes (service-requests/loading.tsx).
 - **Verified evidence:** service-requests/loading.tsx is three Tailwind pulse bars (h-4, h-9, h-80) inside min-h-screen p-6 - no tile row, no table header rows, and uses a different structure from sibling loading files (voice-of-customer/loading.tsx uses page-main/ph with four tile skeletons). Confirmed but cosmetic.
 - **Files to change:** `apps/web/src/app/(app)/crm/service-requests/loading.tsx`
@@ -5793,7 +5793,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ACCOUNTS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Merge duplicate accounts is a destructive-looking control placed between header and stats for all roles; the dialog (MergeDialog.tsx) was not read, so confirmation and audit of the merge are undeterminable (app/(app)/crm/accounts/page.tsx:44).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['PATCH /v1/crm/accounts/:id/parent', '(merge) MergeDialog uses client lib/crm/dataQuality mergeEntities']`
 - **Question:** Is account merge performed server-side with role gate, confirmation-worthy irreversibility handling and audit, rather than client only?
@@ -5804,7 +5804,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ASSIGNMENT-DIRECTORY-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Deleting a queue, territory, partner or branch says only "no longer available for assignment"; nothing warns when an assignment rule or lead still references it, and the response to that case is undeterminable without the backend (app/_components/crm/OwnershipDirectoryEditor.tsx:200).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['DELETE /v1/crm/{assignment-queues|territories|partners|branches}/:id', 'GET /v1/crm/assignment-rules']`
 - **Question:** Does DELETE of a referenced queue/territory/partner/branch return 409 or cascade, instead of leaving dangling rule/lead references?
@@ -5826,7 +5826,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENT-TYPES-01  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** The Code of an existing type is freely editable and saved with PUT; changing the code of a type already attached to documents may orphan them, and there is no warning (DocumentTypesEditor.tsx:399, 329-333). Backend behaviour undeterminable.
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['PUT /v1/crm/document-types/:id', 'POST /v1/crm/document-types']`
 - **Question:** Is code immutable once documents reference the type (409 or ignored) so documents are not orphaned?
@@ -5837,7 +5837,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENTS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Copy asserts behaviour ('Infected files are quarantined automatically', '30 days') that is not verifiable from this route; the rules live in crm-service (absent from the snapshot), so the claim is undeterminable here (page.tsx:28-29).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['POST /v1/crm/documents/presign', 'POST /v1/crm/documents', 'GET /v1/crm/documents/:id/download']`
 - **Question:** Does the service quarantine infected files automatically and apply a 30-day rule as the copy states?
@@ -5859,7 +5859,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-OPPORTUNITIES-01  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1858, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** The stage dropdown on every card lists every stage including terminal ones, so a card can be moved to Won or Lost through a plain stage change that skips the OP-006 Close dialog (outcome, reason, competitor); whether the server refuses is undeterminable because crm-service is absent (apps/web/src/app/_components/crm/OpportunityViews.tsx:225).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['PATCH /v1/crm/deals/:id/stage', 'POST /v1/crm/deals/:id/close']`
 - **Question:** Does the stage endpoint reject terminal stages (Won/Lost) so closing must go through /close with outcome and reason?
@@ -5881,7 +5881,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-PRICE-BOOKS-03  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Two enabled books may carry identical criteria and the UI gives no warning or precedence; which one wins in Resolve is undeterminable because crm-service is absent (PriceBookEditor.tsx:104, lib/crm/quotation.ts:243).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['GET /v1/crm/price-books/resolve', 'POST/PUT /v1/crm/price-books']`
 - **Question:** Is there a deterministic precedence, or a uniqueness check, when two enabled books share identical criteria?
@@ -5892,7 +5892,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-QUALIFICATION-FRAMEWORKS-02  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** A framework is saved as one document including all questions with no version or conflict check; two admins editing at once overwrite each other, and questions removed from a saved framework may orphan answers already recorded on leads (undeterminable, service absent) (QualificationFrameworksEditor.tsx:110-125).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['PATCH /v1/crm/qualification-frameworks/:id', 'POST /v1/crm/qualification-frameworks', 'POST /v1/crm/leads/:id/qualify']`
 - **Question:** Does PATCH qualification-frameworks/:id require and check the row `version` (409 on stale) and does it reject or soft-retire removed question ids that leads already answered?
@@ -5903,7 +5903,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-QUALIFICATION-FRAMEWORKS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1860, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** The delete dialog promises "This is recorded in the audit trail" but nothing on the page shows an audit entry, and audit is undeterminable from this snapshot (QualificationFrameworksEditor.tsx:281).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['DELETE /v1/crm/qualification-frameworks/:id']`
 - **Question:** Does the DELETE handler emit an audit event via @civitasone/events with actor, tenant and framework id (CLAUDE.md rule 8)?
@@ -5925,7 +5925,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-RTI-NEW-02  ·  HIGH  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1858, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** There is no received-date or mode-of-receipt field, so an RTI physically received days ago is registered with the clock starting whenever the form is filed (server default undeterminable); the 30-day statutory deadline is the register's core purpose (rti/new/page.tsx:105-260).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['POST /v1/crm/rti']`
 - **Question:** Does POST /v1/crm/rti accept a receivedDate (and mode) and compute the 30-day dueDate from it, defaulting to server now only when omitted?
@@ -5958,7 +5958,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-VOICE-OF-CUSTOMER-04  ·  MEDIUM  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 closed by #1859, verified on main 9c5e9e9e9) (W2 crm stabilise: formerly PROVISIONAL, re-confirmed against this branch.)
 - **First-pass claim:** Average Score prints "n / 100" while Mixed/Negative thresholds are +15 and -15, implying a signed scale (a -22 would read "-22 / 100"); the actual scale is undeterminable because @civitasone/types is absent (voc.ts:25, voice-of-customer/page.tsx:105).
 - **Service:** `crm-service`  ·  **Endpoint(s):** `['GET /v1/crm/sentiment/summary']`
 - **Question:** Is averageScore in the sentiment summary on a 0-100 scale or a signed -100..+100 scale?
