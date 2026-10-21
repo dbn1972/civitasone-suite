@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { Field } from "./Field";
 import { EntityPicker } from "./EntityPicker";
 import type { EntityOption, EntityPickerProps } from "./EntityPicker";
@@ -47,6 +47,33 @@ describe("EntityPicker", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not load the list.");
     expect(screen.queryByText("No matches")).not.toBeInTheDocument();
+  });
+
+  it("opt-in searchRetryLabel adds a Try again button that re-runs the CURRENT query (GAP-HR-LEAVE-BALANCE-05)", async () => {
+    const search = vi
+      .fn<(q: string, s: AbortSignal) => Promise<EntityOption[]>>()
+      .mockRejectedValueOnce(new Error("boom"))
+      .mockResolvedValueOnce(OPTIONS);
+    render(<Harness search={search} searchErrorText="Could not load the list." searchRetryLabel="Try again" />);
+    fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "Asha" } });
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("Could not load the list.");
+    fireEvent.click(within(alert).getByRole("button", { name: "Try again" }));
+
+    expect(await screen.findByText("Asha Rao")).toBeInTheDocument();
+    expect(search).toHaveBeenCalledTimes(2);
+    expect(search.mock.calls[1]![0]).toBe("Asha"); // same query, no retyping
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows no retry button unless searchRetryLabel is given (existing callers unchanged)", async () => {
+    const search = vi.fn(async () => { throw new Error("boom"); });
+    render(<Harness search={search} searchErrorText="Could not load the list." />);
+    fireEvent.change(screen.getByLabelText("Manager"), { target: { value: "Asha" } });
+
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("clears the error and lists results once a later search succeeds", async () => {

@@ -2,6 +2,7 @@
 
 import { UserFacingError } from "@/lib/userFacingError";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   PageHeader, StatGrid, StatCard, Card, EmptyState, ErrorState, ConfirmDialog, useConfirmAction,
@@ -58,6 +59,7 @@ interface Props {
 export default function LeaveHistoryClient({ roles, myEmployeeId, initialEmployeeId, noLinkedProfile, profileSource }: Props) {
   const t = useTranslations("leaveHistory");
   const tc = useTranslations("common");
+  const router = useRouter();
   const isAdminOrManager = roles.some((r) => ADMIN_OR_MANAGER_ROLES.includes(r));
 
   // GAP-HR-LEAVE-HISTORY-04: initialise to the deep-linked id, else the
@@ -83,6 +85,13 @@ export default function LeaveHistoryClient({ roles, myEmployeeId, initialEmploye
   const [reloadTick, setReloadTick] = useState(0);
   const [pendingCancel, setPendingCancel] = useState<LeaveApp | null>(null);
   const formError = useFormError("leave application");
+
+  // GAP-HR-LEAVE-BALANCE-04: see LeaveBalanceClient -- a profile "Retry"
+  // re-runs the server wrapper (router.refresh()); adopt the own employee id
+  // it then supplies when nobody has been chosen yet.
+  useEffect(() => {
+    setEmpId((prev) => prev || (initialEmployeeId ?? myEmployeeId ?? ""));
+  }, [initialEmployeeId, myEmployeeId]);
 
   const statusLabel: Record<string, string> = {
     pending: t("chipPending"),
@@ -226,7 +235,8 @@ export default function LeaveHistoryClient({ roles, myEmployeeId, initialEmploye
         </Card>
       ) : !isAdminOrManager && profileSource === "error" ? (
         <Card title={t("applicationsCard")}>
-          <ErrorState error={toHumanError("load", { area: "your profile" })} onRetry={() => setReloadTick((n) => n + 1)} />
+          {/* GAP-HR-LEAVE-BALANCE-04: profile is a server-side fetch -- Retry re-runs it. */}
+          <ErrorState error={toHumanError("load", { area: "your profile" })} onRetry={() => router.refresh()} />
         </Card>
       ) : (
         <>

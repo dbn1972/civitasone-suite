@@ -6,7 +6,8 @@ import type { EmployeeSummary } from "@civitasone/types";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
 import { trackActivation } from "@/lib/activation";
 import { useToast } from "@/app/_components/ds/Toast";
-import { ConfirmDialog, Field, Input, Select, Textarea } from "@/app/_components/ds";
+import { Button, ConfirmDialog, Field, Input, Select, Textarea, type EntityOption } from "@/app/_components/ds";
+import { EmployeePicker } from "@/app/_components/EmployeePicker";
 import { useTranslations } from "next-intl";
 import {
   useFieldValidation,
@@ -34,16 +35,35 @@ type LeaveContext = {
   allocations: LeaveAllocation[];
 };
 
+/**
+ * POST /v1/hrms/leave-requests/preview -- what a submit would actually do,
+ * from the SAME rules code the real submit runs (GAP-HR-LEAVE-APPLY-01).
+ * Everything past `computedDays`/`engineApplied` is optional so an older
+ * server (or a stubbed response) that only sends those two still works.
+ */
+type LeavePreview = {
+  /** false = a rule blocks this request (see `violations`); absent/true = acceptable. */
+  valid?: boolean;
+  computedDays: number;
+  /** false = the leave code is outside the CCS engine: `computedDays` is the day count as entered. */
+  engineApplied: boolean;
+  warnings?: string[];
+  violations?: Array<{ code?: string; message: string }>;
+  holidaysInRange?: string[];
+  balance?: number;
+  balanceAfter?: number;
+};
+
 type Props = {
   employees: EmployeeSummary[];
   /** Preselects this employee when arriving via a deep link (e.g. an employee
-   *  profile's "Apply Leave" quick action, ?empId=...). Falls back to the
-   *  first employee in the list if not provided or not found in it. */
+   *  profile's "Apply Leave" quick action, ?empId=...). */
   initialEmployeeId?: string;
-  /** The current user's own employee id, when it appears in `employees` (an
-   *  HR admin/manager viewing the full roster) — used as the default
-   *  selection instead of an arbitrary first row, and to label that option
-   *  and show an "applying on behalf of" note for every other one. */
+  /** The current user's own employee id. In picker mode it powers the "Apply
+   *  for myself" shortcut and the "applying on behalf of" note for everyone
+   *  else; page.tsx makes sure this person's row is in `employees` so a
+   *  manager (whose roster holds only their direct reports) can still apply
+   *  for themselves. */
   myEmployeeId?: string;
   /** True when the logged-in user has no linked employee record at all — a
    *  normal 404 from the self-service profile endpoint, not a fetch failure
@@ -51,21 +71,37 @@ type Props = {
    *  is nothing this form can do for them yet, so it shows a clear, honest
    *  message instead of a confusing empty "no employees loaded" dropdown. */
   noLinkedProfile?: boolean;
+  /** GAP-HR-LEAVE-APPLY-03: HR / managers choose WHO the leave is for with a
+   *  searchable picker that starts empty (never a silent default person).
+   *  A plain employee only ever applies for themselves and gets the fixed
+   *  single-row field. Defaults to "more than one employee in the list". */
+  canPickEmployee?: boolean;
 };
 
-export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noLinkedProfile }: Props) {
+function toEmployeeOption(e: EmployeeSummary): EntityOption {
+  return { id: e.id, label: e.name, sublabel: e.department || undefined };
+}
+
+export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noLinkedProfile, canPickEmployee }: Props) {
   const t = useTranslations("leaveApply");
-  // GAP-HR-LEAVE-APPLY-03: an ?empId= deep link still wins outright. Absent
-  // that, this used to fall back to employees[0] — an arbitrary employee an
-  // unordered fetch happened to return first. When the current user's own
-  // employee record is IN this list (an HR admin/manager viewing the full
-  // roster, not the single-row self-service fallback below), default to
-  // "myself" instead — the common case (an HR admin applying for their own
-  // leave) no longer requires finding themselves in a long list first.
-  const preselected = initialEmployeeId && employees.some((e) => e.id === initialEmployeeId)
-    ? initialEmployeeId
-    : (myEmployeeId && employees.some((e) => e.id === myEmployeeId) ? myEmployeeId : employees[0]?.id ?? "");
+  const pickerMode = canPickEmployee ?? employees.length > 1;
+  // GAP-HR-LEAVE-APPLY-03: in picker mode (HR / manager) nobody is
+  // pre-selected unless an ?empId= deep link names someone -- the old default
+  // ("myself if in the list, else employees[0]") put an arbitrary person in a
+  // field whose only other guard was the leave-type select, so leave could be
+  // filed for the wrong employee. In single-row mode (a plain employee) the
+  // one row is the only choice, so it is selected.
+  const preselected = pickerMode
+    ? (initialEmployeeId ?? "")
+    : (initialEmployeeId && employees.some((e) => e.id === initialEmployeeId) ? initialEmployeeId : employees[0]?.id ?? "");
   const [employeeId, setEmployeeId] = useState(preselected);
+  // Display options for every employee this form has seen (the roster slice
+  // page.tsx loaded + whoever gets picked), so the picker shows a name for the
+  // selected id instead of a raw UUID without a second lookup.
+  const [employeeOptions, setEmployeeOptions] = useState<Record<string, EntityOption>>(
+    () => Object.fromEntries(employees.map((e) => [e.id, toEmployeeOption(e)])),
+  );
+  const [employeeError, setEmployeeError] = useState<string | undefined>();
   const [leaveContext, setLeaveContext] = useState<LeaveContext | null>(null);
   const [status, setStatus] = useState<
     "idle" | "loading" | "submitting" | "accepted" | "error"
@@ -75,14 +111,15 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
   const formError = useFormError("leave request");
 
   // GAP-HR-LEAVE-APPLY-01: server-confirmed preview of what a submit would
-  // actually debit (POST .../leave-requests/preview — reuses the exact same
-  // enforceCcsLeaveRules the real submit calls, so these can never diverge).
+  // actually debit (POST .../leave-requests/preview — runs the exact same
+  // rules the real submit does, so these can never diverge).
   // null = not yet checked, or the preview request itself couldn't be
-  // reached (offline) — falls back to the old approximate calendar count,
-  // not a hard block. A thrown 4xx (rule violation / insufficient balance)
-  // sets previewError instead, which DOES block submit inline (GAP-HR-
-  // LEAVE-APPLY-04) — no more window.confirm('...Continue?').
-  const [preview, setPreview] = useState<{ computedDays: number; engineApplied: boolean } | null>(null);
+  // reached (offline) — falls back to the approximate calendar count and the
+  // soft ConfirmDialog, not a hard block. A rule outcome (preview.valid ===
+  // false: insufficient balance, rule violation, overlap ...) or a rejected
+  // preview request (previewError) DOES block submit, inline and immediately
+  // (GAP-HR-LEAVE-APPLY-04) — no more window.confirm('...Continue?').
+  const [preview, setPreview] = useState<LeavePreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewChecking, setPreviewChecking] = useState(false);
   // Soft confirm for the offline/preview-unavailable fallback path only —
@@ -196,18 +233,25 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
   const dayParts = availableDayParts(leaveConfig, selectedAlloc?.leaveTypeCode, calendarSpan() === 1);
   const effectiveDayPart: LeaveDayPart = dayParts.includes(dayPart) ? dayPart : "full";
 
-  function calcDays(): number {
+  /**
+   * The day count as ENTERED (inclusive calendar days, or 0.5 for a part-day).
+   * NOT authoritative: the server recomputes the real debit under the CCS leave
+   * rules (working days vs calendar days, holidays, sandwich, prefix/suffix) --
+   * see `preview`. This is only (a) the placeholder `daysApplied` the preview
+   * and submit bodies must carry, and (b) the stand-in figure shown, flagged
+   * "approximate", when the preview cannot be reached (offline).
+   */
+  function approximateDays(): number {
     return daysForPart(effectiveDayPart, calendarSpan());
   }
 
-  // GAP-HR-LEAVE-APPLY-01: debounced server preview whenever the three
-  // fields it needs are all present. Deliberately does NOT fire on
-  // `employeeId` changes alone — it's keyed on the same values.* the submit
-  // body uses, so it never previews a stale employee/allocation pairing.
+  // GAP-HR-LEAVE-APPLY-01: debounced server preview whenever the fields it
+  // needs are all present. Keyed on the same values.* the submit body uses, so
+  // it never previews a stale employee/allocation pairing.
   useEffect(() => {
     setPreview(null);
     setPreviewError(null);
-    if (!selectedAlloc || !values.fromDate || !values.toDate || calcDays() <= 0) return;
+    if (!employeeId || !selectedAlloc || !values.fromDate || !values.toDate || approximateDays() <= 0) return;
     const controller = new AbortController();
     const timer = setTimeout(() => {
       setPreviewChecking(true);
@@ -221,17 +265,23 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
           allocId: selectedAlloc.id,
           fromDate: values.fromDate,
           toDate: values.toDate,
-          daysApplied: calcDays(),
+          daysApplied: approximateDays(),
           dayPart: effectiveDayPart,
         }),
       })
         .then(async (res) => {
           if (!res.ok) {
+            // The preview request itself was refused (not a rule outcome):
+            // 403/404/5xx. Shown inline, and Submit stays disabled.
             const resolved = await formError.fromResponse(res, "load");
             setPreviewError(resolved.message);
             return;
           }
-          setPreview(await res.json());
+          // A body without a numeric day count is not a preview (a proxy/stub
+          // answering `{}`): treat it like an unreachable preview rather than
+          // rendering "debit NaN days".
+          const body = (await res.json()) as Partial<LeavePreview> | null;
+          if (typeof body?.computedDays === "number") setPreview(body as LeavePreview);
         })
         .catch((err) => {
           // Offline/unreachable: leave preview null (falls back to the
@@ -245,8 +295,15 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedAlloc is derived from values.allocId + leaveContext (already deps below); formError is stable (see loadContext's own note above).
   }, [employeeId, values.allocId, values.fromDate, values.toDate, selectedAlloc, effectiveDayPart]);
 
-  async function submitAllocation(daysApplied: number) {
+  // GAP-HR-LEAVE-APPLY-01/04: a rule outcome from the server (preview.valid
+  // === false) or a refused preview request blocks submit -- shown inline the
+  // moment it is known, not only after Submit is clicked.
+  const violations = preview && preview.valid === false ? (preview.violations ?? []) : [];
+  const blockedByPreview = previewError !== null || (preview !== null && preview.valid === false);
+
+  async function submitAllocation(daysApplied: number, serverConfirmed: boolean) {
     if (!selectedAlloc) return;
+    const leaveTypeName = selectedAlloc.leaveTypeName;
     setStatus("submitting");
     setMessage("");
 
@@ -286,8 +343,14 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
       }
       setStatus("accepted");
       trackActivation("first_transaction");
-      setMessage(t("acceptedMessage"));
-      toast.success(t("acceptedMessage"));
+      // GAP-HR-LEAVE-APPLY-01: when the day count came from the server's own
+      // preview, say it -- the applicant sees the number that will actually be
+      // debited, not just a generic "submitted".
+      const acceptedText = serverConfirmed
+        ? t("acceptedWithDaysMessage", { count: daysApplied, typeName: leaveTypeName })
+        : t("acceptedMessage");
+      setMessage(acceptedText);
+      toast.success(acceptedText);
       resetFields();
       void loadContext(employeeId);
     } catch (caught) {
@@ -298,6 +361,15 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    // GAP-HR-LEAVE-APPLY-03: in picker mode nobody is pre-selected, so a
+    // submit without choosing who the leave is for is refused up front.
+    if (!employeeId) {
+      setEmployeeError(t("selectEmployeeError"));
+      setStatus("error");
+      setMessage(t("fixErrorsError"));
+      return;
+    }
 
     // Run all validators; if any fail, abort.
     if (!validate()) {
@@ -312,41 +384,39 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
       return;
     }
 
-    const calendarDays = calcDays();
+    const calendarDays = approximateDays();
     if (calendarDays <= 0) {
       setStatus("error");
       setMessage(t("toDateAfterFromError"));
       return;
     }
 
-    // GAP-HR-LEAVE-APPLY-01/04: a successful preview already ran the same
-    // rules engine + IDOR + eligibility + overlap checks the real submit
-    // would — if it came back clean, submit is safe to fire immediately
-    // with the SERVER-confirmed day count, no further confirmation needed.
-    // previewError means preview itself caught a real problem: block here,
-    // inline, instead of a native confirm() the user could click through.
-    if (previewError) {
-      setStatus("error");
-      setMessage(previewError);
-      return;
-    }
+    // GAP-HR-LEAVE-APPLY-01/04: a rule outcome / rejected preview blocks here
+    // (the button is already disabled for these; this guards Enter-key and
+    // programmatic submits). The reasons are shown inline above.
+    if (blockedByPreview) return;
+    // A clean preview already ran the same rules engine + IDOR + eligibility
+    // + overlap + balance checks the real submit would -- safe to fire
+    // immediately with the SERVER-confirmed day count, no further
+    // confirmation needed.
     if (preview) {
-      void submitAllocation(preview.computedDays);
+      void submitAllocation(preview.computedDays, true);
       return;
     }
     // Preview unavailable (offline, or still in flight — previewChecking
     // already disables Submit for the latter, see the button below) fall
-    // back to the old approximate-calendar-count path; only prompt when it
-    // would exceed the visible balance (same soft warning as before, now a
-    // ConfirmDialog instead of window.confirm()).
+    // back to the approximate-calendar-count path; only prompt when it
+    // would exceed the visible balance (soft warning, a ConfirmDialog).
     if (calendarDays > selectedAlloc.balanceDays) {
       setOfflineConfirmOpen(true);
       return;
     }
-    void submitAllocation(calendarDays);
+    void submitAllocation(calendarDays, false);
   }
 
-  const days = calcDays();
+  const days = approximateDays();
+  const selectedOption = employeeId ? employeeOptions[employeeId] : undefined;
+  const forSomeoneElse = pickerMode && !!employeeId && employeeId !== myEmployeeId;
 
   // No employee record is linked to this account at all (a normal 404, not
   // a fetch failure — see page.tsx), and a plain `employee` role has no
@@ -383,28 +453,58 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
         style={{ background: "var(--panel)", borderColor: "var(--line)" }}
         noValidate
       >
-        {/* Employee selector (not validated — always has a default) */}
-        <Field id="leave-employee" label={t("employeeLabel")}>
-          <Select
-            value={employeeId}
-            onChange={(e) => setEmployeeId(e.target.value)}
-          >
-            {employees.length === 0 ? (
-              <option value="">{t("noEmployeesLoaded")}</option>
-            ) : (
-              employees.map((emp) => (
-                <option key={emp.id} value={emp.id}>
-                  {emp.name} ({emp.department}){emp.id === myEmployeeId ? ` — ${t("myselfSuffix")}` : ""}
-                </option>
-              ))
-            )}
-          </Select>
-          {/* GAP-HR-LEAVE-APPLY-03: only shown once there's someone else it
-              could possibly mean — employees.length===1 is always the
-              self-service case (page.tsx's own single-row fallback). */}
-          {employees.length > 1 && employeeId && employeeId !== myEmployeeId && (
+        {/* Employee: HR / managers search and choose (nobody pre-selected);
+            a plain employee only ever has their own row. */}
+        <Field id="leave-employee" label={t("employeeLabel")} required={pickerMode} error={employeeError}>
+          {pickerMode ? (
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <EmployeePicker
+                  value={employeeId || null}
+                  initialOption={selectedOption}
+                  placeholder={t("selectEmployeePlaceholder")}
+                  onChange={(id, option) => {
+                    if (id && option) setEmployeeOptions((prev) => ({ ...prev, [id]: option }));
+                    setEmployeeId(id ?? "");
+                    setEmployeeError(undefined);
+                  }}
+                />
+              </div>
+              {myEmployeeId && employeeId !== myEmployeeId ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  style={{ minHeight: 44 }}
+                  onClick={() => {
+                    setEmployeeId(myEmployeeId);
+                    setEmployeeError(undefined);
+                  }}
+                >
+                  {t("applyForMyself")}
+                </Button>
+              ) : null}
+            </div>
+          ) : (
+            <Select
+              value={employeeId}
+              onChange={(e) => setEmployeeId(e.target.value)}
+            >
+              {employees.length === 0 ? (
+                <option value="">{t("noEmployeesLoaded")}</option>
+              ) : (
+                employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name} ({emp.department}){emp.id === myEmployeeId ? ` — ${t("myselfSuffix")}` : ""}
+                  </option>
+                ))
+              )}
+            </Select>
+          )}
+          {/* GAP-HR-LEAVE-APPLY-03: say out loud when the leave is being
+              filed for someone other than the signed-in user. */}
+          {forSomeoneElse && (
             <p className="mt-1 text-xs" style={{ color: "var(--mut)", margin: 0 }}>
-              {t("onBehalfOfNote", { name: employees.find((e) => e.id === employeeId)?.name ?? "" })}
+              {t("onBehalfOfNote", { name: selectedOption?.label ?? "" })}
             </p>
           )}
         </Field>
@@ -418,7 +518,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
             disabled={!leaveContext?.allocations.length}
           >
             {!leaveContext?.allocations.length ? (
-              <option value="">{t("noLeaveAllocations")}</option>
+              <option value="">{pickerMode && !employeeId ? t("selectEmployeeFirst") : t("noLeaveAllocations")}</option>
             ) : (
               <>
                 <option value="">{t("selectLeaveTypePlaceholder")}</option>
@@ -470,18 +570,34 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
 
         {days > 0 ? (
           <div className="text-sm text-slate-600">
-            {preview ? (
+            {preview && !blockedByPreview ? (
               // GAP-HR-LEAVE-APPLY-01: the server-confirmed count — the same
               // rules-engine computation the real submit debits from,
-              // fetched via POST .../leave-requests/preview.
-              <p style={{ margin: 0 }}>
-                {t.rich("willDebitMessage", {
-                  count: preview.computedDays,
-                  typeName: selectedAlloc?.leaveTypeName ?? "",
-                  strong: (chunks) => <span className="font-semibold text-slate-900">{chunks}</span>,
-                })}
-              </p>
-            ) : (
+              // fetched via POST .../leave-requests/preview — with the
+              // balance it leaves and any engine notices (sandwich etc.).
+              <>
+                <p style={{ margin: 0 }}>
+                  {t.rich("willDebitMessage", {
+                    count: preview.computedDays,
+                    typeName: selectedAlloc?.leaveTypeName ?? "",
+                    strong: (chunks) => <span className="font-semibold text-slate-900">{chunks}</span>,
+                  })}
+                </p>
+                {typeof preview.balanceAfter === "number" ? (
+                  <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut)" }}>
+                    {t("balanceAfterMessage", { count: preview.balanceAfter })}
+                  </p>
+                ) : null}
+                {preview.engineApplied === false ? (
+                  <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut)" }}>{t("directCountNote")}</p>
+                ) : null}
+                {(preview.warnings ?? []).length > 0 ? (
+                  <ul style={{ margin: "4px 0 0", paddingInlineStart: 18, fontSize: 12, color: "var(--mut)" }}>
+                    {(preview.warnings ?? []).map((w) => <li key={w}>{w}</li>)}
+                  </ul>
+                ) : null}
+              </>
+            ) : !blockedByPreview ? (
               <>
                 <p style={{ margin: 0 }}>
                   {t("durationLabel")}{" "}
@@ -493,6 +609,26 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
                   {previewChecking ? t("checkingBalance") : t("calendarDaysDisclaimer")}
                 </p>
               </>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* GAP-HR-LEAVE-APPLY-01/04: why Submit is disabled, shown the moment
+            the server says so (the violations are the rule engine's own
+            messages; previewError covers a refused preview request). */}
+        {blockedByPreview ? (
+          <div
+            role="alert"
+            className="rounded-md border p-3 text-sm"
+            style={{ background: "var(--badbg)", borderColor: "var(--badbd)", color: "var(--bad)" }}
+          >
+            <p style={{ margin: 0, fontWeight: 600 }}>{t("previewBlockedTitle")}</p>
+            {violations.length > 0 ? (
+              <ul style={{ margin: "4px 0 0", paddingInlineStart: 18 }}>
+                {violations.map((v) => <li key={v.message}>{v.message}</li>)}
+              </ul>
+            ) : (
+              <p style={{ margin: "4px 0 0" }}>{previewError}</p>
             )}
           </div>
         ) : null}
@@ -530,7 +666,9 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
             status === "submitting" ||
             status === "loading" ||
             previewChecking ||
-            employees.length === 0
+            blockedByPreview ||
+            employees.length === 0 ||
+            (pickerMode && !employeeId)
           }
           className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-60"
         >
@@ -559,8 +697,8 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
         open={offlineConfirmOpen}
         title={t("confirmOverBalanceTitle")}
         confirmLabel={t("confirmOverBalanceLabel")}
-        description={selectedAlloc ? t("balanceWarning", { days: calcDays(), balance: selectedAlloc.balanceDays }) : ""}
-        onConfirm={() => { setOfflineConfirmOpen(false); void submitAllocation(calcDays()); }}
+        description={selectedAlloc ? t("balanceWarning", { days: approximateDays(), balance: selectedAlloc.balanceDays }) : ""}
+        onConfirm={() => { setOfflineConfirmOpen(false); void submitAllocation(approximateDays(), false); }}
         onCancel={() => setOfflineConfirmOpen(false)}
       />
     </section>

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render as rtlRender, screen, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
@@ -104,13 +104,16 @@ describe("ApplyLeavePage — role-based employee resolution", () => {
 
     await render(ApplyLeavePage({ searchParams: {} }));
 
-    expect(screen.getByRole("option", { name: /asha verma/i })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: /rahul singh/i })).toBeInTheDocument();
+    // GAP-HR-LEAVE-APPLY-03: HR gets the searchable picker, starting EMPTY —
+    // not a 50-row dropdown with an arbitrary first employee already chosen.
+    const picker = screen.getByRole("combobox", { name: /employee/i });
+    expect(picker).toHaveValue("");
+    expect(screen.getByRole("button", { name: /submit leave request/i })).toBeDisabled();
     expect(screen.queryByText(/couldn't load/i)).not.toBeInTheDocument();
     expect(getMyProfileMock).toHaveBeenCalled();
   });
 
-  it("hr_admin/manager viewing the full roster who ALSO has their own employee record defaults to themselves, not an arbitrary first row", async () => {
+  it("hr_admin/manager viewing the full roster who ALSO has their own employee record starts with nobody selected, with a one-click 'Apply for myself'", async () => {
     stubLeaveContextFetch();
     getEmployeesMock.mockResolvedValue({
       data: [
@@ -123,8 +126,29 @@ describe("ApplyLeavePage — role-based employee resolution", () => {
 
     await render(ApplyLeavePage({ searchParams: {} }));
 
-    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("emp-self");
-    expect(screen.getByText(/myself/i)).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: /apply for myself/i }));
+    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("Priya Nair");
+  });
+
+  it("a manager whose roster holds only their direct reports still gets 'Apply for myself' (page.tsx adds the manager's own row)", async () => {
+    const fetchMock = vi.fn(async (..._args: unknown[]) => ({ ok: true, json: async () => ({ employee: {}, leaveTypes: [], allocations: [] }) }) as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    getEmployeesMock.mockResolvedValue({
+      data: [
+        { id: "emp-r1", name: "Asha Verma", department: "Finance" },
+        { id: "emp-r2", name: "Rahul Singh", department: "IT" },
+      ],
+      source: "api",
+    });
+    // the manager (emp-mgr) is NOT in their own direct-report roster
+    getMyProfileMock.mockResolvedValue({ data: { id: "emp-mgr", name: "Meena Rao", department: "dept-uuid", employeeNo: "E7", status: "active", designation: "d" }, source: "api" });
+
+    await render(ApplyLeavePage({ searchParams: {} }));
+
+    fireEvent.click(screen.getByRole("button", { name: /apply for myself/i }));
+    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("Meena Rao");
+    await waitFor(() => expect(fetchMock.mock.calls.some((c) => String(c[0]).includes("employeeId=emp-mgr"))).toBe(true));
   });
 
   it("employee WITH a linked record: 403 on the admin list falls back to self, and (the bug) no misleading 'Couldn't load' badge once that fallback succeeds", async () => {
@@ -185,6 +209,6 @@ describe("ApplyLeavePage — role-based employee resolution", () => {
 
     await render(ApplyLeavePage({ searchParams: { empId: "emp-2" } }));
 
-    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("emp-2");
+    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("Rahul Singh");
   });
 });

@@ -57,6 +57,13 @@ export interface EntityPickerProps {
    * not exist. Adapters signal failure by throwing; see lib/entityAdapters.
    */
   searchErrorText?: string;
+  /**
+   * Opt-in: label for a "Try again" button shown next to `searchErrorText`
+   * after a failed search. It re-runs the CURRENT query (the user keeps what
+   * they typed). Omitted = no button (typing again still re-searches), which
+   * is every existing caller's behaviour. GAP-HR-LEAVE-BALANCE-05.
+   */
+  searchRetryLabel?: string;
   removeOptionAriaLabel?: (label: string) => string;
   /** Accessible name for standalone use (no ancestor Field, no visible label). Ignored when a Field label already provides one. */
   "aria-label"?: string;
@@ -127,6 +134,7 @@ export function EntityPicker({
   noResultsText = "No matches",
   searchingText = "Searching…",
   searchErrorText = "Couldn\u2019t load results. Please try again.",
+  searchRetryLabel,
   removeOptionAriaLabel = (label: string) => `Remove ${label}`,
   "aria-label": ariaLabel,
   id,
@@ -409,6 +417,21 @@ export function EntityPicker({
         }
       >
         {showStatus ? (loading ? searchingText : failed ? searchErrorText : noResultsText) : ""}
+        {showStatus && failed && !loading && searchRetryLabel ? (
+          <>
+            {" "}
+            <button
+              type="button"
+              // mousedown must not blur the input (which would close the
+              // dropdown/clear the status) before the click lands.
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => runSearch(query)}
+              style={{ border: "none", background: "none", padding: 0, font: "inherit", color: "inherit", textDecoration: "underline", cursor: "pointer" }}
+            >
+              {searchRetryLabel}
+            </button>
+          </>
+        ) : null}
       </span>
 
       {open && results.length > 0 && (

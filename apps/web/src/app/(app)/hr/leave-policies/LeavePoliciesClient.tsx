@@ -56,6 +56,11 @@ export default function LeavePoliciesClient() {
   // leavePolicyForm namespace (shared with CreateLeavePolicyForm's own
   // <select> options), not leavePolicies.
   const tf = useTranslations("leavePolicyForm");
+  // An employee type with no entry in the i18n map (the backend can gain a type
+  // before the bundles do) falls back to readable space-separated text rather
+  // than the raw message key path next-intl would otherwise render.
+  const employeeTypeLabel = (value: string) =>
+    tf.has(`employeeTypes.${value}`) ? tf(`employeeTypes.${value}`) : value.replace(/_/g, " ");
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const [state, setState] = useState<LoadState>("loading");
@@ -266,13 +271,13 @@ export default function LeavePoliciesClient() {
       )}
 
       <div role="group" aria-label={t("filterGroupLabel")} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        {[{ value: "all", label: t("allTypes") }, ...EMPLOYEE_TYPES.map((type) => ({ value: type, label: tf(`employeeTypes.${type}`) }))].map((o) => (
+        {[{ value: "all", label: t("allTypes") }, ...EMPLOYEE_TYPES.map((type) => ({ value: type, label: employeeTypeLabel(type) }))].map((o) => (
           <Button
             key={o.value}
             variant={filter === o.value ? "primary" : "ghost"}
             size="sm"
             aria-pressed={filter === o.value}
-            style={{ textTransform: "capitalize", minHeight: 40 }}
+            style={{ minHeight: 40 }}
             onClick={() => setFilter(o.value)}
           >
             {o.label}
@@ -318,7 +323,7 @@ export default function LeavePoliciesClient() {
                 label: t("colEmployeeType"),
                 render: (p) => (
                   <span className={`pill ${TYPE_VARIANT[p.employeeType as string] ?? "mut"}`}>
-                    {tf(`employeeTypes.${p.employeeType as string}`)}
+                    {employeeTypeLabel(p.employeeType as string)}
                   </span>
                 ),
               },
@@ -450,7 +455,7 @@ export default function LeavePoliciesClient() {
         open={editingPolicy !== null}
         onClose={requestCloseEditor}
         busy={saving}
-        title={editingPolicy ? t("editDrawerTitle", { leaveType: editingPolicy.leaveTypeName, employeeType: tf(`employeeTypes.${editingPolicy.employeeType}`) }) : ""}
+        title={editingPolicy ? t("editDrawerTitle", { leaveType: editingPolicy.leaveTypeName, employeeType: employeeTypeLabel(editingPolicy.employeeType) }) : ""}
         footer={
           <>
             <Button variant="ghost" onClick={requestCloseEditor} disabled={saving}>{t("cancelBtn")}</Button>
@@ -463,7 +468,7 @@ export default function LeavePoliciesClient() {
             <p style={{ margin: 0, fontSize: 13, color: "var(--ink2)" }}>
               {t.rich("confirmDescRich", {
                 leaveType: editingPolicy.leaveTypeName,
-                employeeType: tf(`employeeTypes.${editingPolicy.employeeType}`),
+                employeeType: employeeTypeLabel(editingPolicy.employeeType),
                 strongType: (chunks) => <strong>{chunks}</strong>,
                 strongEmp: (chunks) => <strong>{chunks}</strong>,
               })}
@@ -555,7 +560,7 @@ export default function LeavePoliciesClient() {
           deactivateTarget
             ? t.rich("confirmDeactivateDescRich", {
                 leaveType: deactivateTarget.leaveTypeName,
-                employeeType: tf(`employeeTypes.${deactivateTarget.employeeType}`),
+                employeeType: employeeTypeLabel(deactivateTarget.employeeType),
                 strongType: (chunks) => <strong>{chunks}</strong>,
                 strongEmp: (chunks) => <strong>{chunks}</strong>,
               })

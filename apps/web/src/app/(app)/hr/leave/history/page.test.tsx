@@ -3,6 +3,15 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/rea
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
+// router.refresh() re-runs the server wrapper's profile fetch (BALANCE-04 retry).
+const { refreshMock } = vi.hoisted(() => ({ refreshMock: vi.fn() }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), prefetch: vi.fn(), refresh: refreshMock }),
+  usePathname: () => "/",
+  useSearchParams: () => new URLSearchParams(),
+  redirect: vi.fn(),
+}));
+
 import LeaveHistoryClient from "./LeaveHistoryClient";
 
 const EMPLOYEES = [{ id: "emp-1", name: "Asha Verma", employeeNo: "E001" }];
@@ -293,5 +302,72 @@ describe("LeaveHistoryClient — DataTable sort/filter/reason (GAP-HR-LEAVE-HIST
     await renderPage();
     const reasonCell = await screen.findByTitle(LONG_REASON);
     expect(reasonCell).toHaveTextContent(LONG_REASON);
+  });
+});
+
+/**
+ * GAP-HR-LEAVE-BALANCE-04 / -05 (applies to history too, per those items' fix
+ * steps): a missing profile gets an explanation, a profile error gets a Retry
+ * that really re-runs the server fetch, and an employee-LIST failure is its own
+ * error with a Retry that re-requests /employees -- never a silent dead end.
+ */
+describe("LeaveHistoryClient — profile and employee-list failure states (GAP-HR-LEAVE-BALANCE-04/05)", () => {
+  afterEach(() => { vi.unstubAllGlobals(); refreshMock.mockReset(); });
+
+  it("a plain employee with no linked record sees the explanation, not 'no applications'", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <LeaveHistoryClient roles={["employee"]} myEmployeeId={null} noLinkedProfile profileSource="api" />
+      </NextIntlClientProvider>,
+    );
+    expect(await screen.findByText(/no employee record is linked to your account/i)).toBeInTheDocument();
+    expect(screen.queryByText(/has not applied for any leave/i)).not.toBeInTheDocument();
+  });
+
+  it("profile 5xx: Try again calls router.refresh(); once the refreshed page supplies the employee id the history loads", async () => {
+    vi.stubGlobal("fetch", mockFetch([{ id: "app-1", leaveType: "Casual Leave", fromDate: "2026-09-01", toDate: "2026-09-02", status: "pending" }]));
+    const view = render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <LeaveHistoryClient roles={["employee"]} myEmployeeId={null} noLinkedProfile={false} profileSource="error" />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: /try again/i }));
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.some((c) => String(c[0]).includes("/leave/applications"))).toBe(false);
+
+    view.rerender(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <LeaveHistoryClient roles={["employee"]} myEmployeeId="emp-1" noLinkedProfile={false} profileSource="api" />
+      </NextIntlClientProvider>,
+    );
+    expect(await screen.findByText("Casual Leave")).toBeInTheDocument();
+  });
+
+  it("employees fetch 500: an 'employee list' error (not the history error); Try again issues a NEW /employees request and, on success, the picker lists people", async () => {
+    let employeeCalls = 0;
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      const u = String(url);
+      if (u.includes("/hrms/employees")) {
+        employeeCalls++;
+        if (employeeCalls === 1) return { ok: false, status: 500, json: async () => ({ code: "INTERNAL" }) } as Response;
+        return { ok: true, status: 200, json: async () => EMPLOYEES } as Response;
+      }
+      return { ok: false, status: 404, json: async () => ({}) } as Response;
+    }));
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <LeaveHistoryClient roles={["hr_admin"]} myEmployeeId={null} noLinkedProfile={false} profileSource="api" />
+      </NextIntlClientProvider>,
+    );
+
+    expect(await screen.findByText(/couldn.t load employee list/i)).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't load leave history/i)).not.toBeInTheDocument();
+    expect(employeeCalls).toBe(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /try again/i }));
+    await waitFor(() => expect(employeeCalls).toBe(2));
+    expect(await screen.findByRole("option", { name: /asha verma/i })).toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t load employee list/i)).not.toBeInTheDocument();
   });
 });

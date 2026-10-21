@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
 vi.mock("@/lib/sync/requestQueue", () => ({ fetchOrQueue: vi.fn() }));
 vi.mock("@/lib/activation", () => ({ trackActivation: vi.fn() }));
 const toastError = vi.fn();
+const toastSuccess = vi.fn();
 vi.mock("@/app/_components/ds/Toast", () => ({
-  useToast: () => ({ toast: { success: vi.fn(), error: toastError, info: vi.fn() } }),
+  useToast: () => ({ toast: { success: toastSuccess, error: toastError, info: vi.fn() } }),
 }));
 
 import { ApplyLeaveForm } from "./ApplyLeaveForm";
@@ -29,13 +30,21 @@ function renderForm(props: Parameters<typeof ApplyLeaveForm>[0]) {
   );
 }
 
-// GAP-HR-LEAVE-APPLY-01: ApplyLeaveForm now ALSO calls POST .../leave-requests/
-// preview once allocId/fromDate/toDate are all set. Routes by URL so that call
-// never gets the leave-context response shape (no computedDays field) by
-// coincidence — every describe block below that stubs global fetch uses this.
+const EL_CONTEXT = {
+  employee: {}, leaveTypes: [{ id: "lt1", code: "EL", name: "Earned Leave", maxDays: 30 }],
+  allocations: [{ id: "a1", leaveTypeId: "lt1", leaveTypeCode: "EL", leaveTypeName: "Earned Leave", balanceDays: 10 }],
+};
+
+// GAP-HR-LEAVE-APPLY-01: ApplyLeaveForm also calls POST .../leave-requests/
+// preview once the employee, allocId and dates are all set. Routes by URL so
+// that call never gets the leave-context response shape (no computedDays
+// field) by coincidence — every describe block below that stubs global fetch
+// uses this.
 function stubContextAndPreview(opts: {
   context?: unknown;
   preview?: unknown | (() => Response);
+  /** Rows the employee picker's server-side search (GET /hrms/employees?q=) returns. */
+  employeeSearch?: Array<{ id: string; name: string; employeeNo?: string; department?: string }>;
 } = {}) {
   const context = opts.context ?? { employee: {}, leaveTypes: [], allocations: [] };
   const fetchMock = vi.fn(async (url: string) => {
@@ -43,10 +52,17 @@ function stubContextAndPreview(opts: {
       if (typeof opts.preview === "function") return (opts.preview as () => Response)();
       return { ok: true, json: async () => (opts.preview ?? { computedDays: 0, engineApplied: false }) } as Response;
     }
+    if (typeof url === "string" && url.includes("/hrms/employees")) {
+      return { ok: true, json: async () => ({ data: opts.employeeSearch ?? [] }) } as Response;
+    }
     return { ok: true, json: async () => context } as Response;
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
+}
+
+function callsTo(fetchMock: ReturnType<typeof vi.fn>, fragment: string): string[] {
+  return fetchMock.mock.calls.map((c) => String(c[0])).filter((u) => u.includes(fragment));
 }
 
 /** Waits for the (real, 400ms-debounced) preview fetch to have actually fired. */
@@ -57,30 +73,91 @@ async function waitForPreviewFetch(fetchMock: ReturnType<typeof vi.fn>) {
   );
 }
 
-describe("ApplyLeaveForm — deep-link preselection", () => {
-  // The component's own useEffect fetches leave-context for the selected
-  // employee on mount; stub it so that's deterministic and quiet.
+/**
+ * GAP-HR-LEAVE-APPLY-03: HR / managers pick WHO the leave is for with a
+ * searchable picker that starts EMPTY; a plain employee gets their own single
+ * row. The old form defaulted to "myself if in the list, else employees[0]" —
+ * an arbitrary person in a field whose only other guard was the leave-type
+ * select.
+ */
+describe("ApplyLeaveForm — employee selection (GAP-HR-LEAVE-APPLY-03)", () => {
   afterEach(() => vi.unstubAllGlobals());
-  function stubLeaveContextFetch() {
-    stubContextAndPreview();
-  }
 
-  it("defaults to the first employee when no initialEmployeeId is given", () => {
-    stubLeaveContextFetch();
-    renderForm({ employees: EMPLOYEES });
-    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("emp-1");
+  it("HR without ?empId=: the picker shows its placeholder, nobody is selected, no leave-context is requested, Submit is blocked", async () => {
+    const fetchMock = stubContextAndPreview();
+    renderForm({ employees: EMPLOYEES, canPickEmployee: true });
+
+    const picker = screen.getByRole("combobox", { name: /employee/i });
+    expect(picker).toHaveValue("");
+    expect(picker).toHaveAttribute("placeholder", expect.stringMatching(/select an employee/i));
+    expect(screen.getByRole("button", { name: /submit leave request/i })).toBeDisabled();
+    // the leave-type select explains what it is waiting for
+    expect(screen.getByRole("option", { name: /select an employee first/i })).toBeInTheDocument();
+    // give any (wrongly) eager context fetch a chance to fire
+    await new Promise((r) => setTimeout(r, 50));
+    expect(callsTo(fetchMock, "/leave-context")).toHaveLength(0);
   });
 
-  it("preselects the employee named by ?empId= (via initialEmployeeId), not just the first in the list", () => {
-    stubLeaveContextFetch();
-    renderForm({ employees: EMPLOYEES, initialEmployeeId: "emp-2" });
-    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("emp-2");
+  it("?empId= preselects exactly that employee (label shown, leave-context requested for them)", async () => {
+    const fetchMock = stubContextAndPreview();
+    renderForm({ employees: EMPLOYEES, initialEmployeeId: "emp-2", canPickEmployee: true });
+
+    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("Rahul Singh");
+    await waitFor(() => expect(callsTo(fetchMock, "/leave-context")[0]).toContain("employeeId=emp-2"));
   });
 
-  it("falls back to the first employee if initialEmployeeId isn't in the list", () => {
-    stubLeaveContextFetch();
-    renderForm({ employees: EMPLOYEES, initialEmployeeId: "does-not-exist" });
+  it("choosing an employee in the picker loads their leave context and shows the 'applying on behalf of' note", async () => {
+    const fetchMock = stubContextAndPreview({
+      employeeSearch: [{ id: "emp-9", name: "Meera Iyer", employeeNo: "E009", department: "Legal" }],
+    });
+    renderForm({ employees: EMPLOYEES, myEmployeeId: "emp-1", canPickEmployee: true });
+
+    fireEvent.change(screen.getByRole("combobox", { name: /employee/i }), { target: { value: "Meera" } });
+    // EntityPicker commits a choice on mousedown (so the input's blur cannot close the list first).
+    fireEvent.mouseDown(await screen.findByRole("option", { name: /meera iyer/i }, { timeout: 2000 }));
+
+    await waitFor(() => expect(callsTo(fetchMock, "/leave-context")[0]).toContain("employeeId=emp-9"));
+    expect(screen.getByText(/applying on behalf of meera iyer/i)).toBeInTheDocument();
+  });
+
+  it("a manager (own row injected by the page) gets 'Apply for myself', and can then file their own leave", async () => {
+    const fetchMock = stubContextAndPreview({
+      context: EL_CONTEXT,
+      preview: { computedDays: 2, engineApplied: true, valid: true, warnings: [], balance: 10, balanceAfter: 8 },
+    });
+    vi.mocked(fetchOrQueue).mockResolvedValue({ response: new Response("{}", { status: 202 }), queued: false, idempotencyKey: "k" });
+    const mgr = { id: "emp-mgr", name: "Priya Nair", department: "" };
+    renderForm({ employees: [mgr, ...(EMPLOYEES as never[])] as never, myEmployeeId: "emp-mgr", canPickEmployee: true });
+
+    expect(screen.getByRole("button", { name: /submit leave request/i })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /apply for myself/i }));
+
+    await waitFor(() => expect(callsTo(fetchMock, "/leave-context")[0]).toContain("employeeId=emp-mgr"));
+    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("Priya Nair");
+    // it IS the signed-in user, so no "on behalf of" note and no second self shortcut
+    expect(screen.queryByText(/applying on behalf of/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /apply for myself/i })).not.toBeInTheDocument();
+
+    await waitFor(() => expect(screen.getByRole("option", { name: /earned leave/i })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/leave type/i), { target: { value: "a1" } });
+    fireEvent.change(screen.getByLabelText(/from date/i), { target: { value: "2026-09-20" } });
+    fireEvent.change(screen.getByLabelText(/to date/i), { target: { value: "2026-09-21" } });
+    fireEvent.change(screen.getByLabelText(/reason/i), { target: { value: "Attending a family function out of town." } });
+    await waitForPreviewFetch(fetchMock);
+    await waitFor(() => expect(screen.getByRole("button", { name: /submit leave request/i })).toBeEnabled(), { timeout: 2000 });
+    fireEvent.click(screen.getByRole("button", { name: /submit leave request/i }));
+
+    await waitFor(() => expect(fetchOrQueue).toHaveBeenCalled());
+    expect(vi.mocked(fetchOrQueue).mock.calls[0]![1]).toMatchObject({ body: { employeeId: "emp-mgr", allocId: "a1" } });
+  });
+
+  it("a plain employee (single own row, no picker) has themselves selected and no 'Apply for myself' button", async () => {
+    const fetchMock = stubContextAndPreview();
+    renderForm({ employees: [(EMPLOYEES as never[])[0]] as never, myEmployeeId: "emp-1" });
+
     expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("emp-1");
+    expect(screen.queryByRole("button", { name: /apply for myself/i })).not.toBeInTheDocument();
+    await waitFor(() => expect(callsTo(fetchMock, "/leave-context")[0]).toContain("employeeId=emp-1"));
   });
 });
 
@@ -112,8 +189,8 @@ describe("ApplyLeaveForm — UX-016 clerk-safe errors", () => {
     stubLeaveContextFetchWithAllocation();
     // Plain render() would throw here: ApplyLeaveForm calls useTranslations()
     // (UX-017) and needs a NextIntlClientProvider ancestor — same reason the
-    // deep-link-preselection describe block above uses renderForm().
-    renderForm({ employees: EMPLOYEES });
+    // employee-selection describe block above uses renderForm().
+    renderForm({ employees: EMPLOYEES, initialEmployeeId: "emp-1", canPickEmployee: true });
     await waitFor(() => expect(screen.getByRole("option", { name: /earned leave/i })).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/leave type/i), { target: { value: "a1" } });
     fireEvent.change(screen.getByLabelText(/from date/i), { target: { value: "2026-09-20" } });
@@ -150,14 +227,7 @@ describe("ApplyLeaveForm — UX-016 clerk-safe errors", () => {
 });
 
 /**
- * Self-service leave-application fix: an employee with no linked employee
- * record (noLinkedProfile, resolved by page.tsx from a genuine 404 on
- * GET /v1/hrms/me/profile — see page.test.tsx for the full role-resolution
- * coverage) must see a clear, honest message, never the bare, confusing
- * "No employees loaded" dropdown with an unexplained disabled submit button.
- */
-/**
- * GAP-HR-LEAVE-APPLY-01/04: server preview replaces both the naive
+ * GAP-HR-LEAVE-APPLY-01/04: the server preview replaces both the naive
  * calendar-day count shown to the user and the native window.confirm()
  * balance-overrun gate.
  */
@@ -165,52 +235,193 @@ describe("ApplyLeaveForm — server-confirmed preview", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     vi.mocked(fetchOrQueue).mockReset();
+    toastSuccess.mockReset();
   });
 
   async function fillDatesAndAlloc() {
-    renderForm({ employees: EMPLOYEES });
+    renderForm({ employees: EMPLOYEES, initialEmployeeId: "emp-1", canPickEmployee: true });
     await waitFor(() => expect(screen.getByRole("option", { name: /earned leave/i })).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/leave type/i), { target: { value: "a1" } });
     fireEvent.change(screen.getByLabelText(/from date/i), { target: { value: "2026-09-18" } }); // Friday
     fireEvent.change(screen.getByLabelText(/to date/i), { target: { value: "2026-09-21" } }); // Monday — 4 calendar days, engine may compute fewer
   }
 
-  it("shows the server-computed day count once preview resolves, not the raw calendar count", async () => {
+  const submitButton = () => screen.getByRole("button", { name: /submit leave request/i });
+
+  it("shows the server-computed day count, the balance it leaves and the engine's notices — not the raw calendar count", async () => {
     const fetchMock = stubContextAndPreview({
-      context: {
-        employee: {}, leaveTypes: [{ id: "lt1", code: "EL", name: "Earned Leave", maxDays: 30 }],
-        allocations: [{ id: "a1", leaveTypeId: "lt1", leaveTypeCode: "EL", leaveTypeName: "Earned Leave", balanceDays: 10 }],
+      context: EL_CONTEXT,
+      preview: {
+        valid: true, computedDays: 2, engineApplied: true,
+        warnings: ["Sandwich rule applied: 2 holiday(s) between leave dates counted as leave"],
+        violations: [], holidaysInRange: ["2026-09-19"], balance: 10, balanceAfter: 8,
       },
-      preview: { computedDays: 2, engineApplied: true }, // engine excluded the weekend
     });
     await fillDatesAndAlloc();
     await waitForPreviewFetch(fetchMock);
 
     await waitFor(() => expect(screen.getByText(/this will debit/i)).toBeInTheDocument(), { timeout: 2000 });
     expect(screen.getByText(/this will debit/i).parentElement).toHaveTextContent("2 days");
+    expect(screen.getByText(/balance after this request: 8 days/i)).toBeInTheDocument();
+    expect(screen.getByText(/sandwich rule applied/i)).toBeInTheDocument();
+    // none of the approximate-state copy while the server's number is on screen
     expect(screen.queryByText(/approximate/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/duration:/i)).not.toBeInTheDocument();
   });
 
-  it("blocks submit inline (no native confirm, no ConfirmDialog) when preview itself reports a rule violation", async () => {
+  it("a leave code outside the CCS engine says the count is as entered (engineApplied=false), not that it was adjusted", async () => {
     const fetchMock = stubContextAndPreview({
-      context: {
-        employee: {}, leaveTypes: [{ id: "lt1", code: "EL", name: "Earned Leave", maxDays: 30 }],
-        allocations: [{ id: "a1", leaveTypeId: "lt1", leaveTypeCode: "EL", leaveTypeName: "Earned Leave", balanceDays: 1 }],
+      context: EL_CONTEXT,
+      preview: { valid: true, computedDays: 4, engineApplied: false, warnings: [], violations: [], balance: 10, balanceAfter: 6 },
+    });
+    await fillDatesAndAlloc();
+    await waitForPreviewFetch(fetchMock);
+
+    expect(await screen.findByText(/counted as entered for this leave type/i, {}, { timeout: 2000 })).toBeInTheDocument();
+  });
+
+  it("when the server says a rule blocks the request, the reasons show inline AT ONCE and Submit is disabled — no click needed, no ConfirmDialog, nothing sent", async () => {
+    const fetchMock = stubContextAndPreview({
+      context: EL_CONTEXT,
+      preview: {
+        valid: false, computedDays: 12, engineApplied: true, warnings: [],
+        violations: [{ code: "LEAVE_RULE_VIOLATION", message: "Insufficient balance: requested 12 days (computed) but only 10 days available" }],
+        balance: 10, balanceAfter: -2,
       },
-      preview: () => new Response(JSON.stringify({ code: "LEAVE_RULE_VIOLATION", message: "insufficient balance" }), { status: 422 }),
     });
     await fillDatesAndAlloc();
     fireEvent.change(screen.getByLabelText(/reason/i), { target: { value: "Family function out of town this week." } });
     await waitForPreviewFetch(fetchMock);
-    // Let the rejected preview's .then() (setPreviewError) actually commit
-    // before clicking — waitForPreviewFetch only confirms the call fired.
-    await waitFor(() => expect(screen.queryByText(/checking against/i)).not.toBeInTheDocument(), { timeout: 2000 });
+
+    const alert = await screen.findByRole("alert", {}, { timeout: 2000 });
+    expect(alert).toHaveTextContent(/this request can't be submitted yet/i);
+    expect(alert).toHaveTextContent(/insufficient balance: requested 12 days/i);
+    expect(submitButton()).toBeDisabled();
+    // the debit line is NOT shown for a request that cannot be filed
+    expect(screen.queryByText(/this will debit/i)).not.toBeInTheDocument();
+
+    // a forced submit (Enter key) is still refused
+    fireEvent.submit(submitButton().closest("form")!);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(fetchOrQueue).not.toHaveBeenCalled();
+  });
+
+  it("a preview response with no numeric day count is treated as unavailable: the approximate figure shows, never 'debit NaN days'", async () => {
+    const fetchMock = stubContextAndPreview({ context: EL_CONTEXT, preview: {} });
+    await fillDatesAndAlloc();
+    await waitForPreviewFetch(fetchMock);
+
+    expect(await screen.findByText(/^Approximate/, {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(screen.queryByText(/this will debit/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/duration:/i).parentElement).toHaveTextContent("4 days");
+  });
+
+  it("when the preview request itself is refused (e.g. 403), says so inline and keeps Submit disabled", async () => {
+    const fetchMock = stubContextAndPreview({
+      context: EL_CONTEXT,
+      preview: () => new Response(JSON.stringify({ code: "FORBIDDEN", message: "internal: employees may only apply for their own record" }), { status: 403 }),
+    });
+    await fillDatesAndAlloc();
+    await waitForPreviewFetch(fetchMock);
+
+    const alert = await screen.findByRole("alert", {}, { timeout: 2000 });
+    expect(alert).toHaveTextContent(/this request can't be submitted yet/i);
+    expect(alert.textContent).not.toMatch(/internal:/); // clerk-safe: never the raw server text
+    expect(submitButton()).toBeDisabled();
+  });
+
+  it("after a successful submit the confirmation names the server-confirmed days and leave type", async () => {
+    const fetchMock = stubContextAndPreview({
+      context: EL_CONTEXT,
+      preview: { valid: true, computedDays: 2, engineApplied: true, warnings: [], violations: [], balance: 10, balanceAfter: 8 },
+    });
+    vi.mocked(fetchOrQueue).mockResolvedValue({ response: new Response("{}", { status: 202 }), queued: false, idempotencyKey: "k" });
+    await fillDatesAndAlloc();
+    fireEvent.change(screen.getByLabelText(/reason/i), { target: { value: "Family function out of town this week." } });
+    await waitForPreviewFetch(fetchMock);
+    await waitFor(() => expect(submitButton()).toBeEnabled(), { timeout: 2000 });
+    fireEvent.click(submitButton());
+
+    expect(await screen.findByText("Leave request submitted for approval: 2 days of Earned Leave.", {}, { timeout: 2000 })).toBeInTheDocument();
+    expect(toastSuccess).toHaveBeenCalledWith("Leave request submitted for approval: 2 days of Earned Leave.");
+    // and the number sent is the server's, not the 4-day calendar span
+    expect(vi.mocked(fetchOrQueue).mock.calls[0]![1]).toMatchObject({ body: { daysApplied: 2 } });
+  });
+});
+
+/**
+ * GAP-HR-LEAVE-APPLY-01/04: when the preview cannot be reached (offline) the
+ * form falls back to the calendar-day figure — honestly labelled approximate —
+ * and, only if that exceeds the visible balance, asks via the styled
+ * ConfirmDialog (never window.confirm). The queued/offline submit path stays.
+ */
+describe("ApplyLeaveForm — offline fallback (preview unreachable)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(fetchOrQueue).mockReset();
+  });
+
+  function stubOffline() {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("/leave-requests/preview")) throw new TypeError("Failed to fetch");
+      if (url.includes("/hrms/employees")) return { ok: true, json: async () => ({ data: [] }) } as Response;
+      return { ok: true, json: async () => EL_CONTEXT } as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  async function fill(from: string, to: string) {
+    renderForm({ employees: EMPLOYEES, initialEmployeeId: "emp-1", canPickEmployee: true });
+    await waitFor(() => expect(screen.getByRole("option", { name: /earned leave/i })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/leave type/i), { target: { value: "a1" } });
+    fireEvent.change(screen.getByLabelText(/from date/i), { target: { value: from } });
+    fireEvent.change(screen.getByLabelText(/to date/i), { target: { value: to } });
+    fireEvent.change(screen.getByLabelText(/reason/i), { target: { value: "Family function out of town this week." } });
+  }
+
+  it("shows the calendar count as approximate, with copy that no longer claims weekends/holidays are excluded", async () => {
+    const fetchMock = stubOffline();
+    await fill("2026-09-18", "2026-09-21");
+    await waitForPreviewFetch(fetchMock);
+
+    const note = await screen.findByText(/^Approximate/, {}, { timeout: 2000 });
+    expect(note.textContent).not.toMatch(/excludes weekends/i);
+    expect(note.textContent).toMatch(/calendar days/i);
+    expect(screen.getByText(/duration:/i).parentElement).toHaveTextContent("4 days");
+  });
+
+  it("over the visible balance it asks in the styled dialog (not window.confirm); confirming submits the approximate count through the offline queue", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm");
+    const fetchMock = stubOffline();
+    vi.mocked(fetchOrQueue).mockResolvedValue({ response: null, queued: true, idempotencyKey: "kq" });
+    await fill("2026-09-01", "2026-09-14"); // 14 calendar days > balance 10
+    await waitForPreviewFetch(fetchMock);
+    await waitFor(() => expect(screen.getByRole("button", { name: /submit leave request/i })).toBeEnabled(), { timeout: 2000 });
 
     fireEvent.click(screen.getByRole("button", { name: /submit leave request/i }));
-
-    await waitFor(() => expect(screen.getByRole("alert").textContent?.trim()).not.toBe(""), { timeout: 2000 });
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(); // no ConfirmDialog — blocked, not just warned
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(/you are applying for 14 days but only have 10 days balance/i);
     expect(fetchOrQueue).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: /submit anyway/i }));
+    await waitFor(() => expect(fetchOrQueue).toHaveBeenCalled());
+    expect(vi.mocked(fetchOrQueue).mock.calls[0]![1]).toMatchObject({ body: { daysApplied: 14 } });
+    expect(await screen.findByText(/saved and will submit automatically/i)).toBeInTheDocument();
+    expect(confirmSpy).not.toHaveBeenCalled();
+    confirmSpy.mockRestore();
+  });
+
+  it("within the visible balance it queues straight away with no dialog", async () => {
+    const fetchMock = stubOffline();
+    vi.mocked(fetchOrQueue).mockResolvedValue({ response: null, queued: true, idempotencyKey: "kq2" });
+    await fill("2026-09-18", "2026-09-21");
+    await waitForPreviewFetch(fetchMock);
+    await waitFor(() => expect(screen.getByRole("button", { name: /submit leave request/i })).toBeEnabled(), { timeout: 2000 });
+
+    fireEvent.click(screen.getByRole("button", { name: /submit leave request/i }));
+    await waitFor(() => expect(fetchOrQueue).toHaveBeenCalled());
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 });
 
@@ -259,7 +470,7 @@ describe("ApplyLeaveForm — half-day / short leave (GAP-HR-LEAVE-APPLY-05)", ()
   }
 
   async function pickSingleDateCl() {
-    renderForm({ employees: EMPLOYEES });
+    renderForm({ employees: EMPLOYEES, initialEmployeeId: "emp-1", canPickEmployee: true });
     await waitFor(() => expect(screen.getByRole("option", { name: /casual leave/i })).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/leave type/i), { target: { value: "a1" } });
     fireEvent.change(screen.getByLabelText(/from date/i), { target: { value: "2026-10-05" } });
