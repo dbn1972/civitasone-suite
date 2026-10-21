@@ -125,7 +125,7 @@ describe("PaymentAdviceForm", () => {
     expect(screen.getByLabelText(/Re-enter account number/)).toHaveAttribute("autocomplete", "off");
   });
 
-  it("offers a bill picker that fills bill id and amount (not the payee) without any UUID being typed", async () => {
+  it("offers a bill picker that fills bill id, payee name and amount without any UUID being typed", async () => {
     const bills: PfmsBill[] = [
       { id: VALID_BILL, billNo: "BILL-0042", vendor: "Acme Supplies", amountMinor: "1250000", status: "passed" },
       { id: "33333333-3333-3333-3333-333333333333", billNo: "BILL-0043", vendor: "Draft Co", amountMinor: "100", status: "pending" },
@@ -143,10 +143,15 @@ describe("PaymentAdviceForm", () => {
       "BILL-0042 — Acme Supplies — ₹12,500.00",
     ]);
     fireEvent.change(select, { target: { value: VALID_BILL } });
-    // the payee is never prefilled from the bill: it must be typed and verified
-    expect(screen.getByLabelText(/Payee Name/)).toHaveValue("");
+    // GAP-FINANCE-PFMS-07: the payee name comes from the bill's vendor, and says so, but stays editable;
+    // the bank details are NOT on the bill and remain empty for the clerk to type.
+    expect(screen.getByLabelText(/Payee Name/)).toHaveValue("Acme Supplies");
+    expect(screen.getByText(/Filled from the bill's vendor/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^Payee Account No\./)).toHaveValue("");
+    expect(screen.getByLabelText(/Payee IFSC/)).toHaveValue("");
     expect(screen.getByLabelText(/Amount, in paise/)).toHaveValue("1250000");
     fireEvent.change(screen.getByLabelText(/Payee Name/), { target: { value: "Acme Supplies Pvt Ltd" } });
+    expect(screen.queryByText(/Filled from the bill's vendor/)).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText(/^Payee Account No\./), { target: { value: "1234567890" } });
     fireEvent.change(screen.getByLabelText(/Re-enter account number/), { target: { value: "1234567890" } });
@@ -159,6 +164,57 @@ describe("PaymentAdviceForm", () => {
     const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
     expect(body.billId).toBe(VALID_BILL);
     expect(body.amountMinor).toBe(1250000);
+    // the edited name, not the vendor master name, is what is sent
+    expect(body.payeeName).toBe("Acme Supplies Pvt Ltd");
+  });
+
+  // GAP-FINANCE-PFMS-07: prefill must never overwrite what the clerk typed, nor invent a name.
+  describe("payee name prefill from the selected bill", () => {
+    const BILL_A = VALID_BILL;
+    const BILL_B = "44444444-4444-4444-4444-444444444444";
+    const BILL_U = "55555555-5555-5555-5555-555555555555";
+    const bills: PfmsBill[] = [
+      { id: BILL_A, billNo: "BILL-A", vendor: "Acme Supplies", amountMinor: "1000", status: "passed" },
+      { id: BILL_B, billNo: "BILL-B", vendor: "Beta Traders", amountMinor: "2000", status: "passed" },
+      { id: BILL_U, billNo: "BILL-U", vendor: "Unknown vendor", amountMinor: "3000", status: "passed" },
+    ];
+    const pick = (id: string) => fireEvent.change(screen.getByLabelText(/^Bill/), { target: { value: id } });
+    const payee = () => screen.getByLabelText(/Payee Name/) as HTMLInputElement;
+
+    it("switching to another bill replaces a name the form filled in itself", () => {
+      renderForm(bills);
+      pick(BILL_A);
+      expect(payee().value).toBe("Acme Supplies");
+      pick(BILL_B);
+      expect(payee().value).toBe("Beta Traders");
+      expect(screen.getByLabelText(/Amount, in paise/)).toHaveValue("2000");
+    });
+
+    it("never overwrites a name the clerk typed", () => {
+      renderForm(bills);
+      pick(BILL_A);
+      fireEvent.change(payee(), { target: { value: "Acme Supplies Pvt Ltd" } });
+      pick(BILL_B);
+      expect(payee().value).toBe("Acme Supplies Pvt Ltd");
+    });
+
+    it("fills nothing for a vendor the API could not name (Unknown vendor), and clears a name it had filled", () => {
+      renderForm(bills);
+      pick(BILL_U);
+      expect(payee().value).toBe("");
+      expect(screen.queryByText(/Filled from the bill's vendor/)).not.toBeInTheDocument();
+      pick(BILL_A);
+      expect(payee().value).toBe("Acme Supplies");
+      pick(BILL_U);
+      expect(payee().value).toBe("");
+    });
+
+    it("does not offer 'Unknown vendor' as if it were a vendor name in the picker", () => {
+      renderForm(bills);
+      const labels = Array.from((screen.getByLabelText(/^Bill/) as HTMLSelectElement).options).map((o) => o.textContent);
+      expect(labels).toContain("BILL-U — ₹30.00");
+      expect(labels.some((l) => /Unknown vendor/.test(l ?? ""))).toBe(false);
+    });
   });
 
   it("requires a bill to be selected when the picker is shown", () => {
