@@ -124,6 +124,10 @@ export type UpdateContactBody = z.infer<typeof updateContactBody>;
 export const mergeContactsBody = z.object({
   primaryId: z.string().uuid(),
   duplicateId: z.string().uuid(),
+  // GAP-CRM-DEDUP-CANDIDATES-02: a merge is irreversible, so the reviewer's reason rides
+  // the command into the audit trail. Optional on the wire (older callers send none);
+  // the review screen requires >= 10 characters before it will submit.
+  reason: z.string().trim().min(10).max(2000).optional(),
 });
 export type MergeContactsBody = z.infer<typeof mergeContactsBody>;
 

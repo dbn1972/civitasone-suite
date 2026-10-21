@@ -11,6 +11,7 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as dedupRepo from "./dedup-repo.js";
 import { rankDuplicates } from "./dedup-domain.js";
+import { toReviewPair } from "./dedup-candidates-domain.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin"];
@@ -140,8 +141,10 @@ export async function dedupRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
     const q = listCandidatesQuery.parse(req.query ?? {});
-    const data = await dedupRepo.listDedupCandidatePairs(ctx.tenantId, ctx.actorId, q.limit);
-    return reply.send({ data });
+    const pairs = await dedupRepo.listDedupCandidatePairs(ctx.tenantId, ctx.actorId, q.limit);
+    // GAP-CRM-DEDUP-CANDIDATES-01: email/phone leave the server masked (reveal is the
+    // audited POST /v1/crm/pii/reveal), with the differing fields computed pre-mask.
+    return reply.send({ data: pairs.map(toReviewPair) });
   });
 
   /**
