@@ -14,7 +14,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { randomUUID } from "node:crypto";
 import { noteSheetPrintRoutes } from "./note-sheet-print/routes.js";
-import { isTopSecret } from "./domain.js";
+import { isTopSecret, isFileReadOnly } from "./domain.js";
 import { queue } from "../../shared/infra.js";
 import {
   isMoveAllowed, isAccessAllowed,
@@ -38,6 +38,18 @@ async function withinClearance<T extends { classification: string }>(
   if (!(await tenantHasOperators(ctx.tenantId))) return rows;
   const rank = await clearanceRankFor(ctx.tenantId, ctx.actorId);
   return rows.filter((r) => (CLASSIFICATION_RANK[r.classification] ?? 1) <= Math.max(rank, 1));
+}
+
+/**
+ * GAP-ESTAB-FILES-DETAIL-01: a closed / archived file takes no further noting, submission,
+ * signing or movement. Refused synchronously with 409 (nothing is enqueued), so the officer
+ * sees an answer instead of a command the consumer quietly drops. A missing file falls
+ * through to the consumers' existing no-op, as before.
+ */
+async function assertFileWritable(tenantId: string, fileId: string): Promise<void> {
+  if (isFileReadOnly(await queries.getFileStatus(tenantId, fileId))) {
+    throw new HttpError(409, "FILE_READ_ONLY", "this file is closed or archived; no further noting, submission, signing or movement is possible");
+  }
 }
 
 /** 404 when the DAK entry does not exist, 409 when it is already linked to a file. */
@@ -99,6 +111,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = addNotingBody.parse(req.body);
+    await assertFileWritable(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.addNoting(ctx, id, body));
   });
 
@@ -140,6 +153,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = submitNotingBody.parse(req.body);
+    await assertFileWritable(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitNotingForApproval(ctx, id, body));
   });
 
@@ -150,6 +164,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const { notingId } = z.object({ notingId: z.string().uuid() }).parse(req.params);
+    await assertFileWritable(ctx.tenantId, id);
     return sendAccepted(reply, acceptedResponseSchema, await commands.signNoting(ctx, id, notingId));
   });
 
@@ -158,6 +173,7 @@ export async function filesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ESTAB_ROLES);
     const { id } = idParam.parse(req.params);
     const body = moveFileBody.parse(req.body);
+    await assertFileWritable(ctx.tenantId, id);
     // O6 — a file may only be marked to an ACTIVE enrolled eOffice operator,
     // enforced once the tenant has adopted the operator model (so existing /
     // greenfield flows aren't broken before operators are set up).

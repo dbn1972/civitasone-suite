@@ -7,6 +7,18 @@ export class DomainError extends Error {
 export const FILE_CLASSIFICATIONS = ["top_secret", "secret", "confidential", "public"] as const;
 export const FILE_STATUSES = ["draft", "active", "closed", "archived"] as const;
 
+/**
+ * GAP-ESTAB-FILES-DETAIL-01: terminal register states. A file in one of these takes no further
+ * noting, submission, signing or movement (reopen is the only way back for a closed file). One
+ * definition for the routes (synchronous 409) and the consumers (defence in depth); the web
+ * mirrors it as isFileReadOnly in estab/files/[id]/FileDetailActions.tsx. "disposed" is not an
+ * estab_files status today but the register vocabulary carries it, so it is treated the same.
+ */
+export const READ_ONLY_FILE_STATUSES = ["closed", "archived", "disposed"] as const;
+export function isFileReadOnly(status: string | null | undefined): boolean {
+  return status != null && (READ_ONLY_FILE_STATUSES as readonly string[]).includes(status);
+}
+
 /** CSMOP file-type taxonomy (R2). */
 export const FILE_TYPES = ["main", "part", "volume", "linked", "standing_guard", "ephemeral"] as const;
 export type FileType = (typeof FILE_TYPES)[number];

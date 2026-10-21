@@ -36,11 +36,17 @@ export async function submitDfa(ctx: RequestContext, id: string): Promise<Accept
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function approveDfa(ctx: RequestContext, id: string, opts?: { modality?: string; conditions?: string | undefined }): Promise<Accepted> {
+export async function approveDfa(
+  ctx: RequestContext,
+  id: string,
+  opts?: { modality?: string; conditions?: string | undefined; reason?: string | undefined },
+): Promise<Accepted> {
   await queue.publish(COMMANDS.dfaApprove, envelope(ctx, COMMANDS.dfaApprove, {
     id, tenantId: ctx.tenantId, approvedBy: ctx.actorId,
     modality: opts?.modality ?? "approved",
     ...(opts?.conditions ? { conditions: opts.conditions } : {}),
+    // GAP-ESTAB-DFA-02: the approver's remarks travel with the command so the consumer can audit them.
+    ...(opts?.reason ? { reason: opts.reason } : {}),
   }));
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

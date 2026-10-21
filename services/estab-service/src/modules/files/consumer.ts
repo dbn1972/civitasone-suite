@@ -6,7 +6,7 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
-import { computeFileDueBy, computeNotingHash, deriveChildFileNo, assertValidFileType } from "./domain.js";
+import { computeFileDueBy, computeNotingHash, deriveChildFileNo, assertValidFileType, isFileReadOnly } from "./domain.js";
 import * as repo from "./repo.js";
 import * as recordsRepo from "../records/repo.js";
 import { emitModuleDecisionCallback } from "../linkage/consumer.js";
@@ -170,7 +170,7 @@ export function registerFilesConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const existing = await repo.findFileByIdTx(tx, p.fileId, p.tenantId);
-      if (existing?.status === "closed") {
+      if (existing && isFileReadOnly(existing.status)) {
         await enqueue(tx, {
           topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -209,6 +209,18 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const noting = await repo.findNotingByIdTx(tx, p.notingId, p.tenantId);
       if (!noting || noting.fileId !== p.fileId || noting.noteStatus !== "draft") return;
+      // GAP-ESTAB-FILES-DETAIL-01: a closed / archived file takes no new submission. Without this
+      // guard the submit below also flipped the file's status back to "active", silently
+      // re-opening a closed file (reopen is the only sanctioned way back).
+      const target = await repo.findFileByIdTx(tx, p.fileId, p.tenantId);
+      if (target && isFileReadOnly(target.status)) {
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "estab", action: "noting_submit_rejected_read_only_file", resourceType: "file", resourceId: p.fileId, outcome: "rejected" },
+        });
+        return;
+      }
 
       await repo.updateNoting(tx, p.notingId, {
         noteStatus: "submitted", updatedBy: msg.actorId,
@@ -332,6 +344,16 @@ export function registerFilesConsumers(rawQueue: Queue): void {
       if (!noting || noting.fileId !== p.fileId) return;
       // Already-signed notes are immutable (DB trigger also enforces this).
       if (noting.noteStatus === "approved" || noting.eSigned) return;
+      // GAP-ESTAB-FILES-DETAIL-01: no signing on a closed / archived file.
+      const target = await repo.findFileByIdTx(tx, p.fileId, p.tenantId);
+      if (target && isFileReadOnly(target.status)) {
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "estab", action: "noting_sign_rejected_read_only_file", resourceType: "file", resourceId: p.fileId, outcome: "rejected" },
+        });
+        return;
+      }
       await signNotingChain(tx, {
         tenantId: p.tenantId, fileId: p.fileId, notingId: noting.id,
         body: noting.body, officerId: msg.actorId,
@@ -365,7 +387,7 @@ export function registerFilesConsumers(rawQueue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const existing = await repo.findFileByIdTx(tx, p.fileId, p.tenantId);
-      if (existing?.status === "closed") {
+      if (existing && isFileReadOnly(existing.status)) {
         await enqueue(tx, {
           topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

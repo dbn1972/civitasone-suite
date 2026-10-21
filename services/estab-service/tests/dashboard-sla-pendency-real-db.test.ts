@@ -89,6 +89,22 @@ describe("GET /v1/estab/dashboard — shared SLA / pendency definition", () => {
     expect((res.json() as { avgPendencyDays: number }).avgPendencyDays).toBe(15);
   });
 
+  // GAP-ESTAB-DASHBOARD-05: the pendency snapshot's own figures, which no stat tile shows.
+  it("'openFiles' counts every open file at any stage (active and draft), never closed or archived", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/estab/dashboard", headers: headers() });
+    // SLA/1, SLA/2 (draft), SLA/3, SLA/6 are open; SLA/4 (closed) and SLA/5 (archived) are not.
+    // 'filesPending' (status active only) stays 3, so the two differ by the draft file.
+    const body = res.json() as { openFiles: number; filesPending: number };
+    expect(body.openFiles).toBe(4);
+    expect(body.filesPending).toBe(3);
+  });
+
+  it("'oldestPendencyDays' is the age in whole IST days of the oldest OPEN file (closed and archived files are older and ignored)", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/estab/dashboard", headers: headers() });
+    // Open files are 10, 20, 0 and 30 days old; the closed (100) and archived (200) ones must not win.
+    expect((res.json() as { oldestPendencyDays: number }).oldestPendencyDays).toBe(30);
+  });
+
   it("'filesPending' is the count of status='active' files, the figure the register's Active Files tile shows", async () => {
     const res = await app.inject({ method: "GET", url: "/v1/estab/dashboard", headers: headers() });
     expect((res.json() as { filesPending: number }).filesPending).toBe(3);
@@ -97,9 +113,12 @@ describe("GET /v1/estab/dashboard — shared SLA / pendency definition", () => {
   it("never reads another tenant's files", async () => {
     // The other tenant's overdue open file (9 days past due) would make these 3 and 18.75 if it leaked.
     const res = await app.inject({ method: "GET", url: "/v1/estab/dashboard", headers: headers() });
-    const body = res.json() as { slaBreached: number; avgPendencyDays: number };
+    const body = res.json() as { slaBreached: number; avgPendencyDays: number; openFiles: number; oldestPendencyDays: number };
     expect(body.slaBreached).toBe(2);
     expect(body.avgPendencyDays).toBe(15);
+    // ...and its 40-day-old open file would make these 5 and 40.
+    expect(body.openFiles).toBe(4);
+    expect(body.oldestPendencyDays).toBe(30);
   });
 
   it("an empty tenant reads zero, not an error", async () => {
@@ -108,7 +127,7 @@ describe("GET /v1/estab/dashboard — shared SLA / pendency definition", () => {
       headers: { authorization: `Bearer ${signToken({ sub: ACTOR, tid: "c0ff33aa-0000-4000-8000-0000000005b9", roles: ["estab_officer"], sid: "s" }, SECRET)}`, "x-tenant-id": "c0ff33aa-0000-4000-8000-0000000005b9" },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ slaBreached: 0, avgPendencyDays: 0, filesPending: 0 });
+    expect(res.json()).toMatchObject({ slaBreached: 0, avgPendencyDays: 0, filesPending: 0, openFiles: 0, oldestPendencyDays: 0 });
   });
 
   it("a role outside the estab set is refused", async () => {
