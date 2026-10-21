@@ -1417,7 +1417,11 @@ export type DealSummary = {
   amount: string;
   owner: string;
   closeDate?: string;
-  probability: number;
+  /**
+   * Win probability 0-100. Absent when the service sent none (GAP-CRM-OPPORTUNITIES-NEW-06): the
+   * UI shows a dash rather than coercing a missing value to a real-looking 0%.
+   */
+  probability?: number;
   status: "open" | "won" | "lost";
   /** Optimistic-lock row version (services/crm-service deals.version) — required by PATCH .../stage. */
   version?: number;

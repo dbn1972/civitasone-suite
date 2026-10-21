@@ -122,7 +122,7 @@ export default async function Page({ params }: { params: { id: string } }) {
               <div className="fld"><div className="l">Status</div><div className="v"><StatusPill status={deal.status} /></div></div>
               <div className="fld"><div className="l">Owner</div><div className="v">{deal.owner}</div></div>
               <div className="fld"><div className="l">Close Date</div><div className="v">{deal.closeDate ? formatIndianDate(deal.closeDate) : "—"}</div></div>
-              <div className="fld"><div className="l">Probability</div><div className="v">{deal.probability}%</div></div>
+              <div className="fld"><div className="l">Probability</div><div className="v">{typeof deal.probability === "number" ? `${deal.probability}%` : "—"}</div></div>
             </div>
           </div>
         </div>

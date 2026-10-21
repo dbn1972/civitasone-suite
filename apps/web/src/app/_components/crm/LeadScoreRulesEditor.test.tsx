@@ -8,7 +8,7 @@ import * as lq from "@/lib/crm/leadQualification";
 
 vi.mock("@/lib/crm/leadQualification", async (orig) => {
   const actual = await orig<typeof import("@/lib/crm/leadQualification")>();
-  return { ...actual, getScoreRules: vi.fn(), saveScoreRules: vi.fn() };
+  return { ...actual, getScoreRules: vi.fn(), saveScoreRules: vi.fn(), previewScoreRules: vi.fn() };
 });
 
 const rule: lq.LeadScoreRule = { attribute: "leadSource", weight: 5, scoreFnType: "map", params: { default: 20 }, enabled: true };
@@ -16,6 +16,7 @@ const rule: lq.LeadScoreRule = { attribute: "leadSource", weight: 5, scoreFnType
 beforeEach(() => {
   vi.mocked(lq.getScoreRules).mockReset();
   vi.mocked(lq.saveScoreRules).mockReset();
+  vi.mocked(lq.previewScoreRules).mockReset();
 });
 
 /** Walk through the GAP-04 confirm dialog that now gates every Save. */
@@ -72,12 +73,31 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     fireEvent.click(screen.getByRole("button", { name: /add rule/i }));
     fireEvent.change(screen.getByLabelText(/attribute for rule 1/i), { target: { value: "company" } });
     fireEvent.change(screen.getByLabelText(/weight for rule 1/i), { target: { value: "10" } });
-    fireEvent.change(screen.getByLabelText(/params json for rule 1/i), { target: { value: '{"present":80,"absent":10}' } });
+    // GAP-CRM-LEAD-SCORING-02: presence params are typed into labelled inputs, not a JSON box.
+    expect(screen.queryByLabelText(/params json for rule 1/i)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/score when present, rule 1/i), { target: { value: "80" } });
+    fireEvent.change(screen.getByLabelText(/score when absent, rule 1/i), { target: { value: "10" } });
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
     await confirmSave();
     await waitFor(() => expect(lq.saveScoreRules).toHaveBeenCalled());
     const saved = vi.mocked(lq.saveScoreRules).mock.calls[0][0];
     expect(saved[0]).toMatchObject({ attribute: "company", scoreFnType: "presence", params: { present: 80, absent: 10 } });
+  });
+
+  it("still serialises params typed into the Advanced JSON fallback", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [], source: "api" });
+    vi.mocked(lq.saveScoreRules).mockResolvedValue(undefined);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByText(/no scoring rules yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add rule/i }));
+    fireEvent.change(screen.getByLabelText(/attribute for rule 1/i), { target: { value: "company" } });
+    fireEvent.change(screen.getByLabelText(/weight for rule 1/i), { target: { value: "10" } });
+    fireEvent.click(screen.getByRole("button", { name: /edit params as json for rule 1/i }));
+    fireEvent.change(screen.getByLabelText(/params json for rule 1/i), { target: { value: '{"present":80,"absent":10}' } });
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    await confirmSave();
+    await waitFor(() => expect(lq.saveScoreRules).toHaveBeenCalled());
+    expect(vi.mocked(lq.saveScoreRules).mock.calls[0][0][0]).toMatchObject({ attribute: "company", params: { present: 80, absent: 10 } });
   });
 
   it("blocks save when a weight is non-finite (NaN guard)", async () => {
@@ -94,6 +114,7 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [rule], source: "api" });
     render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /edit params as json for rule 1/i }));
     const params = screen.getByLabelText(/params json for rule 1/i);
     fireEvent.change(params, { target: { value: "{not json" } });
     expect(params).toHaveAttribute("aria-invalid", "true");
@@ -108,6 +129,7 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [{ ...rule, scoreFnType: "map", params: {} }], source: "api" });
     render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /edit params as json for rule 1/i }));
     const params = screen.getByLabelText(/params json for rule 1/i);
     // "values" must be an object of value → score.
     fireEvent.change(params, { target: { value: '{"values":[1,2,3]}' } });
@@ -117,13 +139,50 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     expect(lq.saveScoreRules).not.toHaveBeenCalled();
   });
 
-  // GAP-CRM-LEAD-SCORING-03: an unrecognised attribute warns (but is still
-  // allowed — backend attribute is free text).
-  it("warns on an attribute that is not a known lead field", async () => {
+  // GAP-CRM-LEAD-SCORING-03: an attribute the scorer does not read is REJECTED on
+  // save (it could never score), not merely warned about.
+  it("flags a stored attribute the scorer does not read and blocks the save", async () => {
     vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [{ ...rule, attribute: "madeUpField" }], source: "api" });
     render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
     await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
-    expect(screen.getByText(/not a known lead field/i)).toBeInTheDocument();
+    const attr = screen.getByLabelText(/attribute for rule 1/i);
+    expect(attr).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText(/can never score/i)).toBeInTheDocument();
+    // The legacy value stays visible (so it can be removed) but is not a choosable option.
+    expect((screen.getByRole("option", { name: "madeUpField" }) as HTMLOptionElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    expect(await screen.findByText(/needs an attribute, a whole-number weight/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /save and re-score/i })).not.toBeInTheDocument();
+    expect(lq.saveScoreRules).not.toHaveBeenCalled();
+  });
+
+  it("offers only the fields the scorer reads, including the ones the old suggestion list missed", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [rule], source: "api" });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    const values = Array.from(screen.getByLabelText(/attribute for rule 1/i).querySelectorAll("option")).map((o) => (o as HTMLOptionElement).value).filter(Boolean);
+    expect(values).toEqual(["leadSource", "company", "lastActivityAt", "email", "phone", "leadStatus", "city", "designation"]);
+  });
+
+  it("uses the attribute list the backend advertises when it sends one", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [rule], source: "api", meta: { scoreableAttributes: ["leadSource", "email"] } });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    const values = Array.from(screen.getByLabelText(/attribute for rule 1/i).querySelectorAll("option")).map((o) => (o as HTMLOptionElement).value).filter(Boolean);
+    expect(values).toEqual(["leadSource", "email"]);
+  });
+
+  it("blocks two rules on the same field (the backend keeps one rule per field)", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({
+      data: [{ ...rule, attribute: "company", scoreFnType: "presence", params: {} }, { ...rule, attribute: "company", scoreFnType: "presence", params: {} }],
+      source: "api",
+    });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    expect(screen.getAllByText(/another rule already uses this field/i)).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    expect(await screen.findByText(/needs an attribute, a whole-number weight/i)).toBeInTheDocument();
+    expect(lq.saveScoreRules).not.toHaveBeenCalled();
   });
 
   // GAP-CRM-LEAD-SCORING-04: a running total and per-rule share are shown, and
@@ -168,14 +227,14 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     fireEvent.click(screen.getByRole("button", { name: /add rule/i }));
 
     const thirdAttribute = screen.getAllByLabelText(/attribute for rule/i)[2]!;
-    fireEvent.change(thirdAttribute, { target: { value: "budget" } });
+    fireEvent.change(thirdAttribute, { target: { value: "city" } });
     thirdAttribute.focus();
     expect(document.activeElement).toBe(thirdAttribute);
 
     fireEvent.click(screen.getAllByRole("button", { name: /remove rule/i })[0]!);
 
     const survivingThirdAttribute = screen.getAllByLabelText(/attribute for rule/i)[1]!;
-    expect(survivingThirdAttribute).toHaveValue("budget");
+    expect(survivingThirdAttribute).toHaveValue("city");
     expect(document.activeElement).toBe(survivingThirdAttribute);
   });
 
@@ -241,5 +300,236 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
     const dialog = await screen.findByRole("alertdialog");
     expect(dialog).toHaveTextContent(/1 rule will be removed/i);
+  });
+});
+
+describe("LeadScoreRulesEditor structured params (GAP-CRM-LEAD-SCORING-02)", () => {
+  function renderEditor() {
+    return render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
+  }
+  const numeric: lq.LeadScoreRule = { attribute: "designation", weight: 20, scoreFnType: "presence", params: {}, enabled: true };
+
+  it("switching a rule to numeric_threshold shows the tier editor, and the tiers are saved as params", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [numeric], source: "api" });
+    vi.mocked(lq.saveScoreRules).mockResolvedValue(undefined);
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    // Presence shows its two score boxes and no tier controls.
+    expect(screen.queryByRole("button", { name: /add a tier to rule 1/i })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/score function for rule 1/i), { target: { value: "numeric_threshold" } });
+    expect(screen.queryByLabelText(/score when present, rule 1/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /add a tier to rule 1/i }));
+    fireEvent.change(screen.getByLabelText(/at least, tier 1, rule 1/i), { target: { value: "100" } });
+    fireEvent.change(screen.getByLabelText(/score for tier 1, rule 1/i), { target: { value: "80" } });
+    fireEvent.change(screen.getByLabelText(/score below the first tier, rule 1/i), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    await confirmSave();
+    await waitFor(() => expect(lq.saveScoreRules).toHaveBeenCalled());
+    expect(vi.mocked(lq.saveScoreRules).mock.calls[0][0][0]).toMatchObject({
+      scoreFnType: "numeric_threshold",
+      params: { tiers: [{ min: 100, score: 80 }], default: 5 },
+    });
+  });
+
+  it("recency tiers are keyed by maxDays (days since), not min", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [{ ...numeric, attribute: "lastActivityAt", scoreFnType: "recency" }], source: "api" });
+    vi.mocked(lq.saveScoreRules).mockResolvedValue(undefined);
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add a tier to rule 1/i }));
+    fireEvent.change(screen.getByLabelText(/within \(days\), tier 1, rule 1/i), { target: { value: "7" } });
+    fireEvent.change(screen.getByLabelText(/score for tier 1, rule 1/i), { target: { value: "100" } });
+    fireEvent.change(screen.getByLabelText(/score when older than every tier, rule 1/i), { target: { value: "20" } });
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    await confirmSave();
+    await waitFor(() => expect(lq.saveScoreRules).toHaveBeenCalled());
+    expect(vi.mocked(lq.saveScoreRules).mock.calls[0][0][0].params).toEqual({ tiers: [{ maxDays: 7, score: 100 }], beyondScore: 20 });
+  });
+
+  it("map rows build the values table, with a default", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [{ ...numeric, attribute: "leadSource", scoreFnType: "map" }], source: "api" });
+    vi.mocked(lq.saveScoreRules).mockResolvedValue(undefined);
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add a value to rule 1/i }));
+    fireEvent.change(screen.getByLabelText(/lead value 1, rule 1/i), { target: { value: "referral" } });
+    fireEvent.change(screen.getByLabelText(/score for value 1, rule 1/i), { target: { value: "90" } });
+    fireEvent.change(screen.getByLabelText(/score for any other value, rule 1/i), { target: { value: "20" } });
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    await confirmSave();
+    await waitFor(() => expect(lq.saveScoreRules).toHaveBeenCalled());
+    expect(vi.mocked(lq.saveScoreRules).mock.calls[0][0][0].params).toEqual({ values: { referral: 90 }, default: 20 });
+  });
+
+  it("shows a per-field message on the exact input that is wrong, and blocks the save", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [numeric], source: "api" });
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    const present = screen.getByLabelText(/score when present, rule 1/i);
+    const absent = screen.getByLabelText(/score when absent, rule 1/i);
+    fireEvent.change(present, { target: { value: "150" } });
+    expect(present).toHaveAttribute("aria-invalid", "true");
+    const err = screen.getByText(/score must be between 0 and 100/i);
+    expect(err).toHaveAttribute("role", "alert");
+    expect(present).toHaveAttribute("aria-describedby", err.id);
+    // The untouched sibling is not flagged.
+    expect(absent).not.toHaveAttribute("aria-invalid");
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    expect(await screen.findByText(/needs an attribute, a whole-number weight/i)).toBeInTheDocument();
+    expect(lq.saveScoreRules).not.toHaveBeenCalled();
+  });
+
+  it("rejects an upper-case map value (the scorer matches lower-cased values, so it would never match)", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [{ ...numeric, attribute: "leadSource", scoreFnType: "map" }], source: "api" });
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add a value to rule 1/i }));
+    fireEvent.change(screen.getByLabelText(/lead value 1, rule 1/i), { target: { value: "Referral" } });
+    fireEvent.change(screen.getByLabelText(/score for value 1, rule 1/i), { target: { value: "90" } });
+    expect(screen.getByText(/use lower case/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    expect(await screen.findByText(/needs an attribute, a whole-number weight/i)).toBeInTheDocument();
+    expect(lq.saveScoreRules).not.toHaveBeenCalled();
+  });
+
+  it("an incomplete tier row is flagged on its own boxes", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [{ ...numeric, scoreFnType: "numeric_threshold" }], source: "api" });
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add a tier to rule 1/i }));
+    expect(screen.getByLabelText(/at least, tier 1, rule 1/i)).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText(/score for tier 1, rule 1/i)).toHaveAttribute("aria-invalid", "true");
+    fireEvent.change(screen.getByLabelText(/at least, tier 1, rule 1/i), { target: { value: "50" } });
+    expect(screen.getByLabelText(/at least, tier 1, rule 1/i)).not.toHaveAttribute("aria-invalid");
+    expect(screen.getByLabelText(/score for tier 1, rule 1/i)).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("opens stored params the form cannot show in Advanced JSON so nothing is rewritten, and refuses 'Use form' until the JSON fits", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({
+      data: [{ ...numeric, scoreFnType: "map", params: { values: [1, 2, 3] } }],
+      source: "api",
+    });
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    const json = screen.getByLabelText(/params json for rule 1/i);
+    expect(json).toHaveValue('{"values":[1,2,3]}');
+    expect(screen.getByText(/“values” must be an object/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /use the form for rule 1/i }));
+    expect(screen.getByText(/can't be shown in the form/i)).toBeInTheDocument();
+    // Fix the JSON, then the form accepts it.
+    fireEvent.change(json, { target: { value: '{"values":{"referral":90},"default":10}' } });
+    fireEvent.click(screen.getByRole("button", { name: /use the form for rule 1/i }));
+    expect(screen.getByLabelText(/lead value 1, rule 1/i)).toHaveValue("referral");
+    expect(screen.getByLabelText(/score for any other value, rule 1/i)).toHaveValue(10);
+  });
+
+  it("keeps keys the form does not model when a rule is edited in the form", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [{ ...numeric, params: { present: 70, note: "keep me" } }], source: "api" });
+    vi.mocked(lq.saveScoreRules).mockResolvedValue(undefined);
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/score when absent, rule 1/i), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    await confirmSave();
+    await waitFor(() => expect(lq.saveScoreRules).toHaveBeenCalled());
+    expect(vi.mocked(lq.saveScoreRules).mock.calls[0][0][0].params).toEqual({ present: 70, absent: 5, note: "keep me" });
+  });
+});
+
+describe("LeadScoreRulesEditor weights + impact preview (GAP-CRM-LEAD-SCORING-04)", () => {
+  function renderEditor() {
+    return render(<NextIntlClientProvider locale="en" messages={enMessages}><LeadScoreRulesEditor /></NextIntlClientProvider>);
+  }
+  const two: lq.LeadScoreRule[] = [
+    { attribute: "leadSource", weight: 30, scoreFnType: "map", params: { default: 20 }, enabled: true },
+    { attribute: "company", weight: 10, scoreFnType: "presence", params: {}, enabled: true },
+  ];
+  const preview: lq.ScorePreview = {
+    totalLeads: 120, sampled: 120, truncated: false, unscored: 4, currentAverage: 52.5, proposedAverage: 31.2,
+    changed: 80, raised: 10, lowered: 70, totalWeight: 40, maxPossibleScore: 40,
+    bands: [
+      { label: "0-19", current: 5, proposed: 30 },
+      { label: "20-39", current: 20, proposed: 50 },
+      { label: "40-59", current: 40, proposed: 30 },
+      { label: "60-79", current: 35, proposed: 6 },
+      { label: "80-100", current: 16, proposed: 0 },
+    ],
+  };
+
+  it("states the real scoring rule: weights are not normalised, so the enabled total is the ceiling", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: two, source: "api" });
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    expect(screen.getByText(/weights are not normalised/i)).toHaveTextContent(/highest possible score is 40/i);
+    expect(screen.getByRole("note")).toHaveTextContent(/no lead can score above 40/i);
+    expect(screen.queryByText(/weights are normalised, so/i)).not.toBeInTheDocument();
+  });
+
+  it("an enabled total of exactly 100 shows no ceiling warning", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [{ ...two[0]!, weight: 60 }, { ...two[1]!, weight: 40 }], source: "api" });
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+
+  it("Preview impact sends the rules as edited and renders the before/after distribution", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: two, source: "api" });
+    vi.mocked(lq.previewScoreRules).mockResolvedValue(preview);
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/weight for rule 2/i), { target: { value: "25" } });
+    fireEvent.click(screen.getByRole("button", { name: /preview impact/i }));
+    const summary = await screen.findByRole("region", { name: /impact preview/i });
+    expect(lq.previewScoreRules).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(lq.previewScoreRules).mock.calls[0][0].map((r) => [r.attribute, r.weight])).toEqual([["leadSource", 30], ["company", 25]]);
+    expect(summary).toHaveTextContent(/scored 120 of 120 leads/i);
+    expect(summary).toHaveTextContent(/52\.5 now, 31\.2 after/i);
+    expect(summary).toHaveTextContent(/10 leads would score higher and 70 lower/i);
+    const rows = screen.getAllByRole("row").map((r) => r.textContent);
+    expect(rows.some((r) => /80-100\s*16\s*0/.test(r ?? ""))).toBe(true);
+    // Preview is read-only: nothing was saved.
+    expect(lq.saveScoreRules).not.toHaveBeenCalled();
+  });
+
+  it("drops a stale preview as soon as the rules change", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: two, source: "api" });
+    vi.mocked(lq.previewScoreRules).mockResolvedValue(preview);
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /preview impact/i }));
+    await screen.findByRole("region", { name: /impact preview/i });
+    fireEvent.change(screen.getByLabelText(/weight for rule 1/i), { target: { value: "31" } });
+    expect(screen.queryByRole("region", { name: /impact preview/i })).not.toBeInTheDocument();
+  });
+
+  it("does not preview invalid rules", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [{ ...two[0]!, weight: Number.NaN }], source: "api" });
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /preview impact/i }));
+    expect(await screen.findByText(/needs an attribute, a whole-number weight/i)).toBeInTheDocument();
+    expect(lq.previewScoreRules).not.toHaveBeenCalled();
+  });
+
+  it("shows a catalogued message (never the raw error) when the preview fails", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: two, source: "api" });
+    vi.mocked(lq.previewScoreRules).mockRejectedValue(new Error("pg: relation crm.contacts does not exist"));
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /preview impact/i }));
+    expect(await screen.findByText(/couldn't preview the impact/i)).toBeInTheDocument();
+    expect(screen.queryByText(/relation crm\.contacts/i)).not.toBeInTheDocument();
+  });
+
+  it("tells the admin how many leads would change inside the save confirm once a preview exists", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: two, source: "api" });
+    vi.mocked(lq.previewScoreRules).mockResolvedValue(preview);
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /preview impact/i }));
+    await screen.findByRole("region", { name: /impact preview/i });
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(/80 of 120 scored leads would change score/i);
   });
 });

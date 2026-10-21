@@ -11,7 +11,7 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { Button, EntityPicker, type EntityOption } from "../ds";
-import { browserFetch } from "@/lib/api/browserClient";
+import { fetchAllPages, type ListRow } from "@/lib/crm/pagedList";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
 import {
@@ -40,22 +40,33 @@ const MAX_QUANTITY = 100_000_000;
 
 const inputStyle = { padding: 8, minHeight: 40, borderRadius: 8, border: "1px solid var(--line)", width: "100%" } as const;
 
+/** Most matches the account picker lists. */
+const ACCOUNT_PICKER_LIMIT = 20;
+
+function namedAccounts(rows: ListRow[]): Array<{ id: string; name: string }> {
+  return rows.filter((a): a is { id: string; name: string } => typeof a.id === "string" && typeof a.name === "string" && a.id !== "" && a.name !== "");
+}
+
 /**
  * Account search for the EntityPicker. Accounts are listed from the existing
- * `GET /v1/crm/accounts` endpoint; the result is filtered client-side on the typed
- * query (the list endpoint has no server-side search param). Returns [] on any failure
- * so the picker degrades to "no results" rather than throwing.
+ * `GET /v1/crm/accounts` endpoint, a page (200 rows) at a time until enough names
+ * match the typed query - the list endpoint has no server-side search param, and reading
+ * only its default first page (50 rows) made every account past it unfindable, so an
+ * opportunity could not be linked to them (GAP-CRM-OPPORTUNITIES-NEW-02). Returns [] on
+ * any failure so the picker degrades to "no results" rather than throwing.
  */
 async function searchAccounts(query: string, signal: AbortSignal): Promise<EntityOption[]> {
   try {
-    const res = await browserFetch("v1/crm/accounts", { signal });
-    if (!res.ok) return [];
-    const body = (await res.json()) as { data?: Array<{ id?: string; name?: string }> };
     const q = query.trim().toLowerCase();
-    return (body.data ?? [])
-      .filter((a): a is { id: string; name: string } => Boolean(a.id && a.name))
-      .filter((a) => (q ? a.name.toLowerCase().includes(q) : true))
-      .slice(0, 20)
+    const matches = (rows: ListRow[]) =>
+      namedAccounts(rows).filter((a) => (q ? a.name.toLowerCase().includes(q) : true));
+    const { rows } = await fetchAllPages({
+      path: "v1/crm/accounts",
+      signal,
+      done: (read) => matches(read).length >= ACCOUNT_PICKER_LIMIT,
+    });
+    return matches(rows)
+      .slice(0, ACCOUNT_PICKER_LIMIT)
       .map((a) => ({ id: a.id, label: a.name }));
   } catch {
     return [];
@@ -64,12 +75,13 @@ async function searchAccounts(query: string, signal: AbortSignal): Promise<Entit
 
 async function resolveAccounts(ids: string[]): Promise<EntityOption[]> {
   try {
-    const res = await browserFetch("v1/crm/accounts", {});
-    if (!res.ok) return [];
-    const body = (await res.json()) as { data?: Array<{ id?: string; name?: string }> };
     const want = new Set(ids);
-    return (body.data ?? [])
-      .filter((a): a is { id: string; name: string } => Boolean(a.id && a.name && want.has(a.id)))
+    const { rows } = await fetchAllPages({
+      path: "v1/crm/accounts",
+      done: (read) => namedAccounts(read).filter((a) => want.has(a.id)).length >= want.size,
+    });
+    return namedAccounts(rows)
+      .filter((a) => want.has(a.id))
       .map((a) => ({ id: a.id, label: a.name }));
   } catch {
     return [];
@@ -186,7 +198,11 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
       ...(opportunity?.id ? { id: opportunity.id } : {}),
       name: name.trim(),
       pipelineId,
-      stage,
+      // crm-service resolves a deal's stage by its NAME (deals.stage stores the name and the
+      // create route matches pipeline stages by name), so send the stage name - the web-derived
+      // slug key ("qualification") matches no configured stage and was refused INVALID_STAGE.
+      stage: selectedStage?.name ?? stage,
+      ...(selectedStage?.id ? { stageId: selectedStage.id } : {}),
       valueMinor: valueMinor ?? "0",
       // GAP-CRM-OPPORTUNITIES-NEW-06: omit probability/quantity when left blank
       // so an untouched form does not persist a real-looking 0 (which would

@@ -29,6 +29,12 @@ function str(v: unknown): string {
 function num(v: unknown): number {
   return typeof v === "number" ? v : Number(v) || 0;
 }
+/** A finite number, or undefined when the value is absent/blank/not numeric - never a fabricated 0. */
+function optNum(v: unknown): number | undefined {
+  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+  if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
+  return undefined;
+}
 function bool(v: unknown, dflt = false): boolean {
   return typeof v === "boolean" ? v : dflt;
 }
@@ -226,7 +232,10 @@ export interface Opportunity {
   id?: string;
   name: string;
   pipelineId: string;
+  /** The stage NAME as configured on the pipeline (what crm-service stores and matches by). */
   stage: string;
+  /** The pipeline stage's own uuid, when known. */
+  stageId?: string;
   /** Minor units (paise), as a string — never a float. */
   valueMinor: string;
   /**
@@ -266,9 +275,11 @@ export function normaliseOpportunity(raw: unknown): Opportunity | null {
     stage: str(r.stage),
     // Tolerate value | valueMinor | valueDisplay-less payloads.
     valueMinor: minorStr(r.valueMinor ?? r.value),
-    probability: num(r.probability),
+    // GAP-CRM-OPPORTUNITIES-NEW-06: an absent probability/quantity stays absent (shown as a dash),
+    // never coerced to a real-looking 0%.
+    ...(optNum(r.probability) !== undefined ? { probability: optNum(r.probability) as number } : {}),
     product: str(r.product),
-    quantity: num(r.quantity),
+    ...(optNum(r.quantity) !== undefined ? { quantity: optNum(r.quantity) as number } : {}),
     competitors: strArray(r.competitors),
     nextStep: str(r.nextStep),
     expectedCloseDate: str(r.expectedCloseDate ?? r.closeDate),

@@ -18,6 +18,8 @@
  */
 import { browserFetch, errorMessageFromResponse, UserFacingError } from "@/lib/api/browserClient";
 import { referenceFromHeaders } from "@/lib/errorCatalogue";
+import { formatInternalRef } from "@/lib/formatters";
+import { fetchAllPages, type ListRow } from "./pagedList";
 
 export type OnbSource = "api" | "error" | "not-found";
 
@@ -355,11 +357,9 @@ export interface OnboardingLookups {
   accountNames: Record<string, string>;
 }
 
-function namesFromList(raw: unknown): Record<string, string> {
+function namesFromRows(rows: ListRow[]): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const item of toArray(raw)) {
-    if (!item || typeof item !== "object") continue;
-    const r = item as Record<string, unknown>;
+  for (const r of rows) {
     const id = str(r.id);
     const name = str(r.name);
     if (id && name) out[id] = name;
@@ -367,17 +367,59 @@ function namesFromList(raw: unknown): Record<string, string> {
   return out;
 }
 
-/** Fetch the deal + account name maps used to label onboarding rows. */
-export async function getOnboardingLookups(): Promise<OnboardingLookups> {
-  const [dealsRes, accountsRes] = await Promise.allSettled([
-    browserFetch("v1/crm/deals?limit=500"),
-    browserFetch("v1/crm/accounts?limit=500"),
+/**
+ * Page through one list endpoint until every wanted id has been seen (or the list /
+ * page cap is exhausted). `wanted` of null means "no particular ids": read it all.
+ * A failed read degrades to whatever pages did arrive -- names are then left null and
+ * the UI shows a neutral label, never a UUID (GAP-CRM-ONBOARDING-01).
+ */
+async function namesFor(path: string, wanted: Set<string> | null): Promise<Record<string, string>> {
+  if (wanted !== null && wanted.size === 0) return {};
+  const { rows } = await fetchAllPages({
+    path,
+    ...(wanted
+      ? { done: (read: ListRow[]) => { const have = new Set(read.map((r) => str(r.id))); return [...wanted].every((id) => have.has(id)); } }
+      : {}),
+  });
+  return namesFromRows(rows);
+}
+
+/**
+ * Fetch the deal + account name maps used to label onboarding rows.
+ *
+ * Pass the cases being labelled so only as many pages are read as it takes to find
+ * THEIR deals/accounts. The list endpoints cap a page (accounts: 200) and answer a
+ * larger `limit` with a 400, so this pages with the real page size instead of asking
+ * for one oversized page that never resolved an account name.
+ */
+export async function getOnboardingLookups(
+  cases?: ReadonlyArray<Pick<OnboardingCase, "dealId" | "accountId">>,
+): Promise<OnboardingLookups> {
+  const wantedDeals = cases ? new Set(cases.map((c) => c.dealId).filter(Boolean)) : null;
+  const wantedAccounts = cases ? new Set(cases.map((c) => c.accountId).filter((a): a is string => !!a)) : null;
+  const [dealNames, accountNames] = await Promise.all([
+    namesFor("v1/crm/deals", wantedDeals),
+    namesFor("v1/crm/accounts", wantedAccounts),
   ]);
-  const dealNames =
-    dealsRes.status === "fulfilled" && dealsRes.value.ok ? namesFromList(await dealsRes.value.json()) : {};
-  const accountNames =
-    accountsRes.status === "fulfilled" && accountsRes.value.ok ? namesFromList(await accountsRes.value.json()) : {};
   return { dealNames, accountNames };
+}
+
+/**
+ * crm-service masks a KYC reference as "••••" + its last four characters (shared/pii-reveal.ts
+ * maskLast4). True for that server-masked shape - the only value the audited reveal control
+ * is offered for.
+ */
+export function isMaskedKycReference(value: string | null | undefined): boolean {
+  return typeof value === "string" && value.startsWith("••••");
+}
+
+/**
+ * A short, non-identifying reference for support lookups ("Ref 3fa85f64"). The full
+ * record id lives in the URL only; it is never a primary identifier on screen
+ * (GAP-CRM-ONBOARDING-01 / -DETAIL-01).
+ */
+export function shortRef(id: string | null | undefined): string {
+  return formatInternalRef(id ? id.slice(0, 8) : null);
 }
 
 /** Merge resolved names onto cases; a missing name is left null (never a UUID). */

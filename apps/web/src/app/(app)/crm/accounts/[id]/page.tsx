@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader, EmptyState, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { getCrmAccount, getCrmAccounts, getCrmAccountAncestors, getCrmAccountChildren } from "../../../../_data/loaders";
@@ -98,6 +99,11 @@ export default async function Page({ params }: { params: { id: string } }) {
         back="/crm/accounts"
         backLabel="Accounts"
         actions={
+          <>
+          {/* GAP-CRM-OPPORTUNITIES-NEW-02: start an opportunity already linked to this account. */}
+          <Link className="btn" href={`/crm/opportunities/new?accountId=${encodeURIComponent(account.id)}`}>
+            {t("newOpportunity")}
+          </Link>
           <AccountParentForm
             accountId={account.id}
             accountName={account.name}
@@ -111,6 +117,7 @@ export default async function Page({ params }: { params: { id: string } }) {
             })()}
             subtreeSize={collectDescendantIds(accounts, account.id).size}
           />
+          </>
         }
       />
       <div className="grid g-main" style={{ alignItems: "start" }}>

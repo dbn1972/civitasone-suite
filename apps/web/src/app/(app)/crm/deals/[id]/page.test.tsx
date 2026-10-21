@@ -103,6 +103,23 @@ describe("Deal detail page (getDealById regression)", () => {
     expect(screen.getByText("proposal")).toBeInTheDocument();
   });
 
+  // GAP-CRM-OPPORTUNITIES-NEW-06: a deal the service sent no probability for shows a dash, not a
+  // fabricated 0%; a real 0 is still shown as 0%.
+  it("shows a dash for a missing probability and 0% for a real zero", async () => {
+    const { probability: _omit, ...withoutProbability } = RAW_DEAL;
+    void _omit;
+    rawPayload.mockReturnValue(withoutProbability);
+    const first = render(await DealDetailPage({ params: { id: RAW_DEAL.id } }));
+    const probabilityField = () => screen.getByText("Probability").parentElement as HTMLElement;
+    expect(probabilityField()).toHaveTextContent("—");
+    expect(probabilityField()).not.toHaveTextContent("0%");
+    first.unmount();
+
+    rawPayload.mockReturnValue({ ...RAW_DEAL, probability: 0 });
+    render(await DealDetailPage({ params: { id: RAW_DEAL.id } }));
+    expect(probabilityField()).toHaveTextContent("0%");
+  });
+
   // The server close endpoint is admin-only; the UI must not offer Won/Lost to crm_user.
   it("offers Mark Won / Mark Lost to CRM admins", async () => {
     rawPayload.mockReturnValue(RAW_DEAL);

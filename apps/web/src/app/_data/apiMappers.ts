@@ -615,7 +615,8 @@ export function mapDealSummaries(payload: unknown): DealSummary[] | null {
       amount: parseMinorString(row.valueMinor) ?? parseMinorString(row.amount) ?? "0",
       owner: toText(row.owner) ?? "—",
       closeDate: toText(row.closeDate) ?? undefined,
-      probability: typeof row.probability === "number" ? row.probability : 0,
+      // GAP-CRM-OPPORTUNITIES-NEW-06: a missing probability stays missing (rendered as a dash).
+      ...(typeof row.probability === "number" && Number.isFinite(row.probability) ? { probability: row.probability } : {}),
       status,
       version: typeof row.version === "number" ? row.version : undefined,
     });

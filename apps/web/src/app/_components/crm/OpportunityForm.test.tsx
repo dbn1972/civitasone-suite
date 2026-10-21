@@ -48,7 +48,8 @@ describe("OpportunityForm (OP-003)", () => {
     expect(payload.valueMinor).toBe("150050");
     expect(payload.probability).toBe(40);
     expect(payload.pipelineId).toBe("p1");
-    expect(payload.stage).toBe("qual");
+    // The backend matches a pipeline stage by NAME, so the name is sent - not the web-derived key "qual".
+    expect(payload.stage).toBe("Qualify");
   });
 
   it("blocks an invalid probability without calling the API", async () => {
@@ -218,5 +219,104 @@ describe("OpportunityForm quantity bound (server cap 100,000,000)", () => {
     fireEvent.click(screen.getByRole("button", { name: /create opportunity/i }));
     await waitFor(() => expect(op.createOpportunity).toHaveBeenCalled());
     expect(vi.mocked(op.createOpportunity).mock.calls[0][0].quantity).toBe(100000000);
+  });
+});
+
+// GAP-CRM-OPPORTUNITIES-NEW-02 (W2 crm cluster 07): the chosen account is part of the POST body
+// (the backend now persists it, and the account view lists the deal).
+describe("OpportunityForm account link (GAP-CRM-OPPORTUNITIES-NEW-02)", () => {
+  const ACCOUNTS = [
+    { id: "acc-1", name: "Acme Corp" },
+    { id: "acc-2", name: "Beta Industries" },
+  ];
+
+  /** Serve GET /api/proxy/v1/crm/accounts like the real list route (200/page, meta.total). */
+  function serveAccounts(all: Array<{ id: string; name: string }>) {
+    return vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "http://localhost");
+      const limit = Number(url.searchParams.get("limit") ?? 50);
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      return new Response(JSON.stringify({ data: all.slice(offset, offset + limit), meta: { total: all.length } }), { status: 200 });
+    });
+  }
+
+  it("selecting an account puts its id in the POST body", async () => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
+    vi.mocked(op.createOpportunity).mockResolvedValue("deal-acct");
+    const fetchSpy = serveAccounts(ACCOUNTS);
+    renderWithIntl(<OpportunityForm />);
+    await waitFor(() => expect(screen.getByLabelText(/opportunity name/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/opportunity name/i), { target: { value: "Acme renewal" } });
+    fireEvent.change(screen.getByLabelText("Account"), { target: { value: "Acme" } });
+    fireEvent.mouseDown(await screen.findByText("Acme Corp"));
+    expect(await screen.findByDisplayValue("Acme Corp")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /create opportunity/i }));
+    await waitFor(() => expect(op.createOpportunity).toHaveBeenCalled());
+    expect(vi.mocked(op.createOpportunity).mock.calls[0][0].accountId).toBe("acc-1");
+    fetchSpy.mockRestore();
+  });
+
+  it("an account past the first page of the list can still be found (the picker pages with the real page size)", async () => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
+    const many = Array.from({ length: 260 }, (_, i) => ({ id: `acc-f${i}`, name: `Filler ${i}` })).concat([{ id: "acc-late", name: "Zenith Utilities" }]);
+    const fetchSpy = serveAccounts(many);
+    renderWithIntl(<OpportunityForm />);
+    await waitFor(() => expect(screen.getByLabelText(/opportunity name/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Account"), { target: { value: "Zenith" } });
+    expect(await screen.findByText("Zenith Utilities")).toBeInTheDocument();
+    const urls = fetchSpy.mock.calls.map((c) => String(c[0]));
+    expect(urls.some((u) => u.includes("offset=200"))).toBe(true);
+    expect(urls.every((u) => !/limit=(?:[3-9]\d\d|\d{4,})/.test(u))).toBe(true);
+    fetchSpy.mockRestore();
+  });
+
+  it("an account prefilled from ?accountId= is sent without the user touching the picker", async () => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
+    vi.mocked(op.createOpportunity).mockResolvedValue("deal-prefill");
+    const fetchSpy = serveAccounts(ACCOUNTS);
+    renderWithIntl(<OpportunityForm initialAccountId="acc-2" initialAccountLabel="Beta Industries" />);
+    await waitFor(() => expect(screen.getByLabelText(/opportunity name/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/opportunity name/i), { target: { value: "Beta expansion" } });
+    fireEvent.click(screen.getByRole("button", { name: /create opportunity/i }));
+    await waitFor(() => expect(op.createOpportunity).toHaveBeenCalled());
+    expect(vi.mocked(op.createOpportunity).mock.calls[0][0].accountId).toBe("acc-2");
+    fetchSpy.mockRestore();
+  });
+
+  it("omits accountId entirely when no account is chosen (the link stays optional)", async () => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
+    vi.mocked(op.createOpportunity).mockResolvedValue("deal-none");
+    renderWithIntl(<OpportunityForm />);
+    await waitFor(() => expect(screen.getByLabelText(/opportunity name/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/opportunity name/i), { target: { value: "Quick capture" } });
+    fireEvent.click(screen.getByRole("button", { name: /create opportunity/i }));
+    await waitFor(() => expect(op.createOpportunity).toHaveBeenCalled());
+    expect(vi.mocked(op.createOpportunity).mock.calls[0][0]).not.toHaveProperty("accountId");
+  });
+});
+
+describe("OpportunityForm stage identity (W2 crm cluster 07)", () => {
+  it("sends the stage NAME and the stage's own id (crm-service matches stages by name), never the derived slug key", async () => {
+    const withIds: op.Pipeline = {
+      id: "p9",
+      name: "Field Services",
+      enabled: true,
+      stages: [
+        { key: "site_visit_scheduled", name: "Site Visit Scheduled", id: "stage-uuid-1", mandatoryFields: [], gate: false },
+        { key: "quoted", name: "Quoted", id: "stage-uuid-2", mandatoryFields: [], gate: false },
+      ],
+    };
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [withIds], source: "api" });
+    vi.mocked(op.createOpportunity).mockResolvedValue("deal-stage");
+    renderWithIntl(<OpportunityForm />);
+    await waitFor(() => expect(screen.getByLabelText(/opportunity name/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/opportunity name/i), { target: { value: "Survey" } });
+    fireEvent.change(screen.getByLabelText(/^stage$/i), { target: { value: "quoted" } }); // option values are still the keys
+    fireEvent.click(screen.getByRole("button", { name: /create opportunity/i }));
+    await waitFor(() => expect(op.createOpportunity).toHaveBeenCalled());
+    const payload = vi.mocked(op.createOpportunity).mock.calls[0][0];
+    expect(payload.stage).toBe("Quoted");
+    expect(payload.stageId).toBe("stage-uuid-2");
+    expect(payload.stage).not.toBe("quoted");
   });
 });
