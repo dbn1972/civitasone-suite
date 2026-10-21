@@ -2,6 +2,7 @@ import { eq, and, or, ilike, sql, inArray, notInArray, desc, asc, gt } from "dri
 import { pino } from "pino";
 import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
+import { loadProbationMonthsResolver, defaultProbationEnd } from "./probation-period.js";
 import {
   hrmsEmployees, hrmsDepartments, hrmsDesignations, hrmsProbationExtensions,
   type EmployeeRow, type EmployeeInsert, type ProbationExtensionInsert,
@@ -167,13 +168,10 @@ export async function insertProbationExtension(tx: Writer, row: ProbationExtensi
 /**
  * An employee's current probation end: the newEndDate of their most
  * recently recorded extension, if any, else the default of dateOfJoining +
- * 2 years. NOTE: this default formula is duplicated (not imported) in
- * lifecycle/m7-list-routes.ts's confirmations list handler, which needs the
- * same computation for every row in a batch rather than one employee at a
- * time -- module boundaries (CLAUDE.md rule 4) make a single shared helper
- * awkward without a larger refactor of that file's existing local batch*
- * pattern, which is unrelated to this fix and out of scope. Keep both in
- * sync if the default ever changes.
+ * the probation period configured for their employee type (probation-
+ * period.ts; 24 months when the type configures none). lifecycle/
+ * m7-list-routes.ts's confirmations list handler computes the same default
+ * for a whole batch through the SAME resolver, so the two cannot drift.
  */
 export async function findCurrentProbationEnd(id: string, tenantId: string): Promise<string | null> {
   const emp = await findById(id, tenantId);
@@ -185,9 +183,8 @@ export async function findCurrentProbationEnd(id: string, tenantId: string): Pro
     .orderBy(desc(hrmsProbationExtensions.createdAt))
     .limit(1));
   if (latest[0]) return latest[0].newEndDate;
-  const join = new Date(`${emp.dateOfJoining}T00:00:00Z`);
-  join.setUTCFullYear(join.getUTCFullYear() + 2);
-  return join.toISOString().slice(0, 10);
+  const months = (await loadProbationMonthsResolver(tenantId))(emp.employeeType);
+  return defaultProbationEnd(emp.dateOfJoining, months);
 }
 
 /**

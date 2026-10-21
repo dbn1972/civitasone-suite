@@ -13,7 +13,9 @@ import { hrmsEmployees, hrmsDepartments, hrmsDesignations, hrmsProbationExtensio
 import { hrmsTransfers, hrmsPromotions, hrmsSeparations } from "../lifecycle/schema.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import { SERVICE_BOOK_TRANSFER_TYPES, SERVICE_BOOK_PROMOTION_TYPES } from "../service-book/constants.js";
+import { toServiceBookListEntry } from "../service-book/list-shape.js";
 import { hrmsDeputations } from "../deputation/schema.js";
+import { loadProbationMonthsResolver, defaultProbationEnd } from "../employee/probation-period.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
@@ -193,13 +195,16 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
     // silently dropped with no signal to the caller. DESC + limit/offset now,
     // and the stat counts below come from full-scope aggregates (not the
     // loaded page), per GAP-HR-SERVICE-BOOK-05's shared type-bucket constants.
-    const [rows, totalRows, transferRows, promotionRows] = await Promise.all([
+    const [rows, totalRows, employeeRows, transferRows, promotionRows] = await Promise.all([
       scopedRead((tx) =>
         tx.select().from(hrmsServiceBookEntries).where(whereClause)
           .orderBy(desc(hrmsServiceBookEntries.effectiveDate), desc(hrmsServiceBookEntries.id))
           .limit(q.limit).offset(q.offset),
       ),
       scopedRead((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(hrmsServiceBookEntries).where(whereClause)),
+      // Distinct employees with at least one entry in scope -- the "Employees"
+      // stat card must reflect the whole scope, not just the loaded page.
+      scopedRead((tx) => tx.select({ count: sql<number>`count(distinct ${hrmsServiceBookEntries.employeeId})::int` }).from(hrmsServiceBookEntries).where(whereClause)),
       scopedRead((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(hrmsServiceBookEntries)
         .where(and(whereClause, inArray(hrmsServiceBookEntries.entryType, [...SERVICE_BOOK_TRANSFER_TYPES])))),
       scopedRead((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(hrmsServiceBookEntries)
@@ -209,21 +214,13 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
     const meta = {
       total,
       hasMore: q.offset + rows.length < total,
+      employeesTotal: employeeRows[0]?.count ?? 0,
       transfersTotal: transferRows[0]?.count ?? 0,
       promotionsTotal: promotionRows[0]?.count ?? 0,
     };
     if (rows.length === 0) return reply.send({ data: [], meta });
     const empMap = await batchEmployees(ctx.tenantId, [...new Set(rows.map((r) => r.employeeId))]);
-    const data = rows.map((r) => ({
-      id: r.id,
-      employeeId: r.employeeId,
-      employee: empMap.get(r.employeeId)?.fullName ?? "—",
-      eventType: r.entryType,
-      detail: r.description,
-      effectiveDate: r.effectiveDate,
-      orderNo: r.documentRef ?? "—",
-      status: r.attested ? "attested" : "recorded",
-    }));
+    const data = rows.map((r) => toServiceBookListEntry(r, empMap.get(r.employeeId)?.fullName ?? "—"));
     return reply.send({ data, meta });
   });
 
@@ -288,6 +285,7 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
           designationId: hrmsEmployees.designationId,
           dateOfJoining: hrmsEmployees.dateOfJoining,
           confirmationDate: hrmsEmployees.confirmationDate,
+          employeeType: hrmsEmployees.employeeType,
           status: hrmsEmployees.status,
         })
         .from(hrmsEmployees)
@@ -309,24 +307,23 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
     const desigIds = [...new Set(employees.map((e) => e.designationId))];
     const desigMap = await batchDesignations(ctx.tenantId, desigIds);
     // GAP-HR-CONFIRMATION-05: an employee's probation end is the default
-    // (joining + 2y) unless a later extension was recorded for them.
+    // (joining + the probation period configured for their employee type --
+    // employee/probation-period.ts, 24 months when the type configures none)
+    // unless a later extension was recorded for them.
     const extensionMap = await batchLatestProbationExtensions(ctx.tenantId, employees.map((e) => e.id));
+    const probationMonthsFor = await loadProbationMonthsResolver(ctx.tenantId);
     const data = employees.map((e) => {
-      // Probation period: 2 years from joining date (default; overridden by
-      // the latest recorded extension, if any -- GAP-HR-CONFIRMATION-05).
-      const join = e.dateOfJoining;
-      const defaultEnd = join
-        ? new Date(new Date(join + "T00:00:00Z").setUTCFullYear(new Date(join + "T00:00:00Z").getUTCFullYear() + 2))
-            .toISOString()
-            .slice(0, 10)
-        : "—";
-      const probationEnd = extensionMap.get(e.id) ?? defaultEnd;
+      const probationMonths = probationMonthsFor(e.employeeType);
+      const probationEnd = extensionMap.get(e.id) ?? defaultProbationEnd(e.dateOfJoining, probationMonths) ?? "—";
       return {
         id: e.id,
         employee: e.fullName,
         department: deptMap.get(e.departmentId) ?? "—",
         designation: desigMap.get(e.designationId) ?? "—",
         joiningDate: e.dateOfJoining ?? "—",
+        // The configured probation period (months) the default end was derived
+        // from; shown on the card so the length is never an unstated assumption.
+        probationMonths,
         probationEnd,
         dueDate: e.confirmationDate ?? probationEnd,
         status: "probation",

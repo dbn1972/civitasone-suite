@@ -8,6 +8,7 @@ import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import * as employeeRepo from "../employee/repo.js";
 import * as repo from "./repo.js";
 import { SERVICE_BOOK_EVENT_TYPES } from "./constants.js";
+import { toServiceBookListEntry } from "./list-shape.js";
 
 export const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 // GAP-HR-SERVICE-BOOK-06: "employee" added so a plain employee can reach
@@ -62,7 +63,10 @@ export async function serviceBookRoutes(app: FastifyInstance): Promise<void> {
     const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
     if (!actorEmp) return reply.send({ data: [] });
     const rows = await repo.listServiceBookEntries(ctx.tenantId, actorEmp.id);
-    return reply.send({ data: rows });
+    // Same row shape as the HR list (eventType / detail / status / orderNo):
+    // the page reads those, so returning raw table rows hid the attested
+    // status and crashed the badge on the missing eventType.
+    return reply.send({ data: rows.map((r) => toServiceBookListEntry(r, actorEmp.fullName)) });
   });
 
   app.post("/v1/hrms/employees/:id/service-book", async (req, reply) => {
