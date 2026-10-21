@@ -160,6 +160,22 @@ describe("Account detail partial failure (GAP-CRM-ACCOUNTS-DETAIL-04)", () => {
   });
 });
 
+describe("Account detail partial failure - reporting line (GAP-CRM-ACCOUNTS-DETAIL-04)", () => {
+  it("renders the account and an inline retry in Reporting Line when only the ancestors fail", async () => {
+    mAccount.mockResolvedValue({ data: account as never, source: "api" });
+    mAncestors.mockResolvedValue({ data: [], source: "error", status: 503 });
+    mChildren.mockResolvedValue({ data: [], source: "api" });
+    mockRoles.mockReturnValue(["crm_admin"]);
+
+    render(await Page({ params: { id: "acc-99" } }));
+    // The loaded account is NOT replaced by a full-page error ...
+    expect(screen.getAllByText("Deep Link Co").length).toBeGreaterThan(0);
+    // ... and the Reporting Line card offers a retry rather than a false "top-level account".
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByText("This is a top-level account.")).not.toBeInTheDocument();
+  });
+});
+
 describe("Account detail website hardening (GAP-CRM-ACCOUNTS-DETAIL-05)", () => {
   beforeEach(() => {
     mAncestors.mockResolvedValue({ data: [], source: "api" });

@@ -397,6 +397,22 @@ describe("PriceBookEditor (QP-002)", () => {
     expect(create).toHaveAttribute("aria-describedby");
   });
 
+  // GAP-CRM-PRICE-BOOKS-04: currency is chosen from the allow-list, never typed, so a book can only
+  // carry a currency the formatter can render under its own symbol.
+  it("offers currency as a fixed list (INR/USD/EUR/GBP/AED), not a free-text box", async () => {
+    render(<PriceBookEditor />);
+    await waitFor(() => expect(screen.getByText(/no price books yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /new price book/i }));
+    const currency = screen.getByRole("combobox", { name: "Currency" }) as HTMLSelectElement;
+    expect(currency.tagName).toBe("SELECT");
+    expect(Array.from(currency.options).map((o) => o.value)).toEqual(["INR", "USD", "EUR", "GBP", "AED"]);
+    fireEvent.change(screen.getByLabelText(/price book name/i), { target: { value: "Export" } });
+    fireEvent.change(currency, { target: { value: "USD" } });
+    vi.mocked(qp.createPriceBook).mockResolvedValue(undefined);
+    fireEvent.click(screen.getByRole("button", { name: /create book/i }));
+    await waitFor(() => expect(qp.createPriceBook).toHaveBeenCalledWith(expect.objectContaining({ name: "Export", currency: "USD" })));
+  });
+
   it("flags a blank price row aria-invalid and keeps Save disabled", async () => {
     vi.mocked(qp.getProducts).mockResolvedValue({ data: [{ id: "pr1", category: "", code: "P1", name: "Widget", unit: "each", taxRateBps: 0, priceMinor: "0", currency: "INR", activeFrom: "", activeTo: "", enabled: true }], source: "api" });
     render(<PriceBookEditor />);
