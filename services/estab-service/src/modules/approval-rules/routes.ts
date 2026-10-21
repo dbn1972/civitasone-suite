@@ -9,18 +9,22 @@ import {
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { resolveApproval } from "./resolver.js";
+import { assertApproverRolesKnown, getApproverRoleCatalogue } from "./roleCatalogue.js";
 
 const ADMIN_ROLES = ["estab_admin", "super_admin", "tenant_admin"];
 const READER_ROLES = [...ADMIN_ROLES, "estab_officer", "audit_officer"];
 
 export async function approvalRulesRoutes(app: FastifyInstance): Promise<void> {
-  /** List approval rules (admin matrix view). */
+  /** List approval rules (admin matrix view), plus the approver-role catalogue for the form. */
   app.get("/v1/estab/approval-rules", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listRulesQuery.parse(req.query);
     const data = await queries.listApprovalRules(ctx.tenantId, q);
-    return reply.send({ data });
+    // GAP-ESTAB-APPROVAL-MATRIX-03: the approver roles a rule may name travel with the list, so
+    // the matrix form knows its choices in the same read (see roleCatalogue.ts for how the
+    // list is configured; configured:false means no list was declared).
+    return reply.send({ data, approverRoles: getApproverRoleCatalogue() });
   });
 
   /** Get one rule. */
@@ -51,6 +55,7 @@ export async function approvalRulesRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = createApprovalRuleBody.parse(req.body);
+    assertApproverRolesKnown(body.steps);
     const result = await commands.createApprovalRule(ctx, body);
     return sendAccepted(reply, acceptedResponseSchema, result);
   });
@@ -61,6 +66,7 @@ export async function approvalRulesRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ADMIN_ROLES);
     const { id } = req.params as { id: string };
     const body = updateApprovalRuleBody.parse(req.body);
+    assertApproverRolesKnown(body.steps);
     const result = await commands.updateApprovalRule(ctx, id, body);
     return sendAccepted(reply, acceptedResponseSchema, result);
   });
