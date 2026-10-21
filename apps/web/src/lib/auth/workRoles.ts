@@ -314,12 +314,16 @@ export const ICC_IDENTITY_ROLES = ["icc_member"];
  * Two corrections from the gap catalogue's first-pass list
  * (["hr_admin", "super_admin", "admin"]), re-derived from the actual role
  * catalogue rather than assumed:
- *  - Dropped the bare "admin" role: it is not in Keycloak's realm roles
- *    (infra/keycloak/civitasone-realm.json), not in HR_ROLES/
- *    EMPLOYEE_ADMIN_ROLES above, and packages/auth's toRequestContext reads
- *    `roles` straight off the verified JWT payload — "admin" is simply never
- *    issued to any principal in this system (the one other place it
- *    appears, FINANCE_ROLES above, is an unrelated module's role list).
+ *  - Did NOT carry over the bare "admin" role. It IS a defined Keycloak realm
+ *    role (infra/keycloak/civitasone-realm.json) and hr/layout.tsx admits it
+ *    (HR_BASELINE_ROLES), and employee-types / office-locations accept it —
+ *    but granting it authority over leave-entitlement policy (which feeds
+ *    leave debit and payroll LOP) is a policy call nobody has made, so it is
+ *    deliberately absent here AND from policy-admin-routes.ts's HR_ADMIN_ROLES.
+ *    The hub tile (hrTileAccess.ts) uses THIS constant, so an "admin"-only
+ *    session is no longer offered a tile that ends in PermissionDenied.
+ *    OWNER DECISION pending: should "admin" manage leave policies? If yes,
+ *    add it to this list and to the backend list in the same change.
  *  - Added tenant_admin/platform_admin: both already clear hr/layout.tsx's
  *    HR_ROLES (so they reach this page today) but were denied by the old,
  *    narrower list here and by the backend — the exact same dead-end class

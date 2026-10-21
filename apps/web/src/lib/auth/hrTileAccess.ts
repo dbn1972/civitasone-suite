@@ -1,4 +1,4 @@
-import { HR_ROLES } from "./workRoles";
+import { HR_ROLES, LEAVE_POLICY_ADMIN_ROLES } from "./workRoles";
 
 /**
  * GAP-HR-HOME-01 (redesign/gaps/hr.md) -- the HR hub (hr/page.tsx +
@@ -47,7 +47,11 @@ export const HR_TILE_ROLE_OVERRIDES: Record<string, readonly string[]> = {
   "/hr/office-locations": ["hr_admin", "super_admin", "admin"], // office-locations/page.tsx OFFICE_LOCATION_ADMIN_ROLES (GAP-HR-LOCATIONS-NEW-02)
   "/hr/icc": ["hr_admin", "super_admin", "icc_member"], // icc/page.tsx ICC_ROLES
   "/hr/id-cards": ["hr_admin", "security_admin", "super_admin"], // id-cards/page.tsx ID_CARDS_ROLES
-  "/hr/leave-policies": ["hr_admin", "super_admin", "admin"], // leave-policies/page.tsx LEAVE_POLICY_ADMIN_ROLES
+  // GAP-HR-LEAVE-POLICIES-02: the SAME shared constant the page gate and
+  // policy-admin-routes.ts's HR_ADMIN_ROLES use, so the hub tile cannot drift
+  // from the page again (it used to list "admin", which the page denies, and
+  // omit tenant_admin/platform_admin, which the page admits).
+  "/hr/leave-policies": LEAVE_POLICY_ADMIN_ROLES,
   "/hr/onboarding": ["hr_admin", "hr_officer", "super_admin"], // onboarding/page.tsx ONBOARDING_ROLES
   "/hr/rti": ["hr_admin", "hr_officer", "super_admin"], // rti/page.tsx RTI_ROLES
   "/hr/vigilance": ["hr_admin", "hr_officer", "super_admin"], // vigilance/page.tsx VIGILANCE_ROLES

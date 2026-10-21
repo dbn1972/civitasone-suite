@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { PageHeader, StatGrid, StatCard, Card, ErrorState, EmptyState, EntityPicker } from "../../../../_components/ds";
 import { DataSourceBadge, type DataSource } from "../../../../_components/DataSourceBadge";
 import { PrintButton } from "../../../../_components/PrintButton";
@@ -62,6 +63,7 @@ interface Props {
 export default function LeaveBalanceClient({ roles, myEmployeeId, initialEmployeeId, noLinkedProfile, profileSource }: Props) {
   const t = useTranslations("leaveBalance");
   const tc = useTranslations("common");
+  const router = useRouter();
   const isAdminOrManager = roles.some((r) => ADMIN_OR_MANAGER_ROLES.includes(r));
   const canAllocate = roles.some((r) => HR_ROLES.includes(r));
 
@@ -74,6 +76,24 @@ export default function LeaveBalanceClient({ roles, myEmployeeId, initialEmploye
   const [loading, setLoading]     = useState(false);
   const [source, setSource]       = useState<"api" | "error">("api");
   const [reloadTick, setReloadTick] = useState(0);
+
+  // GAP-HR-LEAVE-BALANCE-04: the server wrapper resolves the signed-in user's
+  // own employee id. A profile "Retry" re-runs that server fetch
+  // (router.refresh()), so when a later render supplies the id and nobody has
+  // been chosen yet, adopt it -- the state initialiser above only ever saw
+  // the first render's (failed, null) value.
+  useEffect(() => {
+    setEmpId((prev) => prev || (initialEmployeeId ?? myEmployeeId ?? ""));
+  }, [initialEmployeeId, myEmployeeId]);
+
+  // GAP-HR-LEAVE-BALANCE-05: the picker's employee-list lookup. strict:true
+  // makes a failed request THROW so EntityPicker shows an error (with a
+  // working "Try again" that re-runs the typed query) instead of reading
+  // the failure as "No matches".
+  const searchEmployeesStrict = useCallback(
+    (query: string, signal: AbortSignal) => searchEmployees(query, signal, { strict: true }),
+    [],
+  );
 
   useEffect(() => {
     if (!empId) return;
@@ -128,7 +148,11 @@ export default function LeaveBalanceClient({ roles, myEmployeeId, initialEmploye
       <div className="page-main wrap leave-balance-print">
         <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/leave" backLabel={tc("backToLeave")} />
         <Card title={t("entitlementCard")}>
-          <ErrorState error={toHumanError("load", { area: "your profile" })} onRetry={() => setReloadTick((n) => n + 1)} />
+          {/* GAP-HR-LEAVE-BALANCE-04: the profile is fetched by the SERVER
+              wrapper (page.tsx), so Retry must re-run that -- bumping
+              reloadTick only re-ran client effects that return early while
+              no employee id is known, i.e. it did nothing. */}
+          <ErrorState error={toHumanError("load", { area: "your profile" })} onRetry={() => router.refresh()} />
         </Card>
       </div>
     );
@@ -168,8 +192,10 @@ export default function LeaveBalanceClient({ roles, myEmployeeId, initialEmploye
                   id="emp-picker"
                   value={empId || null}
                   onChange={(v) => setEmpId(typeof v === "string" ? v : "")}
-                  search={searchEmployees}
+                  search={searchEmployeesStrict}
                   resolve={resolveEmployees}
+                  searchErrorText={t("employeeListError")}
+                  searchRetryLabel={t("employeeListRetry")}
                   placeholder={t("employeeLabel")}
                   aria-label={t("employeeLabel")}
                 />

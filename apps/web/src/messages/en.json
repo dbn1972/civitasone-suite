@@ -4442,11 +4442,19 @@
     "allocationOption": "{name} ({balance} days balance)",
     "charsCount": "{count} / 20+ chars",
     "balanceWarning": "You are applying for {days} days but only have {balance} days balance. The count shown is approximate (calendar days); the actual deduction may differ. Continue?",
-    "calendarDaysDisclaimer": "Approximate — excludes weekends & holidays.",
+    "calendarDaysDisclaimer": "Approximate — shown as calendar days. The exact deduction is worked out under the leave rules (weekends and holidays) when the request is processed, so it may differ.",
     "employeePickerPlaceholder": "Search by name or employee number…",
     "employeePickerSearching": "Searching…",
     "employeePickerNoResults": "No matching employee",
-    "applyForMyselfLink": "Apply for myself"
+    "applyForMyselfLink": "Apply for myself",
+    "selectEmployeePlaceholder": "Search and select an employee…",
+    "selectEmployeeError": "Select the employee this leave is for.",
+    "applyForMyself": "Apply for myself",
+    "selectEmployeeFirst": "Select an employee first",
+    "previewBlockedTitle": "This request can't be submitted yet",
+    "balanceAfterMessage": "Balance after this request: {count, plural, one {# day} other {# days}}.",
+    "directCountNote": "Counted as entered for this leave type — weekends and holidays are not adjusted.",
+    "acceptedWithDaysMessage": "Leave request submitted for approval: {count, plural, one {# day} other {# days}} of {typeName}."
   },
   "leaveApprovals": {
     "title": "Leave Approvals",
@@ -4482,7 +4490,10 @@
     "toastRejected": "Leave rejected.",
     "actionFailedFallback": "{decision} failed ({status})",
     "loadTasksError": "Failed to load workflow tasks.",
-    "networkErrorRetry": "Network error. Please try again."
+    "networkErrorRetry": "Network error. Please try again.",
+    "panelTitleWithCount": "Pending Leave Approvals ({count})",
+    "truncatedNotice": "Showing the first {shown} pending leave approvals — more are waiting. Decide some of these and the rest will load.",
+    "truncatedEmptyMessage": "No leave approvals were found in the first {checked} workflow tasks, but more tasks exist, so this list may be incomplete. Try again later or contact support."
   },
   "leaveBalance": {
     "title": "Leave Balance",
@@ -4510,7 +4521,9 @@
     "viewMyBalanceLink": "View my own balance",
     "contactHrToAllocateMessage": "Contact HR to get leave allocated.",
     "noLinkedProfileTitle": "No employee record linked",
-    "noLinkedProfileMessage": "No employee record is linked to your account, so you cannot view a leave balance yet. Contact HR to get your account linked to your employee record."
+    "noLinkedProfileMessage": "No employee record is linked to your account, so you cannot view a leave balance yet. Contact HR to get your account linked to your employee record.",
+    "employeeListError": "Couldn't load the employee list. Check your connection and try again.",
+    "employeeListRetry": "Try again"
   },
   "leaveHistory": {
     "title": "Leave History",
@@ -4557,7 +4570,8 @@
     "showingOfTotal": "Showing {shown} of {total}",
     "cancelReasonLabel": "Reason (optional unless reversing an approval, or cancelling on someone else's behalf)",
     "noLinkedProfileTitle": "No employee record linked",
-    "noLinkedProfileMessage": "No employee record is linked to your account, so you cannot view leave history yet. Contact HR to get your account linked to your employee record."
+    "noLinkedProfileMessage": "No employee record is linked to your account, so you cannot view leave history yet. Contact HR to get your account linked to your employee record.",
+    "employeeListRetry": "Try again"
   },
   "leavePolicies": {
     "title": "Leave Policy Configuration",
