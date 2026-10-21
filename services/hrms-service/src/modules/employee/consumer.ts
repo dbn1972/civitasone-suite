@@ -2,7 +2,7 @@ import { NonRetryableError, type CommandOutcome, type Queue } from "@civitasone/
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { CommandRefusal, enqueue, markProcessed } from "../../shared/outbox.js";
 import { HttpError } from "../../shared/context.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -15,7 +15,7 @@ import { computePension, elEncashment, qualifyingService } from "../pension/engi
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { payProfileAtDateTx } from "../pay-profile/repo.js";
 import * as importRepo from "../bulk-import/repo.js";
-import { classifyCreateFailure, failureCodeFromOutcome } from "../bulk-import/failure.js";
+import { classifyCreateFailure, failureCodeFromOutcome, IMPORT_FAILURE } from "../bulk-import/failure.js";
 
 const AUDIT = "audit.event.record";
 
@@ -76,10 +76,20 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
         // employee in THIS tenant right before writing (same defence-in-depth the
         // confirm consumer applies to its precondition). A manager that vanished
         // in between fails the message loudly rather than creating an employee
-        // whose reportingTo points at nothing.
+        // whose reportingTo points at nothing -- and so does a manager who has
+        // since exited (terminated / separated / retired), the same rule the
+        // PATCH path enforces (manager-eligibility.ts). Either is a permanent
+        // refusal of THIS message, so it is a CommandRefusal (a NonRetryableError:
+        // dead-lettered at once instead of burning retries, reported on the
+        // import row as INVALID_REFERENCE rather than a generic CREATE_FAILED).
         if (p.managerId) {
           const manager = await repo.findByIdTx(tx, p.managerId, p.tenantId);
-          if (!manager) throw new HttpError(422, "MANAGER_NOT_FOUND", `manager ${p.managerId} not found in this tenant`);
+          if (!manager) {
+            throw new CommandRefusal(IMPORT_FAILURE.INVALID_REFERENCE, {}, `${IMPORT_FAILURE.INVALID_REFERENCE}: manager ${p.managerId} not found in this tenant`);
+          }
+          if (isExitedStatus(manager.status)) {
+            throw new CommandRefusal(IMPORT_FAILURE.INVALID_REFERENCE, {}, `${IMPORT_FAILURE.INVALID_REFERENCE}: manager ${p.managerId} has status '${manager.status}' and has left the organisation`);
+          }
         }
         await repo.insertEmployee(tx, {
           id: p.id, tenantId: p.tenantId, employeeNo: p.employeeNo, fullName: p.fullName,

@@ -1,4 +1,4 @@
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { hrmsBulkImportBatches, hrmsBulkImportRows } from "./schema.js";
 import { IMPORT_FAILURE, type ImportFailureCode } from "./failure.js";
@@ -57,6 +57,17 @@ export async function markRowFailed(tx: Tx, tenantId: string, messageId: string,
   await tx.update(hrmsBulkImportRows)
     .set({ status: "failed", errorCode: code, updatedAt: new Date() })
     .where(and(eq(hrmsBulkImportRows.tenantId, tenantId), eq(hrmsBulkImportRows.messageId, messageId), eq(hrmsBulkImportRows.status, "pending")));
+}
+
+/**
+ * Which of these rows are still 'pending' (recorded, but neither created nor failed yet). The record consumer uses
+ * this on a REDELIVERED record command to re-drive the fan-out that the first attempt may have died before finishing.
+ */
+export async function pendingRowIds(tx: Tx, tenantId: string, messageIds: string[]): Promise<Set<string>> {
+  if (messageIds.length === 0) return new Set();
+  const rows = await tx.select({ messageId: hrmsBulkImportRows.messageId }).from(hrmsBulkImportRows)
+    .where(and(eq(hrmsBulkImportRows.tenantId, tenantId), inArray(hrmsBulkImportRows.messageId, messageIds), eq(hrmsBulkImportRows.status, "pending")));
+  return new Set(rows.map((r) => r.messageId));
 }
 
 export interface BatchStatus {

@@ -229,7 +229,7 @@ describe("POST /v1/hrms/employees/bulk", () => {
     }
 
     it("202 — an existing manager's employeeNo is resolved to managerId on the queued create message", async () => {
-      H.queryResults = [CANONICAL_TYPES, NO_TENANT_TYPES, [], [{ id: MANAGER_ID, employeeNo: "M-1" }]];
+      H.queryResults = [CANONICAL_TYPES, NO_TENANT_TYPES, [], [{ id: MANAGER_ID, employeeNo: "M-1", status: "confirmed" }]];
       const publishSpy = vi.spyOn(queue, "publish");
       const res = await post([validEmployee({ managerEmployeeNo: "M-1" })]);
 
@@ -263,7 +263,7 @@ describe("POST /v1/hrms/employees/bulk", () => {
     });
 
     it("400 — an employee cannot be their own manager", async () => {
-      H.queryResults = [CANONICAL_TYPES, NO_TENANT_TYPES, [], [{ id: MANAGER_ID, employeeNo: "E9200" }]];
+      H.queryResults = [CANONICAL_TYPES, NO_TENANT_TYPES, [], [{ id: MANAGER_ID, employeeNo: "E9200", status: "confirmed" }]];
       const publishSpy = vi.spyOn(queue, "publish");
       const res = await post([validEmployee({ employeeNo: "E9200", managerEmployeeNo: "E9200" })]);
 
@@ -273,6 +273,33 @@ describe("POST /v1/hrms/employees/bulk", () => {
       ]);
       expect(publishSpy).not.toHaveBeenCalled();
     });
+
+    it.each(["terminated", "separated", "retired"])(
+      "400 — a manager who has exited (%s) is a row-level error and nothing is queued (the PATCH rule, manager-eligibility.ts)",
+      async (status) => {
+        H.queryResults = [CANONICAL_TYPES, NO_TENANT_TYPES, [], [{ id: MANAGER_ID, employeeNo: "M-GONE", status }]];
+        const publishSpy = vi.spyOn(queue, "publish");
+        const res = await post([validEmployee({ employeeNo: "E9400", managerEmployeeNo: "M-GONE" })]);
+
+        expect(res.statusCode).toBe(400);
+        expect(res.json<{ fieldErrors: { field: string; message: string }[] }>().fieldErrors).toEqual([
+          expect.objectContaining({ field: "employees.0.managerEmployeeNo", message: expect.stringContaining("has left the organisation") }),
+        ]);
+        expect(publishSpy).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(["probation", "confirmed", "on_leave", "suspended", "deputation", "no_show"])(
+      "202 — a manager who has not permanently exited (%s) is still accepted",
+      async (status) => {
+        H.queryResults = [CANONICAL_TYPES, NO_TENANT_TYPES, [], [{ id: MANAGER_ID, employeeNo: "M-OK", status }]];
+        const publishSpy = vi.spyOn(queue, "publish");
+        const res = await post([validEmployee({ employeeNo: "E9500", managerEmployeeNo: "M-OK" })]);
+
+        expect(res.statusCode).toBe(202);
+        expect(createPayloads(publishSpy)[0]!.managerId).toBe(MANAGER_ID);
+      },
+    );
 
     it("400 — a manager who is only another row of the same file cannot be resolved yet (no ordering guarantee between queued rows)", async () => {
       H.queryResults = [CANONICAL_TYPES, NO_TENANT_TYPES, [], []];

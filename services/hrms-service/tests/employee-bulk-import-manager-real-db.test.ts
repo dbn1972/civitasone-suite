@@ -109,6 +109,26 @@ describe("bulk import managerEmployeeNo, end to end (GAP-HR-EMPLOYEES-IMPORT-05)
     expect(await findByNo("BULK-010")).toBeUndefined();
   });
 
+  it("a manager who has exited (terminated / separated / retired) is a row-level error and creates nobody (same rule as PATCH)", async () => {
+    await asTenant(TENANT, async (tx) => {
+      await tx.insert(hrmsEmployees).values(["terminated", "separated", "retired"].map((status) => ({
+        id: randomUUID(), tenantId: TENANT, employeeNo: `BULK-GONE-${status}`, fullName: `Gone ${status}`, departmentId: deptId, designationId: desigId,
+        dateOfJoining: "2010-01-01", status, employeeType: "permanent", basicMinor: 1n, createdBy: HR, updatedBy: HR,
+      })));
+    });
+    const res = await bulk([
+      row("BULK-030", { managerEmployeeNo: "BULK-GONE-terminated" }),
+      row("BULK-031", { managerEmployeeNo: "BULK-GONE-separated" }),
+      row("BULK-032", { managerEmployeeNo: "BULK-GONE-retired" }),
+      row("BULK-033", { managerEmployeeNo: "BULK-MGR" }), // a serving manager on the same file is fine on its own
+    ]);
+    expect(res.statusCode).toBe(400);
+    expect(res.json<{ fieldErrors: { field: string; message: string }[] }>().fieldErrors).toEqual([0, 1, 2].map((i) =>
+      expect.objectContaining({ field: `employees.${i}.managerEmployeeNo`, message: expect.stringContaining("has left the organisation") })));
+    await drain();
+    for (const n of ["BULK-030", "BULK-031", "BULK-032", "BULK-033"]) expect(await findByNo(n)).toBeUndefined();
+  });
+
   it("does not resolve a manager number that exists only in another tenant", async () => {
     await asTenant(OTHER_TENANT, async (tx) => {
       const dept = (await tx.select().from(hrmsDepartments).where(eq(hrmsDepartments.tenantId, OTHER_TENANT)))[0]!;

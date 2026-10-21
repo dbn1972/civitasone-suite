@@ -25,6 +25,7 @@ import { registerBulkImportConsumers } from "../src/modules/bulk-import/consumer
 import { hrmsEmployees, hrmsDepartments, hrmsDesignations } from "../src/modules/employee/schema.js";
 import { hrmsBulkImportBatches, hrmsBulkImportRows } from "../src/modules/bulk-import/schema.js";
 import * as importRepo from "../src/modules/bulk-import/repo.js";
+import { markProcessed } from "../src/shared/outbox.js";
 import { COMMANDS } from "../src/topics.js";
 import type { FastifyInstance } from "fastify";
 import type { MemoryQueue } from "@civitasone/queue";
@@ -266,6 +267,30 @@ describe("consumer outcomes land on the import rows", () => {
     expect((await getStatus(batchId)).json()).toMatchObject({ status: "completed", total: 1, created: 1, failed: 0 });
   });
 
+  it("a create whose manager has exited (or vanished) since the route validated it is refused with INVALID_REFERENCE -- permanently, not retried into CREATE_FAILED -- and the rest of the batch completes", async () => {
+    const exitedManagerId = randomUUID();
+    await asTenant(TENANT, () => db.transaction((tx) => tx.insert(hrmsEmployees).values({
+      id: exitedManagerId, tenantId: TENANT, employeeNo: no("mgx"), fullName: "Left The Organisation", departmentId: deptId, designationId: desigId,
+      dateOfJoining: "2015-01-01", status: "terminated", employeeType: "permanent", createdBy: ACTOR, updatedBy: ACTOR,
+    })));
+    const batchId = await runBatch([
+      { employeeNo: no("mg1"), payload: { managerId: exitedManagerId } }, // manager exited
+      { employeeNo: no("mg2") }, // no manager
+      { employeeNo: no("mg3"), payload: { managerId: randomUUID() } }, // manager vanished
+    ]);
+
+    expect((await getStatus(batchId)).json()).toEqual({
+      batchId, status: "completed", total: 3, created: 1, failed: 2, pending: 0,
+      failedRows: [
+        { rowNo: 1, employeeNo: no("mg1"), code: "INVALID_REFERENCE" },
+        { rowNo: 3, employeeNo: no("mg3"), code: "INVALID_REFERENCE" },
+      ],
+    });
+    expect(await employeeExists(no("mg1"))).toBe(false);
+    expect(await employeeExists(no("mg2"))).toBe(true);
+    expect(await employeeExists(no("mg3"))).toBe(false);
+  });
+
   it("a plain (non-import) create that is refused does not touch any import row or crash the outcome hook", async () => {
     const id = randomUUID();
     await queue.publish(COMMANDS.employeeCreate, {
@@ -286,6 +311,40 @@ describe("record / not_queued commands -- idempotence and ordering", () => {
 
     expect((await getStatus(batchId)).json()).toEqual({ batchId, status: "completed", total: 2, created: 2, failed: 0, pending: 0, failedRows: [] });
     expect(await requestedAuditCount(batchId)).toBe(1);
+  });
+
+  it("a record command redelivered after the first attempt died post-commit (rows recorded, nothing fanned out) re-drives the creates of the rows still pending -- and only those", async () => {
+    const batchId = randomUUID();
+    const items = [1, 2, 3].map((n) => recordItem(batchId, n, no(`x${n}`)));
+    const messageId = randomUUID();
+    // The first delivery committed its record transaction (markProcessed + batch + rows) and then the process died
+    // before the fan-out loop finished: nothing was published. Row 1 was meanwhile settled by another path.
+    await asTenant(TENANT, () => db.transaction(async (tx) => {
+      expect(await markProcessed(tx, messageId)).toBe(true);
+      await importRepo.insertBatch(tx, {
+        id: batchId, tenantId: TENANT, requestedBy: ACTOR, correlationId: null, total: 3,
+        rows: items.map((i) => ({ messageId: i.id, rowNo: i.rowNo, employeeNo: i.employeeNo })),
+      });
+      await importRepo.markRowCreated(tx, TENANT, items[0]!.id);
+    }));
+    expect((await getStatus(batchId)).json()).toMatchObject({ status: "processing", total: 3, created: 1, pending: 2 });
+
+    const real = queue.publish.bind(queue);
+    const creates: string[] = [];
+    const spy = vi.spyOn(queue, "publish").mockImplementation((topic, input) => {
+      if (topic === COMMANDS.employeeCreate) creates.push((input as { messageId: string }).messageId);
+      return real(topic, input);
+    });
+    try {
+      await publishRecord(batchId, 3, items, messageId); // the redelivery
+      await drain();
+    } finally { spy.mockRestore(); }
+
+    expect(creates.sort()).toEqual([items[1]!.id, items[2]!.id].sort()); // row 1 is settled: not re-sent
+    expect((await getStatus(batchId)).json()).toEqual({ batchId, status: "completed", total: 3, created: 3, failed: 0, pending: 0, failedRows: [] });
+    expect(await employeeExists(no("x2"))).toBe(true);
+    expect(await employeeExists(no("x3"))).toBe(true);
+    expect(await requestedAuditCount(batchId)).toBe(0); // the redelivery re-sends creates only; it does not record or audit again
   });
 
   it("chunks of one batch recorded in any order build one batch: a not-yet-recorded chunk reads as pending, not as missing", async () => {

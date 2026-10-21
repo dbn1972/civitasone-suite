@@ -10,6 +10,7 @@ import { COMMANDS } from "../../topics.js";
 import { randomUUID } from "node:crypto";
 import { isKnownEngagementType, resolveKnownEngagementTypeSets } from "../employee/engagement-policy.js";
 import { hrmsEmployees } from "../employee/schema.js";
+import { isExitedStatus } from "../employee/status.js";
 import * as importRepo from "./repo.js";
 import { RECORD_CHUNK_SIZE, type BulkImportItem, type BulkImportRecordItem } from "./command.js";
 
@@ -89,12 +90,19 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
     // the single-row/edit paths but isn't wired into this bulk path, so
     // this stays a narrower, explicit check rather than silently skipping
     // cycle detection here.
+    //
+    // An exited (terminated / separated / retired) employee cannot be a
+    // reporting manager -- the same rule PATCH /v1/hrms/employees/:id
+    // enforces (employee/manager-eligibility.ts, GAP-HR-EMPLOYEES-DETAIL-EDIT-05),
+    // since an exited manager breaks approval routing. `status` is read here so
+    // a row naming one gets a row-level error instead of being queued.
     const managerNos = body.employees.map((e) => e.managerEmployeeNo).filter((v): v is string => !!v);
     const managerRows = managerNos.length > 0
-      ? await scopedRead((tx) => tx.select({ id: hrmsEmployees.id, employeeNo: hrmsEmployees.employeeNo }).from(hrmsEmployees)
+      ? await scopedRead((tx) => tx.select({ id: hrmsEmployees.id, employeeNo: hrmsEmployees.employeeNo, status: hrmsEmployees.status }).from(hrmsEmployees)
           .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), inArray(hrmsEmployees.employeeNo, managerNos))))
       : [];
     const managerIdByNo = new Map(managerRows.map((r) => [r.employeeNo, r.id]));
+    const exitedManagerNos = new Set(managerRows.filter((r) => isExitedStatus(r.status)).map((r) => r.employeeNo));
     const fileNos = new Set(body.employees.map((e) => e.employeeNo));
 
     body.employees.forEach((emp, idx) => {
@@ -125,6 +133,9 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
           // ordering/dependency guarantee between them), so a same-file
           // manager reference cannot be resolved to a real id here.
           fieldErrors.push({ field: `employees.${idx}.managerEmployeeNo`, message: `${emp.managerEmployeeNo} is in this same file, not an existing employee -- import managers first, then re-import with this column.` });
+        } else if (exitedManagerNos.has(emp.managerEmployeeNo)) {
+          // Exists in this tenant but has left the organisation: not an eligible manager (see the note above).
+          fieldErrors.push({ field: `employees.${idx}.managerEmployeeNo`, message: `${emp.managerEmployeeNo} has left the organisation (terminated, separated or retired) and cannot be a reporting manager.` });
         }
       }
     });
