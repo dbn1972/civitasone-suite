@@ -7460,7 +7460,8 @@
     "windowOpenUntil": "Declarations are open until {date}.",
     "windowClosed": "Declarations for {fy} closed on {date}. Contact payroll to change your declaration.",
     "windowNotOpen": "Declarations open on {date}.",
-    "lastUpdatedLabel": "Last updated {date}"
+    "lastUpdatedLabel": "Last updated {date}",
+    "lockedNotice": "This declaration has been verified or approved by payroll and is read-only. Contact payroll if it needs to change."
   },
   "verifyForm16Form": {
     "cardTitle": "Verify a Form-16",
