@@ -2661,7 +2661,8 @@
     "actionsLimitedOnLeave": "This employee is on leave. Transfer, promotion and separation are withheld until they return; leave, attendance, service book and salary slips stay available.",
     "lifecycleUnavailable": "Transfers, promotions or deputations couldn't be loaded right now, so this history may be incomplete. Please try again in a moment.",
     "updatedBanner": "Your changes were submitted and are being applied. If a value still looks old, refresh in a moment.",
-    "updatedBannerDismiss": "Dismiss"
+    "updatedBannerDismiss": "Dismiss",
+    "fieldBasicPay": "Basic Pay"
   },
   "employeeEdit": {
     "pageTitle": "Edit Employee",
@@ -2723,7 +2724,9 @@
     "confirmAccountMismatch": "The two account numbers don't match. Re-enter them.",
     "bankAccountFormatError": "Enter the account number as digits only (9 to 18 digits).",
     "ifscFormatError": "Enter a valid IFSC: four letters, a zero, then six letters or digits (e.g. SBIN0001234).",
-    "pickerSearchError": "Couldn't load employees. Please try again."
+    "pickerSearchError": "Couldn't load employees. Please try again.",
+    "basicPayLabel": "Basic Pay",
+    "basicPayRevisionHintRich": "Basic pay cannot be changed from this form. Use a <link>salary revision in Payroll</link>, which is approved, effective-dated and audited."
   },
   "employeeFyLookup": {
     "formTitle": "Look Up Form 12BA",
@@ -3032,7 +3035,10 @@
     "hideBtn": "Hide",
     "showBtn": "Show",
     "workLocationOtherLabel": "Not in the list? Type the place instead",
-    "workLocationOtherPlaceholder": "e.g. CGO Complex, New Delhi"
+    "workLocationOtherPlaceholder": "e.g. CGO Complex, New Delhi",
+    "payStructureLabel": "Pay Structure",
+    "payStructureHint": "(optional)",
+    "payStructurePlaceholder": "Search pay structures…"
   },
   "employeeWizardStep5": {
     "heading": "Step 5 — Review & Submit",
@@ -3077,7 +3083,8 @@
     "shiftNight": "Night (10 PM – 6 AM)",
     "complianceImportant": "Important:",
     "complianceNote": "Sensitive fields (PAN, Aadhaar, Bank Account) are transmitted over TLS and stored AES-256 encrypted at rest in compliance with IT Act 2000 and DPDP Act 2023.",
-    "creatingRecord": "Creating employee record…"
+    "creatingRecord": "Creating employee record…",
+    "payStructure": "Pay Structure"
   },
   "employees": {
     "title": "Employees",

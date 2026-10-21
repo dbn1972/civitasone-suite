@@ -7,7 +7,9 @@ import { useFormError } from "@/lib/useFormError";
 import { AcceptedNotice, Button, ConfirmDialog, EntityPicker, Field, Input, MaskedField } from "@/app/_components/ds";
 import { useAcceptedWrite } from "@/lib/useAcceptedWrite";
 import { acceptedCopy } from "@/lib/acceptedCopy";
-import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
+import Link from "next/link";
+import { formatMoney } from "@/lib/formatters";
+import { searchEmployees, resolveEmployees, MANAGER_INELIGIBLE_STATUSES } from "@/lib/entityAdapters/employee";
 import { searchPayStructures, resolvePayStructures } from "@/lib/entityAdapters/payStructure";
 import { useTranslations } from "next-intl";
 import { isIndianStateCode } from "@/lib/india/states";
@@ -26,13 +28,11 @@ const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 // boundary). Any patch touching one of these needs a typed reason.
 const SENSITIVE_FIELDS = ["bankAccountNo", "bankIfsc", "uanNumber", "esicIpNumber", "pran"] as const;
 
-// GAP-HR-EMPLOYEES-DETAIL-EDIT-05: mirrors hrms-service's employee/status.ts
-// EXITED_STATUSES exactly (not SERVING_STATUSES -- that set is scoped to the
-// "Active" headcount stat and deliberately excludes on_leave/suspended too,
-// which are temporary and still legitimate manager picks per that file's own
-// comment). Duplicated, not imported, for the same cross-service-boundary
-// reason as SENSITIVE_FIELDS above.
-const MANAGER_INELIGIBLE_STATUSES = ["terminated", "separated", "retired"] as const;
+// GAP-HR-EMPLOYEES-DETAIL-EDIT-05: MANAGER_INELIGIBLE_STATUSES (shared with the
+// Add Employee wizard's manager picker, GAP-HR-EMPLOYEES-NEW-04) mirrors
+// hrms-service's employee/status.ts EXITED_STATUSES exactly -- see its comment
+// in lib/entityAdapters/employee.ts.
+
 
 interface Props {
   employee: EmployeeDetail;
@@ -442,6 +442,24 @@ export function EditEmployeeForm({ employee }: Props) {
               noResultsText={t("pickerNoResults")}
             />
           </Field>
+
+          {/* GAP-HR-EMPLOYEES-NEW-02: shown read-only, never as an input. Basic
+              pay feeds every payslip and this PATCH route deliberately rejects it
+              (updateEmployeeBody, GAP-HR-EMPLOYEES-DETAIL-EDIT-04: no
+              maker-checker, no effective date, no arrears handling here), so a
+              change goes through a Payroll salary revision. The API only sends
+              the figure to the HR roles, hence the presence check. */}
+          {employee.basicMinor !== undefined && (
+            <div style={{ display: "grid", gap: 4 }}>
+              <span style={labelStyle}>{t("basicPayLabel")}</span>
+              <span style={{ fontSize: 14, color: "var(--ink)", fontWeight: 600 }}>{formatMoney(employee.basicMinor)}</span>
+              <span style={{ fontSize: 12, color: "var(--mut)" }}>
+                {t.rich("basicPayRevisionHintRich", {
+                  link: (chunks) => <Link href="/hr/payroll/salary-revisions" style={{ color: "inherit", textDecoration: "underline" }}>{chunks}</Link>,
+                })}
+              </span>
+            </div>
+          )}
 
           <div style={{ display: "grid", gap: 4 }}>
             <WorkStateSelect

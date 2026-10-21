@@ -2,7 +2,7 @@ import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill, LoadErrorState, Masked } from "../../../../_components/ds";
 import { getEmployeeById } from "../../../../_data/loaders";
-import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
+import { formatIndianDate, formatMoney, humanizeStatus } from "@/lib/formatters";
 import { getSessionRoles, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
 import { EMPLOYEE_ADMIN_ROLES, EMPLOYEE_PII_REVEAL_ROLES, EMPLOYEE_PHONE_REVEAL_ROLES } from "@/lib/auth/workRoles";
 import { isServingStatus, isExitedStatus, employeeStatusVariant } from "@/lib/employeeStatus";
@@ -387,6 +387,17 @@ export default async function EmployeeDetailPage({ params, searchParams }: { par
             <div className="fld">
               <span className="l">{t("fieldGrade")}</span>
               <span className="v">{employee.grade}</span>
+            </div>
+          )}
+          {/* GAP-HR-EMPLOYEES-NEW-02: basic pay is captured when the employee is
+              created but never showed back. The API sends it (in paise) only to
+              the HR roles that can create the record, so there is no role check
+              here to keep in sync -- the field is simply absent for everyone
+              else. 0 is a real recorded figure, shown as such, not hidden. */}
+          {employee.basicMinor !== undefined && (
+            <div className="fld">
+              <span className="l">{t("fieldBasicPay")}</span>
+              <span className="v">{formatMoney(employee.basicMinor)}</span>
             </div>
           )}
           <div className="fld">

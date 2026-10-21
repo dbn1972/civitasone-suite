@@ -52,6 +52,33 @@ export async function findByNo(employeeNo: string, tenantId: string): Promise<Em
  * migrations/0007_geo_attendance_ro.sql).
  */
 export async function listByTenant(tenantId: string, limit = 100, offset = 0, employeeType?: string, managerId?: string, q?: string, status?: string, excludeStatuses?: string[]): Promise<EmployeeRow[]> {
+  const conditions = listConditions(tenantId, employeeType, managerId, q, status, excludeStatuses);
+  // GAP-HR-LEAVE-ALLOCATE-04: this had NO ORDER BY, so any limit/offset page --
+  // and above all the picker's first `limit` rows -- came back in arbitrary,
+  // unstable order (a row could repeat or vanish between pages). Name, then
+  // employee number, then id (a unique final tiebreak) makes every page
+  // deterministic and the picker's results read alphabetically.
+  return scopedRead((tx) => tx.select().from(hrmsEmployees)
+    .where(and(...conditions))
+    .orderBy(asc(sql`lower(${hrmsEmployees.fullName})`), asc(hrmsEmployees.employeeNo), asc(hrmsEmployees.id))
+    .limit(limit)
+    .offset(offset));
+}
+
+/**
+ * GAP-HR-LEAVE-ALLOCATE-04: the real number of employees matching the SAME
+ * filters as listByTenant (not the size of the returned page), so a caller can
+ * say "showing 20 of 340" instead of guessing from `rows.length === limit`.
+ */
+export async function countByTenant(tenantId: string, employeeType?: string, managerId?: string, q?: string, status?: string, excludeStatuses?: string[]): Promise<number> {
+  const conditions = listConditions(tenantId, employeeType, managerId, q, status, excludeStatuses);
+  const rows = await scopedRead((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(hrmsEmployees)
+    .where(and(...conditions)));
+  return rows[0]?.count ?? 0;
+}
+
+/** Shared WHERE for listByTenant / countByTenant so the page and its total can never disagree. */
+function listConditions(tenantId: string, employeeType?: string, managerId?: string, q?: string, status?: string, excludeStatuses?: string[]) {
   const conditions = [eq(hrmsEmployees.tenantId, tenantId)];
   // GAP-HR-EMPLOYEES-06: exact status match (canonical lowercase, see status.ts).
   if (status) conditions.push(eq(hrmsEmployees.status, status));
@@ -70,10 +97,7 @@ export async function listByTenant(tenantId: string, limit = 100, offset = 0, em
     const pattern = `%${q}%`;
     conditions.push(or(ilike(hrmsEmployees.fullName, pattern), ilike(hrmsEmployees.employeeNo, pattern))!);
   }
-  return scopedRead((tx) => tx.select().from(hrmsEmployees)
-    .where(and(...conditions))
-    .limit(limit)
-    .offset(offset));
+  return conditions;
 }
 
 /**

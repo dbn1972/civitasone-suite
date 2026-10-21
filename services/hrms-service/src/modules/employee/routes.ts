@@ -283,7 +283,12 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
           : "you may only view your own employee record");
       }
     }
-    const detail = await queries.getEmployeeDetail(id, ctx.tenantId);
+    // GAP-HR-EMPLOYEES-NEW-02: basic pay is returned to the HR roles that can
+    // create the record with it (HR_ROLES) and to nobody else -- a manager
+    // reading a direct report, or an employee reading their own record, gets the
+    // same detail as before, without the pay field.
+    const includePay = HR_ROLES.some((r) => ctx.roles.includes(r));
+    const detail = await queries.getEmployeeDetail(id, ctx.tenantId, { includePay });
     if (!detail) throw new HttpError(404, "NOT_FOUND", "employee not found");
     return reply.send(detail);
   });
