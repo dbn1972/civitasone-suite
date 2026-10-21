@@ -15,15 +15,14 @@
  * "remove the UUID fallbacks: show '—' ... instead") except they now render
  * "—", never the raw id.
  *
- * This component is ALSO used by /hr/promotion/page.tsx (unrelated to this
- * GAP, not touched here), which falls back to a SECOND, differently-shaped
- * endpoint — lifecycle/m7-list-routes.ts's un-prefixed GET /v1/hrms/
- * promotions — when the primary one returns zero rows. That route's own
- * field names are `employee` (not `employeeName`) and `fromGrade`/`toGrade`
- * for the designation text (no `fromDesignationName`/`toDesignationName` at
- * all). `employee` and `fromGrade`/`toGrade` stay in the fallback chains
- * below for that reason — this is genuinely two backends' worth of field
- * names converging on one shared card, not leftover dead code.
+ * GAP-HR-PROMOTION-01: /hr/promotion/page.tsx now reads ONLY lifecycle/
+ * m7-list-routes.ts's un-prefixed GET /v1/hrms/promotions, whose field names
+ * are `employee` (not `employeeName`) and `fromGrade`/`toGrade` for the
+ * designation text (no `fromDesignationName`/`toDesignationName`), with
+ * "—" for anything it could not resolve. The `employeeName` /
+ * `fromDesignationName` / `toDesignationName` names stay in the fallback
+ * chains below because the employee-profile timeline still reads the other
+ * route (GET /v1/hrms/lifecycle/promotions) and may reuse this card.
  *
  * GAP-HR-DPC-02: "DPC Meeting Date" is removed — `dpcDate` has no backing
  * column on hrms_promotions and no DPC-batch concept exists in the schema to
@@ -130,6 +129,9 @@ export function PromotionCard({ promotion }: Props) {
   const empLabel    = promotion.employeeName ?? promotion.employee ?? t("unknownEmployee");
   const fromLabel   = promotion.fromDesignationName ?? promotion.fromGrade ?? "—";
   const toLabel     = promotion.toDesignationName   ?? promotion.toGrade   ?? "—";
+  // The list route sends "—" for a promotion with no order reference; that is
+  // "nothing to show", not an order number.
+  const orderNumber = [promotion.orderNo, promotion.orderRef].find((v) => typeof v === "string" && v.trim() !== "" && v !== "—") ?? null;
   const payStr      = promotion.newBasicMinor != null
     ? formatMoney(promotion.newBasicMinor)
     : null;
@@ -172,11 +174,11 @@ export function PromotionCard({ promotion }: Props) {
 
         {/* Key fields */}
         <div className="fields">
-          {(promotion.orderNo ?? promotion.orderRef) && (
+          {orderNumber && (
             <div className="fld">
               <span className="l">{t("orderNoLabel")}</span>
               <span className="v" style={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
-                {promotion.orderNo ?? promotion.orderRef}
+                {orderNumber}
               </span>
             </div>
           )}
