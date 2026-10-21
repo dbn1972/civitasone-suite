@@ -290,4 +290,23 @@ describe("GET /v1/payroll/income-tax -- self-service listing scope", () => {
     expect(rows(res.json()).sort()).toEqual([OWN_EMP, OTHER_EMP].sort());
     expect(resolveActorEmployeeId).not.toHaveBeenCalled();
   });
+
+  // GAP-PAYROLL-INCOME-TAX-03: the web table links each row to the employee.
+  // `id` is a declaration id OR (as here, with none seeded) the employee id, so
+  // the row also names its employee explicitly.
+  const employeeIds = (b: unknown) => ((b as { data?: Array<{ employeeId?: string }> }).data ?? []).map((r) => r.employeeId);
+
+  it("every row names its employee in employeeId, for staff and for a self-service caller", async () => {
+    const staff = await call({ method: "GET", url: `/v1/payroll/income-tax?fy=${FY}` }, ADMIN());
+    expect((employeeIds(staff.json()) as string[]).sort()).toEqual([OWN_EMP, OTHER_EMP].sort());
+    const own = await call({ method: "GET", url: `/v1/payroll/income-tax?fy=${FY}` }, EMPLOYEE());
+    expect(employeeIds(own.json())).toEqual([OWN_EMP]);
+  });
+
+  it("a manager is refused outright (not in the route's reader roles), so no row leaks to them", async () => {
+    const res = await call({ method: "GET", url: `/v1/payroll/income-tax?fy=${FY}` }, auth(randomUUID(), ["manager"]));
+    expect(res.statusCode).toBe(403);
+    expect(res.body).not.toContain(OWN_EMP);
+    expect(res.body).not.toContain(OTHER_EMP);
+  });
 });
