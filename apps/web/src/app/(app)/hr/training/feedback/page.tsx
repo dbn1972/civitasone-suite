@@ -66,7 +66,7 @@ export default async function TrainingFeedbackPage() {
   const canAccess = roles.some((r: string) => TRAINING_ADMIN_ROLES.includes(r));
 
   if (!canAccess) {
-    return <PermissionDenied module="training feedback" requiredRoles={TRAINING_ADMIN_ROLES} />;
+    return <PermissionDenied module="training completion results" requiredRoles={TRAINING_ADMIN_ROLES} />;
   }
 
   const { data, source } = await getData();
@@ -103,7 +103,7 @@ export default async function TrainingFeedbackPage() {
       )}
       <Card title={t("cardTitle")}>
         {isError ? (
-          <RefreshErrorState error={toHumanError("load", { area: "training feedback" })} />
+          <RefreshErrorState error={toHumanError("load", { area: "training completion results" })} />
         ) : (
           <DataTable<Row> columns={columns} rows={rows} sortable filterable filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}

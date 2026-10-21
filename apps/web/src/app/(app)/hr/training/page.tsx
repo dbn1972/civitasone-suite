@@ -46,7 +46,7 @@ export default async function TrainingPage() {
                * to a page that only shows PermissionDenied.
                */}
               <Link href="/hr/training/nominations" className="btn ghost">{t("viewNominations")}</Link>
-              <Link href="/hr/training/feedback" className="btn ghost">{t("feedbackReports")}</Link>
+              <Link href="/hr/training/feedback" className="btn ghost">{t("completionResults")}</Link>
               <Link href="/hr/training/new" className="btn primary">{t("newProgram")}</Link>
             </div>
           ) : undefined
