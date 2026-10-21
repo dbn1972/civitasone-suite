@@ -13660,6 +13660,7 @@
     "changeStatus": "Change status",
     "classificationPartialSave": "Contact details were saved, but the classification could not be saved. Please retry — only the classification will be sent.",
     "classificationSaveError": "Could not save the classification.",
+    "noChanges": "No changes to save.",
     "linkAccountAria": "Link to an existing account",
     "searchAccounts": "Search accounts…",
     "linkedTo": "Linked to <strong>{name}</strong>. Clear the picker to type a new organisation instead.",

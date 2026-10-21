@@ -75,14 +75,9 @@ describe("EditContactForm", () => {
   it("does not PATCH the contact when nothing core/consent changed", async () => {
     render(<EditContactForm params={{ id: "c1" }} initial={initial} />);
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(browserFetchMock).toHaveBeenCalled());
-    // Only the classification endpoint is hit; the contact PATCH is skipped.
-    const contactPatch = browserFetchMock.mock.calls.find((c) => c[0] === "v1/crm/contacts/c1");
-    expect(contactPatch).toBeUndefined();
-    const classificationCall = browserFetchMock.mock.calls.find(
-      (c) => typeof c[0] === "string" && c[0].includes("/classification"),
-    );
-    expect(classificationCall).toBeDefined();
+    // Nothing changed: neither the contact PATCH nor the classification PATCH is sent.
+    expect(await screen.findByText("No changes to save.")).toBeInTheDocument();
+    expect(browserFetchMock).not.toHaveBeenCalled();
   });
 
   // GAP-CRM-CONTACTS-DETAIL-EDIT-03: PATCH ok but classification fails -> the
@@ -95,8 +90,9 @@ describe("EditContactForm", () => {
       return Promise.resolve(makeRes(true, 200, {}));
     });
     render(<EditContactForm params={{ id: "c1" }} initial={initial} />);
-    // Change a core field so the PATCH runs.
+    // Change a core field so the PATCH runs, and the classification so it is sent.
     fireEvent.change(screen.getByLabelText("Designation"), { target: { value: "VP" } });
+    fireEvent.change(screen.getByLabelText("Temperature"), { target: { value: "hot" } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
     await waitFor(() => expect(screen.getByText(/details were saved, but the classification/i)).toBeInTheDocument());
@@ -128,7 +124,7 @@ describe("EditContactForm", () => {
   // GAP-CRM-CONTACTS-NEW-02: the Organisation field is an account picker; a
   // contact already linked to an account seeds it (resolve) and unlinking sends
   // accountId: null on save.
-  it("seeds the linked account and sends accountId: null when the account is cleared", async () => {
+  it("seeds the linked account into the picker and does not re-send the link when it is unchanged", async () => {
     browserFetchMock.mockImplementation((path: string) => {
       if (path === "v1/crm/accounts") {
         return Promise.resolve(makeRes(true, 200, { data: [{ id: "acc-1", name: "Acme" }] }));
@@ -140,11 +136,10 @@ describe("EditContactForm", () => {
     // The account picker shows the seeded account name (from initial.organization).
     const picker = screen.getByRole("combobox", { name: /link to an existing account/i }) as HTMLInputElement;
     await waitFor(() => expect(picker.value).toBe("Acme"));
-    // Clear the account link.
-    fireEvent.change(picker, { target: { value: "" } });
-    fireEvent.keyDown(picker, { key: "Backspace" });
-    // Clearing via the input empties the query; explicitly unlink by selecting none.
+    // Saving without touching the link sends nothing: no contact PATCH (so no
+    // accountId), and the untouched classification is not re-sent either.
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-    await waitFor(() => expect(browserFetchMock).toHaveBeenCalled());
+    expect(await screen.findByText("No changes to save.")).toBeInTheDocument();
+    expect(browserFetchMock).not.toHaveBeenCalled();
   });
 });

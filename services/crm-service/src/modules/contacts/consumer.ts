@@ -75,7 +75,10 @@ export function registerContactConsumers(rawQueue: Queue): void {
       if (p.gstin !== undefined) patch.gstin = p.gstin;
       if (p.pan !== undefined) patch.pan = p.pan;
       if (p.pincode !== undefined) patch.pincode = p.pincode;
-      if (p.leadStatus !== undefined) patch.leadStatus = p.leadStatus;
+      // leadStatus is deliberately NOT applied here (GAP-CRM-CONTACTS-DETAIL-EDIT-02):
+      // status changes go through the governed lead-transition command, which
+      // carries the reason code and transition audit. An updateContact message
+      // queued before the PATCH route started refusing leadStatus is ignored too.
       if (p.leadSource !== undefined) patch.leadSource = p.leadSource;
       if (p.ownerId !== undefined) patch.ownerId = p.ownerId;
       if (p.accountId !== undefined) patch.accountId = p.accountId;

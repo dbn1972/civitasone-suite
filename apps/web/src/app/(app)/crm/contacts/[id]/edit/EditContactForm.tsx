@@ -163,6 +163,15 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
   // GAP-CRM-CONTACTS-DETAIL-EDIT-06: dirty detection drives the Cancel confirm
   // and the beforeunload guard. Compare the live form/consent/classification
   // against the initial values the page loaded with.
+  // GAP-CRM-CONTACTS-DETAIL-EDIT-01: the classification half is compared on its
+  // own so an unchanged classification is not re-PATCHed on every save.
+  const classificationDirty =
+    classification.temperature !== (initial.temperature && isTemperature(initial.temperature) ? initial.temperature : "") ||
+    classification.priority !== (initial.priority && isPriority(initial.priority) ? initial.priority : "") ||
+    classification.segment !== (initial.segment ?? "") ||
+    classification.product !== (initial.product ?? "") ||
+    classification.region !== (initial.region ?? "") ||
+    classification.expectedValueRupees !== minorToRupees(initial.expectedValueMinor);
   const dirty =
     form.name !== initial.name ||
     form.email !== (initial.email ?? "") ||
@@ -178,12 +187,7 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
     consent.granted !== (initial.marketingConsent ?? false) ||
     consent.purpose !== (initial.consentPurpose ?? "") ||
     consent.channel !== (initial.consentChannel ?? "") ||
-    classification.temperature !== (initial.temperature && isTemperature(initial.temperature) ? initial.temperature : "") ||
-    classification.priority !== (initial.priority && isPriority(initial.priority) ? initial.priority : "") ||
-    classification.segment !== (initial.segment ?? "") ||
-    classification.product !== (initial.product ?? "") ||
-    classification.region !== (initial.region ?? "") ||
-    classification.expectedValueRupees !== minorToRupees(initial.expectedValueMinor);
+    classificationDirty;
 
   const [cancelOpen, setCancelOpen] = useState(false);
   // Hold the success-redirect timer so it can be cleared on unmount (the old
@@ -362,7 +366,8 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
       // GAP-CRM-CONTACTS-DETAIL-EDIT-03: run the core PATCH only when something
       // core/consent changed AND it is not already saved from a prior attempt,
       // so a retry after a classification failure never re-persists the core.
-      if ((!isEmptyPatch(corePatch) || consentChanged || accountChanged || identifiersChanged) && !coreSaved) {
+      const coreChanged = !isEmptyPatch(corePatch) || consentChanged || accountChanged || identifiersChanged;
+      if (coreChanged && !coreSaved) {
         const res = await browserFetch(`v1/crm/contacts/${params.id}`, {
           method: "PATCH",
           body: JSON.stringify(body),
@@ -383,17 +388,25 @@ export default function EditContactForm({ params, initial, maskedPii }: Props) {
       // LQ-003: persist classification on its dedicated endpoint, in its OWN
       // try/catch so a classification failure after the core already saved is a
       // PARTIAL success — the form stays open and the user can retry just this.
-      try {
-        await saveClassification(params.id, classificationPatch);
-      } catch (ce) {
-        setError(
-          coreSaved || !isEmptyPatch(corePatch) || consentChanged
-            ? t("classificationPartialSave")
-            : ce instanceof Error ? ce.message : t("classificationSaveError"),
-        );
-        return;
+      // An untouched classification is not re-sent (acceptance: an unchanged form
+      // sends no request at all).
+      if (classificationDirty) {
+        try {
+          await saveClassification(params.id, classificationPatch);
+        } catch (ce) {
+          setError(
+            coreSaved || coreChanged
+              ? t("classificationPartialSave")
+              : ce instanceof Error ? ce.message : t("classificationSaveError"),
+          );
+          return;
+        }
       }
-      setMessage("Contact updated.");
+      if (!coreChanged && !coreSaved && !classificationDirty) {
+        setMessage(t("noChanges"));
+      } else {
+        setMessage("Contact updated.");
+      }
       // GAP-CRM-CONTACTS-DETAIL-EDIT-06: keep a short confirmation beat, but hold
       // the timer so it is cleared on unmount (no router.push after unmount).
       redirectTimer.current = setTimeout(() => router.push(`/crm/contacts/${params.id}`), 500);

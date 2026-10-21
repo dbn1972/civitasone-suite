@@ -70,11 +70,49 @@ export const createContactBody = createContactObject
   .superRefine(consentRefiner);
 export type CreateContactBody = z.infer<typeof createContactBody>;
 
+/**
+ * GAP-CRM-CONTACTS-DETAIL-EDIT-01: fields a PATCH may CLEAR by sending `null`.
+ * `name`, `country`, ownership and lifecycle fields stay non-nullable. Before
+ * this, every one of these was `z.string()...optional()`, so the edit form's
+ * "clear this field" (explicit null, since JSON drops undefined) was rejected
+ * with 400 for the whole PATCH - a DPDP correction/erasure of email, phone or
+ * the business identifiers could not be recorded. null = clear; absent = leave.
+ */
+const clearableContactFields = {
+  email: z.string().email().max(320).nullable().optional(),
+  phone: z.string().min(3).max(32).nullable().optional(),
+  company: z.string().min(1).max(200).nullable().optional(),
+  designation: z.string().max(120).nullable().optional(),
+  city: z.string().max(100).nullable().optional(),
+  gstin: z.string().max(15).nullable().optional(),
+  pan: z.string().max(10).nullable().optional(),
+  pincode: z.string().max(6).nullable().optional(),
+  leadSource: z.string().max(64).nullable().optional(),
+};
+
+/**
+ * GAP-CRM-CONTACTS-DETAIL-EDIT-02: a lead's status moves only through the
+ * governed transition (POST /v1/crm/leads/:id/transition), which enforces the
+ * state machine, the reason code for disqualify/nurture/recycle/re-open and the
+ * transition audit. The generic PATCH used to write `leadStatus` straight
+ * through, so a crm_user could disqualify a lead with no reason or audit trail
+ * by calling it directly. It is now refused at the boundary (400
+ * LEAD_STATUS_VIA_TRANSITION) rather than silently dropped, so a caller still
+ * sending it learns it was not applied.
+ */
+export const LEAD_STATUS_VIA_TRANSITION = "LEAD_STATUS_VIA_TRANSITION";
+function leadStatusRefiner(val: Record<string, unknown>, ctx: z.RefinementCtx): void {
+  if (val.leadStatus !== undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: LEAD_STATUS_VIA_TRANSITION, path: ["leadStatus"] });
+  }
+}
+
 export const updateContactBody = createContactObject
   .partial()
-  .extend({ status: z.enum(["active", "inactive"]).optional() })
+  .extend({ status: z.enum(["active", "inactive"]).optional(), ...clearableContactFields })
   .superRefine(formatRefiner(CONTACT_FORMAT_SPECS))
-  .superRefine(consentRefiner);
+  .superRefine(consentRefiner)
+  .superRefine(leadStatusRefiner);
 export type UpdateContactBody = z.infer<typeof updateContactBody>;
 
 export const mergeContactsBody = z.object({

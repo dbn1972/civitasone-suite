@@ -318,6 +318,18 @@ export const CRM_PII_READ_ROLES = ["crm_admin", "admin", "super_admin", "platfor
 export const CRM_CONTACTS_EXPORT_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
 
 /**
+ * Roles offered the Contacts-list bulk-export button (GAP-CRM-CONTACTS-01).
+ * crm-service's GET /v1/crm/contacts/export (modules/contacts/export-routes.ts)
+ * admits crm_user / crm_admin / super_admin and sessions are matched by EXACT
+ * role string, so "admin", "platform_admin" and "tenant_admin" - present in
+ * CRM_CONTACTS_EXPORT_ROLES - were shown a button that always 403'd. This set is
+ * the intersection of what the server admits and the registry-egress policy
+ * (admin-class only; a plain crm_user is not offered the whole-registry
+ * download): crm_admin and super_admin. The server stays the authority.
+ */
+export const CRM_CONTACTS_BULK_EXPORT_ROLES = ["crm_admin", "super_admin"];
+
+/**
  * Roles permitted to verify/reject uploaded account & contact documents
  * (GAP-CRM-ACCOUNTS-DETAIL-02). Document verification is an approval control,
  * so it is restricted to CRM admins rather than every crm_user — the detail

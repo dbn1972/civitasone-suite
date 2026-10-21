@@ -4,7 +4,7 @@ import { LeadFilters } from "../../../_components/crm/LeadFilters";
 import type { MergeOption } from "../../../_components/crm/MergeDialog";
 import { getTranslations } from "next-intl/server";
 import { getCrmContacts } from "../../../_data/loaders";
-import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES, CRM_CONTACTS_EXPORT_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES, CRM_CONTACTS_BULK_EXPORT_ROLES } from "@/lib/auth/roleGuard";
 import { ContactToolbar } from "./ContactToolbar";
 import { ContactsTable } from "./ContactsTable";
 
@@ -54,7 +54,7 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
   const canViewPii = hasAnyRole(sessionRoles, CRM_PII_READ_ROLES);
   // GAP-CRM-CONTACTS-01: only permitted roles may bulk-export, and the export
   // must respect the active filters rather than dumping the whole registry.
-  const canExport = hasAnyRole(sessionRoles, CRM_CONTACTS_EXPORT_ROLES);
+  const canExport = hasAnyRole(sessionRoles, CRM_CONTACTS_BULK_EXPORT_ROLES);
   const exportQuery: Record<string, string> = {};
   for (const [key, value] of Object.entries(searchParams ?? {})) {
     if (typeof value === "string" && value.trim()) exportQuery[key] = value;

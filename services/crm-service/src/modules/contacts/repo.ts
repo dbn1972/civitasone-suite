@@ -175,7 +175,9 @@ export async function listByTenant(
   if (filters.accountId) conditions.push(eq(contacts.accountId, filters.accountId));
   if (filters.segment === "mine" && filters.actorId) conditions.push(eq(contacts.ownerId, filters.actorId));
   if (filters.segment === "recent") {
-    conditions.push(sql`${contacts.lastActivityAt} > now() - interval '30 days' OR ${contacts.createdAt} > now() - interval '7 days'`);
+    // Parenthesised: drizzle's and() joins conditions with a bare " and ", so an
+    // unwrapped OR here would swallow the tenant/status/search predicates.
+    conditions.push(sql`(${contacts.lastActivityAt} > now() - interval '30 days' OR ${contacts.createdAt} > now() - interval '7 days')`);
   }
 
   const rows = await scopedRead((tx) => tx.select().from(contacts)
