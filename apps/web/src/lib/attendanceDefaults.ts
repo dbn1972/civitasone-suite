@@ -27,9 +27,10 @@
  * a translator can still adjust the surrounding wording/grammar per locale,
  * but can no longer silently redefine a policy value. (The keys were named
  * `*Val` while the locale files still held literal values; they are now
- * templates and renamed `*Tpl`.) attendanceConfig.messages.test.ts enforces
- * that every locale's template takes exactly the parameters the English one
- * does and carries no literal number of its own.
+ * templates and renamed `*Tpl`.) The "attendanceConfig locale catalogue"
+ * block in app/(app)/hr/attendance/config/page.test.tsx enforces that every
+ * locale's template takes exactly the parameters the English one does and
+ * carries no literal number of its own.
  *
  * The four non-numeric rows are code-supplied too, as closed codes
  * (WeeklyOffPattern / ApproverLevel / CoEarnedRule) rendered through an ICU

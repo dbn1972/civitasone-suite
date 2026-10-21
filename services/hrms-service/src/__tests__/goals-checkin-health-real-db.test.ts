@@ -11,6 +11,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
+import { withRawTenantGuc } from "@civitasone/db";
 import { buildApp } from "../app.js";
 import { sqlClient } from "../shared/db.js";
 import type { FastifyInstance } from "fastify";
@@ -49,6 +50,13 @@ beforeAll(async () => {
   app = await buildApp();
 });
 afterAll(async () => {
+  // Remove everything this file created (check-ins and the completion points
+  // first, then the goals), as the sibling real-DB tests do.
+  await withRawTenantGuc(sqlClient, TENANT, async (tx) => {
+    await tx`DELETE FROM hrms.goal_checkins WHERE tenant_id = ${TENANT}`;
+    await tx`DELETE FROM hrms.leaderboard_points WHERE tenant_id = ${TENANT}`;
+    await tx`DELETE FROM hrms.goals WHERE tenant_id = ${TENANT}`;
+  });
   await app.close();
   await sqlClient.end();
 });
