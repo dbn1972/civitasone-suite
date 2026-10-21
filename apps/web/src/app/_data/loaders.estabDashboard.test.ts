@@ -10,10 +10,10 @@ import { getEstabDashboard } from "./loaders";
 
 // The loader's mapResponse is applied by fetchJson; emulate that so the field mapping is what is tested.
 function serve(payload: unknown) {
-  fetchJsonMock.mockImplementation(async (_path: string, _fallback: unknown, opts: { mapResponse: (p: unknown) => unknown }) => ({
-    data: opts.mapResponse(payload),
-    source: "api",
-  }));
+  fetchJsonMock.mockImplementation(async (...args: unknown[]) => {
+    const opts = args[2] as { mapResponse: (p: unknown) => unknown };
+    return { data: opts.mapResponse(payload), source: "api" };
+  });
 }
 
 const REST = { meetingsToday: 1, vehiclesInUse: 2, complianceItemsDue: 3, slaBreached: 4, dakPending: 5, avgPendencyDays: 6 };

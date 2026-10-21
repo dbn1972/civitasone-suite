@@ -415,8 +415,8 @@ describe("DAK-05: status label and success message (GAP-ESTAB-DAK-05)", () => {
   });
 
   it("the success message names the DAK number the clerk typed", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation((_input: RequestInfo | URL, init?: RequestInit) =>
-      Promise.resolve(init?.method === "POST" ? jsonResponse({ id: "z", status: "accepted" }, 202) : jsonResponse({ data: [] })));
+    vi.spyOn(globalThis, "fetch").mockImplementation((...args: [RequestInfo | URL, RequestInit?]) =>
+      Promise.resolve(args[1]?.method === "POST" ? jsonResponse({ id: "z", status: "accepted" }, 202) : jsonResponse({ data: [] })));
     render(<DakRegistryPage />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Register DAK" })).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/^DAK number/i), { target: { value: "DAK/2026/555" } });
