@@ -3085,7 +3085,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-MEDICAL-02  ·  LOW  ·  partly  ·  theme OTHER
 
-- [x] **Status** — PR #1810 (merged)
+- [x] **Status** — PR #1810 (merged) — next.config.mjs now redirects /finance/medical -> /hr/medical before finance/layout.tsx's role gate (employee/manager/HR users no longer hit PermissionDenied); the page-level redirect is kept only as a fallback — whether to delete finance/medical/page.tsx is an optional owner call (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** Finance sidebar and home do not need this route: it exists only for bookmarks, so it can be deleted once analytics show no hits (page.tsx:3-8).
 - **Verified evidence:** Confirmed as a fact, but it is a housekeeping suggestion, not a defect. apps/web/src/app/(app)/finance/medical/page.tsx:3-8 is a comment plus `redirect("/hr/medical")` (line 10). No sidebar, hub tile or navRouteManifest entry references /finance/medical (grep of apps/web/src finds only the file itself). But nothing records hits on the redirect (bare server redirect, no telemetry), so 'delete once analytics show no hits' cannot be acted on today. The folder also still holds orphaned components (MedicalClaimForm.tsx) that nothing imports.
 - **Files to change:** `apps/web/src/app/(app)/finance/medical/page.tsx`, `apps/web/src/app/(app)/finance/medical/MedicalClaimForm.tsx`
@@ -3237,7 +3237,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-PAYMENTS-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** — PR #1786 (merged)
+- [~] **Status** — PR #1786 (merged); W2 finance rescan: PARTIAL. Done: New Payment / Release payment are hidden from the bill's creator and passer; payment initiate now requires a reason (10-500 chars) and its audit event carries actor, exact paise amount, mode, bill, DDO and reason. REMAINING (OWNER DECISION): (1) a separate payment-level Pending Approval -> approve/release step (payment maker vs checker): today SoD is bill-creator != payer and bill-passer != payer, enforced in the route and the initiate consumer; a payment approval state is a workflow/policy change. (2) the acceptance says same-actor release is 403, but every SoD refusal in finance-service is 409 (MAKER_CHECKER_VIOLATION / PAYER_IS_PASSER): confirm 409 is acceptable
 - **First-pass claim:** "+ New Payment" POSTs only { action: "release", reason } (FinanceActions.tsx:88) and is styled danger: an irreversible outward disbursement is triggered from a one-line free-text reason with no beneficiary, amount, mode or bill.
 - **Verified evidence:** FinanceActions.tsx:78-91 '+ New Payment' is danger-styled ActionButton with requireReason ('Authorising officer & reason'), POSTing /api/proxy/v1/finance/payments/eft {action:'release', reason}. No beneficiary, amount, mode or bill fields; the dialog copy claims 'maker prepares, a distinct checker must authorise' but nothing on the client enforces or shows a checker. The endpoint's server behaviour cannot be seen (finance-service absent). Note the reason is free text naming the 'authorising officer', not a structured id.
 - **Files to change:** `apps/web/src/app/(app)/finance/_components/FinanceActions.tsx`, `apps/web/src/app/(app)/finance/payments/NewPaymentForm.tsx (new)`, `services/finance-service payments routes (backend)`
@@ -3357,7 +3357,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-PAYMENTS-DETAIL-02  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** — PR #1840 (merged)
+- [~] **Status** — PR #1840 (merged); W2 finance rescan: PARTIAL. Done: EntityPicker offers a Try again button on a failed search (EmployeePicker wires it); RaiseEOfficeNote searches the directory the signed-in role can reach (HR directory for HR/manager/employee/payroll roles, payroll employee lookup for finance_officer). REMAINING (OWNER DECISION): finance_admin is an eFile initiator role but is on neither directory's role list (hrms DIRECTORY_ROLES, payroll LOOKUP_ROLES), so it gets a plain 'cannot search the employee directory' note and cannot complete the raise from the UI. Either add finance_admin to payroll-service LOOKUP_ROLES (widens a name directory) or add an estab-service forward-to lookup open to INITIATOR_ROLES: which?
 - **First-pass claim:** Raising an eOffice file asks the officer to paste two employee UUIDs (RaiseEOfficeNote.tsx: placeholders "employee UUID" and "approver UUID", validated only against a UUID regex), a raw-id entry no clerk can complete without a lookup.
 - **Verified evidence:** RaiseEOfficeNote.tsx:~168-176 renders two plain inputs with placeholders 'employee UUID' / 'approver UUID'; submit() at :102-103 validates only UUID_RE. The component is shared by ~10 detail pages (grants, hr/disciplinary, assets, bills, sanctions, legal, procurement, payments). No EntityPicker exists in the repo. An identity users loader exists (getTenantUsers, /api/identity/users); the current user id could default initiatedBy from the session (not verified where the id is exposed).
 - **Files to change:** `apps/web/src/app/_components/RaiseEOfficeNote.tsx`, `apps/web/src/app/_components/EmployeePicker.tsx (new)`
@@ -3681,7 +3681,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-PFMS-07  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [x] **Status** — PR #1811 (merged)
+- [x] **Status** — PR #1811 (merged) — selecting a bill now also fills the payee name from the bill's vendor (editable, never overwrites typed text, nothing for an Unknown vendor); BillSummary carries no bank data, so account no. and IFSC stay typed (owner call: prefilling them needs an audited vendor-master reveal) (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** Payee Account No. and Payee IFSC are entered in plain text and echoed with no masking in the advice flow (PaymentAdviceForm.tsx), and Bill ID is a raw UUID the clerk must copy from elsewhere.
 - **Verified evidence:** True in part: PaymentAdviceForm.tsx:205-217 payee account is a plain text input (maxLength 32), IFSC :232-245, and billId is a raw UUID field validated by uuidRe at :95-101 that the clerk must copy from elsewhere. Overstated: the value is not echoed anywhere; the confirm text shows only payeeName and amount (en.json pfmsPaymentAdviceForm.confirmDescription ~3588) and submit clears the fields (:141). Masking a typed field would hinder verification and no shared <Masked> component exists (grep found none in apps/web or packages/ui-kit). A bills list loader exists: getFinanceBills in app/_data/loaders.ts:1891 (GET /api/v1/finance/bills).
 - **Files to change:** `apps/web/src/app/(app)/finance/pfms/PaymentAdviceForm.tsx`, `apps/web/src/app/(app)/finance/pfms/page.tsx`, `apps/web/src/app/(app)/finance/pfms/PaymentsPanel.tsx`
@@ -3739,7 +3739,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-RECONCILIATION-01  ·  HIGH  ·  partly  ·  theme AUDIT (was MONEY)
 
-- [x] **Status** — PR #1811 (merged)
+- [~] **Status** — PR #1811 (merged); W2 finance rescan: PARTIAL. Done: a resolved / written-off row shows the reason, the date and WHO (resolved_by resolved to a name through the new GET /v1/finance/actors). REMAINING (OWNER DECISION): fix step 3, a write-off threshold above which a second approver must approve, with an approval state in the backend; needs the threshold (paise) and the approver role from Finance and is not invented here
 - **First-pass claim:** Resolve and Write off send only { action } (ExceptionsPanel.tsx:74-76) although the row type carries resolutionNote, resolvedBy and resolvedAt (:24-26): no reason or note is captured, and a write-off of any size (₹30 or ₹45,000) is one confirm with no second approver, breaching the audited maker-checker rule in CLAUDE.md.
 - **Verified evidence:** ExceptionsPanel.tsx:72-75 POSTs { action } only; resolutionNote/resolvedBy/resolvedAt exist on ExceptionRow (:26-28) but no UI captures or displays them. Write off of any amount is one ConfirmDialog (:178-196). Mis-cited rule: CLAUDE.md contains no maker-checker rule (grep of CLAUDE.md, docs, .claude); it requires audit events on every mutation (rule 8), enforced server-side (cannot verify: finance recon route absent). Theme MONEY is off; this is a control/audit gap.
 - **Files to change:** `apps/web/src/app/(app)/finance/reconciliation/ExceptionsPanel.tsx`, `(backend) reconciliation exception action route`
@@ -4325,7 +4325,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-STATUTORY-TDS-RETURNS-05  ·  LOW  ·  partly  ·  theme OTHER (was PII)
 
-- [x] **Status** — PR #1814 (merged)
+- [x] **Status** — PR #1814 (merged) — TDS table now offers an audited PAN reveal (reason 10-500 chars -> POST /v1/finance/vendor-tds/:id/pan/reveal) to finance_officer/finance_admin/super_admin; masked by default, CSV and offline cache never carry the full PAN (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** Vendor is shown by name only; the PAN needed to reconcile with Form 26AS is not shown (TDSReturnsTable.tsx:19). PAN is a DPDP-adjacent field, so any addition should be masked.
 - **Verified evidence:** TDSReturnsTable.tsx:20 shows vendor_name only, no PAN. True. But this is a missing-field enhancement, not a PII leak; no <Masked> component exists in apps/web (grep found none), and whether VendorTdsEntry contains a PAN cannot be verified.
 - **Files to change:** `apps/web/src/app/(app)/finance/statutory/tds-returns/TDSReturnsTable.tsx`, `apps/web/src/app/_components/Masked.tsx`
@@ -4780,7 +4780,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-TREASURY-E-PAYMENTS-01  ·  HIGH  ·  partly  ·  theme DUPLICATE (was I18N)
 
-- [x] **Status** — PR #1817 (merged)
+- [x] **Status** — PR #1817 (merged) — both tiles are kept; the acceptance alternative 'both render identical rows with links' is met by one shared PaymentsTable (EPaymentsTable is now a thin wrapper); merging into one tile + redirect remains an optional owner call (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** This route is a second copy of the Payments register: it calls the same endpoint with the same loader contract (loaders.ts:1993-2005) and shows the same four columns minus the tabs, actions and row link (EPaymentsTable.tsx:36-41 vs payments/PaymentsTable.tsx:81-95). Two sidebar tiles lead to one dataset.
 - **Verified evidence:** getFinanceEPayments (loaders.ts:1997-2005) and getPayments (loaders.ts:769-772) both hit /api/v1/finance/payments with paymentsListSchema and mapPayments. EPaymentsTable.tsx has the same four columns (referenceId, beneficiary, amountDisplay, status) as payments/PaymentsTable.tsx:81-95 minus Segmented tabs, reference formatting and rowHref. Tiles: finance/page.tsx:30 (e-Payment Orders) and :46 (Payments). The 'actions' claim is overstated: PaymentsTable has tabs and a row link but no action buttons.
 - **Files to change:** `apps/web/src/app/(app)/finance/treasury/e-payments/page.tsx`, `apps/web/src/app/(app)/finance/treasury/e-payments/EPaymentsTable.tsx`, `apps/web/src/app/(app)/finance/page.tsx`
@@ -5055,7 +5055,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-VENDORS-DETAIL-04  ·  MEDIUM  ·  partly  ·  theme WIRING (was CONFIRM)
 
-- [x] **Status** — PR #1840 (merged)
+- [x] **Status** — PR #1840 (merged) — PATCH mutations (field edit, deactivate, reactivate) now write audit events (field names only); vendor and bank-change approvals now require a reason (400 without); SoD refusals stay 409 MAKER_CHECKER_VIOLATION (repo-wide convention, not 403) and decisions are POST not PATCH (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** No actions: a vendor cannot be edited, approved from Pending, blocked, or have bank details changed here (page.tsx:77-121); bank-detail change is the fraud-sensitive workflow that most needs maker-checker.
 - **Verified evidence:** True that apps/web/src/app/(app)/finance/vendors/[id]/page.tsx:75-122 has no edit/approve/block/bank-change action; it is a read-only page. But vendors/page.tsx:8-10 comments that status is derived from isActive only and no approval workflow exists, and finance-service is absent, so whether endpoints for vendor update/approve/bank change exist cannot be verified. The maker-checker point is a valid design need, not a defect in existing code.
 - **Files to change:** `apps/web/src/app/(app)/finance/vendors/[id]/page.tsx`, `apps/web/src/lib/finance/vendor.ts (new)`, `apps/web/src/app/(app)/finance/vendors/[id]/VendorActions.tsx (new)`
@@ -5211,7 +5211,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-JOURNAL-ENTRY-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** — PR #1807 (merged)
+- [x] **Status** — PR #1807 (merged) — POST /v1/finance/journals now answers 409 DUPLICATE_VOUCHER (voucherNo field error) for a typed duplicate and the consumer records a race loser as a failure audit; web shows the message under Voucher Number (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** Voucher number is typed by hand (placeholder JV-2026-001) rather than allocated by the server, risking duplicates; the backend duplicate handling is undeterminable (finance-service absent).
 - **Service:** `finance-service`  ·  **Endpoint(s):** `['POST /v1/finance/journals']`
 - **Question:** Does POST journals enforce a unique voucher number per tenant (409 on duplicate) or allocate it server-side when omitted?
