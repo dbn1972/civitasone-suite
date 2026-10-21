@@ -383,6 +383,67 @@ describe("JournalEntryForm account picker (GAP-FINANCE-JOURNAL-ENTRY-04)", () =>
   });
 });
 
+// GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05 / -06: the server refuses the entry because of a field's value.
+describe("JournalEntryForm server field refusals (VOUCHERS-NEW-05 / -06)", () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  async function submitAndConfirm(response: Response, props: { redirectTo?: string } = {}) {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(response);
+    render(<JournalEntryForm accounts={accounts} {...props} />);
+    fillBalancedLines();
+    fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
+    await waitFor(() => expect(screen.getByText("Post this journal entry?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason / authority for posting (maker-checker)"), { target: { value: "Month-end" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post entry" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    return fetchSpy;
+  }
+  const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+  it("a duplicate voucher number from the server shows under the input, keeps the form, focuses the field and does not redirect", async () => {
+    await submitAndConfirm(
+      json(409, { code: "DUPLICATE_VOUCHER_NO", message: "voucher number already exists", fieldErrors: [{ field: "voucherNo", message: "This voucher number already exists. Enter a different number, or leave it blank to auto-number." }] }),
+      { redirectTo: "/finance/accounting/general-ledger" },
+    );
+    const input = screen.getByLabelText("Voucher Number", { selector: "input" });
+    await waitFor(() => expect(screen.getByText(/This voucher number already exists/)).toBeInTheDocument());
+    // under the input: the message is the field's described-by and the field is flagged invalid
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input.getAttribute("aria-describedby")).toBe("jv-voucher-srv-err");
+    expect(document.getElementById("jv-voucher-srv-err")).toHaveTextContent(/already exists/);
+    // the confirm dialog is closed so the message is not hidden behind it, and what was typed is kept
+    expect(screen.queryByText("Post this journal entry?")).not.toBeInTheDocument();
+    expect(input).toHaveValue("JV-TEST-001");
+    await waitFor(() => expect(input).toHaveFocus());
+    // no success panel, no link to the ledger: nothing was posted
+    expect(screen.queryByText(/Journal entry (posted|accepted)/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View in General Ledger" })).not.toBeInTheDocument();
+    // the whole form is still there to correct and resubmit
+    expect(screen.getByRole("button", { name: "Post Journal Entry" })).toBeEnabled();
+  });
+
+  it("a closed-period refusal (422 PERIOD_CLOSED) shows under the posting date, in plain words, and posts nothing", async () => {
+    await submitAndConfirm(
+      json(422, { code: "PERIOD_CLOSED", message: "cannot post to hard-closed period 2026-04", fieldErrors: [{ field: "postingDate", message: "This accounting period is closed. Choose a posting date in an open period." }] }),
+    );
+    const date = screen.getByLabelText("Posting Date");
+    await waitFor(() => expect(document.getElementById("jv-date-srv-err")).toHaveTextContent(/accounting period is closed/));
+    expect(date).toHaveAttribute("aria-invalid", "true");
+    expect(screen.queryByText("Post this journal entry?")).not.toBeInTheDocument();
+    await waitFor(() => expect(date).toHaveFocus());
+    // the summary line uses the catalogued copy, never the raw code or message
+    expect(document.getElementById("jv-form-error")).toHaveTextContent("This accounting period is closed, so nothing was posted. Choose a posting date in an open period.");
+    expect(document.body.textContent).not.toMatch(/PERIOD_CLOSED|hard-closed period 2026-04/);
+    expect(screen.queryByText(/Journal entry (posted|accepted)/)).not.toBeInTheDocument();
+  });
+
+  it("any other server failure still shows inside the confirm dialog, which stays open", async () => {
+    await submitAndConfirm(json(500, { code: "INTERNAL", message: "internal error" }));
+    await waitFor(() => expect(screen.getByText("Post this journal entry?")).toBeInTheDocument());
+    expect(document.getElementById("jv-voucher-srv-err")).toBeNull();
+  });
+});
+
 // GAP-FINANCE-JOURNAL-ENTRY-06
 describe("JournalEntryForm voucher number (GAP-FINANCE-JOURNAL-ENTRY-06)", () => {
   beforeEach(() => vi.restoreAllMocks());

@@ -2,12 +2,15 @@ import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { GLEntrySummaryListSchema, FinancialStatementSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
+import { idempotentId } from "@civitasone/auth";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import { findControlAccountRefs } from "../budget/repo.js";
-import { assertNoControlAccounts, DomainError } from "./domain.js";
+import { getPeriodStatusDb } from "../period-close/repo.js";
+import { assertNoControlAccounts, DomainError, periodPostingRefusal, voucherNeedsAllocation } from "./domain.js";
 import { postJournalBody, ledgerQueryParams, reverseParam, ledgerPageQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const READER_ROLES  = [...FINANCE_ROLES, "audit_officer"];
@@ -21,6 +24,27 @@ const BUDGET_OVERRIDE_ROLES = ["finance_admin", "super_admin"];
 // enforced separately, in the consumer transaction, for the case where the
 // same elevated officer tries to approve their own draft.
 const JOURNAL_APPROVE_ROLES = ["finance_admin", "super_admin"];
+
+/** Plain-language text for the posting-date field when a period refuses the journal. */
+const PERIOD_FIELD_MESSAGE = {
+  PERIOD_CLOSED: "This accounting period is closed. Choose a posting date in an open period.",
+  PERIOD_SOFT_CLOSED: "This period is soft-closed and accepts only adjustment or closing entries. Choose a posting date in an open period.",
+  PERIOD_UNKNOWN: "Enter a valid posting date.",
+} as const;
+
+/**
+ * GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-06: refuse a journal dated in a period that cannot take it NOW, with a 422 the
+ * caller can act on, instead of 202-accepting a draft that can never post. The posting consumer (gl/consumer.ts
+ * postJournal) stays the authority at posting time and applies the very same rule (periodPostingRefusal), so a period
+ * that closes between this check and the post still posts nothing; this only moves the answer to the front.
+ */
+async function assertPeriodAcceptsPosting(tenantId: string, postingDate: string, journalType: string): Promise<void> {
+  const period = postingDate.slice(0, 7);
+  const refusal = periodPostingRefusal(await getPeriodStatusDb(tenantId, period), journalType, period);
+  if (refusal) {
+    throw new HttpError(422, refusal.code, refusal.message, [{ field: "postingDate", message: PERIOD_FIELD_MESSAGE[refusal.code] }]);
+  }
+}
 
 export async function glRoutes(app: FastifyInstance): Promise<void> {
   // NOTE (flagged for explicit review): this was FINANCE_ROLES (includes
@@ -55,6 +79,21 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
       if (err instanceof DomainError) throw new HttpError(400, err.code, err.message);
       throw err;
     }
+    // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-06: a posting date in a closed period is a 422 here, not a draft that can
+    // never be approved.
+    await assertPeriodAcceptsPosting(ctx.tenantId, body.postingDate, body.type);
+    // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05: a typed voucher number must be unique per tenant. The UNIQUE(tenant_id,
+    // voucher_no) index stays the authority for a true race (the consumer would dead-letter the loser), but a plain
+    // duplicate is answered here, as a field error on voucherNo, instead of a 202 followed by a silently dropped
+    // draft. A retry of THIS request (same idempotency key -> same journal id) is not a duplicate of itself.
+    if (!voucherNeedsAllocation(body.voucherNo)) {
+      const taken = await repo.findJournalByVoucherNo(ctx.tenantId, body.voucherNo);
+      if (taken && taken.id !== idempotentId(ctx)) {
+        throw new HttpError(409, "DUPLICATE_VOUCHER_NO", "voucher number already exists", [
+          { field: "voucherNo", message: "This voucher number already exists. Enter a different number, or leave it blank to auto-number." },
+        ]);
+      }
+    }
     // DOM-024: this now creates a pending_approval draft, not a posted
     // journal — see gl/commands.ts createJournal() / gl/consumer.ts
     // finance.gl.create.
@@ -70,6 +109,13 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, JOURNAL_APPROVE_ROLES);
     const { id } = reverseParam.parse(req.params);
+    // GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-06: the period may have been closed since the maker drafted this. Tell the
+    // checker now (422) rather than 202-accepting an approval the posting consumer would refuse. Only a draft of THIS
+    // tenant that is still awaiting approval is checked here; anything else falls through to the consumer unchanged.
+    const draft = await repo.findJournalById(id);
+    if (draft && draft.tenantId === ctx.tenantId && draft.status === "pending_approval") {
+      await assertPeriodAcceptsPosting(ctx.tenantId, String(draft.postingDate), draft.type);
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveJournal(ctx, id));
   });
 
