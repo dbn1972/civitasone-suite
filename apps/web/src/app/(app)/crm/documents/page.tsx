@@ -43,7 +43,7 @@ export default function Page() {
           </p>
           <ul style={{ margin: 0, paddingLeft: 18, color: "var(--muted)", display: "grid", gap: 6 }}>
             {canManage ? (
-              <li>{t.rich("configureTypes", { link: (chunks) => <a href="/crm/document-types">{chunks}</a> })}</li>
+              <li>{t.rich("configureTypes", { link: (chunks) => <Link href="/crm/document-types">{chunks}</Link> })}</li>
             ) : (
               <li>{t("askAdminCatalogue")}</li>
             )}
@@ -60,7 +60,7 @@ export default function Page() {
             <Link className="btn ghost" href="/crm/accounts">Go to Accounts</Link>
             <Link className="btn ghost" href="/crm/contacts">Go to Contacts</Link>
             {canManage ? (
-              <a className="btn primary" href="/crm/document-types">{t("manageTypes")}</a>
+              <Link className="btn primary" href="/crm/document-types">{t("manageTypes")}</Link>
             ) : (
               <span style={{ fontSize: 13, color: "var(--muted)", alignSelf: "center" }}>
                 {t("askAdminTypes")}

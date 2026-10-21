@@ -17,6 +17,8 @@ interface PageProps {
 
 export default async function ForecastPage({ searchParams }: PageProps) {
   const t = await getTranslations("crmForecastPeriod");
+  // The link to the board uses the CRM hub's own label for that route, so the two can never drift apart.
+  const tHub = await getTranslations("crm.hub");
   const pipelineId = searchParams?.pipelineId;
   // GAP-CRM-FORECAST-03: resolve the chosen FY quarter / year to a close-date window so
   // the weighted total is tied to a horizon, and name that horizon in the subtitle.
@@ -30,7 +32,7 @@ export default async function ForecastPage({ searchParams }: PageProps) {
 
   const stages = rankStages(forecast);
   const topStage = topContributingStage(forecast);
-  const periodSuffix = period ? ` · ${localizedPeriodLabel(period, (k, v) => t(k, v))}` : ` · ${t("allOpenDeals")}`;
+  const periodSuffix = period ? ` · ${localizedPeriodLabel(period, (k, v) => t(k, v))}` : ` · ${t("allOpenEngagements")}`;
 
   // GAP-CRM-FORECAST-01: on a failed forecast load the tiles used to print ₹0.00 / 0
   // deals and the table "No forecast yet" — an outage read as a genuinely empty
@@ -60,32 +62,34 @@ export default async function ForecastPage({ searchParams }: PageProps) {
         title="Procurement Pipeline Forecast"
         subtitle={t("subtitle", { periodSuffix })}
         back="/crm"
-        actions={<Link className="btn" href="/crm/pipeline">Engagement Board</Link>}
+        actions={<Link className="btn" href="/crm/pipeline">{tHub("tiles.pipelineBoard.title")}</Link>}
       />
       {pipelineSource === "error" && <DataSourceBadge source="error" />}
       <StatGrid>
         {/* GAP-CRM-FORECAST-06: tone tokens (dark-mode aware) instead of fixed
-            pastel hex iconBg values that stayed pale in dark mode. */}
+            pastel hex iconBg values that stayed pale in dark mode, and icons the
+            ds StatIcon set maps to vector glyphs (a bare "▣" / "◉" / "◈" / "△" was
+            not in the map and rendered as raw text). */}
         <StatCard
-          icon="▣"
+          icon="💰"
           tone="good"
           label="Weighted Forecast"
           value={formatMoney(forecast.totalForecastMinor)}
         />
         <StatCard
-          icon="◉"
+          icon="🤝"
           tone="info"
           label="Engagements in Forecast"
           value={forecast.dealCount.toLocaleString("en-IN")}
         />
         <StatCard
-          icon="◈"
+          icon="📊"
           tone="warn"
           label="Avg Weighted Engagement"
           value={formatMoney(averageWeightedDealMinor(forecast))}
         />
         <StatCard
-          icon="△"
+          icon="🎯"
           tone="neutral"
           label="Top Stage"
           value={topStage ? topStage.stageName : "—"}

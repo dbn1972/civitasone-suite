@@ -4,6 +4,7 @@ import { fetchJson } from "../../../../_data/apiClient";
 import { PageHeader, StatusPill, Card, LoadErrorState, EmptyState } from "../../../../_components/ds";
 import { getSessionRoles, hasAnyRole, CRM_GRIEVANCE_CLOSE_ROLES, CRM_PII_READ_ROLES } from "@/lib/auth/roleGuard";
 import { GrievanceActions } from "./GrievanceActions";
+import { grievancePriorityPillClass, grievanceStatusLabel } from "../grievanceDisplay";
 
 interface GrievanceDetail {
   id: string;
@@ -22,6 +23,9 @@ interface GrievanceDetail {
   resolvedAt?: string;
   closedAt?: string;
   escalatedAt?: string;
+  // GAP-CRM-GRIEVANCES-DETAIL-04: when the grievance was last assigned (crm.grievances.assigned_at,
+  // migration 0162). Null/absent for a grievance assigned before that column existed.
+  assignedAt?: string | null;
   // GAP-CRM-GRIEVANCES-DETAIL-04: the GET /:id endpoint
   // (crm-service modules/grievances/routes.ts) returns these for a grievance
   // that has been forwarded or appealed; shown only when present.
@@ -77,26 +81,10 @@ async function resolveAssigneeName(assignedTo?: string): Promise<string | null> 
   return res.source === "api" && typeof res.data === "string" ? res.data : null;
 }
 
+// GAP-CRM-GRIEVANCES-06: the shared theme-safe `.pill` classes (the same ones the register uses),
+// not `var(--bg)` text on a `var(--ink2|--warn|--bad)` fill, whose contrast was unverified in dark mode.
 function PriorityBadge({ priority, label }: { priority: string; label: string }) {
-  const color =
-    priority === "urgent" ? "var(--bad)"
-    : priority === "high" ? "var(--warn)"
-    : "var(--ink2)";
-  return (
-    <span
-      style={{
-        display: "inline-block",
-        padding: "2px 8px",
-        borderRadius: 4,
-        fontSize: 12,
-        fontWeight: 600,
-        color: "var(--bg)",
-        background: color,
-      }}
-    >
-      {label}
-    </span>
-  );
+  return <span className={grievancePriorityPillClass(priority)}>{label}</span>;
 }
 
 function TimelineItem({
@@ -205,7 +193,9 @@ export default async function GrievanceDetailPage({
 
   const timelineSteps = [
     { label: t("stepLogged"),      ts: g.createdAt,   done: true },
-    { label: t("stepAssigned"),    ts: undefined,     done: !!g.assignedTo },
+    // GAP-CRM-GRIEVANCES-DETAIL-04: the real assignment time (assigned_at); a grievance assigned before that
+    // column existed has none, and the step then shows done without a time rather than an invented one.
+    { label: t("stepAssigned"),    ts: g.assignedAt ?? undefined, done: !!g.assignedTo },
     // GAP-CRM-GRIEVANCES-DETAIL-04: FORWARDED is a real CPGRAMS status, so the
     // timeline now has a Forwarded step with its own forwardedAt time; it is
     // done once the grievance has been forwarded (forwardedTo set) or has moved
@@ -248,7 +238,7 @@ export default async function GrievanceDetailPage({
               <dt style={{ color: "var(--ink2)" }}>{t("priority")}</dt>
               <dd><PriorityBadge priority={g.priority} label={priorityLabel} /></dd>
               <dt style={{ color: "var(--ink2)" }}>{t("status")}</dt>
-              <dd><StatusPill status={g.status} /></dd>
+              <dd><StatusPill status={g.status} label={grievanceStatusLabel(g.status, t("stepFirstAppeal"))} /></dd>
               <dt style={{ color: "var(--ink2)" }}>{t("assignedTo")}</dt>
               <dd>{formatAssignee(t, g.assignedTo, assigneeName)}</dd>
               <dt style={{ color: "var(--ink2)" }}>{t("dueBy")}</dt>

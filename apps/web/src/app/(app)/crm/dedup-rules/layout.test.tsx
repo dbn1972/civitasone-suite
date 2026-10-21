@@ -43,15 +43,25 @@ describe("DedupRulesLayout (GAP-CRM-DEDUP-RULES-05)", () => {
     expect(screen.getByText("rules editor")).toBeInTheDocument();
   });
 
-  it("admits the shared CRM admin roles (super_admin, platform_admin, admin, tenant_admin)", () => {
-    for (const role of ["super_admin", "platform_admin", "admin", "tenant_admin"]) {
-      mockRedirect.mockReset();
-      sessionWithRoles([role]);
-      const { unmount } = render(<DedupRulesLayout>{`editor ${role}`}</DedupRulesLayout>);
-      expect(mockRedirect).not.toHaveBeenCalled();
-      unmount();
-    }
+  it("admits super_admin as well as crm_admin (the roles the server admits on dedup-rules)", () => {
+    sessionWithRoles(["super_admin"]);
+    render(<DedupRulesLayout>{"rules editor"}</DedupRulesLayout>);
+    expect(mockRedirect).not.toHaveBeenCalled();
+    expect(screen.getByText("rules editor")).toBeInTheDocument();
   });
+
+  // GAP-CRM-DEDUP-RULES-05: these were admitted via the broader CRM_ADMIN_ROLES
+  // but cannot use the page -- admin / platform_admin never clear the parent CRM
+  // layout and tenant_admin is 403'd by crm-service. Narrowing the web gate to
+  // the server's set changes nobody's real access.
+  it.each(["tenant_admin", "admin", "platform_admin"])(
+    "redirects %s to /crm/data-quality instead of showing a page whose calls cannot succeed",
+    (role) => {
+      sessionWithRoles([role]);
+      render(<DedupRulesLayout>{"rules editor"}</DedupRulesLayout>);
+      expect(mockRedirect).toHaveBeenCalledWith("/crm/data-quality");
+    },
+  );
 
   it("redirects an unauthenticated session to /crm/data-quality", () => {
     mockGet.mockReturnValue(undefined);

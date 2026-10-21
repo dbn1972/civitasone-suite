@@ -441,6 +441,12 @@ export interface DocumentType {
   expiryRequired: boolean;
   verificationRequired: boolean;
   enabled: boolean;
+  /**
+   * GAP-CRM-DOCUMENT-TYPES-03: how many document rows (every version) are filed
+   * under this type, as reported by GET /v1/crm/document-types. Undefined when
+   * the backend did not report it (older API) -- NOT zero.
+   */
+  documentCount?: number;
 }
 
 function normAppliesTo(v: unknown): SubjectType[] {
@@ -457,6 +463,8 @@ export function normaliseDocumentType(raw: unknown): DocumentType | null {
   const name = str(r.name);
   const id = optStr(r.id);
   if (!id && !code && !name) return null;
+  const rawCount = r.documentCount ?? r.document_count;
+  const documentCount = typeof rawCount === "number" && Number.isFinite(rawCount) && rawCount >= 0 ? Math.trunc(rawCount) : undefined;
   return {
     id,
     code,
@@ -466,6 +474,7 @@ export function normaliseDocumentType(raw: unknown): DocumentType | null {
     expiryRequired: bool(r.expiryRequired ?? r.expiry_required),
     verificationRequired: bool(r.verificationRequired ?? r.verification_required),
     enabled: bool(r.enabled, true),
+    ...(documentCount !== undefined ? { documentCount } : {}),
   };
 }
 
@@ -542,8 +551,8 @@ export async function updateDocumentType(id: string, t: DocumentType): Promise<v
 
 export async function deleteDocumentType(id: string, reason?: string): Promise<void> {
   // GAP-CRM-DOCUMENT-TYPES-03: pass a deletion reason for the audit trail when
-  // the admin supplies one. Additive — a backend that ignores the body still
-  // works; the server remains responsible for emitting the audit event.
+  // the admin supplies one; the server records it on the document_type_delete
+  // audit event and refuses (409 TYPE_IN_USE) while documents still use the type.
   const res = await browserFetch(`v1/crm/document-types/${id}`, {
     method: "DELETE",
     ...(reason && reason.trim() ? { body: JSON.stringify({ reason: reason.trim() }) } : {}),

@@ -266,6 +266,19 @@ export const INVENTORY_ITEM_LINK_ROLES = ["inventory_manager", "inventory_admin"
 export const CRM_ADMIN_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
 
 /**
+ * Roles that can actually USE the Matching (dedup) Rules editor: the
+ * intersection of the parent CRM layout gate (crm_user, crm_admin, super_admin,
+ * tenant_admin) and crm-service's ADMIN_ROLES on GET/PUT /v1/crm/dedup-rules
+ * (modules/contacts/dedup-routes.ts: crm_admin, super_admin). Narrower than
+ * CRM_ADMIN_ROLES on purpose: tenant_admin passes both web layouts but the
+ * server answers 403, and admin / platform_admin never pass the parent layout,
+ * so listing them only produced a page that cannot load (GAP-CRM-DEDUP-RULES-05).
+ * A drift guard (dedup-rules/layout.test.tsx) reads the server constant and
+ * fails if the two disagree. The server stays the authority.
+ */
+export const CRM_DEDUP_RULES_ROLES = ["crm_admin", "super_admin"];
+
+/**
  * Roles crm-service admits on GET /v1/crm/contacts/:id (its CRM_ROLES in
  * modules/contacts/routes.ts). Used to decide whether a drill-through link to a
  * contact record is offered at all: an analytics/ML admin without a CRM role

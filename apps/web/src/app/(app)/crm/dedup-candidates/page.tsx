@@ -11,9 +11,12 @@
  * GAP-CRM-DEDUP-CANDIDATES-05: the merge call is a POST to /v1/crm/contacts/merge
  * with { primaryId, duplicateId } (see lib/crm/dedupCandidates.ts), NOT the
  * PATCH /:leftId/merge { mergeIntoId } this comment used to claim. The list
- * (dedup-candidates) and dismiss endpoints are not yet implemented server-side
- * (see dedupCandidates.ts for the full writeup); getDedupCandidates fails closed
- * to a DataSourceBadge error state rather than a fabricated "data is clean".
+ * (GET /v1/crm/contacts/dedup-candidates) and dismiss
+ * (PATCH /v1/crm/contacts/dedup-candidates/:pairId/dismiss) endpoints EXIST
+ * server-side (services/crm-service contacts/dedup-routes.ts; see
+ * dedupCandidates.ts for the full writeup). getDedupCandidates still fails
+ * closed to a DataSourceBadge error state on any non-2xx rather than a
+ * fabricated "data is clean".
  *
  * On a failed API load the page shows DataSourceBadge rather than an empty
  * state that could be mistaken for "data is clean".

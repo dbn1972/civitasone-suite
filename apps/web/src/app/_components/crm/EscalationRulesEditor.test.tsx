@@ -4,7 +4,6 @@ import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { EscalationRulesEditor } from "./EscalationRulesEditor";
 import * as as from "@/lib/crm/assignment";
-import * as aa from "@/lib/crm/activityAccount";
 
 function render(ui: React.ReactElement) {
   return rtlRender(
@@ -19,32 +18,32 @@ vi.mock("@/lib/crm/assignment", async (orig) => {
   return {
     ...actual,
     getEscalationRules: vi.fn(),
+    getEscalationRecipients: vi.fn(),
     createEscalationRule: vi.fn(),
     updateEscalationRule: vi.fn(),
     deleteEscalationRule: vi.fn(),
   };
 });
-vi.mock("@/lib/crm/activityAccount", async (orig) => {
-  const actual = await orig<typeof import("@/lib/crm/activityAccount")>();
-  return {
-    ...actual,
-    getEscalationRoles: vi.fn(),
-    getEscalationUsers: vi.fn(),
-  };
-});
-const ROLES: aa.EscalationRole[] = [
-  { key: "sales_manager", label: "Sales Manager" },
-  { key: "lead_desk", label: "Lead Desk" },
-];
-const USERS: aa.EscalationUser[] = [{ id: "u1", name: "Asha Rao" }];
+const DIRECTORY: as.EscalationRecipientDirectory = {
+  roles: [
+    { key: "sales_manager", label: "Sales Manager" },
+    { key: "lead_desk", label: "Lead Desk" },
+  ],
+  users: [{ id: "u1", name: "Asha Rao" }],
+  rolesAvailable: true,
+  usersAvailable: true,
+  usersTruncated: false,
+};
+const NO_DIRECTORY: as.EscalationRecipientDirectory = {
+  roles: [], users: [], rolesAvailable: false, usersAvailable: false, usersTruncated: false,
+};
 const rule: as.EscalationRule = { id: "e1", trigger: "unaccepted", thresholdMinutes: 60, recipientRole: "sales_manager", recipientId: "", reassign: true, enabled: true };
 beforeEach(() => {
   vi.mocked(as.getEscalationRules).mockReset();
   vi.mocked(as.createEscalationRule).mockReset();
   vi.mocked(as.updateEscalationRule).mockReset();
   vi.mocked(as.deleteEscalationRule).mockReset();
-  vi.mocked(aa.getEscalationRoles).mockReset().mockResolvedValue({ data: ROLES, source: "api" });
-  vi.mocked(aa.getEscalationUsers).mockReset().mockResolvedValue({ data: USERS, source: "api" });
+  vi.mocked(as.getEscalationRecipients).mockReset().mockResolvedValue({ data: DIRECTORY, source: "api" });
 });
 
 describe("EscalationRulesEditor (AS-004 admin)", () => {
@@ -193,5 +192,150 @@ describe("EscalationRulesEditor threshold bound (server cap 100,000 minutes)", (
     expect(days).not.toHaveAttribute("aria-invalid");
     fireEvent.change(days, { target: { value: "70" } }); // 100,800 minutes
     expect(screen.getByLabelText("Threshold for rule 1")).toHaveAttribute("aria-invalid", "true");
+  });
+});
+
+// GAP-CRM-ESCALATION-RULES-01 -- a recipient can only be CHOSEN from the tenant
+// directory. There is no free-text fallback: a mistyped role / stale user id used
+// to save and the escalation then notified nobody.
+describe("EscalationRulesEditor recipient directory (GAP-CRM-ESCALATION-RULES-01)", () => {
+  it("an unknown role string cannot be saved (and the control is a picker, not a text box)", async () => {
+    // A rule persisted earlier, when the role was free text, with a typo.
+    const typo: as.EscalationRule = { ...rule, recipientRole: "sales_mangaer" };
+    vi.mocked(as.getEscalationRules).mockResolvedValue({ data: [typo], source: "api" });
+    render(<EscalationRulesEditor />);
+    const roleSelect = await screen.findByLabelText(/recipient role for rule 1/i);
+    expect(roleSelect.tagName).toBe("SELECT");
+    // The stale value is shown as UNKNOWN, not silently accepted.
+    expect(within(roleSelect as HTMLSelectElement).getByRole("option", { name: /unknown role .sales_mangaer./i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByText(/not in the directory/i)).toBeInTheDocument();
+    expect(as.updateEscalationRule).not.toHaveBeenCalled();
+
+    // Picking a real role clears the way.
+    vi.mocked(as.updateEscalationRule).mockResolvedValue(undefined);
+    fireEvent.change(roleSelect, { target: { value: "sales_manager" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(as.updateEscalationRule).toHaveBeenCalled());
+  });
+
+  it("never falls back to a free-text role or user input when the directory is unavailable", async () => {
+    vi.mocked(as.getEscalationRecipients).mockResolvedValue({ data: NO_DIRECTORY, source: "error" });
+    vi.mocked(as.getEscalationRules).mockResolvedValue({ data: [], source: "api" });
+    render(<EscalationRulesEditor />);
+    await waitFor(() => expect(screen.getByText(/no escalation rules yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add escalation rule/i }));
+
+    expect((await screen.findByLabelText(/recipient role for rule 1/i)).tagName).toBe("SELECT");
+    expect(screen.getByLabelText(/recipient user for rule 1/i).tagName).toBe("SELECT");
+    expect(screen.queryByPlaceholderText(/sales_manager/i)).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/user id/i)).not.toBeInTheDocument();
+    // The admin is told why the pickers are empty, with a retry.
+    expect(screen.getByText(/couldn.t load the role and user directory/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /retry loading directory/i })).toBeInTheDocument();
+  });
+
+  it("refuses to save a recipient it cannot verify while the directory is unavailable, then saves after a retry", async () => {
+    vi.mocked(as.getEscalationRecipients).mockResolvedValueOnce({ data: NO_DIRECTORY, source: "error" });
+    vi.mocked(as.getEscalationRules).mockResolvedValue({ data: [rule], source: "api" });
+    vi.mocked(as.updateEscalationRule).mockResolvedValue(undefined);
+    render(<EscalationRulesEditor />);
+    await screen.findByLabelText(/recipient role for rule 1/i);
+    // The saved role is shown as unverified, not as a known role.
+    expect(screen.getByRole("option", { name: /not verified/i })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByText(/directory could not be loaded.*not saved/i)).toBeInTheDocument();
+    expect(as.updateEscalationRule).not.toHaveBeenCalled();
+
+    // Retry succeeds (the default mock returns the full directory) -> the same save goes through.
+    fireEvent.click(screen.getByRole("button", { name: /retry loading directory/i }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: /retry loading directory/i })).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(as.updateEscalationRule).toHaveBeenCalledWith("e1", expect.objectContaining({ recipientRole: "sales_manager" })));
+  });
+
+  it("flags a partly-available directory (roles ok, users not) and still verifies the roles that loaded", async () => {
+    vi.mocked(as.getEscalationRecipients).mockResolvedValue({
+      data: { ...DIRECTORY, users: [], usersAvailable: false },
+      source: "api",
+    });
+    vi.mocked(as.getEscalationRules).mockResolvedValue({ data: [rule], source: "api" });
+    vi.mocked(as.updateEscalationRule).mockResolvedValue(undefined);
+    render(<EscalationRulesEditor />);
+    expect(await screen.findByText(/couldn.t load the user directory/i)).toBeInTheDocument();
+    // A role-only rule is still verifiable and saves.
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(as.updateEscalationRule).toHaveBeenCalled());
+  });
+
+  it("shows the recipient user by NAME, never the raw id, and saves the id chosen from the picker", async () => {
+    const withUser: as.EscalationRule = { ...rule, recipientRole: "", recipientId: "u1" };
+    vi.mocked(as.getEscalationRules).mockResolvedValue({ data: [withUser], source: "api" });
+    render(<EscalationRulesEditor />);
+    const userSelect = (await screen.findByLabelText(/recipient user for rule 1/i)) as HTMLSelectElement;
+    expect(userSelect.tagName).toBe("SELECT");
+    // The saved rule reads "Asha Rao" ...
+    expect(screen.getByDisplayValue("Asha Rao")).toBeInTheDocument();
+    // ... and the opaque id is not shown anywhere as text.
+    expect(screen.queryByText("u1")).not.toBeInTheDocument();
+    expect(within(userSelect).queryByRole("option", { name: "u1" })).not.toBeInTheDocument();
+  });
+
+  it("picks a user from the directory for a new rule and sends that user's id", async () => {
+    vi.mocked(as.getEscalationRules).mockResolvedValue({ data: [], source: "api" });
+    vi.mocked(as.createEscalationRule).mockResolvedValue(undefined);
+    render(<EscalationRulesEditor />);
+    await waitFor(() => expect(screen.getByText(/no escalation rules yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add escalation rule/i }));
+    fireEvent.change(await screen.findByLabelText(/recipient user for rule 1/i), { target: { value: "u1" } });
+    fireEvent.click(screen.getByRole("button", { name: /create/i }));
+    await waitFor(() => expect(as.createEscalationRule).toHaveBeenCalled());
+    expect(vi.mocked(as.createEscalationRule).mock.calls[0][0]).toMatchObject({ recipientId: "u1" });
+  });
+
+  it("lets a saved user through when the user list was truncated (the server is the authority)", async () => {
+    const withUser: as.EscalationRule = { ...rule, recipientRole: "", recipientId: "u-not-in-first-page" };
+    vi.mocked(as.getEscalationRecipients).mockResolvedValue({ data: { ...DIRECTORY, usersTruncated: true }, source: "api" });
+    vi.mocked(as.getEscalationRules).mockResolvedValue({ data: [withUser], source: "api" });
+    vi.mocked(as.updateEscalationRule).mockResolvedValue(undefined);
+    render(<EscalationRulesEditor />);
+    expect(await screen.findByRole("option", { name: /not in the loaded list/i })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(as.updateEscalationRule).toHaveBeenCalled());
+  });
+
+  it("derives the rule name the server requires from trigger, threshold and recipient", async () => {
+    vi.mocked(as.getEscalationRules).mockResolvedValue({ data: [], source: "api" });
+    vi.mocked(as.createEscalationRule).mockResolvedValue(undefined);
+    render(<EscalationRulesEditor />);
+    await waitFor(() => expect(screen.getByText(/no escalation rules yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add escalation rule/i }));
+    fireEvent.change(screen.getByLabelText(/threshold for rule 1/i), { target: { value: "120" } });
+    fireEvent.change(await screen.findByLabelText(/recipient role for rule 1/i), { target: { value: "lead_desk" } });
+    fireEvent.click(screen.getByRole("button", { name: /create/i }));
+    await waitFor(() => expect(as.createEscalationRule).toHaveBeenCalled());
+    expect(vi.mocked(as.createEscalationRule).mock.calls[0][0].name).toBe("Not accepted in time · 2 hours → Lead Desk");
+  });
+
+  it("explains a server-side refusal of the recipient (422) instead of claiming success", async () => {
+    vi.mocked(as.getEscalationRules).mockResolvedValue({ data: [rule], source: "api" });
+    vi.mocked(as.updateEscalationRule).mockRejectedValue(new as.EscalationRecipientError("invalid", "generic status text"));
+    render(<EscalationRulesEditor />);
+    await screen.findByLabelText(/recipient role for rule 1/i);
+    fireEvent.change(screen.getByLabelText(/recipient role for rule 1/i), { target: { value: "lead_desk" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByText(/not in the directory/i)).toBeInTheDocument();
+    expect(screen.queryByText(/escalation rule saved/i)).not.toBeInTheDocument();
+  });
+
+  it("says the rule was NOT saved when the server could not verify the recipient (503)", async () => {
+    vi.mocked(as.getEscalationRules).mockResolvedValue({ data: [rule], source: "api" });
+    vi.mocked(as.updateEscalationRule).mockRejectedValue(new as.EscalationRecipientError("unavailable", "generic status text"));
+    render(<EscalationRulesEditor />);
+    await screen.findByLabelText(/recipient role for rule 1/i);
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByText(/directory could not be loaded.*not saved/i)).toBeInTheDocument();
   });
 });

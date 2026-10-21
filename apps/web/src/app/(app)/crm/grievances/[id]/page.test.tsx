@@ -22,6 +22,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import GrievanceDetailPage from "./page";
+import { formatIndianDateTime } from "@/lib/formatters";
 
 const ID = "8cf7f7eb-1de6-4a31-b48c-1f598ecf33c0";
 
@@ -102,8 +103,71 @@ describe("GrievanceDetailPage", () => {
     expect(screen.getByText("No response in 30 days")).toBeInTheDocument();
     // Timeline has a Forwarded step and the First appeal rename.
     expect(screen.getByText("Forwarded")).toBeInTheDocument();
-    expect(screen.getByText("First appeal")).toBeInTheDocument();
+    // "First appeal" appears twice for an APPEAL grievance: the timeline step and the status pill.
+    expect(screen.getAllByText("First appeal")).toHaveLength(2);
     expect(screen.queryByText("Escalated")).not.toBeInTheDocument();
+  });
+
+  // GAP-CRM-GRIEVANCES-06: the status pill reads "First appeal" for APPEAL (not the humanised
+  // enum "Appeal"), matching the timeline step, the register tile and the register table.
+  it("labels an APPEAL grievance's status pill 'First appeal', and leaves other statuses humanised", async () => {
+    fetchJsonMock.mockResolvedValue({ data: grievance({ status: "APPEAL", escalatedAt: "2026-08-03T00:00:00.000Z" }), source: "api" });
+    render(await GrievanceDetailPage({ params: { id: ID } }));
+    const statusPill = screen.getByText("Status").nextElementSibling!.querySelector(".pill");
+    expect(statusPill).toHaveTextContent("First appeal");
+    expect(screen.queryByText("Appeal")).not.toBeInTheDocument();
+  });
+
+  it("keeps the humanised label for a non-APPEAL status", async () => {
+    fetchJsonMock.mockResolvedValue({ data: grievance({ status: "ATTENDED" }), source: "api" });
+    render(await GrievanceDetailPage({ params: { id: ID } }));
+    expect(screen.getByText("Status").nextElementSibling!.querySelector(".pill")).toHaveTextContent("Attended");
+  });
+
+  // GAP-CRM-GRIEVANCES-06: priority is a theme-safe shared pill, not an inline var(--bg)-on-fill span.
+  it.each([
+    ["urgent", "Urgent", "bad"],
+    ["high", "High", "warn"],
+    ["normal", "Normal", "mut"],
+    ["low", "Low", "mut"],
+  ])("renders %s priority with the shared .pill.%s tone class", async (priority, label, tone) => {
+    fetchJsonMock.mockResolvedValue({ data: grievance({ priority }), source: "api" });
+    render(await GrievanceDetailPage({ params: { id: ID } }));
+    const badge = screen.getByText("Priority").nextElementSibling!.querySelector("span")!;
+    expect(badge).toHaveTextContent(label);
+    expect(badge).toHaveClass("pill", tone);
+    // No hand-rolled inline colours that ignore the dark theme.
+    expect(badge.getAttribute("style") ?? "").not.toMatch(/background|color/);
+  });
+
+  // GAP-CRM-GRIEVANCES-DETAIL-04: the Assigned step carries the real assignment time.
+  it("shows the real assignment time on the Assigned timeline step", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: grievance({ assignedTo: "11111111-2222-4333-8444-555555555555", assignedAt: "2026-08-05T10:30:00.000Z" }),
+      source: "api",
+    });
+    render(await GrievanceDetailPage({ params: { id: ID } }));
+    const step = screen.getByText("Assigned").closest("li")!;
+    expect(step).toHaveTextContent(formatIndianDateTime("2026-08-05T10:30:00.000Z"));
+  });
+
+  it("shows Assigned as done but WITHOUT a time (no invented one) when the grievance predates assigned_at", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: grievance({ assignedTo: "11111111-2222-4333-8444-555555555555", assignedAt: null }),
+      source: "api",
+    });
+    render(await GrievanceDetailPage({ params: { id: ID } }));
+    const step = screen.getByText("Assigned").closest("li")!;
+    expect(step).toHaveTextContent("✓");
+    // Only the label and tick: no timestamp line.
+    expect(step.querySelectorAll("div > div").length).toBeGreaterThan(0);
+    expect(step.textContent).toBe("✓Assigned");
+  });
+
+  it("does not mark Assigned done when nobody is assigned", async () => {
+    fetchJsonMock.mockResolvedValue({ data: grievance({ assignedTo: undefined, assignedAt: null }), source: "api" });
+    render(await GrievanceDetailPage({ params: { id: ID } }));
+    expect(screen.getByText("Assigned").closest("li")).toHaveTextContent("○");
   });
 
   // GAP-CRM-GRIEVANCES-DETAIL-07 — a 5xx/network error must show a retry state,

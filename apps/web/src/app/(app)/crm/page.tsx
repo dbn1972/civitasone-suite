@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import type { NavTile } from "@civitasone/types";
 import { LinkTiles } from "../../_components/LinkTiles";
 import { PageHeader } from "../../_components/ds";
-import { getSessionRoles, CRM_ADMIN_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, hasAnyRole, CRM_ADMIN_ROLES, CRM_DEDUP_RULES_ROLES } from "@/lib/auth/roleGuard";
 
 // Stable section keys map to crm.hub.sections.* / crm.hub.tiles.* i18n keys.
 // Hrefs stay static; only the user-facing labels are translated
@@ -12,6 +12,12 @@ const CONFIGURATION_SECTION = "configuration";
 interface TileDef {
 	tileKey: string;
 	href: string;
+	/**
+	 * Optional tile-level gate, narrower than the section gate: only these roles
+	 * are offered the tile (it mirrors the destination route's own layout guard so
+	 * a tile never leads to a redirect).
+	 */
+	roles?: readonly string[];
 }
 
 interface SectionDef {
@@ -69,7 +75,7 @@ const sections: SectionDef[] = [
 		sectionKey: CONFIGURATION_SECTION,
 		tiles: [
 			{ tileKey: "customFields", href: "/crm/custom-fields" },
-			{ tileKey: "dedupRules", href: "/crm/dedup-rules" },
+			{ tileKey: "dedupRules", href: "/crm/dedup-rules", roles: CRM_DEDUP_RULES_ROLES },
 			{ tileKey: "leadScoring", href: "/crm/lead-scoring" },
 			{ tileKey: "qualificationFrameworks", href: "/crm/qualification-frameworks" },
 			{ tileKey: "leadReasonCodes", href: "/crm/lead-reason-codes" },
@@ -90,7 +96,8 @@ export default async function Page() {
 	// (each gated by its own layout). Non-admins are redirected if they open
 	// one, so don't surface the tiles to them in the first place
 	// (GAP-CRM-AGENT-WORKLOAD-01).
-	const isAdmin = getSessionRoles().some((r) => CRM_ADMIN_ROLES.includes(r));
+	const sessionRoles = getSessionRoles();
+	const isAdmin = sessionRoles.some((r) => CRM_ADMIN_ROLES.includes(r));
 	const visibleSections = sections.filter(
 		(section) => isAdmin || section.sectionKey !== CONFIGURATION_SECTION,
 	);
@@ -100,11 +107,13 @@ export default async function Page() {
 			<div className="space-y-6">
 				{visibleSections.map((section) => {
 					const heading = t(`sections.${section.sectionKey}`);
-					const tiles: NavTile[] = section.tiles.map((tile) => ({
-						title: t(`tiles.${tile.tileKey}.title`),
-						href: tile.href,
-						description: t(`tiles.${tile.tileKey}.description`),
-					}));
+					const tiles: NavTile[] = section.tiles
+						.filter((tile) => !tile.roles || hasAnyRole(sessionRoles, tile.roles))
+						.map((tile) => ({
+							title: t(`tiles.${tile.tileKey}.title`),
+							href: tile.href,
+							description: t(`tiles.${tile.tileKey}.description`),
+						}));
 					return (
 						<section
 							key={section.sectionKey}
