@@ -1438,7 +1438,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; employeeId: string; effectiveDate: string;
       oldBasicMinor: number; newBasicMinor: number; oldGrossMinor: number; newGrossMinor: number;
-      revisionType: string; orderNo?: string | null;
+      revisionType: string; orderNo?: string | null; reason?: string | null;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -1473,7 +1473,12 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
           payload: { id: p.id, employeeId: p.employeeId, newBasicMinor: p.newBasicMinor },
         });
       }
-      await audit(tx, msg, "create", "payroll_salary_revision", p.id, { newValue: { status } });
+      // GAP-PAYROLL-SALARY-REVISIONS-02: the maker's reason and the sanctioning
+      // order go on the audit record (no free text lands anywhere else).
+      await audit(tx, msg, "create", "payroll_salary_revision", p.id, {
+        newValue: { status, ...(p.orderNo ? { orderNo: p.orderNo } : {}) },
+        ...(p.reason ? { reason: p.reason } : {}),
+      });
     });
   });
 

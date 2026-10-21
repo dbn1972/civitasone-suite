@@ -1945,7 +1945,8 @@
     "confirmLabel": "Record revision",
     "confirmDescription": "Record a {revisionType} revision to {amount} basic for employee <strong>{employeeId}</strong>, effective {effectiveDate}.",
     "networkError": "Network error. Please try again.",
-    "orderNoRequiredError": "Enter the order number that sanctions this revision."
+    "orderNoRequiredError": "Enter the order number that sanctions this revision.",
+    "reasonLabel": "Reason for this revision"
   },
   "crm": {
     "loading": {
@@ -6903,7 +6904,7 @@
     "historyCardTitle": "Salary Revision History",
     "filterPlaceholder": "Filter by employee or order no…",
     "emptyTitle": "No salary revisions yet",
-    "emptyMessage": "Revisions recorded upstream in HRMS pay-fixation will appear here.",
+    "emptyMessage": "Salary revisions will appear here once they are recorded.",
     "colEmployee": "Employee",
     "colEffectiveDate": "Effective Date",
     "colRevisionType": "Revision Type",

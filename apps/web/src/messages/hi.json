@@ -1927,7 +1927,8 @@
     "confirmLabel": "संशोधन दर्ज करें",
     "confirmDescription": "कर्मचारी <strong>{employeeId}</strong> के लिए {amount} मूल वेतन तक {revisionType} संशोधन दर्ज करें, प्रभावी {effectiveDate}।",
     "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
-    "orderNoRequiredError": "इस संशोधन को स्वीकृत करने वाला आदेश क्रमांक दर्ज करें।"
+    "orderNoRequiredError": "इस संशोधन को स्वीकृत करने वाला आदेश क्रमांक दर्ज करें।",
+    "reasonLabel": "इस संशोधन का कारण"
   },
   "crm": {
     "loading": {
@@ -7965,7 +7966,7 @@
     "historyCardTitle": "वेतन संशोधन इतिहास",
     "filterPlaceholder": "कर्मचारी या आदेश संख्या के अनुसार फ़िल्टर करें…",
     "emptyTitle": "अभी तक कोई वेतन संशोधन नहीं",
-    "emptyMessage": "HRMS वेतन-निर्धारण में अपस्ट्रीम दर्ज संशोधन यहां दिखाई देंगे।",
+    "emptyMessage": "वेतन संशोधन दर्ज होने के बाद यहां दिखाई देंगे।",
     "colEmployee": "कर्मचारी",
     "colEffectiveDate": "प्रभावी तिथि",
     "colRevisionType": "संशोधन प्रकार",

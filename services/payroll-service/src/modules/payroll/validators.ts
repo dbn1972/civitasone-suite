@@ -232,6 +232,11 @@ export const createSalaryRevisionBody = z.object({
   revisionType:  z.enum(["annual_increment", "promotion", "correction", "fitment"]).default("annual_increment"),
   // GAP-PAYROLL-SALARY-REVISIONS-02: a revision rewrites HRMS basic pay, so it must cite its sanctioning order.
   orderNo:       z.string().trim().min(1).max(64),
+  // GAP-PAYROLL-SALARY-REVISIONS-02: the maker's stated reason, written to the
+  // audit trail with the revision. Optional on the API (older clients / scripts
+  // keep working) but, when sent, it must be a real sentence -- the web form
+  // always sends it (ConfirmDialog requires >= 10 characters).
+  reason:        z.string().trim().min(10).max(512).optional(),
 }).superRefine((b, ctx) => {
   // GAP-PAYROLL-SALARY-REVISIONS-03: the same sanity rules the web form applies.
   const issue = revisionSanityIssue(b);
