@@ -2657,7 +2657,8 @@
     "marital_single": "Single",
     "marital_married": "Married",
     "marital_divorced": "Divorced",
-    "marital_widowed": "Widowed"
+    "marital_widowed": "Widowed",
+    "fieldBasicPay": "Basic Pay"
   },
   "employeeEdit": {
     "pageTitle": "Edit Employee",
@@ -2710,7 +2711,9 @@
     "savingBtn": "Saving…",
     "saveChangesBtn": "Save Changes",
     "cancelBtn": "Cancel",
-    "loadingLabel": "Loading edit form…"
+    "loadingLabel": "Loading edit form…",
+    "basicPayLabel": "Basic Pay",
+    "basicPayRevisionHintRich": "Basic pay cannot be changed from this form. Use a <link>salary revision in Payroll</link>, which is approved, effective-dated and audited."
   },
   "employeeFyLookup": {
     "formTitle": "Look Up Form 12BA",
@@ -3009,7 +3012,10 @@
     "hideBtn": "Hide",
     "showBtn": "Show",
     "workLocationOtherLabel": "Not in the list? Type the place instead",
-    "workLocationOtherPlaceholder": "e.g. CGO Complex, New Delhi"
+    "workLocationOtherPlaceholder": "e.g. CGO Complex, New Delhi",
+    "payStructureLabel": "Pay Structure",
+    "payStructureHint": "(optional)",
+    "payStructurePlaceholder": "Search pay structures…"
   },
   "employeeWizardStep5": {
     "heading": "Step 5 — Review & Submit",
@@ -3054,7 +3060,8 @@
     "shiftNight": "Night (10 PM – 6 AM)",
     "complianceImportant": "Important:",
     "complianceNote": "Sensitive fields (PAN, Aadhaar, Bank Account) are transmitted over TLS and stored AES-256 encrypted at rest in compliance with IT Act 2000 and DPDP Act 2023.",
-    "creatingRecord": "Creating employee record…"
+    "creatingRecord": "Creating employee record…",
+    "payStructure": "Pay Structure"
   },
   "employees": {
     "title": "Employees",

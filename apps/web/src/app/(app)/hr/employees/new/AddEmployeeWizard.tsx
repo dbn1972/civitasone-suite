@@ -105,6 +105,8 @@ export function buildPayload(data: WizardData): Record<string, unknown> {
     "mobile", "email",
     "employeeNo", "departmentId", "designationId",
     "dateOfJoining", "employeeType",
+    // GAP-HR-EMPLOYEES-NEW-02: a real createEmployeeBody key (uuid, optional).
+    "payStructureId",
     "managerId",
     "pan", "aadhaarRef", "bankAccountNo", "bankIfsc",
   ];

@@ -29,10 +29,12 @@ export type WizardData = {
   employeeType: string;
   // GAP-HR-EMPLOYEES-NEW-02: rupees, as typed (e.g. "44900.50") -- converted
   // to paise via lib/money.ts's rupeesToMinorString in buildPayload, never
-  // Number(x)*100. payStructureId is intentionally not collected here yet;
-  // EditEmployeeForm.tsx's EntityPicker already lets HR set it right after
-  // creation, which was judged sufficient for this pass (see PR notes).
+  // Number(x)*100.
   basicPay: string;
+  // GAP-HR-EMPLOYEES-NEW-02: the picked pay-structure id (the same payroll
+  // pay-structure master EditEmployeeForm.tsx's picker reads). Optional --
+  // createEmployeeBody accepts it, and "" means none picked.
+  payStructureId: string;
   // Step 3 — Assignment
   managerId: string;
   workLocation: string;
@@ -69,6 +71,7 @@ export const WIZARD_INIT: WizardData = {
   dateOfJoining: "",
   employeeType: "permanent",
   basicPay: "",
+  payStructureId: "",
   managerId: "",
   workLocation: "",
   locationId: "",

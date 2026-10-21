@@ -8,13 +8,25 @@ import { failStrict } from "./strict";
 // (not imported) for the same reason EditEmployeeForm.tsx's SENSITIVE_FIELDS
 // comment gives: hrms-service's employee/status.ts is a separate service,
 // across the service boundary this web app can't import across.
-type EmployeeRow = { id: string; employeeNo?: string; name: string; department?: string; status?: string };
+type EmployeeRow = { id: string; employeeNo?: string; name: string; department?: string; designation?: string; status?: string };
+
+/**
+ * GAP-HR-EMPLOYEES-NEW-04: statuses an employee has left the organisation for
+ * good. Mirrors hrms-service's employee/status.ts EXITED_STATUSES (duplicated,
+ * not imported -- cross-service boundary; same reason as the note above).
+ * Pass as `excludeStatuses` wherever the picked person must still be serving
+ * (a reporting manager): on_leave / suspended are temporary and stay pickable.
+ */
+export const MANAGER_INELIGIBLE_STATUSES = ["terminated", "separated", "retired"] as const;
 
 function toOption(row: EmployeeRow): EntityOption {
   return {
     id: row.id,
     label: row.employeeNo ? `${row.name} (${row.employeeNo})` : row.name,
-    sublabel: row.department,
+    // GAP-HR-EMPLOYEES-NEW-04: a name alone cannot tell two "R. Sharma"s apart
+    // when choosing a reporting manager; the API already returns each person's
+    // designation, so it leads the second line, ahead of the department.
+    sublabel: [row.designation, row.department].filter(Boolean).join(" · ") || undefined,
   };
 }
 

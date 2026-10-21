@@ -193,3 +193,53 @@ describe("EditEmployeeForm — masked phone no longer blocks unrelated saves", (
     expect(screen.queryByText(/fix the highlighted fields/i)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * GAP-HR-EMPLOYEES-NEW-02: basic pay is shown on the edit form READ-ONLY. The
+ * generic PATCH route rejects basicMinor on purpose (no maker-checker, effective
+ * date or arrears handling there -- see updateEmployeeBody), so the form never
+ * offers an input for it and points at the Payroll salary-revision flow.
+ */
+describe("EditEmployeeForm — basic pay is read-only (GAP-HR-EMPLOYEES-NEW-02)", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function renderWith(employee: Record<string, unknown>) {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        {/* @ts-expect-error minimal fixture, not the full EmployeeDetail type */}
+        <EditEmployeeForm employee={employee} />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("shows the current basic pay as formatted text, with a link to the salary-revision flow", () => {
+    renderWith({ ...EMPLOYEE, basicMinor: 4490050 });
+    expect(screen.getByText("₹44,900.50")).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: /salary revision in payroll/i });
+    expect(link).toHaveAttribute("href", "/hr/payroll/salary-revisions");
+    // Read-only: there is no input for it.
+    expect(screen.queryByLabelText(/basic pay/i)).not.toBeInTheDocument();
+  });
+
+  it("shows nothing about basic pay when the API did not send it", () => {
+    renderWith(EMPLOYEE);
+    expect(screen.queryByText(/basic pay/i)).not.toBeInTheDocument();
+  });
+
+  it("never puts basicMinor in the PATCH body, whatever else is saved", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 202 }));
+    renderWith({ ...EMPLOYEE, basicMinor: 4490050 });
+    fireEvent.change(screen.getByLabelText(/mobile/i), { target: { value: "9123456780" } });
+    fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+    expect(body).toEqual({ mobile: "9123456780" });
+    expect(body).not.toHaveProperty("basicMinor");
+  });
+});

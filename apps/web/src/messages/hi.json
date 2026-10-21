@@ -2633,7 +2633,8 @@
     "marital_single": "अविवाहित",
     "marital_married": "विवाहित",
     "marital_divorced": "तलाकशुदा",
-    "marital_widowed": "विधवा/विधुर"
+    "marital_widowed": "विधवा/विधुर",
+    "fieldBasicPay": "मूल वेतन"
   },
   "employeeEdit": {
     "pageTitle": "कर्मचारी संपादित करें",
@@ -2686,7 +2687,9 @@
     "savingBtn": "सहेजा जा रहा है…",
     "saveChangesBtn": "परिवर्तन सहेजें",
     "cancelBtn": "रद्द करें",
-    "loadingLabel": "संपादन फ़ॉर्म लोड हो रहा है…"
+    "loadingLabel": "संपादन फ़ॉर्म लोड हो रहा है…",
+    "basicPayLabel": "मूल वेतन",
+    "basicPayRevisionHintRich": "इस फ़ॉर्म से मूल वेतन नहीं बदला जा सकता। <link>पेरोल में वेतन संशोधन</link> का उपयोग करें, जो अनुमोदित, प्रभावी तिथि वाला और लेखा-परीक्षित होता है।"
   },
   "employeeFyLookup": {
     "formTitle": "फॉर्म 12BA खोजें",
@@ -2985,7 +2988,10 @@
     "hideBtn": "छिपाएँ",
     "showBtn": "दिखाएँ",
     "workLocationOtherLabel": "सूची में नहीं है? स्थान स्वयं लिखें",
-    "workLocationOtherPlaceholder": "उदाहरण: CGO कॉम्प्लेक्स, नई दिल्ली"
+    "workLocationOtherPlaceholder": "उदाहरण: CGO कॉम्प्लेक्स, नई दिल्ली",
+    "payStructureLabel": "वेतन संरचना",
+    "payStructureHint": "(वैकल्पिक)",
+    "payStructurePlaceholder": "वेतन संरचना खोजें…"
   },
   "employeeWizardStep5": {
     "heading": "चरण 5 — समीक्षा एवं सबमिट करें",
@@ -3030,7 +3036,8 @@
     "shiftNight": "रात्रि (10 PM – 6 AM)",
     "complianceImportant": "महत्वपूर्ण:",
     "complianceNote": "संवेदनशील फ़ील्ड (PAN, आधार, बैंक खाता) TLS के माध्यम से प्रेषित की जाती हैं और IT अधिनियम 2000 तथा DPDP अधिनियम 2023 के अनुपालन में AES-256 एन्क्रिप्टेड रूप में संग्रहीत की जाती हैं।",
-    "creatingRecord": "कर्मचारी रिकॉर्ड बनाया जा रहा है…"
+    "creatingRecord": "कर्मचारी रिकॉर्ड बनाया जा रहा है…",
+    "payStructure": "वेतन संरचना"
   },
   "employees": {
     "title": "कर्मचारी",

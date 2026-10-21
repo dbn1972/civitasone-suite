@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { searchEmployees, resolveEmployees } from "./employee";
+import { searchEmployees, resolveEmployees, MANAGER_INELIGIBLE_STATUSES } from "./employee";
 
 describe("entityAdapters/employee", () => {
   const fetchMock = vi.fn();
@@ -24,6 +24,33 @@ describe("entityAdapters/employee", () => {
       expect.objectContaining({ signal: controller.signal }),
     );
     expect(result).toEqual([{ id: "e1", label: "Asha Rao (EMP001)", sublabel: "Finance" }]);
+  });
+
+  // GAP-HR-EMPLOYEES-NEW-04: a name alone cannot tell two people apart.
+  it("puts the designation ahead of the department in the second line when the API returns one", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: [{ id: "e1", employeeNo: "EMP001", name: "Asha Rao", department: "Finance", designation: "Under Secretary" }] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    const result = await searchEmployees("Asha", new AbortController().signal);
+    expect(result).toEqual([{ id: "e1", label: "Asha Rao (EMP001)", sublabel: "Under Secretary · Finance" }]);
+  });
+
+  it("shows the designation alone when there is no department, and no second line when there is neither", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: [{ id: "e1", name: "A", designation: "Director" }, { id: "e2", name: "B" }] }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      ),
+    );
+    const result = await searchEmployees("x", new AbortController().signal);
+    expect(result).toEqual([{ id: "e1", label: "A", sublabel: "Director" }, { id: "e2", label: "B", sublabel: undefined }]);
+  });
+
+  it("MANAGER_INELIGIBLE_STATUSES is exactly the permanent-exit set (on_leave / suspended stay pickable)", () => {
+    expect([...MANAGER_INELIGIBLE_STATUSES].sort()).toEqual(["retired", "separated", "terminated"]);
   });
 
   it("searchEmployees returns an empty list on a non-ok response rather than throwing", async () => {
