@@ -16,7 +16,7 @@
  * Read-only. A directory that cannot be read answers 503 (never an empty list presented as
  * fact), so a picker can say "unavailable" instead of "nobody to choose from".
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
@@ -27,8 +27,29 @@ import {
   USER_SEARCH_LIMIT,
 } from "../../shared/user-directory.js";
 
-/** `?q=` narrows the picker to people whose NAME matches (server-side, so it reaches past the browse cap). */
-const usersQuery = z.object({ q: z.string().trim().min(USER_SEARCH_MIN_CHARS).max(100).optional() });
+/** A control character (C0 range or DEL): never part of a person's name, and a NUL would only make identity answer 400/500. */
+function hasControlChar(v: string): boolean {
+  for (const ch of v) {
+    const c = ch.charCodeAt(0);
+    if (c < 0x20 || c === 0x7f) return true;
+  }
+  return false;
+}
+
+/**
+ * `?q=` narrows the picker to people whose NAME matches (server-side, so it reaches past the browse cap).
+ * Control characters are refused here with a 400, so they never travel on to identity-service, where
+ * they would surface as a misleading 503 "directory unavailable".
+ */
+const usersQuery = z.object({
+  q: z
+    .string()
+    .trim()
+    .min(USER_SEARCH_MIN_CHARS)
+    .max(100)
+    .refine((v) => !hasControlChar(v), { message: "q must not contain control characters" })
+    .optional(),
+});
 
 /**
  * Anyone who can work CRM tasks may pick a colleague (reassign, assign).
@@ -49,10 +70,34 @@ function pickerUser(u: { id: string; name: string }): { id: string; name: string
   return { id: u.id, name: u.name };
 }
 
+/** Plain picker loads: a few per screen, so the original conservative budget stands. */
+export const DIRECTORY_BROWSE_LIMIT_PER_MINUTE = 60;
+/**
+ * `?q=` is a type-ahead: even debounced it is a few requests per search, and the budget is per tenant + IP,
+ * which on a shared office egress address is many people at once. 4x the browse budget, still below the
+ * service-wide 300/min default, and counted in its OWN bucket so searching can never lock out opening a picker.
+ */
+export const DIRECTORY_SEARCH_LIMIT_PER_MINUTE = 240;
+
+const isSearch = (req: FastifyRequest): boolean => {
+  const q = (req.query as { q?: unknown } | undefined)?.q;
+  return typeof q === "string" && q.length > 0;
+};
+
 export async function directoryRoutes(app: FastifyInstance): Promise<void> {
   app.get(
     "/v1/crm/directory/users",
-    { config: { rateLimit: { max: 60, timeWindow: "1 minute" } } },
+    {
+      config: {
+        rateLimit: {
+          timeWindow: "1 minute",
+          max: (req: FastifyRequest) => (isSearch(req) ? DIRECTORY_SEARCH_LIMIT_PER_MINUTE : DIRECTORY_BROWSE_LIMIT_PER_MINUTE),
+          // The service default key (tenant + IP), split by browse / search so the two budgets are independent.
+          keyGenerator: (req: FastifyRequest) =>
+            `${isSearch(req) ? "search" : "browse"}:${(req as FastifyRequest & { tenantId?: string }).tenantId ?? req.ip}:${req.ip}`,
+        },
+      },
+    },
     async (req, reply) => {
       const ctx = resolveContext(req);
       requireRole(ctx, USER_PICKER_ROLES);
