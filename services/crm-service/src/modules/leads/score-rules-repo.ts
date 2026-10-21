@@ -15,10 +15,11 @@ import {
 import {
   DEFAULT_SCORE_RULE_CONFIGS,
   toScoringRules,
+  leadAttributesFromRow,
   type StoredScoreRule,
   type ScoreFnType,
 } from "./score-rules-domain.js";
-import type { ScoringRule } from "./scoring.js";
+import { computeLeadScore, type ScoringRule } from "./scoring.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -245,6 +246,115 @@ export async function upsertRules(
     });
   });
   return getRuleViewsList(tenantId, actorId);
+}
+
+// ── Dry-run preview (GAP-CRM-LEAD-SCORING-04) ───────────────────────────────────
+
+/** Most leads a preview scores in memory; beyond this the result says so (truncated). */
+export const SCORE_PREVIEW_SAMPLE_LIMIT = 5000;
+
+/** Five equal-width score bands, shared by the stored and the proposed distribution. */
+const PREVIEW_BANDS = [
+  { label: "0-19", min: 0, max: 19 },
+  { label: "20-39", min: 20, max: 39 },
+  { label: "40-59", min: 40, max: 59 },
+  { label: "60-79", min: 60, max: 79 },
+  { label: "80-100", min: 80, max: 100 },
+] as const;
+
+export interface ScorePreviewBand {
+  label: string;
+  /** Leads whose STORED score falls in this band. */
+  current: number;
+  /** Leads that WOULD fall in this band under the proposed rules. */
+  proposed: number;
+}
+export interface ScorePreview {
+  /** Active leads in the tenant. */
+  totalLeads: number;
+  /** Leads actually scored in the preview (<= SCORE_PREVIEW_SAMPLE_LIMIT, most recently updated first). */
+  sampled: number;
+  truncated: boolean;
+  /** Sampled leads with no stored score yet. */
+  unscored: number;
+  currentAverage: number | null;
+  proposedAverage: number | null;
+  /** Sampled leads whose stored score differs from the proposed one (unscored leads excluded). */
+  changed: number;
+  raised: number;
+  lowered: number;
+  /** Sum of the enabled proposed weights, and the highest score they can ever produce. */
+  totalWeight: number;
+  maxPossibleScore: number;
+  bands: ScorePreviewBand[];
+}
+
+function bandIndex(score: number): number {
+  const i = PREVIEW_BANDS.findIndex((b) => score >= b.min && score <= b.max);
+  return i < 0 ? PREVIEW_BANDS.length - 1 : i;
+}
+
+/**
+ * Score the tenant's active leads with a PROPOSED rule set without persisting anything,
+ * using the exact scorer + attribute extraction the real recalculation uses
+ * (computeLeadScore / leadAttributesFromRow), and compare against the stored scores.
+ * Read-only: no writes, no audit event.
+ */
+export async function previewRules(tenantId: string, proposed: RuleUpsert[]): Promise<ScorePreview> {
+  const scoringRules = toScoringRules(proposed);
+  const { total, rows } = await scopedRead(async (tx) => {
+    const countRows = (await tx.execute(sql`
+      SELECT count(*)::int AS n FROM crm.contacts WHERE tenant_id = ${tenantId} AND status = 'active'
+    `)) as unknown as Array<{ n: number }>;
+    const leadRows = (await tx.execute(sql`
+      SELECT lead_source, company, last_activity_at, email, phone, lead_status, city, designation, score
+      FROM crm.contacts
+      WHERE tenant_id = ${tenantId} AND status = 'active'
+      ORDER BY updated_at DESC
+      LIMIT ${SCORE_PREVIEW_SAMPLE_LIMIT}
+    `)) as unknown as Array<Record<string, unknown>>;
+    return { total: Number(countRows[0]?.n ?? 0), rows: leadRows };
+  });
+
+  const bands: ScorePreviewBand[] = PREVIEW_BANDS.map((b) => ({ label: b.label, current: 0, proposed: 0 }));
+  let proposedSum = 0;
+  let currentSum = 0;
+  let currentCount = 0;
+  let changed = 0;
+  let raised = 0;
+  let lowered = 0;
+  let unscored = 0;
+  for (const row of rows) {
+    const next = computeLeadScore(leadAttributesFromRow(row), scoringRules);
+    proposedSum += next;
+    bands[bandIndex(next)]!.proposed += 1;
+    if (row.score === null || row.score === undefined) {
+      unscored += 1;
+      continue;
+    }
+    const prev = Number(row.score);
+    currentSum += prev;
+    currentCount += 1;
+    bands[bandIndex(prev)]!.current += 1;
+    if (next > prev) { raised += 1; changed += 1; }
+    else if (next < prev) { lowered += 1; changed += 1; }
+  }
+  const totalWeight = proposed.reduce((sum, r) => sum + (r.enabled ? r.weight : 0), 0);
+  const avg = (sum: number, n: number) => (n === 0 ? null : Math.round((sum / n) * 10) / 10);
+  return {
+    totalLeads: total,
+    sampled: rows.length,
+    truncated: total > rows.length,
+    unscored,
+    currentAverage: avg(currentSum, currentCount),
+    proposedAverage: avg(proposedSum, rows.length),
+    changed,
+    raised,
+    lowered,
+    totalWeight,
+    maxPossibleScore: Math.min(100, totalWeight),
+    bands,
+  };
 }
 
 // ── Score history ───────────────────────────────────────────────────────────────

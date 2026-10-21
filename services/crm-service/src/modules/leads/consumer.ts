@@ -15,6 +15,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
 import { computeLeadScore } from "./scoring.js";
+import { leadAttributesFromRow } from "./score-rules-domain.js";
 import type { ScoringRule, LeadAttributes } from "./scoring.js";
 
 /** Internal command topic for score recalculation */
@@ -172,16 +173,8 @@ async function recalculateScore(
   if (rows.length === 0) return;
 
   const row = rows[0]!;
-  const leadAttributes: LeadAttributes = {
-    leadSource: row.lead_source,
-    company: row.company,
-    lastActivityAt: row.last_activity_at,
-    email: row.email,
-    phone: row.phone,
-    leadStatus: row.lead_status,
-    city: row.city,
-    designation: row.designation,
-  };
+  // Single source of truth for the scoring input (also used by the dry-run preview).
+  const leadAttributes: LeadAttributes = leadAttributesFromRow(row);
 
   const rules = await getTenantScoringRulesTx(tx, tenantId, msg.actorId);
   const score = computeLeadScore(leadAttributes, rules);
