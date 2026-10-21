@@ -14778,7 +14778,17 @@
     "dismissConfirm": "Dismiss pair",
     "dismissReasonLabel": "Reason (optional)",
     "dismissFailed": "Dismiss failed",
-    "page": "Page {page} of {total}"
+    "page": "Page {page} of {total}",
+    "fieldName": "Name",
+    "fieldEmail": "Email",
+    "fieldPhone": "Phone",
+    "fieldCompany": "Company",
+    "fieldLastActivity": "Last activity",
+    "fieldGstin": "GSTIN",
+    "fieldPan": "PAN",
+    "matchedOn": "Matched on: {fields}",
+    "revealEmailLabel": "email of {name}",
+    "revealPhoneLabel": "phone number of {name}"
   },
   "crmDocumentRegister": {
     "missingMandatory": "Missing mandatory",

@@ -299,16 +299,9 @@ export const CRM_QUOTATION_APPROVE_ROLES = ["crm_admin", "super_admin", "tenant_
  */
 export const CRM_VIGILANCE_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
 
-/**
- * Roles permitted to read full contact PII (phone/email in the clear) rather
- * than the masked form (GAP-CRM-CONTACTS-02 / GAP-CRM-CONTACTS-DETAIL-02).
- * DPDP: the base crm_user sees masked values; only privileged/admin roles see
- * the clear value. The server remains the authority — this only decides what
- * the UI renders. NOTE (HUMAN REVIEW): true redaction requires the contacts
- * API to omit the clear value for roles outside this set; UI masking alone is
- * cosmetic until that backend change lands.
- */
-export const CRM_PII_READ_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
+// CRM_PII_READ_ROLES lives in ./crmRoles (client-safe) and is re-exported here so
+// existing server-side imports keep working with a single source of truth.
+export { CRM_PII_READ_ROLES } from "./crmRoles";
 
 /**
  * Roles permitted to bulk-export contacts (name/phone/email egress)
