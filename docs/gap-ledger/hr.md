@@ -1872,7 +1872,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-DASHBOARD-05  ·  MEDIUM  ·  partly  ·  theme COPY (was I18N)
 
-- [x] **Status** — PR #1826 (merged)
+- [x] **Status** — PR #1826 (merged) Rescan: the manager variant (and any viewer who cannot open /hr/payroll) no longer gets the Run Payroll quick action; the greeting and banner say "Month ends in N days" instead of presenting calendar month-end as a payroll cutoff (same honest relabel the KPI card got). Open owner question (not blocking): source a real payroll cutoff once a payroll calendar/cutoff API exists (none does today). (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** 'Payroll Closes' shows '1 days' (unpluralised template) and is simply days to calendar month-end, not the payroll calendar (HRKPIStrip.tsx; page.tsx payrollDaysLeft); PayrollBanner is role='alert' on every load and offers 'Start Run →' to managers who cannot run payroll (PayrollBanner.tsx; QuickActionsPanel 'Run Payroll' for manager variant).
 - **Verified evidence:** True: HRKPIStrip.tsx:82 renders `{payrollDaysLeft} days` with no pluralisation (1 -> '1 days'; GreetingHeader.tsx and PayrollBanner.tsx:13 do pluralise), and page.tsx:66-70 payrollDaysLeft = days to calendar month-end using server local time, not a payroll calendar. PayrollBanner.tsx:7 has role='alert' and is rendered on every HR-staff load (page.tsx:302) with 'Start Run →' to /hr/payroll for managers too. Overstated: per QuickActionsPanel.tsx:45-54 comment the payroll page loads for managers and hides the run form (canAdminister), so the link lands on a page without run capability rather than an error. Strings are hard-coded English throughout (not next-intl), matching the I18N tag.
 - **Files to change:** `apps/web/src/app/(app)/hr/dashboard/_components/HRKPIStrip.tsx`, `apps/web/src/app/(app)/hr/dashboard/_components/PayrollBanner.tsx`, `apps/web/src/app/(app)/hr/dashboard/page.tsx`, `apps/web/src/messages/en.json`
@@ -1906,7 +1906,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-DASHBOARD-07  ·  MEDIUM  ·  defect  ·  theme BACKEND
 
-- [x] **Status** — PR #1702 (merged), per the catalog's own "defect" classification for this item.
+- [~] **Status** — PR #1702 (merged), per the catalog's own "defect" classification for this item. Rescan: the null-vs-zero half is fixed, but the denominator is still present / all non-separated headcount, so on_leave staff lower the rate (the item expects 10 headcount, 2 on_leave, 4 present -> 50, i.e. present / (headcount - on_leave); the code gives 40). Left unchanged on purpose: the intended denominator is a product decision and dashboard-summary-real-db.test.ts pins the current formula. OWNER QUESTION: should "Present Today" be present / (headcount - on_leave)? If yes, also decide how half_day, WFH and holiday/weekly-off rows count (today only status=present counts).
 - **First-pass claim:** Present Today = present ÷ total headcount (queries.ts:129), so staff on approved leave count as absent-equivalent; a zero-attendance-feed tenant shows 0% (and 'Live attendance') instead of 'Sync offline', which only appears for non-numbers.
 - **Service:** `hrms-service`  ·  **Endpoint(s):** `['GET /v1/hrms/dashboard']`
 - **Question:** 
@@ -1934,7 +1934,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-DASHBOARD-09  ·  LOW  ·  confirmed  ·  theme LAYOUT (was LOADING)
 
-- [x] **Status** — PR #1702 (merged): layout/loading fixed.
+- [x] **Status** — PR #1702 (merged): layout/loading fixed. Rescan: the --dash-* / --page-bg tokens are now actually defined (light and dark) in dashboard/dashboard.css, all eight components' and the page's inline <style> blocks moved into it, the four undefined DeptHeadcountChart tokens mapped to real ones, bare #fff removed, loading skeleton test added, and dashboard.guard.test.ts enforces no hex outside token declarations, no undefined tokens and 4.5:1 avatar/greeting contrast in both themes. (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** Page has no visible title (sr-only h1) unlike every other HR page; loading.tsx shows a visible 'HR Dashboard' header that then disappears (dashboard/loading.tsx vs page.tsx); heavy inline <style> blocks and hex colours in five components bypass tokens.
 - **Verified evidence:** dashboard/page.tsx:147,254 render an sr-only <h1 id='hr-dash-heading'> and no visible PageHeader (the greeting is an h2 in GreetingHeader.tsx), while dashboard/loading.tsx:5 renders visible <PageHeader title='HR Dashboard' subtitle='People operations overview.'/> with 6 KPI skeletons and a 2-col grid that does not match the real 3-column body, so the header vanishes when data arrives. Inline <style> blocks exist in ActionInbox, DeptHeadcountChart, GreetingHeader, HRKPIStrip, MyKPIStrip, MyLeaveStatusPanel, PayrollBanner, QuickActionsPanel (8 files) and page.tsx, and hard-coded hex colours appear in all of them (e.g. AVATAR_BG/FG arrays in ActionInbox.tsx:19-20 and page.tsx:347-348, greeting gradient #0f2240). Most have var() with hex fallbacks; avatar and gradient colours are bare hex. Observation says 'five components'; it is eight.
 - **Files to change:** `apps/web/src/app/(app)/hr/dashboard/loading.tsx`, `apps/web/src/app/(app)/hr/dashboard/page.tsx`, `apps/web/src/app/(app)/hr/dashboard/_components/*.tsx`
@@ -1958,7 +1958,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-DEPARTMENTS-01  ·  HIGH  ·  confirmed  ·  theme DATA-CONTRACT (was I18N)
 
-- [x] **Status** — PR #1699 (merged): real per-row employeeCount (was always 0).
+- [x] **Status** — PR #1699 (merged): real per-row employeeCount (was always 0). Rescan: a department with no employeeCount renders an em dash with no count aria-label (never a fabricated 0), and the "No Employees" stat shows an em dash unless every row carries a count. (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** employeeCount is never returned: GET /v1/hrms/departments returns the raw hrms_departments rows (masters-routes.ts:48-53, schema.ts:8-22), so every department shows a '0 employees' badge and 'aria-label 0 employees' — misleading, and deletion is offered for departments that do have staff.
 - **Verified evidence:** GET /v1/hrms/departments returns raw hrms_departments rows (masters-routes.ts:48-53; columns schema.ts:8-25, no count). page.tsx Dept type has optional employeeCount (:27) but DepartmentsTable.tsx:306,320 renders `node.employeeCount ?? 0`, so every node shows '0' and aria-label '0 employees'. Delete/Edit are shown for every node when canEdit (:333-342) regardless of staff. Theme I18N is wrong; this is a data-contract gap.
 - **Files to change:** `services/hrms-service/src/modules/employee/masters-routes.ts`, `apps/web/src/app/(app)/hr/departments/DepartmentsTable.tsx`, `services/hrms-service/src/modules/employee/__tests__/masters-routes.test.ts`
@@ -1976,7 +1976,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-DEPARTMENTS-02  ·  HIGH  ·  confirmed  ·  theme INTEGRITY (was DEADROUTE)
 
-- [x] **Status** — PR #1699 (merged): real 409 DEPARTMENT_IN_USE (children/active-employee check) instead of unconditional delete; applies the decision packet's own cited default (block outright).
+- [x] **Status** — PR #1699 (merged): real 409 DEPARTMENT_IN_USE (children/active-employee check) instead of unconditional delete; applies the decision packet's own cited default (block outright). Rescan: consumer employee_masters_routes__3 repeats the child/active-employee guard (NonRetryableError, no delete) and emits an audit event; component test for the 409; DEPARTMENT_IN_USE has its own catalogued copy (en+hi). Open owner question (not blocking): should exited (terminated/separated/retired) employees block a department delete, and should delete become a soft delete (isActive=false)? (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** Delete gives no guard against non-empty departments or child departments: DELETE returns 202 after publishing a command (masters-routes.ts:92-104) and the tree removes the node locally on any 2xx (DepartmentsTable.tsx doDelete → setLocalDepts filter), leaving orphaned children re-rooted by buildTree and employees pointing at a deleted id.
 - **Verified evidence:** DELETE checks only existence then publishes and returns 202 (masters-routes.ts:92-103); the consumer does a bare `tx.delete(hrmsDepartments)` (f3-consumer.ts:332-336). No child or employee check; employees.departmentId is notNull (schema.ts:46) with no .references in the drizzle schema. Client removes the node on any res.ok (DepartmentsTable.tsx:443-449) and buildTree (:165-171) re-roots children whose parent is missing. The confirm dialog text (en.json departmentsTable.deleteConfirmDesc) gives no warning.
 - **Files to change:** `services/hrms-service/src/modules/employee/masters-routes.ts`, `services/hrms-service/src/modules/employee/f3-consumer.ts`, `apps/web/src/app/(app)/hr/departments/DepartmentsTable.tsx`, `apps/web/src/messages/en.json`
@@ -2057,7 +2057,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-DEPARTMENTS-07  ·  LOW  ·  partly  ·  theme A11Y (was FABRICATED)
 
-- [x] **Status** — PR #1699 (merged): a11y fixes — focusable toggle gets an accessible name, Edit/Delete name the department.
+- [x] **Status** — PR #1699 (merged): a11y fixes — focusable toggle gets an accessible name, Edit/Delete name the department. Rescan: newBtn no longer carries a literal plus (page draws the aria-hidden one), and hi.json gained editAria/deleteAria plus the other missing departmentsTable/departments keys. (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** Buttons use icon-less text, the toggle button has no aria-label for leaf rows (DepartmentsTable.tsx:aria-label undefined when !hasChildren) and 'newBtn' carries a literal '+' in the translation string.
 - **Verified evidence:** True: the expand/collapse button gets aria-label undefined for leaf rows (DepartmentsTable.tsx:244) and renders an inert '·' - a focusable unnamed button; 'newBtn' is '+ New Department' with a literal plus (en.json departments.newBtn); Edit/Delete buttons repeat identical names on every row (:335-340). Not an issue: 'icon-less text buttons' is a style choice, not a defect. Theme FABRICATED is wrong.
 - **Files to change:** `apps/web/src/app/(app)/hr/departments/DepartmentsTable.tsx`, `apps/web/src/app/(app)/hr/departments/page.tsx`, `apps/web/src/messages/en.json`
@@ -2301,7 +2301,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-DESIGNATIONS-02  ·  HIGH  ·  confirmed  ·  theme INTEGRITY (was OTHER)
 
-- [x] **Status** — PR #1669 (merged): 409 DESIGNATION_IN_USE on delete + 409 DUPLICATE_CODE on create, both real-DB-tested, async F3 consumer independently re-checks inside its own transaction (closes the TOCTOU race).
+- [x] **Status** — PR #1669 (merged): 409 DESIGNATION_IN_USE on delete + 409 DUPLICATE_CODE on create, both real-DB-tested, async F3 consumer independently re-checks inside its own transaction (closes the TOCTOU race). Rescan: the delete guard now spans every in-service referrer (employees incl. exited, seniority lists/entries, workforce posts, manpower plans/requisitions, job openings, requisitions, assessment blueprints, sanctioned posts, promotion/transfer history), in the route and again in the F3 consumer (NonRetryableError, audit event in the same tx); GET ?withUsage=true returns a per-row usageCount and the table marks Delete aria-disabled with the reason. (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** Delete has no reference check: DELETE answers 202 after publishing a command (masters-routes.ts:137-149 pattern), the row is dropped locally on any 2xx (DesignationsTable.tsx doDelete) while employees, pay-matrix rows and vacancies may still point at the id.
 - **Verified evidence:** Same pattern as departments: DELETE checks existence, publishes, returns 202 (masters-routes.ts:137-148); consumer bare-deletes (f3-consumer.ts:348-351, case __5). hrmsEmployees.designationId is notNull (employee/schema.ts:47) with no declared FK. Client drops row on any res.ok (DesignationsTable.tsx:155-162) and confirm text has no warning. Pay-matrix rows and vacancies referencing designations: cannot-verify (their tables are outside these files).
 - **Files to change:** `services/hrms-service/src/modules/employee/masters-routes.ts`, `services/hrms-service/src/modules/employee/f3-consumer.ts`, `apps/web/src/app/(app)/hr/designations/DesignationsTable.tsx`, `apps/web/src/messages/en.json`
@@ -2417,7 +2417,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-DESIGNATIONS-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme COPY (was OTHER)
 
-- [x] **Status** — PR #1669 (merged).
+- [x] **Status** — PR #1669 (merged). Rescan: hints are tied to the inputs via aria-describedby (create form and edit row), labels read "Pay Level (7th CPC, optional)" / "Pay Grade (optional)" (en+hi), edit row has an explicit "Clear level" action. (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** Level and Pay Grade are both optional, yet Level 0 is the DB default (schema.ts:32) and is treated as 'no level' by the list — the form never says that blank means unclassified.
 - **Verified evidence:** schema.ts:32 level notNull default 0; consumer writes `body.level ?? 0` (f3-consumer.ts:308); list treats level<=0 as none and shows '—' (DesignationsTable.tsx:187-188,259-263). Form label is just 'Pay Level' (en.json levelLabel) with placeholder 'e.g. 4' and no hint that blank means unclassified; edit input allows 0 (:219 min=0).
 - **Files to change:** `apps/web/src/app/(app)/hr/designations/new/AddDesignationForm.tsx`, `apps/web/src/app/(app)/hr/designations/DesignationsTable.tsx`, `apps/web/src/messages/en.json`
@@ -2432,7 +2432,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-DESIGNATIONS-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme UX (was OTHER)
 
-- [x] **Status** — PR #1669 (merged).
+- [x] **Status** — PR #1669 (merged). Rescan: "Add another" now moves focus to the Code input (ref passed to the form); component test asserts it. (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** Redirect after 1.5 s prevents adding several designations in a row (NewDesignationPageClient.tsx onSuccess).
 - **Verified evidence:** NewDesignationPageClient.tsx:299-302 onSuccess does router.refresh() then setTimeout(push('/hr/designations'),1500) (timer is also never cleared on unmount). The form clears its fields on success (AddDesignationForm.tsx:110-113) but the redirect fires regardless; the same pattern exists for departments.
 - **Files to change:** `apps/web/src/app/(app)/hr/designations/new/NewDesignationPageClient.tsx`, `apps/web/src/app/(app)/hr/designations/new/AddDesignationForm.tsx`, `apps/web/src/app/(app)/hr/departments/new/NewDepartmentPageClient.tsx`, `apps/web/src/messages/en.json`
@@ -8740,7 +8740,7 @@ Counts: ACTION 521, BACKEND-VERIFY 2, CANNOT-VERIFY 2, REFUTED 12
 
 ### GAP-HR-WORKFORCE-07  ·  LOW  ·  partly  ·  theme CONFIG (was FABRICATED)
 
-- [x] **Status** — PR #1701 (merged): three independently-hardcoded 60s consolidated into one RETIREMENT_AGE_YEARS constant, surfaced to the web as a footnote.
+- [x] **Status** — PR #1701 (merged): three independently-hardcoded 60s consolidated into one RETIREMENT_AGE_YEARS constant, surfaced to the web as a footnote. Rescan: the superannuation age is now a per-tenant policy key (retirement_age, default 60 = unchanged behaviour; 40-75 sanity bounds) read by both endpoints and reported in meta.retirementAge; real-DB test shows age 58 shifting employees between horizons. Open owner question (not blocking): which ages apply to which edition/category (per-category ages need employee-level data and are not modelled). (W2 hr rescan: completed by #PRNUM)
 - **First-pass claim:** Retirement age 60 is hard-coded in the API (retirementAge = 60, routes.ts:124) whereas Govt of Odisha employees retire at 60 but PSU editions differ; not tenant-configurable.
 - **Verified evidence:** Hard-coding confirmed in backend: const retirementAge = 60 at routes.ts:93 (vacancy-forecast) and :124 (retirement-forecast), and the literal '60 years' in groupExpr (~127-131), so the two queries can diverge if only the const is changed. No tenant setting is consulted. The claim that PSU editions differ is a business assertion I cannot verify from the repo. It is config, not fabricated content; page.tsx shows no age at all.
 - **Files to change:** `services/hrms-service/src/modules/workforce-planning/routes.ts`
