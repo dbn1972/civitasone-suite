@@ -133,7 +133,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-ACCOUNTING-FINANCIAL-STATEMENTS-03  ·  MEDIUM  ·  partly  ·  theme MONEY
 
-- [x] **Status** — PR #1795 (merged)
+- [x] **Status** — PR #1795 (merged) (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** Money is a JS number (openingBalance/receipts/... reduced with + at page.tsx:13-16), not paise bigint/decimal string as GL and sanctions use (general-ledger/page.tsx:14); large tenants can lose precision.
 - **Verified evidence:** apps/web/src/app/(app)/finance/accounting/financial-statements/page.tsx:13-16 and StatementsTable.tsx:94-97 add values with `+` and cast `as number`; formatMoney(number) treats them as paise and rounds (lib/formatters.ts:100). Contrast general-ledger/page.tsx:14 (BigInt on string paise). Overstated: integer paise sums are exact up to 2^53 (about ₹9e13), so precision loss for a normal tenant is unlikely; the real risks are contract inconsistency with rule 11 (bigint/decimal-string) and that if the API ever sends strings, `+` would concatenate. The declared type lives in @civitasone/types (absent), so the wire type is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/finance/accounting/financial-statements/page.tsx`, `apps/web/src/app/(app)/finance/accounting/financial-statements/StatementsTable.tsx`, `apps/web/src/app/_data/loaders.ts`, `packages/types (FinancialStatementSummary + zod schema)`
@@ -237,7 +237,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** — PR #1795 (merged)
+- [x] **Status** — PR #1795 (merged) (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** Balanced check runs on the full list in page.tsx:17 but totals in GLTable footer run on the filtered list (GLTable.tsx:59-60) - two different totals on one screen.
 - **Verified evidence:** apps/web/src/app/(app)/finance/accounting/general-ledger/page.tsx:14-17 totals and the Balanced delta use the full list; GLTable.tsx:107-108 and footer :199 total the filtered list (tab + search), so a Payment-only tab correctly shows debit != credit next to a 'Balanced' card. Logic is coherent but unlabelled, which reads as two conflicting totals.
 - **Files to change:** `apps/web/src/app/(app)/finance/accounting/general-ledger/GLTable.tsx`, `apps/web/src/app/(app)/finance/accounting/general-ledger/page.tsx`
@@ -327,7 +327,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05  ·  MEDIUM  ·  partly  ·  theme VALIDATION
 
-- [x] **Status** — PR #1795 (merged)
+- [~] **Status** — PR #1795 (merged); W2 finance rescan: partly closed. DONE: a duplicate typed voucher number is now a synchronous 409 DUPLICATE_VOUCHER_NO answered as a voucherNo field error before anything is queued (a retry of the same idempotency key is not a duplicate of itself), shown under the input with the confirm dialog closed and focus on the field, tested (service + component); blank = server-allocated gapless number stays the design. OPEN, OWNER DECISION: the voucher numbering series is not decided, so a single character such as 'x' is still accepted by the deliberately permissive pattern (acceptance 1) and no series decision is recorded (acceptance 3). QUESTION for Finance: what is the voucher numbering series (prefix, financial-year part, minimum sequence digits) per voucher type, and may an officer type a number at all or must it always be server-allocated?
 - **First-pass claim:** Voucher number is free text with no series/duplicate hint (JournalEntryForm.tsx:100,205-215); the GL later relies on it as the voucher key.
 - **Verified evidence:** JournalEntryForm.tsx:100 validates voucherNo only as non-empty; input at 208-216 is free text with placeholder 'e.g. JV-2026-001' and no series suggestion, format check, max length or duplicate check. True for the UI. Whether the GL keys on voucherNo and rejects duplicates is cannot-verify (finance-service/gl validators absent from snapshot); the client already sends x-idempotency-key (line 159) which protects retries but not a user reusing a number. Also zod is not used at the form boundary (hand-rolled validate()), contrary to CLAUDE.md rule 9 spirit for client forms; backend zod is the real boundary.
 - **Files to change:** `apps/web/src/app/(app)/finance/journal-entry/JournalEntryForm.tsx`, `apps/web/src/app/(app)/finance/journal-entry/page.tsx`
@@ -832,7 +832,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-BUDGET-FORMULATION-05  ·  LOW  ·  partly  ·  theme STATUS (was NAVUX)
 
-- [x] **Status** — PR #1797 (merged)
+- [~] **Status** — PR #1797 (merged); W2 finance rescan: partly closed. DONE: the status enum now covers what GET /v1/finance/budgets computes today (active, exhausted) plus draft/pending/submitted/approved/rejected, each with an explicit pill tone and exactly one tab (unknown values under Other); tabs are offered only for statuses that have rows (no dead tabs); the create form links to ?highlight=<id>, which opens that row's tab and announces it (or says it is still being processed); tested. OPEN, OWNER DECISION: budget.finance_budgets has no status column, so the approval statuses never occur on a live row and draft keeps the muted pill tone. QUESTION: does a budget estimate get a real lifecycle (draft, pending, submitted, approved/rejected) with a submit and approve workflow and which role decides, or is the computed active/exhausted status final?
 - **First-pass claim:** Tab "Submitted" and stat "Pending Review" are different statuses; a newly proposed estimate (new page) has no visible status path here.
 - **Verified evidence:** FormulationTable.tsx:60-67 tabs Submitted/Approved/Pending map to statuses submitted/approved/pending, while the stat card (page.tsx:37) is "Pending Review" = status "pending", so the labels invite confusion. Cannot verify which status POST /v1/finance/budgets assigns to a new estimate (finance-service absent), so 'no visible status path' is unproven; the new page (new/page.tsx:86-89) does redirect to the list. Back navigation exists (PageHeader back=...).
 - **Files to change:** `apps/web/src/app/(app)/finance/budget/formulation/FormulationTable.tsx`, `apps/web/src/app/(app)/finance/budget/formulation/page.tsx`
@@ -1527,7 +1527,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-02  ·  HIGH  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** — PR #1790 (merged)
+- [x] **Status** — PR #1790 (merged) (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** Level (Major / Minor / Sub-minor) is chosen but no parent head can be selected (page.tsx:101-110), so a minor or sub-minor head is created unattached to any major head; the resulting tree cannot be inferred from the form.
 - **Verified evidence:** Create form (new/page.tsx:165-223) has code, name, level select (LEVEL_OPTIONS 25-29), classification, hoaCode; submit body (87-93) has no parent. The header comment (6-9) says the endpoint accepts code, name, level, hoaCode, classification only, so the tree cannot be expressed. Backend schema unverifiable.
 - **Files to change:** `apps/web/src/app/(app)/finance/chart-of-accounts/new/page.tsx`, `services/finance-service (accounts create schema, if parentId not supported)`
@@ -1705,7 +1705,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-DASHBOARD-01  ·  HIGH  ·  confirmed  ·  theme DATA-INTEGRITY (was PII)
 
-- [x] **Status** — PR #1790 (merged)
+- [~] **Status** — PR #1790 (merged); W2 finance rescan: web side complete, backend OPEN. DONE: FinanceDashboardSchema / FinanceDashboard carry an optional categoryBreakdown [{label, amountMinor (paise string)}], mapFinanceDashboard is all-or-nothing, and BudgetChart draws a bar chart whose labels are exactly the supplied amounts (acceptance 2; an amount beyond 2^53 paise is listed exactly), tested with a mocked breakdown; without one the page still says Category breakdown not available (acceptance 1). OPEN, OWNER DECISION: finance-service getDashboard sends no category split. QUESTION: what are the expenditure categories (major head of account, economic classification, scheme) and which postings count as expenditure? Today totalExpenditure sums ALL ledger debits (dashboard/queries.ts), so a category split would not reconcile with that tile until the definition is fixed.
 - **First-pass claim:** "Expenditure by Category" is fabricated: BudgetChart.tsx:26-32 multiplies total expenditure by hard-coded shares (Salaries 35%, Infra 25%, Programs 20%, Grants 12%, Other 8%). No API field supplies a category split, so a finance officer sees a plausible chart that is not their data and would be exported by "Export MIS".
 - **Verified evidence:** BudgetChart.tsx:43-49 builds barData from Math.round(utilized*0.35/0.25/0.20/0.12/0.08); chart titled 'Expenditure by Category' (line 57). loaders.ts:1833-1845 mapFinanceDashboard exposes only budgetUtilisationPct, pendingSanctions, paymentsThisMonth, totalExpenditure - no category field. Export MIS (PrintExportButton -> window.print) prints the chart. Backend finance-service not in snapshot, so whether a category endpoint exists is cannot-verify.
 - **Files to change:** `apps/web/src/app/(app)/finance/dashboard/BudgetChart.tsx`, `apps/web/src/app/(app)/finance/dashboard/page.tsx`, `apps/web/src/app/_data/loaders.ts`
@@ -1938,7 +1938,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-ADVANCES-03  ·  MEDIUM  ·  partly  ·  theme PII
 
-- [x] **Status** — PR #1805 (merged)
+- [~] **Status** — PR #1805 (merged); W2 finance rescan: partly closed. DONE: the Officers/Parties filter and the FINANCE_ROLES route gate were already in place; the free-text reason on employee advances is now masked together with the name and purpose for roles outside ADVANCE_OFFICER_NAME_ROLES (tested over HTTP). OPEN, OWNER DECISION: amount, adjusted amount and balance on employee advances are still shown to every reader role, and there is no recoveryMode column because the API has no such field. QUESTIONS: should balances on personal advances be hidden from roles outside ADVANCE_OFFICER_NAME_ROLES, and which roles keep them (payroll-recovery scope)? What are the recovery modes (salary deduction, cash, adjustment against a bill) and where is the mode recorded?
 - **First-pass claim:** Personal advances (officer names) and party advances share one list with a free-text Purpose (type, capitalised) - no recovery-mode column and no DPDP role gating of individual officers' balances beyond FINANCE_ROLES.
 - **Verified evidence:** Single table mixes personal and party advances with beneficiary + type columns (AdvancesTable.tsx:61-70); no recovery-mode column in code. The page has no role gating in the file (FINANCE_ROLES gating, if any, would be in layout/middleware not read here) - cannot-verify. DPDP concern is a judgement, not a code defect.
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/advances/AdvancesTable.tsx`
@@ -2030,7 +2030,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-03  ·  MEDIUM  ·  confirmed  ·  theme PII
 
-- [x] **Status** — PR #1805 (merged)
+- [x] **Status** — PR #1805 (merged) (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** Payee is optional (page.tsx:84-86) yet the register column "Officer / Party" is the primary identifier; an advance can be created for nobody. No employee/vendor picker, and DPDP-sensitive individual advances are entered as free text.
 - **Verified evidence:** new/page.tsx:91-92 payee input has no required attribute and payload sends payee: form.payee || undefined (line 47); free text, no employee/vendor picker. Register column beneficiary (AdvancesTable.tsx:63) is primary. DPDP claim is judgement; no PII controls visible. Backend may reject empty payee (cannot-verify).
 - **Files to change:** `apps/web/src/app/(app)/finance/expenditure/advances/new/page.tsx`
@@ -5134,7 +5134,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-06  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** — PR #1795 (merged)
+- [x] **Status** — PR #1795 (merged) (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** No period-close check on posting date in the client: the client never checks the period status, so a date in a closed period is only caught, if at all, by the backend (undeterminable; finance/period-close/page.tsx exists as a separate screen).
 - **Service:** `finance-service`  ·  **Endpoint(s):** `['POST /v1/finance/journals']`
 - **Question:** Does POST journals reject a postingDate in a closed period with a clear error code?
@@ -5189,7 +5189,7 @@ Counts: ACTION 297, BACKEND-VERIFY 12, CANNOT-VERIFY 2, REFUTED 1
 
 ### GAP-FINANCE-CHART-OF-ACCOUNTS-05  ·  LOW  ·  unverified-service-absent  ·  theme BACKEND
 
-- [x] **Status** — PR #1804 (merged)
+- [x] **Status** — PR #1804 (merged) (W2 finance rescan: completed by #PRNUM)
 - **First-pass claim:** Hub tile promises a "hierarchical account tree" (finance/page.tsx:9) but the screen is a flat list; "+ Add Head" is shown to every FINANCE_ROLES member (page.tsx:24) with the create authority enforced only server-side (undeterminable).
 - **Service:** `finance-service`  ·  **Endpoint(s):** `['POST /v1/finance/accounts', 'GET /v1/finance/accounts']`
 - **Question:** Which roles may create account heads, and does GET return parentId for building a tree?
