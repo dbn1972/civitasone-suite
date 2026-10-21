@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatIndianDate, todayIST } from "@/lib/formatters";
+import { daysUntilIST } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 import { requireAnyRole } from "@/lib/auth/roleGuard";
 import { HR_STAFF_MANAGER_ROLES } from "@/lib/auth/workRoles";
+import { contractExpiryState, EXPIRING_WINDOW_DAYS } from "./contractRules";
 
 type ApiContract = {
   id: string;
@@ -18,6 +19,9 @@ type ApiContract = {
   status: string;
 };
 
+/** Full-scope register counts from the server (GET /v1/hrms/contracts?summary=true), not derived from the loaded page. */
+type ContractSummary = { active: number; expiring: number; expired: number; agencies: number };
+
 type Row = {
   id: string;
   employeeId: string;
@@ -28,8 +32,25 @@ type Row = {
   contractFrom: string;
   contractTo: string;
   status: string;
-  daysToExpiry: number;
+  /** Status-cell key for the Expiry column: "expired" | "today" | "d<N>" (days left) | "" when not applicable. */
+  expiry: string;
+  daysToExpiry: number | null;
 } & Record<string, unknown>;
+
+type ContractsPage = {
+  rows: Row[];
+  /** Total contracts in scope (all pages), from the server. */
+  total: number;
+  summary: ContractSummary | null;
+};
+
+/** Contracts per server page (the API caps `limit` at 200). */
+const CONTRACTS_PAGE_SIZE = 50;
+
+function parsePage(raw: string | undefined): number {
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 1 ? n : 1;
+}
 
 /**
  * GAP-HR-CONTRACTUAL-01/02: this page used to fetch the general employees
@@ -43,13 +64,18 @@ type Row = {
  * contractual engagement by definition, so no employeeType filter is needed
  * at all, and the real contract dates/status/agency come from their actual
  * source of record instead of never-populated employee fields.
+ *
+ * GAP-HR-CONTRACTUAL-03/04: the register is paged server-side (soonest end
+ * date first) and its stat cards come from the server's full-scope summary, so
+ * "Total" is the real total and no contract past the first page is unreachable.
  */
 function mapContracts(apiItems: ApiContract[]): Row[] {
-  const today = todayIST();
   return apiItems.map((c) => {
-    const end = new Date(c.endDate);
-    const now = new Date(today);
-    const daysToExpiry = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const daysToExpiry = daysUntilIST(c.endDate);
+    const state = contractExpiryState(c.status, daysToExpiry);
+    let expiry = "";
+    if (state === "expired") expiry = "expired";
+    else if (state !== "none" && daysToExpiry !== null) expiry = daysToExpiry === 0 ? "today" : `d${daysToExpiry}`;
     return {
       id: c.id,
       employeeId: c.employeeId,
@@ -60,38 +86,61 @@ function mapContracts(apiItems: ApiContract[]): Row[] {
       contractFrom: c.startDate,
       contractTo: c.endDate,
       status: c.status,
+      expiry,
       daysToExpiry,
     };
   });
 }
 
-async function getContractual(): Promise<LoaderResult<Row[]>> {
-  return fetchJson<unknown, Row[]>("/api/v1/hrms/contracts?limit=100", [], {
+async function getContractual(page: number): Promise<LoaderResult<ContractsPage>> {
+  const params = new URLSearchParams({
+    limit: String(CONTRACTS_PAGE_SIZE),
+    offset: String((page - 1) * CONTRACTS_PAGE_SIZE),
+    sort: "endDate",
+    summary: "true",
+  });
+  return fetchJson<unknown, ContractsPage>(`/api/v1/hrms/contracts?${params.toString()}`, { rows: [], total: 0, summary: null }, {
     telemetryKey: "hr.contractual",
     mapResponse: (p) => {
-      const arr = Array.isArray((p as { data?: unknown })?.data) ? (p as { data: ApiContract[] }).data : null;
-      return arr ? mapContracts(arr) : null;
+      const body = p as { data?: unknown; meta?: { total?: number; summary?: ContractSummary } } | null;
+      const arr = Array.isArray(body?.data) ? (body!.data as ApiContract[]) : null;
+      if (!arr) return null;
+      return { rows: mapContracts(arr), total: body?.meta?.total ?? arr.length, summary: body?.meta?.summary ?? null };
     },
   });
 }
 
-export default async function ContractualPage() {
+export default async function ContractualPage({ searchParams }: { searchParams?: { page?: string } } = {}) {
   requireAnyRole(HR_STAFF_MANAGER_ROLES);
   const t = await getTranslations("contractual");
-  const result = await getContractual();
-  const { data: items, source } = result;
+  const page = parsePage(searchParams?.page);
+  const result = await getContractual(page);
+  const { data, source } = result;
+  const { rows: items, total, summary } = data;
 
   const errored = source === "error";
-  // Real contract-status-and-date-driven counts (GAP-HR-CONTRACTUAL-04)
-  // instead of comparing employee-lifecycle statuses that this data never
-  // carried in the first place.
-  const active = items.filter((i) => i.status === "active").length;
-  const expiringSoon = items.filter((i) => i.status === "expiring" || (i.status === "active" && i.daysToExpiry <= 30 && i.daysToExpiry >= 0)).length;
-  const expired = items.filter((i) => i.status === "expired" || (i.daysToExpiry < 0 && i.status !== "terminated" && i.status !== "renewed")).length;
-  const agencies = new Set(items.map((i) => i.agency).filter((a) => a !== "—")).size;
-  const isTruncated = !errored && items.length >= 100;
+  // GAP-HR-CONTRACTUAL-03/04: the stat cards are the server's full-scope counts (classified by contract status AND
+  // end date against the IST date), not counts of whichever page loaded; "—" when the API sent no summary.
+  const stat = (n: number | undefined): number | string => (errored || n === undefined ? "—" : n);
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "date" }[] = [
+  const from = (page - 1) * CONTRACTS_PAGE_SIZE + 1;
+  const to = (page - 1) * CONTRACTS_PAGE_SIZE + items.length;
+  const hasMore = to < total;
+  const showPager = !errored && (page > 1 || hasMore);
+  const pageHref = (target: number): string => (target > 1 ? `/hr/contractual?page=${target}` : "/hr/contractual");
+
+  // Per-row Expiry badge (GAP-HR-CONTRACTUAL-04): server-safe status-cell keys -> translated label + tone.
+  const expiryLabels: Record<string, string> = { expired: t("badgeExpired"), today: t("badgeExpiresToday") };
+  const expiryVariants: Record<string, "good" | "warn" | "mut" | "bad" | "info"> = { expired: "bad", today: "warn" };
+  for (const r of items) {
+    if (r.expiry.startsWith("d") && !(r.expiry in expiryLabels)) {
+      const days = Number(r.expiry.slice(1));
+      expiryLabels[r.expiry] = t("badgeExpiresIn", { days });
+      expiryVariants[r.expiry] = days <= EXPIRING_WINDOW_DAYS ? "warn" : "mut";
+    }
+  }
+
+  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "date"; statusLabels?: Record<string, string>; statusVariants?: Record<string, "good" | "warn" | "mut" | "bad" | "info"> }[] = [
     { key: "name", label: t("colName") },
     { key: "department", label: t("colDepartment") },
     { key: "agency", label: t("colAgency") },
@@ -99,43 +148,54 @@ export default async function ContractualPage() {
     { key: "contractFrom", label: t("colFrom"), cellType: "date" },
     { key: "contractTo", label: t("colTo"), cellType: "date" },
     { key: "status", label: t("colStatus"), cellType: "status" },
+    { key: "expiry", label: t("colExpiry"), cellType: "status", statusLabels: expiryLabels, statusVariants: expiryVariants },
   ];
 
   return (
     <div className="page-main wrap">
-      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
-      {isTruncated && (
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel={t("backLabel")} />
+      {showPager && (
         <span
           role="status"
           className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800"
           style={{ marginBottom: 12 }}
         >
-          {t("truncatedNotice", { count: items.length })}
+          {t("pageNotice", { from, to, total })}
         </span>
       )}
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statActiveLabel")} value={errored ? "—" : active} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statExpiringLabel")} value={errored ? "—" : expiringSoon} />
-        <StatCard icon="📁" iconBg="var(--badbg)" label={t("statExpiredLabel")} value={errored ? "—" : expired} />
-        <StatCard icon="🏢" iconBg="var(--bg)" label={t("statAgenciesLabel")} value={errored ? "—" : agencies} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotalLabel")} value={errored ? "—" : total} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statActiveLabel")} value={stat(summary?.active)} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statExpiringLabel")} value={stat(summary?.expiring)} />
+        <StatCard icon="📁" iconBg="var(--badbg)" label={t("statExpiredLabel")} value={stat(summary?.expired)} />
+        <StatCard icon="🏢" iconBg="var(--bg)" label={t("statAgenciesLabel")} value={stat(summary?.agencies)} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (
           <LoadErrorState result={result} area="contractual employees" backHref="/hr" />
         ) : (
-          <DataTable<Row>
-            columns={columns}
-            rows={items}
-            // GAP-HR-CONTRACTUAL-05: rows open the contract detail page
-            // (renew / terminate live there; employee profile is linked from it).
-            rowLinkKey="id" rowLinkPrefix="/hr/contractual/"
-            sortable filterable filterPlaceholder={t("filterPlaceholder")}
-            pageSize={15}
-            emptyIcon="📑"
-            emptyTitle={t("emptyTitle")}
-            emptyMessage={t("emptyMessage")}
-          />
+          <>
+            <DataTable<Row>
+              columns={columns}
+              rows={items}
+              // GAP-HR-CONTRACTUAL-05: rows open the contract detail page
+              // (renew / terminate live there; employee profile is linked from it).
+              rowLinkKey="id" rowLinkPrefix="/hr/contractual/"
+              sortable filterable filterPlaceholder={t("filterPlaceholder")}
+              // One server page per table page: "page 1 shows 50", the pager below walks the rest.
+              pageSize={CONTRACTS_PAGE_SIZE}
+              emptyIcon="📑"
+              emptyTitle={t("emptyTitle")}
+              emptyMessage={t("emptyMessage")}
+            />
+            {showPager && (
+              <nav aria-label={t("pagerAriaLabel")} style={{ display: "flex", gap: 8, alignItems: "center", padding: "12px 16px" }}>
+                {page > 1 && <Link href={pageHref(page - 1)} className="btn ghost">{t("prevPageLink")}</Link>}
+                <span style={{ fontSize: 12, color: "var(--mut)" }}>{t("pageLabel", { page })}</span>
+                {hasMore && <Link href={pageHref(page + 1)} className="btn ghost">{t("nextPageLink")}</Link>}
+              </nav>
+            )}
+          </>
         )}
       </Card>
     </div>

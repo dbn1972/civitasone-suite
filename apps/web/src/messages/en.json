@@ -1705,7 +1705,16 @@
     "filterPlaceholder": "Filter by name, agency or department…",
     "emptyTitle": "No contractual staff",
     "emptyMessage": "Contractual employees appear here, showing their engagement terms and contract expiry dates.",
-    "truncatedNotice": "Showing the first {count} contracts — more may exist. Search and filters below only cover this loaded set."
+    "pageNotice": "Showing contracts {from}–{to} of {total}, soonest end date first. Search and sorting only cover this page.",
+    "backLabel": "Back to HR",
+    "colExpiry": "Expiry",
+    "badgeExpired": "Expired",
+    "badgeExpiresToday": "Expires today",
+    "badgeExpiresIn": "{days, plural, one {Expires in # day} other {Expires in # days}}",
+    "pagerAriaLabel": "Contract pages",
+    "prevPageLink": "← Previous page",
+    "nextPageLink": "Next page →",
+    "pageLabel": "Page {page}"
   },
   "corrections": {
     "loadingAriaLabel": "Loading…",
@@ -7007,7 +7016,17 @@
     "statTransfersLabel": "Transfers / Postings",
     "statPromotionsLabel": "Promotions / Increments",
     "cardTitle": "Service Book Entries",
-    "truncationNotice": "Showing {shown} of {total} entries."
+    "truncationNotice": "Showing {shown} of {total} entries.",
+    "backLabel": "Back to HR",
+    "employeePickerLabel": "Show one employee's service book",
+    "employeePickerPlaceholder": "Search by name or employee number…",
+    "employeePickerSearching": "Searching…",
+    "employeePickerNoResults": "No matching employees",
+    "employeePickerError": "Couldn't search employees. Please try again.",
+    "pagerAriaLabel": "Service book pages",
+    "newerEntriesLink": "← Newer entries",
+    "olderEntriesLink": "Older entries →",
+    "pageLabel": "Page {page}"
   },
   "serviceBookView": {
     "eventJoining": "Joining",
@@ -7028,8 +7047,6 @@
     "eventSuspension": "Suspension",
     "eventRetirement": "Retirement",
     "eventOther": "Other",
-    "searchEmployeePlaceholder": "Search employee…",
-    "filterByEmployeeAriaLabel": "Filter by employee name",
     "filterByEventTypeAriaLabel": "Filter by event type",
     "unattestedOnlyLabel": "Unattested only",
     "allEventTypes": "All Event Types",
@@ -7861,7 +7878,7 @@
   },
   "confirmation": {
     "title": "Probation Confirmations",
-    "subtitle": "Employees due for service confirmation after the mandatory 2-year probation (CCS Conduct Rules).",
+    "subtitle": "Employees due for service confirmation once their probation period ends (CCS Conduct Rules).",
     "statOnProbation": "On Probation",
     "statOverdue": "Overdue",
     "statDueSoon": "Due in 30 Days",
@@ -7869,7 +7886,10 @@
     "statDateNotSet": "Date Not Set",
     "cardTitle": "Probation Register — Confirmation Due",
     "recNotRecorded": "No manager recommendation on record",
-    "recAria": "Manager recommendation: {label}"
+    "recAria": "Manager recommendation: {label}",
+    "emptyTitle": "No employees currently on probation",
+    "emptyMessage": "Employees on probation appear here once added to the service book.",
+    "probationPeriodHint": "{months, plural, one {# month probation} other {# months probation}}"
   },
   "deputation": {
     "title": "Deputation",
@@ -8074,6 +8094,7 @@
     "subtitle": "Upcoming retirements within 6 months, processing wizard, and full separation register.",
     "statTotal": "Total",
     "statUpcoming": "Next 6 Months",
+    "statOverdue": "Overdue",
     "statProcessed": "Processed",
     "statInitiated": "Initiated",
     "statVrs": "VRS",
@@ -8087,11 +8108,14 @@
     "colStatus": "Status",
     "filterPlaceholder": "Filter by employee, department or date…",
     "emptyTitle": "No retirement or separation records",
-    "emptyMessage": "Superannuation, VRS, and resignation records appear here."
+    "emptyMessage": "Superannuation, VRS, and resignation records appear here.",
+    "backLabel": "Back to HR",
+    "loadErrorMessage": "Couldn't load retirement records — showing nothing"
   },
   "retirementDashboard": {
     "noUpcomingTitle": "No retirements in the next 6 months",
     "noUpcomingMessage": "Employees retiring beyond 6 months appear in the full register below.",
+    "summaryCounts": "{upcoming} due in the next 6 months · {overdue} overdue",
     "cardAriaLabel": "Retirement: {name}",
     "colRetirementDate": "Retirement Date",
     "colDaysRemaining": "Days Remaining",
