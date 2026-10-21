@@ -8,7 +8,14 @@ import { useTranslations } from "next-intl";
 
 type EmployeeOption = { id: string; name: string; employeeNo: string };
 
-export default function OvertimeNewPage() {
+/**
+ * The request form. `canFileForOthers` is true for HR staff (the only roles
+ * the backend lets file on someone else's behalf); every other permitted
+ * caller (a plain employee) can only file for themselves, so the field is
+ * locked to their own record instead of offering a list. page.tsx (a Server
+ * Component) decides which, from the session roles.
+ */
+export default function OvertimeNewForm({ canFileForOthers }: { canFileForOthers: boolean }) {
   const router = useRouter();
   const [status, setStatus] = useState<"idle" | "submitting" | "done" | "error">("idle");
   const [msg, setMsg] = useState("");
@@ -25,8 +32,15 @@ export default function OvertimeNewPage() {
   // is a larger, separate build (130 items across 28 modules per the
   // catalog's own shared-fix count) -- this is a page-local interim fix
   // using the same employees-list endpoint RequestAdvanceForm.tsx already
-  // uses, plus a self-lock fallback for a caller with no list permission
-  // (a bare "employee"), rather than inventing the generic component here.
+  // uses for HR staff, and a self-lock for everyone else.
+  //
+  // Rescan: the self-lock used to be reached only when the employees list
+  // answered 403. That route now admits a plain employee (it returns their
+  // direct reports, which for most employees is an empty list), so an
+  // employee got an empty or reports-only picker and could not choose
+  // themselves. The branch is now decided up front by role: only HR staff
+  // (who can file for anyone) get the picker; everyone else's own record is
+  // loaded from /me/profile and locked in.
   const [mode, setMode] = useState<"loading" | "picker" | "self-locked" | "unavailable">("loading");
   const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [selfProfile, setSelfProfile] = useState<EmployeeOption | null>(null);
@@ -43,34 +57,40 @@ export default function OvertimeNewPage() {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch("/api/proxy/v1/hrms/employees?limit=500", { signal: controller.signal })
-      .then(async (r) => {
-        if (r.ok) {
-          const body = await r.json();
-          const rows: EmployeeOption[] = Array.isArray(body) ? body : (body.data ?? []);
-          setEmployees(rows);
-          setMode("picker");
-          return;
-        }
-        if (r.status === 403) {
-          const meRes = await fetch("/api/proxy/v1/hrms/me/profile", { signal: controller.signal });
-          if (meRes.ok) {
-            const me = await meRes.json();
-            const profile = { id: me.id, name: me.fullName, employeeNo: me.employeeNo };
-            setSelfProfile(profile);
-            setEmployeeId(profile.id);
-            setMode("self-locked");
-            return;
-          }
-        }
-        setMode("unavailable");
-      })
-      .catch((err) => {
-        if (err instanceof Error && err.name === "AbortError") return;
-        setMode("unavailable");
-      });
+    async function lockToSelf(): Promise<boolean> {
+      const meRes = await fetch("/api/proxy/v1/hrms/me/profile", { signal: controller.signal });
+      if (!meRes.ok) return false;
+      const me = await meRes.json();
+      if (!me || typeof me.id !== "string") return false;
+      const profile = { id: me.id, name: me.fullName, employeeNo: me.employeeNo };
+      setSelfProfile(profile);
+      setEmployeeId(profile.id);
+      setMode("self-locked");
+      return true;
+    }
+    async function load() {
+      if (!canFileForOthers) {
+        if (!(await lockToSelf())) setMode("unavailable");
+        return;
+      }
+      const r = await fetch("/api/proxy/v1/hrms/employees?limit=500", { signal: controller.signal });
+      if (r.ok) {
+        const body = await r.json();
+        const rows: EmployeeOption[] = Array.isArray(body) ? body : (body.data ?? []);
+        setEmployees(rows);
+        setMode("picker");
+        return;
+      }
+      // An HR caller whose directory read is refused can still file for themselves.
+      if (r.status === 403 && (await lockToSelf())) return;
+      setMode("unavailable");
+    }
+    load().catch((err) => {
+      if (err instanceof Error && err.name === "AbortError") return;
+      setMode("unavailable");
+    });
     return () => controller.abort();
-  }, []);
+  }, [canFileForOthers]);
 
   useEffect(() => () => {
     if (redirectTimeout.current) clearTimeout(redirectTimeout.current);
@@ -159,7 +179,7 @@ export default function OvertimeNewPage() {
             )}
           </Field>
           {mode === "loading" && <p style={{ fontSize: 13, color: "var(--mut)", margin: 0 }}>{tMsg("loading")}</p>}
-          {mode === "unavailable" && <p role="alert" style={{ color: "var(--red)", fontSize: 12, margin: 0 }}>{t("employeeListUnavailable")}</p>}
+          {mode === "unavailable" && <p role="alert" style={{ color: "var(--red)", fontSize: 12, margin: 0 }}>{canFileForOthers ? t("employeeListUnavailable") : t("profileUnavailable")}</p>}
           <Field id={dateId} label={t("labelDate")} required error={dateFieldError}>
             <Input type="date" value={requestDate} max={today}
               onChange={(e) => { setRequestDate(e.target.value); clearErr("requestDate"); }} />

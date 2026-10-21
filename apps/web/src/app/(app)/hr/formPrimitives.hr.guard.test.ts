@@ -38,6 +38,7 @@ const HR_CONVERTED = [
   "onboarding/_components/AddTaskForm.tsx",
   "onboarding/_components/ApplyTemplateCard.tsx",
   "outsourced/OutsourcedRegister.tsx",
+  "overtime/new/OvertimeNewForm.tsx", // the form moved here when page.tsx became a role-gating Server Component (GAP-HR-OVERTIME-NEW-02)
   "overtime/new/page.tsx",
   "payroll/form16/Form16Wizard.tsx",
   "promotion/PromoteWithApproval.tsx",

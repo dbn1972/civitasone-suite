@@ -8222,7 +8222,20 @@
     "colActions": "Actions",
     "statApprovedHours": "Approved Hours",
     "colDate": "Date",
-    "truncatedNotice": "Showing the first {count} of {total} requests. Refine the filter to find a specific one."
+    "truncatedNotice": "Showing the first {count} of {total} requests. Use the page links below to see the rest.",
+    "actionApprove": "Approve",
+    "actionReject": "Reject",
+    "approveTitle": "Approve this overtime request?",
+    "approveDescription": "This approves the overtime request. The decision is applied in the background, so the list may take a moment to update.",
+    "rejectTitle": "Reject this overtime request?",
+    "rejectDescription": "The reason you enter is recorded with the rejection.",
+    "rejectReasonLabel": "Reason for rejection",
+    "alreadyDecided": "This request was already decided by someone else (or removed). The list has been refreshed.",
+    "decisionQueued": "Decision recorded. It is being applied and the list will update shortly.",
+    "pageEmptyTitle": "No requests on this page",
+    "pageEmptyMessage": "The list has fewer requests than this page expects. Go back to the first page.",
+    "backToFirstPage": "Back to the first page",
+    "noRequestsMessageNoRequest": "Overtime requests from you and your direct reports will appear here."
   },
   "overtimeNew": {
     "title": "New Overtime Request",
@@ -8249,7 +8262,8 @@
     "backToOvertime": "Back to Overtime",
     "discardTitle": "Discard this request?",
     "discardMessage": "You have unsaved changes. Leaving now will discard them.",
-    "discardConfirm": "Discard"
+    "discardConfirm": "Discard",
+    "profileUnavailable": "Could not load your employee record, so a request cannot be filed right now. Refresh and try again."
   },
   "transfer": {
     "title": "Transfer Orders",
