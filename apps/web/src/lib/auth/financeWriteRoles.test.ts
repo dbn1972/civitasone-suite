@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ACCOUNT_HEAD_WRITE_ROLES, FINANCE_ROLES, HR_ROLES, OPENING_BALANCE_WRITE_ROLES, PAYMENT_WRITE_ROLES } from "./workRoles";
+import { ACCOUNT_HEAD_WRITE_ROLES, EMPLOYEE_LOOKUP_ROLES, FINANCE_ROLES, HR_ROLES, OPENING_BALANCE_WRITE_ROLES, PAYMENT_WRITE_ROLES } from "./workRoles";
 
 describe("finance write-role constants (GAP-FINANCE-OPENING-BALANCES-04 / PAYMENTS-04)", () => {
   it("opening balances: finance_admin/super_admin only (masters/fy-routes.ts WRITER_ROLES)", () => {
@@ -14,6 +14,12 @@ describe("finance write-role constants (GAP-FINANCE-OPENING-BALANCES-04 / PAYMEN
     for (const r of ["audit_officer", "budget_officer", "procurement_officer", "accounts_officer", "payroll_admin", "tenant_admin", "admin"]) {
       expect((ACCOUNT_HEAD_WRITE_ROLES as readonly string[]).includes(r), r).toBe(false);
     }
+  });
+  it("employee lookup (officer picker on the new-advance form): payroll-service LOOKUP_ROLES; finance_admin is NOT among them", () => {
+    expect([...EMPLOYEE_LOOKUP_ROLES]).toEqual(["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"]);
+    expect((EMPLOYEE_LOOKUP_ROLES as readonly string[]).includes("finance_admin")).toBe(false);
+    // ...so a finance_admin can create an advance (PAYMENT_WRITE_ROLES-style gate on the service) but needs the typed fallback
+    expect((PAYMENT_WRITE_ROLES as readonly string[]).includes("finance_admin")).toBe(true);
   });
   it("every write role can reach the finance module at all", () => {
     for (const r of [...OPENING_BALANCE_WRITE_ROLES, ...PAYMENT_WRITE_ROLES, ...ACCOUNT_HEAD_WRITE_ROLES]) {

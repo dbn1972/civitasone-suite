@@ -3192,7 +3192,8 @@
     "placeholderVendor": "Type a vendor name…",
     "vendorSearching": "Searching…",
     "vendorNoResults": "No matching active vendors",
-    "vendorSearchFailed": "Could not load vendors. Check your connection and try again."
+    "vendorSearchFailed": "Could not load vendors. Check your connection and try again.",
+    "helpPayeeOfficerTyped": "Type the officer's name. Your role cannot search the employee directory, so no employee id is saved with this advance. The name is used only to issue and recover it; individual officers' names are masked for roles not authorised to see them."
   },
   "expenditureAdvancesTable": {
     "tabAll": "All",
