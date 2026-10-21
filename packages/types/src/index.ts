@@ -811,6 +811,8 @@ export type BillSummary = {
   dueDate?: string;
   status: "pending" | "passed" | "approved" | "paid" | "rejected" | "on_hold" | "under_review";
   poRef?: string;
+  /** Human PO number (e.g. "PO-2026-014") snapshotted from the GRN the bill was drafted from; absent on hand-lodged / older bills. */
+  poNumber?: string;
   threeWayMatch: "matched" | "pending" | "partial" | "unmatched" | "na";
 };
 
@@ -819,6 +821,10 @@ export type BillDetail = BillSummary & {
   grnRef?: string;
   invoiceNo?: string;
   paymentRef?: string;
+  /** User id of the officer who lodged the bill (maker-checker: they cannot pass it or release its payment). */
+  createdBy?: string;
+  /** User id of the officer who passed it, while it is passed (the passer cannot release its payment). */
+  passedBy?: string;
 };
 
 export type AdvanceSummary = {
@@ -842,6 +848,8 @@ export type UCSummary = {
   id: string;
   ucNo: string;
   grantRef?: string;
+  /** Scheme Tracking code (finance_schemes.code) the certificate was raised against; absent on older certificates. */
+  schemeCode?: string;
   grantee: string;
   amount: string;        // minor units (paise), bigint-safe decimal string
   periodFrom: string;

@@ -64,6 +64,21 @@ export function assertDistinctMakerChecker(creatorId: string, approverId: string
   }
 }
 
+/** Longest PO number kept on a bill (the procurement allocator issues short document numbers; this is only a bound). */
+export const PO_NUMBER_MAX_LENGTH = 64;
+
+/**
+ * GAP-FINANCE-EXPENDITURE-BILLS-06: the human PO number procurement sends with a GRN (`poNo`), cleaned for storage on
+ * the bill as a display snapshot. Anything that is not a real value -- absent, not a string, blank, or a producer that
+ * stringified a missing id into the literal "undefined" / "null" -- is null, never a fabricated number.
+ */
+export function normalisePoNumber(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const value = raw.trim();
+  if (value === "" || value === "undefined" || value === "null") return null;
+  return value.slice(0, PO_NUMBER_MAX_LENGTH);
+}
+
 /** Bill must reference a PO and a GRN for 3-way match. */
 export function assertThreeWayMatchPresent(poRef: string | null | undefined, grnRef: string | null | undefined): void {
   if (!poRef || !grnRef) {

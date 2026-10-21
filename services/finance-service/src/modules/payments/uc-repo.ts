@@ -1,6 +1,6 @@
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { scopedRead, type Db } from "../../shared/db.js";
-import { financeSanctions } from "../budget/schema.js";
+import { financeSanctions, financeSchemes } from "../budget/schema.js";
 import { financeUC, type UCRow } from "./schema.js";
 import { UC_CLAIMING_STATUSES } from "./uc-domain.js";
 
@@ -11,6 +11,16 @@ export async function findApprovedSanctionByNo(tx: Q, tenantId: string, sanction
   const q = tx.select({ id: financeSanctions.id, amountMinor: financeSanctions.amountMinor }).from(financeSanctions)
     .where(and(eq(financeSanctions.tenantId, tenantId), eq(financeSanctions.sanctionNo, sanctionNo), eq(financeSanctions.status, "approved")));
   const rows = await (lock ? q.for("update").limit(1) : q.limit(1));
+  return rows[0] ?? null;
+}
+
+/**
+ * The tenant's scheme with this Scheme Tracking code, or null. (tenant_id, code) is unique, so a code names exactly one
+ * scheme; a scheme NAME does not, which is why a UC links to a scheme by code.
+ */
+export async function findSchemeByCode(tx: Q, tenantId: string, code: string): Promise<{ id: string; code: string; name: string } | null> {
+  const rows = await tx.select({ id: financeSchemes.id, code: financeSchemes.code, name: financeSchemes.name }).from(financeSchemes)
+    .where(and(eq(financeSchemes.tenantId, tenantId), eq(financeSchemes.code, code))).limit(1);
   return rows[0] ?? null;
 }
 
