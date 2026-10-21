@@ -40,7 +40,17 @@ const MAX_VALUE_MINOR = 9_223_372_036_854_775_807n;
  * beyond int8 is a clean 400 here instead of an async insert failure in the consumer.
  */
 const valueMinorField = zMoneyMinorStringNonNeg
-  .refine((v) => BigInt(v) <= MAX_VALUE_MINOR, { message: "valueMinor exceeds the maximum storable amount" })
+  // superRefine, not refine: when the codec rejects the input (a JSON number past 2^53,
+  // e.g. 1e20) its transform reports the issue and returns z.NEVER, and zod STILL runs
+  // this check on that placeholder. BigInt(z.NEVER) throws a SyntaxError that surfaces as
+  // a 500; so only compare when the value is genuinely the canonical digit string (the
+  // codec has already reported every other case as a 400).
+  .superRefine((v, ctx) => {
+    if (typeof v !== "string" || !/^\d+$/.test(v)) return;
+    if (BigInt(v) > MAX_VALUE_MINOR) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "valueMinor exceeds the maximum storable amount" });
+    }
+  })
   .default("0");
 
 export const createDealBody = z.object({

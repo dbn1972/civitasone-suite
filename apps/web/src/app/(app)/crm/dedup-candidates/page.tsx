@@ -96,13 +96,25 @@ function differs(a: string | null | undefined, b: string | null | undefined): bo
 }
 
 /**
+ * The exact shapes crm-service's maskEmail / maskPhone emit
+ * (services/crm-service/src/shared/pii-crypto.ts): email = first character + "***" +
+ * "@domain" ("p***@example.com"); phone = "*" repeated, then at most the last four digits
+ * ("*******3210", or "****" for a very short number). A clear value that merely CONTAINS
+ * a "*" (valid in an RFC 5322 local part) does not match either shape.
+ */
+const SERVER_MASKED_EMAIL = /^.\*\*\*@/u;
+const SERVER_MASKED_PHONE = /^\*+\d{0,4}$/;
+
+/**
  * GAP-CRM-DEDUP-CANDIDATES-01: the server masks email/phone before they leave
- * crm-service (a masked value always carries "*"), so show those as received. A
- * value with no "*" came from a server that has not been upgraded; mask it here
- * so the clear value is never rendered either way.
+ * crm-service, so show a value in the server's mask shape as received. Anything else
+ * came from a server that has not been upgraded (web deployed ahead of crm-service);
+ * mask it here so the clear value is never rendered either way. This tests the mask
+ * SHAPE, not merely the presence of a "*", so an unmasked address like "a*b@x.in"
+ * is still masked.
  */
 function maskedFor(key: "email" | "phone", v: string): string {
-  if (v.includes("*")) return v;
+  if (key === "email" ? SERVER_MASKED_EMAIL.test(v) : SERVER_MASKED_PHONE.test(v)) return v;
   return key === "email" ? maskEmail(v) : maskPhone(v);
 }
 

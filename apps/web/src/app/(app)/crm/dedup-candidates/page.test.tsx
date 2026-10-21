@@ -371,6 +371,36 @@ describe("DedupCandidatesPage PII reveal (GAP-CRM-DEDUP-CANDIDATES-01)", () => {
     expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
   });
 
+  // Review finding: any value containing "*" used to be trusted as already masked, so a
+  // CLEAR email with "*" in its (RFC 5322 valid) local part rendered unmasked while the
+  // web was deployed ahead of crm-service. Only the server's mask SHAPE is passed through.
+  it("still masks a clear email/phone that merely contains '*' (crm-service not yet upgraded)", async () => {
+    identity.roles = ["crm_user"];
+    await renderPage({
+      ...MASKED_PAIR,
+      left: { ...LEFT, email: "a*b@example.com", phone: "+91-98765*43210" },
+      right: { ...RIGHT, email: "c*d@example.com", phone: "+91-98765*43211" },
+    });
+    expect(screen.queryByText("a*b@example.com")).not.toBeInTheDocument();
+    expect(screen.queryByText("c*d@example.com")).not.toBeInTheDocument();
+    expect(screen.queryByText("+91-98765*43210")).not.toBeInTheDocument();
+    expect(screen.queryByText("+91-98765*43211")).not.toBeInTheDocument();
+    expect(screen.getAllByText("a***@e******.c**")).toHaveLength(1);
+    expect(screen.getAllByText("c***@e******.c**")).toHaveLength(1);
+    expect(screen.getByText("91XXXXXXX210")).toBeInTheDocument();
+    expect(screen.getByText("91XXXXXXX211")).toBeInTheDocument();
+  });
+
+  it("passes the server's own short-number mask ('****') through as received", async () => {
+    identity.roles = ["crm_user"];
+    await renderPage({
+      ...MASKED_PAIR,
+      left: { ...MASKED_LEFT, phone: "****" },
+      right: { ...MASKED_RIGHT, phone: "****" },
+    });
+    expect(screen.getAllByText("****").length).toBeGreaterThanOrEqual(1);
+  });
+
   it("offers no Reveal button while the viewer's roles are still unknown", async () => {
     identity.roles = [];
     await renderPage();
