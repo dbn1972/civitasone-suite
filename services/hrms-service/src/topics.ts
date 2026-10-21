@@ -1,5 +1,11 @@
 export const COMMANDS = {
   employeeCreate:       "hrms.employee.create",
+  // GAP-HR-EMPLOYEES-IMPORT-02: POST /v1/hrms/employees/bulk is CQRS -- the route only validates and publishes
+  // these; bulk-import/consumer.ts records the batch + its pending rows (one transaction) and then fans the
+  // per-employee hrms.employee.create commands out. _notQueued is the route's "the rest never made it onto the
+  // queue" compensation, so a half-published batch ends 'completed' with named failures, not 'processing' forever.
+  employeeBulkImportRecord:    "hrms.employee.bulk_import.record",
+  employeeBulkImportNotQueued: "hrms.employee.bulk_import.not_queued",
   employeeConfirm:      "hrms.employee.confirm",
   // GAP-HR-CONFIRMATION-05: probation-extension audit record.
   employeeProbationExtend: "hrms.employee.probation.extend",

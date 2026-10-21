@@ -11,19 +11,33 @@ export interface NewBatch {
   tenantId: string;
   requestedBy: string;
   correlationId: string | null;
+  /**
+   * Rows in the WHOLE batch (the value GET .../status reports as `total`). Defaults to `rows.length`; a batch
+   * recorded in several chunks passes the full count on every chunk, so whichever chunk lands first creates the
+   * header correctly and rows of chunks not yet recorded simply read as pending.
+   */
+  total?: number;
   rows: Array<{ messageId: string; rowNo: number; employeeNo: string }>;
+  /** Record these rows already failed with this code (they were never queued) instead of 'pending'. */
+  failedWith?: ImportFailureCode;
 }
 
-/** Record an accepted batch and its (pending) rows. Run in the route's transaction, BEFORE anything is queued. */
-export async function insertBatch(tx: Tx, b: NewBatch): Promise<void> {
-  await tx.insert(hrmsBulkImportBatches).values({
-    id: b.id, tenantId: b.tenantId, total: b.rows.length, requestedBy: b.requestedBy, correlationId: b.correlationId,
-  });
+/**
+ * Record (a chunk of) an accepted batch: the header (once) and its rows. Run in the record consumer's
+ * transaction, BEFORE any create command is published. Idempotent: a replayed chunk, a second chunk of the same
+ * batch and a row that already exists are all no-ops. Resolves true when THIS call created the batch header.
+ */
+export async function insertBatch(tx: Tx, b: NewBatch): Promise<boolean> {
+  const header = await tx.insert(hrmsBulkImportBatches).values({
+    id: b.id, tenantId: b.tenantId, total: b.total ?? b.rows.length, requestedBy: b.requestedBy, correlationId: b.correlationId,
+  }).onConflictDoNothing().returning({ id: hrmsBulkImportBatches.id });
   await tx.insert(hrmsBulkImportRows).values(
     b.rows.map((r) => ({
-      messageId: r.messageId, tenantId: b.tenantId, batchId: b.id, rowNo: r.rowNo, employeeNo: r.employeeNo, status: "pending",
+      messageId: r.messageId, tenantId: b.tenantId, batchId: b.id, rowNo: r.rowNo, employeeNo: r.employeeNo,
+      status: b.failedWith ? "failed" : "pending", errorCode: b.failedWith ?? null,
     })),
-  );
+  ).onConflictDoNothing();
+  return header.length > 0;
 }
 
 /**

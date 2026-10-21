@@ -4,14 +4,14 @@ import { eq, and, inArray } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import { randomUUID } from "node:crypto";
 import { isKnownEngagementType, resolveKnownEngagementTypeSets } from "../employee/engagement-policy.js";
 import { hrmsEmployees } from "../employee/schema.js";
-import { emitAudit } from "../recruitment/audit-emit.js";
 import * as importRepo from "./repo.js";
-import { IMPORT_FAILURE } from "./failure.js";
+import { RECORD_CHUNK_SIZE, type BulkImportItem, type BulkImportRecordItem } from "./command.js";
 
 const HR_ROLES = ["hr_admin", "super_admin", "admin"];
 
@@ -133,43 +133,43 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ code: "VALIDATION_FAILED", message: "Bulk import has errors", fieldErrors, correlationId: ctx.correlationId });
     }
 
-    // GAP-HR-EMPLOYEES-IMPORT-02: record the batch -- one pending row per employee -- BEFORE
-    // anything is queued. The batchId in the 202 is then a real, pollable record, and the create
-    // consumer has a row to mark 'created' (atomically with the employee insert) or 'failed'.
-    // The row id doubles as the create command's messageId and as the new employee's id.
-    const items = body.employees.map((emp, idx) => ({ emp, id: randomUUID(), rowNo: idx + 1 }));
-    await db.transaction(async (tx) => {
-      await importRepo.insertBatch(tx, {
-        id: batchId, tenantId: ctx.tenantId, requestedBy: ctx.actorId, correlationId: ctx.correlationId ?? null,
-        rows: items.map((i) => ({ messageId: i.id, rowNo: i.rowNo, employeeNo: i.emp.employeeNo })),
-      });
-      await emitAudit(tx, { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId },
-        "hrms.employee.bulk_import_requested", "employee_import_batch", batchId, { total: items.length });
+    // GAP-HR-EMPLOYEES-IMPORT-02: this route only publishes (CQRS -- see f3-leftover-hrms-cqrs.test.ts). The record
+    // command's consumer commits the batch and one pending row per employee, and only THEN publishes the per-employee
+    // create commands, so the batchId in the 202 becomes a real, pollable record and each create has a row to mark
+    // 'created' (atomically with the employee insert) or 'failed'. The row id doubles as the create command's messageId
+    // and as the new employee's id. Until the consumer has run, GET .../status answers 404 for the new id.
+    const items: BulkImportRecordItem[] = body.employees.map((emp, idx) => {
+      const { managerEmployeeNo, ...rest } = emp;
+      const id = randomUUID();
+      return {
+        id, rowNo: idx + 1, employeeNo: emp.employeeNo,
+        create: {
+          id, tenantId: ctx.tenantId, ...rest, currency: "INR", importBatchId: batchId,
+          ...(managerEmployeeNo ? { managerId: managerIdByNo.get(managerEmployeeNo) } : {}),
+        },
+      };
+    });
+    const total = items.length;
+    const chunks: BulkImportRecordItem[][] = [];
+    for (let i = 0; i < total; i += RECORD_CHUNK_SIZE) chunks.push(items.slice(i, i + RECORD_CHUNK_SIZE));
+    const envelope = <T>(type: string, payload: T) => ({
+      messageId: randomUUID(), type,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0", payload,
     });
 
-    // Queue each employee creation
-    let queued = 0;
+    let published = 0;
     try {
-      for (const { emp, id } of items) {
-        const { managerEmployeeNo, ...rest } = emp;
-        await queue.publish("hrms.employee.create", {
-          messageId: id, type: "hrms.employee.create",
-          tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-          payload: {
-            id, tenantId: ctx.tenantId, ...rest, currency: "INR", importBatchId: batchId,
-            ...(managerEmployeeNo ? { managerId: managerIdByNo.get(managerEmployeeNo) } : {}),
-          },
-        });
-        queued++;
+      for (const chunk of chunks) {
+        await queue.publish(COMMANDS.employeeBulkImportRecord, envelope(COMMANDS.employeeBulkImportRecord, { batchId, total, items: chunk }));
+        published++;
       }
     } catch (err) {
-      // The queue broke part-way. Rows never handed to it will never be processed: mark them failed
-      // (best effort) so the batch can finish instead of reading "processing" forever, then surface
-      // the error. The row whose publish threw is included -- if it was in fact delivered, the
-      // consumer's markRowCreated still wins (created overrides failed).
-      await db.transaction(async (tx) => {
-        for (const { id } of items.slice(queued)) await importRepo.markRowFailed(tx, ctx.tenantId, id, IMPORT_FAILURE.NOT_QUEUED);
-      }).catch((markErr) => req.log.error({ markErr }, "could not mark un-queued import rows"));
+      // The queue broke part-way. The chunks never published would leave their rows unrecorded -- the batch reading
+      // "processing" forever -- so tell the consumer to record them as failed. Best effort (the queue is what just
+      // broke); the chunk whose publish threw is included, as it may in fact have been delivered. Then surface the error.
+      const unsent: BulkImportItem[] = chunks.slice(published).flat().map(({ id, rowNo, employeeNo }) => ({ id, rowNo, employeeNo }));
+      await queue.publish(COMMANDS.employeeBulkImportNotQueued, envelope(COMMANDS.employeeBulkImportNotQueued, { batchId, total, items: unsent }))
+        .catch((markErr) => req.log.error({ markErr }, "could not record un-queued import rows"));
       throw err;
     }
 

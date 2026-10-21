@@ -3,7 +3,8 @@
  * import row naming a managerEmployeeNo creates an employee whose reporting
  * manager is actually stored, and whose detail record shows "reportingTo".
  *
- * POST /v1/hrms/employees/bulk (resolves the number to an id, queues the create)
+ * POST /v1/hrms/employees/bulk (resolves the number to an id, publishes the batch)
+ *   -> hrms.employee.bulk_import.record consumer (records the batch, publishes the creates)
  *   -> hrms.employee.create consumer (inserts the row, managerId included)
  *   -> GET /v1/hrms/employees/:id (reportingTo resolved from managerId).
  * The consumer used to drop managerId, so the first and last link never met.
@@ -19,9 +20,11 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { buildApp } from "../src/app.js";
 import { registerEmployeeConsumers } from "../src/modules/employee/consumer.js";
+import { registerBulkImportConsumers } from "../src/modules/bulk-import/consumer.js";
 import { hrmsEmployees, hrmsDepartments, hrmsDesignations } from "../src/modules/employee/schema.js";
 
 registerEmployeeConsumers(queue);
+registerBulkImportConsumers(queue);
 const drain = () => (queue as unknown as MemoryQueue).drain();
 
 const SECRET = process.env.JWT_SECRET ?? "";
