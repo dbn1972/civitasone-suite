@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as rtlRender, screen, within } from "@testing-library/react";
+import { render as rtlRender, screen, within, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import hiMessages from "@/messages/hi.json";
@@ -61,6 +61,35 @@ describe("TrainingFeedbackPage — GAP-HR-TRAINING-FEEDBACK-04", () => {
     expect(screen.getByText(formatIndianDate("2026-03-05"))).toBeInTheDocument();
     expect(formatIndianDate("2026-03-05")).toBe("05 Mar 2026");
     expect(screen.queryByText("2026-03-05")).not.toBeInTheDocument();
+  });
+
+  it("the date column (Completed On) sorts chronologically (raw ISO kept for sorting), not by the formatted day-of-month text", async () => {
+    // As display strings these would sort "02 Apr 2026" < "15 Dec 2025" < "28 Mar 2026" (day first),
+    // which is NOT chronological. Sorting on the raw ISO date must give Dec 2025 < Mar 2026 < Apr 2026.
+    state.payload = {
+      data: [
+        { id: "a", employee: "Asha Rao", program: "Data Protection", score: 82, submittedOn: "2026-04-02" },
+        { id: "b", employee: "Kiran Bose", program: "Leadership Lab", score: 70, submittedOn: "2026-03-28" },
+        { id: "c", employee: "Meera Iyer", program: "Ethics", score: 65, submittedOn: "2025-12-15" },
+      ],
+      total: 3,
+      truncated: false,
+    };
+    await renderPage();
+    const order = () => screen.getAllByRole("row").slice(1).map((r) => within(r).getAllByRole("cell")[0].textContent);
+    const header = screen.getByRole("columnheader", { name: /Completed On/ });
+
+    fireEvent.click(header);
+    expect(header).toHaveAttribute("aria-sort", "ascending");
+    expect(order()).toEqual(["Meera Iyer", "Kiran Bose", "Asha Rao"]);
+
+    fireEvent.click(header);
+    expect(header).toHaveAttribute("aria-sort", "descending");
+    expect(order()).toEqual(["Asha Rao", "Kiran Bose", "Meera Iyer"]);
+
+    // The cells still show the shared Indian date format, never the raw ISO.
+    expect(screen.getByText("02 Apr 2026")).toBeInTheDocument();
+    expect(screen.queryByText("2026-04-02")).not.toBeInTheDocument();
   });
 
   it("a failed load shows the unknown dash in all four stat cards -- not 0", async () => {
