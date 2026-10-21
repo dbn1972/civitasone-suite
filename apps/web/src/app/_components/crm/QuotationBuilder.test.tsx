@@ -307,4 +307,28 @@ describe("QuotationBuilder (QP-003/004/005)", () => {
     await waitFor(() => expect(section).toHaveTextContent("v1"));
     expect(section).toHaveTextContent("₹354.00");
   });
+
+  // GAP-CRM-QUOTATIONS-05: a lower typed price is no longer invisible -- each line shows the
+  // catalogue list price and the discount against it, and the quote shows the overall discount.
+  it("shows list price vs entered price and the discount banner when a line is priced below list", async () => {
+    render(<QuotationBuilder />);
+    await waitFor(() => expect(screen.getByText(/no quotations yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /new quotation/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add line/i }));
+    fireEvent.change(screen.getByLabelText(/product for line 1/i), { target: { value: "pr1" } });
+    // Seeded at list: the list price is shown, but no discount wording and no banner.
+    expect(await screen.findByText(/list price ₹100\.00/i)).toBeInTheDocument();
+    expect(screen.queryByText(/below list/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/below the catalogue list price overall/i)).not.toBeInTheDocument();
+
+    // Typing a lower price (60.00 on a 100.00 list = 40% below) surfaces both.
+    fireEvent.change(screen.getByLabelText(/unit price for line 1/i), { target: { value: "60" } });
+    expect(await screen.findByText(/40% below list/i)).toBeInTheDocument();
+    expect(screen.getByText(/priced 40% below the catalogue list price overall/i)).toBeInTheDocument();
+
+    // A price above list is a premium, not a discount.
+    fireEvent.change(screen.getByLabelText(/unit price for line 1/i), { target: { value: "120" } });
+    await waitFor(() => expect(screen.queryByText(/below list/i)).not.toBeInTheDocument());
+    expect(screen.queryByText(/below the catalogue list price overall/i)).not.toBeInTheDocument();
+  });
 });

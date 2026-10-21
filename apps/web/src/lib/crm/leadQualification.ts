@@ -196,13 +196,56 @@ export function normaliseFrameworks(raw: unknown): QualificationFramework[] {
   return out;
 }
 
+/**
+ * GAP-CRM-QUALIFICATION-FRAMEWORKS-04: the one canonical form of a business line
+ * (trimmed, lowercase). The editor stores it this way, the list query is sent this
+ * way, and crm-service compares lower(btrim(business_line)) -- so "Government " and
+ * "government" are the same line everywhere.
+ */
+export function normaliseBusinessLine(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function editDistance(a: string, b: string): number {
+  const prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let diagonal = prev[0]!;
+    prev[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const above = prev[j]!;
+      prev[j] = Math.min(prev[j]! + 1, prev[j - 1]! + 1, diagonal + (a[i - 1] === b[j - 1] ? 0 : 1));
+      diagonal = above;
+    }
+  }
+  return prev[b.length]!;
+}
+
+/**
+ * The known business line a typed value is most likely a typo of ("goverment" ->
+ * "government"), or null when it is an exact match or nothing is close. Short values
+ * only tolerate one slip so unrelated short codes ("psu" / "smb") are not conflated.
+ */
+export function closestBusinessLine(candidate: string, known: readonly string[]): string | null {
+  const c = normaliseBusinessLine(candidate);
+  if (c === "") return null;
+  const limit = c.length >= 5 ? 2 : 1;
+  let best: { line: string; d: number } | null = null;
+  for (const raw of known) {
+    const k = normaliseBusinessLine(raw);
+    if (k === "" || k === c) return null;
+    const d = editDistance(c, k);
+    if (d <= limit && (best === null || d < best.d)) best = { line: k, d };
+  }
+  return best?.line ?? null;
+}
+
 export async function getFrameworks(businessLine?: string): Promise<LoaderResult<QualificationFramework[]>> {
   try {
     // GAP-CRM-QUALIFICATION-FRAMEWORKS-04: business line is an open vocabulary matched
     // case-insensitively. Frameworks are stored lowercase (editor normalises on save),
     // so lowercase+trim the query here too — a lead whose businessLine is "Government "
     // then still matches a framework saved as "government".
-    const normalised = businessLine?.trim().toLowerCase();
+    const normalised = normaliseBusinessLine(businessLine);
     const qs = normalised ? `?businessLine=${encodeURIComponent(normalised)}` : "";
     const res = await browserFetch(`v1/crm/qualification-frameworks${qs}`);
     if (!res.ok) return { data: [], source: "error" };

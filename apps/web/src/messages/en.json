@@ -14275,7 +14275,11 @@
     "usageNone": "This product is not used in any quotation or price book.",
     "usageCounts": "Used in {quotations, plural, one {# quotation} other {# quotations}} and {priceBooks, plural, one {# price book} other {# price books}}.",
     "disabledMessage": "Product “{name}” disabled.",
-    "disableFailed": "Could not disable the product. Try again."
+    "disableFailed": "Could not disable the product. Try again.",
+    "customTaxWarn": "Not a standard GST slab ({slabs}%). You will be asked to confirm before it saves.",
+    "customTaxTitle": "Save “{name}” with a non-standard tax rate?",
+    "customTaxDescription": "{rate} is not one of the standard GST slabs ({slabs}%). It will be applied to every quotation line that uses this product. Confirm only if this rate is intended (for example a special-rate item or a cess).",
+    "customTaxConfirm": "Save at {rate}"
   },
   "crmQualificationFrameworksEditor": {
     "added": "New framework added — enter its name below.",
@@ -14306,7 +14310,13 @@
     "businessLineHelp": "Matched to a lead’s business line case-insensitively — stored lowercase so “Government” and “government” match the same leads.",
     "saved": "Framework “{name}” saved.",
     "conflict": "This framework was changed by someone else while you were editing it. Reload to see their version, then re-apply your changes.",
-    "questionHasAnswers": "A question you removed has already been answered on leads, so it cannot be deleted without losing those answers. Restore the question (you can set its weight to 0 to stop it affecting scores) and save again."
+    "questionHasAnswers": "A question you removed has already been answered on leads, so it cannot be deleted without losing those answers. Restore the question (you can set its weight to 0 to stop it affecting scores) and save again.",
+    "noActiveFrameworkHint": "No active framework for: {lines}. Leads in these business lines cannot be qualified until one is activated.",
+    "newLineTitle": "Use the new business line “{line}”?",
+    "newLineBody": "No saved framework uses “{line}”. A framework only applies to leads whose business line matches exactly, so a misspelling would silently never match.",
+    "newLineDidYouMean": "Did you mean “{suggestion}”? Cancel and change it to reuse that line.",
+    "newLineKnown": "Business lines in use: {lines}.",
+    "newLineConfirm": "Use this business line"
   },
   "crmQuotationApprovalPanel": {
     "rejected": "Approval rejected.",
@@ -14364,7 +14374,10 @@
     "recordAcceptance": "Record acceptance",
     "quotationAccepted": "Quotation accepted.",
     "versionHistoryError": "Version history couldn’t be loaded.",
-    "versionHistoryRetry": "Retry"
+    "versionHistoryRetry": "Retry",
+    "listPrice": "List price {price}",
+    "belowList": "{pct} below list",
+    "discountBanner": "This quotation is priced {pct} below the catalogue list price overall. A discount above your tenant’s approval threshold must be approved (see Approvals below) before it can be sent."
   },
   "crmReasonCodesEditor": {
     "title": "Lead Stage Reasons",
@@ -14434,7 +14447,15 @@
     "authorityName": "Authority name",
     "otherAuthorityAriaLabel": "Other authority name",
     "authorityNamePlaceholder": "Full name of the public authority",
-    "selectAuthorityError": "Select the public authority to transfer this request to."
+    "selectAuthorityError": "Select the public authority to transfer this request to.",
+    "respondCharCount": "{count} of {max} characters (at least {min} required).",
+    "reviewResponse": "Review response",
+    "reviewTitle": "Check the response before sending",
+    "reviewBody": "This is exactly what will be recorded as the statutory response to the applicant. It cannot be edited here once sent.",
+    "reviewTextAria": "Response text to be sent",
+    "sendResponse": "Send response",
+    "backToEdit": "Back to edit",
+    "sendFailed": "The response could not be sent. Try again."
   },
   "crmRtiDetail": {
     "modeOnline": "Online / RTI portal",
@@ -14456,10 +14477,8 @@
     "secondAppealRecorded": "{ref} — recorded {date}",
     "disposed": "Disposed",
     "disposalReason": "Disposal Reason",
-    "applicantDataNoticeLogged": "Personal data of the RTI applicant. Access is logged.",
+    "applicantDataNoticeLogged": "Personal data of the RTI applicant. Shown masked by default; revealing a value needs a stated reason and is recorded in the audit log.",
     "applicantDataNoticeMasked": "Personal data of the RTI applicant. Masked — you do not have permission to view the full contact.",
-    "section6": "§6 — Information Request",
-    "section11": "§11 — Third-party Information",
     "title": "RTI Request",
     "backLabel": "RTI Applications",
     "notFoundTitle": "RTI request not found",
@@ -14480,7 +14499,12 @@
     "responded": "Responded {date}",
     "applicantCard": "Applicant",
     "name": "Name",
-    "contact": "Contact"
+    "contact": "Contact",
+    "transferredFrom": "Transferred from {from} on {date}",
+    "transferredFromNoDate": "Transferred from {from}",
+    "revealNameLabel": "applicant name",
+    "revealContactLabel": "applicant contact",
+    "maskedAriaLabel": "{label} (masked)"
   },
   "crmRtiFilters": {
     "statusAll": "All statuses",
@@ -14492,8 +14516,6 @@
     "statusSecondAppeal": "Second Appeal",
     "statusDisposed": "Disposed",
     "sectionAll": "All sections",
-    "section6": "§6 — Information",
-    "section11": "§11 — Third-party",
     "status": "Status",
     "filterByStatus": "Filter by status",
     "section": "Section",
@@ -14530,8 +14552,6 @@
     "selectMode": "Select mode…",
     "dpdpNotice": "Personal data collected here is used only to process this request under the Right to Information Act 2005, and is retained and disclosed in line with the applicable record-retention schedule and the DPDP Act 2023. Access to applicant contact details is logged.",
     "contactPlaceholder": "10-digit mobile or email",
-    "section6": "§6 — Information Request",
-    "section11": "§11 — Third-party Information",
     "feeRequired": "Enter the fee amount paid (use 0 for an exempt / BPL applicant).",
     "title": "New RTI Request",
     "subtitle": "Log a Right to Information Act 2005 request.",
@@ -14592,7 +14612,11 @@
     "priority_urgent": "Urgent",
     "priority_high": "High",
     "priority_normal": "Normal",
-    "priority_low": "Low"
+    "priority_low": "Low",
+    "piiRevealNote": "Contact details are masked under the DPDP Act 2023. Reveal a value to see it: a reason is required and the access is recorded in the audit log.",
+    "revealPhoneLabel": "citizen phone",
+    "revealEmailLabel": "citizen email",
+    "maskedAriaLabel": "{label} (masked)"
   },
   "crmServiceRequestNew": {
     "phoneHint": "Enter a 10-digit mobile number.",
@@ -14664,7 +14688,13 @@
       "normal": "normal",
       "high": "high",
       "urgent": "urgent"
-    }
+    },
+    "overdueOnly": "Overdue only",
+    "assignedToMe": "Assigned to me",
+    "sortBy": "Sort",
+    "sortAria": "Sort requests",
+    "sortDefault": "Priority, newest first",
+    "sortDueAt": "Due date, soonest first"
   },
   "crmServiceRequestsTable": {
     "exportTitle": "Export citizen service requests?",
@@ -15305,6 +15335,10 @@
     "engagementValue": "Engagement Value",
     "avgLikelihood": "Avg Likelihood",
     "highValueEngagements": "High-Value Engagements (≥ {threshold})"
+  },
+  "crmRtiSections": {
+    "section6": "§6 — Information Request",
+    "section11": "§11 — Third-party Information"
   },
   "crmRtiTable": {
     "closed": "Closed",

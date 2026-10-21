@@ -15,6 +15,7 @@
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
+import { RTI_SECTIONS, localisedSectionLabel } from "@/lib/crm/rti";
 
 const STATUS_OPTIONS = [
   { value: "", labelKey: "statusAll" },
@@ -27,12 +28,6 @@ const STATUS_OPTIONS = [
   { value: "DISPOSED", labelKey: "statusDisposed" },
 ] as const;
 
-const SECTION_OPTIONS = [
-  { value: "", labelKey: "sectionAll" },
-  { value: "s.6", labelKey: "section6" },
-  { value: "s.11", labelKey: "section11" },
-] as const;
-
 export function RtiFilters({
   status,
   section,
@@ -43,6 +38,8 @@ export function RtiFilters({
   search: string;
 }) {
   const t = useTranslations("crmRtiFilters");
+  // GAP-CRM-RTI-06: section names come from the one shared namespace, same as every RTI screen.
+  const tSection = useTranslations("crmRtiSections");
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -106,8 +103,9 @@ export function RtiFilters({
           onChange={(e) => navigate({ section: e.target.value })}
           style={selectStyle}
         >
-          {SECTION_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
+          <option value="">{t("sectionAll")}</option>
+          {RTI_SECTIONS.map((o) => (
+            <option key={o.value} value={o.value}>{localisedSectionLabel(tSection, o.value)}</option>
           ))}
         </select>
       </label>

@@ -82,6 +82,44 @@ describe("Masked onReveal (F1-05 audited reveal)", () => {
   });
 });
 
+// GAP-CRM-RTI-DETAIL-03: a person's name can be masked / revealed like any other identifier.
+describe("Masked kind=name", () => {
+  it("masks a raw name locally when there is no onReveal config", () => {
+    render(<Masked kind="name" value="Anil Sharma" />);
+    expect(screen.getByText("A••• S••••a")).toBeInTheDocument();
+    expect(screen.queryByText("Anil Sharma")).not.toBeInTheDocument();
+  });
+
+  it("shows the server-masked name verbatim and a Reveal control for a reveal-allowed viewer", () => {
+    render(
+      withIntl(
+        <Masked
+          kind="name"
+          value="Anil S•••"
+          onReveal={{ canReveal: true, resourceType: "rti", resourceId: "8cf7f7eb-1de6-4a31-b48c-1f598ecf33c0", field: "applicantName", label: "applicant name" }}
+        />,
+      ),
+    );
+    expect(screen.getByText("Anil S•••")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reveal" })).toBeInTheDocument();
+  });
+
+  it("shows the server-masked name with NO Reveal control for everyone else", () => {
+    render(
+      withIntl(
+        <Masked
+          kind="name"
+          value="Anil S•••"
+          ariaLabel="applicant name (masked)"
+          onReveal={{ canReveal: false, resourceType: "rti", resourceId: "8cf7f7eb-1de6-4a31-b48c-1f598ecf33c0", field: "applicantName", label: "applicant name" }}
+        />,
+      ),
+    );
+    expect(screen.getByLabelText("applicant name (masked)")).toHaveTextContent("Anil S•••");
+    expect(screen.queryByRole("button", { name: "Reveal" })).not.toBeInTheDocument();
+  });
+});
+
 describe("maskName (GAP-CITIZEN-GRIEVANCES-03)", () => {
   it("masks each part keeping first chars and the last char of the final part", () => {
     expect(maskName("Ramesh Kumar")).toBe("R••••• K•••r");

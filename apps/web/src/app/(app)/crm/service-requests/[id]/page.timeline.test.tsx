@@ -61,7 +61,8 @@ describe("F6-01 SR detail timeline wiring", () => {
   it("calls fetchJson for both the detail and the history endpoints", async () => {
     await Page({ params: { id: "sr-1" } });
     const urls = fetchJsonMock.mock.calls.map((c) => c[0] as string);
-    expect(urls.some((u) => u.endsWith("/service-requests/sr-1"))).toBe(true);
+    // The detail is requested masked (?maskPii=true) so PII is only ever shown via the audited reveal.
+    expect(urls.some((u) => u.endsWith("/service-requests/sr-1?maskPii=true"))).toBe(true);
     expect(urls.some((u) => u.endsWith("/service-requests/sr-1/history"))).toBe(true);
   });
 });

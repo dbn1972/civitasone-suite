@@ -328,6 +328,85 @@ describe("ProductCatalogueEditor (QP-001)", () => {
     await waitFor(() => expect(qp.createProduct).toHaveBeenCalled());
     expect(vi.mocked(qp.createProduct).mock.calls[0][0].hsnSac).toBe("998314");
   });
+  // GAP-CRM-PRODUCTS-02 (custom-with-confirm): a rate that is not a standard GST
+  // slab (the "81" fat-finger) is no longer accepted silently on the Custom path.
+  async function fillNewProduct(taxCustom?: string) {
+    vi.mocked(qp.getProducts).mockResolvedValue({ data: [], source: "api" });
+    vi.mocked(qp.createProduct).mockResolvedValue(undefined);
+    renderWithIntl(<ProductCatalogueEditor />);
+    await waitFor(() => expect(screen.getByText(/no products yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add product/i }));
+    fireEvent.change(screen.getByLabelText(/code for product 1/i), { target: { value: "CUS-1" } });
+    fireEvent.change(screen.getByLabelText(/name for product 1/i), { target: { value: "Special item" } });
+    fireEvent.change(screen.getByLabelText(/price for product 1/i), { target: { value: "100" } });
+    if (taxCustom !== undefined) {
+      fireEvent.change(screen.getByLabelText(/^tax percent for product 1/i), { target: { value: "custom" } });
+      fireEvent.change(screen.getByLabelText(/custom tax percent for product 1/i), { target: { value: taxCustom } });
+    }
+  }
+
+  it("warns inline and asks for confirmation before saving a custom non-slab rate (81%)", async () => {
+    await fillNewProduct("81");
+    // Inline warning under the custom input names the standard slabs.
+    expect(await screen.findByText(/not a standard gst slab \(0\/5\/12\/18\/28%\)/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /create/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(/non-standard tax rate/i);
+    expect(dialog).toHaveTextContent("81%");
+    // Nothing is sent until the admin confirms.
+    expect(qp.createProduct).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /save at 81%/i }));
+    await waitFor(() => expect(qp.createProduct).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(qp.createProduct).mock.calls[0][0].taxRateBps).toBe(8100);
+  });
+
+  it("cancelling the custom-rate confirm saves nothing", async () => {
+    await fillNewProduct("81");
+    fireEvent.click(screen.getByRole("button", { name: /create/i }));
+    await screen.findByRole("alertdialog");
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(qp.createProduct).not.toHaveBeenCalled();
+  });
+
+  it("accepts 18 without a confirm, whether picked as a slab or typed on the Custom path", async () => {
+    await fillNewProduct("18.00");
+    expect(screen.queryByText(/not a standard gst slab/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /create/i }));
+    await waitFor(() => expect(qp.createProduct).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(vi.mocked(qp.createProduct).mock.calls[0][0].taxRateBps).toBe(1800);
+  });
+
+  it("re-confirms only when the custom rate CHANGES, not on every edit of a special-rate product", async () => {
+    vi.mocked(qp.getProducts).mockResolvedValue({ data: [{ ...product, taxRateBps: 300 }], source: "api" });
+    vi.mocked(qp.updateProduct).mockResolvedValue(undefined);
+    renderWithIntl(<ProductCatalogueEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("Rack server")).toBeInTheDocument());
+    // Renaming a product that already carries 3% saves straight away.
+    fireEvent.change(screen.getByLabelText(/name for product 1/i), { target: { value: "Rack server v2" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(qp.updateProduct).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    // Changing the rate to another non-slab value asks again.
+    fireEvent.change(screen.getByLabelText(/custom tax percent for product 1/i), { target: { value: "4" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    expect(await screen.findByRole("alertdialog")).toHaveTextContent("4%");
+    expect(qp.updateProduct).toHaveBeenCalledTimes(1);
+  });
+
+  it("asks for the \u20b90 confirm first and the custom-rate confirm second when both apply", async () => {
+    await fillNewProduct("81");
+    fireEvent.change(screen.getByLabelText(/price for product 1/i), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: /create/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /save at \u20b90\.00/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /save at 81%/i }));
+    await waitFor(() => expect(qp.createProduct).toHaveBeenCalledTimes(1));
+    const payload = vi.mocked(qp.createProduct).mock.calls[0][0];
+    expect(payload.priceMinor).toBe("0");
+    expect(payload.taxRateBps).toBe(8100);
+  });
+
   it("GAP-CRM-PRODUCTS-04: input minHeight is at least 44px for touch targets", () => {
     // Given: a new product row is added
     // This is a static check on the exported inputStyle constant — rendered inputs

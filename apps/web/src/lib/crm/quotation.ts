@@ -592,6 +592,42 @@ export function normaliseQuotations(raw: unknown): Quotation[] {
     .filter((q): q is Quotation => q !== null);
 }
 
+/**
+ * GAP-CRM-QUOTATIONS-05: how far a quoted unit price sits below its catalogue list price,
+ * in basis points (1000 = 10%), floored. 0 at or above list; null when there is no usable
+ * list price (free-text line, price 0). The reference is the product CATALOGUE price --
+ * the same one crm-service's send gate (effectiveDiscountBps) derives the discount from --
+ * so what the builder shows is what the server will judge. Integer BigInt maths only.
+ */
+export function discountBps(listUnitMinor: string | null | undefined, unitPriceMinor: string): number | null {
+  if (listUnitMinor === null || listUnitMinor === undefined || !/^\d+$/.test(listUnitMinor) || !/^\d+$/.test(unitPriceMinor)) return null;
+  const list = BigInt(listUnitMinor);
+  if (list <= 0n) return null;
+  const unit = BigInt(unitPriceMinor);
+  if (unit >= list) return 0;
+  return Number(((list - unit) * 10000n) / list);
+}
+
+/**
+ * Quotation-level effective discount (bps) over the lines that carry a list price, mirroring
+ * crm-service quotation-approval-domain effectiveDiscountBps: sum(list*qty) vs sum(quoted*qty),
+ * lines without a list price ignored, 0 when there is no discount.
+ */
+export function quotationDiscountBps(
+  lines: ReadonlyArray<{ listUnitMinor: string | null | undefined; unitPriceMinor: string; quantity: number }>,
+): number {
+  let refTotal = 0n;
+  let quotedTotal = 0n;
+  for (const l of lines) {
+    if (l.listUnitMinor === null || l.listUnitMinor === undefined || !/^\d+$/.test(l.listUnitMinor) || !/^\d+$/.test(l.unitPriceMinor)) continue;
+    const qty = BigInt(Math.max(0, Math.trunc(l.quantity)));
+    refTotal += BigInt(l.listUnitMinor) * qty;
+    quotedTotal += BigInt(l.unitPriceMinor) * qty;
+  }
+  if (refTotal <= 0n || quotedTotal >= refTotal) return 0;
+  return Number(((refTotal - quotedTotal) * 10000n) / refTotal);
+}
+
 /** Per-line net (qty * unit) in paise as a BigInt-safe string. */
 export function lineNetMinor(line: QuotationLine): string {
   const unit = BigInt(minorStr(line.unitPriceMinor));

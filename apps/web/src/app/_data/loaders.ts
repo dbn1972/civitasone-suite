@@ -1987,13 +1987,29 @@ export async function getCrmGrievances(
 }
 
 export async function getCrmServiceRequests(
-  params: { status?: string; priority?: string; serviceType?: string; search?: string; limit?: number; page?: number } = {},
+  params: {
+    status?: string;
+    priority?: string;
+    serviceType?: string;
+    search?: string;
+    /** GAP-CRM-SERVICE-REQUESTS-03: owner filter (a user id), the server's assignedTo filter. */
+    assignedTo?: string;
+    /** GAP-CRM-SERVICE-REQUESTS-03: only past-due requests that are still workable. */
+    overdue?: boolean;
+    /** GAP-CRM-SERVICE-REQUESTS-03: "dueAt" = soonest due date first (the server's only alternative order). */
+    sort?: "dueAt";
+    limit?: number;
+    page?: number;
+  } = {},
 ): Promise<LoaderResult<{ rows: CrmServiceRequestRow[]; total: number; statusCounts: Record<string, number> }>> {
   const qs = new URLSearchParams();
   if (params.status) qs.set("status", params.status);
   if (params.priority) qs.set("priority", params.priority);
   if (params.serviceType) qs.set("serviceType", params.serviceType);
   if (params.search) qs.set("search", params.search);
+  if (params.assignedTo) qs.set("assignedTo", params.assignedTo);
+  if (params.overdue) qs.set("overdue", "true");
+  if (params.sort) qs.set("sort", params.sort);
   qs.set("limit", String(params.limit ?? 50));
   qs.set("page", String(params.page ?? 1));
   return fetchJson<unknown, { rows: CrmServiceRequestRow[]; total: number; statusCounts: Record<string, number> }>(

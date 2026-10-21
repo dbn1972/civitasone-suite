@@ -8,7 +8,7 @@ import { useSeededResource } from "@/lib/sync/resource";
 import type { CrmRtiRow } from "../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 import { isRtiClosed, rtiDaysLeft } from "./rtiStatus";
-import { sectionLabel as canonicalSectionLabel } from "@/lib/crm/rti"; // GAP-CRM-RTI-06
+import { localisedSectionLabel } from "@/lib/crm/rti"; // GAP-CRM-RTI-06
 
 // ---------------------------------------------------------------------------
 // SLA badge
@@ -75,9 +75,8 @@ function SlaBadge({ status, dueAt }: { status: string; dueAt: string | null }) {
 }
 
 // ---------------------------------------------------------------------------
-// Section label — GAP-CRM-RTI-06: shared via @/lib/crm/rti so the table, the
-// GAP-CRM-RTI-06: local sectionLabel replaced with canonical import from @/lib/crm/rti
-// (see import above). The table uses the short form (second arg true) to keep cells compact.
+// Section label — GAP-CRM-RTI-06: the table, filters, detail and new-request form all
+// render the SAME localised label through localisedSectionLabel (crmRtiSections).
 
 /**
  * GAP-CRM-RTI-04: an RTI applicant's name is personal data under DPDP. In the
@@ -131,6 +130,7 @@ export function RtiTable({
   hasFilters?: boolean;
 }) {
   const t = useTranslations("crmRtiTable");
+  const tSection = useTranslations("crmRtiSections");
   const {
     data: rows,
     provenance,
@@ -181,7 +181,7 @@ export function RtiTable({
                   color: "var(--ink2)",
                 }}
               >
-                {canonicalSectionLabel(r.section, true)}
+                {localisedSectionLabel(tSection, r.section)}
               </span>
             ),
           },

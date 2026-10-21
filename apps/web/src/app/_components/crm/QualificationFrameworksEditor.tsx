@@ -5,6 +5,14 @@
  * card saves independently (POST when new, PUT when it has an id) and can be
  * deleted behind a ConfirmDialog. On a failed load we show the saved-info badge
  * and never fabricate an empty framework set as fact (source==="error").
+ *
+ * GAP-CRM-QUALIFICATION-FRAMEWORKS-04 (business line): there is no authoritative
+ * business-line list (crm-service keeps it an open vocabulary), so the editor
+ * cannot offer a closed select. Instead it (a) stores one canonical form
+ * (trim + lowercase), (b) suggests the lines already saved, (c) asks the admin to
+ * CONFIRM a line no saved framework uses -- naming the near-match when it looks
+ * like a typo ("goverment" -> "government") -- and (d) lists the saved business
+ * lines that currently have no ACTIVE framework.
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
@@ -19,6 +27,8 @@ import {
   FrameworkConflictError,
   QuestionHasAnswersError,
   deleteFramework,
+  normaliseBusinessLine,
+  closestBusinessLine,
   type QualificationFramework,
   type QualQuestion,
   type LqSource,
@@ -77,6 +87,11 @@ export function QualificationFrameworksEditor() {
   // GAP-CRM-QUALIFICATION-FRAMEWORKS-03: per-question validation messages for the
   // framework currently being saved (scoped to that framework's index).
   const [fieldErrors, setFieldErrors] = useState<{ fi: number; q: Record<number, string> } | null>(null);
+  // GAP-CRM-QUALIFICATION-FRAMEWORKS-04: the SAVED (server) view of business lines, kept
+  // apart from the edited cards so a typo being typed never counts as "already in use".
+  const [savedLines, setSavedLines] = useState<Array<{ line: string; active: boolean }>>([]);
+  // A save paused for confirmation because its business line is new to this tenant.
+  const [confirmLine, setConfirmLine] = useState<{ idx: number; line: string; suggestion: string | null } | null>(null);
   const headingId = useId();
 
   // Stable per-row React keys, independent of array position -- see
@@ -133,6 +148,7 @@ export function QualificationFrameworksEditor() {
     const { data, source: s } = await getFrameworks();
     if (!isLive()) return;
     setFrameworks(data);
+    setSavedLines(data.map((f) => ({ line: normaliseBusinessLine(f.businessLine), active: f.active })).filter((l) => l.line !== ""));
     setFrameworkRowIds(data.map(() => nextFrameworkRowId.current++));
     setQuestionRowIds(data.map((f) => f.questions.map(() => nextQuestionRowId.current++)));
     setSource(s);
@@ -170,7 +186,7 @@ export function QualificationFrameworksEditor() {
     setQuestionRowIds((prev) => prev.map((ids, i) => (i === fi ? ids.filter((_, j) => j !== qi) : ids)));
   }
 
-  async function save(idx: number) {
+  async function save(idx: number, opts: { lineConfirmed?: boolean } = {}) {
     setMessage("");
     setError("");
     setStale(false);
@@ -179,7 +195,7 @@ export function QualificationFrameworksEditor() {
     // canonical list exists in web or crm-service). Normalise it (trim + lowercase)
     // on save so a case/whitespace typo doesn't silently stop the framework matching
     // a lead; getFrameworks() lowercases the query the same way.
-    const normalisedLine = frameworks[idx].businessLine.trim().toLowerCase();
+    const normalisedLine = normaliseBusinessLine(frameworks[idx].businessLine);
     const fw = { ...frameworks[idx], businessLine: normalisedLine };
     if (normalisedLine !== frameworks[idx].businessLine) {
       update(idx, { businessLine: normalisedLine });
@@ -199,6 +215,13 @@ export function QualificationFrameworksEditor() {
       }
       setFieldErrors({ fi: idx, q: qErrors });
       setError(headline || t("fixHighlighted"));
+      return;
+    }
+    // A business line no saved framework uses is either a new line or a typo that would
+    // silently never match a lead: pause and ask (only once some lines exist to compare to).
+    const known = Array.from(new Set(savedLines.map((l) => l.line)));
+    if (!opts.lineConfirmed && known.length > 0 && !known.includes(normalisedLine)) {
+      setConfirmLine({ idx, line: normalisedLine, suggestion: closestBusinessLine(normalisedLine, known) });
       return;
     }
     setBusyIdx(idx);
@@ -255,6 +278,11 @@ export function QualificationFrameworksEditor() {
     );
   }
 
+  // Saved business lines where every saved framework is inactive.
+  const linesWithoutActive = Array.from(new Set(savedLines.map((l) => l.line))).filter(
+    (line) => !savedLines.some((l) => l.line === line && l.active),
+  );
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div className="card">
@@ -270,6 +298,13 @@ export function QualificationFrameworksEditor() {
               {t("reloadLatest")}
             </Button>
           </div>
+        ) : null}
+        {/* GAP-CRM-QUALIFICATION-FRAMEWORKS-04: saved business lines with no ACTIVE
+            framework -- leads in those lines cannot be qualified until one is active. */}
+        {linesWithoutActive.length > 0 ? (
+          <p role="status" style={{ fontSize: 13, color: "#b45309", padding: "0 12px" }}>
+            {t("noActiveFrameworkHint", { lines: linesWithoutActive.join(", ") })}
+          </p>
         ) : null}
         {/* GAP-CRM-QUALIFICATION-FRAMEWORKS-04: suggest the business lines already in
             use so admins reuse an existing canonical value instead of typing a variant. */}
@@ -434,6 +469,31 @@ export function QualificationFrameworksEditor() {
           </div>
         ))
       )}
+
+      <ConfirmDialog
+        open={confirmLine !== null}
+        title={t("newLineTitle", { line: confirmLine?.line ?? "" })}
+        description={
+          confirmLine ? (
+            <>
+              <p style={{ margin: "0 0 8px" }}>{t("newLineBody", { line: confirmLine.line })}</p>
+              {confirmLine.suggestion ? (
+                <p style={{ margin: "0 0 8px", fontWeight: 600 }}>{t("newLineDidYouMean", { suggestion: confirmLine.suggestion })}</p>
+              ) : null}
+              <p style={{ margin: 0, fontSize: 13 }}>
+                {t("newLineKnown", { lines: Array.from(new Set(savedLines.map((l) => l.line))).join(", ") })}
+              </p>
+            </>
+          ) : null
+        }
+        confirmLabel={t("newLineConfirm")}
+        onCancel={() => setConfirmLine(null)}
+        onConfirm={() => {
+          const pending = confirmLine;
+          setConfirmLine(null);
+          if (pending) void save(pending.idx, { lineConfirmed: true });
+        }}
+      />
 
       <ConfirmDialog
         open={confirmIdx !== null}
