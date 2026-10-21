@@ -203,8 +203,18 @@ describe("listEmployees — GAP-HR-SF-06 (EntityPicker) q/ids", () => {
     rowsMock.mockResolvedValueOnce([]); // departments
     rowsMock.mockResolvedValueOnce([]); // designations (#1686)
     await listEmployees(TENANT, 20, 0, undefined, undefined, "Asha");
-    // #1759 added a trailing `status` filter argument to repo.listByTenant.
-    expect(listByTenantMock).toHaveBeenCalledWith(TENANT, 20, 0, undefined, undefined, "Asha", undefined);
+    // #1759 added a trailing `status` filter argument to repo.listByTenant;
+    // GAP-HR-EMPLOYEES-DETAIL-EDIT-05 added `excludeStatuses` after it.
+    expect(listByTenantMock).toHaveBeenCalledWith(TENANT, 20, 0, undefined, undefined, "Asha", undefined, undefined);
+  });
+
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-05: the manager picker excludes exited staff in the query itself.
+  it("passes excludeStatuses through to repo.listByTenant as the last argument", async () => {
+    listByTenantMock.mockResolvedValueOnce([]);
+    rowsMock.mockResolvedValueOnce([]);
+    rowsMock.mockResolvedValueOnce([]);
+    await listEmployees(TENANT, 20, 0, undefined, undefined, "Zed", undefined, undefined, ["terminated", "separated", "retired"]);
+    expect(listByTenantMock).toHaveBeenCalledWith(TENANT, 20, 0, undefined, undefined, "Zed", undefined, ["terminated", "separated", "retired"]);
   });
 
   it("ids takes the batch-lookup path (repo.listByIds), bypassing repo.listByTenant entirely", async () => {

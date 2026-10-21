@@ -236,6 +236,10 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
         : 0;
       return {
         id: r.id,
+        // GAP-HR-EMPLOYEES-DETAIL-01: the row now names its employee by id (the
+        // display name above is not a key), so a caller can verify -- and a
+        // profile page can defensively filter on -- who a deputation belongs to.
+        employeeId: r.employeeId,
         employee: empMap.get(r.employeeId)?.fullName ?? "—",
         parentOrg: r.parentCadre,
         deputationOrg: r.borrowingDepartment,

@@ -47,6 +47,7 @@ import { schema as payrollConfigModule } from "../modules/payroll-config/schema.
 import { schema as seniorityModule }    from "../modules/seniority/schema.js";
 import { schema as workforceCoreModule } from "../modules/workforce-core/schema.js";
 import { scanLinkSchema }             from "../modules/employee/scan-link-schema.js";
+import { bulkImportSchema }           from "../modules/bulk-import/schema.js";
 import { outboxSchema }                from "./outbox.js";
 
 const SCHEMA = {
@@ -91,6 +92,7 @@ const SCHEMA = {
   ...seniorityModule,
   ...workforceCoreModule,
   ...scanLinkSchema,
+  ...bulkImportSchema,
   ...outboxSchema,
 };
 

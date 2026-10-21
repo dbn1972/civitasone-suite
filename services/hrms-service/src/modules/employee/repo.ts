@@ -1,4 +1,4 @@
-import { eq, and, or, ilike, sql, inArray, desc, asc, gt } from "drizzle-orm";
+import { eq, and, or, ilike, sql, inArray, notInArray, desc, asc, gt } from "drizzle-orm";
 import { pino } from "pino";
 import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
@@ -51,10 +51,12 @@ export async function findByNo(employeeNo: string, tenantId: string): Promise<Em
  * exists, we use it as reporting officer" comment in
  * migrations/0007_geo_attendance_ro.sql).
  */
-export async function listByTenant(tenantId: string, limit = 100, offset = 0, employeeType?: string, managerId?: string, q?: string, status?: string): Promise<EmployeeRow[]> {
+export async function listByTenant(tenantId: string, limit = 100, offset = 0, employeeType?: string, managerId?: string, q?: string, status?: string, excludeStatuses?: string[]): Promise<EmployeeRow[]> {
   const conditions = [eq(hrmsEmployees.tenantId, tenantId)];
   // GAP-HR-EMPLOYEES-06: exact status match (canonical lowercase, see status.ts).
   if (status) conditions.push(eq(hrmsEmployees.status, status));
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-05: pickers exclude people who cannot be chosen (exited staff).
+  if (excludeStatuses && excludeStatuses.length > 0) conditions.push(notInArray(hrmsEmployees.status, excludeStatuses));
   if (employeeType) {
     // Case-insensitive, multi-value ("intern,apprentice"); a single value behaves as before.
     const types = employeeType.split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
