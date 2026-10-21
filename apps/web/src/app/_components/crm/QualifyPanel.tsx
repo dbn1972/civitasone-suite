@@ -8,6 +8,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
+import { PanelSkeleton } from "./PanelSkeleton";
 import { EmptyState, Button } from "../ds";
 import {
   getFrameworks,
@@ -70,9 +71,7 @@ export function QualifyPanel({ leadId, businessLine }: { leadId: string; busines
     return (
       <div className="card">
         <div className="card-h"><h3>Qualify lead</h3></div>
-        <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", padding: "0 12px 12px" }}>
-          Loading qualification framework…
-        </p>
+        <PanelSkeleton style={{ padding: "0 12px 12px" }} />
       </div>
     );
   }

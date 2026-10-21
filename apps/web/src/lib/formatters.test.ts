@@ -673,3 +673,16 @@ describe("formatMonthYear (SF-07b)", () => {
     expect(formatMonthYear(2026, 0, "short")).toBe("Jan 2026");
   });
 });
+
+describe("humanizeStatus CRM stage and lead-status values (GAP-CRM-CONTACTS-DETAIL-07)", () => {
+  it("title-cases underscored deal stages", () => {
+    expect(humanizeStatus("closed_won")).toBe("Closed Won");
+    expect(humanizeStatus("closed_lost")).toBe("Closed Lost");
+    expect(humanizeStatus("prospecting")).toBe("Prospecting");
+  });
+
+  it("title-cases lead statuses and classification values", () => {
+    expect(humanizeStatus("disqualified")).toBe("Disqualified");
+    expect(humanizeStatus("hot")).toBe("Hot");
+  });
+});

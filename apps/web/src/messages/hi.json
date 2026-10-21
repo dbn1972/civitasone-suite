@@ -2004,6 +2004,9 @@
       "channelLabel": "दर्ज करने का माध्यम *",
       "selectChannel": "माध्यम चुनें…",
       "lastRecorded": "अंतिम बार दर्ज: {when}।",
+      "recordAria": "सहमति अभिलेख",
+      "purposeLine": "उद्देश्य: {purpose}",
+      "sourceLine": "प्राप्ति माध्यम: {channel}",
       "purposes": {
         "marketing": "विपणन संचार",
         "transactional": "लेन-देन संबंधी संदेश",
@@ -14084,12 +14087,18 @@
     "emptyTitle": "अभी तक कोई संपर्क नहीं",
     "emptyMessage": "शुरू करने के लिए अपना पहला संपर्क जोड़ें।",
     "newContact": "+ नया संपर्क",
-    "colTemperature": "तापमान"
+    "colTemperature": "तापमान",
+    "fieldPhone": "फ़ोन नंबर",
+    "fieldEmail": "ईमेल पता"
   },
   "crmContactDetailPage": {
     "title": "संपर्क विवरण",
     "loadArea": "संपर्क",
-    "backLabel": "संपर्क"
+    "backLabel": "संपर्क",
+    "fieldPhone": "फ़ोन नंबर",
+    "fieldEmail": "ईमेल पता",
+    "maskedPhoneAria": "छिपाया गया फ़ोन नंबर",
+    "maskedEmailAria": "छिपाया गया ईमेल पता"
   },
   "crmDealsPage": {
     "subtitle": "उच्च-मूल्य विक्रेता संलग्नताएँ, खरीद अवसर और सरकारी हितधारक इंटरैक्शन ट्रैक करें"
@@ -14099,7 +14108,9 @@
     "filteredToAccount": "एक खाते तक फ़िल्टर किया गया",
     "filteredToAccountNamed": "एक खाते तक फ़िल्टर किया गया: {name}",
     "clearAccountFilterAria": "खाता फ़िल्टर हटाएँ",
-    "clearAccountFilter": "हटाएँ ✕"
+    "clearAccountFilter": "हटाएँ ✕",
+    "piiBannerReveal": "इस पंजी में व्यक्तिगत डेटा डिजिटल व्यक्तिगत डेटा संरक्षण अधिनियम, 2023 के अंतर्गत सुरक्षित है। फ़ोन नंबर और ईमेल पते छिपाए गए हैं; किसी को देखने के लिए कारण बताना आवश्यक है और यह ऑडिट ट्रेल में दर्ज होता है।",
+    "piiBannerMasked": "इस पंजी में व्यक्तिगत डेटा डिजिटल व्यक्तिगत डेटा संरक्षण अधिनियम, 2023 के अंतर्गत सुरक्षित है। आपकी भूमिका के लिए फ़ोन नंबर और ईमेल पते छिपाए गए हैं।"
   },
   "crmContactNewPage": {
     "contactArea": "संपर्क",

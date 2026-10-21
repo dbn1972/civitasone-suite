@@ -126,10 +126,11 @@ export async function teamRoutes(app: FastifyInstance): Promise<void> {
       `) as unknown as Array<Record<string, unknown>>;
     });
 
-    // GAP-CRM-AGENT-WORKLOAD-05: the workload table keeps only the agent id, so the
-    // roster would render every agent as "Unnamed agent". Enrich each row with the
-    // display name from identity-service (best effort: an unresolved id simply has
-    // no `name`, it is never replaced by the raw id).
+    // GAP-CRM-AGENT-WORKLOAD-05 + GAP-CRM-CONTACTS-DETAIL-01: the workload table keeps
+    // only the agent id, so the roster (and the assign / transfer owner pickers) would
+    // render every agent as "Unnamed agent". Enrich each row with the display name from
+    // identity-service (best effort: an unresolved id simply has no `name`, it is never
+    // replaced by the raw id; an unreachable identity-service omits the field).
     const names = await fetchUserNames(ctx.tenantId);
     const data = agents.map((a) => {
       const name = names.get(a.agentId as string);

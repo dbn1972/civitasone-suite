@@ -1,10 +1,11 @@
-import { PageHeader, StatCard, StatGrid, maskEmail, maskPhone } from "../../../_components/ds";
+import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { MergeButton } from "../../../_components/crm/MergeButton";
 import { LeadFilters } from "../../../_components/crm/LeadFilters";
 import type { MergeOption } from "../../../_components/crm/MergeDialog";
 import { getTranslations } from "next-intl/server";
 import { getCrmContacts } from "../../../_data/loaders";
 import { getSessionRoles, hasAnyRole, CRM_PII_READ_ROLES, CRM_CONTACTS_BULK_EXPORT_ROLES } from "@/lib/auth/roleGuard";
+import { displayMaskedEmail, displayMaskedPhone } from "@/lib/crm/maskedPii";
 import { ContactToolbar } from "./ContactToolbar";
 import { ContactsTable } from "./ContactsTable";
 
@@ -48,10 +49,12 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
   // Never fabricate a 0 count when the list load failed — show "—" instead.
   const stat = (n: number) => (source === "error" ? "—" : n.toLocaleString("en-IN"));
 
-  // GAP-CRM-CONTACTS-02: DPDP — the base crm_user sees masked phone/email; only
-  // privileged roles see the clear value. Computed server-side from the session.
+  // GAP-CRM-CONTACTS-02: DPDP - phone/email are masked for EVERY role in the
+  // list. A role in CRM_PII_READ_ROLES may reveal one value at a time through the
+  // audited reveal (reason required, one pii_reveal audit event); no other role
+  // has a reveal control. Computed server-side from the session.
   const sessionRoles = getSessionRoles();
-  const canViewPii = hasAnyRole(sessionRoles, CRM_PII_READ_ROLES);
+  const canReveal = hasAnyRole(sessionRoles, CRM_PII_READ_ROLES);
   // GAP-CRM-CONTACTS-01: only permitted roles may bulk-export, and the export
   // must respect the active filters rather than dumping the whole registry.
   const canExport = hasAnyRole(sessionRoles, CRM_CONTACTS_BULK_EXPORT_ROLES);
@@ -68,14 +71,13 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
     segmentParam === "mine" || segmentParam === "recent" ? segmentParam : "all";
 
   // DPDP: mask on the SERVER, before the rows become client props / the offline
-  // seed cache. Only CRM_PII_READ_ROLES ever receive clear phone/email.
-  const safeContacts = canViewPii
-    ? contacts
-    : contacts.map((c) => ({
-        ...c,
-        phone: c.phone ? maskPhone(c.phone) : c.phone,
-        email: c.email ? maskEmail(c.email) : c.email,
-      }));
+  // seed cache, so a clear phone/email is never serialised to the browser - not
+  // even for a role that may reveal (it reveals per value, audited, on demand).
+  const safeContacts = contacts.map((c) => ({
+    ...c,
+    phone: c.phone ? displayMaskedPhone(c.phone) : c.phone,
+    email: c.email ? displayMaskedEmail(c.email) : c.email,
+  }));
 
   const mergeOptions: MergeOption[] = safeContacts
     .filter((c): c is typeof c & { id: string } => Boolean(c.id))
@@ -101,7 +103,7 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
           the same useSeededResource call that produces its rows. */}
       <div role="note" aria-label="Data protection notice" className="flex items-start gap-2.5 mt-2 px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
         <span aria-hidden="true" className="text-base leading-snug">🛡</span>
-        <span>Personal data in this registry is protected under the Digital Personal Data Protection Act, 2023. Access is role-scoped and logged.</span>
+        <span>{canReveal ? t("piiBannerReveal") : t("piiBannerMasked")}</span>
       </div>
       <ContactToolbar canExport={canExport} exportQuery={exportQuery} initialSearch={searchParams?.search ?? ""} initialSegment={initialSegment} />
       {searchParams?.accountId ? (
@@ -132,7 +134,7 @@ export default async function Page({ searchParams }: { searchParams?: SP }) {
         <StatCard icon="◉" tone="warn" label="With Priority Tag" value={stat(contacts.filter(c => Boolean(c.priority)).length)} />
         <StatCard icon="◈" tone="info" label="Reachable by Email" value={stat(contacts.filter(c => c.email).length)} />
       </StatGrid>
-      <ContactsTable contacts={safeContacts} source={source} filtered={filtered} />
+      <ContactsTable contacts={safeContacts} source={source} filtered={filtered} canReveal={canReveal} />
     </>
   );
 }

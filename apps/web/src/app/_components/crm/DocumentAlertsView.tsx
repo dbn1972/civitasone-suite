@@ -8,6 +8,7 @@
  */
 import { useEffect, useId, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
+import { PanelSkeleton } from "./PanelSkeleton";
 import { formatIndianDate } from "@/lib/formatters";
 import {
   getDocuments,
@@ -66,7 +67,7 @@ export function DocumentAlertsView({ subjectType, subjectId }: Props) {
       </div>
       <div className="pad">
         {source === "loading" ? (
-          <p role="status" aria-live="polite" style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>Checking document requirements…</p>
+          <PanelSkeleton />
         ) : source === "error" ? (
           <p role="alert" style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
             — Document requirements unavailable right now. <DataSourceBadge source="error" />

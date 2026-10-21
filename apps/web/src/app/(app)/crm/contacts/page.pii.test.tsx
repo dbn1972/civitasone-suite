@@ -33,11 +33,49 @@ describe("Contacts list server-side PII masking (DPDP)", () => {
     expect(props.contacts[0]!.phone).toBe("98XXXXX210");
   });
 
-  it("passes clear values for a CRM_PII_READ_ROLES role", async () => {
+  // GAP-CRM-CONTACTS-02: a privileged role is masked by default too. The clear
+  // value reaches the browser only through the audited per-value reveal, never
+  // in the list payload.
+  it("masks phone/email for a CRM_PII_READ_ROLES role too, and enables the audited reveal", async () => {
     mockRoles.mockReturnValue(["crm_admin"]);
     render(await Page({ searchParams: {} }));
+    const props = tableProps.mock.calls[0]![0] as { contacts: Array<{ phone: string; email: string }>; canReveal: boolean };
+    expect(JSON.stringify(props)).not.toContain("9876543210");
+    expect(JSON.stringify(props)).not.toContain("asha@example.com");
+    expect(props.contacts[0]!.phone).toBe("98XXXXX210");
+    expect(props.canReveal).toBe(true);
+  });
+
+  it("gives a plain crm_user no reveal control", async () => {
+    mockRoles.mockReturnValue(["crm_user"]);
+    render(await Page({ searchParams: {} }));
+    const props = tableProps.mock.calls[0]![0] as { canReveal: boolean };
+    expect(props.canReveal).toBe(false);
+  });
+
+  it("does not double-mask a value crm-service already redacted for the caller", async () => {
+    vi.mocked(getCrmContacts).mockResolvedValue({
+      data: [{ id: "c2", name: "Ravi", phone: "******3210", email: "r***@example.com" }] as never,
+      source: "api",
+    });
+    mockRoles.mockReturnValue(["crm_user"]);
+    render(await Page({ searchParams: {} }));
     const props = tableProps.mock.calls[0]![0] as { contacts: Array<{ phone: string; email: string }> };
-    expect(props.contacts[0]!.phone).toBe("9876543210");
-    expect(props.contacts[0]!.email).toBe("asha@example.com");
+    expect(props.contacts[0]!.phone).toBe("******3210");
+    expect(props.contacts[0]!.email).toBe("r***@example.com");
+  });
+
+  it("states the truth in the banner: masked, and reveal is recorded - never the old 'logged' claim for clear lists", async () => {
+    mockRoles.mockReturnValue(["crm_admin"]);
+    const { container } = render(await Page({ searchParams: {} }));
+    const note = container.querySelector('[role="note"]')!;
+    expect(note.textContent).toMatch(/masked/i);
+    expect(note.textContent).toMatch(/recorded in the audit trail/i);
+    expect(note.textContent).not.toMatch(/Access is role-scoped and logged/);
+
+    mockRoles.mockReturnValue(["crm_user"]);
+    const second = render(await Page({ searchParams: {} }));
+    const note2 = second.container.querySelector('[role="note"]')!;
+    expect(note2.textContent).toMatch(/masked for your role/i);
   });
 });

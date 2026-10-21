@@ -9,9 +9,11 @@
  * source, and give a link across rather than inventing a "0".
  */
 import { useEffect, useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
+import { PanelSkeleton } from "./PanelSkeleton";
 import { StatGrid, StatCard, EmptyState } from "../ds";
-import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { formatIndianDate, formatMoney, humanizeStatus } from "@/lib/formatters";
 import {
   getContact360,
   getAccount360,
@@ -57,6 +59,16 @@ function revenue(minor: string | undefined): string {
   }
 }
 
+/** Translated label for a consent purpose/channel code; an unknown code falls back to a humanised form. */
+function consentLabel(
+  t: ReturnType<typeof useTranslations>,
+  group: "purposes" | "channels",
+  code: string,
+): string {
+  const key = `${group}.${code}`;
+  return t.has(key) ? t(key) : humanizeStatus(code);
+}
+
 /** Marker for a REAL, tenant-owned (source:'crm') block — contrast with ExternalTag. */
 function RealTag() {
   return (
@@ -83,6 +95,7 @@ function ExternalTag() {
 }
 
 export function Customer360Panel({ subjectType, subjectId }: Props) {
+  const tConsent = useTranslations("crm.consent");
   const [view, setView] = useState<Customer360 | null>(null);
   const [source, setSource] = useState<AaSource | "loading">("loading");
   const headingId = useId();
@@ -103,6 +116,22 @@ export function Customer360Panel({ subjectType, subjectId }: Props) {
 
   const v = view;
   const isError = source === "error";
+
+  // GAP-CRM-CONTACTS-DETAIL-06: while loading, reserve the panel's space with the
+  // shared skeleton instead of rendering every section's "empty" copy ("No linked
+  // deals.", "No consent on record.") for data that simply has not arrived yet.
+  if (source === "loading") {
+    return (
+      <div className="card">
+        <div className="card-h">
+          <h3 id={headingId}>360° view</h3>
+        </div>
+        <div className="pad">
+          <PanelSkeleton rows={5} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="card">
@@ -176,6 +205,19 @@ export function Customer360Panel({ subjectType, subjectId }: Props) {
                     ? `Marketing consent given${v.consent.updatedAt ? ` on ${formatIndianDate(v.consent.updatedAt)}` : ""}.`
                     : "Marketing consent withheld."}
           </p>
+          {/* GAP-CRM-CONTACTS-DETAIL-02: the DPDP record names what the consent was
+              given for and where it was captured - shown when the backend has them
+              (consent that predates the fields shows only the line above). */}
+          {!isError && v?.consent && (v.consent.purpose || v.consent.channel) ? (
+            <ul aria-label={tConsent("recordAria")} style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0", paddingLeft: 16 }}>
+              {v.consent.purpose ? (
+                <li>{tConsent("purposeLine", { purpose: consentLabel(tConsent, "purposes", v.consent.purpose) })}</li>
+              ) : null}
+              {v.consent.channel ? (
+                <li>{tConsent("sourceLine", { channel: consentLabel(tConsent, "channels", v.consent.channel) })}</li>
+              ) : null}
+            </ul>
+          ) : null}
         </section>
 
         {/* Next actions */}
@@ -207,7 +249,7 @@ export function Customer360Panel({ subjectType, subjectId }: Props) {
                 <thead><tr><th>Deal</th><th>Stage</th><th style={{ textAlign: "right" }}>Amount</th></tr></thead>
                 <tbody>
                   {v!.deals.map((d) => (
-                    <tr key={d.id}><td><a href={`/crm/deals/${d.id}`}>{d.name}</a></td><td>{d.stage.replace(/_/g, " ") || "—"}</td><td className="num">{money(d.amount)}</td></tr>
+                    <tr key={d.id}><td><a href={`/crm/deals/${d.id}`}>{d.name}</a></td><td>{d.stage ? humanizeStatus(d.stage) : "—"}</td><td className="num">{money(d.amount)}</td></tr>
                   ))}
                 </tbody>
               </table>

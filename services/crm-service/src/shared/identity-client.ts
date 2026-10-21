@@ -1,4 +1,5 @@
 const IDENTITY_URL = process.env.IDENTITY_SERVICE_URL ?? "http://127.0.0.1:3001";
+const NAME_TTL_MS = 60_000;
 
 /**
  * Is `userId` a real, ACTIVE user of `tenantId`? Asks identity-service (the source of truth for
@@ -36,7 +37,6 @@ export async function isActiveTenantUser(tenantId: string, userId: string): Prom
  * roster on every keystroke, and the directory (up to ~2000 users) is not worth fetching
  * each time. A failed lookup is never cached, so recovery is immediate.
  */
-const NAME_TTL_MS = 60_000;
 const nameCache = new Map<string, { at: number; names: Map<string, string> }>();
 
 /** Test hook: forget every cached directory. */
@@ -63,4 +63,33 @@ export async function fetchUserNames(tenantId: string): Promise<Map<string, stri
   } catch {
     return new Map();
   }
+}
+
+/**
+ * Display names for user ids (GAP-CRM-CONTACTS-DETAIL-01: the owner/agent
+ * pickers had ids only, so every option read "Unnamed agent"). Uses the same
+ * minimal tenant-scoped identity-service summaries endpoint (id + name only, no
+ * email or other PII) and the same x-internal service path that the meeting,
+ * finance, inventory and procurement services use. Display enrichment only: any
+ * failure yields an empty map and the caller simply omits `name`; it must never
+ * fail the read it decorates. Ids that cannot be resolved are absent.
+ */
+export async function resolveUserNames(
+  tenantId: string,
+  ids: Array<string | null | undefined>,
+): Promise<Map<string, string>> {
+  const wanted = [...new Set(ids.filter((i): i is string => typeof i === "string" && i.length > 0))];
+  if (wanted.length === 0) return new Map();
+  const all = await fetchUserNames(tenantId);
+  const out = new Map<string, string>();
+  for (const id of wanted) {
+    const n = all.get(id);
+    if (n) out.set(id, n);
+  }
+  return out;
+}
+
+/** Test hook: clear the in-process name cache. */
+export function clearIdentityNameCache(): void {
+  clearUserNameCache();
 }
