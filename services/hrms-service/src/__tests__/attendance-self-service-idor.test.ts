@@ -263,9 +263,14 @@ describe("GET /v1/hrms/overtime-requests — self-scoping", () => {
       headers: { authorization: `Bearer ${tok(["employee"], ACTOR_NOLINK)}` },
     });
     expect(r.statusCode).toBe(200);
-    // GAP-HR-OVERTIME-04: this short-circuit now also carries hasMore/total
-    // (both trivially false/0), alongside the pre-existing empty data: [].
-    expect(r.json()).toEqual({ data: [], hasMore: false, total: 0 });
+    // GAP-HR-OVERTIME-04: this short-circuit carries the same envelope as a
+    // populated response -- hasMore/total (trivially false/0) and an
+    // all-zero `summary` (the web reads it for the stat cards) -- alongside
+    // the pre-existing empty data: [].
+    expect(r.json()).toEqual({
+      data: [], hasMore: false, total: 0,
+      summary: { total: 0, pending: 0, approved: 0, rejected: 0, approvedHours: 0 },
+    });
     expect(scopedReadMock).not.toHaveBeenCalled();
   });
 
@@ -300,7 +305,10 @@ describe("GET /v1/hrms/overtime-requests — self-scoping", () => {
     });
     expect(r.statusCode).toBe(200);
     // GAP-HR-OVERTIME-04: see the "no linked employee record" test above.
-    expect(r.json()).toEqual({ data: [], hasMore: false, total: 0 });
+    expect(r.json()).toEqual({
+      data: [], hasMore: false, total: 0,
+      summary: { total: 0, pending: 0, approved: 0, rejected: 0, approvedHours: 0 },
+    });
     // Only the reports-lookup scopedRead call happens -- the route must
     // short-circuit before ever building/running the data query.
     expect(scopedReadMock).toHaveBeenCalledTimes(1);

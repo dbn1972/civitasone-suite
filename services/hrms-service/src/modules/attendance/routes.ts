@@ -569,7 +569,9 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     // IDOR guard: employees may only read their own OT requests
     const effectiveEmpId = await resolveSelfOrReportsScopedEmployeeId(ctx, q.empId);
     if (isEmptyScope(effectiveEmpId)) {
-      return reply.send({ data: [], hasMore: false, total: 0 });
+      // Same envelope as the populated response (the web reads `summary`
+      // for its stat cards), with every counter zero.
+      return reply.send({ data: [], hasMore: false, total: 0, summary: summariseOvertimeByStatus([]) });
     }
     // FORCE-RLS fix: was a bare db.select() against attendance.hrms_overtime_requests
     // (FORCE ROW LEVEL SECURITY — migration 0148), so under the NOBYPASSRLS
@@ -591,7 +593,12 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     const [rows, byStatus] = await scopedRead(async (tx) => [
       await tx.select().from(hrmsOvertimeRequests)
         .where(whereCond)
-        .orderBy(desc(hrmsOvertimeRequests.requestDate))
+        // request_date is NOT unique (many requests share a day), and
+        // Postgres returns tied rows in an unspecified order that can differ
+        // between (limit, offset) windows -- ordering by date alone made
+        // consecutive pages overlap and silently skip rows. id (the primary
+        // key) is the unique tiebreak that makes LIMIT/OFFSET paging total.
+        .orderBy(desc(hrmsOvertimeRequests.requestDate), desc(hrmsOvertimeRequests.id))
         .limit(q.limit + 1)
         .offset(q.offset),
       await tx.select({
