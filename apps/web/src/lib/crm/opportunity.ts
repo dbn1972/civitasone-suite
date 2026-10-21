@@ -13,6 +13,7 @@
  * and displays with formatMoney. Never do rupee/paise arithmetic with Number.
  */
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { buildCreateDealBody, buildUpdateDealBody } from "./opportunityBody";
 
 export type OpSource = "api" | "error";
 
@@ -341,7 +342,9 @@ async function throwStageError(res: Response): Promise<never> {
 }
 
 export async function createOpportunity(opp: Opportunity): Promise<string | null> {
-  const res = await browserFetch("v1/crm/deals", { method: "POST", body: JSON.stringify(opp) });
+  // The wire body is built, not `JSON.stringify(opp)`: crm-service rejects the form's blank "" fields
+  // (see opportunityBody.ts).
+  const res = await browserFetch("v1/crm/deals", { method: "POST", body: JSON.stringify(buildCreateDealBody(opp)) });
   if (!res.ok) await throwStageError(res);
   // The command path returns 202 { id, status, correlationId }. Surface the id so the
   // caller can navigate to the new record (and so a second Create click can be blocked
@@ -356,7 +359,7 @@ export async function createOpportunity(opp: Opportunity): Promise<string | null
 
 export async function updateOpportunity(id: string, opp: Opportunity): Promise<void> {
   // PATCH, not PUT: the service registers `app.patch("/v1/crm/deals/:id")`.
-  const res = await browserFetch(`v1/crm/deals/${id}`, { method: "PATCH", body: JSON.stringify(opp) });
+  const res = await browserFetch(`v1/crm/deals/${id}`, { method: "PATCH", body: JSON.stringify(buildUpdateDealBody(opp)) });
   if (!res.ok) await throwStageError(res);
 }
 

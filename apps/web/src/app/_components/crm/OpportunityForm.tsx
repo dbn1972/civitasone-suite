@@ -14,6 +14,7 @@ import { Button, EntityPicker, type EntityOption } from "../ds";
 import { type ListRow } from "@/lib/crm/pagedList";
 import { fetchAccountsByIds, searchAccountsByName } from "@/lib/crm/accountLookup";
 import { rupeesToMinorString } from "@/lib/money";
+import { valueMinorFitsUpdate } from "@/lib/crm/opportunityBody";
 import { formatMoney } from "@/lib/formatters";
 import {
   getPipelines,
@@ -139,8 +140,11 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
     }
   }, [selectedPipeline, stage]);
 
-  const valueMinor = valueRupees.trim() ? rupeesToMinorString(valueRupees.trim()) : "0";
-  const valueValid = valueMinor !== null;
+  // allowZero: an existing zero-value deal opens as "0.00" and must stay saveable (a blank field is already "0").
+  const valueMinor = valueRupees.trim() ? rupeesToMinorString(valueRupees.trim(), { allowZero: true }) : "0";
+  // The edit PATCH carries the value as a JSON number, so an edit refuses what would not survive as one.
+  const valueFitsSave = valueMinor === null || !opportunity?.id || valueMinorFitsUpdate(valueMinor);
+  const valueValid = valueMinor !== null && valueFitsSave;
   const probNum = Number(probability);
   const probValid = probability.trim() === "" || (Number.isFinite(probNum) && probNum >= 0 && probNum <= 100);
   const qtyNum = Number(quantity);
@@ -175,7 +179,7 @@ export function OpportunityForm({ opportunity, onSaved, initialAccountId, initia
     setMissing([]);
     setSubmitAttempted(true);
     if (!canSubmit) {
-      if (!valueValid) setError("Enter the deal value as a plain rupee amount (max 2 decimals).");
+      if (!valueValid) setError(valueMinor === null ? "Enter the deal value as a plain rupee amount (max 2 decimals)." : "The deal value is too large to save.");
       else if (!probValid) setError("Probability must be a whole number between 0 and 100.");
       else if (!qtyValid) setError("Quantity must be a whole number.");
       else setError("Name, pipeline and stage are required.");

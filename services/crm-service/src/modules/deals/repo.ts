@@ -342,12 +342,18 @@ export async function contactExistsTx(tx: Writer, tenantId: string, contactId: s
 }
 
 /**
- * GAP-CRM-OPPORTUNITIES-NEW-02: does `accountId` exist in this tenant? Tx-scoped for the
+ * GAP-CRM-OPPORTUNITIES-NEW-02: is `accountId` a LIVE account of this tenant? Tx-scoped for the
  * same reason as contactExistsTx (consumers already hold an open transaction).
+ *
+ * Only `status = 'active'` accounts qualify - the same predicate the account lists, the picker
+ * search and the by-id lookup use. A merged or soft-deleted account is not offered anywhere, so a
+ * deal must not be linkable to one (the route answers 422 ACCOUNT_NOT_FOUND and the consumer
+ * refuses the write too, for a command that was accepted while the account was still live).
  */
 export async function accountExistsTx(tx: Writer, tenantId: string, accountId: string): Promise<boolean> {
   const rows = (await (tx as typeof db).execute(sql`
-    SELECT 1 AS one FROM crm.accounts WHERE id = ${accountId}::uuid AND tenant_id = ${tenantId}::uuid LIMIT 1
+    SELECT 1 AS one FROM crm.accounts
+    WHERE id = ${accountId}::uuid AND tenant_id = ${tenantId}::uuid AND status = 'active' LIMIT 1
   `)) as unknown as unknown[];
   return rows.length > 0;
 }
