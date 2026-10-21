@@ -27,8 +27,9 @@
  * normalised: the weighted sum is divided by a fixed 100 and capped at 100, so
  * the enabled total sets the highest possible score). "Preview impact" dry-runs the
  * rules as edited against the tenant's leads (read-only) and shows how the score
- * distribution would move; Save still opens a confirm making it explicit that the
- * change re-scores every lead.
+ * distribution would move; Save still opens a confirm. Save only stores the rules: it does
+ * NOT re-score existing leads in bulk, a lead's stored score updates the next time that lead
+ * changes (crm.contact.updated), and the confirm says exactly that.
  *
  * GAP-CRM-LEAD-SCORING-05 (concurrency): the backend GET now returns a
  * list-level version (SUM of per-row versions) plus "Last changed by/at", and
@@ -306,8 +307,8 @@ export function LeadScoreRulesEditor() {
       setError(t("ruleNeedsFields"));
       return;
     }
-    // GAP-CRM-LEAD-SCORING-04: changing weights re-scores every lead, so make
-    // that explicit before the PUT.
+    // GAP-CRM-LEAD-SCORING-04: the rules change how every lead scores from now on, so
+    // confirm before the PUT. (Save stores the rules only; it does not re-score leads in bulk.)
     setConfirmSave(true);
   }
 

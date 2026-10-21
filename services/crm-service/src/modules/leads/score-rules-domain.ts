@@ -123,7 +123,7 @@ export function leadAttributesFromRow(row: Record<string, unknown>): Record<stri
  * a proposed rule replaces the stored rule for its attribute and every stored rule the
  * proposal omits is kept as it is. Proposed entries apply in order, so a later entry wins
  * over an earlier one with the same attribute (exactly like the sequential upserts).
- * The dry-run preview scores THIS set, so its numbers are what Save will really produce.
+ * The dry-run preview scores THIS set, so its numbers describe the rules Save will leave behind.
  */
 export function overlayRules(
   stored: readonly StoredScoreRule[],

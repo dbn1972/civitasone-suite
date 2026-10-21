@@ -4,17 +4,109 @@ import { isScoreableAttribute } from "./score-rules-domain.js";
 
 export const scoreFnTypeEnum = z.enum(["presence", "map", "recency", "numeric_threshold"]);
 
-export const scoreRuleSchema = z.object({
+/**
+ * GAP-CRM-LEAD-SCORING-02: the params contract of each score function, enforced here so a
+ * direct API call cannot save what buildScoreFn (score-rules-domain.ts) would choke on. A
+ * stored `{ "tiers": 5 }` makes buildScoreFn throw (`.slice` on a number), which aborts every
+ * lead recalculation and every preview for the tenant until an admin repairs the rule. The web
+ * editor checks the same contract field by field (apps/web/src/lib/crm/leadScoreParams.ts),
+ * but the backend is authoritative.
+ *
+ * What buildScoreFn reads, per kind:
+ *   presence          { present, absent }
+ *   map               { values: { <lower-case value>: score }, default }
+ *   recency           { tiers: [{ maxDays, score }], beyondScore, absentScore }
+ *   numeric_threshold { tiers: [{ min, score }], default }
+ * Every score is clamped to 0-100 by the scorer, so an out-of-range score is rejected here
+ * instead of being silently clamped. Keys the scorer does not read pass through untouched.
+ */
+const SCORE_MESSAGE = "must be a number from 0 to 100";
+// One refinement (not .finite().min().max()), so an out-of-range value is ONE field error;
+// Infinity (JSON `1e999`) fails the range, NaN is not a number.
+const scoreValue = z
+  .number({ invalid_type_error: SCORE_MESSAGE })
+  .refine((n) => n >= 0 && n <= 100, SCORE_MESSAGE);
+
+/** The scorer lower-cases the lead value before looking it up, so an upper-case key can never match. */
+const lowerCaseKeys = (values: Record<string, unknown>, ctx: z.RefinementCtx): void => {
+  for (const key of Object.keys(values)) {
+    if (key !== key.toLowerCase()) {
+      ctx.addIssue({
+        code: "custom",
+        path: [key],
+        message: "map keys must be lower-case: the lead value is lower-cased before it is matched",
+      });
+    }
+  }
+};
+
+const DAYS_MESSAGE = "must be a number of days, 0 or more";
+
+const presenceParams = z
+  .object({ present: scoreValue.optional(), absent: scoreValue.optional() })
+  .passthrough();
+
+const mapParams = z
+  .object({
+    values: z.record(scoreValue).superRefine(lowerCaseKeys).optional(),
+    default: scoreValue.optional(),
+  })
+  .passthrough();
+
+const recencyParams = z
+  .object({
+    tiers: z
+      .array(
+        z
+          .object({
+            maxDays: z.number({ invalid_type_error: DAYS_MESSAGE }).refine((n) => n >= 0 && Number.isFinite(n), DAYS_MESSAGE),
+            score: scoreValue,
+          })
+          .passthrough(),
+      )
+      .optional(),
+    beyondScore: scoreValue.optional(),
+    absentScore: scoreValue.optional(),
+    default: scoreValue.optional(),
+  })
+  .passthrough();
+
+const numericThresholdParams = z
+  .object({
+    tiers: z
+      .array(
+        z
+          .object({
+            min: z.number({ invalid_type_error: "must be a number" }).finite("must be a number"),
+            score: scoreValue,
+          })
+          .passthrough(),
+      )
+      .optional(),
+    default: scoreValue.optional(),
+  })
+  .passthrough();
+
+const ruleBase = {
   // GAP-CRM-LEAD-SCORING-03: only a field the scorer really evaluates (an unknown
   // attribute would be saved but never score anything).
   attribute: z.string().min(1).max(64).refine(isScoreableAttribute, {
     message: "attribute is not a scoreable lead field",
   }),
   weight: z.number().int().min(0).max(100),
-  scoreFnType: scoreFnTypeEnum,
-  params: z.record(z.unknown()).default({}),
   enabled: z.boolean().default(true),
-});
+};
+
+/**
+ * Discriminated on scoreFnType so each kind's params are checked against its own contract;
+ * a violation answers 400 with a field error on `rules.<i>.params...`.
+ */
+export const scoreRuleSchema = z.discriminatedUnion("scoreFnType", [
+  z.object({ ...ruleBase, scoreFnType: z.literal("presence"), params: presenceParams.default({}) }),
+  z.object({ ...ruleBase, scoreFnType: z.literal("map"), params: mapParams.default({}) }),
+  z.object({ ...ruleBase, scoreFnType: z.literal("recency"), params: recencyParams.default({}) }),
+  z.object({ ...ruleBase, scoreFnType: z.literal("numeric_threshold"), params: numericThresholdParams.default({}) }),
+]);
 
 /**
  * The backend keeps ONE rule per (tenant, attribute): a second entry for the same attribute

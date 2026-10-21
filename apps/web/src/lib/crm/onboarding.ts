@@ -19,7 +19,7 @@
 import { browserFetch, errorMessageFromResponse, UserFacingError } from "@/lib/api/browserClient";
 import { referenceFromHeaders } from "@/lib/errorCatalogue";
 import { formatInternalRef } from "@/lib/formatters";
-import { fetchAllPages, type ListRow } from "./pagedList";
+import { fetchAllPages, fetchRowsByIds, type ListRow } from "./pagedList";
 import { fetchAccountsByIds } from "./accountLookup";
 
 export type OnbSource = "api" | "error" | "not-found";
@@ -369,19 +369,14 @@ function namesFromRows(rows: ListRow[]): Record<string, string> {
 }
 
 /**
- * Page through one list endpoint until every wanted id has been seen (or the list /
- * page cap is exhausted). `wanted` of null means "no particular ids": read it all.
- * A failed read degrades to whatever pages did arrive -- names are then left null and
- * the UI shows a neutral label, never a UUID (GAP-CRM-ONBOARDING-01).
+ * Read one whole list endpoint (page by page, within the server's page cap). Only the
+ * "no particular cases" call of getOnboardingLookups() needs this: naming a page of cases
+ * looks the accounts and deals up by id instead. A failed read degrades to whatever pages did
+ * arrive -- names are then left null and the UI shows a neutral label, never a UUID
+ * (GAP-CRM-ONBOARDING-01).
  */
-async function namesFor(path: string, wanted: Set<string> | null): Promise<Record<string, string>> {
-  if (wanted !== null && wanted.size === 0) return {};
-  const { rows } = await fetchAllPages({
-    path,
-    ...(wanted
-      ? { done: (read: ListRow[]) => { const have = new Set(read.map((r) => str(r.id))); return [...wanted].every((id) => have.has(id)); } }
-      : {}),
-  });
+async function allNames(path: string): Promise<Record<string, string>> {
+  const { rows } = await fetchAllPages({ path });
   return namesFromRows(rows);
 }
 
@@ -405,6 +400,16 @@ async function accountNamesByIds(ids: ReadonlySet<string>): Promise<NameLookup> 
   return { names: namesFromRows(rows), complete };
 }
 
+/**
+ * Name deals by id with `GET /v1/crm/deals?ids=` -- one request per 50 ids, however long the
+ * deals list is. A deleted, cancelled or missing deal is simply absent from the answer (the
+ * list never includes it), so it never forces the list to be paged to the end.
+ */
+async function dealNamesByIds(ids: ReadonlySet<string>): Promise<NameLookup> {
+  const { rows, complete } = await fetchRowsByIds("v1/crm/deals", ids);
+  return { names: namesFromRows(rows), complete };
+}
+
 /** Name ONE deal with `GET /v1/crm/deals/:id`; a 404 is a definitive "no such deal". */
 async function dealNameById(dealId: string): Promise<{ name: string | null; complete: boolean }> {
   try {
@@ -423,10 +428,10 @@ async function dealNameById(dealId: string): Promise<{ name: string | null; comp
 /**
  * Fetch the deal + account name maps used to label onboarding rows.
  *
- * Pass the cases being labelled. Accounts are then looked up by id (one request per 50
- * accounts, however many exist); deals are paged only until THEIR ids have been seen
- * (the deals list has no id filter), with the real page size - a larger `limit` is a 400.
- * Without `cases` both lists are read in full.
+ * Pass the cases being labelled. Accounts and deals are then both looked up by id (one
+ * request per 50 of each, however many exist): a deal or account that is gone or inactive is
+ * simply absent from the answer and never forces a walk of the list. Without `cases` both
+ * lists are read in full, within the server's page cap.
  */
 export async function getOnboardingLookups(
   cases?: ReadonlyArray<Pick<OnboardingCase, "dealId" | "accountId">>,
@@ -434,8 +439,8 @@ export async function getOnboardingLookups(
   const wantedDeals = cases ? new Set(cases.map((c) => c.dealId).filter(Boolean)) : null;
   const wantedAccounts = cases ? new Set(cases.map((c) => c.accountId).filter((a): a is string => !!a)) : null;
   const [dealNames, accountNames] = await Promise.all([
-    namesFor("v1/crm/deals", wantedDeals),
-    wantedAccounts ? accountNamesByIds(wantedAccounts).then((r) => r.names) : namesFor("v1/crm/accounts", null),
+    wantedDeals ? dealNamesByIds(wantedDeals).then((r) => r.names) : allNames("v1/crm/deals"),
+    wantedAccounts ? accountNamesByIds(wantedAccounts).then((r) => r.names) : allNames("v1/crm/accounts"),
   ]);
   return { dealNames, accountNames };
 }

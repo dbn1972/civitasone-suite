@@ -379,3 +379,129 @@ describe("a repeated attribute in one request is rejected (GAP-CRM-LEAD-SCORING-
     expect(res.statusCode).toBe(200);
   });
 });
+
+// GAP-CRM-LEAD-SCORING-02: the backend is authoritative for the params contract of each score
+// function. A direct API call with params the scorer cannot read (e.g. recency `{ tiers: 5 }`)
+// used to be saved and then made buildScoreFn throw on every recalculation and preview of the
+// tenant; now it is a 400 with a field error on `rules.<i>.params...` and nothing is saved.
+describe("score-function params are validated by the backend (GAP-CRM-LEAD-SCORING-02)", () => {
+  const rule = (attribute: string, scoreFnType: string, params: unknown, weight = 10) => ({
+    attribute, weight, scoreFnType, params, enabled: true,
+  });
+
+  // [label, rule, field that must carry the error]
+  const rejected: Array<[string, ReturnType<typeof rule>, string]> = [
+    ["recency tiers that is not an array", rule("lastActivityAt", "recency", { tiers: 5 }), "rules.0.params.tiers"],
+    ["recency tier maxDays that is a string", rule("lastActivityAt", "recency", { tiers: [{ maxDays: "7", score: 10 }] }), "rules.0.params.tiers.0.maxDays"],
+    ["recency tier with negative maxDays", rule("lastActivityAt", "recency", { tiers: [{ maxDays: -1, score: 10 }] }), "rules.0.params.tiers.0.maxDays"],
+    ["recency tier score above 100", rule("lastActivityAt", "recency", { tiers: [{ maxDays: 7, score: 101 }] }), "rules.0.params.tiers.0.score"],
+    ["recency beyondScore above 100", rule("lastActivityAt", "recency", { beyondScore: 150 }), "rules.0.params.beyondScore"],
+    ["numeric_threshold tiers that is an object", rule("city", "numeric_threshold", { tiers: { min: 1, score: 5 } }), "rules.0.params.tiers"],
+    ["numeric_threshold tier with no min", rule("city", "numeric_threshold", { tiers: [{ score: 50 }] }), "rules.0.params.tiers.0.min"],
+    ["numeric_threshold default below 0", rule("city", "numeric_threshold", { default: -5 }), "rules.0.params.default"],
+    ["map values that is an array", rule("leadSource", "map", { values: [] }), "rules.0.params.values"],
+    ["map key with upper-case letters", rule("leadSource", "map", { values: { Referral: 90 } }), "rules.0.params.values.Referral"],
+    ["map score that is not a number", rule("leadSource", "map", { values: { referral: "high" } }), "rules.0.params.values.referral"],
+    ["map score above 100", rule("leadSource", "map", { values: { referral: 120 } }), "rules.0.params.values.referral"],
+    ["presence present above 100", rule("company", "presence", { present: 101 }), "rules.0.params.present"],
+    ["presence absent that is a string", rule("company", "presence", { absent: "0" }), "rules.0.params.absent"],
+    ["params that is an array", rule("company", "presence", []), "rules.0.params"],
+    ["params that is null", rule("company", "presence", null), "rules.0.params"],
+    ["a score function the scorer does not have", rule("company", "linear", { max: 100 }), "rules.0.scoreFnType"],
+  ];
+
+  describe.each([
+    ["PUT /v1/crm/lead-score-rules", "PUT" as const, "/v1/crm/lead-score-rules"],
+    ["POST /v1/crm/lead-score-rules/preview", "POST" as const, "/v1/crm/lead-score-rules/preview"],
+  ])("%s", (_name, method, url) => {
+    it.each(rejected)("rejects %s with a 400 field error and changes nothing", async (_label, bad, field) => {
+      const t = randomUUID();
+      try {
+        const before = await call("GET", "/v1/crm/lead-score-rules", { headers: headers(["crm_admin"], t) }); // seeds the defaults
+        const res = await call(method, url, { headers: headers(["crm_admin"], t), payload: { rules: [bad] } });
+        expect(res.statusCode).toBe(400);
+        const body = res.json() as { code: string; fieldErrors: Array<{ field: string; message: string }> };
+        expect(body.code).toBe("VALIDATION_FAILED");
+        expect(body.fieldErrors.map((f) => f.field)).toContain(field);
+        // Nothing was written, so the tenant's rules (and their version) are exactly as they were.
+        const after = await call("GET", "/v1/crm/lead-score-rules", { headers: headers(["crm_admin"], t) });
+        expect((after.json() as { version: string }).version).toBe((before.json() as { version: string }).version);
+        expect((after.json() as { data: unknown[] }).data).toEqual((before.json() as { data: unknown[] }).data);
+      } finally {
+        await wipeTenant(t);
+      }
+    });
+  });
+
+  it("names the offending rule by position, so the editor can point at the right row", async () => {
+    const res = await call("PUT", "/v1/crm/lead-score-rules", {
+      payload: { rules: [presence("company", 10), rule("lastActivityAt", "recency", { tiers: 5 }, 20)] },
+    });
+    expect(res.statusCode).toBe(400);
+    const fields = (res.json() as { fieldErrors: Array<{ field: string }> }).fieldErrors.map((f) => f.field);
+    expect(fields).toEqual(["rules.1.params.tiers"]);
+  });
+
+  it("a rejected params shape never reaches the scorer: the tenant keeps recalculating", async () => {
+    const t = randomUUID();
+    try {
+      const bad = await call("PUT", "/v1/crm/lead-score-rules", {
+        headers: headers(["crm_admin"], t),
+        payload: { rules: [rule("lastActivityAt", "recency", { tiers: 5 }, 25)] },
+      });
+      expect(bad.statusCode).toBe(400);
+      const lead = await createLead("Still scored", { company: "Acme", email: "a@b.in" }, t);
+      await recalc(lead, t); // would throw inside buildScoreFn had the bad rule been saved
+      expect(await storedScore(lead, t)).not.toBeNull();
+      const ok = await call("POST", "/v1/crm/lead-score-rules/preview", {
+        headers: headers(["crm_admin"], t),
+        payload: { rules: [presence("company", 40)] },
+      });
+      expect(ok.statusCode).toBe(200);
+    } finally {
+      await wipeTenant(t);
+    }
+  });
+
+  it("accepts every kind's real params, leaves keys the scorer ignores alone, and defaults omitted params", async () => {
+    const t = randomUUID();
+    try {
+      const rules = [
+        rule("company", "presence", { present: 70, absent: 20 }, 15),
+        rule("leadSource", "map", { values: { referral: 90, cold_call: 30 }, default: 20, note: "kept" }, 25),
+        rule("lastActivityAt", "recency", { tiers: [{ maxDays: 7, score: 100 }, { maxDays: 30, score: 60 }], beyondScore: 20, absentScore: 10 }, 25),
+        rule("city", "numeric_threshold", { tiers: [{ min: -5, score: 0 }, { min: 100, score: 80 }], default: 0 }, 15),
+      ];
+      const put = await call("PUT", "/v1/crm/lead-score-rules", { headers: headers(["crm_admin"], t), payload: { rules } });
+      expect(put.statusCode).toBe(200);
+      const stored = (put.json() as { data: Array<{ attribute: string; params: Record<string, unknown> }> }).data;
+      expect(stored.find((r) => r.attribute === "leadSource")?.params).toEqual({ values: { referral: 90, cold_call: 30 }, default: 20, note: "kept" });
+      expect(stored.find((r) => r.attribute === "city")?.params).toEqual({ tiers: [{ min: -5, score: 0 }, { min: 100, score: 80 }], default: 0 });
+
+      // `params` may be omitted (it is `{}`), as before.
+      const noParams = await call("PUT", "/v1/crm/lead-score-rules", {
+        headers: headers(["crm_admin"], t),
+        payload: { rules: [{ attribute: "email", weight: 5, scoreFnType: "presence", enabled: true }] },
+      });
+      expect(noParams.statusCode).toBe(200);
+    } finally {
+      await wipeTenant(t);
+    }
+  });
+
+  it("the rules a GET returns (including the seeded defaults) go straight back through PUT", async () => {
+    const t = randomUUID();
+    try {
+      const get = await call("GET", "/v1/crm/lead-score-rules", { headers: headers(["crm_admin"], t) });
+      const current = (get.json() as { data: Array<{ attribute: string; weight: number; scoreFnType: string; params: unknown; enabled: boolean }> }).data;
+      expect(current.length).toBeGreaterThan(0);
+      const put = await call("PUT", "/v1/crm/lead-score-rules", {
+        headers: headers(["crm_admin"], t),
+        payload: { rules: current.map((r) => ({ attribute: r.attribute, weight: r.weight, scoreFnType: r.scoreFnType, params: r.params, enabled: r.enabled })) },
+      });
+      expect(put.statusCode).toBe(200);
+    } finally {
+      await wipeTenant(t);
+    }
+  });
+});
