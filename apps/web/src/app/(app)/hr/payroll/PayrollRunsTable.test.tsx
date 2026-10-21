@@ -122,3 +122,42 @@ describe("PayrollRunsTable — COMP-019 (rupee/paise unit-convention regression)
     expectRupeeGroundTruthDisplayed(screen, 410000000n); // sampleRuns[0].netAmount = Rs 41,00,000
   });
 });
+
+// GAP-PAYROLL-RUNS-01: the table renders the API's exact paise strings through
+// formatMoney (via lib/payroll/runMoney.ts), preferring them to the rupee floats.
+describe("PayrollRunsTable — GAP-PAYROLL-RUNS-01 (exact paise first, legacy rupees as fallback)", () => {
+  function withRuns(runs: unknown) {
+    mockedHook.mockReturnValue({
+      data: runs,
+      fromCache: false,
+      offline: false,
+      cachedAt: null,
+      provenance: "live",
+    } as never);
+  }
+
+  it("renders grossMinor/netMinor with formatMoney: net 1,23,456.78", () => {
+    const runs = [{ id: "run-m", payPeriod: "2026-08", employeeCount: 3, grossAmount: 1, netAmount: 1, grossMinor: "15000000", netMinor: "12345678", status: "paid" }];
+    withRuns(runs);
+    renderTable({ runs: runs as never, source: "api" });
+    expect(screen.getByText("₹1,23,456.78")).toBeInTheDocument();
+    expect(screen.getByText("₹1,50,000.00")).toBeInTheDocument();
+    // the (deliberately wrong) rupee floats on the same row must not be shown
+    expect(screen.queryByText("₹1.00")).not.toBeInTheDocument();
+  });
+
+  it("a legacy payload (rupee floats only) renders the identical string", () => {
+    const runs = [{ id: "run-l", payPeriod: "2026-08", employeeCount: 3, grossAmount: 150000, netAmount: 123456.78, status: "paid" }];
+    withRuns(runs);
+    renderTable({ runs: runs as never, source: "api" });
+    expect(screen.getByText("₹1,23,456.78")).toBeInTheDocument();
+    expect(screen.getByText("₹1,50,000.00")).toBeInTheDocument();
+  });
+
+  it("a run with no usable money fields shows dashes, not ₹0.00", () => {
+    const runs = [{ id: "run-x", payPeriod: "2026-08", employeeCount: 3, status: "draft" }];
+    withRuns(runs);
+    renderTable({ runs: runs as never, source: "api" });
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
+  });
+});

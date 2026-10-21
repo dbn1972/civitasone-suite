@@ -229,6 +229,12 @@ export async function getRunDetail(id: string, tenantId: string) {
       gross: Number(s.grossMinor) / 100,
       deductions: Number(s.totalDeductionsMinor) / 100,
       net: Number(s.netPayMinor) / 100,
+      // GAP-PAYROLL-RUNS-01: the exact integer-paise twins of the three rupee
+      // floats above (bigint strings, like the run-level *Minor fields), so the
+      // run-detail screen renders slip money via formatMoney with no float.
+      grossMinor: s.grossMinor.toString(),
+      deductionsMinor: s.totalDeductionsMinor.toString(),
+      netMinor: s.netPayMinor.toString(),
       status: s.status,
       issues: readiness.get(s.employeeId) ?? [],
     })),

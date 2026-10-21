@@ -951,6 +951,11 @@ export const PayrollRunFullDetailSchema = PayrollRunDetailSchema.extend({
     gross: z.number(),
     deductions: z.number(),
     net: z.number(),
+    // GAP-PAYROLL-RUNS-01: exact integer-paise twins of the rupee floats above
+    // (digit strings; optional so an older payroll-service still validates).
+    grossMinor: z.string().regex(/^-?\d+$/).optional(),
+    deductionsMinor: z.string().regex(/^-?\d+$/).optional(),
+    netMinor: z.string().regex(/^-?\d+$/).optional(),
     status: z.string(),
     // GAP-PAYROLL-DETAIL-05: issue codes (MISSING_PAN, INVALID_PAN,
     // MISSING_BANK_ACCOUNT, INVALID_IFSC) -- never the PAN / account number.

@@ -975,6 +975,16 @@ export type PayrollRunDetail = {
   grossAmount: number;
   netAmount: number;
   deductions: number;
+  /**
+   * GAP-PAYROLL-RUNS-01: authoritative integer-paise run totals (digit strings,
+   * bigint-safe). Optional so a payload from an older payroll-service still
+   * type-checks; grossAmount/netAmount/deductions above are the same totals as
+   * RUPEE floats (legacy). Money screens render via lib/payroll/runMoney.ts,
+   * which prefers these and only falls back to the rupee floats.
+   */
+  grossMinor?: string;
+  netMinor?: string;
+  deductionsMinor?: string;
   status: "draft" | "processing" | "completed" | "paid" | "disbursed" | "failed";
 };
 
@@ -986,6 +996,10 @@ export type PayrollRunFullDetail = PayrollRunDetail & {
     gross: number;
     deductions: number;
     net: number;
+    /** GAP-PAYROLL-RUNS-01: the same three figures in exact integer paise (digit strings). */
+    grossMinor?: string;
+    deductionsMinor?: string;
+    netMinor?: string;
     status: string;
   }>;
 };

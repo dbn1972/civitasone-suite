@@ -3,7 +3,7 @@ import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { getPayrollRunDetails, getPayrollStructures } from "../../../_data/loaders";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
-import { formatRupees } from "@/lib/formatters";
+import { formatRunMoney } from "@/lib/payroll/runMoney";
 import { CreatePayrollRunForm } from "./CreatePayrollRunForm";
 import { PayrollRunsTable } from "./PayrollRunsTable";
 import { getActiveDdos, getActiveGroups } from "./pay-groups/payGroupData";
@@ -70,7 +70,10 @@ export default async function PayrollPage() {
 
   const totalRuns = errored ? null : runs.length;
   const totalEmployeesPaid = errored ? null : (latestPaidRun?.employeeCount ?? 0);
-  const totalGross = errored ? null : (latestPaidRun?.grossAmount ?? 0);
+  // GAP-PAYROLL-RUNS-01: the tile renders the latest paid run's EXACT paise
+  // total through the shared run-money adapter (same figure /hr/payroll/runs
+  // and /hr/payroll/[id] show for that run); no paid run yet is a real zero.
+  const totalGrossLabel = errored ? "—" : latestPaidRun ? formatRunMoney(latestPaidRun, "gross") : formatRunMoney({ grossMinor: "0" }, "gross");
   // "Pending" now means every run not yet actually paid (draft, processing,
   // completed-awaiting-disbursement, or failed) -- it and the paid-run
   // count above always sum to totalRuns.
@@ -109,7 +112,7 @@ export default async function PayrollPage() {
       <StatGrid>
         <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalRuns")} value={totalRuns ?? "—"} />
         <StatCard icon="👥" iconBg="var(--infobg)" label={t("statEmployeesPaid")} value={totalEmployeesPaid === null ? "—" : totalEmployeesPaid.toLocaleString("en-IN")} />
-        <StatCard icon="🏛" iconBg="var(--warnbg)" label={t("statTotalGross")} value={totalGross === null ? "—" : formatRupees(totalGross)} />
+        <StatCard icon="🏛" iconBg="var(--warnbg)" label={t("statTotalGross")} value={totalGrossLabel} />
         <StatCard icon="📄" iconBg="var(--panel)" label={t("statPending")} value={pending ?? "—"} />
       </StatGrid>
       <Card title={t("runsCardTitle")}>

@@ -14,8 +14,9 @@ const PROPS = {
   runId: "r1",
   status: "processing",
   employeeCount: 50,
-  grossAmount: 500000,
-  netAmount: 450000,
+  // GAP-PAYROLL-RUNS-01: exact paise strings (Rs 5,00,000.00 / Rs 4,50,000.00).
+  grossMinor: "50000000",
+  netMinor: "45000000",
   payPeriod: "2026-09",
   canAdminister: true,
 };
@@ -85,5 +86,39 @@ describe("PayrollRunActions — pre-disbursement issues and disburse copy", () =
     expect(dialog).toHaveTextContent("irreversible");
     expect(dialog).not.toHaveTextContent("Funds are released to PFMS");
     expect(dialog).toHaveTextContent("1 employee still has an unresolved issue");
+  });
+});
+
+// GAP-PAYROLL-RUNS-01: the irreversible-action summaries show EXACT paise through formatMoney.
+describe("PayrollRunActions — confirmation amounts come from exact paise", () => {
+  function renderActions(props: Record<string, unknown>) {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <PayrollRunActions {...PROPS} {...props} />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("the Approve confirmation names the GROSS total, e.g. 1,23,456.78", async () => {
+    renderActions({ grossMinor: "12345678", netMinor: "10000000" });
+    fireEvent.click(screen.getByRole("button", { name: /approve run/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("₹1,23,456.78");
+    expect(dialog).not.toHaveTextContent("₹1,00,000.00");
+  });
+
+  it("the Disburse confirmation names the NET total, e.g. 99,999.99", async () => {
+    renderActions({ status: "completed", grossMinor: "12345678", netMinor: "9999999" });
+    fireEvent.click(screen.getByRole("button", { name: /disburse/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("₹99,999.99");
+    expect(dialog).not.toHaveTextContent("₹1,23,456.78");
+  });
+
+  it("an unknown total reads as a dash, never a fabricated zero", async () => {
+    renderActions({ status: "completed", netMinor: null });
+    fireEvent.click(screen.getByRole("button", { name: /disburse/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).not.toHaveTextContent("₹0.00");
   });
 });

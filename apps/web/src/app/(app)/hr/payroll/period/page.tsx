@@ -4,6 +4,7 @@ import { getPayrollRunDetails } from "@/app/_data/loaders";
 import type { PayrollRunDetail } from "@civitasone/types";
 import { toHumanError } from "@/lib/messages";
 import { payrollRunStatusLabel } from "@/lib/payroll/statusLabels";
+import { runMinor } from "@/lib/payroll/runMoney";
 import { getTranslations } from "next-intl/server";
 
 // This page used to call GET /api/v1/finance/periods -- Finance's GL
@@ -33,9 +34,10 @@ type Row = {
   month: string;
   runDate: string;
   employeesProcessed: number;
-  grossPayout: number;
-  netPayout: number;
-  deductions: number;
+  /** Exact integer paise as digit strings (GAP-PAYROLL-RUNS-01); null = missing. */
+  grossPayout: string | null;
+  netPayout: string | null;
+  deductions: string | null;
   status: string;
 };
 
@@ -45,9 +47,12 @@ function toRow(run: PayrollRunDetail): Row {
     month: run.payPeriod,
     runDate: run.runDate,
     employeesProcessed: run.employeeCount,
-    grossPayout: run.grossAmount,
-    netPayout: run.netAmount,
-    deductions: run.deductions,
+    // GAP-PAYROLL-RUNS-01: the same run-money adapter /hr/payroll, /runs and
+    // /[id] use -- exact paise from grossMinor/netMinor/deductionsMinor, with
+    // the legacy rupee floats only as a fallback for an older payroll-service.
+    grossPayout: runMinor(run, "gross")?.toString() ?? null,
+    netPayout: runMinor(run, "net")?.toString() ?? null,
+    deductions: runMinor(run, "deductions")?.toString() ?? null,
     status: run.status,
   };
 }
@@ -77,7 +82,7 @@ export default async function PayrollPeriodPage() {
   const paidCount = errored ? 0 : items.filter((i) => i.status === "paid").length;
   const notYetPaidCount = errored ? 0 : items.length - paidCount;
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "rupees" | "date"; align?: "left" | "right"; statusLabels?: Record<string, string> }[] = [
+  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "amount" | "date"; align?: "left" | "right"; statusLabels?: Record<string, string> }[] = [
     { key: "month", label: t("colMonth") },
     // GAP-PAYROLL-PERIOD-03: this used to print the raw API date string
     // (e.g. "2026-08-31T00:00:00Z") with no formatting at all, unlike the
@@ -85,17 +90,15 @@ export default async function PayrollPeriodPage() {
     { key: "runDate", label: t("colRunDate"), cellType: "date" },
     { key: "employeesProcessed", label: t("colEmployees"), align: "right" },
     // GAP-PAYROLL-PERIOD-04: these three used to be pre-formatted into
-    // separate *Display string fields and rendered as plain text, because
-    // the comment here believed DataTable had no server-safe rupee
-    // cellType -- it already does (cellType:"rupees", used elsewhere in
-    // this exact module), which also keeps the raw numeric value available
-    // for sorting. grossAmount/netAmount/deductions are already rupees
-    // (payroll-service divides the minor-unit total before returning them);
-    // cellType:"rupees" (never "amount", which calls formatMoney and
-    // expects minor units) is the correct, canonical path.
-    { key: "grossPayout", label: t("colGross"), align: "right", cellType: "rupees" },
-    { key: "netPayout", label: t("colNet"), align: "right", cellType: "rupees" },
-    { key: "deductions", label: t("colDeductions"), align: "right", cellType: "rupees" },
+    // separate *Display string fields. They are now raw values rendered by
+    // DataTable's server-safe cellType (which also keeps the raw numeric value
+    // available for sorting). GAP-PAYROLL-RUNS-01: the values are EXACT PAISE
+    // strings (see toRow), so the canonical cellType is "amount" (formatMoney);
+    // the old "rupees" cellType (formatRupees on a rupee float) is no longer
+    // used for run money.
+    { key: "grossPayout", label: t("colGross"), align: "right", cellType: "amount" },
+    { key: "netPayout", label: t("colNet"), align: "right", cellType: "amount" },
+    { key: "deductions", label: t("colDeductions"), align: "right", cellType: "amount" },
     // GAP-PAYROLL-PERIOD-05: raw, untranslated enum before (cellType:
     // "status" had no label option) -- now carries the same translated
     // label Home/Runs show for the same status value.

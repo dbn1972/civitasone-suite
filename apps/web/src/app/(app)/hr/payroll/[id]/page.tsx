@@ -3,7 +3,8 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatGrid, StatCard, StatusPill } from "../../../../_components/ds";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getPayrollRunById, getPayrollRunDetails } from "../../../../_data/loaders";
-import { formatRupees, formatIndianDate, formatMonthYear } from "@/lib/formatters";
+import { formatIndianDate, formatMonthYear } from "@/lib/formatters";
+import { formatRunMoney, runMinor } from "@/lib/payroll/runMoney";
 import { payrollRunStatusLabel, payrollRunStatusVariant } from "@/lib/payroll/statusLabels";
 import { PayrollRunActions } from "./PayrollRunActions";
 import { PayrollRunStepper } from "./PayrollRunStepper";
@@ -20,6 +21,10 @@ type SalarySlipRow = {
   gross: number;
   deductions: number;
   net: number;
+  /** GAP-PAYROLL-RUNS-01: exact integer-paise twins of gross / deductions / net. */
+  grossMinor?: string;
+  deductionsMinor?: string;
+  netMinor?: string;
   status: string;
   /** GAP-PAYROLL-DETAIL-05: pre-disbursement issue codes (never the PAN / account number). */
   issues?: string[];
@@ -98,14 +103,20 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   // that row fell outside the fetched batch. Ask the backend for exactly
   // that one month instead.
   const prevIso = prevPeriodIso(run.payPeriod);
-  // `previousGross` distinguishes "no prior run existed" (a real 0 — no
+  // `previousGrossMinor` distinguishes "no prior run existed" (a real "0" — no
   // parseable previous period, or the fetch succeeded and simply found none)
   // from "the fetch for the prior run failed" (null) — a fetch failure must
   // not read as a fabricated ₹0 prior payroll in the MoM comparison below.
-  let previousGross: number | null = 0;
+  // GAP-PAYROLL-RUNS-01: carried as exact integer paise (digit string).
+  let previousGrossMinor: string | null = "0";
   if (prevIso) {
     const { data: prevRuns, source: prevSource } = await getPayrollRunDetails({ limit: 1, month: prevIso });
-    previousGross = prevSource === "error" ? null : (prevRuns[0]?.grossAmount ?? 0);
+    const prevRun = prevRuns[0];
+    previousGrossMinor = prevSource === "error"
+      ? null
+      : prevRun
+        ? (runMinor(prevRun, "gross")?.toString() ?? null)
+        : "0";
   }
 
   const slipRows = run.salarySlips as SalarySlipRow[];
@@ -138,16 +149,16 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
       {/* KPI summary cards */}
       <StatGrid>
         <StatCard icon="👥" iconBg="var(--infobg)" label={t("statEmployees")}  value={run.employeeCount.toLocaleString("en-IN")} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statGross")}      value={formatRupees(run.grossAmount)} />
-        <StatCard icon="📉" iconBg="var(--warnbg)" label={t("statDeductions")} value={formatRupees(run.deductions)} />
-        <StatCard icon="✅" iconBg="var(--panel)"  label={t("statNetPay")}    value={formatRupees(run.netAmount)} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statGross")}      value={formatRunMoney(run, "gross")} />
+        <StatCard icon="📉" iconBg="var(--warnbg)" label={t("statDeductions")} value={formatRunMoney(run, "deductions")} />
+        <StatCard icon="✅" iconBg="var(--panel)"  label={t("statNetPay")}    value={formatRunMoney(run, "net")} />
       </StatGrid>
 
       {/* Month-over-Month KPI cards */}
       <MonthOverMonthCards
-        currentGross={run.grossAmount}
-        previousGross={previousGross}
-        currentNet={run.netAmount}
+        currentGrossMinor={runMinor(run, "gross")?.toString() ?? null}
+        previousGrossMinor={previousGrossMinor}
+        currentNetMinor={runMinor(run, "net")?.toString() ?? null}
         currentPeriod={run.payPeriod}
         previousPeriod={prevPeriodLabel(run.payPeriod)}
       />
@@ -160,8 +171,8 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
         runId={run.id}
         status={run.status}
         employeeCount={run.employeeCount}
-        grossAmount={run.grossAmount}
-        netAmount={run.netAmount}
+        grossMinor={runMinor(run, "gross")?.toString() ?? null}
+        netMinor={runMinor(run, "net")?.toString() ?? null}
         payPeriod={run.payPeriod}
         canAdminister={canAdminister}
         exceptionCount={exceptions.length}
@@ -194,15 +205,15 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
           </div>
           <div className="fld">
             <div className="l">{t("fieldGrossAmount")}</div>
-            <div className="v">{formatRupees(run.grossAmount)}</div>
+            <div className="v">{formatRunMoney(run, "gross")}</div>
           </div>
           <div className="fld">
             <div className="l">{t("fieldDeductions")}</div>
-            <div className="v">{formatRupees(run.deductions)}</div>
+            <div className="v">{formatRunMoney(run, "deductions")}</div>
           </div>
           <div className="fld">
             <div className="l">{t("fieldNetAmount")}</div>
-            <div className="v">{formatRupees(run.netAmount)}</div>
+            <div className="v">{formatRunMoney(run, "net")}</div>
           </div>
         </div>
       </Card>
