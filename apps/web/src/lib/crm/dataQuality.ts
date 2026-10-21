@@ -233,13 +233,17 @@ function defaultFieldMessage(code: FieldErrorCode): string {
   }
 }
 
-/** Normalise duplicate-check responses whether bare array or { candidates }. */
+/**
+ * Normalise duplicate-check responses: a bare array, `{ candidates }`, or `{ data }`. The last is what
+ * POST /v1/crm/contacts/duplicate-check actually answers (`reply.send({ data: matches })`); without it every
+ * real response parsed to "no duplicates", so no pre-save duplicate warning could ever show.
+ */
 export function normaliseCandidates(raw: unknown): DuplicateCandidate[] {
-  const list = Array.isArray(raw)
-    ? raw
-    : raw && typeof raw === "object" && Array.isArray((raw as { candidates?: unknown }).candidates)
-      ? (raw as { candidates: unknown[] }).candidates
-      : [];
+  const wrapped = (key: "candidates" | "data"): unknown[] | undefined => {
+    const v = raw && typeof raw === "object" ? (raw as Record<string, unknown>)[key] : undefined;
+    return Array.isArray(v) ? v : undefined;
+  };
+  const list = Array.isArray(raw) ? raw : (wrapped("candidates") ?? wrapped("data") ?? []);
   const out: DuplicateCandidate[] = [];
   for (const item of list) {
     if (!item || typeof item !== "object") continue;

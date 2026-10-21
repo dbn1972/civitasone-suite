@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
@@ -185,6 +185,191 @@ describe("NewGrievancePage", () => {
       fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: "Different issue" } });
       fireEvent.click(screen.getByRole("button", { name: "Submit Grievance" }));
       await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/grievances/g-linked"));
+    });
+  });
+
+  // GAP-CRM-GRIEVANCES-NEW-01 - a TYPED phone / email that already belongs to a CRM contact. The picker above is
+  // a name search (phone and email are encrypted at rest), so before this a clerk who typed a repeat citizen's
+  // number got no warning unless they picked the contact by hand. The check runs through the existing contact
+  // duplicate-check (ids, matched field names and a score back - never the number), debounced, advisory, and
+  // announced through ONE always-mounted live region.
+  describe("typed phone / email already belongs to an existing contact (GAP-CRM-GRIEVANCES-NEW-01)", () => {
+    type Handlers = {
+      duplicates?: Array<{ id: string; matchedFields: string[]; score: number }> | "fail";
+      contactName?: string | null;
+      open?: Array<{ id: string; referenceNo: string; subject: string }>;
+    };
+
+    function mockApi(h: Handlers = {}) {
+      const duplicates = h.duplicates ?? [{ id: "ct-9", matchedFields: ["phone"], score: 30 }];
+      return vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith("/v1/crm/contacts/duplicate-check")) {
+          return Promise.resolve(
+            duplicates === "fail"
+              ? new Response(JSON.stringify({ code: "INTERNAL" }), { status: 500 })
+              : new Response(JSON.stringify({ data: duplicates }), { status: 200 }),
+          );
+        }
+        if (/\/v1\/crm\/contacts\/[^/?]+$/.test(url)) {
+          return Promise.resolve(
+            h.contactName === null
+              ? new Response("{}", { status: 404 })
+              : new Response(JSON.stringify({ id: "ct-9", name: h.contactName ?? "Meera Devi", status: "active" }), { status: 200 }),
+          );
+        }
+        if (url.includes("/v1/crm/contacts/lookup")) {
+          return Promise.resolve(new Response(JSON.stringify({ data: [{ id: "ct-9", name: "Meera Devi" }] }), { status: 200 }));
+        }
+        if (url.includes("/v1/crm/grievances?")) {
+          const open = h.open ?? [];
+          return Promise.resolve(new Response(JSON.stringify({ data: open, meta: { total: open.length } }), { status: 200 }));
+        }
+        if (url.includes("/v1/crm/grievance-categories")) {
+          return Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+        }
+        return Promise.resolve(new Response(JSON.stringify({ data: { id: "g-new" } }), { status: 201 }));
+      });
+    }
+
+    const region = () => screen.getByRole("status", { name: "Existing contact check" });
+    const checks = (spy: ReturnType<typeof mockApi>) =>
+      spy.mock.calls.filter(([u]) => String(u).endsWith("/v1/crm/contacts/duplicate-check"));
+    const bodyOf = (call: unknown[]) => JSON.parse((call[1] as RequestInit).body as string) as Record<string, unknown>;
+    const type = (label: RegExp, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    const settle = () => new Promise((r) => setTimeout(r, 900));
+
+    it("keeps ONE live region mounted from the start, empty until there is something to say", () => {
+      mockApi();
+      render(<NewGrievancePage />);
+      expect(region()).toHaveAttribute("aria-live", "polite");
+      expect(region()).toBeEmptyDOMElement();
+    });
+
+    it("warns, with a link to the contact, when a typed phone already belongs to one", async () => {
+      const spy = mockApi();
+      render(<NewGrievancePage />);
+      type(/^phone/i, "9876543210");
+      await waitFor(() => expect(region()).toHaveTextContent("An existing contact already has this phone number."), { timeout: 4000 });
+      expect(within(region()).getByRole("link", { name: "Meera Devi" })).toHaveAttribute("href", "/crm/contacts/ct-9");
+      // Only the typed phone travels - not the name, not an email nobody typed.
+      expect(checks(spy)).toHaveLength(1);
+      expect(bodyOf(checks(spy)[0]!)).toEqual({ phone: "9876543210" });
+      // The number itself is never repeated back.
+      expect(region().textContent).not.toContain("9876543210");
+      expect(screen.getAllByRole("status", { name: "Existing contact check" })).toHaveLength(1);
+    });
+
+    it("warns for a typed email too, and says so in words", async () => {
+      const spy = mockApi({ duplicates: [{ id: "ct-9", matchedFields: ["email"], score: 40 }] });
+      render(<NewGrievancePage />);
+      type(/^email/i, "meera@example.gov.in");
+      await waitFor(() => expect(region()).toHaveTextContent("An existing contact already has this email address."), { timeout: 4000 });
+      expect(bodyOf(checks(spy)[0]!)).toEqual({ email: "meera@example.gov.in" });
+      expect(region().textContent).not.toContain("meera@example.gov.in");
+    });
+
+    it("sends both values in one check and names the right fields for several matches", async () => {
+      const spy = mockApi({
+        duplicates: [
+          { id: "ct-9", matchedFields: ["phone"], score: 30 },
+          { id: "ct-10", matchedFields: ["email"], score: 40 },
+        ],
+      });
+      render(<NewGrievancePage />);
+      type(/^phone/i, "+91-9876543210");
+      type(/^email/i, "meera@example.gov.in");
+      await waitFor(() => expect(region()).toHaveTextContent("2 existing contacts already have this phone number or email address."), { timeout: 4000 });
+      expect(checks(spy)).toHaveLength(1);
+      expect(bodyOf(checks(spy)[0]!)).toEqual({ phone: "+91-9876543210", email: "meera@example.gov.in" });
+      expect(within(region()).getAllByRole("link")).toHaveLength(2);
+    });
+
+    it("debounces: rapid typing makes one check, with the final value", async () => {
+      const spy = mockApi();
+      render(<NewGrievancePage />);
+      for (const v of ["9", "98", "9876", "987654", "9876543", "98765432", "987654321", "9876543210"]) type(/^phone/i, v);
+      await waitFor(() => expect(region()).toHaveTextContent("already has this phone number"), { timeout: 4000 });
+      expect(checks(spy)).toHaveLength(1);
+      expect(bodyOf(checks(spy)[0]!)).toEqual({ phone: "9876543210" });
+    });
+
+    it("does not look up a half-typed phone or an invalid email", async () => {
+      const spy = mockApi();
+      render(<NewGrievancePage />);
+      type(/^phone/i, "98765");
+      type(/^email/i, "meera@");
+      await settle();
+      expect(checks(spy)).toHaveLength(0);
+      expect(region()).toBeEmptyDOMElement();
+    });
+
+    it("says nothing when no contact matches", async () => {
+      const spy = mockApi({ duplicates: [] });
+      render(<NewGrievancePage />);
+      type(/^phone/i, "9876543210");
+      await waitFor(() => expect(checks(spy)).toHaveLength(1), { timeout: 4000 });
+      await settle();
+      expect(region()).toBeEmptyDOMElement();
+    });
+
+    it("clears the warning when the typed value is no longer a complete number", async () => {
+      mockApi();
+      render(<NewGrievancePage />);
+      type(/^phone/i, "9876543210");
+      await waitFor(() => expect(region()).toHaveTextContent("already has this phone number"), { timeout: 4000 });
+      type(/^phone/i, "98765");
+      await waitFor(() => expect(region()).toBeEmptyDOMElement());
+    });
+
+    it("lists the matched contact's open grievances with links (a probable duplicate)", async () => {
+      mockApi({ open: [{ id: "g-old-1", referenceNo: "DARPG/2026/000001", subject: "No water" }, { id: "g-old-2", referenceNo: "DARPG/2026/000002", subject: "Pipe" }] });
+      render(<NewGrievancePage />);
+      type(/^phone/i, "9876543210");
+      await waitFor(() => expect(region()).toHaveTextContent("2 open grievances:"), { timeout: 4000 });
+      expect(within(region()).getByRole("link", { name: "DARPG/2026/000001" })).toHaveAttribute("href", "/crm/grievances/g-old-1");
+      expect(within(region()).getByRole("link", { name: "DARPG/2026/000002" })).toHaveAttribute("href", "/crm/grievances/g-old-2");
+    });
+
+    it("still links a contact whose name could not be read, with a neutral label", async () => {
+      mockApi({ contactName: null });
+      render(<NewGrievancePage />);
+      type(/^phone/i, "9876543210");
+      await waitFor(() => expect(within(region()).getByRole("link", { name: "Existing contact" })).toHaveAttribute("href", "/crm/contacts/ct-9"), { timeout: 4000 });
+    });
+
+    it("stops warning about a contact once the clerk has linked that contact", async () => {
+      mockApi();
+      render(<NewGrievancePage />);
+      type(/^phone/i, "9876543210");
+      await waitFor(() => expect(region()).toHaveTextContent("already has this phone number"), { timeout: 4000 });
+      fireEvent.change(screen.getByRole("combobox", { name: /link existing contact/i }), { target: { value: "Meera" } });
+      fireEvent.mouseDown(await screen.findByText("Meera Devi", { selector: "[role=option] *, [role=option]" }));
+      await waitFor(() => expect(region()).toBeEmptyDOMElement());
+    });
+
+    it("is advisory and fails soft: a failed check says so, and the grievance can still be filed", async () => {
+      mockApi({ duplicates: "fail" });
+      render(<NewGrievancePage />);
+      type(/^phone/i, "9876543210");
+      await waitFor(() => expect(region()).toHaveTextContent("Could not check whether this phone or email already belongs to a contact."), { timeout: 4000 });
+      type(/full name/i, "Meera Devi");
+      type(/category/i, "Water Supply");
+      type(/subject/i, "No water");
+      fireEvent.click(screen.getByRole("button", { name: "Submit Grievance" }));
+      await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/grievances/g-new"));
+    });
+
+    it("is advisory when it DOES match: the grievance can still be filed with the warning showing", async () => {
+      mockApi();
+      render(<NewGrievancePage />);
+      type(/^phone/i, "9876543210");
+      await waitFor(() => expect(region()).toHaveTextContent("already has this phone number"), { timeout: 4000 });
+      type(/full name/i, "Meera Devi");
+      type(/category/i, "Water Supply");
+      type(/subject/i, "No water");
+      fireEvent.click(screen.getByRole("button", { name: "Submit Grievance" }));
+      await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/crm/grievances/g-new"));
     });
   });
 

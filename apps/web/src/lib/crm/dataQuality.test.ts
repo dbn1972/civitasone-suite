@@ -55,8 +55,18 @@ describe("normaliseCandidates", () => {
     expect(out.map((c) => c.id)).toEqual(["b", "a"]);
     expect(out[0].matchedFields).toEqual(["email"]);
   });
+  it("reads the { data: [...] } envelope crm-service really answers (it parsed to 'no duplicates' before)", () => {
+    // Exactly what POST /v1/crm/contacts/duplicate-check sends: ids, matched field NAMES and a score - no values.
+    const raw = { data: [{ id: "c-1", matchedFields: ["phone"], score: 30 }, { id: "c-2", matchedFields: ["email", "phone"], score: 70 }] };
+    const out = normaliseCandidates(raw);
+    expect(out.map((c) => c.id)).toEqual(["c-2", "c-1"]);
+    expect(out[0]).toMatchObject({ matchedFields: ["email", "phone"], score: 70 });
+    expect(out[1]!.phone).toBeUndefined();
+    expect(out[1]!.email).toBeUndefined();
+  });
   it("drops entries without an id and handles junk", () => {
     expect(normaliseCandidates([{ score: 1 }, null, "x"])).toEqual([]);
+    expect(normaliseCandidates({ data: "nope" })).toEqual([]);
     expect(normaliseCandidates(undefined)).toEqual([]);
   });
 });

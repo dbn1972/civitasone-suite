@@ -16,6 +16,7 @@
  */
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import type { EntityOption } from "@/app/_components/ds";
+import { duplicateCheck } from "@/lib/crm/dataQuality";
 
 export async function searchContacts(query: string, signal: AbortSignal): Promise<EntityOption[]> {
   const q = query.trim();
@@ -62,4 +63,80 @@ export async function getOpenGrievancesForContact(
   } catch {
     return { items: [], total: 0 };
   }
+}
+
+/* ------------------------------------------------------------------------------------------------
+ * GAP-CRM-GRIEVANCES-NEW-01: a TYPED phone / email that already belongs to a CRM contact.
+ *
+ * The picker above is a NAME search (phone and email are encrypted at rest, so GET /contacts/lookup
+ * cannot match them), which left a clerk who types a repeat citizen's number with no warning unless
+ * they happened to pick the contact by hand. This asks the contact duplicate-check instead - the same
+ * endpoint, role gate (CRM roles), tenant scoping and tenant dedup rules the new-contact form uses.
+ * It compares the typed value with the decrypted contacts server-side and answers with ids, the
+ * matched field NAMES and a score only - never a phone or email - so nothing is learnt here that the
+ * clerk's role cannot already see. Only the typed phone / email are sent (never the name), and only
+ * once they pass the form's own format check.
+ *
+ * Everything here is ADVISORY and fails soft: a failed check reports `failed` (the form says it could
+ * not check), a failed name or open-grievance read just leaves that detail out. Filing is never blocked.
+ * ---------------------------------------------------------------------------------------------- */
+
+export type ContactMatchField = "phone" | "email";
+
+export interface ExistingContactMatch {
+  id: string;
+  /** Display name, or null when the contact could not be read (the link still works). */
+  name: string | null;
+  /** Which of the TYPED values matched this contact. */
+  matchedOn: ContactMatchField[];
+  /** Open grievances already on file for this contact (a probable duplicate), with links. */
+  openGrievances: { items: OpenGrievanceRef[]; total: number };
+}
+
+export interface ExistingContactResult {
+  matches: ExistingContactMatch[];
+  /** True = the duplicate check itself could not be completed (NOT "no match"). */
+  failed: boolean;
+}
+
+/** At most this many matching contacts are shown; more than that is a data-quality problem for the dedup queue. */
+const MAX_MATCHES = 3;
+
+async function contactName(id: string, signal: AbortSignal): Promise<string | null> {
+  try {
+    const res = await browserFetch(`v1/crm/contacts/${encodeURIComponent(id)}`, { signal });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { name?: unknown } | null;
+    return typeof body?.name === "string" && body.name.trim() ? body.name.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function findExistingContacts(
+  input: { phone?: string; email?: string },
+  signal: AbortSignal,
+): Promise<ExistingContactResult> {
+  const phone = input.phone?.trim();
+  const email = input.email?.trim();
+  if (!phone && !email) return { matches: [], failed: false };
+  let candidates;
+  try {
+    candidates = await duplicateCheck({ ...(phone ? { phone } : {}), ...(email ? { email } : {}) });
+  } catch {
+    return { matches: [], failed: !signal.aborted };
+  }
+  if (signal.aborted) return { matches: [], failed: false };
+  // Only a match on a value that was actually typed counts (the tenant rules may also weigh other fields).
+  const hits = candidates
+    .map((c) => ({ id: c.id, matchedOn: c.matchedFields.filter((f): f is ContactMatchField => f === "phone" || f === "email") }))
+    .filter((c) => c.matchedOn.length > 0)
+    .slice(0, MAX_MATCHES);
+  const matches = await Promise.all(
+    hits.map(async (h): Promise<ExistingContactMatch> => {
+      const [name, openGrievances] = await Promise.all([contactName(h.id, signal), getOpenGrievancesForContact(h.id, signal)]);
+      return { id: h.id, name, matchedOn: h.matchedOn, openGrievances };
+    }),
+  );
+  return { matches, failed: false };
 }

@@ -6,7 +6,13 @@ import Link from "next/link";
 import { Button, ConfirmDialog, EntityPicker, PageHeader } from "../../../../_components/ds";
 import { browserFetch } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
-import { searchContacts, getOpenGrievancesForContact, type OpenGrievanceRef } from "@/lib/crm/grievanceContactLink";
+import {
+  searchContacts,
+  getOpenGrievancesForContact,
+  findExistingContacts,
+  type OpenGrievanceRef,
+  type ExistingContactResult,
+} from "@/lib/crm/grievanceContactLink";
 import {
   getGrievanceCategories,
   grievanceCategoryOptions,
@@ -30,6 +36,9 @@ const GRIEVANCE_CATEGORIES = DEFAULT_GRIEVANCE_CATEGORIES.map((c) => c.label);
 // form; email is a standard shape. Both optional — an empty value is allowed.
 const PHONE_RE = /^(?:\+?91[-\s]?)?[6-9]\d{9}$|^\+?\d{7,15}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Pause after the last keystroke before the typed phone / email is checked against existing contacts. */
+const CONTACT_CHECK_DEBOUNCE_MS = 500;
 
 export default function NewGrievancePage() {
   const t = useTranslations("crmGrievanceNew");
@@ -71,6 +80,40 @@ export default function NewGrievancePage() {
     });
     return () => ctrl.abort();
   }, [contactId]);
+  // GAP-CRM-GRIEVANCES-NEW-01: a typed phone / email that already belongs to a CRM contact. The two
+  // inputs stay uncontrolled (the submit reads FormData); these mirror what is typed so a debounced
+  // check can run. Advisory only: it never blocks filing, and a failed check says so.
+  const [typedPhone, setTypedPhone] = useState("");
+  const [typedEmail, setTypedEmail] = useState("");
+  const [existing, setExisting] = useState<ExistingContactResult>({ matches: [], failed: false });
+  useEffect(() => {
+    const phone = typedPhone.trim();
+    const email = typedEmail.trim();
+    // Only a value that passes the form's own format check is looked up (a half-typed number is not a citizen).
+    const phoneOk = phone !== "" && PHONE_RE.test(phone);
+    const emailOk = email !== "" && EMAIL_RE.test(email);
+    if (!phoneOk && !emailOk) {
+      // Nothing typed that can identify a citizen yet, so there is nothing to look up or to report: this
+      // resets the advisory state; it is not a fetch result being read as "empty".
+      setExisting((prev) => (prev.matches.length === 0 && !prev.failed ? prev : { matches: [], failed: false })); // ux-001-ok: input cleared / not yet valid, no lookup was made
+      return;
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => {
+      void findExistingContacts({ ...(phoneOk ? { phone } : {}), ...(emailOk ? { email } : {}) }, ctrl.signal).then((r) => {
+        if (!ctrl.signal.aborted) setExisting(r);
+      });
+    }, CONTACT_CHECK_DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+      ctrl.abort();
+    };
+  }, [typedPhone, typedEmail]);
+  // A contact the clerk has already linked is not worth warning about a second time.
+  const shownMatches = existing.matches.filter((m) => m.id !== contactId);
+  const matchedFields = new Set(shownMatches.flatMap((m) => m.matchedOn));
+  const matchedFieldsKey = matchedFields.has("phone") && matchedFields.has("email") ? "both" : matchedFields.has("email") ? "email" : "phone";
+
   // GAP-CRM-GRIEVANCES-NEW-02: client-side inline errors for phone/email, keyed
   // by field name, shown beside the field just like the server ones.
   const [clientErrors, setClientErrors] = useState<Record<string, string>>({});
@@ -253,6 +296,7 @@ export default function NewGrievancePage() {
                     name="citizenPhone"
                     type="tel"
                     maxLength={32}
+                    onChange={(e) => setTypedPhone(e.currentTarget.value)}
                     placeholder={t("phonePlaceholder")}
                     aria-invalid={fieldErr("citizenPhone") ? true : undefined}
                     aria-describedby={fieldErr("citizenPhone") ? "citizenPhone-error" : undefined}
@@ -275,6 +319,7 @@ export default function NewGrievancePage() {
                     name="citizenEmail"
                     type="email"
                     maxLength={320}
+                    onChange={(e) => setTypedEmail(e.currentTarget.value)}
                     placeholder={t("emailPlaceholder")}
                     aria-invalid={fieldErr("citizenEmail") ? true : undefined}
                     aria-describedby={fieldErr("citizenEmail") ? "citizenEmail-error" : undefined}
@@ -291,6 +336,49 @@ export default function NewGrievancePage() {
                     <span id="citizenEmail-error" style={{ fontSize: 12, color: "var(--bad)" }}>{fieldErr("citizenEmail")}</span>
                   )}
                 </label>
+              </div>
+              {/* GAP-CRM-GRIEVANCES-NEW-01: ONE live region, mounted for the whole life of the form, so the
+                  match announcement is reliably read out when it appears. It names the existing contact(s)
+                  that already have the typed phone / email (names and links only - never the number or
+                  address itself) and any open grievances they have, and it is advisory. */}
+              <div role="status" aria-live="polite" aria-label={t("contactMatchAria")}>
+                {shownMatches.length > 0 ? (
+                  <div
+                    style={{
+                      padding: "10px 14px",
+                      fontSize: 13,
+                      lineHeight: 1.5,
+                      color: "var(--ink)",
+                      background: "color-mix(in srgb, var(--warn) 10%, transparent)",
+                      border: "1px solid color-mix(in srgb, var(--warn) 40%, transparent)",
+                      borderRadius: "var(--r)",
+                    }}
+                  >
+                    <strong>{t("contactMatchWarning", { count: shownMatches.length, fields: matchedFieldsKey })}</strong>
+                    <ul style={{ margin: "6px 0 0", paddingInlineStart: 18 }}>
+                      {shownMatches.map((m) => (
+                        <li key={m.id}>
+                          <Link href={`/crm/contacts/${encodeURIComponent(m.id)}`}>{m.name ?? t("contactMatchUnnamed")}</Link>
+                          {m.openGrievances.total > 0 ? (
+                            <>
+                              {" — "}
+                              {t("contactMatchOpenGrievances", { count: m.openGrievances.total })}{" "}
+                              {m.openGrievances.items.map((g, i) => (
+                                <span key={g.id}>
+                                  {i > 0 ? ", " : ""}
+                                  <Link href={`/crm/grievances/${encodeURIComponent(g.id)}`}>{g.referenceNo}</Link>
+                                </span>
+                              ))}
+                            </>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                    <p style={{ margin: "6px 0 0", color: "var(--ink2)" }}>{t("contactMatchHint", { label: t("linkContact") })}</p>
+                  </div>
+                ) : existing.failed ? (
+                  <span style={{ fontSize: 12, color: "var(--ink2)" }}>{t("contactMatchUnavailable")}</span>
+                ) : null}
               </div>
               {/* GAP-CRM-GRIEVANCES-NEW-01: optionally tie the grievance to an
                   existing CRM contact (server-side name search; the lookup only
