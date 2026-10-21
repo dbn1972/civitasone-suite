@@ -4277,7 +4277,8 @@
     "filterPlaceholder": "Filter by holder, card number, type or department…",
     "emptyTitle": "No ID cards issued",
     "emptyMessage": "ID cards for employees and vendor staff appear here once issued by HR administration.",
-    "loadingSubtitle": "Employee identity cards."
+    "loadingSubtitle": "Employee identity cards.",
+    "accessRestrictedReason": "ID cards include physical access-zone data, so this register is limited to HR administrators and security administrators."
   },
   "incomeTax": {
     "loadingAriaLabel": "Loading…",
