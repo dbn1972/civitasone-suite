@@ -8,7 +8,10 @@ const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: pushMock, refresh: refreshMock }) }));
 
 const searchEmployeesMock = vi.fn();
-vi.mock("@/lib/entityAdapters/employee", () => ({
+// MANAGER_INELIGIBLE_STATUSES lives in the adapter module (shared with the Add Employee wizard manager
+// picker); keep the real constant so this test also pins the exact list the form sends.
+vi.mock("@/lib/entityAdapters/employee", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/entityAdapters/employee")>()),
   searchEmployees: (...a: unknown[]) => searchEmployeesMock(...a),
   resolveEmployees: vi.fn(async () => []),
 }));

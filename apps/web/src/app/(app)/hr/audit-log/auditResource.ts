@@ -43,6 +43,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "dsc_config",
   "employee",
   "employee_competency",
+  "employee_import_batch",
   "exemption_ceiling",
   "expense_claim",
   "face_config",

@@ -40,7 +40,9 @@ describe("Step3 reporting manager picker (GAP-HR-EMPLOYEES-NEW-04)", () => {
     fireEvent.change(input, { target: { value: "sharma" } });
     await screen.findByText("Asha Sharma (S-002)");
     const url = String((fetchMock.mock.calls[0] as unknown[])[0]);
-    expect(url).toBe("/api/proxy/v1/hrms/employees?q=sharma&limit=20");
+    // HR cluster 01 (GAP-HR-EMPLOYEES-DETAIL-EDIT-05) also sends the exited-status exclusion to the server
+    // so the 20-row page is never spent on people who cannot be chosen; the typed query stays q=sharma.
+    expect(url).toBe("/api/proxy/v1/hrms/employees?q=sharma&limit=20&excludeStatuses=terminated,separated,retired");
     expect(url).not.toContain("role=manager");
   });
 
