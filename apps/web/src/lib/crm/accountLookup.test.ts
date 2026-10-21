@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { errorMessageFromResponse } from "@/lib/api/browserClient";
 import { ACCOUNT_IDS_PER_REQUEST, fetchAccountsByIds, searchAccountsByName } from "./accountLookup";
 
 function res(body: unknown, status = 200): Response {
@@ -91,7 +92,18 @@ describe("searchAccountsByName", () => {
   });
 
   it("throws on a failed request so the caller can tell it from 'no matches'", async () => {
-    fetchMock.mockResolvedValue(res({}, 500));
+    fetchMock.mockImplementation(async () => res({}, 500));
     await expect(searchAccountsByName("acme", 20)).rejects.toThrow();
+  });
+
+  // A clerk reads this message: it must be the app's plain-language one for a 500, never a
+  // status code ("accounts search failed (500)"). Without this a revert to a raw-status Error
+  // would stay green here and only be caught by the repo-wide raw-status-leak CI guard.
+  it("fails with the plain-language message for the status, never a raw HTTP status", async () => {
+    fetchMock.mockImplementation(async () => res({}, 500));
+    const expected = await errorMessageFromResponse(res({}, 500));
+    expect(expected).not.toMatch(/\b500\b/);
+    await expect(searchAccountsByName("acme", 20)).rejects.toThrow(expected);
+    await expect(searchAccountsByName("acme", 20)).rejects.not.toThrow(/\b500\b/);
   });
 });

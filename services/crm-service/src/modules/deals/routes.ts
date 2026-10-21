@@ -3,7 +3,7 @@ import { z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { resolveUserNames } from "../../shared/identity-names.js";
+import { resolveUserNames } from "../../shared/user-directory.js";
 import { createDealBody, updateDealStageBody, updateDealBody, idParam, dealsListSchema, dealIdsQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";

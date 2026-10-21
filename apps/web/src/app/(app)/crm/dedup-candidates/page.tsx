@@ -37,7 +37,7 @@ import {
 import { maskEmail, maskPhone } from "@/app/_components/ds";
 import { MaskedReveal } from "@/app/_components/ds/MaskedReveal";
 import { useSessionIdentity } from "@/lib/auth/useSessionIdentity";
-import { CRM_PII_READ_ROLES } from "@/lib/auth/crmRoles";
+import { CRM_PII_READ_ROLES, CRM_MERGE_ROLES } from "@/lib/auth/crmRoles";
 
 // ─── Confidence badge ─────────────────────────────────────────────────────────
 
@@ -181,12 +181,18 @@ interface PairCardProps {
   busyPairId: string | null;
   /** Viewer holds a role the audited PII reveal accepts (display gate only). */
   canReveal: boolean;
+  /**
+   * Viewer holds a role POST /v1/crm/contacts/merge accepts (CRM_MERGE_ROLES, display gate
+   * only). Merging is admin-only on the server; offering it (and the Swap that only decides
+   * which record a merge keeps) to a plain crm_user walked them into a 403.
+   */
+  canMerge: boolean;
   onMerge: (pair: DedupPair) => void;
   onDismiss: (pair: DedupPair) => void;
   onSwap: (pair: DedupPair) => void;
 }
 
-function PairCard({ pair, swapped, busyPairId, canReveal, onMerge, onDismiss, onSwap }: PairCardProps) {
+function PairCard({ pair, swapped, busyPairId, canReveal, canMerge, onMerge, onDismiss, onSwap }: PairCardProps) {
   const t = useTranslations("crmDedupCandidates");
   const headingId = useId();
   const busy = busyPairId === pair.pairId;
@@ -256,22 +262,26 @@ function PairCard({ pair, swapped, busyPairId, canReveal, onMerge, onDismiss, on
       </div>
 
       <div className="dedup-actions">
-        <Button
-          variant="danger"
-          onClick={() => onMerge(pair)}
-          disabled={busy}
-          loading={busy}
-        >
-          {busy ? t("working") : t("mergeKeep", { name: keep.name ?? t("primaryFallback") })}
-        </Button>
-        <Button
-          variant="ghost"
-          onClick={() => onSwap(pair)}
-          disabled={busy}
-          aria-label={t("swapAria")}
-        >
-          {t("swapSides")}
-        </Button>
+        {canMerge && (
+          <>
+            <Button
+              variant="danger"
+              onClick={() => onMerge(pair)}
+              disabled={busy}
+              loading={busy}
+            >
+              {busy ? t("working") : t("mergeKeep", { name: keep.name ?? t("primaryFallback") })}
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => onSwap(pair)}
+              disabled={busy}
+              aria-label={t("swapAria")}
+            >
+              {t("swapSides")}
+            </Button>
+          </>
+        )}
         <Button
           variant="ghost"
           onClick={() => onDismiss(pair)}
@@ -291,6 +301,7 @@ export default function DedupCandidatesPage() {
   // Display gate only: the server's reveal endpoint re-checks the role.
   const identity = useSessionIdentity();
   const canReveal = identity.roles.some((r) => CRM_PII_READ_ROLES.includes(r));
+  const canMerge = identity.roles.some((r) => CRM_MERGE_ROLES.includes(r));
   const [pairs, setPairs]      = useState<DedupPair[]>([]);
   const [source, setSource]    = useState<DedupSource | "loading">("loading");
   const [actionErr, setActErr] = useState<string | null>(null);
@@ -493,6 +504,7 @@ export default function DedupCandidatesPage() {
                 swapped={swapped[pair.pairId] ?? false}
                 busyPairId={null}
                 canReveal={canReveal}
+                canMerge={canMerge}
                 onMerge={openMerge}
                 onDismiss={openDismiss}
                 onSwap={toggleSwap}

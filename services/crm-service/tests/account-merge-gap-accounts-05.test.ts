@@ -35,7 +35,7 @@ function headers(roles: string[]) {
 async function cleanup(): Promise<void> {
   await sqlClient.begin(async (tx) => {
     await tx`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
-    for (const t of ["account_relationships", "activities", "contacts", "accounts"]) {
+    for (const t of ["service_requests", "account_relationships", "activities", "contacts", "accounts"]) {
       await tx.unsafe(`DELETE FROM crm.${t} WHERE tenant_id = '${TENANT}'`).catch(() => {});
     }
     await tx`DELETE FROM _outbox.messages WHERE tenant_id = ${TENANT}`.catch(() => {});
@@ -218,6 +218,40 @@ describe("GAP-CRM-ACCOUNTS-05 merge re-points child accounts, activities and rel
         `${primary}>${third}:partner`,
       ].sort(),
     );
+  });
+
+  it("re-points account follow-up service requests, so 'View related account' lands on the primary", async () => {
+    const primary = await newAccount("SR Primary");
+    const duplicate = await newAccount("SR Duplicate");
+    const unrelated = await newAccount("SR Unrelated");
+    const followUp = async (relatedAccountId: string): Promise<string> => {
+      const res = await post(
+        "/v1/crm/service-requests",
+        { citizenName: "Suresh Rao", serviceType: "Account Health Follow-up", subject: "Account health follow-up", relatedAccountId },
+        ["crm_admin"],
+      );
+      expect(res.statusCode).toBe(201);
+      return res.json().data.id as string;
+    };
+    const onDuplicate = await followUp(duplicate);
+    const onUnrelated = await followUp(unrelated);
+
+    await mergeAccounts(primary, duplicate);
+
+    // Real-DB read (not a mock): nothing references the tombstoned duplicate any more.
+    const rows = await scoped((tx) => tx<Array<{ id: string; relatedAccountId: string | null }>>`
+      SELECT id, related_account_id AS "relatedAccountId" FROM crm.service_requests
+      WHERE tenant_id = ${TENANT} AND id IN (${onDuplicate}, ${onUnrelated})`);
+    const byId = new Map(rows.map((r) => [r.id, r.relatedAccountId]));
+    expect(byId.get(onDuplicate)).toBe(primary);
+    expect(byId.get(onUnrelated)).toBe(unrelated);
+
+    // The detail read the "View related account" link is built from points at a live account.
+    const detail = await get(`/v1/crm/service-requests/${onDuplicate}`, ["crm_admin"]);
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().data.relatedAccountId).toBe(primary);
+    const target = await get(`/v1/crm/accounts/${primary}`, ["crm_admin"]);
+    expect(target.statusCode).toBe(200);
   });
 
   it("records the merged-away account id in the audit row, not only the survivor", async () => {

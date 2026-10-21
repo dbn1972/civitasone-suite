@@ -13,6 +13,12 @@
  */
 import { browserFetch, errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { minutesSince, formatAgeing } from "@/lib/crm/assignment";
+import {
+  normaliseEscalationRoles,
+  normaliseEscalationUsers,
+  type EscalationRole,
+  type EscalationUser,
+} from "./directory";
 import { UserFacingError } from "@/lib/userFacingError";
 
 export type AaSource = "api" | "error";
@@ -295,41 +301,12 @@ export async function getTaskEscalationRules(): Promise<LoaderResult<TaskEscalat
 
 /* -- GAP-CRM-TASK-ESCALATION-01: role + user pickers for escalation targets -- */
 
-/** A selectable manager role (from policy-service). */
-export interface EscalationRole {
-  key: string;
-  label: string;
-}
-
-/** A selectable manager user (from identity-service). */
-export interface EscalationUser {
-  id: string;
-  name: string;
-}
-
-export function normaliseEscalationRoles(raw: unknown): EscalationRole[] {
-  const out: EscalationRole[] = [];
-  for (const item of toArray(raw, "roles")) {
-    if (!item || typeof item !== "object") continue;
-    const r = item as Record<string, unknown>;
-    const key = str(r.key) || str(r.name) || str(r.id);
-    if (!key) continue;
-    out.push({ key, label: str(r.label) || str(r.name) || key });
-  }
-  return out;
-}
-
-export function normaliseEscalationUsers(raw: unknown): EscalationUser[] {
-  const out: EscalationUser[] = [];
-  for (const item of toArray(raw, "users")) {
-    if (!item || typeof item !== "object") continue;
-    const r = item as Record<string, unknown>;
-    const id = str(r.id);
-    if (!id) continue;
-    out.push({ id, name: str(r.name) || str(r.email) || id });
-  }
-  return out;
-}
+/*
+ * The role / user shapes and their normalisers live in ./directory (shared with the lead
+ * escalation editor in assignment.ts); re-exported here so existing importers keep working.
+ */
+export { normaliseEscalationRoles, normaliseEscalationUsers };
+export type { EscalationRole, EscalationUser };
 
 /**
  * GAP-CRM-TASK-ESCALATION-01: the tenant's assignable roles. A free-text role

@@ -1,8 +1,8 @@
 /**
  * CRM staff directory - the pickers behind task escalation and assignment.
  *
- *   GET /v1/crm/directory/users   - the tenant's users as { id, name }
- *   GET /v1/crm/directory/roles   - the tenant's roles as { key, label }
+ *   GET /v1/crm/directory/users   - the tenant's ACTIVE users as { id, name }
+ *   GET /v1/crm/directory/roles   - the tenant's ACTIVE roles as { key, label }
  *
  * The web used to fill these pickers from identity-service's `identity/users` and
  * policy-service's `policy/roles`, both of which are gated to platform/tenant admins. A
@@ -18,7 +18,14 @@ import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { listDirectoryUsers, listDirectoryRoles } from "../../shared/user-directory.js";
 
-/** Anyone who can work CRM tasks may pick a colleague (reassign, assign). */
+/**
+ * Anyone who can work CRM tasks may pick a colleague (reassign, assign).
+ *
+ * OWNER SIGN-OFF PENDING: this lets a plain `crm_user` list the name of every ACTIVE staff
+ * member of the tenant (id + name only), which is wider than the admin-only identity listing
+ * it replaced. It is the behaviour the reassign / assign pickers were built on, so it is kept
+ * until the owner decides; narrowing it means taking `crm_user` out of this list.
+ */
 const USER_PICKER_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];
 /** Roles are only needed to configure escalation rules, which is admin-only. */
 const ROLE_PICKER_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
@@ -30,9 +37,10 @@ export async function directoryRoutes(app: FastifyInstance): Promise<void> {
     async (req, reply) => {
       const ctx = resolveContext(req);
       requireRole(ctx, USER_PICKER_ROLES);
-      const users = await listDirectoryUsers(ctx.tenantId);
-      if (users === undefined) throw new HttpError(503, "DIRECTORY_UNAVAILABLE", "the user directory is unavailable; try again");
-      return reply.send({ data: users, meta: { total: users.length } });
+      const list = await listDirectoryUsers(ctx.tenantId);
+      if (list === undefined) throw new HttpError(503, "DIRECTORY_UNAVAILABLE", "the user directory is unavailable; try again");
+      // `truncated`: more users exist than were read, so a missing name proves nothing.
+      return reply.send({ data: list.users, meta: { total: list.users.length, truncated: list.truncated } });
     },
   );
 

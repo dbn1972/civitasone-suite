@@ -9,7 +9,7 @@ import { commandId } from "../../shared/idempotency.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { ALLOWED_CURRENCIES } from "../deals/quotation-domain.js";
-import { resolveUserNames } from "../../shared/identity-names.js";
+import { resolveUserNames } from "../../shared/user-directory.js";
 import * as repo from "./repo.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin", "tenant_admin"];

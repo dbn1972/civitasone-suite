@@ -22,13 +22,12 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
-import { fetchUserNames } from "../../shared/identity-client.js";
 import { COMMANDS } from "../../topics.js";
 import * as v from "./validators.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
 import { assertEscalationRecipientExists } from "./recipients.js";
-import { listTenantRoleNames, listActiveTenantUsers } from "../../shared/directory-client.js";
+import { resolveUserNames, listDirectoryRoles, listDirectoryUsers } from "../../shared/user-directory.js";
 
 const CRM_ROLES = ["crm_user", "crm_admin", "super_admin"];
 const ADMIN_ROLES = ["crm_admin", "super_admin", "tenant_admin"];
@@ -159,7 +158,7 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     // GAP-CRM-ASSIGNMENT-RULES-05: show WHO last changed the chain. The rule row keeps
     // only the user id, so resolve a display name from identity-service (best effort:
     // an unresolved id simply has no name; the raw id is never shown as a label).
-    const names = await fetchUserNames(ctx.tenantId);
+    const names = await resolveUserNames(ctx.tenantId, rules.map((r) => r.updatedBy));
     const data = rules.map((r) => {
       const updatedByName = r.updatedBy ? names.get(r.updatedBy) : undefined;
       return updatedByName ? { ...r, updatedByName } : r;
@@ -321,13 +320,16 @@ export async function assignmentRoutes(app: FastifyInstance): Promise<void> {
     { config: { rateLimit: { max: 30, timeWindow: "1 minute" } } },
     async (req, reply) => {
       const ctx = resolveContext(req); requireRole(ctx, ADMIN_ROLES);
+      // Same directory (and same semantics: active users, active roles, fail-closed) as
+      // GET /v1/crm/directory/{users,roles}; only the envelope and the admin-only gate differ.
+      // `fresh`: an editor that has just added a role or user must see it, not a 60s-old list.
       const [roles, users] = await Promise.all([
-        listTenantRoleNames(ctx.tenantId),
-        listActiveTenantUsers(ctx.tenantId),
+        listDirectoryRoles(ctx.tenantId, { fresh: true }),
+        listDirectoryUsers(ctx.tenantId, { fresh: true }),
       ]);
       return reply.send({
         data: {
-          roles: (roles ?? []).map((name) => ({ key: name, label: name })),
+          roles: roles ?? [],
           users: users?.users ?? [],
         },
         // `*Available:false` = that directory could not be read (NOT "there are none"), so the

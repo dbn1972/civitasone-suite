@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
-import { clearUserNameCache } from "../src/shared/identity-client.js";
+import { clearDirectoryCache } from "../src/shared/user-directory.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
@@ -60,7 +60,7 @@ beforeAll(async () => {
            (gen_random_uuid(), ${TENANT}, ${UNKNOWN_AGENT}, 50, 2, true, '[]'::jsonb)`);
 });
 // Each case stubs a different identity directory: forget the per-tenant name cache between them.
-beforeEach(() => clearUserNameCache());
+beforeEach(() => clearDirectoryCache());
 afterEach(() => vi.restoreAllMocks());
 afterAll(async () => {
   await scoped((tx) => tx`DELETE FROM crm.agent_workload WHERE tenant_id = ${TENANT}`).catch(() => {});
@@ -82,16 +82,38 @@ describe("GET /v1/crm/teams/agents display names (GAP-CRM-AGENT-WORKLOAD-05)", (
   });
 
   // The web agent pickers read this roster on every keystroke.
-  it("fetches the directory once per minute per tenant, and never caches a failure", async () => {
-    const down = stubIdentity("down");
-    expect("name" in byAgent(await agents(), KNOWN_AGENT)).toBe(false); // failed => not cached
-    down.mockRestore();
-
+  it("fetches the directory once per minute per tenant", async () => {
     const ok = stubIdentity([{ id: KNOWN_AGENT, name: "Asha Rao" }]);
-    expect(byAgent(await agents(), KNOWN_AGENT).name).toBe("Asha Rao"); // recovered immediately
+    expect(byAgent(await agents(), KNOWN_AGENT).name).toBe("Asha Rao");
     await agents();
     await agents();
     expect(ok.mock.calls.filter((c) => String(c[0]).includes("user-summaries"))).toHaveLength(1);
+  });
+
+  // A failed lookup is remembered for 10s (user-directory.ts), so while identity is down the
+  // per-keystroke roster reads do not each wait out the identity timeout; after the window the
+  // roster recovers by itself.
+  it("remembers a failed lookup for 10s only: no refetch inside the window, names back after it", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-10-21T10:00:00Z"));
+      const down = stubIdentity("down");
+      expect("name" in byAgent(await agents(), KNOWN_AGENT)).toBe(false); // failed
+      down.mockRestore();
+
+      const ok = stubIdentity([{ id: KNOWN_AGENT, name: "Asha Rao" }]);
+      const lookups = () => ok.mock.calls.filter((c) => String(c[0]).includes("user-summaries")).length;
+      vi.setSystemTime(new Date("2026-10-21T10:00:05Z"));
+      expect("name" in byAgent(await agents(), KNOWN_AGENT)).toBe(false); // inside the window: not asked again
+      expect(lookups()).toBe(0);
+
+      vi.setSystemTime(new Date("2026-10-21T10:00:11Z")); // past the 10s failure window
+      expect(byAgent(await agents(), KNOWN_AGENT).name).toBe("Asha Rao"); // recovered
+      await agents();
+      expect(lookups()).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it.each([["unreachable", "down" as const], ["unavailable (503)", 503 as const]])(

@@ -1,6 +1,7 @@
 import {
   CRM_ADMIN_ROLES,
   CRM_DEDUP_RULES_ROLES,
+  CRM_PIPELINE_WRITE_ROLES,
   CRM_STRICT_ADMIN_ROLES,
   hasAnyRole,
 } from "@/lib/auth/roleGuard";
@@ -19,6 +20,10 @@ import {
  *                    (Matching Rules: narrower still -- crm_admin and super_admin
  *                    only, the roles crm-service admits on /v1/crm/dedup-rules;
  *                    GAP-CRM-DEDUP-RULES-05)
+ *   - "pipelineWrite" the route layout calls requireAnyRole(CRM_PIPELINE_WRITE_ROLES, ...)
+ *                    (Pipelines editor: crm_admin and super_admin only, the roles
+ *                    crm-service admits on /v1/crm/pipelines writes; tenant_admin
+ *                    would see a wired editor whose every call 403s)
  *
  * hubTiles.test.ts reads every destination layout.tsx and fails if a tile's
  * `access` drifts from the guard the route really enforces. Hiding a tile is UX
@@ -27,7 +32,7 @@ import {
  * Section and tile keys map to the crm.hub.sections.* / crm.hub.tiles.* i18n
  * keys (GAP-CRM-HOME-03); hrefs are static.
  */
-export type TileAccess = "all" | "admin" | "strictAdmin" | "dedupRules";
+export type TileAccess = "all" | "admin" | "strictAdmin" | "dedupRules" | "pipelineWrite";
 
 export interface TileDef {
   tileKey: string;
@@ -59,7 +64,7 @@ export const CRM_HUB_SECTIONS: SectionDef[] = [
     sectionKey: "pipeline",
     tiles: [
       { tileKey: "pipelineBoard", href: "/crm/pipeline", access: "all" },
-      { tileKey: "pipelines", href: "/crm/pipelines", access: "admin" },
+      { tileKey: "pipelines", href: "/crm/pipelines", access: "pipelineWrite" },
       { tileKey: "opportunities", href: "/crm/opportunities", access: "all" },
       { tileKey: "ageing", href: "/crm/opportunity-ageing", access: "all" },
       { tileKey: "forecast", href: "/crm/forecast", access: "all" },
@@ -117,6 +122,7 @@ export function canSeeTile(access: TileAccess, roles: readonly string[]): boolea
   if (access === "admin") return hasAnyRole(roles, CRM_ADMIN_ROLES);
   if (access === "strictAdmin") return hasAnyRole(roles, CRM_STRICT_ADMIN_ROLES);
   if (access === "dedupRules") return hasAnyRole(roles, CRM_DEDUP_RULES_ROLES);
+  if (access === "pipelineWrite") return hasAnyRole(roles, CRM_PIPELINE_WRITE_ROLES);
   return true;
 }
 

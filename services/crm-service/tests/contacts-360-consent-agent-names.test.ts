@@ -17,7 +17,7 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerAllConsumers } from "../src/consumers.js";
-import { clearIdentityNameCache } from "../src/shared/identity-client.js";
+import { clearDirectoryCache } from "../src/shared/user-directory.js";
 import { drainQueue } from "./consumer-harness.js";
 
 const SECRET = process.env.JWT_SECRET ?? "";
@@ -65,7 +65,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  clearIdentityNameCache();
+  clearDirectoryCache();
 });
 
 afterAll(async () => {

@@ -17,7 +17,7 @@ import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerAllConsumers } from "../src/consumers.js";
 import { drainQueue } from "./consumer-harness.js";
-import { clearUserNameCache } from "../src/shared/identity-client.js";
+import { clearDirectoryCache } from "../src/shared/user-directory.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
@@ -66,7 +66,7 @@ beforeAll(async () => {
   await queue.start();
 });
 // Each case stubs a different identity directory: forget the per-tenant name cache between them.
-beforeEach(() => clearUserNameCache());
+beforeEach(() => clearDirectoryCache());
 afterEach(() => vi.restoreAllMocks());
 afterAll(async () => {
   await cleanup();
@@ -100,6 +100,10 @@ describe("GET /v1/crm/assignment-rules last-changed metadata (GAP-CRM-ASSIGNMENT
 
   it("reflects a later change by someone else", async () => {
     const first = (await call("GET", "/v1/crm/assignment-rules", ACTOR_A, undefined, ["crm_user"])).json().data[0] as { updatedAt: string };
+    // That first read had no identity stub, so its name lookup failed (nothing listens on the
+    // identity port) and the directory remembers the failure for 10s; forget it so the read
+    // below sees the stub instead of the failure window.
+    clearDirectoryCache();
     await new Promise((r) => setTimeout(r, 20));
     const put = await call("PUT", `/v1/crm/assignment-rules/${ruleId}`, ACTOR_B, { name: "north zone" });
     expect(put.statusCode).toBe(202);

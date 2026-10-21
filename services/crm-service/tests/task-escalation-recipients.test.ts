@@ -35,8 +35,8 @@ function headers(roles = ["crm_admin"]) {
 const originalFetch = globalThis.fetch;
 /** policy-service /policy/roles; null = unreachable. */
 let policyRoles: Array<{ name: string; status: string }> | null;
-/** identity-service user-summaries; null = unreachable. */
-let identityUsers: Array<{ id: string; name: string }> | null;
+/** identity-service /identity/users (the pickers list ACTIVE users only); null = unreachable. */
+let identityUsers: Array<{ id: string; name: string; status?: string }> | null;
 
 globalThis.fetch = (async (url: unknown, init?: unknown) => {
   const u = String(url);
@@ -44,9 +44,13 @@ globalThis.fetch = (async (url: unknown, init?: unknown) => {
     if (policyRoles === null) throw new Error("connect ECONNREFUSED");
     return new Response(JSON.stringify(policyRoles), { status: 200, headers: { "content-type": "application/json" } });
   }
-  if (u.includes("/identity/internal/user-summaries")) {
+  if (u.includes("/identity/users?")) {
     if (identityUsers === null) throw new Error("connect ECONNREFUSED");
-    return new Response(JSON.stringify(identityUsers), { status: 200, headers: { "content-type": "application/json" } });
+    // Honour the paging the directory asks for (limit/offset), like identity-service does.
+    const q = new URL(u).searchParams;
+    const offset = Number(q.get("offset") ?? 0);
+    const limit = Number(q.get("limit") ?? 200);
+    return new Response(JSON.stringify(identityUsers.slice(offset, offset + limit)), { status: 200, headers: { "content-type": "application/json" } });
   }
   return originalFetch(url as string, init as RequestInit);
 }) as typeof fetch;
@@ -60,8 +64,8 @@ beforeEach(async () => {
     { name: "retired_role", status: "inactive" },
   ];
   identityUsers = [
-    { id: MANAGER, name: "Priya Sharma" },
-    { id: ACTOR, name: "Anil Kumar" },
+    { id: MANAGER, name: "Priya Sharma", status: "active" },
+    { id: ACTOR, name: "Anil Kumar", status: "active" },
   ];
   clearDirectoryCache();
   vi.mocked(isActiveTenantUser).mockReset();
@@ -211,7 +215,28 @@ describe("GAP-CRM-TASK-ESCALATION-01: the staff directory behind the pickers", (
       { id: ACTOR, name: "Anil Kumar" },
       { id: MANAGER, name: "Priya Sharma" },
     ]);
-    expect(res.json().meta.total).toBe(2);
+    expect(res.json().meta).toEqual({ total: 2, truncated: false });
+  });
+
+  it("offers ACTIVE users only: a deactivated user is never a pickable assignee or manager", async () => {
+    const gone = randomUUID();
+    identityUsers = [
+      { id: MANAGER, name: "Priya Sharma", status: "active" },
+      { id: gone, name: "Retired Officer", status: "suspended" },
+    ];
+    clearDirectoryCache();
+    const res = await get("/v1/crm/directory/users", ["crm_user"]);
+    expect(res.json().data).toEqual([{ id: MANAGER, name: "Priya Sharma" }]);
+    expect(res.body).not.toContain("Retired Officer");
+  });
+
+  it("says when the list is truncated, so a missing name is not read as 'no such user'", async () => {
+    identityUsers = Array.from({ length: 1200 }, (_, i) => ({ id: randomUUID(), name: `Officer ${String(i).padStart(4, "0")}`, status: "active" }));
+    clearDirectoryCache();
+    const res = await get("/v1/crm/directory/users", ["crm_admin"]);
+    expect(res.statusCode).toBe(200);
+    expect(res.json().meta.truncated).toBe(true);
+    expect(res.json().data).toHaveLength(1000);
   });
 
   it("also serves a plain crm_user (they reassign their own tasks) but not a non-CRM role", async () => {

@@ -6,7 +6,7 @@
  * Pure unit test (no DB): fetch is stubbed and the clock is faked.
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { resolveUserNames, clearIdentityNameCache } from "../src/shared/identity-client.js";
+import { resolveUserNames, clearDirectoryCache } from "../src/shared/user-directory.js";
 
 const TENANT = "aaaaaaaa-1111-4000-8000-0000000c0203";
 const USER = "bbbbbbbb-2222-4000-8000-0000000c0203";
@@ -14,13 +14,13 @@ const USER = "bbbbbbbb-2222-4000-8000-0000000c0203";
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date("2026-10-21T10:00:00Z"));
-  clearIdentityNameCache();
+  clearDirectoryCache();
 });
 
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
-  clearIdentityNameCache();
+  clearDirectoryCache();
 });
 
 const ok = (rows: unknown) => new Response(JSON.stringify(rows), { status: 200 });

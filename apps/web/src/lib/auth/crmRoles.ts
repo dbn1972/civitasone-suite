@@ -15,3 +15,17 @@
  * cosmetic until that backend change lands.
  */
 export const CRM_PII_READ_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
+
+/**
+ * Roles permitted to merge duplicate CRM records: accounts (GAP-CRM-ACCOUNTS-05) and
+ * contacts (the Duplicate Candidates screen). A merge is irreversible (the duplicate is
+ * tombstoned and its contacts, plans, tenders and child accounts move to the primary), and
+ * POST /v1/crm/accounts/merge and POST /v1/crm/contacts/merge answer 403 to everyone but
+ * these two roles, so the control is only offered to them -- a plain crm_user used to be
+ * walked through a danger confirmation and then refused.
+ * Deliberately EXACTLY the server's set (not the wider CRM admin lists): a role this does
+ * not name would be offered a button the service rejects. The server remains the authority;
+ * this only decides whether the UI offers it. Lives here (client-safe) because the
+ * Duplicate Candidates page is a client component; roleGuard re-exports it for server pages.
+ */
+export const CRM_MERGE_ROLES = ["crm_admin", "super_admin"];

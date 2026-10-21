@@ -115,12 +115,14 @@ export async function serviceRequestRoutes(app: FastifyInstance): Promise<void> 
     const refNo = srRef();
 
     const row = await scopedRead(async (tx) => {
-      // GAP-CRM-HEALTH-ACCOUNTID-03: the related account must exist in THIS tenant;
-      // never persist another tenant's (or a made-up) account id.
+      // GAP-CRM-HEALTH-ACCOUNTID-03: the related account must exist in THIS tenant and be
+      // active; never persist another tenant's (or a made-up) account id, and never link a
+      // new follow-up to an account that was merged away (status = 'inactive').
       if (body.relatedAccountId !== undefined) {
         const acct = (await tx.execute(sql`
           SELECT 1 AS ok FROM crm.accounts
           WHERE id = ${body.relatedAccountId}::uuid AND tenant_id = ${ctx.tenantId}
+            AND status = 'active'
         `)) as unknown as Array<{ ok: number }>;
         if (acct.length === 0) throw new HttpError(422, "ACCOUNT_NOT_FOUND", "related account not found");
       }

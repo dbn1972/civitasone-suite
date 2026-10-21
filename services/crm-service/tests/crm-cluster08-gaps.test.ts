@@ -21,7 +21,7 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerAllConsumers } from "../src/consumers.js";
-import { clearIdentityNameCache } from "../src/shared/identity-names.js";
+import { clearDirectoryCache } from "../src/shared/user-directory.js";
 import { diffFields, diffPrices, priceSummary, MAX_PRICE_CHANGES } from "../src/modules/price-books/history.js";
 import { drainQueue } from "./consumer-harness.js";
 
@@ -95,7 +95,7 @@ beforeAll(async () => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  clearIdentityNameCache();
+  clearDirectoryCache();
 });
 
 afterAll(async () => {

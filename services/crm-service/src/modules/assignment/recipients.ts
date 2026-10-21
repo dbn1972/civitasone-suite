@@ -9,18 +9,19 @@
  */
 import { HttpError } from "../../shared/context.js";
 import { isActiveTenantUser } from "../../shared/identity-client.js";
-import { listTenantRoleNames } from "../../shared/directory-client.js";
+import { listDirectoryRoles } from "../../shared/user-directory.js";
 
 export async function assertEscalationRecipientExists(
   tenantId: string,
   recipient: { recipientRole?: string | undefined; recipientId?: string | undefined },
 ): Promise<void> {
   if (recipient.recipientRole) {
-    const roles = await listTenantRoleNames(tenantId);
+    // `fresh`: a role created or retired a moment ago must be judged as it is now.
+    const roles = await listDirectoryRoles(tenantId, { fresh: true });
     if (roles === undefined) {
       throw new HttpError(503, "DIRECTORY_UNAVAILABLE", "could not verify the recipient role; try again");
     }
-    if (!roles.includes(recipient.recipientRole)) {
+    if (!roles.some((role) => role.key === recipient.recipientRole)) {
       throw new HttpError(422, "INVALID_RECIPIENT", "recipientRole must be an active role in this tenant");
     }
   }

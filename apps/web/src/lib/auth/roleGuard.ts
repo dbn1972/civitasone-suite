@@ -280,6 +280,20 @@ export const CRM_ADMIN_ROLES = ["crm_admin", "admin", "super_admin", "platform_a
 export const CRM_DEDUP_RULES_ROLES = ["crm_admin", "super_admin"];
 
 /**
+ * Roles that can actually USE the Pipelines editor (/crm/pipelines): crm-service
+ * admits ONLY [crm_admin, super_admin] on POST/PATCH/DELETE /v1/crm/pipelines
+ * (modules/pipelines/routes.ts PIPELINE_WRITE_ROLES), and tenant_admin is not even
+ * in its read set, so a tenant_admin who cleared the broader CRM_ADMIN_ROLES gate
+ * got a fully wired editor whose every call answered 403. admin / platform_admin
+ * never clear the parent CRM layout. The /crm/pipelines layout and its hub tile
+ * gate on this set; pipelines/layout.test.tsx reads the server constant and fails
+ * if the two drift. The server stays the authority. Widening this (letting
+ * tenant_admin configure pipelines) is an access-control change that needs the
+ * backend lists changed first and security sign-off.
+ */
+export const CRM_PIPELINE_WRITE_ROLES = ["crm_admin", "super_admin"];
+
+/**
  * The route-accurate subset for the three admin screens whose crm-service
  * routes accept ONLY [crm_admin, super_admin, tenant_admin]: Product Catalogue
  * (products/routes.ts), Service Types (service-requests/routes.ts) and Agent
@@ -327,7 +341,7 @@ export const CRM_VIGILANCE_ROLES = ["crm_admin", "admin", "super_admin", "platfo
 
 // CRM_PII_READ_ROLES lives in ./crmRoles (client-safe) and is re-exported here so
 // existing server-side imports keep working with a single source of truth.
-export { CRM_PII_READ_ROLES } from "./crmRoles";
+export { CRM_PII_READ_ROLES, CRM_MERGE_ROLES } from "./crmRoles";
 
 /**
  * Roles permitted to bulk-export contacts (name/phone/email egress)
@@ -368,18 +382,6 @@ export const CRM_CAMPAIGN_PERFORMANCE_POST_ROLES = ["crm_admin", "super_admin", 
  * 403 others); this only decides whether the UI offers the control.
  */
 export const CRM_VERIFY_ROLES = ["crm_admin", "admin", "super_admin", "platform_admin", "tenant_admin"];
-
-/**
- * Roles permitted to merge duplicate CRM accounts (GAP-CRM-ACCOUNTS-05). A merge is
- * irreversible (the duplicate is tombstoned and its contacts, plans, tenders and
- * child accounts move to the primary), and POST /v1/crm/accounts/merge answers 403
- * to everyone but these two roles, so the control is only offered to them -- a
- * plain crm_user used to be walked through a danger confirmation and then refused.
- * Deliberately EXACTLY the server's set (not the wider CRM admin lists above): a
- * role this does not name would be offered a button the service rejects. The
- * server remains the authority; this only decides whether the UI offers it.
- */
-export const CRM_MERGE_ROLES = ["crm_admin", "super_admin"];
 
 /**
  * Roles permitted to close (won/lost/cancelled/on_hold) an opportunity

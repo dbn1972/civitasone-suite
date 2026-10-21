@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, it, expect } from "vitest";
 import en from "@/messages/en.json";
 import hi from "@/messages/hi.json";
-import { CRM_ADMIN_ROLES, CRM_DEDUP_RULES_ROLES, CRM_STRICT_ADMIN_ROLES } from "@/lib/auth/roleGuard";
+import { CRM_ADMIN_ROLES, CRM_DEDUP_RULES_ROLES, CRM_PIPELINE_WRITE_ROLES, CRM_STRICT_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 import { CRM_HUB_SECTIONS, canSeeTile, visibleHubSections, type TileAccess } from "./hubTiles";
 
 const CRM_DIR = __dirname;
@@ -55,6 +55,7 @@ describe("CRM hub tile access mirrors the destination route guards (GAP-CRM-HOME
     expect(src, `${href}/layout.tsx must not declare a local role array`).not.toMatch(/^\s*(?:export\s+)?const\s+\w*ROLES\s*=\s*\[/m);
     if (/requireAnyRole\(\s*CRM_STRICT_ADMIN_ROLES\b/.test(src)) return "strictAdmin";
     if (/requireAnyRole\(\s*CRM_DEDUP_RULES_ROLES\b/.test(src)) return "dedupRules";
+    if (/requireAnyRole\(\s*CRM_PIPELINE_WRITE_ROLES\b/.test(src)) return "pipelineWrite";
     if (/requireAnyRole\(\s*CRM_ADMIN_ROLES\b/.test(src)) return "admin";
     return "all";
   }
@@ -99,6 +100,18 @@ describe("CRM hub tile access mirrors the destination route guards (GAP-CRM-HOME
       expect(canSeeTile("dedupRules", [role]), role).toBe(false);
     }
     expect(CRM_DEDUP_RULES_ROLES.every((r) => CRM_STRICT_ADMIN_ROLES.includes(r))).toBe(true);
+  });
+
+  it("offers the Pipelines tile only to the roles crm-service admits on pipeline writes", () => {
+    expect(canSeeTile("pipelineWrite", ["crm_admin"])).toBe(true);
+    expect(canSeeTile("pipelineWrite", ["super_admin"])).toBe(true);
+    // tenant_admin clears the broader CRM_ADMIN_ROLES gate but every pipeline call answers 403;
+    // admin / platform_admin never clear the parent CRM layout.
+    for (const role of ["tenant_admin", "admin", "platform_admin", "crm_user"]) {
+      expect(canSeeTile("pipelineWrite", [role]), role).toBe(false);
+    }
+    expect(CRM_PIPELINE_WRITE_ROLES.every((r) => CRM_STRICT_ADMIN_ROLES.includes(r))).toBe(true);
+    expect(allTiles.find((t) => t.tileKey === "pipelines")?.access).toBe("pipelineWrite");
   });
 
   it("drops a section that has no visible tile instead of rendering an empty heading", () => {

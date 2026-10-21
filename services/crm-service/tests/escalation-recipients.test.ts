@@ -15,9 +15,11 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from "vites
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 
-vi.mock("../src/shared/directory-client.js", () => ({
-  listTenantRoleNames: vi.fn(),
-  listActiveTenantUsers: vi.fn(),
+// The tenant directory (roles + users) is stubbed; everything else in user-directory stays real.
+vi.mock("../src/shared/user-directory.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/shared/user-directory.js")>()),
+  listDirectoryRoles: vi.fn(),
+  listDirectoryUsers: vi.fn(),
 }));
 vi.mock("../src/shared/identity-client.js", () => ({ isActiveTenantUser: vi.fn() }));
 
@@ -26,7 +28,7 @@ import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerAllConsumers } from "../src/consumers.js";
 import { drainQueue } from "./consumer-harness.js";
-import { listTenantRoleNames, listActiveTenantUsers } from "../src/shared/directory-client.js";
+import { listDirectoryRoles, listDirectoryUsers } from "../src/shared/user-directory.js";
 import { isActiveTenantUser } from "../src/shared/identity-client.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -34,6 +36,7 @@ const TENANT = randomUUID();
 const ACTOR = randomUUID();
 const GOOD_USER = randomUUID();
 const GHOST_USER = randomUUID();
+const role = (name: string) => ({ key: name, label: name });
 
 function headers(roles: string[] = ["crm_admin"]): Record<string, string> {
   return {
@@ -76,8 +79,8 @@ afterAll(async () => {
 });
 beforeEach(async () => {
   await cleanup();
-  vi.mocked(listTenantRoleNames).mockReset().mockResolvedValue(["sales_manager", "lead_desk"]);
-  vi.mocked(listActiveTenantUsers).mockReset().mockResolvedValue({ users: [{ id: GOOD_USER, name: "Asha Rao" }], truncated: false });
+  vi.mocked(listDirectoryRoles).mockReset().mockResolvedValue([role("sales_manager"), role("lead_desk")]);
+  vi.mocked(listDirectoryUsers).mockReset().mockResolvedValue({ users: [{ id: GOOD_USER, name: "Asha Rao" }], truncated: false });
   vi.mocked(isActiveTenantUser).mockReset().mockImplementation(async (_t, id) => id === GOOD_USER);
 });
 
@@ -119,7 +122,7 @@ describe("GAP-CRM-ESCALATION-RULES-01: recipient must exist", () => {
   });
 
   it("fails CLOSED (503) when the role directory cannot be read -- the rule is not saved unverified", async () => {
-    vi.mocked(listTenantRoleNames).mockResolvedValue(undefined);
+    vi.mocked(listDirectoryRoles).mockResolvedValue(undefined);
     const res = await call("POST", "/v1/crm/escalation-rules", { ...RULE, recipientRole: "sales_manager" });
     expect(res.statusCode).toBe(503);
     expect(res.json().code).toBe("DIRECTORY_UNAVAILABLE");
@@ -137,7 +140,7 @@ describe("GAP-CRM-ESCALATION-RULES-01: recipient must exist", () => {
   it("does not consult any directory for a rule with no recipient (e.g. reassign-only)", async () => {
     const res = await call("POST", "/v1/crm/escalation-rules", { ...RULE, thresholdMinutes: 90 });
     expect(res.statusCode).toBe(202);
-    expect(listTenantRoleNames).not.toHaveBeenCalled();
+    expect(listDirectoryRoles).not.toHaveBeenCalled();
     expect(isActiveTenantUser).not.toHaveBeenCalled();
   });
 
@@ -170,13 +173,13 @@ describe("GAP-CRM-ESCALATION-RULES-01: recipient pickers (GET /v1/crm/escalation
     expect(body.data.users).toEqual([{ id: GOOD_USER, name: "Asha Rao" }]);
     expect(body.meta).toEqual({ rolesAvailable: true, usersAvailable: true, usersTruncated: false });
     // Only the caller's own tenant is ever asked about.
-    expect(listTenantRoleNames).toHaveBeenCalledWith(TENANT);
-    expect(listActiveTenantUsers).toHaveBeenCalledWith(TENANT);
+    expect(listDirectoryRoles).toHaveBeenCalledWith(TENANT, { fresh: true });
+    expect(listDirectoryUsers).toHaveBeenCalledWith(TENANT, { fresh: true });
   });
 
   it("says a directory is UNAVAILABLE (not empty) when it could not be read", async () => {
-    vi.mocked(listTenantRoleNames).mockResolvedValue(undefined);
-    vi.mocked(listActiveTenantUsers).mockResolvedValue(undefined);
+    vi.mocked(listDirectoryRoles).mockResolvedValue(undefined);
+    vi.mocked(listDirectoryUsers).mockResolvedValue(undefined);
     const res = await call("GET", "/v1/crm/escalation-rules/recipients");
     expect(res.statusCode).toBe(200);
     expect(res.json().data).toEqual({ roles: [], users: [] });
@@ -184,7 +187,7 @@ describe("GAP-CRM-ESCALATION-RULES-01: recipient pickers (GET /v1/crm/escalation
   });
 
   it("flags a truncated user list", async () => {
-    vi.mocked(listActiveTenantUsers).mockResolvedValue({ users: [], truncated: true });
+    vi.mocked(listDirectoryUsers).mockResolvedValue({ users: [], truncated: true });
     const res = await call("GET", "/v1/crm/escalation-rules/recipients");
     expect(res.json().meta.usersTruncated).toBe(true);
   });
@@ -192,7 +195,7 @@ describe("GAP-CRM-ESCALATION-RULES-01: recipient pickers (GET /v1/crm/escalation
   it("is admin-only: a plain crm_user is forbidden and nothing is looked up", async () => {
     const res = await call("GET", "/v1/crm/escalation-rules/recipients", undefined, ["crm_user"]);
     expect(res.statusCode).toBe(403);
-    expect(listTenantRoleNames).not.toHaveBeenCalled();
-    expect(listActiveTenantUsers).not.toHaveBeenCalled();
+    expect(listDirectoryRoles).not.toHaveBeenCalled();
+    expect(listDirectoryUsers).not.toHaveBeenCalled();
   });
 });

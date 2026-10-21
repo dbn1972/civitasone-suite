@@ -21,9 +21,10 @@ import { runTenantEscalation, runEscalationCycle, startEscalationScheduler } fro
 // GAP-CRM-ESCALATION-RULES-01: the escalation-rule routes now verify a recipient role against
 // the tenant's role directory (policy-service). There is no policy-service in this suite, so
 // the lookup is stubbed with the one role these flows use; the rules are real DB round-trips.
-vi.mock("../src/shared/directory-client.js", () => ({
-  listTenantRoleNames: vi.fn(async () => ["sales_manager"]),
-  listActiveTenantUsers: vi.fn(async () => ({ users: [], truncated: false })),
+vi.mock("../src/shared/user-directory.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/shared/user-directory.js")>()),
+  listDirectoryRoles: vi.fn(async () => [{ key: "sales_manager", label: "sales_manager" }]),
+  listDirectoryUsers: vi.fn(async () => ({ users: [], truncated: false })),
 }));
 
 process.env.CRM_PII_KEY ??= "test_pii_key_for_crm_domain_tests_aaaa";

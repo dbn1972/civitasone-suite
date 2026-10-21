@@ -123,6 +123,25 @@ describe("service request relatedAccountId (GAP-CRM-HEALTH-ACCOUNTID-03)", () =>
     expect(count[0]!.n).toBe(0);
   });
 
+  it("rejects an account that was merged away (inactive) with 422, nothing stored", async () => {
+    // Accounts only go inactive through a merge. A new follow-up must not be linked to the
+    // tombstoned duplicate: "View related account" would land on "Account not found".
+    const merged = await makeAccount(TENANT);
+    await scoped(TENANT, async (tx) => {
+      await tx`UPDATE crm.accounts SET status = 'inactive' WHERE id = ${merged} AND tenant_id = ${TENANT}`;
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/crm/service-requests",
+      headers: headers(),
+      payload: createPayload({ relatedAccountId: merged }),
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("ACCOUNT_NOT_FOUND");
+    const count = await scoped(TENANT, (tx) => tx<Array<{ n: number }>>`SELECT count(*)::int AS n FROM crm.service_requests WHERE tenant_id = ${TENANT} AND related_account_id = ${merged}`);
+    expect(count[0]!.n).toBe(0);
+  });
+
   it("rejects a malformed account id with 400", async () => {
     const res = await app.inject({
       method: "POST",

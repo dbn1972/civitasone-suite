@@ -179,8 +179,10 @@ export async function reassignAccountRelationships(
 /**
  * Re-point every child that references an account from `fromId` to `toId`:
  * the account's contacts, account-subject activities, strategic plans, QBRs,
- * tenders, onboarding cases, child accounts and typed account relationships.
- * Deals follow transitively via the reassigned contacts.
+ * tenders, onboarding cases, child accounts, typed account relationships, the
+ * direct deals.account_id link and the service requests raised as account
+ * follow-ups (service_requests.related_account_id). Deals reached only through a
+ * contact follow the reassigned contacts.
  *
  * `fromParentId` is the duplicate's own parent (used to lift the one child that
  * would otherwise create a hierarchy loop -- see reassignChildAccounts).
@@ -203,6 +205,10 @@ export async function reassignAccountChildren(
   await reassignAccountRelationships(tx, fromId, toId, tenantId);
   // GAP-CRM-OPPORTUNITIES-NEW-02: deals carry an optional DIRECT account link - follow the merge.
   await tx.execute(sql`UPDATE crm.deals SET account_id = ${toId} WHERE account_id = ${fromId} AND tenant_id = ${tenantId}`);
+  // GAP-CRM-HEALTH-ACCOUNTID-03: an account follow-up service request names the account it is
+  // about. The column has no FK (migration 0165), so nothing follows the merge unless it is
+  // re-pointed here -- otherwise "View related account" lands on the tombstoned duplicate.
+  await tx.execute(sql`UPDATE crm.service_requests SET related_account_id = ${toId} WHERE related_account_id = ${fromId} AND tenant_id = ${tenantId}`);
 }
 
 /** Soft-delete an account (status = inactive) inside the caller's tx. */

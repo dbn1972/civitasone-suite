@@ -8,6 +8,12 @@
  * wrapper (the backend is being built concurrently — see AS-001..004 contract).
  */
 import { browserFetch, errorMessageFromResponse, errorCodeFromResponse } from "@/lib/api/browserClient";
+import {
+  normaliseEscalationRoles,
+  normaliseEscalationUsers,
+  type EscalationRole,
+  type EscalationUser,
+} from "./directory";
 
 export type AsSource = "api" | "error";
 
@@ -601,16 +607,14 @@ export async function updateEscalationRule(id: string, rule: EscalationRule): Pr
   if (!res.ok) throw await escalationWriteError(res);
 }
 
-/** A role the escalation editor may offer as a recipient (key = the role name stored on the rule). */
-export interface EscalationRecipientRole {
-  key: string;
-  label: string;
-}
-/** An ACTIVE user the editor may offer as a recipient (the id is stored; the name is shown). */
-export interface EscalationRecipientUser {
-  id: string;
-  name: string;
-}
+/**
+ * A role the escalation editor may offer as a recipient (key = the role name stored on the
+ * rule) and an ACTIVE user it may offer (the id is stored; the name is shown). The SAME shapes,
+ * parsed by the SAME normalisers (./directory), as the task-escalation editor's pickers: crm-service
+ * serves both from one tenant directory.
+ */
+export type EscalationRecipientRole = EscalationRole;
+export type EscalationRecipientUser = EscalationUser;
 export interface EscalationRecipientDirectory {
   roles: EscalationRecipientRole[];
   users: EscalationRecipientUser[];
@@ -638,20 +642,8 @@ export async function getEscalationRecipients(): Promise<LoaderResult<Escalation
     const res = await browserFetch("v1/crm/escalation-rules/recipients");
     if (!res.ok) return { data: unavailable, source: "error" };
     const body = (await res.json()) as { data?: { roles?: unknown; users?: unknown }; meta?: Record<string, unknown> };
-    const roles: EscalationRecipientRole[] = [];
-    for (const item of Array.isArray(body.data?.roles) ? (body.data!.roles as unknown[]) : []) {
-      if (!item || typeof item !== "object") continue;
-      const r = item as Record<string, unknown>;
-      const key = str(r.key);
-      if (key) roles.push({ key, label: str(r.label) || key });
-    }
-    const users: EscalationRecipientUser[] = [];
-    for (const item of Array.isArray(body.data?.users) ? (body.data!.users as unknown[]) : []) {
-      if (!item || typeof item !== "object") continue;
-      const u = item as Record<string, unknown>;
-      const id = str(u.id);
-      if (id) users.push({ id, name: str(u.name) || id });
-    }
+    const roles = normaliseEscalationRoles(body.data?.roles);
+    const users = normaliseEscalationUsers(body.data?.users);
     const meta = body.meta ?? {};
     return {
       data: {

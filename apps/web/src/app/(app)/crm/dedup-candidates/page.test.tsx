@@ -115,6 +115,7 @@ describe("DedupCandidatesPage", () => {
   });
 
   it("shows the merge confirm dialog when Merge button is clicked", async () => {
+    identity.roles = ["crm_admin"]; // merging is admin-only (CRM_MERGE_ROLES)
     vi.mocked(api.getDedupCandidates).mockResolvedValue({
       data: [PAIR],
       source: "api",
@@ -141,6 +142,7 @@ describe("DedupCandidatesPage", () => {
   });
 
   it("calls mergeDedupPair and removes the pair on confirm", async () => {
+    identity.roles = ["crm_admin"]; // merging is admin-only (CRM_MERGE_ROLES)
     vi.mocked(api.getDedupCandidates).mockResolvedValue({
       data: [PAIR],
       source: "api",
@@ -174,6 +176,7 @@ describe("DedupCandidatesPage", () => {
   });
 
   it("GAP-CRM-DEDUP-CANDIDATES-02: Swap makes the right contact the primary in the POST body", async () => {
+    identity.roles = ["crm_admin"]; // merging is admin-only (CRM_MERGE_ROLES)
     vi.mocked(api.getDedupCandidates).mockResolvedValue({ data: [PAIR], source: "api" });
     vi.mocked(api.mergeDedupPair).mockResolvedValue(undefined);
 
@@ -194,6 +197,34 @@ describe("DedupCandidatesPage", () => {
       expect(api.mergeDedupPair).toHaveBeenCalledWith("bbb-222", "aaa-111", "right record is the better source"),
     );
   });
+
+  // POST /v1/crm/contacts/merge answers 403 to everyone but crm_admin / super_admin, so a
+  // plain crm_user used to be walked through a danger confirmation and then refused.
+  it("offers Merge (and the Swap that only decides which record a merge keeps) to crm_admin and super_admin", async () => {
+    for (const role of ["crm_admin", "super_admin"]) {
+      identity.roles = [role];
+      vi.mocked(api.getDedupCandidates).mockResolvedValue({ data: [PAIR], source: "api" });
+      const { unmount } = render(<DedupCandidatesPage />);
+      await waitFor(() => expect(screen.getByText("85%")).toBeInTheDocument());
+      expect(screen.getByRole("button", { name: /merge → keep/i }), role).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /swap/i }), role).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it.each([["crm_user"], ["tenant_admin"], ["admin"], ["platform_admin"], [""]])(
+    "offers no Merge or Swap to %j, but still lets them review and Dismiss the pair",
+    async (role) => {
+      identity.roles = role ? [role] : []; // "" = roles still unknown
+      vi.mocked(api.getDedupCandidates).mockResolvedValue({ data: [PAIR], source: "api" });
+      render(<DedupCandidatesPage />);
+      await waitFor(() => expect(screen.getByText("85%")).toBeInTheDocument());
+      expect(screen.queryByRole("button", { name: /merge → keep/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /swap/i })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /dismiss pair/i })).toBeInTheDocument();
+      expect(api.mergeDedupPair).not.toHaveBeenCalled();
+    },
+  );
 
   it("GAP-CRM-DEDUP-CANDIDATES-03: Dismiss opens a confirm and calls no API until confirmed", async () => {
     vi.mocked(api.getDedupCandidates).mockResolvedValue({
