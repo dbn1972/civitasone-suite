@@ -2386,7 +2386,8 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-CANDIDATES-05  ·  LOW  ·  confirmed  ·  theme STALE-COMMENT (was VALIDATION)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- **W2 crm rescan note:** the page.tsx header now documents the live endpoints (GET /v1/crm/contacts/dedup-candidates, PATCH .../dedup-candidates/:pairId/dismiss, POST /v1/crm/contacts/merge) instead of calling list/dismiss "not yet implemented"; it matches lib/crm/dedupCandidates.ts and contacts/dedup-routes.ts.
 - **First-pass claim:** The file header documents PATCH /v1/crm/contacts/:leftId/merge {mergeIntoId} but the client calls POST /v1/crm/contacts/merge {primaryId, duplicateId} — stale comment (page.tsx:8; lib/crm/dedupCandidates.ts:68-70).
 - **Verified evidence:** Header comment page.tsx:8 says PATCH /v1/crm/contacts/:leftId/merge {mergeIntoId}; dedupCandidates.ts:68-70 actually POSTs /v1/crm/contacts/merge {primaryId,duplicateId}.
 - **Files to change:** `apps/web/src/app/(app)/crm/dedup-candidates/page.tsx`
@@ -2448,7 +2449,8 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-RULES-02  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- **W2 crm rescan note:** server If-Match/409 and the editor's reload message were already in place. Added the missing in-app navigation guard: lib/useUnsavedNavigationGuard.ts (beforeunload + capture-phase interception of same-origin link clicks while dirty -> ConfirmDialog "Leave without saving?" -> router.push on confirm), wired into DedupRulesEditor. Tests: DedupRulesEditor.test.tsx "unsaved-changes guard" (beforeunload armed only while dirty, disarmed after save, link click intercepted / Stay / Leave, external link left to the browser) and lib/useUnsavedNavigationGuard.test.tsx. Known limit: browser Back/Forward (history traversal) cannot be intercepted through a supported App Router API, so it is not covered.
 - **First-pass claim:** Saving replaces the whole rule list (PUT {rules}) with no version or If-Match token and no change summary; two admins editing at once silently overwrite each other, and there is no dirty-state warning when leaving with unsaved edits (DedupRulesEditor.tsx:107-123; lib/crm/dataQuality.ts:192-198).
 - **Verified evidence:** save() calls saveDedupRules(rules) -> PUT v1/crm/dedup-rules {rules} (dataQuality.ts) with no version/ETag; normaliseRules keeps no version field. No dirty-state tracking or beforeunload/route-change guard anywhere in the editor (no shared hook found). Last write wins. Backend concurrency support not verifiable.
 - **Files to change:** `apps/web/src/app/_components/crm/DedupRulesEditor.tsx`, `apps/web/src/lib/crm/dataQuality.ts`
@@ -2496,7 +2498,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-RULES-05  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [~] **Status** NEEDS OWNER DECISION — web narrowed, access NOT widened. dedup-rules/layout.tsx now gates on CRM_DEDUP_RULES_ROLES = {crm_admin, super_admin}: the intersection of the parent CRM layout and crm-service's ADMIN_ROLES on GET/PUT /v1/crm/dedup-rules (admin/platform_admin never passed the parent layout; tenant_admin passed both web layouts then got 403 from the server). The data-quality "Matching rules" link and the hub "Matching Rules" tile follow the same set, and dedup-rules/composedGate.test.tsx drives the real parent + child layouts for every role and reads the server constant as a drift guard. Remaining: whether tenant admins (and admin/platform_admin) should be able to manage tenant-wide dedup rules at all. OWNER QUESTION: should tenant_admin be allowed to edit dedup rules? If yes the backend ADMIN_ROLES must be widened first (and admin/platform_admin added to the CRM module gate), which is an access-control change needing security sign-off; if no, this item can be closed as-is.
 - **First-pass claim:** ALLOWED_ROLES includes 'admin' and 'tenant_admin', but the parent CRM layout already requires crm_user, crm_admin, platform_admin or super_admin, so those two roles cannot reach the page unless they also hold a CRM role (dedup-rules/layout.tsx:8; crm/layout.tsx:5).
 - **Verified evidence:** dedup-rules/layout.tsx:8 ALLOWED_ROLES includes admin and tenant_admin; crm/layout.tsx:5,8 requires one of crm_user, crm_admin, platform_admin, super_admin (requireAnyRole in lib/auth/roleGuard.ts redirects otherwise), so admin/tenant_admin without a CRM role never reach it.
 - **Files to change:** `apps/web/src/app/(app)/crm/dedup-rules/layout.tsx`, `apps/web/src/app/(app)/crm/layout.tsx`
@@ -2508,7 +2510,8 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-RULES-06  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13, W0-10 confirmed: closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- **W2 crm rescan note:** the remaining English literals in DedupRulesEditor (heading, loading text, table headers, row aria-labels, On/Off, Remove, Add rule, Save rules/Saving, saved message, empty state, form/load area names) now come from crmDedupRulesEditor next-intl keys (en + hi); the emoji EmptyState icon is dropped for the default illustration; the duplicate-field error names the field by its label. Tests: DedupRulesEditor.test.tsx (labels + locale-independent behaviour) and the crm-i18n-parity suite.
 - **First-pass claim:** Success and error messages use hard-coded hex colours and English literals; field values render as raw enum text ('gstin', 'exact') (DedupRulesEditor.tsx:140-143, 175, 186).
 - **Verified evidence:** Hard-coded hex at DedupRulesEditor.tsx:140 (#047857) and :143 (#b42318); English literals throughout; option values render raw enum text 'gstin'/'exact' (:175,186). Not fabricated data so FABRICATED tag is wrong. Icon is an emoji (:148).
 - **Files to change:** `apps/web/src/app/_components/crm/DedupRulesEditor.tsx`
@@ -2547,7 +2550,8 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENT-TYPES-03  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- **W2 crm rescan note:** the old copy ("documents keep their type") was false: crm.documents(tenant_id, doc_type) -> document_types ON DELETE SET NULL nulls the NOT NULL tenant_id too, so deleting an in-use type failed as an opaque 500. Now: GET /v1/crm/document-types returns documentCount per type; DELETE refuses an in-use type with 409 TYPE_IN_USE (type + documents untouched; admin turns Enabled off instead), locks the row against a racing upload, and records the reason (+ code) on the document_type_delete audit event (400 on an over-long reason). The editor disables Delete for an in-use type with a count + "turn off Enabled" hint, and the dialog for an unused type says nothing is filed under it. Tests: tests/document-types-delete.test.ts (real DB), DocumentTypesEditor.test.tsx, lib/crm/documentTypesNormalise.test.ts. OWNER CONFIRMATION: block-when-in-use is the DB's own referential rule surfaced cleanly; if the owner instead wants in-use types deletable (documents detached / soft-delete), that needs a schema decision and a rule for the mandatory-document compliance flags.
 - **First-pass claim:** Delete confirmation says the type 'will no longer be selectable for new uploads' but does not say whether existing documents of that type are kept, nor show how many exist (editor:459-461).
 - **Verified evidence:** apps/web/src/app/_components/crm/DocumentTypesEditor.tsx:216-225 ConfirmDialog description is only '“name” will no longer be selectable for new uploads.'; no reason field, no count, no statement about existing documents. Lines cited (459-461) are wrong. deleteDocumentType(id) at lib/crm/documents.ts:402 takes only id. Count of existing documents or reason support needs a crm-service endpoint (absent from snapshot).
 - **Files to change:** `apps/web/src/app/_components/crm/DocumentTypesEditor.tsx`, `apps/web/src/lib/crm/documents.ts`
@@ -2658,7 +2662,8 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DOCUMENTS-03  ·  LOW  ·  confirmed  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- **W2 crm rescan note:** the last two plain anchors to /crm/document-types on documents/page.tsx (the configureTypes rich-text link and the Manage Document Types button) are now next/link. documents/page.test.tsx stamps every next/link in a mock and fails if any internal /crm/ anchor in the guidance card lacks it (the old href-only assertions passed with plain anchors).
 - **First-pass claim:** All links are plain anchor tags instead of next/link, forcing full page loads inside the app shell (page.tsx:27, 32-34).
 - **Verified evidence:** documents/page.tsx uses <a href> at lines 27, 32, 33, 34 for internal routes, causing full document loads. The same pattern (<a className='btn'>) is used in forecast/page.tsx:28 and StageBreakdownTable.tsx:66, so it is systemic.
 - **Files to change:** `apps/web/src/app/(app)/crm/documents/page.tsx`, `apps/web/src/app/(app)/crm/forecast/page.tsx`, `apps/web/src/app/(app)/crm/forecast/StageBreakdownTable.tsx`
@@ -2693,7 +2698,8 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ESCALATION-RULES-01  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- **W2 crm rescan note:** (1) No free-text fallback any more: role and user are always pickers fed by the new GET /v1/crm/escalation-rules/recipients (crm-service reads policy-service roles + identity-service active users server-side over x-internal; the old policy/roles and identity/users?limit=500 calls were tenant_admin-only and the latter 400'd on the 200 cap, which is why crm_admin always landed on free text). When a directory is unavailable the pickers are empty, an alert + Retry says so, and a recipient that cannot be verified is not saved. (2) POST/PUT now reject an unknown role / inactive user with 422 INVALID_RECIPIENT and fail closed with 503 DIRECTORY_UNAVAILABLE (assignment/recipients.ts, shared/directory-client.ts). (3) Fixed a latent wiring bug found on the way: the editor sent no `name` (required) and "" for an unset recipientId (must be a UUID), so every save was a 400; lib/crm/assignment.ts escalationRuleBody now sends a derived name and omits unset recipients. Saved rules show the user's NAME in the picker. Tests: tests/escalation-recipients.test.ts + tests/directory-client.test.ts (real DB / stubbed fetch), EscalationRulesEditor.test.tsx, lib/crm/escalationRecipients.test.ts.
 - **First-pass claim:** Recipient user is a free-text raw user id ('user id (optional)') and recipient role a free-text string ('e.g. sales_manager'); there is no picker or validation against real users/roles, so a typo saves and leads escalate to nobody (EscalationRulesEditor.tsx:200-205).
 - **Verified evidence:** apps/web/src/app/_components/crm/EscalationRulesEditor.tsx:198-205 recipientRole is free text (placeholder 'e.g. sales_manager') and recipientId free text ('user id (optional)'); rowValid (38-44) only requires one to be non-empty. No lookup exists. Whether backend validates ids/roles cannot be verified (crm-service absent).
 - **Files to change:** `apps/web/src/app/_components/crm/EscalationRulesEditor.tsx`, `apps/web/src/lib/crm/assignment.ts`
@@ -2865,7 +2871,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-FORECAST-06  ·  LOW  ·  partly  ·  theme CONSISTENCY (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [~] **Status** NEEDS OWNER DECISION — done: stat icons are mapped ds glyphs (money / handshake / chart / target) instead of raw text, tone tokens (already), the forecast's "All open deals" wording and suffix now say "engagements" (en + hi, keys renamed to allOpenEngagements*), and the link to /crm/pipeline reuses the hub tile's own label ("Pipeline Board") via crm.hub.tiles.pipelineBoard.title so they cannot drift. Remaining: acceptance "one term across the CRM hub and forecast" is not fully met because three CRM hub tile descriptions still say "deal" ("Visual kanban of deal stages", "Post-deal onboarding workflows", "Deal qualification criteria") and /crm/deals/new still says Deal (GAP-CRM-DEALS-NEW-07 is the same open naming decision). OWNER QUESTION: confirm the single term is "Engagement" (as the hub tile, deals list, pipeline and forecast already use); then the three hub descriptions (+ hi) and the new-deal page are a mechanical rename.
 - **First-pass claim:** 'Engagements' here, 'Deals' in the route and hub, and 'Engagement Board' for /crm/pipeline; stat icons are glyph characters on hard-coded hex backgrounds (#dcfce7, #e0f2fe, #fef3c7, #fce7f3) instead of tokens (page.tsx:32-55).
 - **Verified evidence:** Hex icon backgrounds confirmed at page.tsx:34,40,46,52 (#dcfce7,#e0f2fe,#fef3c7,#fce7f3) and glyph-character icons; StatCard defaults iconBg to #eef2ff (ds/StatCard.tsx:32). Terminology drift is real: page.tsx labels say 'Engagements', crm/page.tsx:13 titles the route 'Deals' (description 'Engagements and procurement opportunities'), page.tsx:28 link says 'Engagement Board' to /crm/pipeline, and empty action is '+ New Engagement' to /crm/deals/new. Not a fabrication issue.
 - **Files to change:** `apps/web/src/app/(app)/crm/forecast/page.tsx`, `apps/web/src/app/(app)/crm/page.tsx`, `apps/web/src/app/_components/ds/StatCard.tsx`
@@ -2972,7 +2978,8 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-06  ·  LOW  ·  partly  ·  theme STATUS
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- **W2 crm rescan note:** the APPEAL status pill reads "First appeal" in the register table and the detail page (shared crm/grievances/grievanceDisplay.ts), the status filter option is "First appeal", matching the tile and the timeline step (en + hi); the detail page's priority badge now uses the same theme-safe .pill tone classes as the table (it was still var(--bg) on a var(--ink2|--warn|--bad) fill). Tests: GrievancesTable.display.test.tsx pins the priority classes and computes the real WCAG ratios of the .pill.bad/.warn/.mut token pairs from civitas-ds.css in light and dark (all >= 4.5:1); grievanceDisplay.test.ts pins label consistency; detail page.test.tsx.
 - **First-pass claim:** Status shows raw enum text (REGISTERED, APPEAL) in StatusPill, and the tile 'Escalated' counts APPEAL rows which the actions call 'First Appeal'; priority pills use var(--bg) text on var(--ink2) backgrounds (GrievancesTable.tsx:9-14, 80; page.tsx:30, 54).
 - **Verified evidence:** Overstated: StatusPill (ds/StatusPill.tsx) passes status through humanizeStatus (lib/formatters.ts:44), so users see 'Registered', 'Forwarded', 'Attended', 'Disposed', 'Appeal', not raw uppercase. True: none of the five CPGRAMS values is in STATUS_MAP, so all fall back to the neutral 'info' variant (no visual difference between Registered, Attended, Disposed, Appeal). True: page.tsx:30,54 tile 'Escalated (this page)' counts APPEAL while the detail action is 'First Appeal' and detail timeline says 'Escalated'. True: priority pill uses color var(--bg) on var(--ink2)/var(--warn)/var(--bad) (GrievancesTable.tsx:9-14,80); actual contrast in dark theme is unverified.
 - **Files to change:** `apps/web/src/app/_components/ds/StatusPill.tsx`, `apps/web/src/app/(app)/crm/grievances/page.tsx`, `apps/web/src/app/(app)/crm/grievances/GrievancesTable.tsx`
@@ -3063,7 +3070,8 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-GRIEVANCES-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme MISSING-FIELD (was WIRING)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
+- **W2 crm rescan note:** the Assigned timeline step now carries a real time. Migration 0162_grievance_assigned_at.sql adds nullable crm.grievances.assigned_at (additive, no backfill); PATCH /:id/assign stamps it and GET /:id returns it as assignedAt; the page passes it to the step. A grievance assigned before the column existed shows the step done WITHOUT a time (nothing invented). Tests: tests/grievance-assigned-at.test.ts (real DB) and detail page.test.tsx.
 - **First-pass claim:** Forward stores forwardedTo and First Appeal stores appealReason, but GrievanceDetail has neither field, so the department a grievance was forwarded to and the appeal reason are never displayed after saving; the Status Timeline has no 'Forwarded' step and 'Assigned' never shows a time (page.tsx:6-26, 129-135).
 - **Verified evidence:** page.tsx:6-26 GrievanceDetail has no forwardedTo or appealReason; nothing in the Details/Resolution cards renders them. GrievanceActions.tsx:75 sends {forwardedTo} and :85 sends {appealReason}. Timeline (page.tsx:129-135) has Logged/Assigned/Escalated/Resolved/Closed; 'Assigned' has `ts: undefined` (line 131) so never shows a time, and there is no Forwarded step although FORWARDED is a status. Whether the GET returns forwardedTo/appealReason/forwardedAt/assignedAt is cannot-verify (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/grievances/[id]/page.tsx`
