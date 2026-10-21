@@ -109,6 +109,84 @@ describe("F1-01 grievances mask citizenPhone/citizenEmail server-side", () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────
+// GAP-CRM-GRIEVANCES-DETAIL-05: default-masked detail read + audited reveal
+// ──────────────────────────────────────────────────────────────────────────
+describe("GAP-CRM-GRIEVANCES-DETAIL-05 grievance detail ?pii=masked", () => {
+  async function createGrievance(tid: string): Promise<string> {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/crm/grievances",
+      headers: authHeaders(["crm_admin"], tid),
+      payload: {
+        citizenName: "Asha Rao",
+        citizenPhone: PHONE,
+        citizenEmail: EMAIL,
+        category: "water",
+        subject: "No supply",
+        priority: "normal",
+      },
+    });
+    expect(res.statusCode).toBe(201);
+    return res.json().data.id as string;
+  }
+
+  it("masks phone and email for a PII-read role when pii=masked, with no raw value anywhere in the body", async () => {
+    const tid = randomUUID();
+    const id = await createGrievance(tid);
+
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/crm/grievances/${id}?pii=masked`,
+      headers: authHeaders(["crm_admin"], tid),
+    });
+    expect(res.statusCode).toBe(200);
+    const row = res.json().data;
+    expect(row.citizenPhone).toBe("******3210");
+    expect(row.citizenEmail).toBe("c***@example.in");
+    expect(res.body).not.toContain(PHONE);
+    expect(res.body).not.toContain(EMAIL);
+  });
+
+  it("is additive: the same admin call without pii=masked still returns the clear value", async () => {
+    const tid = randomUUID();
+    const id = await createGrievance(tid);
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/crm/grievances/${id}`,
+      headers: authHeaders(["crm_admin"], tid),
+    });
+    expect(res.json().data.citizenPhone).toBe(PHONE);
+  });
+
+  it("rejects an unknown pii mode instead of silently returning clear data", async () => {
+    const tid = randomUUID();
+    const id = await createGrievance(tid);
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/crm/grievances/${id}?pii=clear`,
+      headers: authHeaders(["crm_admin"], tid),
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("the clear value is then only reachable through the audited reveal, which a crm_user cannot call", async () => {
+    const tid = randomUUID();
+    const id = await createGrievance(tid);
+    const reveal = (roles: string[]) =>
+      app.inject({
+        method: "POST",
+        url: "/v1/crm/pii/reveal",
+        headers: authHeaders(roles, tid),
+        payload: { resourceType: "grievance", resourceId: id, field: "citizenPhone", reason: "citizen asked for a callback" },
+      });
+    expect((await reveal(["crm_user"])).statusCode).toBe(403);
+    const ok = await reveal(["crm_admin"]);
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().data.value).toBe(PHONE);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
 // F1-02 RTI
 // ──────────────────────────────────────────────────────────────────────────
 describe("F1-02 rti mask applicantName (partial) + applicantContact", () => {
