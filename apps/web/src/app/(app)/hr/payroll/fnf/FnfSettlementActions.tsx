@@ -43,9 +43,12 @@ export function FnfSettlementActions({ row, viewer }: { row: FnfActionRow; viewe
   const [paymentDate, setPaymentDate] = useState("");
   const [paymentReason, setPaymentReason] = useState("");
   // One x-idempotency-key per dialog opening: a retry after a dropped
-  // connection reuses it (so the proxy can answer the original), a fresh
-  // opening gets a fresh one. The server also dedups on a deterministic
-  // messageId + the version check; this is the belt to those braces.
+  // connection reuses it, a fresh opening gets a fresh one. The web proxy and
+  // the gateway forward the header, but NO F&F transition route reads it today.
+  // Duplicate submissions are absorbed server-side by the deterministic
+  // messageId (settlement id, action, version, actor -- fnf/routes.ts) and the
+  // consumer's version check, so the same action cannot apply twice at one
+  // version whatever key is sent. The key is kept for request tracing.
   const idempotencyKey = useRef<string | null>(null);
   const formId = useId();
   const accepted = useAcceptedWrite();

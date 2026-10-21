@@ -14,6 +14,7 @@ import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { payrollSlips } from "../payroll/schema.js";
 import { form16BulkJobs } from "./schema.js";
+import { publicFailureDetails } from "./failure-reasons.js";
 import { COMMANDS } from "../../topics.js";
 import { getObject, presignedGetUrl } from "@civitasone/storage";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
@@ -337,6 +338,8 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", `No bulk Form 16 job found for FY ${q.fy}`);
     }
 
+    const failures = publicFailureDetails(job.errorDetails);
+
     return reply.send({
       data: {
         jobId: job.id,
@@ -346,7 +349,10 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
         generated: job.generated,
         failed: job.failed,
         storagePrefix: job.storagePrefix,
-        errorDetails: job.errorDetails,
+        // Allow-list projection: { employeeNo, reasonCode } rows only. The stored raw
+        // exception text never leaves the service (see failure-reasons.ts).
+        errorDetails: failures?.entries ?? null,
+        errorDetailsTotal: failures?.total ?? 0,
         createdAt: job.createdAt,
         completedAt: job.completedAt,
       },

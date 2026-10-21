@@ -217,17 +217,16 @@ export async function getRunDetail(id: string, tenantId: string) {
     // click into a guaranteed 403. approvedBy is null until the run is approved.
     createdBy: run.createdBy,
     approvedBy: run.approvedBy ?? null,
-    // BUG-2 fix: this payload's grossAmount/netAmount/deductions above are
-    // already rupees (/100 of the minor-unit column), and the frontend's
-    // run-detail view (SalarySlipsClientTable.tsx) renders these embedded
-    // slip fields with formatRupees(), not formatMoney() — i.e. it already
-    // expects rupees here too. The old `Number(s.grossMinor)` (raw paise, no
-    // /100) was a 100x mismatch against both the sibling run-level fields in
-    // this same response and what the frontend actually does with the value.
+    // The rupee fields on each slip below (gross/deductions/net) are the legacy
+    // wire shape: RUPEES (/100 of the minor-unit column), consistent with the
+    // sibling run-level grossAmount/netAmount/deductions above (BUG-2 fixed an
+    // earlier raw-paise mismatch). The web tier no longer renders them: the run
+    // detail table reads the integer-paise strings (grossMinor / deductionsMinor /
+    // netMinor, GAP-PAYROLL-HOME-01) and formats them with formatMoney. They stay
+    // on the wire, unchanged, for older clients.
     // NOT touched: listSalarySlips()/GET /v1/payroll/salary-slips below is a
-    // different endpoint, correctly consumed via formatMoney() (paise) by
-    // SalarySlipsTable.tsx's DataTable — that convention is independently
-    // correct and out of scope here.
+    // different endpoint, consumed via formatMoney() (paise) by
+    // SalarySlipsTable.tsx's DataTable.
     salarySlips: runSlips.map((s) => ({
       id: s.id,
       employeeId: s.employeeId,

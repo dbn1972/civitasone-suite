@@ -101,42 +101,48 @@ describe("Form16Page", () => {
     expect(screen.queryByText("No Form-16 filing run for FY 2025-26")).not.toBeInTheDocument();
   });
 
-  // GAP-PAYROLL-FORM16-05: a parseable errorDetails shape renders a safe
-  // per-employee list, never the raw backend JSON blob.
-  it("renders failure details as a parsed list, not raw JSON", async () => {
+  // GAP-PAYROLL-FORM16-05: bulk-status returns { employeeNo, reasonCode } rows
+  // (payroll-service form16-pdf/failure-reasons.ts). The page maps each stable
+  // code to translated copy and shows the HR-facing employee number.
+  it("renders failure details as a parsed list of translated reasons, not raw JSON", async () => {
     statusAwareGetMock.mockResolvedValue({
       kind: "ok",
       status: 200,
       body: {
         data: {
           jobId: "job-2", fy: "2025-26", status: "completed",
-          totalEmployees: 2, generated: 1, failed: 1,
+          totalEmployees: 4, generated: 0, failed: 4,
           storagePrefix: "form16/2025-26",
-          // The shape payroll-service form16-pdf/bulk-consumer.ts really writes.
-          errorDetails: [{ employeeId: "5b1c2d3e-0000-4000-8000-000000000e09", employeeNo: "EMP-0109", error: "No PAN on file" }],
+          errorDetails: [
+            { employeeNo: "EMP-0109", reasonCode: "DATA_UNAVAILABLE" },
+            { employeeNo: "EMP-0110", reasonCode: "RENDERER_UNAVAILABLE" },
+            { employeeNo: "EMP-0111", reasonCode: "SIGNING_FAILED" },
+            { employeeNo: "EMP-0112", reasonCode: "STORAGE_ERROR" },
+          ],
+          errorDetailsTotal: 4,
           createdAt: "2026-04-01T00:00:00.000Z", completedAt: null,
         },
       },
     });
     const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
-    const { container } = render(
-      <NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>,
-    );
+    renderPage(ui);
     fireEventClickSummary();
-    // the HR-facing employee number, not the internal UUID
-    expect(screen.getByText("EMP-0109: No PAN on file")).toBeInTheDocument();
-    expect(container.textContent).not.toContain("5b1c2d3e-0000-4000-8000-000000000e09");
-    expect(screen.queryByText(/"employeeId"/)).not.toBeInTheDocument();
+    expect(screen.getByText("EMP-0109: Salary or tax data could not be read for this employee.")).toBeInTheDocument();
+    expect(screen.getByText("EMP-0110: The PDF renderer was unavailable.")).toBeInTheDocument();
+    expect(screen.getByText("EMP-0111: The PDF could not be digitally signed.")).toBeInTheDocument();
+    expect(screen.getByText("EMP-0112: The PDF could not be saved to storage.")).toBeInTheDocument();
+    expect(screen.queryByText(/"employeeNo"/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/more failure/)).not.toBeInTheDocument();
   });
 
-  it("renders a run-level failure as 'Whole run' and a bounded one-line reason", async () => {
-    const long = `Chromium crashed\n${"x".repeat(400)}`;
+  it("renders a run-level failure as 'Whole run' with the generic reason", async () => {
     statusAwareGetMock.mockResolvedValue({
       kind: "ok", status: 200,
       body: { data: {
         jobId: "job-4", fy: "2025-26", status: "failed", totalEmployees: 0, generated: 0, failed: 1,
         storagePrefix: null,
-        errorDetails: [{ employeeId: "system", employeeNo: "N/A", error: long }],
+        errorDetails: [{ employeeNo: "N/A", reasonCode: "UNKNOWN" }],
+        errorDetailsTotal: 1,
         createdAt: "2026-04-01T00:00:00.000Z", completedAt: null,
       } },
     });
@@ -144,43 +150,73 @@ describe("Form16Page", () => {
     const { container } = render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     fireEventClickSummary();
     const item = container.querySelector("details li");
-    expect(item?.textContent?.startsWith("Whole run: Chromium crashed xxx")).toBe(true);
-    expect(item?.textContent).not.toContain("\n");
-    expect((item?.textContent ?? "").length).toBeLessThan(170);
-    expect(item?.textContent?.endsWith("…")).toBe(true);
+    expect(item?.textContent).toBe("Whole run: Reason not available. Contact an administrator with the Job ID above.");
   });
 
-  it("accepts the legacy { employeeId, message } shape without ever printing the id", async () => {
+  // The page must stay safe against a payroll-service that still sends the old
+  // shape (raw exception text + internal employee UUID). Neither may be rendered.
+  it("never renders backend error text or the internal employee id, even if the service sends them", async () => {
+    const uuid = "5b1c2d3e-0000-4000-8000-000000000e09";
     statusAwareGetMock.mockResolvedValue({
       kind: "ok", status: 200,
       body: { data: {
-        jobId: "job-5", fy: "2025-26", status: "completed", totalEmployees: 2, generated: 1, failed: 1,
+        jobId: "job-5", fy: "2025-26", status: "completed", totalEmployees: 3, generated: 0, failed: 3,
         storagePrefix: "form16/2025-26",
-        errorDetails: [{ employeeId: "e9", message: "No PAN on file" }],
+        errorDetails: [
+          { employeeId: uuid, employeeNo: "EMP-0109", error: "connect ECONNREFUSED 10.0.3.7:5432 /srv/keys/signing.p12" },
+          { employeeId: "e9", message: "Chromium crashed: /usr/lib/chromium/headless_shell" },
+          { employeeNo: "EMP-0007", reasonCode: "SOMETHING_NEW", error: "S3 AccessDenied arn:aws:s3:::civitas-form16" },
+        ],
         createdAt: "2026-04-01T00:00:00.000Z", completedAt: null,
       } },
     });
     const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
     const { container } = render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     fireEventClickSummary();
-    expect(screen.getByText("An employee: No PAN on file")).toBeInTheDocument();
-    expect(container.textContent).not.toMatch(/\be9\b/);
+    const generic = "Reason not available. Contact an administrator with the Job ID above.";
+    expect(screen.getByText(`EMP-0109: ${generic}`)).toBeInTheDocument();
+    expect(screen.getByText(`An employee: ${generic}`)).toBeInTheDocument();
+    expect(screen.getByText(`EMP-0007: ${generic}`)).toBeInTheDocument();
+    const text = container.textContent ?? "";
+    for (const leaked of [uuid, "ECONNREFUSED", "signing.p12", "Chromium", "headless_shell", "AccessDenied", "arn:aws", /\be9\b/]) {
+      if (typeof leaked === "string") expect(text).not.toContain(leaked);
+      else expect(text).not.toMatch(leaked);
+    }
   });
 
-  it("falls back to 'No reason recorded' for an entry with no error text", async () => {
+  it("caps the list and says how many failures are not shown", async () => {
+    const rows = Array.from({ length: 120 }, (_, i) => ({ employeeNo: `EMP-${String(i).padStart(4, "0")}`, reasonCode: "STORAGE_ERROR" }));
+    statusAwareGetMock.mockResolvedValue({
+      kind: "ok", status: 200,
+      body: { data: {
+        jobId: "job-7", fy: "2025-26", status: "completed", totalEmployees: 500, generated: 0, failed: 500,
+        storagePrefix: "form16/2025-26",
+        errorDetails: rows,
+        errorDetailsTotal: 500,
+        createdAt: "2026-04-01T00:00:00.000Z", completedAt: null,
+      } },
+    });
+    const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
+    const { container } = render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    fireEventClickSummary();
+    expect(container.querySelectorAll("details li")).toHaveLength(100);
+    expect(screen.getByText("400 more failures are not shown.")).toBeInTheDocument();
+  });
+
+  it("falls back to the generic reason for an entry with no reason code", async () => {
     statusAwareGetMock.mockResolvedValue({
       kind: "ok", status: 200,
       body: { data: {
         jobId: "job-6", fy: "2025-26", status: "completed", totalEmployees: 2, generated: 1, failed: 1,
         storagePrefix: "form16/2025-26",
-        errorDetails: [{ employeeId: "u", employeeNo: "EMP-0007" }],
+        errorDetails: [{ employeeNo: "EMP-0007" }],
         createdAt: "2026-04-01T00:00:00.000Z", completedAt: null,
       } },
     });
     const ui = await Form16Page({ searchParams: { fy: "2025-26" } });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
     fireEventClickSummary();
-    expect(screen.getByText("EMP-0007: No reason recorded")).toBeInTheDocument();
+    expect(screen.getByText("EMP-0007: Reason not available. Contact an administrator with the Job ID above.")).toBeInTheDocument();
   });
 
   // GAP-PAYROLL-FORM16-05: an unrecognized errorDetails shape must fall

@@ -63,6 +63,8 @@ const TRANSITION_BODIES = {
     // requires >= 10 characters). Optional on the wire so existing callers keep
     // working; when present it travels on the command and lands in the audit
     // event (consumer.ts writes `reason` for every transition that carries one).
+    // OWNER DECISION (open): the 10-character rule is therefore a web-only gate;
+    // see runActionBody in payroll/validators.ts for the same trade-off on run approve/disburse.
     reason: z.string().trim().min(10).max(512).optional(),
   }),
 } as const;

@@ -3584,7 +3584,12 @@
     "failureDetailsSummary": "विफलता विवरण ({count})",
     "failureRow": "{employee}: {message}",
     "failureDetailsUnavailable": "विफलता विवरण एक अपरिचित प्रारूप में हैं और यहां नहीं दिखाए जा सकते; ऊपर दिए गए जॉब आईडी के साथ किसी प्रशासक से संपर्क करें।",
-    "failureReasonUnknown": "कोई कारण दर्ज नहीं",
+    "failureReasonUnknown": "कारण उपलब्ध नहीं; ऊपर दिए गए जॉब आईडी के साथ किसी प्रशासक से संपर्क करें।",
+    "failureReasonDataUnavailable": "इस कर्मचारी का वेतन या कर डेटा पढ़ा नहीं जा सका।",
+    "failureReasonRendererUnavailable": "PDF बनाने वाली सेवा उपलब्ध नहीं थी।",
+    "failureReasonSigningFailed": "PDF पर डिजिटल हस्ताक्षर नहीं किए जा सके।",
+    "failureReasonStorageError": "PDF को भंडारण में सहेजा नहीं जा सका।",
+    "failureRowsTruncated": "{count, plural, one {# और विफलता यहां नहीं दिखाई गई है।} other {# और विफलताएं यहां नहीं दिखाई गई हैं।}}",
     "failureRunLevel": "पूरा रन",
     "failureEmployeeUnknown": "एक कर्मचारी"
   },
@@ -5306,7 +5311,9 @@
   },
   "payrollCommon": {
     "backToPayroll": "पेरोल पर वापस जाएं",
-    "backToSalarySlips": "वेतन पर्चियों पर वापस जाएं"
+    "backToSalarySlips": "वेतन पर्चियों पर वापस जाएं",
+    "backToHr": "एचआर पर वापस जाएं",
+    "backToPensioners": "पेंशनभोगी पर वापस जाएं"
   },
   "exceptionPanel": {
     "panelAriaLabel": "{count, plural, one {# वेतन अपवाद पर ध्यान देने की आवश्यकता है} other {# वेतन अपवादों पर ध्यान देने की आवश्यकता है}}",

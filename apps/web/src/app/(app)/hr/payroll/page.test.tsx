@@ -149,6 +149,34 @@ describe("PayrollPage", () => {
     expect(tileValue("statTotalGrossPeriod|period=2026-08")).toBe("₹5,00,000.00");
   });
 
+  it("HOME-03: several paid pay-group runs of the latest period are added up (60 + 40 = 100 employees, exact paise gross); earlier periods are not", async () => {
+    mockFetchJson({
+      data: [
+        run("g0", "2026-08", "paid", 100, "50000000"),
+        run("g1", "2026-09", "paid", 60, "30000001"),
+        run("g2", "2026-09", "paid", 40, "20000002"),
+        run("g3", "2026-09", "completed", 7, "999"),
+      ],
+      source: "api",
+    });
+    renderPage(await PayrollPage());
+    expect(tileValue("statEmployeesPaidPeriod|period=2026-09")).toBe("100");
+    expect(tileValue("statTotalGrossPeriod|period=2026-09")).toBe("₹5,00,000.03");
+  });
+
+  it("HOME-03: if one of the period's paid runs has no paise total, the gross tile is a dash, not a partial sum", async () => {
+    mockFetchJson({
+      data: [
+        run("g1", "2026-09", "paid", 60, "30000000"),
+        { id: "g2", payPeriod: "2026-09", status: "paid", employeeCount: 40, grossAmount: 200000, netAmount: 0 },
+      ],
+      source: "api",
+    });
+    renderPage(await PayrollPage());
+    expect(tileValue("statEmployeesPaidPeriod|period=2026-09")).toBe("100");
+    expect(tileValue("statTotalGrossPeriod|period=2026-09")).toBe("—");
+  });
+
   it("HOME-03: before any run is paid the tiles use the plain labels and show real zeros", async () => {
     mockFetchJson({ data: [run("d1", "2026-09", "draft", 7, "1000000")], source: "api" });
     renderPage(await PayrollPage());

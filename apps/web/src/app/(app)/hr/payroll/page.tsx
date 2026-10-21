@@ -4,7 +4,7 @@ import { getPayrollRunDetails, getPayrollStructures } from "../../../_data/loade
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { formatMoney } from "@/lib/formatters";
-import { latestPaidRun, summariseRunStatuses } from "@/lib/payroll/runSummary";
+import { latestPaidPeriodTotals, summariseRunStatuses } from "@/lib/payroll/runSummary";
 import { CreatePayrollRunForm } from "./CreatePayrollRunForm";
 import { PayrollRunsTable } from "./PayrollRunsTable";
 import { getActiveDdos, getActiveGroups } from "./pay-groups/payGroupData";
@@ -62,17 +62,22 @@ export default async function PayrollPage() {
   // The old "Employees Paid"/"Total Gross" tiles summed employeeCount/
   // grossAmount over EVERY paid-or-completed run ever: the same employees
   // counted again each month, and completed-but-unpaid runs folded into a
-  // tile literally labelled "Paid". Use only the single most recent
-  // ACTUALLY-paid run instead, and say which period it is.
+  // tile literally labelled "Paid". Use only the paid runs of the LATEST paid
+  // period instead, and say which period it is. One period can hold several
+  // paid runs (pay-group runs make one per pay group), so they are added up
+  // within that period -- never across periods.
   //
   // The status tiles come from summariseRunStatuses: Paid + In progress +
   // Awaiting disbursement + Failed always sum to Total runs.
   const counts = errored ? null : summariseRunStatuses(runs);
-  const latestPaid = errored ? null : latestPaidRun(runs);
+  const latestPaid = errored ? null : latestPaidPeriodTotals(runs);
   const latestPeriod = latestPaid?.payPeriod ?? null;
-  // Money is rendered from the API's integer-paise string (GAP-PAYROLL-HOME-01);
-  // a paid run whose payload lacks it shows "—" (unknown), never a made-up zero.
+  // Money is rendered from the API's integer-paise strings (GAP-PAYROLL-HOME-01),
+  // summed in bigint; a paid run whose payload lacks it makes the total "—"
+  // (unknown), never a made-up zero or a partial sum.
   const totalGrossDisplay = errored ? "—" : latestPaid ? formatMoney(latestPaid.grossMinor) : formatMoney(0n);
+  // Before any run is paid this is a real zero (nothing has been paid); on a failed fetch it is unknown.
+  const employeesPaidDisplay = errored ? "—" : (latestPaid?.employeeCount ?? 0).toLocaleString("en-IN");
   const existingPeriods = runs.map((r) => r.payPeriod);
 
   return (
@@ -114,7 +119,7 @@ export default async function PayrollPage() {
           icon="👥"
           iconBg="var(--infobg)"
           label={latestPeriod ? t("statEmployeesPaidPeriod", { period: latestPeriod }) : t("statEmployeesPaid")}
-          value={latestPaid ? latestPaid.employeeCount.toLocaleString("en-IN") : counts ? "0" : "—"}
+          value={employeesPaidDisplay}
         />
         <StatCard
           icon="🏛"

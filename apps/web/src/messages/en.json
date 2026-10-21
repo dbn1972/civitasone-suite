@@ -3608,7 +3608,12 @@
     "failureDetailsSummary": "Failure details ({count})",
     "failureRow": "{employee}: {message}",
     "failureDetailsUnavailable": "Failure details are in an unrecognized format and can't be shown here; contact an administrator with the Job ID above.",
-    "failureReasonUnknown": "No reason recorded",
+    "failureReasonUnknown": "Reason not available. Contact an administrator with the Job ID above.",
+    "failureReasonDataUnavailable": "Salary or tax data could not be read for this employee.",
+    "failureReasonRendererUnavailable": "The PDF renderer was unavailable.",
+    "failureReasonSigningFailed": "The PDF could not be digitally signed.",
+    "failureReasonStorageError": "The PDF could not be saved to storage.",
+    "failureRowsTruncated": "{count, plural, one {# more failure is not shown.} other {# more failures are not shown.}}",
     "failureRunLevel": "Whole run",
     "failureEmployeeUnknown": "An employee"
   },
@@ -9193,7 +9198,9 @@
   },
   "payrollCommon": {
     "backToPayroll": "Back to Payroll",
-    "backToSalarySlips": "Back to Salary Slips"
+    "backToSalarySlips": "Back to Salary Slips",
+    "backToHr": "Back to HR",
+    "backToPensioners": "Back to Pensioners"
   },
   "exceptionPanel": {
     "panelAriaLabel": "{count, plural, one {# payroll exception requires attention} other {# payroll exceptions require attention}}",

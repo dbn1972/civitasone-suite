@@ -27,13 +27,18 @@ describe("PayrollPeriodPage", () => {
     expect(fetchJsonMock.mock.calls[0][0]).toBe("/api/v1/payroll/runs");
   });
 
-  it("does not divide already-rupee amounts by 100 again", async () => {
-    // PayrollRunDetail.grossAmount/netAmount/deductions are already rupees;
-    // rendering them via DataTable's cellType:"amount" (which assumes minor
-    // units) would silently show ₹5,000.00 instead of ₹5,00,000.00.
+  it("renders the integer-paise strings as rupees (5,00,000.00), not shifted by 100", async () => {
+    // GAP-PAYROLL-HOME-01: the run totals are read from grossMinor / netMinor /
+    // deductionsMinor (integer paise) and formatted once at the display edge. A
+    // wrong divisor would show ₹5,000.00 or ₹5,00,00,000.00 instead.
     fetchJsonMock.mockResolvedValue({
       data: [
-        { id: "run-1", runDate: "2026-08-01", payPeriod: "August 2026", employeeCount: 10, grossAmount: 500000, netAmount: 430000, deductions: 70000, status: "paid" },
+        {
+          id: "run-1", runDate: "2026-08-01", payPeriod: "August 2026", employeeCount: 10,
+          grossAmount: 500000, netAmount: 430000, deductions: 70000,
+          grossMinor: "50000000", netMinor: "43000000", deductionsMinor: "7000000",
+          status: "paid",
+        },
       ],
       source: "api",
     });
@@ -42,7 +47,25 @@ describe("PayrollPeriodPage", () => {
     render(ui);
 
     expect(screen.getByText("₹5,00,000.00")).toBeInTheDocument();
+    expect(screen.getByText("₹4,30,000.00")).toBeInTheDocument();
+    expect(screen.getByText("₹70,000.00")).toBeInTheDocument();
     expect(screen.queryByText("₹5,000.00")).not.toBeInTheDocument();
+  });
+
+  it("does not fall back to the legacy rupee floats: a payload without the paise strings shows an em dash", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        { id: "run-2", runDate: "2026-08-01", payPeriod: "August 2026", employeeCount: 10, grossAmount: 500000, netAmount: 430000, deductions: 70000, status: "paid" },
+      ],
+      source: "api",
+    });
+
+    const ui = await PayrollPeriodPage();
+    render(ui);
+
+    expect(screen.queryByText("₹5,00,000.00")).not.toBeInTheDocument();
+    expect(screen.queryByText("₹4,30,000.00")).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(3);
   });
 
   it("tells the truth on a fetch failure", async () => {

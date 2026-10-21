@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { latestPaidRun, summariseRunStatuses } from "./runSummary";
+import { latestPaidPeriodTotals, latestPaidRun, summariseRunStatuses } from "./runSummary";
 
 type R = { id: string; payPeriod: string; status: "draft" | "processing" | "completed" | "paid" | "disbursed" | "failed"; runDate?: string };
 const run = (id: string, payPeriod: string, status: R["status"], runDate?: string): R => ({ id, payPeriod, status, ...(runDate ? { runDate } : {}) });
@@ -55,5 +55,43 @@ describe("latestPaidRun (GAP-PAYROLL-HOME-03)", () => {
   it("is null when nothing has been paid", () => {
     expect(latestPaidRun([run("a", "2026-08", "completed")])).toBeNull();
     expect(latestPaidRun([])).toBeNull();
+  });
+});
+
+describe("latestPaidPeriodTotals (GAP-PAYROLL-HOME-03)", () => {
+  type P = { id: string; payPeriod: string; status: R["status"]; employeeCount: number; grossMinor?: string };
+  const p = (id: string, payPeriod: string, status: R["status"], employeeCount: number, grossMinor?: string): P =>
+    ({ id, payPeriod, status, employeeCount, ...(grossMinor === undefined ? {} : { grossMinor }) });
+
+  it("adds up the paid runs of the latest paid period only (pay-group runs), exact in paise", () => {
+    const t = latestPaidPeriodTotals([
+      p("a", "2026-08", "paid", 100, "50000000"),
+      p("b", "2026-09", "paid", 60, "30000001"),
+      p("c", "2026-09", "paid", 40, "20000002"),
+      p("d", "2026-09", "completed", 7, "999"),
+      p("e", "2026-10", "failed", 3, "888"),
+    ]);
+    expect(t).toEqual({ payPeriod: "2026-09", runCount: 2, employeeCount: 100, grossMinor: 50000003n });
+  });
+
+  it("two single paid runs of 100 in different months still give 100 for the latest month, not 200", () => {
+    const t = latestPaidPeriodTotals([p("a", "2026-07", "paid", 100, "50000000"), p("b", "2026-08", "paid", 100, "50000000")]);
+    expect(t).toEqual({ payPeriod: "2026-08", runCount: 1, employeeCount: 100, grossMinor: 50000000n });
+  });
+
+  it("treats 'disbursed' as paid and ignores unpaid statuses", () => {
+    expect(latestPaidPeriodTotals([p("a", "2026-08", "disbursed", 5, "100"), p("b", "2026-09", "draft", 9, "900")]))
+      .toEqual({ payPeriod: "2026-08", runCount: 1, employeeCount: 5, grossMinor: 100n });
+  });
+
+  it("an unknown paise total on any paid run of the period makes the gross unknown (null), not a partial sum", () => {
+    const t = latestPaidPeriodTotals([p("a", "2026-09", "paid", 60, "30000000"), p("b", "2026-09", "paid", 40)]);
+    expect(t).toEqual({ payPeriod: "2026-09", runCount: 2, employeeCount: 100, grossMinor: null });
+    expect(latestPaidPeriodTotals([p("a", "2026-09", "paid", 60, "12.5")])?.grossMinor).toBeNull();
+  });
+
+  it("is null when nothing has been paid", () => {
+    expect(latestPaidPeriodTotals([p("a", "2026-08", "completed", 1, "1")])).toBeNull();
+    expect(latestPaidPeriodTotals([])).toBeNull();
   });
 });
