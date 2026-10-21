@@ -405,6 +405,27 @@ describe("POST /v1/crm/custom-fields", () => {
     expect(res.statusCode).toBe(401);
   });
 
+  // GAP-CRM-CUSTOM-FIELDS-01: the privacy keys in validationSchema are typed at the route.
+  it("returns 400 for a malformed sensitive flag instead of storing it verbatim", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/crm/custom-fields",
+      headers: authHeader(["crm_admin"]),
+      payload: { entityType: "contacts", fieldName: "Aadhaar", fieldType: "text", validationSchema: { sensitive: "yes" } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().fieldErrors[0].field).toBe("validationSchema.sensitive");
+  });
+
+  it("returns 400 for visibleToRoles on a field that is not sensitive", async () => {
+    const res = await app.inject({
+      method: "POST", url: "/v1/crm/custom-fields",
+      headers: authHeader(["crm_admin"]),
+      payload: { entityType: "contacts", fieldName: "PAN", fieldType: "text", validationSchema: { visibleToRoles: ["crm_admin"] } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().fieldErrors[0].message).toBe("VISIBLE_TO_ROLES_REQUIRES_SENSITIVE");
+  });
+
   it("returns 403 for non-admin role", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/crm/custom-fields",
@@ -416,6 +437,16 @@ describe("POST /v1/crm/custom-fields", () => {
 });
 
 describe("PATCH /v1/crm/custom-fields/:id", () => {
+  it("returns 400 for a malformed visibleToRoles list (GAP-CRM-CUSTOM-FIELDS-01)", async () => {
+    const res = await app.inject({
+      method: "PATCH", url: `/v1/crm/custom-fields/${VALID_UUID}`,
+      headers: authHeader(["crm_admin"]),
+      payload: { validationSchema: { sensitive: true, visibleToRoles: "crm_admin" } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().fieldErrors[0].field).toBe("validationSchema.visibleToRoles");
+  });
+
   it("returns 400 with empty body", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/crm/custom-fields/${VALID_UUID}`,
