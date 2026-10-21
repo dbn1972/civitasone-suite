@@ -39,11 +39,26 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       dateOfBirth?: string; gender?: string; pan?: string; aadhaarRef?: string;
       mobile?: string; email?: string; bankAccountNo?: string; bankIfsc?: string;
       payStructureId?: string;
+      // GAP-HR-EMPLOYEES-IMPORT-05: set by the bulk-import route, which resolves
+      // a row's managerEmployeeNo to this id (tenant-scoped) before queueing.
+      // The single-row create path writes managerId directly in commands.ts and
+      // never reaches this consumer.
+      managerId?: string;
       legalEntityId?: string; costCenterId?: string; locationId?: string;
       esicIpNumber?: string; uanNumber?: string; pran?: string; gstin?: string; sacCode?: string; agencyRef?: string; napsId?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // GAP-HR-EMPLOYEES-IMPORT-05: the route resolved this id moments ago, but
+      // this consumer runs async off a queue, so re-verify it still names an
+      // employee in THIS tenant right before writing (same defence-in-depth the
+      // confirm consumer applies to its precondition). A manager that vanished
+      // in between fails the message loudly rather than creating an employee
+      // whose reportingTo points at nothing.
+      if (p.managerId) {
+        const manager = await repo.findByIdTx(tx, p.managerId, p.tenantId);
+        if (!manager) throw new HttpError(422, "MANAGER_NOT_FOUND", `manager ${p.managerId} not found in this tenant`);
+      }
       await repo.insertEmployee(tx, {
         id: p.id, tenantId: p.tenantId, employeeNo: p.employeeNo, fullName: p.fullName,
         departmentId: p.departmentId, designationId: p.designationId,
@@ -53,6 +68,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
         aadhaarRef: p.aadhaarRef ?? null, mobile: p.mobile ?? null, email: p.email ?? null,
         bankAccountNo: p.bankAccountNo ?? null, bankIfsc: p.bankIfsc ?? null,
         payStructureId: p.payStructureId ?? null,
+        managerId: p.managerId ?? null,
         ...(p.legalEntityId ? { legalEntityId: p.legalEntityId } : {}),
         ...(p.costCenterId ? { costCenterId: p.costCenterId } : {}),
         ...(p.locationId ? { locationId: p.locationId } : {}),
