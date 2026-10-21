@@ -1976,7 +1976,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DATA-QUALITY-07  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 crm rescan: PARTIAL - title is the next-intl key crm.dataQuality.title with no suffix, and ta/te/kn/hi now fall back to English per key (i18n/withEnglishFallback) instead of printing the raw key. NOT met: no Odia (or) locale exists, so an Odia title cannot show. NEEDS OWNER DECISION: add Odia as a supported locale (SUPPORTED_LOCALES + LOCALE_LABELS + messages/or.json + font check) and who supplies/approves the Odia translations, starting with crm.dataQuality.title.)
 - **First-pass claim:** Title carries a hard-coded Devanagari suffix, not a next-intl key, and not Odia for an Odisha tenant (app/(app)/crm/data-quality/page.tsx:9).
 - **Verified evidence:** data-quality/page.tsx:9 title 'Data Quality • डेटा गुणवत्ता' hard-coded; no next-intl; no Odia.
 - **Files to change:** `apps/web/src/app/(app)/crm/data-quality/page.tsx`
@@ -2090,7 +2090,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-07  ·  LOW  ·  partly  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** The same object is "Deals" (route, hub, custom fields), "Engagements" (dashboard, page) and "Engagement/New Engagement" (buttons); close date and probability are mapped but never shown (app/(app)/crm/deals/DealsTable.tsx:74).
 - **Verified evidence:** Naming inconsistency real: deals/page.tsx:16 'Vendor / Stakeholder Engagements', :20 '+ New Engagement', DealsTable.tsx:110 'Engagements'; crm/page.tsx:13 hub says 'Deals'; new page says 'New Deal'. closeDate and probability are mapped (apiMappers.ts:527-528) but DealsTable columns (:123-129) omit them. Cited line 74 is wrong.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/DealsTable.tsx`, `apps/web/src/app/(app)/crm/deals/page.tsx`
@@ -2168,7 +2168,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-DETAIL-06  ·  LOW  ·  confirmed  ·  theme I18N (was FABRICATED)
 
-- [x] **Status** (W2 2026-10-16: closed by #N, W2 crm: closed by #N)
+- [x] **Status** (W2 2026-10-16: closed by #N, W2 crm: closed by #N) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Success and error text uses hard-coded hex colours (#047857 / #b42318) and English literals instead of tokens / next-intl (DealDetailActions.tsx:165-172); the page mixes 'Deal' (title) with 'Engagement' (list).
 - **Verified evidence:** DealDetailActions.tsx:165 color '#047857', :170 '#b42318' hard-coded; messages are English literals; page title 'Deal ...' (page.tsx:31) vs list 'Engagements' (deals/page.tsx:16). CustomFieldsManager uses same hex (204-205) too.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/[id]/DealDetailActions.tsx`, `apps/web/src/app/(app)/crm/deals/[id]/page.tsx`
@@ -2204,7 +2204,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-NEW-01  ·  HIGH  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Stage can be set to Won or Lost at creation with no reason and no confirmation, bypassing the governed close flow (POST /close with a required reason of at least 10 characters for lost) that DealDetailActions enforces (deals/new/page.tsx:11-17, deals/[id]/DealDetailActions.tsx:97-107).
 - **Verified evidence:** deals/new/page.tsx:11-17 STAGES includes Won and Lost; select at :115-120 posts form.stage straight to POST v1/crm/deals (:68-79) with no dialog or reason. DealDetailActions.tsx:85-107 closes via ActionButton requireReason (lost adds minReasonLength=10) -> POST v1/crm/deals/:id/close {outcome,reason} (:40-46). Whether crm-service rejects Won/Lost on create is not verifiable (service absent from snapshot). maker!=checker is not applicable to a single-user create.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/new/page.tsx`
@@ -2221,7 +2221,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-NEW-02  ·  MEDIUM  ·  partly  ·  theme WIRING
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Stage vocabulary differs from the rest of the module: the form posts capitalised Lead/Proposal/…/Won/Lost while the list and detail use prospecting/proposal/negotiation/closed_won/closed_lost; 'Lead' has no counterpart (deals/new/page.tsx:11-17, app/_data/apiMappers.ts normalizeDealStage).
 - **Verified evidence:** Form STAGES (deals/new/page.tsx:11-17) are capitalised Lead/Proposal/Negotiation/Won/Lost, while list/detail use prospecting/proposal/negotiation/closed_won/closed_lost. But normalizeDealStage (apiMappers.ts:489-502) explicitly maps lead->prospecting, won->closed_won, lost->closed_lost, and loaders.ts:2778-2783 states the real backend contract returns capitalised values. So 'Lead' does have a counterpart (prospecting) and the list renders correctly; the real gap is that the vocabulary is duplicated in three places and 'qualification' exists in the mapper but not the form.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/new/page.tsx`, `apps/web/src/app/_data/apiMappers.ts`
@@ -2237,7 +2237,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-NEW-03  ·  MEDIUM  ·  partly  ·  theme MONEY
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Money is a JS Number times 100 rounded on the client from a step=1 input, so paise cannot be entered and large values lose precision above 2^53 paise; no lakh grouping or preview of the entered amount (page.tsx:65-66, 112).
 - **Verified evidence:** page.tsx:65-66 does Number(form.value) then Math.round(rupees*100); input at :112 is type=number step=1 so browser validation blocks fractional rupees (paise cannot be typed) and the >2^53 concern (~90 trillion rupees) is not realistic. Real gaps: float math against the money rule, no lakh grouping or preview (no formatMoney under the field), and NaN silently becomes 0 (:66). The repo already has rupeesToMinorString in lib/money.ts:28, used by OpportunityForm.tsx:85.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/new/page.tsx`
@@ -2254,7 +2254,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-NEW-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** The contact picker swallows both a non-OK response and an exception with no message, and loads the full contact list into a single dropdown (unpaged, no search) (page.tsx:42-52, 124-129).
 - **Verified evidence:** page.tsx:42-52: `if (!res.ok) return;` and `catch { /* ignore */ }` give no message; fetch v1/crm/contacts has no query/limit and options are rendered in one <select> (:124-129). Server-side default page size is not verifiable (crm-service absent), so the picker may silently truncate.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/new/page.tsx`
@@ -2300,7 +2300,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEALS-NEW-07  ·  LOW  ·  partly  ·  theme I18N (was FABRICATED)
 
-- [~] **Status** NEEDS OWNER DECISION — naming (Deal vs Engagement) and hex-colour tokens require a product decision before web changes can land
+- [x] **Status** (W2 crm rescan: completed by #PRNUM) Canonical noun "Engagement" is the term already live on the hub, list and new screens; the copy, picker hint and banners (shared themed Alert) now follow it. Owner may still override the noun; every string lives in the catalogue so a change is key edits only.
 - **First-pass claim:** Copy calls the record 'Deal' (title, button) while the list page says 'Engagement'; the picker says 'Contact' where the list column says 'Account'; banners use hard-coded hex colours (page.tsx:95-101).
 - **Verified evidence:** Copy mismatch is real: new page title 'New Deal' (page.tsx:93), button 'Create deal' (:141), 'Contact (optional)' (:123) versus list 'Vendor / Stakeholder Engagements', '+ New Engagement' (deals/page.tsx:16,20) and column 'Account' (DealsTable.tsx:126). Hard-coded hex at :95 (#ecfdf3) and :100 (#fef2f2, #b42318). Not fabricated data, so the FABRICATED tag is wrong.
 - **Files to change:** `apps/web/src/app/(app)/crm/deals/new/page.tsx`
@@ -2323,7 +2323,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-CANDIDATES-01  ·  HIGH  ·  confirmed  ·  theme PII
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1858, verified on main 9c5e9e9e9) (W2 crm rescan: completed by #PRNUM)
 - **First-pass claim:** Full email and phone of both contacts are shown side by side to any CRM role with no masking or role gate, although the page's purpose only needs enough to recognise a match (DPDP data minimisation) (dedup-candidates/page.tsx:47-53, 119-125).
 - **Verified evidence:** FIELDS (dedup-candidates/page.tsx:47-53) include email and phone; PairCard prints raw pair.left/right[key] via fmt (:119,125). No masking or role gate beyond the CRM layout roles; no <Masked> shared component exists (grep found only integration secret mask). NOTE: dedupCandidates.ts:4-21 says GET /v1/crm/contacts/dedup-candidates does not exist in crm-service, so the page currently always renders the error state; the issue is latent until the endpoint exists.
 - **Files to change:** `apps/web/src/app/(app)/crm/dedup-candidates/page.tsx`, `apps/web/src/app/_components/ds/Masked.tsx (new)`
@@ -2339,7 +2339,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-DEDUP-CANDIDATES-02  ·  MEDIUM  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [~] **Status** (W2 crm rescan: PARTIAL - Swap, a mandatory reviewer reason (>=10 chars in the dialog; validated and persisted by crm-service), and an audit trail naming BOTH contacts (merge on the primary, merge_into on the absorbed duplicate, reason on both) are done and tested; also fixed a latent bug where a merge that backfilled the primary's missing email rolled back on the unique email index. NOT built (item fix step 3, flagged as follow-up): per-field winner selection. NEEDS OWNER DECISION: which fields may a reviewer take from the duplicate over the primary's value (email/phone are PII and unique-indexed), and should the reason be mandatory server-side rather than only in the UI?)
 - **First-pass claim:** Merge is irreversible ('cannot be undone') yet always keeps the left contact and only backfills its empty fields; the reviewer cannot swap sides or choose per-field winners even though differing fields are highlighted (page.tsx:139, 296; lib/crm/dedupCandidates.ts:60-66).
 - **Verified evidence:** Merge button 'Merge → keep left' (page.tsx:139), ConfirmDialog at :291-305 says 'cannot be undone' and has no reason; mergeDedupPair(left.id,right.id) (dedupCandidates.ts:67-73) posts {primaryId,duplicateId}; left is always primary and only empty fields backfilled (:61-66). No swap or per-field choice; backend carry-over rules (merge-consumer) not verifiable.
 - **Files to change:** `apps/web/src/app/(app)/crm/dedup-candidates/page.tsx`, `apps/web/src/lib/crm/dedupCandidates.ts`
