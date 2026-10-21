@@ -238,18 +238,9 @@ describe("onboarding HTTP client", () => {
   });
 
   // GAP-CRM-ONBOARDING-01 — deal/account name resolution for the list.
-  it("getOnboardingLookups builds id→name maps from the deals + accounts lists", async () => {
-    fetchMock
-      .mockResolvedValueOnce(res({ data: [{ id: "d1", name: "Acme renewal" }, { id: "d2", name: "Beta expansion" }] }))
-      .mockResolvedValueOnce(res({ data: [{ id: "a1", name: "Acme Corp" }] }));
-    const lk = await onb.getOnboardingLookups();
-    expect(lk.dealNames).toEqual({ d1: "Acme renewal", d2: "Beta expansion" });
-    expect(lk.accountNames).toEqual({ a1: "Acme Corp" });
-  });
-
   it("getOnboardingLookups degrades to empty maps when a lookup fails (names left to resolve to null)", async () => {
     fetchMock.mockResolvedValueOnce(res({}, { status: 500 })).mockRejectedValueOnce(new Error("network"));
-    const lk = await onb.getOnboardingLookups();
+    const lk = await onb.getOnboardingLookups([{ dealId: "d1", accountId: "a1" }]);
     expect(lk.dealNames).toEqual({});
     expect(lk.accountNames).toEqual({});
   });

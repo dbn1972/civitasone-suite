@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { fetchAllPages, CRM_LIST_PAGE_SIZE } from "./pagedList";
+import { dataOf, fetchRowsByIds, IDS_PER_REQUEST } from "./pagedList";
 
 function res(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -11,50 +11,48 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-const rows = (n: number, from = 0) => Array.from({ length: n }, (_, i) => ({ id: `r${from + i}` }));
-const offsets = () => fetchMock.mock.calls.map((c) => new URL(String(c[0]), "http://localhost").searchParams.get("offset"));
+const urlOf = (i: number) => new URL(String(fetchMock.mock.calls[i]![0]), "http://localhost");
 
-describe("fetchAllPages", () => {
-  it("uses the server page size and walks offsets until the list is exhausted", async () => {
-    fetchMock
-      .mockResolvedValueOnce(res({ data: rows(CRM_LIST_PAGE_SIZE), meta: { total: 250 } }))
-      .mockResolvedValueOnce(res({ data: rows(50, CRM_LIST_PAGE_SIZE), meta: { total: 250 } }));
-    const r = await fetchAllPages({ path: "v1/crm/accounts" });
-    expect(r.rows).toHaveLength(250);
-    expect(r).toMatchObject({ complete: true, ok: true });
-    expect(offsets()).toEqual(["0", "200"]);
-    expect(String(fetchMock.mock.calls[0]![0])).toContain(`limit=${CRM_LIST_PAGE_SIZE}`);
+describe("dataOf", () => {
+  it("reads the rows of a bare array, { data } and { items } envelope, and drops non-object entries", () => {
+    expect(dataOf([{ id: "a" }, null, 3, { id: "b" }])).toEqual([{ id: "a" }, { id: "b" }]);
+    expect(dataOf({ data: [{ id: "a" }] })).toEqual([{ id: "a" }]);
+    expect(dataOf({ items: [{ id: "a" }] })).toEqual([{ id: "a" }]);
+    expect(dataOf({ rows: [{ id: "a" }] })).toEqual([]);
+    expect(dataOf(null)).toEqual([]);
+    expect(dataOf("x")).toEqual([]);
   });
+});
 
-  it("stops at the reported total even when the last page is full", async () => {
-    fetchMock.mockResolvedValueOnce(res({ data: rows(CRM_LIST_PAGE_SIZE), pagination: { total: CRM_LIST_PAGE_SIZE } }));
-    const r = await fetchAllPages({ path: "v1/crm/deals" });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+describe("fetchRowsByIds", () => {
+  it("asks for the ids in ONE request per 50, never paging by offset", async () => {
+    const ids = Array.from({ length: IDS_PER_REQUEST + 1 }, (_, i) => `r${i}`);
+    fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const asked = new URL(String(input), "http://localhost").searchParams.get("ids")!.split(",");
+      return res({ data: asked.map((id) => ({ id })) });
+    });
+    const r = await fetchRowsByIds("v1/crm/deals", ids);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(urlOf(0).searchParams.get("ids")!.split(",")).toHaveLength(IDS_PER_REQUEST);
+    expect(urlOf(1).searchParams.get("ids")).toBe(`r${IDS_PER_REQUEST}`);
+    expect(urlOf(0).searchParams.has("offset")).toBe(false);
+    expect(r.rows).toHaveLength(ids.length);
     expect(r.complete).toBe(true);
   });
 
-  it("stops as soon as `done` is satisfied", async () => {
-    fetchMock.mockResolvedValue(res({ data: rows(CRM_LIST_PAGE_SIZE), meta: { total: 5000 } }));
-    const r = await fetchAllPages({ path: "v1/crm/accounts", done: (read) => read.length >= CRM_LIST_PAGE_SIZE });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(r.complete).toBe(true);
+  it("makes no request for nothing, and de-duplicates ids", async () => {
+    expect(await fetchRowsByIds("v1/crm/deals", ["", ""])).toEqual({ rows: [], complete: true });
+    expect(fetchMock).not.toHaveBeenCalled();
+    fetchMock.mockResolvedValue(res({ data: [] }));
+    await fetchRowsByIds("v1/crm/deals", ["d1", "d1"]);
+    expect(urlOf(0).searchParams.get("ids")).toBe("d1");
   });
 
-  it("caps the number of pages and reports the result as incomplete", async () => {
-    fetchMock.mockImplementation(async () => res({ data: rows(CRM_LIST_PAGE_SIZE) }));
-    const r = await fetchAllPages({ path: "v1/crm/accounts", maxPages: 3 });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(r).toMatchObject({ complete: false, ok: true });
-    expect(r.rows).toHaveLength(3 * CRM_LIST_PAGE_SIZE);
-  });
-
-  it("reports ok:false when not even the first page can be read, and keeps earlier pages when a later one fails", async () => {
-    fetchMock.mockResolvedValueOnce(res({ code: "X" }, 500));
-    expect(await fetchAllPages({ path: "v1/crm/accounts" })).toEqual({ rows: [], complete: false, ok: false });
-    fetchMock.mockReset();
-    fetchMock.mockResolvedValueOnce(res({ data: rows(CRM_LIST_PAGE_SIZE) })).mockRejectedValueOnce(new Error("network"));
-    const partial = await fetchAllPages({ path: "v1/crm/accounts" });
-    expect(partial).toMatchObject({ complete: false, ok: true });
-    expect(partial.rows).toHaveLength(CRM_LIST_PAGE_SIZE);
+  it("reports an incomplete answer when a request fails, keeping the batches that arrived", async () => {
+    const ids = Array.from({ length: IDS_PER_REQUEST + 1 }, (_, i) => `r${i}`);
+    fetchMock.mockResolvedValueOnce(res({ data: [{ id: "r0" }] })).mockRejectedValueOnce(new Error("network"));
+    const r = await fetchRowsByIds("v1/crm/accounts", ids);
+    expect(r.rows).toEqual([{ id: "r0" }]);
+    expect(r.complete).toBe(false);
   });
 });

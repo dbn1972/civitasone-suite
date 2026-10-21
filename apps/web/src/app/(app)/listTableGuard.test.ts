@@ -31,7 +31,6 @@ const ID_SLICE_ALLOW: readonly string[] = [
   "citizen/_data.ts",
   "crm/campaigns/[id]/page.tsx",
   "crm/health/[accountId]/page.tsx",
-  "crm/onboarding/OnboardingList.tsx",
   "knowledge/repository/page.tsx",
   "knowledge/search/SearchClient.tsx",
   "loyalty/members/MembersTable.tsx",

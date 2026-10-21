@@ -19,7 +19,7 @@
 import { browserFetch, errorMessageFromResponse, UserFacingError } from "@/lib/api/browserClient";
 import { referenceFromHeaders } from "@/lib/errorCatalogue";
 import { formatInternalRef } from "@/lib/formatters";
-import { fetchAllPages, fetchRowsByIds, type ListRow } from "./pagedList";
+import { fetchRowsByIds, type ListRow } from "./pagedList";
 import { fetchAccountsByIds } from "./accountLookup";
 
 export type OnbSource = "api" | "error" | "not-found";
@@ -368,18 +368,6 @@ function namesFromRows(rows: ListRow[]): Record<string, string> {
   return out;
 }
 
-/**
- * Read one whole list endpoint (page by page, within the server's page cap). Only the
- * "no particular cases" call of getOnboardingLookups() needs this: naming a page of cases
- * looks the accounts and deals up by id instead. A failed read degrades to whatever pages did
- * arrive -- names are then left null and the UI shows a neutral label, never a UUID
- * (GAP-CRM-ONBOARDING-01).
- */
-async function allNames(path: string): Promise<Record<string, string>> {
-  const { rows } = await fetchAllPages({ path });
-  return namesFromRows(rows);
-}
-
 interface NameLookup {
   names: Record<string, string>;
   /**
@@ -428,19 +416,19 @@ async function dealNameById(dealId: string): Promise<{ name: string | null; comp
 /**
  * Fetch the deal + account name maps used to label onboarding rows.
  *
- * Pass the cases being labelled. Accounts and deals are then both looked up by id (one
- * request per 50 of each, however many exist): a deal or account that is gone or inactive is
- * simply absent from the answer and never forces a walk of the list. Without `cases` both
- * lists are read in full, within the server's page cap.
+ * Pass the cases being labelled. Accounts and deals are both looked up by id (one request
+ * per 50 of each, however many exist): a deal or account that is gone or inactive is simply
+ * absent from the answer and never forces a walk of the list. A failed request leaves those
+ * names out -- the UI then shows a neutral label, never a UUID (GAP-CRM-ONBOARDING-01).
  */
 export async function getOnboardingLookups(
-  cases?: ReadonlyArray<Pick<OnboardingCase, "dealId" | "accountId">>,
+  cases: ReadonlyArray<Pick<OnboardingCase, "dealId" | "accountId">>,
 ): Promise<OnboardingLookups> {
-  const wantedDeals = cases ? new Set(cases.map((c) => c.dealId).filter(Boolean)) : null;
-  const wantedAccounts = cases ? new Set(cases.map((c) => c.accountId).filter((a): a is string => !!a)) : null;
+  const wantedDeals = new Set(cases.map((c) => c.dealId).filter(Boolean));
+  const wantedAccounts = new Set(cases.map((c) => c.accountId).filter((a): a is string => !!a));
   const [dealNames, accountNames] = await Promise.all([
-    wantedDeals ? dealNamesByIds(wantedDeals).then((r) => r.names) : allNames("v1/crm/deals"),
-    wantedAccounts ? accountNamesByIds(wantedAccounts).then((r) => r.names) : allNames("v1/crm/accounts"),
+    dealNamesByIds(wantedDeals).then((r) => r.names),
+    accountNamesByIds(wantedAccounts).then((r) => r.names),
   ]);
   return { dealNames, accountNames };
 }
