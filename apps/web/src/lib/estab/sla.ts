@@ -63,7 +63,8 @@ export function pendencyDays(
 ): number | null {
   if (!file.createdDate || file.createdDate === "—") return null;
   if (isClosedStatus(file.status)) return null;
-  // daysLeft is "days until due", so for "days since created" we negate.
+  // daysLeft is "days until due", so for "days since created" we negate. "0 - d" (not "-d") so a file
+  // created today reads 0, never -0.
   const d = daysLeft(file.createdDate);
-  return d !== null ? -d : null;
+  return d !== null ? 0 - d : null;
 }

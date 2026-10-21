@@ -1,9 +1,9 @@
 import { getTranslations } from "next-intl/server";
-import { getEstabFiles } from "../../../_data/loaders";
+import { getEstabDashboard, getEstabFiles } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState, Term } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { formatDays } from "@/lib/formatters";
-import { pendencyDays } from "@/lib/estab/sla";
+import { isClosedStatus } from "@/lib/estab/sla";
 import { FilesTable, type FileRow } from "./FilesTable";
 import Link from "next/link";
 
@@ -25,23 +25,21 @@ const MASKED_CLASSIFICATIONS = new Set(["secret", "top_secret"]);
 
 export default async function EstabFilesListPage() {
   const tFallback = await getTranslations("employeeFallback");
-  const { data: files, source } = await getEstabFiles();
+  const t = await getTranslations("estabW2");
+  // GAP-ESTAB-DASHBOARD-01/02: the office-wide figures (Active Files, Avg Pendency) come from the
+  // same service counts as the dashboard, so a tile with the same name shows the same number. The
+  // register page itself holds only one page of rows, so counting them here would disagree.
+  const [{ data: files, source }, { data: dash, source: dashSource }] = await Promise.all([
+    getEstabFiles(),
+    getEstabDashboard(),
+  ]);
   const errored = source === "error";
-  const active = files.filter((f) => f.status === "active").length;
+  const dashErrored = dashSource === "error";
   const pending = files.filter((f) => f.status === "pending").length;
   // GAP-ESTAB-LIST-02: "Closed (MTD)" → "Closed" — we don't have closedAt,
-  // so the count is all-time closed, not month-to-date.
-  const closed = files.filter((f) => f.status === "archived" || f.status === "disposed").length;
-
-  const pendingFiles = files.filter((f) => f.status === "pending");
-  let avgPendencyDisplay = "—";
-  if (pendingFiles.length > 0) {
-    const totalDays = pendingFiles.reduce((sum, f) => {
-      const d = pendencyDays(f);
-      return d !== null ? sum + d : sum;
-    }, 0);
-    avgPendencyDisplay = `${formatDays(totalDays / pendingFiles.length)} days`;
-  }
+  // so the count is all-time closed, not month-to-date. Closed, archived and disposed are all finished.
+  const closed = files.filter((f) => isClosedStatus(f.status)).length;
+  const avgPendencyDisplay = `${formatDays(dash.avgPendencyDays)} days`;
 
   const rows: FileRow[] = files.map((f) => ({
     id: f.id,
@@ -101,11 +99,11 @@ export default async function EstabFilesListPage() {
       >
         {/* GAP-ESTAB-LIST-03: removed "and SLA on pendency" — dueDate is now
             shown per-file in the table via a Due column with overdue highlight. */}
-        <span aria-hidden="true">📁</span> <b>eOffice integration.</b> Digital files with e-sign note sheets, full movement trail — no physical files.
+        <span aria-hidden="true">📁</span> <b>eOffice integration.</b> Digital files with signed note sheets, full movement trail — no physical files.
       </div>
       <StatGrid>
-        <StatCard icon="📁" tone="good" label="Active Files" value={errored ? "—" : active.toLocaleString("en-IN")} />
-        <StatCard icon="⏱" tone="warn" label="Avg Pendency" value={errored ? "—" : avgPendencyDisplay} />
+        <StatCard icon="📁" tone="good" hint={t("dashActiveFilesHint")} label="Active Files" value={dashErrored ? "—" : dash.filesActive.toLocaleString("en-IN")} />
+        <StatCard icon="⏱" tone="warn" label="Avg Pendency" value={dashErrored ? "—" : avgPendencyDisplay} />
         <StatCard icon="🟡" tone="warn" label="Pending" value={errored ? "—" : pending.toLocaleString("en-IN")} />
         {/* GAP-ESTAB-LIST-02: label "Closed", not "Closed (MTD)" */}
         <StatCard icon="✅" tone="info" label="Closed" value={errored ? "—" : closed.toLocaleString("en-IN")} />

@@ -4863,7 +4863,7 @@ export async function getGrantUtilization(): Promise<LoaderResult<GrantUtilizati
 // Establishment loaders
 
 const ESTAB_DASHBOARD_EMPTY: EstabDashboard = {
-  filesPending: 0,
+  filesActive: 0,
   meetingsToday: 0,
   vehiclesInUse: 0,
   complianceItemsDue: 0,
@@ -4875,7 +4875,10 @@ const ESTAB_DASHBOARD_EMPTY: EstabDashboard = {
 function mapEstabDashboard(payload: unknown): EstabDashboard | null {
   if (!isRecord(payload)) return null;
   return {
-    filesPending: typeof payload.filesPending === "number" ? payload.filesPending : 0,
+    // filesActive is the field name; filesPending is the deprecated alias older services still send.
+    filesActive: typeof payload.filesActive === "number"
+      ? payload.filesActive
+      : typeof payload.filesPending === "number" ? payload.filesPending : 0,
     meetingsToday: typeof payload.meetingsToday === "number" ? payload.meetingsToday : 0,
     vehiclesInUse: typeof payload.vehiclesInUse === "number" ? payload.vehiclesInUse : 0,
     complianceItemsDue: typeof payload.complianceItemsDue === "number" ? payload.complianceItemsDue : 0,

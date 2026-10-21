@@ -28,9 +28,27 @@ function makeFile(overrides: Record<string, unknown> = {}) {
   };
 }
 
+// The page reads the register (first call) and the dashboard counts (second call).
+const DASH = {
+  filesActive: 7, filesPending: 7, meetingsToday: 0, vehiclesInUse: 0, complianceItemsDue: 0,
+  slaBreached: 2, dakPending: 0, avgPendencyDays: 4.5,
+};
+
+function installDefaults() {
+  fetchJsonMock.mockReset();
+  fetchJsonMock.mockImplementation(async (path: unknown) =>
+    String(path).includes("/estab/dashboard") ? { data: DASH, source: "api" } : { data: [], source: "api" });
+}
+
+/** The value shown on the stat tile with this label. */
+function tileValue(container: HTMLElement, label: string): string | undefined {
+  const tile = Array.from(container.querySelectorAll(".stat")).find((el) => el.querySelector(".lab")?.textContent === label);
+  return tile?.querySelector(".val")?.textContent ?? undefined;
+}
+
 describe("EstabFilesListPage", () => {
   beforeEach(() => {
-    fetchJsonMock.mockReset();
+    installDefaults();
   });
 
   it("GAP-ESTAB-LIST-01: masks subject for secret/top_secret files", async () => {
@@ -98,5 +116,55 @@ describe("EstabFilesListPage", () => {
     expect(screen.queryByText("In transit")).not.toBeInTheDocument();
     // "Pending" appears in both the stat label and the segment control.
     expect(screen.getAllByText("Pending").length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("EstabFilesListPage — office-wide tiles share the dashboard's definition (GAP-ESTAB-DASHBOARD-01 / -02)", () => {
+  beforeEach(() => {
+    installDefaults();
+  });
+
+  it("'Active Files' shows the service's count of status=active files, not a count of the rows on this page", async () => {
+    // Three active rows on the page, but the office has 7 (the dashboard tile shows the same 7).
+    fetchJsonMock.mockResolvedValueOnce({ data: [makeFile({ id: "a" }), makeFile({ id: "b" }), makeFile({ id: "c" })], source: "api" });
+    const { container } = render(await EstabFilesListPage());
+    expect(tileValue(container, "Active Files")).toBe("7");
+  });
+
+  it("'Avg Pendency' is the service's average over every open file (the dashboard's number), not over the 'pending' rows", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: [makeFile({ id: "a" })], source: "api" });
+    const { container } = render(await EstabFilesListPage());
+    expect(tileValue(container, "Avg Pendency")).toBe("4.5 days");
+  });
+
+  it("when the dashboard counts cannot be read the two tiles say so ('—') instead of showing a page-local number", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: [makeFile({ id: "a" })], source: "api" });
+    fetchJsonMock.mockResolvedValueOnce({ data: { ...DASH, filesActive: 0, avgPendencyDays: 0 }, source: "error" });
+    const { container } = render(await EstabFilesListPage());
+    expect(tileValue(container, "Active Files")).toBe("—");
+    expect(tileValue(container, "Avg Pendency")).toBe("—");
+    // the register itself still renders
+    expect(screen.getByText("Budget allocation for Q3")).toBeInTheDocument();
+  });
+
+  it("'Closed' counts every finished file: closed, archived and disposed", async () => {
+    fetchJsonMock.mockResolvedValueOnce({
+      data: [
+        makeFile({ id: "c", status: "closed" }),
+        makeFile({ id: "a", status: "archived" }),
+        makeFile({ id: "d", status: "disposed" }),
+        makeFile({ id: "x", status: "active" }),
+      ],
+      source: "api",
+    });
+    const { container } = render(await EstabFilesListPage());
+    expect(tileValue(container, "Closed")).toBe("3");
+  });
+
+  it("carries the same hint as the dashboard tile so the two read as one figure", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: [], source: "api" });
+    const { container } = render(await EstabFilesListPage());
+    const tile = Array.from(container.querySelectorAll(".stat")).find((el) => el.querySelector(".lab")?.textContent === "Active Files");
+    expect(tile?.getAttribute("title")).toMatch(/same count as Active Files on the File Register/);
   });
 });

@@ -92,3 +92,12 @@ describe("closed files (GAP-ESTAB-DASHBOARD-01: one definition shared with the d
       .toEqual([true, true, true, false, false, false, false]);
   });
 });
+
+describe("pendencyDays zero (GAP-ESTAB-DASHBOARD-01)", () => {
+  it("is 0, never -0, for a file created today (IST)", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-21T10:00:00+05:30"));
+    expect(Object.is(pendencyDays({ createdDate: "2026-10-21", status: "active" }), 0)).toBe(true);
+    expect(pendencyDays({ createdDate: "2026-10-11", status: "active" })).toBe(10);
+  });
+});

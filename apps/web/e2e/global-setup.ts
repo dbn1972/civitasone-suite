@@ -717,7 +717,7 @@ const FIXTURES: Record<string, unknown> = {
   '/api/v1/grants/utilization-certs': [],
   '/api/v1/grants/schemes': [],
 
-  '/api/v1/estab/dashboard': { filesPending: 1, meetingsToday: 1, vehiclesInUse: 0, complianceItemsDue: 0 },
+  '/api/v1/estab/dashboard': { filesActive: 1, filesPending: 1, meetingsToday: 1, vehiclesInUse: 0, complianceItemsDue: 0 },
   '/api/v1/estab/files': [
     {
       id: 'fil-001',

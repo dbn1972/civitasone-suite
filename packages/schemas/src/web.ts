@@ -1828,6 +1828,8 @@ export const GrantUtilizationListSchema = z.array(GrantUtilizationSchema);
 
 // Establishment schemas
 export const EstabDashboardSchema = z.object({
+  filesActive: z.number().default(0),
+  /** Deprecated alias of filesActive (same value), kept so older clients keep working. */
   filesPending: z.number().default(0),
   meetingsToday: z.number().default(0),
   vehiclesInUse: z.number().default(0),
@@ -1846,7 +1848,7 @@ export const EstabFileSummarySchema = z.object({
   createdBy: z.string(),
   createdDate: z.string(),
   currentHolder: z.string().optional(),
-  status: z.enum(["active", "pending", "archived", "disposed"]),
+  status: z.enum(["draft", "active", "pending", "closed", "transferred", "archived", "disposed"]),
   tags: z.array(z.string()).default([]),
 });
 export const EstabFileSummaryListSchema = z.array(EstabFileSummarySchema);

@@ -24,7 +24,8 @@ export default async function EstabInboxPage() {
     dueDate: f.dueDate,
   }));
 
-  const active = files.filter((f) => f.status === "active").length;
+  // Open files with the officer that are not awaiting receipt: draft and active alike (a closed file is not "active").
+  const active = files.filter((f) => !isClosedStatus(f.status) && f.status !== "pending").length;
   // Pending = in-transit / awaiting receipt on the desk (GAP-ESTAB-INBOX-05).
   const awaitingReceipt = files.filter((f) => f.status === "pending").length;
   let overdue = 0;

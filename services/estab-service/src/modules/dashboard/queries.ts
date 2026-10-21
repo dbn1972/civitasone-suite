@@ -93,8 +93,12 @@ export async function getDashboard(tenantId: string) {
     complianceItemsDue = c?.count ?? 0;
   } catch { /* ok */ }
 
+  const filesActive = pendingFiles?.count ?? 0;
   return {
-    filesPending: pendingFiles?.count ?? 0,
+    // GAP-ESTAB-DASHBOARD-02: the count of status="active" files under its true name.
+    filesActive,
+    // Deprecated alias (same value) for clients that still read the old field name.
+    filesPending: filesActive,
     meetingsToday,
     vehiclesInUse,
     complianceItemsDue,

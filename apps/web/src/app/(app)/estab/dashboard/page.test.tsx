@@ -11,7 +11,7 @@ vi.mock("../../../_data/loaders", () => ({
 import EstabDashboardPage from "./page";
 
 const DASH = {
-  filesPending: 12,
+  filesActive: 12,
   meetingsToday: 2,
   vehiclesInUse: 3,
   complianceItemsDue: 5,
