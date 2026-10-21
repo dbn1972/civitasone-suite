@@ -19,6 +19,18 @@ describe("legacy finance -> HR redirects (next.config.mjs)", () => {
   });
 });
 
+// GAP-FINANCE-MEDICAL-02: same root cause for the medical-claims bookmark. The page-level redirect() in
+// finance/medical/page.tsx only runs after finance/layout.tsx's role gate, so employee / manager / HR users
+// (outside FINANCE_ROLES) saw PermissionDenied instead of landing on /hr/medical.
+describe("legacy /finance/medical redirect (next.config.mjs)", () => {
+  it("permanently redirects /finance/medical to /hr/medical before any layout role gate", async () => {
+    const r = await rules();
+    expect(r).toContainEqual({ source: "/finance/medical", destination: "/hr/medical", permanent: true });
+    // A single exact-path rule: it must not swallow other /finance/* routes.
+    expect(r.filter((x) => x.source.startsWith("/finance/medical"))).toHaveLength(1);
+  });
+});
+
 // GAP-FINANCE-EXPENSES-01 / GAP-FINANCE-LOANS-01: the HR layout must admit the finance roles that
 // hrms-service's claims and loans routes accept, so the redirect target is not a permission wall.
 describe("HR layout admits the finance roles the redirect targets serve", () => {
