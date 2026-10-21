@@ -22,6 +22,12 @@ export interface CertificationCardProps {
   // previously made the "Renew Now" button permanently unreachable (it was
   // only ever rendered if `onRenew` was passed, and it never was).
   renewHref?: string;
+  // GAP-HR-CERTIFICATIONS-02: who holds the certificate. The register lists
+  // many people at once for HR (and a manager's reports), so a card without
+  // a holder is unattributable. Passed only for viewers who can see more
+  // than their own records; a bare employee's list is just their own.
+  holderName?: string;
+  holderDepartment?: string;
 }
 
 export function CertificationCard({
@@ -33,6 +39,8 @@ export function CertificationCard({
   isMandatory = false,
   status,
   renewHref,
+  holderName,
+  holderDepartment,
 }: CertificationCardProps) {
   const t = useTranslations("certifications");
   const days = expiryDate ? daysUntilExpiry(expiryDate) : null;
@@ -81,6 +89,14 @@ export function CertificationCard({
           {certificationName}
         </p>
         <p style={{ margin: "3px 0 0", fontSize: 12, color: "var(--mut)" }}>{issuingBody}</p>
+        {holderName && (
+          <p data-testid="certification-holder" style={{ margin: "6px 0 0", fontSize: 12, fontWeight: 600, color: "var(--ink2)" }}>
+            {holderName}
+            {holderDepartment && holderDepartment !== "—" && (
+              <span style={{ fontWeight: 400, color: "var(--mut)" }}> · {holderDepartment}</span>
+            )}
+          </p>
+        )}
       </div>
 
       {/* Dates */}
