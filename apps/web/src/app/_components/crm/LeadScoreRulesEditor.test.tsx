@@ -284,8 +284,9 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
   });
 
   // GAP-CRM-LEAD-SCORING-07: removing a loaded rule then Save surfaces the
-  // removed-rule count in the confirm dialog.
-  it("shows how many rules will be removed in the save confirm", async () => {
+  // removed-rule count in the confirm dialog -- and says truthfully that Save does not
+  // delete it (crm-service upserts by field and never deletes an omitted rule).
+  it("tells the admin a rule dropped from the list is NOT deleted by Save", async () => {
     vi.mocked(lq.getScoreRules).mockResolvedValue({
       data: [
         { ...rule, attribute: "leadSource", weight: 30 },
@@ -299,7 +300,25 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     fireEvent.click(screen.getAllByRole("button", { name: /remove rule/i })[1]!);
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
     const dialog = await screen.findByRole("alertdialog");
-    expect(dialog).toHaveTextContent(/1 rule will be removed/i);
+    expect(dialog).toHaveTextContent(/1 rule is no longer in this list/i);
+    expect(dialog).toHaveTextContent(/saving does not delete it/i);
+    expect(dialog).toHaveTextContent(/keeps scoring/i);
+    expect(dialog).toHaveTextContent(/turn it off instead/i);
+    expect(dialog).not.toHaveTextContent(/no longer contribute/i);
+  });
+
+  it("changing a rule's score function edits the same rule: it is not reported as dropped", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({
+      data: [{ ...rule, attribute: "leadSource", weight: 30 }],
+      source: "api",
+    });
+    vi.mocked(lq.saveScoreRules).mockResolvedValue(undefined);
+    renderWithIntl(<LeadScoreRulesEditor />);
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/score function for rule 1/i), { target: { value: "presence" } });
+    fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).not.toHaveTextContent(/no longer in this list/i);
   });
 });
 
@@ -446,7 +465,7 @@ describe("LeadScoreRulesEditor weights + impact preview (GAP-CRM-LEAD-SCORING-04
   ];
   const preview: lq.ScorePreview = {
     totalLeads: 120, sampled: 120, truncated: false, unscored: 4, currentAverage: 52.5, proposedAverage: 31.2,
-    changed: 80, raised: 10, lowered: 70, totalWeight: 40, maxPossibleScore: 40,
+    changed: 80, raised: 10, lowered: 70, totalWeight: 40, maxPossibleScore: 40, retainedRules: 0,
     bands: [
       { label: "0-19", current: 5, proposed: 30 },
       { label: "20-39", current: 20, proposed: 50 },
@@ -489,6 +508,27 @@ describe("LeadScoreRulesEditor weights + impact preview (GAP-CRM-LEAD-SCORING-04
     expect(rows.some((r) => /80-100\s*16\s*0/.test(r ?? ""))).toBe(true);
     // Preview is read-only: nothing was saved.
     expect(lq.saveScoreRules).not.toHaveBeenCalled();
+  });
+
+  it("says so when the preview still counts saved rules the edited list dropped", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: two, source: "api" });
+    vi.mocked(lq.previewScoreRules).mockResolvedValue({ ...preview, retainedRules: 2 });
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /preview impact/i }));
+    const summary = await screen.findByRole("region", { name: /impact preview/i });
+    expect(summary).toHaveTextContent(/2 saved rules are not in this list/i);
+    expect(summary).toHaveTextContent(/still counted here because Save does not delete them/i);
+  });
+
+  it("shows no retained-rule line when the list covers every saved rule", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: two, source: "api" });
+    vi.mocked(lq.previewScoreRules).mockResolvedValue(preview);
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /preview impact/i }));
+    const summary = await screen.findByRole("region", { name: /impact preview/i });
+    expect(summary).not.toHaveTextContent(/saved rules? (is|are) not in this list/i);
   });
 
   it("drops a stale preview as soon as the rules change", async () => {

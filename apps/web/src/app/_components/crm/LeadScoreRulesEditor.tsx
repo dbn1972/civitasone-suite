@@ -270,11 +270,14 @@ export function LeadScoreRulesEditor() {
   const rulesKey = JSON.stringify(toRules(rows));
   const livePreview = preview && preview.forKey === rulesKey ? preview.data : null;
 
-  // GAP-CRM-LEAD-SCORING-07: rules present at load that are no longer in the
-  // list (by attribute + score function). Removing a rule stops it scoring.
+  // GAP-CRM-LEAD-SCORING-07: rules present at load whose field is no longer in the list.
+  // crm-service keeps ONE rule per field and Save only upserts the rules it is sent, so a
+  // rule dropped here is NOT deleted: it keeps scoring with its saved weight and settings
+  // (the confirm says so). Switching a rule's score function edits the same rule, so it is
+  // not a removal.
   function removedRuleCount(): number {
-    const present = new Set(rows.map((r) => `${r.attribute.trim()}::${r.scoreFnType}`));
-    return originalRows.filter((o) => !present.has(`${o.attribute.trim()}::${o.scoreFnType}`)).length;
+    const present = new Set(rows.map((r) => r.attribute.trim()));
+    return originalRows.filter((o) => !present.has(o.attribute.trim())).length;
   }
   const removedCount = removedRuleCount();
 
@@ -594,9 +597,12 @@ function PreviewSummary({ preview }: { preview: ScorePreview }) {
       <p style={{ fontSize: 13, margin: "0 0 4px" }}>
         {t("previewChanged", { raised: preview.raised, lowered: preview.lowered, unscored: preview.unscored })}
       </p>
-      <p style={{ fontSize: 13, margin: "0 0 8px" }}>
+      <p style={{ fontSize: 13, margin: preview.retainedRules > 0 ? "0 0 4px" : "0 0 8px" }}>
         {t("previewCeiling", { total: preview.totalWeight, max: preview.maxPossibleScore })}
       </p>
+      {preview.retainedRules > 0 ? (
+        <p style={{ fontSize: 13, margin: "0 0 8px" }}>{t("previewRetained", { count: preview.retainedRules })}</p>
+      ) : null}
       <table className="tbl" aria-label={t("previewBandsLabel")}>
         <thead>
           <tr>

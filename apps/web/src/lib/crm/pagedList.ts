@@ -34,7 +34,8 @@ export interface PagedListOptions {
   signal?: AbortSignal;
 }
 
-function dataOf(body: unknown): ListRow[] {
+/** The rows of a list response (`[...]`, `{ data: [...] }` or `{ items: [...] }`). */
+export function dataOf(body: unknown): ListRow[] {
   if (Array.isArray(body)) return body.filter((r): r is ListRow => !!r && typeof r === "object");
   if (body && typeof body === "object") {
     for (const k of ["data", "items"]) {

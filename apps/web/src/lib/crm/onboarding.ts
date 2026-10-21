@@ -20,6 +20,7 @@ import { browserFetch, errorMessageFromResponse, UserFacingError } from "@/lib/a
 import { referenceFromHeaders } from "@/lib/errorCatalogue";
 import { formatInternalRef } from "@/lib/formatters";
 import { fetchAllPages, type ListRow } from "./pagedList";
+import { fetchAccountsByIds } from "./accountLookup";
 
 export type OnbSource = "api" | "error" | "not-found";
 
@@ -384,13 +385,48 @@ async function namesFor(path: string, wanted: Set<string> | null): Promise<Recor
   return namesFromRows(rows);
 }
 
+interface NameLookup {
+  names: Record<string, string>;
+  /**
+   * True when every request got a definitive answer. An id the server did not return is
+   * then known to be inactive or missing; false means a request failed, so a missing
+   * name only means "not found yet".
+   */
+  complete: boolean;
+}
+
+/**
+ * Name accounts by id with `GET /v1/crm/accounts?ids=` -- one request per 50 ids, however
+ * long the account list is. An inactive or missing account is simply absent from the
+ * answer, so it never forces the list to be paged to the end.
+ */
+async function accountNamesByIds(ids: ReadonlySet<string>): Promise<NameLookup> {
+  const { rows, complete } = await fetchAccountsByIds(ids);
+  return { names: namesFromRows(rows), complete };
+}
+
+/** Name ONE deal with `GET /v1/crm/deals/:id`; a 404 is a definitive "no such deal". */
+async function dealNameById(dealId: string): Promise<{ name: string | null; complete: boolean }> {
+  try {
+    const res = await browserFetch(`v1/crm/deals/${encodeURIComponent(dealId)}`);
+    if (res.status === 404) return { name: null, complete: true };
+    if (!res.ok) return { name: null, complete: false };
+    const body: unknown = await res.json();
+    const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const deal = record.data && typeof record.data === "object" ? (record.data as Record<string, unknown>) : record;
+    return { name: str(deal.name) || null, complete: true };
+  } catch {
+    return { name: null, complete: false };
+  }
+}
+
 /**
  * Fetch the deal + account name maps used to label onboarding rows.
  *
- * Pass the cases being labelled so only as many pages are read as it takes to find
- * THEIR deals/accounts. The list endpoints cap a page (accounts: 200) and answer a
- * larger `limit` with a 400, so this pages with the real page size instead of asking
- * for one oversized page that never resolved an account name.
+ * Pass the cases being labelled. Accounts are then looked up by id (one request per 50
+ * accounts, however many exist); deals are paged only until THEIR ids have been seen
+ * (the deals list has no id filter), with the real page size - a larger `limit` is a 400.
+ * Without `cases` both lists are read in full.
  */
 export async function getOnboardingLookups(
   cases?: ReadonlyArray<Pick<OnboardingCase, "dealId" | "accountId">>,
@@ -399,9 +435,36 @@ export async function getOnboardingLookups(
   const wantedAccounts = cases ? new Set(cases.map((c) => c.accountId).filter((a): a is string => !!a)) : null;
   const [dealNames, accountNames] = await Promise.all([
     namesFor("v1/crm/deals", wantedDeals),
-    namesFor("v1/crm/accounts", wantedAccounts),
+    wantedAccounts ? accountNamesByIds(wantedAccounts).then((r) => r.names) : namesFor("v1/crm/accounts", null),
   ]);
   return { dealNames, accountNames };
+}
+
+export interface CaseLookupResult {
+  lookups: OnboardingLookups;
+  /** False when a request failed: the caller should try again later rather than treat the gaps as final. */
+  complete: boolean;
+}
+
+/**
+ * Name ONE case's deal and account for the detail page: the deal by id and the account by
+ * id, two requests in all -- no list is paged. A deal or account that is gone or inactive
+ * comes back unnamed with `complete: true`, so the caller can stop asking.
+ */
+export async function getOnboardingCaseLookups(
+  c: Pick<OnboardingCase, "dealId" | "accountId">,
+): Promise<CaseLookupResult> {
+  const [deal, account] = await Promise.all([
+    c.dealId ? dealNameById(c.dealId) : Promise.resolve({ name: null, complete: true }),
+    c.accountId ? accountNamesByIds(new Set([c.accountId])) : Promise.resolve<NameLookup>({ names: {}, complete: true }),
+  ]);
+  return {
+    lookups: {
+      dealNames: c.dealId && deal.name ? { [c.dealId]: deal.name } : {},
+      accountNames: account.names,
+    },
+    complete: deal.complete && account.complete,
+  };
 }
 
 /**

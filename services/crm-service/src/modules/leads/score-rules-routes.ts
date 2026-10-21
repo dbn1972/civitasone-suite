@@ -2,7 +2,8 @@
  * LQ-002 — configurable lead scoring rules + score history.
  *   GET /v1/crm/lead-score-rules          — the tenant's rules (admin; seeds defaults)
  *   PUT /v1/crm/lead-score-rules          — upsert rules (admin, audited)
- *   POST /v1/crm/lead-score-rules/preview — dry-run a proposed rule set against the tenant's leads (admin, read-only)
+ *   POST /v1/crm/lead-score-rules/preview — dry-run what a PUT of this rule list would score against the tenant's leads
+ *                                           (admin, read-only; the list is overlaid on the stored rules like the PUT)
  *   GET /v1/crm/leads/:id/score-history   — score change history for a lead
  */
 import type { FastifyInstance } from "fastify";
@@ -39,7 +40,8 @@ export async function leadScoreRuleRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  // GAP-CRM-LEAD-SCORING-04: score the tenant's leads with the PROPOSED rules and report
+  // GAP-CRM-LEAD-SCORING-04: score the tenant's leads with the rules a Save of the PROPOSED
+  // list would leave behind (PUT is additive, so omitted stored rules still score) and report
   // the resulting distribution against the stored scores. Nothing is persisted.
   app.post(
     "/v1/crm/lead-score-rules/preview",

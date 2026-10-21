@@ -11,7 +11,8 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { Button, EntityPicker, type EntityOption } from "../ds";
-import { fetchAllPages, type ListRow } from "@/lib/crm/pagedList";
+import { type ListRow } from "@/lib/crm/pagedList";
+import { fetchAccountsByIds, searchAccountsByName } from "@/lib/crm/accountLookup";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
 import {
@@ -48,24 +49,15 @@ function namedAccounts(rows: ListRow[]): Array<{ id: string; name: string }> {
 }
 
 /**
- * Account search for the EntityPicker. Accounts are listed from the existing
- * `GET /v1/crm/accounts` endpoint, a page (200 rows) at a time until enough names
- * match the typed query - the list endpoint has no server-side search param, and reading
- * only its default first page (50 rows) made every account past it unfindable, so an
- * opportunity could not be linked to them (GAP-CRM-OPPORTUNITIES-NEW-02). Returns [] on
- * any failure so the picker degrades to "no results" rather than throwing.
+ * Account search for the EntityPicker: the server filters by name (`GET /v1/crm/accounts?search=`),
+ * so a keystroke costs ONE request of at most 20 rows and an account anywhere in the tenant is
+ * findable (GAP-CRM-OPPORTUNITIES-NEW-02). It used to page the whole list on every keystroke
+ * and read it to the end for a query that matched nothing. Returns [] on any failure so the
+ * picker degrades to "no results" rather than throwing.
  */
 async function searchAccounts(query: string, signal: AbortSignal): Promise<EntityOption[]> {
   try {
-    const q = query.trim().toLowerCase();
-    const matches = (rows: ListRow[]) =>
-      namedAccounts(rows).filter((a) => (q ? a.name.toLowerCase().includes(q) : true));
-    const { rows } = await fetchAllPages({
-      path: "v1/crm/accounts",
-      signal,
-      done: (read) => matches(read).length >= ACCOUNT_PICKER_LIMIT,
-    });
-    return matches(rows)
+    return namedAccounts(await searchAccountsByName(query, ACCOUNT_PICKER_LIMIT, signal))
       .slice(0, ACCOUNT_PICKER_LIMIT)
       .map((a) => ({ id: a.id, label: a.name }));
   } catch {
@@ -73,16 +65,11 @@ async function searchAccounts(query: string, signal: AbortSignal): Promise<Entit
   }
 }
 
+/** Labels for already-chosen account ids: one lookup by id, not a walk of the list. */
 async function resolveAccounts(ids: string[]): Promise<EntityOption[]> {
   try {
-    const want = new Set(ids);
-    const { rows } = await fetchAllPages({
-      path: "v1/crm/accounts",
-      done: (read) => namedAccounts(read).filter((a) => want.has(a.id)).length >= want.size,
-    });
-    return namedAccounts(rows)
-      .filter((a) => want.has(a.id))
-      .map((a) => ({ id: a.id, label: a.name }));
+    const { rows } = await fetchAccountsByIds(ids);
+    return namedAccounts(rows).map((a) => ({ id: a.id, label: a.name }));
   } catch {
     return [];
   }

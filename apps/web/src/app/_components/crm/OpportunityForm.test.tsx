@@ -230,13 +230,22 @@ describe("OpportunityForm account link (GAP-CRM-OPPORTUNITIES-NEW-02)", () => {
     { id: "acc-2", name: "Beta Industries" },
   ];
 
-  /** Serve GET /api/proxy/v1/crm/accounts like the real list route (200/page, meta.total). */
+  /**
+   * Serve GET /api/proxy/v1/crm/accounts like the real list route: limit (<= 200) and offset
+   * paging, `search` (name contains, ignoring case), `ids` (comma-separated lookup), meta.total
+   * counting the matches.
+   */
   function serveAccounts(all: Array<{ id: string; name: string }>) {
     return vi.spyOn(globalThis, "fetch").mockImplementation(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), "http://localhost");
       const limit = Number(url.searchParams.get("limit") ?? 50);
       const offset = Number(url.searchParams.get("offset") ?? 0);
-      return new Response(JSON.stringify({ data: all.slice(offset, offset + limit), meta: { total: all.length } }), { status: 200 });
+      const search = (url.searchParams.get("search") ?? "").trim().toLowerCase();
+      const ids = url.searchParams.get("ids")?.split(",");
+      const matching = all.filter(
+        (a) => (!search || a.name.toLowerCase().includes(search)) && (!ids || ids.includes(a.id)),
+      );
+      return new Response(JSON.stringify({ data: matching.slice(offset, offset + limit), meta: { total: matching.length } }), { status: 200 });
     });
   }
 
@@ -256,17 +265,35 @@ describe("OpportunityForm account link (GAP-CRM-OPPORTUNITIES-NEW-02)", () => {
     fetchSpy.mockRestore();
   });
 
-  it("an account past the first page of the list can still be found (the picker pages with the real page size)", async () => {
+  const accountRequests = (fetchSpy: ReturnType<typeof serveAccounts>) =>
+    fetchSpy.mock.calls.map((c) => new URL(String(c[0]), "http://localhost")).filter((u) => u.pathname.endsWith("/v1/crm/accounts"));
+
+  it("an account deep in a long list is found with ONE server-side search, not by paging the list", async () => {
     vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
-    const many = Array.from({ length: 260 }, (_, i) => ({ id: `acc-f${i}`, name: `Filler ${i}` })).concat([{ id: "acc-late", name: "Zenith Utilities" }]);
+    const many = Array.from({ length: 460 }, (_, i) => ({ id: `acc-f${i}`, name: `Filler ${i}` })).concat([{ id: "acc-late", name: "Zenith Utilities" }]);
     const fetchSpy = serveAccounts(many);
     renderWithIntl(<OpportunityForm />);
     await waitFor(() => expect(screen.getByLabelText(/opportunity name/i)).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("Account"), { target: { value: "Zenith" } });
     expect(await screen.findByText("Zenith Utilities")).toBeInTheDocument();
-    const urls = fetchSpy.mock.calls.map((c) => String(c[0]));
-    expect(urls.some((u) => u.includes("offset=200"))).toBe(true);
-    expect(urls.every((u) => !/limit=(?:[3-9]\d\d|\d{4,})/.test(u))).toBe(true);
+    const calls = accountRequests(fetchSpy);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.searchParams.get("search")).toBe("Zenith");
+    expect(calls[0]!.searchParams.get("limit")).toBe("20");
+    expect(calls[0]!.searchParams.has("offset")).toBe(false); // never walks pages
+    fetchSpy.mockRestore();
+  });
+
+  it("a query that matches nothing costs one request and says so (it does not read the whole list)", async () => {
+    vi.mocked(op.getPipelines).mockResolvedValue({ data: [pipeline], source: "api" });
+    const many = Array.from({ length: 460 }, (_, i) => ({ id: `acc-f${i}`, name: `Filler ${i}` }));
+    const fetchSpy = serveAccounts(many);
+    renderWithIntl(<OpportunityForm />);
+    await waitFor(() => expect(screen.getByLabelText(/opportunity name/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Account"), { target: { value: "Nonexistent Ltd" } });
+    await waitFor(() => expect(accountRequests(fetchSpy)).toHaveLength(1));
+    await screen.findByText(/no (matches|results)/i);
+    expect(accountRequests(fetchSpy)).toHaveLength(1);
     fetchSpy.mockRestore();
   });
 

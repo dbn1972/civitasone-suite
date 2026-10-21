@@ -118,6 +118,23 @@ export function leadAttributesFromRow(row: Record<string, unknown>): Record<stri
   return out;
 }
 
+/**
+ * The rule set a PUT would leave behind. PUT is an additive upsert by (tenant, attribute):
+ * a proposed rule replaces the stored rule for its attribute and every stored rule the
+ * proposal omits is kept as it is. Proposed entries apply in order, so a later entry wins
+ * over an earlier one with the same attribute (exactly like the sequential upserts).
+ * The dry-run preview scores THIS set, so its numbers are what Save will really produce.
+ */
+export function overlayRules(
+  stored: readonly StoredScoreRule[],
+  proposed: readonly StoredScoreRule[],
+): StoredScoreRule[] {
+  const byAttribute = new Map<string, StoredScoreRule>();
+  for (const r of stored) byAttribute.set(r.attribute, r);
+  for (const r of proposed) byAttribute.set(r.attribute, r);
+  return [...byAttribute.values()];
+}
+
 /** Turn stored rules into executable ScoringRules, dropping disabled ones. */
 export function toScoringRules(stored: readonly StoredScoreRule[]): ScoringRule[] {
   return stored

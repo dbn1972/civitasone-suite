@@ -16,10 +16,32 @@ export const scoreRuleSchema = z.object({
   enabled: z.boolean().default(true),
 });
 
+/**
+ * The backend keeps ONE rule per (tenant, attribute): a second entry for the same attribute
+ * in one request would silently overwrite the first on save (and be scored twice by a
+ * naive preview), so it is rejected as a field error on the repeated entry.
+ */
+const scoreRuleList = z
+  .array(scoreRuleSchema)
+  .max(20)
+  .superRefine((rules, ctx) => {
+    const seen = new Set<string>();
+    rules.forEach((rule, index) => {
+      if (seen.has(rule.attribute)) {
+        ctx.addIssue({
+          code: "custom",
+          path: [index, "attribute"],
+          message: "attribute is used by more than one rule; each lead field can have one rule",
+        });
+      }
+      seen.add(rule.attribute);
+    });
+  });
+
 export const putScoreRulesBody = z.object({
   // F3-03 empty-config guard: an empty list reaches the ROUTE (which answers 422
   // EMPTY_CONFIG_REJECTED unless ?confirmEmpty=true) instead of a generic 400.
-  rules: z.array(scoreRuleSchema).max(20),
+  rules: scoreRuleList,
   // GAP-CRM-LEAD-SCORING-05: optional list-level optimistic-concurrency token.
   // Also accepted via the If-Match header; the header takes precedence.
   version: z.string().min(1).optional(),
@@ -28,7 +50,7 @@ export type PutScoreRulesBody = z.infer<typeof putScoreRulesBody>;
 
 /** GAP-CRM-LEAD-SCORING-04: dry-run of a proposed rule set (nothing is saved). */
 export const previewScoreRulesBody = z.object({
-  rules: z.array(scoreRuleSchema).max(20),
+  rules: scoreRuleList,
 });
 
 export const scoreHistoryQuery = z.object({

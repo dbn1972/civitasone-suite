@@ -1,4 +1,4 @@
-import { eq, and, or, ilike, desc, sql, type SQL } from "drizzle-orm";
+import { eq, and, or, ilike, inArray, desc, sql, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { contacts, accounts, contactImportBatches, type ContactRow, type ContactInsert, type ContactView, type ContactDetailView, type AccountInsert, type ContactImportBatchInsert, type ContactImportBatchView } from "./schema.js";
 import { deals } from "../deals/schema.js";
@@ -432,12 +432,18 @@ export interface AccountListRow {
   lastContactAt: string | null;
 }
 
-/** Server-side narrowing for the accounts list / picker search (GAP-CRM-ACCOUNTS-DETAIL-01). */
+/**
+ * Server-side narrowing for the accounts list / picker search (GAP-CRM-ACCOUNTS-DETAIL-01)
+ * and the id lookup (W2 crm cluster 07). Every filter applies on top of tenant scope and
+ * status='active', so they can only ever narrow the population the list already exposes.
+ */
 export interface AccountListFilters {
-  /** Case-insensitive substring of the account name. */
+  /** Case-insensitive substring of the account name; `%`, `_` and `\` match literally. */
   search?: string;
   /** Hide this account AND every descendant (a re-parent picker must not offer a cycle). */
   excludeSubtreeOf?: string;
+  /** Only these account ids (a lookup of known ids, not a page). An empty list matches nothing. */
+  ids?: string[];
 }
 
 /** Escape LIKE metacharacters so a typed `%` or `_` matches literally. */
@@ -449,6 +455,7 @@ function accountListConditions(tenantId: string, filters: AccountListFilters): S
   const conditions: SQL[] = [eq(accounts.tenantId, tenantId), eq(accounts.status, "active")];
   const search = filters.search?.trim();
   if (search) conditions.push(ilike(accounts.name, `%${escapeLike(search)}%`));
+  if (filters.ids) conditions.push(filters.ids.length > 0 ? inArray(accounts.id, filters.ids) : sql`false`);
   if (filters.excludeSubtreeOf) {
     conditions.push(sql`${accounts.id} NOT IN (
       WITH RECURSIVE sub(id) AS (
@@ -552,8 +559,8 @@ export async function getAccount(tenantId: string, id: string): Promise<AccountD
 /**
  * GAP-CRM-ACCOUNTS-02: the total number of active accounts for this tenant, so
  * the list page can show "Showing N of M" instead of guessing from a capped page.
- * Counts the SAME population as listAccounts (status='active', tenant-scoped),
- * without the contact leftJoin so it is a single cheap aggregate.
+ * Counts the SAME population as listAccounts (status='active', tenant-scoped, same
+ * filters), without the contact leftJoin so it is a single cheap aggregate.
  */
 export async function countAccounts(tenantId: string, filters: AccountListFilters = {}): Promise<number> {
   const rows = await scopedRead((tx) => tx.select({ total: sql<string>`count(*)` })

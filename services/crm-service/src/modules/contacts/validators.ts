@@ -186,6 +186,9 @@ export const listContactsQuery = z.object({
   expectedValueMax: z.coerce.number().int().nonnegative().optional(),
 });
 
+/** Most account ids one `?ids=` lookup may carry. */
+export const MAX_ACCOUNT_LOOKUP_IDS = 50;
+
 // LQ-003: PATCH /v1/crm/contacts/:id/classification body. All fields optional so a
 // caller can set just one; expected_value is a non-negative integer of paise.
 export const classificationBody = z.object({
@@ -293,6 +296,14 @@ export const listAccountsQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
   search: z.string().trim().max(100).optional(),
   excludeSubtreeOf: z.string().uuid().optional(),
+  // W2 crm cluster 07: comma-separated ids - look specific accounts up in one request, so a
+  // picker or a name lookup never has to page the whole list.
+  ids: z
+    .string()
+    .max(MAX_ACCOUNT_LOOKUP_IDS * 37)
+    .transform((v) => v.split(",").map((x) => x.trim()).filter((x) => x.length > 0))
+    .pipe(z.array(z.string().uuid()).min(1).max(MAX_ACCOUNT_LOOKUP_IDS))
+    .optional(),
 });
 
 // GAP-CRM-ACCOUNTS-DETAIL-01: GET /v1/crm/accounts/:id -- the list row shape plus the

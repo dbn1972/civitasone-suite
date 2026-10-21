@@ -215,10 +215,12 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
     // GAP-CRM-ACCOUNTS-02: return the tenant-wide active-account total alongside
     // the (capped) page so the UI can show "N of M" and flag partial stats.
     // GAP-CRM-ACCOUNTS-DETAIL-01: `search` / `excludeSubtreeOf` narrow server-side
-    // (the total then counts the matching set).
+    // (the total then counts the matching set). W2 crm cluster 07: `ids` looks up
+    // specific accounts in one request (the total is then the number of matches).
     const { data, total } = await queries.listAccountsWithTotal(ctx.tenantId, q.limit, q.offset, {
       ...(q.search ? { search: q.search } : {}),
       ...(q.excludeSubtreeOf ? { excludeSubtreeOf: q.excludeSubtreeOf } : {}),
+      ...(q.ids !== undefined ? { ids: q.ids } : {}),
     });
     sendValidated(reply, accountsListSchema, { data, meta: { total } });
   });

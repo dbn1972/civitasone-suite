@@ -13920,7 +13920,7 @@
     "exportConfirmLabel": "Download CSV"
   },
   "crmLeadScoreRulesEditor": {
-    "removedRules": "{count, plural, one {# rule will be removed and will no longer contribute to any lead score.} other {# rules will be removed and will no longer contribute to any lead score.}}",
+    "removedRules": "{count, plural, one {# rule is no longer in this list. Saving does not delete it: it keeps its saved weight and settings and keeps scoring. To stop it scoring, turn it off instead.} other {# rules are no longer in this list. Saving does not delete them: they keep their saved weights and settings and keep scoring. To stop them scoring, turn them off instead.}}",
     "heading": "Scoring rules",
     "paramsMustBeObject": "Params must be a JSON object.",
     "conflictChanged": "These scoring rules were changed by another admin. Reload to see the latest, then re-apply your changes.",
@@ -13986,6 +13986,7 @@
     "previewAverage": "Average score: {current} now, {proposed} after.",
     "previewChanged": "{raised} leads would score higher and {lowered} lower. {unscored} leads have no score yet.",
     "previewCeiling": "Enabled weights total {total}, so the highest possible score is {max}.",
+    "previewRetained": "{count, plural, one {# saved rule is not in this list. It is still counted here because Save does not delete it.} other {# saved rules are not in this list. They are still counted here because Save does not delete them.}}",
     "previewBandsLabel": "Score distribution",
     "previewBand": "Score band",
     "previewNow": "Now",

@@ -472,6 +472,11 @@ export interface ScorePreview {
   lowered: number;
   totalWeight: number;
   maxPossibleScore: number;
+  /**
+   * Enabled saved rules the edited list no longer mentions. Save is an additive upsert and
+   * never deletes them, so the preview still scores with them.
+   */
+  retainedRules: number;
   bands: ScorePreviewBand[];
 }
 
@@ -492,6 +497,7 @@ export function normaliseScorePreview(raw: unknown): ScorePreview | null {
     lowered: num(d.lowered),
     totalWeight: num(d.totalWeight),
     maxPossibleScore: num(d.maxPossibleScore),
+    retainedRules: num(d.retainedRules),
     bands: (d.bands as unknown[]).map((b) => {
       const r = (b && typeof b === "object" ? b : {}) as Record<string, unknown>;
       return { label: str(r.label), current: num(r.current), proposed: num(r.proposed) };

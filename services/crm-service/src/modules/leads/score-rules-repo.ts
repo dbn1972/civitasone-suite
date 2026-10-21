@@ -15,6 +15,7 @@ import {
 import {
   DEFAULT_SCORE_RULE_CONFIGS,
   toScoringRules,
+  overlayRules,
   leadAttributesFromRow,
   type StoredScoreRule,
   type ScoreFnType,
@@ -283,9 +284,14 @@ export interface ScorePreview {
   changed: number;
   raised: number;
   lowered: number;
-  /** Sum of the enabled proposed weights, and the highest score they can ever produce. */
+  /** Sum of the enabled weights that WOULD apply after Save, and the highest score they can ever produce. */
   totalWeight: number;
   maxPossibleScore: number;
+  /**
+   * Enabled stored rules the proposal does not mention. Save is an additive upsert, so
+   * these keep scoring unchanged and are included in every number above.
+   */
+  retainedRules: number;
   bands: ScorePreviewBand[];
 }
 
@@ -295,14 +301,20 @@ function bandIndex(score: number): number {
 }
 
 /**
- * Score the tenant's active leads with a PROPOSED rule set without persisting anything,
- * using the exact scorer + attribute extraction the real recalculation uses
- * (computeLeadScore / leadAttributesFromRow), and compare against the stored scores.
- * Read-only: no writes, no audit event.
+ * Score the tenant's active leads with the rule set a Save of `proposed` WOULD leave
+ * behind, without persisting anything, using the exact scorer + attribute extraction the
+ * real recalculation uses (computeLeadScore / leadAttributesFromRow), and compare
+ * against the stored scores. Read-only: no writes, no audit event.
+ *
+ * upsertRules is additive by (tenant, attribute) and never deletes an omitted rule, so the
+ * proposal is overlaid on the tenant's stored rules with the same semantics
+ * (overlayRules). Scoring only the proposal would show a rule the admin dropped from the
+ * editor as gone while it keeps scoring after Save. The stored rules are read as they are
+ * (no lazy-seeding): a tenant with no rows ends up with exactly the proposed rows after a PUT.
  */
 export async function previewRules(tenantId: string, proposed: RuleUpsert[]): Promise<ScorePreview> {
-  const scoringRules = toScoringRules(proposed);
-  const { total, rows } = await scopedRead(async (tx) => {
+  const { total, rows, storedRows } = await scopedRead(async (tx) => {
+    const stored = await tx.select().from(leadScoreRules).where(eq(leadScoreRules.tenantId, tenantId));
     const countRows = (await tx.execute(sql`
       SELECT count(*)::int AS n FROM crm.contacts WHERE tenant_id = ${tenantId} AND status = 'active'
     `)) as unknown as Array<{ n: number }>;
@@ -313,8 +325,12 @@ export async function previewRules(tenantId: string, proposed: RuleUpsert[]): Pr
       ORDER BY updated_at DESC
       LIMIT ${SCORE_PREVIEW_SAMPLE_LIMIT}
     `)) as unknown as Array<Record<string, unknown>>;
-    return { total: Number(countRows[0]?.n ?? 0), rows: leadRows };
+    return { total: Number(countRows[0]?.n ?? 0), rows: leadRows, storedRows: stored.map(toStored) };
   });
+  const effective = overlayRules(storedRows, proposed);
+  const scoringRules = toScoringRules(effective);
+  const proposedAttributes = new Set(proposed.map((r) => r.attribute));
+  const retainedRules = storedRows.filter((r) => r.enabled && !proposedAttributes.has(r.attribute)).length;
 
   const bands: ScorePreviewBand[] = PREVIEW_BANDS.map((b) => ({ label: b.label, current: 0, proposed: 0 }));
   let proposedSum = 0;
@@ -339,7 +355,7 @@ export async function previewRules(tenantId: string, proposed: RuleUpsert[]): Pr
     if (next > prev) { raised += 1; changed += 1; }
     else if (next < prev) { lowered += 1; changed += 1; }
   }
-  const totalWeight = proposed.reduce((sum, r) => sum + (r.enabled ? r.weight : 0), 0);
+  const totalWeight = effective.reduce((sum, r) => sum + (r.enabled ? r.weight : 0), 0);
   const avg = (sum: number, n: number) => (n === 0 ? null : Math.round((sum / n) * 10) / 10);
   return {
     totalLeads: total,
@@ -353,6 +369,7 @@ export async function previewRules(tenantId: string, proposed: RuleUpsert[]): Pr
     lowered,
     totalWeight,
     maxPossibleScore: Math.min(100, totalWeight),
+    retainedRules,
     bands,
   };
 }
