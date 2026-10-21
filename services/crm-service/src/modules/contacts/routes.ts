@@ -5,7 +5,7 @@ import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import {
   createContactBody, updateContactBody, mergeContactsBody, bulkImportBody,
-  listContactsQuery, createAccountBody, updateAccountBody, idParam, contactsListSchema, accountsListSchema,
+  listContactsQuery, listAccountsQuery, createAccountBody, updateAccountBody, idParam, contactsListSchema, accountsListSchema,
   classificationBody,
   internalBulkImportBody,
   deleteContactBody,
@@ -210,10 +210,14 @@ export async function contactRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/crm/accounts", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, CRM_ROLES);
-    const q = listContactsQuery.parse(req.query);
+    const q = listAccountsQuery.parse(req.query);
     // GAP-CRM-ACCOUNTS-02: return the tenant-wide active-account total alongside
-    // the (capped) page so the UI can show "N of M" and flag partial stats.
-    const { data, total } = await queries.listAccountsWithTotal(ctx.tenantId, q.limit, q.offset);
+    // the (capped) page so the UI can show "N of M" and flag partial stats. With
+    // `search`/`ids` the total is the number of accounts matching the filter.
+    const { data, total } = await queries.listAccountsWithTotal(ctx.tenantId, q.limit, q.offset, {
+      ...(q.search !== undefined ? { search: q.search } : {}),
+      ...(q.ids !== undefined ? { ids: q.ids } : {}),
+    });
     sendValidated(reply, accountsListSchema, { data, meta: { total } });
   });
 

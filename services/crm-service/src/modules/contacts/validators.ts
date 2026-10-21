@@ -138,6 +138,26 @@ export const listContactsQuery = z.object({
   expectedValueMax: z.coerce.number().int().nonnegative().optional(),
 });
 
+/** Most account ids one `?ids=` lookup may carry. */
+export const MAX_ACCOUNT_LOOKUP_IDS = 50;
+
+/**
+ * GET /v1/crm/accounts query. Same paging as before (limit <= 200); `search` narrows by
+ * name and `ids` (comma-separated) looks up specific accounts in one request, so a picker
+ * or a name lookup never has to page the whole list. Other query keys are ignored, as before.
+ */
+export const listAccountsQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+  offset: z.coerce.number().int().min(0).default(0),
+  search: z.string().max(100).optional(),
+  ids: z
+    .string()
+    .max(MAX_ACCOUNT_LOOKUP_IDS * 37)
+    .transform((v) => v.split(",").map((s) => s.trim()).filter((s) => s.length > 0))
+    .pipe(z.array(z.string().uuid()).min(1).max(MAX_ACCOUNT_LOOKUP_IDS))
+    .optional(),
+});
+
 // LQ-003: PATCH /v1/crm/contacts/:id/classification body. All fields optional so a
 // caller can set just one; expected_value is a non-negative integer of paise.
 export const classificationBody = z.object({

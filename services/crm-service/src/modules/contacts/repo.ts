@@ -1,4 +1,4 @@
-import { eq, and, or, ilike, desc, sql, type SQL } from "drizzle-orm";
+import { eq, and, or, ilike, inArray, desc, sql, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { contacts, accounts, contactImportBatches, type ContactRow, type ContactInsert, type ContactView, type ContactDetailView, type AccountInsert, type ContactImportBatchInsert, type ContactImportBatchView } from "./schema.js";
 import { deals } from "../deals/schema.js";
@@ -430,7 +430,31 @@ export interface AccountListRow {
   lastContactAt: string | null;
 }
 
-export async function listAccounts(tenantId: string, limit = 500, offset = 0): Promise<AccountListRow[]> {
+/**
+ * Narrowing for the accounts list. Both filters apply on top of tenant scope and
+ * status='active', so they can only ever narrow the population the list already exposes.
+ */
+export interface AccountListFilters {
+  /** Case-insensitive "name contains"; `%`, `_` and `\` in the text match literally. */
+  search?: string;
+  /** Only these account ids (a lookup of known ids, not a page). An empty list matches nothing. */
+  ids?: string[];
+}
+
+function accountConditions(tenantId: string, filters: AccountListFilters): SQL[] {
+  const conditions: SQL[] = [eq(accounts.tenantId, tenantId), eq(accounts.status, "active")];
+  const search = filters.search?.trim();
+  if (search) conditions.push(ilike(accounts.name, `%${search.replace(/[\\%_]/g, "\\$&")}%`));
+  if (filters.ids) conditions.push(filters.ids.length > 0 ? inArray(accounts.id, filters.ids) : sql`false`);
+  return conditions;
+}
+
+export async function listAccounts(
+  tenantId: string,
+  limit = 500,
+  offset = 0,
+  filters: AccountListFilters = {},
+): Promise<AccountListRow[]> {
   const rows = await scopedRead((tx) => tx.select({
     id: accounts.id,
     name: accounts.name,
@@ -447,7 +471,7 @@ export async function listAccounts(tenantId: string, limit = 500, offset = 0): P
       eq(contacts.tenantId, accounts.tenantId),
       eq(contacts.status, "active"),
     ))
-    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.status, "active")))
+    .where(and(...accountConditions(tenantId, filters)))
     .groupBy(accounts.id, accounts.name, accounts.industry, accounts.website, accounts.parentId, accounts.ownerId, accounts.lastContactAt)
     .orderBy(accounts.name)
     .limit(limit)
@@ -464,13 +488,13 @@ export async function listAccounts(tenantId: string, limit = 500, offset = 0): P
 /**
  * GAP-CRM-ACCOUNTS-02: the total number of active accounts for this tenant, so
  * the list page can show "Showing N of M" instead of guessing from a capped page.
- * Counts the SAME population as listAccounts (status='active', tenant-scoped),
- * without the contact leftJoin so it is a single cheap aggregate.
+ * Counts the SAME population as listAccounts (status='active', tenant-scoped, same
+ * filters), without the contact leftJoin so it is a single cheap aggregate.
  */
-export async function countAccounts(tenantId: string): Promise<number> {
+export async function countAccounts(tenantId: string, filters: AccountListFilters = {}): Promise<number> {
   const rows = await scopedRead((tx) => tx.select({ total: sql<string>`count(*)` })
     .from(accounts)
-    .where(and(eq(accounts.tenantId, tenantId), eq(accounts.status, "active"))));
+    .where(and(...accountConditions(tenantId, filters))));
   return Number(rows[0]?.total ?? 0);
 }
 

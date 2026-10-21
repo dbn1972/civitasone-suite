@@ -116,10 +116,11 @@ export async function listAccountsWithTotal(
   tenantId: string,
   limit = 50,
   offset = 0,
+  filters: repo.AccountListFilters = {},
 ): Promise<{ data: Awaited<ReturnType<typeof repo.listAccounts>>; total: number }> {
   const [data, total] = await Promise.all([
-    repo.listAccounts(tenantId, limit, offset),
-    repo.countAccounts(tenantId),
+    repo.listAccounts(tenantId, limit, offset, filters),
+    repo.countAccounts(tenantId, filters),
   ]);
   return { data, total };
 }

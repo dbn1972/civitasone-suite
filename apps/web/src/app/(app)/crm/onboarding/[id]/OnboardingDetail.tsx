@@ -29,7 +29,7 @@ import {
   advanceStage,
   recordKyc,
   getOnboardingCase,
-  getOnboardingLookups,
+  getOnboardingCaseLookups,
   resolveCaseNames,
   shortRef,
   isMaskedKycReference,
@@ -117,6 +117,24 @@ export function OnboardingDetail({
     };
   }, []);
 
+  // The deal/account NAMES of this case. They do not change when the case advances, so they
+  // are resolved once per page view and reused by every reload and poll retry. Only a
+  // complete answer is final (a deal or account that is gone is then known to be unnamed);
+  // after a failed request the names found so far are kept and the lookup is tried again.
+  const namesRef = useRef<{ key: string; lookups: OnboardingLookups; complete: boolean } | null>(null);
+  const lookupsFor = useCallback(async (c: OnboardingCase): Promise<OnboardingLookups> => {
+    const key = `${c.dealId}|${c.accountId ?? ""}`;
+    const prev = namesRef.current && namesRef.current.key === key ? namesRef.current : null;
+    if (prev?.complete) return prev.lookups;
+    const { lookups, complete } = await getOnboardingCaseLookups(c);
+    const merged: OnboardingLookups = {
+      dealNames: { ...prev?.lookups.dealNames, ...lookups.dealNames },
+      accountNames: { ...prev?.lookups.accountNames, ...lookups.accountNames },
+    };
+    namesRef.current = { key, lookups: merged, complete };
+    return merged;
+  }, []);
+
   const load = useCallback(
     (signal?: { alive: boolean }) => {
       setSource("loading");
@@ -124,17 +142,15 @@ export function OnboardingDetail({
       // the case so the customer being onboarded is named, not shown as a raw
       // UUID. The onboarding module stores only opaque ids and never joins to
       // the deals/accounts modules (L2 isolation), so names are resolved in the
-      // web layer from the list endpoints; a failed lookup just leaves names null.
+      // web layer by id (deal by id, account by id); a failed lookup just leaves names null.
       return getOnboardingCase(id).then(async ({ data, source: s }: { data: OnboardingCase | null; source: OnbSource }) => {
-        // The lookup is told which deal/account it is naming, so it pages the (capped) list
-        // endpoints only until it has found them.
-        const lookups: OnboardingLookups = data ? await getOnboardingLookups([data]) : { dealNames: {}, accountNames: {} };
+        const lookups: OnboardingLookups = data ? await lookupsFor(data) : { dealNames: {}, accountNames: {} };
         if (signal && !signal.alive) return;
         setItem(data ? resolveCaseNames([data], lookups)[0] ?? data : null);
         setSource(s);
       });
     },
-    [id],
+    [id, lookupsFor],
   );
 
   useEffect(() => {
@@ -176,7 +192,7 @@ export function OnboardingDetail({
         await new Promise((r) => setTimeout(r, delayMs));
         if (!mountedRef.current.alive) return;
         const { data, source: s } = await getOnboardingCase(id);
-        const lookups: OnboardingLookups = data ? await getOnboardingLookups([data]) : { dealNames: {}, accountNames: {} };
+        const lookups: OnboardingLookups = data ? await lookupsFor(data) : { dealNames: {}, accountNames: {} };
         if (!mountedRef.current.alive) return;
         const resolved = data ? resolveCaseNames([data], lookups)[0] ?? data : null;
         setItem(resolved);
@@ -184,7 +200,7 @@ export function OnboardingDetail({
         if (resolved && resolved.version > priorVersion) return; // change landed
       }
     },
-    [id],
+    [id, lookupsFor],
   );
 
   const isError = source === "error";

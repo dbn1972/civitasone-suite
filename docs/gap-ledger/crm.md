@@ -3713,7 +3713,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-SCORING-03  ·  MEDIUM  ·  confirmed  ·  theme VALIDATION (was FABRICATED)
 
-- [~] **Status** (W2 crm rescan: partly closed by #PRNUM. DONE: the attribute is now a select of the 8 lead fields the scorer actually reads (backend-advertised in GET lead-score-rules `meta.scoreableAttributes`, incl. phone/leadStatus/city/designation the old list missed), and an unknown or duplicate attribute is rejected on save in the web AND by crm-service (400 on `rules.<i>.attribute`). REMAINING: 'custom field appears in list' - custom fields are not part of the scoring input (leads/consumer.ts leadAttributesFromRow), so a custom field cannot be scored today. OWNER QUESTION: should custom fields become scoreable? If yes, the scoring input must be extended with custom-field values and the allow-list opened to custom-field keys.)
+- [~] **Status** (W2 crm rescan: partly closed by #PRNUM. DONE: the attribute is now a select of the 8 lead fields the scorer actually reads (backend-advertised in GET lead-score-rules `meta.scoreableAttributes`, incl. phone/leadStatus/city/designation the old list missed), and an unknown attribute, or an attribute repeated within one request, is rejected on save in the web AND by crm-service (PUT and preview both answer 400 on `rules.<i>.attribute` of the offending entry; real-DB tests in w2-crm07-lead-score-preview.test.ts). REMAINING: 'custom field appears in list' - custom fields are not part of the scoring input (leads/consumer.ts leadAttributesFromRow), so a custom field cannot be scored today. OWNER QUESTION: should custom fields become scoreable? If yes, the scoring input must be extended with custom-field values and the allow-list opened to custom-field keys.)
 - **First-pass claim:** Attribute is a free-text string with a single placeholder ('e.g. industry'); nothing validates it against real lead fields or custom fields, so a typo saves a rule that never scores (editor:178-183).
 - **Verified evidence:** Attribute input (:177-184) is free text with placeholder 'e.g. industry'; rowValid only requires non-empty (:58). No source of valid attributes in the file. Theme FABRICATED is wrong (no fake data); it is validation.
 - **Files to change:** `apps/web/src/app/_components/crm/LeadScoreRulesEditor.tsx`
@@ -3728,7 +3728,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-SCORING-04  ·  MEDIUM  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W2 crm rescan: completed by #PRNUM)
+- [x] **Status** (W2 crm rescan: completed by #PRNUM. Rework: the dry-run preview scores the proposed list OVERLAID on the saved rules, because Save (PUT) is an additive upsert by attribute and never deletes a rule the list omits; so the before/after numbers, the 'N of M leads would change' line and the weight ceiling are what Save will really produce (a real-DB test saves the proposal, rescores through the recalc consumer and compares), and the preview says how many saved rules it kept. A rule dropped from the editor therefore keeps scoring - the confirm now says so and points to turning the rule off. OWNER QUESTION (does not reopen this item): should Save delete rules the list omits? That would change the PUT contract and its empty-list/clear-all path, so it is not done here.)
 - **First-pass claim:** Weights are independent 0-100 numbers with no total, normalisation hint, or preview of the resulting score distribution; the change applies to every lead after Save with no impact summary (editor:164, 236-239).
 - **Verified evidence:** Weight inputs (:197-207) are int 0-100 each; no sum, normalisation hint or preview; Save (:235-240) applies to all leads per note. Preview needs backend.
 - **Files to change:** `apps/web/src/app/_components/crm/LeadScoreRulesEditor.tsx`
@@ -3770,7 +3770,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-LEAD-SCORING-07  ·  LOW  ·  confirmed  ·  theme CONFIRM
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9; W2 crm rework re-confirmed: Save after removal still asks confirm with the dropped-rule count (LeadScoreRulesEditor.test.tsx 'tells the admin a rule dropped from the list is NOT deleted by Save'); the copy no longer claims the rule stops scoring)
 - **First-pass claim:** loading.tsx shows four stat tiles and a 280px block the page never renders; Remove deletes a rule immediately with no confirmation (lead-scoring/loading.tsx; editor:108, 226).
 - **Verified evidence:** lead-scoring/loading.tsx:9-16 4 tiles + 280px block; loaded page has no tiles. removeRule (:108) fires from button :226 with no confirm; local only until Save, so partly reversible.
 - **Files to change:** `apps/web/src/app/(app)/crm/lead-scoring/loading.tsx`, `apps/web/src/app/_components/crm/LeadScoreRulesEditor.tsx`
@@ -3875,7 +3875,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-01  ·  HIGH  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W2 crm rescan: completed by #PRNUM)
+- [x] **Status** (W2 crm rescan: completed by #PRNUM. Rework: account names are looked up by id (GET /v1/crm/accounts?ids=, one request per 50 ids, an inactive or missing account answers definitively) instead of paging the accounts list; the deals list is still paged only until the page's deals are found.)
 - **First-pass claim:** The list identifies a case only by the first 8 characters of a record id; Account is likewise an id fragment and the deal is not shown, so a clerk cannot tell which customer a row is without opening it (OnboardingList.tsx:30-32, 114, 122).
 - **Verified evidence:** apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx:30-32 shortId slices to 8 chars; used for case link text (114) and Account (122); no deal column; model has no names (lib/crm/onboarding.ts:195-208). Clerks cannot tell customers apart.
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/OnboardingList.tsx`, `apps/web/src/lib/crm/onboarding.ts`
@@ -3972,7 +3972,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-DETAIL-01  ·  MEDIUM  ·  confirmed  ·  theme UUID
 
-- [x] **Status** (W2 crm rescan: completed by #PRNUM)
+- [x] **Status** (W2 crm rescan: completed by #PRNUM. Rework: the detail page names the deal with GET /v1/crm/deals/:id and the account with GET /v1/crm/accounts?ids=, two requests in all and no list paging; the names are resolved once per page view and reused by every reload and poll retry (a failed request is retried, keeping the names already found).)
 - **First-pass claim:** The card title is 'Case {full record id}' and Account and Deal are raw UUIDs with no names or links to /crm/accounts or the deal; the page title is a static 'Onboarding Case', so the customer being onboarded is never named (OnboardingDetail.tsx:246, 256-257; page.tsx:8).
 - **Verified evidence:** apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx:246 <h3>Case {item.id}</h3> prints the full id; 256-257 print item.accountId and item.dealId raw with no link or name. page.tsx:8 PageHeader title is static 'Onboarding Case'. OnboardingCase model (lib/crm/onboarding.ts:195-208) carries only ids, no customer name. Account/deal name lookup endpoints not visible in this snapshot (crm-service absent).
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx`, `apps/web/src/app/(app)/crm/onboarding/[id]/page.tsx`, `apps/web/src/lib/crm/onboarding.ts`
@@ -4023,7 +4023,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-DETAIL-04  ·  MEDIUM  ·  confirmed  ·  theme FAILMASK
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1859, verified on main 9c5e9e9e9; W2 crm rework re-confirmed: OnboardingDetail.test.tsx 'offers Retry on a failed load and re-fetches when clicked' passes on the reworked load path)
 - **First-pass claim:** On a failed load the EmptyState says 'Try again in a moment' but offers no retry control, so the clerk must reload the browser (OnboardingDetail.tsx:221-235).
 - **Verified evidence:** apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx:221-235: on isError with item==null, EmptyState says 'Try again in a moment' but has no action prop, no retry (reload exists at 107 but unused). Note not-found is separated correctly (getOnboardingCase returns 'not-found' on 404, lib:286).
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx`
@@ -4056,7 +4056,7 @@ Counts: ACTION 343, BACKEND-VERIFY 16, CANNOT-VERIFY 1
 
 ### GAP-CRM-ONBOARDING-DETAIL-06  ·  LOW  ·  confirmed  ·  theme OTHER
 
-- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9)
+- [x] **Status** (W0 2026-10-13 PROVISIONAL — re-confirm in this module's next wave PR: closed by #1860, verified on main 9c5e9e9e9; W2 crm rework re-confirmed: OnboardingDetail.test.tsx 'polls after a 202 until the version advances, then settles' passes and now also asserts the names are looked up once across the polls)
 - **First-pass claim:** Accepted (202) mutations show 'may take a moment to take effect' but the case is reloaded immediately, so the panel can still show the old stage or KYC status (OnboardingDetail.tsx:107-109, 136-143, 192-199).
 - **Verified evidence:** applyKyc (137-142) and applyStage (192-199) show 'may take a moment to take effect' when result.accepted (HTTP 202) then immediately call reload(), so the fetched case may still be stale; no polling. Stage/KYC selects reset, so the user sees old values with a success message.
 - **Files to change:** `apps/web/src/app/(app)/crm/onboarding/[id]/OnboardingDetail.tsx`

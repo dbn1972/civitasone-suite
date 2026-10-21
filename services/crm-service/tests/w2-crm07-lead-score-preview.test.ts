@@ -16,7 +16,9 @@ import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { registerAllConsumers } from "../src/consumers.js";
-import { drainQueue } from "./consumer-harness.js";
+import { runWithTenant } from "@civitasone/db";
+import { drainQueue, captureHandlers, envelope } from "./consumer-harness.js";
+import { LEAD_SCORE_RECALC } from "../src/modules/leads/consumer.js";
 import {
   SCOREABLE_LEAD_ATTRIBUTES,
   SCORE_ATTRIBUTE_COLUMNS,
@@ -90,6 +92,19 @@ const presence = (attribute: string, weight: number) => ({
   attribute, weight, scoreFnType: "presence", params: { present: 100, absent: 0 }, enabled: true,
 });
 
+/** Drive the real rule-based recalculation consumer for one lead (what Save leads to). */
+async function recalc(leadId: string, tenantId: string): Promise<void> {
+  const { handlerFor } = captureHandlers();
+  const handler = handlerFor(LEAD_SCORE_RECALC);
+  const msg = envelope(LEAD_SCORE_RECALC, { contactId: leadId, tenantId }, { tenantId, actorId: ACTOR });
+  await runWithTenant(tenantId, () => handler(msg));
+}
+async function wipeTenant(t: string): Promise<void> {
+  await scoped(t, (tx) => tx`DELETE FROM crm.lead_score_history WHERE tenant_id = ${t}`);
+  await scoped(t, (tx) => tx`DELETE FROM crm.lead_score_rules WHERE tenant_id = ${t}`);
+  await scoped(t, (tx) => tx`DELETE FROM crm.contacts WHERE tenant_id = ${t}`);
+}
+
 describe("scoreable-attribute allow-list (GAP-CRM-LEAD-SCORING-03)", () => {
   it("the allow-list is exactly the scorer's input and is derived from one table", () => {
     expect([...SCOREABLE_LEAD_ATTRIBUTES].sort()).toEqual(
@@ -145,6 +160,14 @@ describe("scoreable-attribute allow-list (GAP-CRM-LEAD-SCORING-03)", () => {
 });
 
 describe("POST /v1/crm/lead-score-rules/preview (GAP-CRM-LEAD-SCORING-04)", () => {
+  // The preview scores the proposal OVERLAID on the stored rules (PUT is additive), so these
+  // tests start from an explicit stored baseline: a single company rule that every proposal
+  // below overrides or that is the only rule that scores.
+  beforeAll(async () => {
+    const res = await call("PUT", "/v1/crm/lead-score-rules", { payload: { rules: [presence("company", 40)] } });
+    expect(res.statusCode).toBe(200);
+  });
+
   it("scores the tenant's leads with the proposed rules, reports the distribution, and persists nothing", async () => {
     const hi = await createLead("Has company", { company: "Acme" });
     const lo = await createLead("No company", {});
@@ -170,6 +193,7 @@ describe("POST /v1/crm/lead-score-rules/preview (GAP-CRM-LEAD-SCORING-04)", () =
     expect(p.changed).toBe(2);
     expect(p.totalWeight).toBe(100);
     expect(p.maxPossibleScore).toBe(100);
+    expect(p.retainedRules).toBe(0); // the proposal overrides the only stored rule
     const band = (label: string) => p.bands.find((b) => b.label === label)!;
     expect(band("0-19")).toMatchObject({ current: 1, proposed: 2 });
     expect(band("80-100")).toMatchObject({ current: 1, proposed: 1 });
@@ -192,6 +216,122 @@ describe("POST /v1/crm/lead-score-rules/preview (GAP-CRM-LEAD-SCORING-04)", () =
     expect(p.maxPossibleScore).toBe(40);
   });
 
+  describe("scores what Save will really leave behind (stored rules the proposal omits still score)", () => {
+    const seededRules = [presence("company", 50), presence("leadSource", 50)];
+
+    /** Seed a tenant with two stored rules and two leads; returns the lead ids. */
+    async function seedTenant(t: string): Promise<{ both: string; companyOnly: string }> {
+      const put = await call("PUT", "/v1/crm/lead-score-rules", { headers: headers(["crm_admin"], t), payload: { rules: seededRules } });
+      expect(put.statusCode).toBe(200);
+      const both = await createLead("Company and source", { company: "Acme", leadSource: "referral" }, t);
+      const companyOnly = await createLead("Company only", { company: "Beta" }, t);
+      return { both, companyOnly };
+    }
+    const preview = (t: string, rules: unknown[]) =>
+      call("POST", "/v1/crm/lead-score-rules/preview", { headers: headers(["crm_admin"], t), payload: { rules } });
+
+    it("a rule left out of the proposal keeps contributing, and the preview equals the scores after Save", async () => {
+      const t = randomUUID();
+      try {
+        const { both, companyOnly } = await seedTenant(t);
+
+        // The editor dropped the leadSource rule, but Save never deletes it.
+        const res = await preview(t, [presence("company", 50)]);
+        expect(res.statusCode).toBe(200);
+        const p = (res.json() as { data: { retainedRules: number; totalWeight: number; maxPossibleScore: number; proposedAverage: number } }).data;
+        expect(p.retainedRules).toBe(1);
+        expect(p.totalWeight).toBe(100); // company 50 + the retained leadSource 50
+        expect(p.maxPossibleScore).toBe(100);
+        expect(p.proposedAverage).toBe(75); // (100 + 50) / 2; scoring only the proposal would say 50
+
+        // Save exactly that proposal, rescore through the real consumer, compare.
+        const put = await call("PUT", "/v1/crm/lead-score-rules", { headers: headers(["crm_admin"], t), payload: { rules: [presence("company", 50)] } });
+        expect(put.statusCode).toBe(200);
+        const stored = (put.json() as { data: Array<{ attribute: string; enabled: boolean }> }).data;
+        expect(stored.find((r) => r.attribute === "leadSource")?.enabled).toBe(true); // still there
+        await recalc(both, t);
+        await recalc(companyOnly, t);
+        const scores = [await storedScore(both, t), await storedScore(companyOnly, t)];
+        expect(scores).toEqual([100, 50]);
+        expect((scores[0]! + scores[1]!) / 2).toBe(p.proposedAverage);
+      } finally {
+        await wipeTenant(t);
+      }
+    });
+
+    it("disabling the rule in the proposal is what stops it scoring, and the preview says so", async () => {
+      const t = randomUUID();
+      try {
+        const { both, companyOnly } = await seedTenant(t);
+
+        const res = await preview(t, [presence("company", 50), { ...presence("leadSource", 50), enabled: false }]);
+        const p = (res.json() as { data: { retainedRules: number; totalWeight: number; proposedAverage: number } }).data;
+        expect(p.retainedRules).toBe(0); // the proposal covers it
+        expect(p.totalWeight).toBe(50);
+        expect(p.proposedAverage).toBe(50); // both leads score 50 on company alone
+
+        const put = await call("PUT", "/v1/crm/lead-score-rules", {
+          headers: headers(["crm_admin"], t),
+          payload: { rules: [presence("company", 50), { ...presence("leadSource", 50), enabled: false }] },
+        });
+        expect(put.statusCode).toBe(200);
+        await recalc(both, t);
+        await recalc(companyOnly, t);
+        expect([await storedScore(both, t), await storedScore(companyOnly, t)]).toEqual([50, 50]);
+      } finally {
+        await wipeTenant(t);
+      }
+    });
+
+    it("a stored rule that is already disabled is not counted as retained", async () => {
+      const t = randomUUID();
+      try {
+        const put = await call("PUT", "/v1/crm/lead-score-rules", {
+          headers: headers(["crm_admin"], t),
+          payload: { rules: [presence("company", 50), { ...presence("leadSource", 50), enabled: false }] },
+        });
+        expect(put.statusCode).toBe(200);
+        const res = await preview(t, [presence("company", 50)]);
+        const p = (res.json() as { data: { retainedRules: number; totalWeight: number } }).data;
+        expect(p.retainedRules).toBe(0);
+        expect(p.totalWeight).toBe(50);
+      } finally {
+        await wipeTenant(t);
+      }
+    });
+
+    it("with no stored rules the preview is exactly the proposal (a first PUT creates just those rows)", async () => {
+      const t = randomUUID();
+      try {
+        const res = await preview(t, [presence("company", 30)]);
+        const p = (res.json() as { data: { retainedRules: number; totalWeight: number } }).data;
+        expect(p.retainedRules).toBe(0);
+        expect(p.totalWeight).toBe(30);
+        // The dry run seeded nothing.
+        const rows = (await scoped(t, (tx) => tx`SELECT count(*)::int AS n FROM crm.lead_score_rules WHERE tenant_id = ${t}`)) as unknown as Array<{ n: number }>;
+        expect(rows[0]!.n).toBe(0);
+      } finally {
+        await wipeTenant(t);
+      }
+    });
+
+    it("never reads another tenant's stored rules", async () => {
+      const t = randomUUID();
+      const other = randomUUID();
+      try {
+        const put = await call("PUT", "/v1/crm/lead-score-rules", { headers: headers(["crm_admin"], other), payload: { rules: [presence("city", 70)] } });
+        expect(put.statusCode).toBe(200);
+        const res = await preview(t, [presence("company", 30)]);
+        const p = (res.json() as { data: { retainedRules: number; totalWeight: number } }).data;
+        expect(p.retainedRules).toBe(0);
+        expect(p.totalWeight).toBe(30);
+      } finally {
+        await wipeTenant(t);
+        await wipeTenant(other);
+      }
+    });
+  });
+
   it("only looks at the caller's tenant", async () => {
     await createLead("Other tenant lead", { company: "Elsewhere" }, OTHER);
     const res = await call("POST", "/v1/crm/lead-score-rules/preview", { payload: { rules: [presence("company", 100)] } });
@@ -203,5 +343,39 @@ describe("POST /v1/crm/lead-score-rules/preview (GAP-CRM-LEAD-SCORING-04)", () =
     expect((await call("POST", "/v1/crm/lead-score-rules/preview", { headers: headers(["crm_user"]), payload: body })).statusCode).toBe(403);
     expect((await call("POST", "/v1/crm/lead-score-rules/preview", { noAuth: true, payload: body })).statusCode).toBe(401);
     expect((await call("POST", "/v1/crm/lead-score-rules/preview", { payload: { rules: [presence("industry", 10)] } })).statusCode).toBe(400);
+  });
+});
+
+describe("a repeated attribute in one request is rejected (GAP-CRM-LEAD-SCORING-03)", () => {
+  const dup = [presence("company", 10), presence("email", 20), presence("company", 99)];
+
+  it("PUT answers 400 with a field error on the repeated entry and saves nothing", async () => {
+    const t = randomUUID();
+    try {
+      const res = await call("PUT", "/v1/crm/lead-score-rules", { headers: headers(["crm_admin"], t), payload: { rules: dup } });
+      expect(res.statusCode).toBe(400);
+      const body = res.json() as { code: string; fieldErrors: Array<{ field: string; message: string }> };
+      expect(body.code).toBe("VALIDATION_FAILED");
+      expect(body.fieldErrors.map((f) => f.field)).toEqual(["rules.2.attribute"]);
+      expect(body.fieldErrors[0]!.message).toMatch(/more than one rule/i);
+      // Nothing was written: the first read lazy-seeds the defaults, so company is its default 25, not 10 or 99.
+      const get = await call("GET", "/v1/crm/lead-score-rules", { headers: headers(["crm_admin"], t) });
+      const company = (get.json() as { data: Array<{ attribute: string; weight: number }> }).data.find((r) => r.attribute === "company");
+      expect(company?.weight).toBe(25);
+    } finally {
+      await wipeTenant(t);
+    }
+  });
+
+  it("preview answers the same 400, so a duplicate is never double counted", async () => {
+    const res = await call("POST", "/v1/crm/lead-score-rules/preview", { payload: { rules: dup } });
+    expect(res.statusCode).toBe(400);
+    const body = res.json() as { fieldErrors: Array<{ field: string }> };
+    expect(body.fieldErrors.map((f) => f.field)).toEqual(["rules.2.attribute"]);
+  });
+
+  it("distinct attributes are still accepted", async () => {
+    const res = await call("POST", "/v1/crm/lead-score-rules/preview", { payload: { rules: [presence("company", 10), presence("email", 20)] } });
+    expect(res.statusCode).toBe(200);
   });
 });
