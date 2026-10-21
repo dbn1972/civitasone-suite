@@ -51,6 +51,9 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     // requested stage is beyond the pipeline's entry (lowest-ordinal) stage, enforce the
     // target stage's mandatory fields against the create body, synchronously (422).
     let stage = body.stage;
+    // GAP-CRM-OPPORTUNITIES-NEW-06: the probability a blank form should get — the chosen
+    // stage's own configured probability (resolved below), never a hard-coded 0.
+    let stageDefaultProbability: number | undefined;
     if (body.pipelineId) {
       const stages = await pipelineRepo.stagesOf(body.pipelineId, ctx.tenantId);
       if (stages && stages.length > 0) {
@@ -60,6 +63,7 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
         if (!target) {
           throw new HttpError(422, "INVALID_STAGE", `stage '${stage}' is not configured on this pipeline`);
         }
+        stageDefaultProbability = target.probability;
         if (target.id !== entry.id && target.name !== entry.name) {
           const snap = {
             product: body.product ?? null,
@@ -86,7 +90,24 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     // stage were named Won/Lost would otherwise create closed deals by omission).
     assertOpenCreateStage(stage ?? "Lead");
 
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createDeal(ctx, { ...body, stage: stage ?? "Lead" }));
+    // GAP-CRM-OPPORTUNITIES-NEW-02: a supplied account must exist in the caller's tenant
+    // (synchronous 422, so the form can show it; the consumer re-checks defensively).
+    if (body.accountId && !(await repo.accountExists(ctx.tenantId, body.accountId))) {
+      throw new HttpError(422, "ACCOUNT_NOT_FOUND", "the selected account does not exist in this tenant");
+    }
+
+    // An explicit probability (including an explicit 0) is always honoured; only an
+    // OMITTED one takes the stage default, and a pipeline-less deal still stores 0.
+    const probability = body.probability ?? stageDefaultProbability;
+    return sendAccepted(
+      reply,
+      acceptedResponseSchema,
+      await commands.createDeal(ctx, {
+        ...body,
+        stage: stage ?? "Lead",
+        ...(probability !== undefined ? { probability } : {}),
+      }),
+    );
   });
 
   app.get("/v1/crm/deals", async (req, reply) => {
@@ -226,6 +247,9 @@ export async function dealRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CRM_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateDealBody.parse(req.body);
+    if (body.accountId && !(await repo.accountExists(ctx.tenantId, body.accountId))) {
+      throw new HttpError(422, "ACCOUNT_NOT_FOUND", "the selected account does not exist in this tenant");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateDeal(ctx, id, body));
   });
 

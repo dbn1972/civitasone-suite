@@ -201,6 +201,8 @@ export async function reassignAccountChildren(
   await tx.execute(sql`UPDATE crm.onboarding_cases SET account_id = ${toId} WHERE account_id = ${fromId} AND tenant_id = ${tenantId}`);
   await reassignChildAccounts(tx, fromId, toId, tenantId, actorId, fromParentId);
   await reassignAccountRelationships(tx, fromId, toId, tenantId);
+  // GAP-CRM-OPPORTUNITIES-NEW-02: deals carry an optional DIRECT account link - follow the merge.
+  await tx.execute(sql`UPDATE crm.deals SET account_id = ${toId} WHERE account_id = ${fromId} AND tenant_id = ${tenantId}`);
 }
 
 /** Soft-delete an account (status = inactive) inside the caller's tx. */

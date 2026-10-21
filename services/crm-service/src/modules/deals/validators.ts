@@ -65,9 +65,16 @@ export const createDealBody = z.object({
   valueMinor: valueMinorField,
   currency: z.string().length(3).default("INR"),
   contactId: z.string().uuid().optional(),
+  // GAP-CRM-OPPORTUNITIES-NEW-02: optional direct account link (validated against the
+  // caller's tenant in routes.ts). Whether it becomes mandatory is a product decision.
+  accountId: z.string().uuid().optional(),
   ownerId: z.string().uuid().optional(),
   closeDate: isoDate.optional(),
-  probability: z.number().int().min(0).max(100).default(0),
+  // GAP-CRM-OPPORTUNITIES-NEW-06: deliberately NO `.default(0)`. An omitted probability is
+  // resolved in routes.ts to the chosen pipeline stage's own configured probability (and
+  // only falls back to 0 for a pipeline-less deal), so a blank form no longer silently
+  // stores a real-looking 0% that zeroes the deal's forecast weighting.
+  probability: z.number().int().min(0).max(100).optional(),
   ...opportunityFields,
 });
 export type CreateDealBody = z.infer<typeof createDealBody>;
@@ -86,6 +93,7 @@ export const updateDealBody = z.object({
   ownerId: z.string().uuid().nullable().optional(),
   closeDate: isoDate.nullable().optional(),
   contactId: z.string().uuid().nullable().optional(),
+  accountId: z.string().uuid().nullable().optional(),
   product: z.string().min(1).max(160).nullable().optional(),
   quantity: z.number().int().min(0).max(MAX_QUANTITY).nullable().optional(),
   competitors: competitors.optional(),
@@ -108,6 +116,7 @@ export const dealViewSchema = z.object({
   valueDisplay: z.string(),
   contactId: z.string().uuid().nullable().optional(),
   contactName: z.string().nullable().optional(),
+  accountId: z.string().uuid().nullable().optional(),
   ownerId: z.string().uuid().nullable().optional(),
   closeDate: z.string().nullable().optional(),
   closedAt: z.string().nullable().optional(),

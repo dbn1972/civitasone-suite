@@ -404,7 +404,10 @@ export async function threeSixtyRoutes(app: FastifyInstance): Promise<void> {
       const deals = (await tx.execute(sql`
         SELECT id, name, stage, value_minor AS "valueMinor", currency, status
         FROM crm.deals WHERE tenant_id = ${t}
-          AND contact_id IN (SELECT id FROM crm.contacts WHERE tenant_id = ${t} AND account_id = ${id})
+          AND (
+            account_id = ${id}
+            OR contact_id IN (SELECT id FROM crm.contacts WHERE tenant_id = ${t} AND account_id = ${id})
+          )
         ORDER BY created_at DESC
       `)) as unknown as Rows;
 

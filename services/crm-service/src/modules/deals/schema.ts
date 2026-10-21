@@ -12,6 +12,8 @@ export const deals = crmSchema.table("deals", {
   valueMinor: bigint("value_minor", { mode: "bigint" }).notNull().default(0n),
   currency: char("currency", { length: 3 }).notNull().default("INR"),
   contactId: uuid("contact_id"),
+  // GAP-CRM-OPPORTUNITIES-NEW-02 (migration 0168): optional direct account link.
+  accountId: uuid("account_id"),
   ownerId: uuid("owner_id"),
   closeDate: date("close_date"),
   closedAt: timestamp("closed_at", { withTimezone: true }),
@@ -52,6 +54,8 @@ export type DealView = {
   valueDisplay: string;
   contactId: string | null;
   contactName: string | null;
+  /** Direct account link (GAP-CRM-OPPORTUNITIES-NEW-02); null when the deal is not linked to an account. */
+  accountId: string | null;
   ownerId: string | null;
   closeDate: string | null;
   closedAt: string | null;
