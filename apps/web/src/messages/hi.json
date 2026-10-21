@@ -9007,7 +9007,20 @@
     "targetLabel": "लक्ष्य:",
     "progressLabel": "प्रगति",
     "checkinSaveFailed": "यह चेक-इन सहेजा नहीं जा सका।",
-    "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।"
+    "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
+    "statusOnTrack": "सही दिशा में",
+    "statusAtRisk": "जोखिम में",
+    "statusBehind": "पिछड़ा",
+    "statusAchieved": "प्राप्त",
+    "cascadeOrg": "संगठन",
+    "cascadeDept": "विभाग",
+    "cascadeIndividual": "व्यक्तिगत",
+    "cascadedFrom": "मूल लक्ष्य:",
+    "dueOverdue": "{days} दिन विलंबित",
+    "dueToday": "आज देय",
+    "dueLeft": "{days} दिन शेष",
+    "checkinSaved": "चेक-इन सहेजा गया। प्रगति अब {progress}% है।",
+    "checkinCompleted": "चेक-इन सहेजा गया। यह लक्ष्य अब पूर्ण है।"
   },
   "competency": {
     "title": "योग्यता ढांचा",

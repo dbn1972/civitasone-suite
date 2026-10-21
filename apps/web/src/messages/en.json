@@ -7913,7 +7913,20 @@
     "targetLabel": "Target:",
     "progressLabel": "Progress",
     "checkinSaveFailed": "Couldn't save this check-in.",
-    "networkError": "Network error. Please try again."
+    "networkError": "Network error. Please try again.",
+    "statusOnTrack": "On Track",
+    "statusAtRisk": "At Risk",
+    "statusBehind": "Behind",
+    "statusAchieved": "Achieved",
+    "cascadeOrg": "Org",
+    "cascadeDept": "Dept",
+    "cascadeIndividual": "Individual",
+    "cascadedFrom": "Cascaded from:",
+    "dueOverdue": "{days}d overdue",
+    "dueToday": "Due today",
+    "dueLeft": "{days}d left",
+    "checkinSaved": "Check-in saved. Progress is now {progress}%.",
+    "checkinCompleted": "Check-in saved. This goal is now complete."
   },
   "skills": {
     "title": "Skill Matrix",
