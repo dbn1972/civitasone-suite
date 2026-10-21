@@ -206,6 +206,29 @@ export interface DataQualityReport {
   recordsByFilter?: Record<DataQualityFilter, DataQualityRecordRow[]>;
 }
 
+/**
+ * The same report with every row's display name removed. Names are record data:
+ * a caller who may open the dashboard but not list contacts/accounts keeps the
+ * counts, distribution and ids it always had, without learning who the records are.
+ */
+export function withoutNames(report: DataQualityReport): DataQualityReport {
+  const strip = (rows: DataQualityRecordRow[]): DataQualityRecordRow[] => rows.map((r) => ({ ...r, name: null }));
+  const { recordsByFilter, ...rest } = report;
+  return {
+    ...rest,
+    records: strip(report.records),
+    ...(recordsByFilter
+      ? {
+          recordsByFilter: {
+            missing: strip(recordsByFilter.missing),
+            invalid: strip(recordsByFilter.invalid),
+            stale: strip(recordsByFilter.stale),
+          },
+        }
+      : {}),
+  };
+}
+
 function toRow(c: RecordClassification): DataQualityRecordRow {
   return { id: c.id, name: c.name, score: c.score / 100, issues: c.issues };
 }

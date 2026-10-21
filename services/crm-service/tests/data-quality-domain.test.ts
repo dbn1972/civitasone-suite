@@ -9,6 +9,7 @@ import {
   isStale,
   classifyRecord,
   buildReport,
+  withoutNames,
   type RecordInput,
 } from "../src/modules/dashboard/data-quality.js";
 
@@ -227,5 +228,35 @@ describe("buildReport filter=all (GAP-CRM-DATA-QUALITY-03)", () => {
     const all = buildReport(many, "contacts", { staleDays: 90, filter: "all", now, idLimit: 3 });
     expect(all.recordsByFilter?.missing).toHaveLength(3);
     expect(all.counts.missing).toBe(7);
+  });
+});
+
+describe("withoutNames (names are record data, gated by the list roles)", () => {
+  const now = new Date("2026-08-04T00:00:00Z");
+  const records: RecordInput[] = [
+    { id: "m", attributes: { name: "Asha Verma" }, lastActivityAt: now },
+    { id: "s", attributes: { name: "Old One" }, lastActivityAt: "2020-01-01T00:00:00Z" },
+  ];
+
+  it("nulls the name on single-filter rows and every all-filters list, keeping ids, scores, issues and counts", () => {
+    const single = buildReport(records, "contacts", { staleDays: 90, filter: "missing", now });
+    const stripped = withoutNames(single);
+    expect(stripped.records.map((r) => r.name)).toEqual([null, null]);
+    expect(stripped.records.map((r) => r.id)).toEqual(single.records.map((r) => r.id));
+    expect(stripped.counts).toEqual(single.counts);
+    expect(stripped.filteredIds).toEqual(single.filteredIds);
+    expect(stripped.recordsByFilter).toBeUndefined();
+
+    const all = withoutNames(buildReport(records, "contacts", { staleDays: 90, filter: "all", now }));
+    const names = [...all.recordsByFilter!.missing, ...all.recordsByFilter!.invalid, ...all.recordsByFilter!.stale].map((r) => r.name);
+    expect(names.length).toBeGreaterThan(0);
+    expect(names.every((n) => n === null)).toBe(true);
+    expect(JSON.stringify(all)).not.toContain("Asha");
+  });
+
+  it("does not mutate the original report", () => {
+    const rep = buildReport(records, "contacts", { staleDays: 90, filter: "all", now });
+    withoutNames(rep);
+    expect(rep.recordsByFilter!.missing[0]!.name).toBe("Asha Verma");
   });
 });
