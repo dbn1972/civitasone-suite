@@ -209,7 +209,7 @@ export function Customer360Panel({ subjectType, subjectId }: Props) {
               given for and where it was captured - shown when the backend has them
               (consent that predates the fields shows only the line above). */}
           {!isError && v?.consent && (v.consent.purpose || v.consent.channel) ? (
-            <ul aria-label={tConsent("recordAria")} style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0", paddingLeft: 16 }}>
+            <ul aria-label={tConsent("recordAria")} style={{ fontSize: 13, color: "var(--muted)", margin: "4px 0 0", paddingInlineStart: 16 }}>
               {v.consent.purpose ? (
                 <li>{tConsent("purposeLine", { purpose: consentLabel(tConsent, "purposes", v.consent.purpose) })}</li>
               ) : null}

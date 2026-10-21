@@ -11,6 +11,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { DealDetailActions } from "./DealDetailActions";
+import { stripComments } from "@/lib/testUtils/stripComments";
 
 /**
  * GAP-CRM-DEALS-DETAIL-06: DealDetailActions uses i18n keys, no hex literals.
@@ -36,8 +37,7 @@ describe("GAP-CRM-DEALS-DETAIL-06 — DealDetailActions i18n", () => {
 
 /** Source text with line and block comments removed, so scans see only code. */
 function code(file: string): string {
-  const raw = readFileSync(join(__dirname, file), "utf8");
-  return raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
+  return stripComments(readFileSync(join(__dirname, file), "utf8"));
 }
 
 describe("GAP-CRM-DEALS-DETAIL-06 — the components actually use the catalogue", () => {
@@ -49,7 +49,7 @@ describe("GAP-CRM-DEALS-DETAIL-06 — the components actually use the catalogue"
     );
     fireEvent.click(screen.getByRole("button", { name: hiMessages.crmDealDetail.logActivity }));
     const ns = hiMessages.crmDealDetail;
-    expect(screen.getByText(ns.logActivityFor.replace("{name}", "नगर निगम अनुबंध"))).toBeInTheDocument();
+    expect(screen.getByText(ns.logActivityFor.split("{name}").join("नगर निगम अनुबंध"))).toBeInTheDocument();
     expect(screen.getByLabelText(ns.fieldType)).toBeInTheDocument();
     expect(screen.getByLabelText(ns.fieldSubject)).toBeInTheDocument();
     expect(screen.getByLabelText(new RegExp(`^${ns.fieldNotes}`))).toBeInTheDocument();

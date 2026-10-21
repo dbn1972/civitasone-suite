@@ -68,7 +68,7 @@ describe("contact detail panels share PanelSkeleton while loading (GAP-CRM-CONTA
     expect(busy).not.toBeNull();
     expect(busy!.querySelectorAll('div[aria-hidden="true"]').length).toBeGreaterThanOrEqual(1);
     // the old plain-text loading paragraphs are gone
-    expect(container.querySelector("p")?.textContent ?? "").not.toMatch(/^Loading|^Checking document/);
+    expect(container.querySelector("p")?.textContent ?? "").not.toMatch(/^(?:Loading|Checking document)/);
   });
 
   it("Customer360Panel does not claim 'No linked deals' / 'No consent on record' for data that has not arrived", () => {

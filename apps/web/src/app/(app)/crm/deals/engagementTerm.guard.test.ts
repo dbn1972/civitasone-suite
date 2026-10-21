@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import enMessages from "@/messages/en.json";
 import hiMessages from "@/messages/hi.json";
+import { stripComments } from "@/lib/testUtils/stripComments";
 
 /**
  * GAP-CRM-DEALS-07 / GAP-CRM-DEALS-NEW-07: the record the CRM deals screens
@@ -69,9 +70,7 @@ describe("one noun across the CRM deals screens (hard-coded literals)", () => {
 
   /** String literals and JSX text in a source file, with comments removed. */
   function userFacingText(file: string): string[] {
-    const src = readFileSync(join(__dirname, file), "utf8")
-      .replace(/\/\*[\s\S]*?\*\//g, "")
-      .replace(/(^|[^:])\/\/.*$/gm, "$1");
+    const src = stripComments(readFileSync(join(__dirname, file), "utf8"));
     const out: string[] = [];
     for (const m of src.matchAll(/"([^"\n]*)"|`([^`]*)`/g)) out.push(m[1] ?? m[2] ?? "");
     for (const m of src.matchAll(/>([^<>{}\n]+)</g)) out.push(m[1]!);

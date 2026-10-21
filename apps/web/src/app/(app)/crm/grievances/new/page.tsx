@@ -332,7 +332,7 @@ export default function NewGrievancePage() {
                     }}
                   >
                     <strong>{t("duplicateWarning", { count: openForContact.total })}</strong>
-                    <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                    <ul style={{ margin: "6px 0 0", paddingInlineStart: 18 }}>
                       {openForContact.items.map((g) => (
                         <li key={g.id}>
                           <Link href={`/crm/grievances/${encodeURIComponent(g.id)}`}>{g.referenceNo}</Link>
