@@ -3,6 +3,7 @@ import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
 import { MergeButton } from "../../../_components/crm/MergeButton";
 import type { MergeOption } from "../../../_components/crm/MergeDialog";
 import { getCrmAccounts } from "../../../_data/loaders";
+import { getSessionRoles, hasAnyRole, CRM_MERGE_ROLES } from "@/lib/auth/roleGuard";
 import { AccountsTable } from "./AccountsTable";
 import { AccountHierarchy } from "./AccountHierarchy";
 import { NewAccountForm } from "./NewAccountForm";
@@ -23,6 +24,10 @@ export default async function Page() {
   // when the page is full these counts are of the loaded page only, not the
   // whole master. Say so rather than present a page count as the total.
   const partialSuffix = (base: string) => (source !== "error" && truncated ? t("partialSuffix", { label: base }) : base);
+
+  // GAP-CRM-ACCOUNTS-05: merge is admin-only on the server (crm_admin / super_admin);
+  // offering it to a crm_user would only end in a 403 after the confirmation.
+  const canMerge = hasAnyRole(getSessionRoles(), CRM_MERGE_ROLES);
 
   const mergeOptions: MergeOption[] = accounts.map((a) => ({
     id: a.id,
@@ -49,7 +54,7 @@ export default async function Page() {
           second, independent read of `source` here that could disagree with
           the table's own cache state (UX-002's pattern). The `stat()`
           "—" fallback above is unrelated and unchanged. */}
-      {mergeOptions.length >= 2 ? <MergeButton entity="accounts" options={mergeOptions} label="Merge duplicate accounts" /> : null}
+      {canMerge && mergeOptions.length >= 2 ? <MergeButton entity="accounts" options={mergeOptions} label="Merge duplicate accounts" /> : null}
       <StatGrid>
         <StatCard icon="▣" tone="info" label={total !== null && truncated ? t("totalAccounts") : partialSuffix(t("totalAccounts"))} value={source === "error" ? "—" : (total !== null ? total.toLocaleString("en-IN") : stat(accounts.length))} />
         <StatCard icon="◉" tone="info" label={partialSuffix(t("subsidiaryAccounts"))} value={stat(subsidiaries)} />

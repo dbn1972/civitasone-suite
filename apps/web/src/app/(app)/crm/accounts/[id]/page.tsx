@@ -1,11 +1,10 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader, EmptyState, DataTable, RefreshErrorState } from "../../../../_components/ds";
-import { getCrmAccount, getCrmAccounts, getCrmAccountAncestors, getCrmAccountChildren } from "../../../../_data/loaders";
+import { getCrmAccount, getCrmAccountAncestors, getCrmAccountChildren } from "../../../../_data/loaders";
 import { getSessionRoles, hasAnyRole, CRM_VERIFY_ROLES } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 import { hierarchyState } from "./hierarchyState";
 import { safeExternalUrl } from "@/lib/url";
-import { collectDescendantIds } from "../hierarchy";
 import { AccountParentForm } from "./AccountParentForm";
 import { AccountOwnerForm } from "./AccountOwnerForm";
 import { Customer360Panel } from "../../../../_components/crm/Customer360Panel";
@@ -19,60 +18,35 @@ import { DocumentAlertsView } from "../../../../_components/crm/DocumentAlertsVi
 export default async function Page({ params }: { params: { id: string } }) {
   const t = await getTranslations("crmAccountDetail");
   const tOwner = await getTranslations("crmOwner");
-  // The account is resolved by id (getCrmAccount queries the list at the server's
-  // max page size, so accounts beyond the default 50-row page resolve) rather
-  // than accounts.find() over the default page, which rendered a valid deep link
-  // as "Account not found" (GAP-CRM-ACCOUNTS-DETAIL-01). The /ancestors endpoint
-  // loads every tenant account and 404s on an unknown id, so it is the
-  // authoritative existence signal: a null account + 404 ancestors is a real
-  // "does not exist"; a null account + non-404 is a load failure, not a 404.
-  const [accountResult, accountsResult, ancestorsResult, childrenResult] = await Promise.all([
+  // The account is resolved by id over GET /v1/crm/accounts/:id, so a valid deep
+  // link renders no matter where the account would sit in the capped list
+  // (GAP-CRM-ACCOUNTS-DETAIL-01). A 404 from that endpoint is the authoritative
+  // "does not exist (or was merged away)"; any other failure is a load failure
+  // and offers a retry instead of falsely claiming the account is missing.
+  const [accountResult, ancestorsResult, childrenResult] = await Promise.all([
     getCrmAccount(params.id),
-    getCrmAccounts(),
     getCrmAccountAncestors(params.id),
     getCrmAccountChildren(params.id),
   ]);
   const { data: account } = accountResult;
-  const { data: accounts } = accountsResult;
   const { data: ancestors } = ancestorsResult;
   const { data: children } = childrenResult;
   const childState = hierarchyState(childrenResult);
   const ancestorState = hierarchyState(ancestorsResult);
 
-  // A genuine 404 from the authoritative ancestors endpoint → the account does
-  // not exist, regardless of whether the (capped) list happened to include it.
-  if (ancestorsResult.status === 404) {
-    return (
-      <>
-        <PageHeader title="Account Detail" back="/crm/accounts" backLabel="Accounts" />
-        <EmptyState icon="🏢" title={t("notFoundTitle")} message={t("notFoundMessage")} />
-      </>
-    );
-  }
-
-  // The account exists but neither the by-id lookup nor the hierarchy load
-  // succeeded — a transient failure, not a 404. Offer a retry instead of
-  // falsely claiming the account is missing.
   if (!account) {
-    if (accountResult.source === "error" || ancestorsResult.source === "error") {
+    if (accountResult.status === 404) {
       return (
         <>
           <PageHeader title="Account Detail" back="/crm/accounts" backLabel="Accounts" />
-          <RefreshErrorState error={toHumanError("load", { area: "account details" })} backHref="/crm/accounts" />
+          <EmptyState icon="🏢" title={t("notFoundTitle")} message={t("notFoundMessage")} />
         </>
       );
     }
-    // Loaded cleanly, exists per ancestors, but sits beyond the max page the
-    // list endpoint can return. A true by-id endpoint removes this edge
-    // (tracked as GAP-CRM-ACCOUNTS-DETAIL-03); until then, fail safe.
     return (
       <>
         <PageHeader title="Account Detail" back="/crm/accounts" backLabel="Accounts" />
-        <EmptyState
-          icon="🏢"
-          title={t("unavailableTitle")}
-          message={t("unavailableMessage")}
-        />
+        <RefreshErrorState error={toHumanError("load", { area: "account details" })} backHref="/crm/accounts" />
       </>
     );
   }
@@ -102,14 +76,13 @@ export default async function Page({ params }: { params: { id: string } }) {
             accountId={account.id}
             accountName={account.name}
             currentParentId={account.parentId}
-            options={(() => {
-              // GAP-CRM-ACCOUNTS-DETAIL-03: exclude the account itself AND its
-              // descendants, so a move that would create a cycle can't even be
-              // selected (the server 422 CYCLE_DETECTED stays as a backstop).
-              const descendants = collectDescendantIds(accounts, account.id);
-              return accounts.filter((a) => a.id !== account.id && !descendants.has(a.id));
-            })()}
-            subtreeSize={collectDescendantIds(accounts, account.id).size}
+            currentParentName={account.parentId ? parentName : null}
+            // GAP-CRM-ACCOUNTS-DETAIL-03: the parent picker searches server-side and
+            // the server hides this account AND its descendants, so a move that
+            // would create a cycle can't be selected (the 422 CYCLE_DETECTED stays
+            // as a backstop). The size of the moving sub-tree comes from the
+            // by-id response, not from a pre-loaded list.
+            subtreeSize={account.descendantCount ?? 0}
           />
         }
       />
@@ -211,7 +184,7 @@ export default async function Page({ params }: { params: { id: string } }) {
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 18, marginTop: 18 }}>
         <Customer360Panel subjectType="account" subjectId={account.id} />
-        <AccountRelationshipsEditor accountId={account.id} accountOptions={accounts.map((a) => ({ id: a.id, name: a.name }))} />
+        <AccountRelationshipsEditor accountId={account.id} />
         <ActivityFeed subjectType="account" subjectId={account.id} />
         <CommunicationLog subjectType="account" subjectId={account.id} />
         <AddressesEditor ownerType="account" ownerId={account.id} />

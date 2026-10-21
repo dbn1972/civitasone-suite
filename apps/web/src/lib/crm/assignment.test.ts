@@ -258,3 +258,42 @@ describe("assignment CRUD wrappers (paths, methods, error propagation)", () => {
     expect((await acceptLead("l1")).accepted).toBe(true);
   });
 });
+
+// GAP-CRM-ASSIGNMENT-DIRECTORY-04: a 409 IN_USE on delete carries WHAT still uses the
+// entry, instead of collapsing into the generic "changed by someone else" conflict.
+describe("deleteResource IN_USE refusal (GAP-CRM-ASSIGNMENT-DIRECTORY-04)", () => {
+  it("throws ResourceInUseError with the referencing rules and branches", async () => {
+    const { deleteResource, ResourceInUseError } = await import("@/lib/crm/assignment");
+    fetchMock.mockResolvedValueOnce(
+      res(
+        {
+          code: "IN_USE",
+          message: "cannot delete: still referenced by 2 assignment rules and 1 branch.",
+          references: {
+            assignmentRules: [{ id: "r1", name: "North zone" }, { id: "r2", name: "Large deals" }],
+            assignmentRuleCount: 2,
+            branches: [{ id: "b1", name: "Pune" }],
+            branchCount: 1,
+          },
+        },
+        409,
+      ),
+    );
+    const err = await deleteResource("territories", "t1").catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ResourceInUseError);
+    expect((err as InstanceType<typeof ResourceInUseError>).references).toEqual({
+      assignmentRules: ["North zone", "Large deals"],
+      assignmentRuleCount: 2,
+      branches: ["Pune"],
+      branchCount: 1,
+    });
+  });
+
+  it("a 409 that is not IN_USE stays the generic human conflict message", async () => {
+    const { deleteResource, ResourceInUseError } = await import("@/lib/crm/assignment");
+    fetchMock.mockResolvedValueOnce(res({ code: "VERSION_CONFLICT", message: "stale" }, 409));
+    const err = await deleteResource("partners", "p1").catch((e: unknown) => e);
+    expect(err).not.toBeInstanceOf(ResourceInUseError);
+    expect((err as Error).message).not.toMatch(/VERSION_CONFLICT|stale/);
+  });
+});

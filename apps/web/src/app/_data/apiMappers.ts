@@ -669,6 +669,21 @@ export function mapCrmAccounts(payload: unknown): CRMAccountSummary[] | null {
   return mapped;
 }
 
+/**
+ * GAP-CRM-ACCOUNTS-DETAIL-01: one account from GET /v1/crm/accounts/:id. The body is
+ * `{ data: <account> }` (a bare account is tolerated). Reuses the list-row mapper so
+ * the by-id and list shapes cannot drift, and carries the by-id-only `descendantCount`.
+ */
+export function mapCrmAccount(payload: unknown): CRMAccountSummary | null {
+  const body = isRecord(payload) && "data" in payload ? payload.data : payload;
+  const first = mapCrmAccounts([body])?.[0];
+  if (!first) return null;
+  const descendantCount = isRecord(body) ? body.descendantCount : undefined;
+  return typeof descendantCount === "number" && Number.isFinite(descendantCount)
+    ? { ...first, descendantCount }
+    : first;
+}
+
 export function mapCrmAccountNodes(payload: unknown): CRMAccountNode[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;

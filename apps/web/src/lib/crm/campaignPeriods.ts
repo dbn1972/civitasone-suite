@@ -28,7 +28,16 @@ export interface PostPeriodInput {
   responses: number;
   /** ISO-4217 currency code; defaults to INR. */
   currency?: string;
+  /**
+   * Optional display name for the campaign (GAP-CRM-CAMPAIGNS-01). Stored with the
+   * period so the ROI list and detail page show the campaign by name instead of a
+   * raw id. Blank = leave any stored name unchanged.
+   */
+  campaignName?: string;
 }
+
+/** Server cap on the campaign name (PUT /v1/crm/campaigns/:id/performance). */
+export const MAX_CAMPAIGN_NAME_LENGTH = 200;
 
 export class CampaignPeriodValidationError extends Error {
   constructor(message: string) {
@@ -53,6 +62,7 @@ export function buildPerformanceBody(input: PostPeriodInput): {
   revenueMinor: string;
   responses: number;
   currency: string;
+  campaignName?: string;
 } {
   if (!ISO_DATE.test(input.periodStart)) {
     throw new CampaignPeriodValidationError("Enter a valid period start date.");
@@ -63,6 +73,9 @@ export function buildPerformanceBody(input: PostPeriodInput): {
   if (input.periodEnd && input.periodEnd < input.periodStart) {
     throw new CampaignPeriodValidationError("The period end date cannot be before the start date.");
   }
+  // The form caps the field at the server maximum; the slice is a backstop so an
+  // over-long value can never turn into a 400 for something the user cannot see.
+  const campaignName = (input.campaignName ?? "").trim().slice(0, MAX_CAMPAIGN_NAME_LENGTH);
   const costMinor = rupeesToMinorString(input.costRupees, { allowZero: true });
   if (costMinor === null) {
     throw new CampaignPeriodValidationError("Enter the spend as rupees (up to two decimal places).");
@@ -81,6 +94,7 @@ export function buildPerformanceBody(input: PostPeriodInput): {
     revenueMinor,
     responses: input.responses,
     currency: (input.currency ?? "INR").toUpperCase(),
+    ...(campaignName ? { campaignName } : {}),
   };
 }
 

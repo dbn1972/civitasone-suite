@@ -510,6 +510,11 @@ export interface CRMAccountSummary {
   ownerId?: string | null;
   /** F5-02: ISO timestamp of the latest activity linked to the account. */
   lastContactAt?: string | null;
+  /**
+   * Active sub-accounts anywhere below this account. Only the by-id endpoint
+   * (GET /v1/crm/accounts/:id) returns it; list rows omit it.
+   */
+  descendantCount?: number;
 }
 
 /** Minimal account node used for hierarchy breadcrumbs and child lists. */

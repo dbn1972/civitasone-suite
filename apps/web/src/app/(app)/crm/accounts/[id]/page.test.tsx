@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@/test-utils/intl-render";
 
+// NOTE: getCrmAccounts (the capped list) is deliberately NOT part of this mock: the
+// detail page must not depend on it any more (GAP-CRM-ACCOUNTS-DETAIL-01).
 vi.mock("../../../../_data/loaders", () => ({
   getCrmAccount: vi.fn(),
-  getCrmAccounts: vi.fn(),
   getCrmAccountAncestors: vi.fn(),
   getCrmAccountChildren: vi.fn(),
 }));
@@ -26,9 +27,23 @@ vi.mock("../../../../_components/crm/DocumentsPanel", () => ({
   },
 }));
 // Light stubs for the rest of the heavy client panels.
-vi.mock("./AccountParentForm", () => ({ AccountParentForm: () => <div /> }));
+// Capture what the page hands the parent form (sub-tree size, current parent label).
+const parentFormProps: Array<{ subtreeSize?: number; currentParentId?: string | null; currentParentName?: string | null }> = [];
+vi.mock("./AccountParentForm", () => ({
+  AccountParentForm: (props: { subtreeSize?: number; currentParentId?: string | null; currentParentName?: string | null }) => {
+    parentFormProps.push(props);
+    return <div />;
+  },
+}));
+// The relationships editor is handed ONLY the account id: it searches server-side.
+const relationshipProps: Array<Record<string, unknown>> = [];
 vi.mock("../../../../_components/crm/Customer360Panel", () => ({ Customer360Panel: () => <div /> }));
-vi.mock("../../../../_components/crm/AccountRelationshipsEditor", () => ({ AccountRelationshipsEditor: () => <div /> }));
+vi.mock("../../../../_components/crm/AccountRelationshipsEditor", () => ({
+  AccountRelationshipsEditor: (props: Record<string, unknown>) => {
+    relationshipProps.push(props);
+    return <div />;
+  },
+}));
 vi.mock("../../../../_components/crm/ActivityFeed", () => ({ ActivityFeed: () => <div /> }));
 vi.mock("../../../../_components/crm/CommunicationLog", () => ({ CommunicationLog: () => <div /> }));
 vi.mock("../../../../_components/crm/AddressesEditor", () => ({ AddressesEditor: () => <div /> }));
@@ -37,13 +52,11 @@ vi.mock("../../../../_components/crm/DocumentAlertsView", () => ({ DocumentAlert
 import Page from "./page";
 import {
   getCrmAccount,
-  getCrmAccounts,
   getCrmAccountAncestors,
   getCrmAccountChildren,
 } from "../../../../_data/loaders";
 
 const mAccount = vi.mocked(getCrmAccount);
-const mAccounts = vi.mocked(getCrmAccounts);
 const mAncestors = vi.mocked(getCrmAccountAncestors);
 const mChildren = vi.mocked(getCrmAccountChildren);
 
@@ -51,8 +64,9 @@ const account: Record<string, unknown> = { id: "acc-99", name: "Deep Link Co", i
 
 beforeEach(() => {
   docPanelProps.length = 0;
+  parentFormProps.length = 0;
+  relationshipProps.length = 0;
   mAccount.mockReset();
-  mAccounts.mockReset();
   mAncestors.mockReset();
   mChildren.mockReset();
   mRolesDefault();
@@ -62,22 +76,35 @@ function mRolesDefault() {
 }
 
 describe("Account detail page (GAP-CRM-ACCOUNTS-DETAIL-01)", () => {
-  it("renders detail for an account resolved by id even though the default list page omits it", async () => {
-    // getCrmAccount resolves it (queries at max page size); the default list is
-    // empty (simulating the account being beyond the first 50 rows).
+  it("renders detail for an account resolved by id (no list lookup, so no cap can hide it)", async () => {
+    // getCrmAccount is the by-id endpoint: the account renders regardless of where it
+    // would sit in the capped list, and the page never loads that list.
     mAccount.mockResolvedValue({ data: account as never, source: "api" });
-    mAccounts.mockResolvedValue({ data: [], source: "api" });
     mAncestors.mockResolvedValue({ data: [], source: "api" });
     mChildren.mockResolvedValue({ data: [], source: "api" });
 
     render(await Page({ params: { id: "acc-99" } }));
+    expect(mAccount).toHaveBeenCalledWith("acc-99");
     expect(screen.getAllByText("Deep Link Co").length).toBeGreaterThan(0);
     expect(screen.queryByText("Account not found")).not.toBeInTheDocument();
+    // Pickers search server-side: the relationships editor gets just the account id.
+    expect(relationshipProps[0]).toEqual({ accountId: "acc-99" });
   });
 
-  it("renders 'Account not found' when the authoritative ancestors endpoint 404s", async () => {
-    mAccount.mockResolvedValue({ data: null, source: "api" });
-    mAccounts.mockResolvedValue({ data: [], source: "api" });
+  it("hands the parent form the by-id sub-tree size and the current parent's name", async () => {
+    mAccount.mockResolvedValue({
+      data: { ...account, parentId: "p-1", descendantCount: 7 } as never,
+      source: "api",
+    });
+    mAncestors.mockResolvedValue({ data: [{ id: "p-1", name: "Parent Org" }] as never, source: "api" });
+    mChildren.mockResolvedValue({ data: [], source: "api" });
+
+    render(await Page({ params: { id: "acc-99" } }));
+    expect(parentFormProps[0]).toMatchObject({ subtreeSize: 7, currentParentId: "p-1", currentParentName: "Parent Org" });
+  });
+
+  it("renders 'Account not found' when the by-id endpoint 404s (unknown, other-tenant or merged-away id)", async () => {
+    mAccount.mockResolvedValue({ data: null, source: "error", status: 404 });
     mAncestors.mockResolvedValue({ data: [], source: "error", status: 404 });
     mChildren.mockResolvedValue({ data: [], source: "error", status: 404 });
 
@@ -87,7 +114,6 @@ describe("Account detail page (GAP-CRM-ACCOUNTS-DETAIL-01)", () => {
 
   it("shows a retry (not 'not found') on a transient load failure", async () => {
     mAccount.mockResolvedValue({ data: null, source: "error", status: 500 });
-    mAccounts.mockResolvedValue({ data: [], source: "error", status: 500 });
     mAncestors.mockResolvedValue({ data: [], source: "error", status: 500 });
     mChildren.mockResolvedValue({ data: [], source: "error", status: 500 });
 
@@ -102,7 +128,6 @@ describe("Account detail page (GAP-CRM-ACCOUNTS-DETAIL-01)", () => {
 describe("Account detail document verify gating (GAP-CRM-ACCOUNTS-DETAIL-02)", () => {
   beforeEach(() => {
     mAccount.mockResolvedValue({ data: account as never, source: "api" });
-    mAccounts.mockResolvedValue({ data: [], source: "api" });
     mAncestors.mockResolvedValue({ data: [], source: "api" });
     mChildren.mockResolvedValue({ data: [], source: "api" });
   });
@@ -123,7 +148,6 @@ describe("Account detail document verify gating (GAP-CRM-ACCOUNTS-DETAIL-02)", (
 describe("Account detail partial failure (GAP-CRM-ACCOUNTS-DETAIL-04)", () => {
   it("renders the account and an inline retry when only children fail", async () => {
     mAccount.mockResolvedValue({ data: account as never, source: "api" });
-    mAccounts.mockResolvedValue({ data: [], source: "api" });
     mAncestors.mockResolvedValue({ data: [], source: "api" });
     mChildren.mockResolvedValue({ data: [], source: "error", status: 503 });
 
@@ -138,7 +162,6 @@ describe("Account detail partial failure (GAP-CRM-ACCOUNTS-DETAIL-04)", () => {
 
 describe("Account detail website hardening (GAP-CRM-ACCOUNTS-DETAIL-05)", () => {
   beforeEach(() => {
-    mAccounts.mockResolvedValue({ data: [], source: "api" });
     mAncestors.mockResolvedValue({ data: [], source: "api" });
     mChildren.mockResolvedValue({ data: [], source: "api" });
     mockRoles.mockReturnValue(["crm_admin"]);

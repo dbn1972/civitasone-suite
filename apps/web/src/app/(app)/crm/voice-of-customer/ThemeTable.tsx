@@ -79,7 +79,7 @@ export function ThemeTable({ themes, canExport = true }: { themes: RankedTheme[]
       emptyMessage="Themes appear once interactions have been logged against contacts and engagements. Every note, call and complaint is scored automatically."
       emptyAction={
         <a className="btn primary" href="/crm/activities">
-          Log an interaction
+          {t("logActivity")}
         </a>
       }
     />

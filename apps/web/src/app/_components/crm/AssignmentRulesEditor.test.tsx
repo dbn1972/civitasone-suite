@@ -244,3 +244,121 @@ describe("AssignmentRulesEditor dirty markers (RULES-06)", () => {
     expect(screen.queryByText("Unsaved")).not.toBeInTheDocument();
   });
 });
+
+// GAP-CRM-ASSIGNMENT-RULES-05/06: a row's unsaved edits are never lost or smuggled
+// through another action (reorder / delete / create), and an unload warns.
+describe("AssignmentRulesEditor unsaved-edit safety (RULES-05/06)", () => {
+  const r1: as.AssignmentRule = { id: "r1", name: "First", ruleType: "territory", criteria: { territory: "w", ownerId: "u1" }, ordinal: 0, enabled: true, fallbackOwnerId: "" };
+  const r2: as.AssignmentRule = { id: "r2", name: "Second", ruleType: "territory", criteria: { territory: "e", ownerId: "u1" }, ordinal: 1, enabled: true, fallbackOwnerId: "" };
+
+  it("warns on page unload only while a row has unsaved edits", async () => {
+    const add = vi.spyOn(window, "addEventListener");
+    const remove = vi.spyOn(window, "removeEventListener");
+    const unloadAdds = () => add.mock.calls.filter((c) => c[0] === "beforeunload");
+    vi.mocked(as.getAssignmentRules).mockResolvedValue({ data: [r1], source: "api" });
+    renderWithIntl(<AssignmentRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("First")).toBeInTheDocument());
+    expect(unloadAdds()).toHaveLength(0); // clean => no guard
+
+    fireEvent.change(screen.getByLabelText(/name for rule 1/i), { target: { value: "First edited" } });
+    expect(unloadAdds()).toHaveLength(1);
+    const handler = unloadAdds()[0]![1] as (e: Event) => void;
+    const ev = new Event("beforeunload", { cancelable: true });
+    handler(ev);
+    expect(ev.defaultPrevented).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: /discard changes to rule 1/i }));
+    expect(remove.mock.calls.some((c) => c[0] === "beforeunload")).toBe(true);
+    add.mockRestore();
+    remove.mockRestore();
+  });
+
+  it("deleting a row keeps another row's unsaved edit and does not reload the chain", async () => {
+    vi.mocked(as.getAssignmentRules).mockResolvedValue({ data: [r1, r2], source: "api" });
+    vi.mocked(as.deleteAssignmentRule).mockResolvedValue(undefined);
+    renderWithIntl(<AssignmentRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("First")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/name for rule 1/i), { target: { value: "First edited" } });
+    fireEvent.click(screen.getByRole("button", { name: /delete rule 2/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /delete rule/i }));
+    await waitFor(() => expect(as.deleteAssignmentRule).toHaveBeenCalledWith("r2"));
+    await waitFor(() => expect(screen.queryByDisplayValue("Second")).not.toBeInTheDocument());
+    expect(screen.getByDisplayValue("First edited")).toBeInTheDocument();
+    expect(as.getAssignmentRules).toHaveBeenCalledTimes(1);
+  });
+
+  it("Move persists only the ordinal swap, not an unsaved enabled flip, and keeps unsaved edits", async () => {
+    vi.mocked(as.getAssignmentRules).mockResolvedValue({ data: [r1, r2], source: "api" });
+    vi.mocked(as.updateAssignmentRule).mockResolvedValue(undefined);
+    renderWithIntl(<AssignmentRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("First")).toBeInTheDocument());
+    // Unsaved: rule 2 switched OFF (which would normally need a confirmation).
+    fireEvent.click(screen.getByLabelText(/enable rule 2/i));
+    fireEvent.click(screen.getByRole("button", { name: /move rule 2 up/i }));
+    await waitFor(() => expect(as.updateAssignmentRule).toHaveBeenCalledTimes(2));
+    const sent = new Map(
+      vi.mocked(as.updateAssignmentRule).mock.calls.map((c) => [c[0], c[1] as as.AssignmentRule]),
+    );
+    // r2 moved to ordinal 0 but was persisted with its SAVED enabled=true.
+    expect(sent.get("r2")).toMatchObject({ ordinal: 0, enabled: true });
+    expect(sent.get("r1")).toMatchObject({ ordinal: 1, enabled: true });
+    // No confirmation dialog, no reload, and the unsaved flip is still pending.
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(as.getAssignmentRules).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByLabelText(/enable rule 1/i)).not.toBeChecked());
+    expect(screen.getByText("Unsaved")).toBeInTheDocument();
+  });
+
+  it("creating a rule while another saved row has unsaved edits yields one row per rule", async () => {
+    const created: as.AssignmentRule = { id: "r3", name: "Third", ruleType: "territory", criteria: { territory: "n", ownerId: "u1" }, ordinal: 1, enabled: true, fallbackOwnerId: "" };
+    vi.mocked(as.getAssignmentRules)
+      .mockResolvedValueOnce({ data: [r1], source: "api" })
+      .mockResolvedValueOnce({ data: [r1, created], source: "api" });
+    vi.mocked(as.createAssignmentRule).mockResolvedValue(undefined);
+    renderWithIntl(<AssignmentRulesEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("First")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/name for rule 1/i), { target: { value: "First edited" } });
+    fireEvent.click(screen.getByRole("button", { name: /add rule/i }));
+    fireEvent.change(screen.getByLabelText(/name for rule 2/i), { target: { value: "Third" } });
+    fireEvent.change(screen.getByLabelText(/criteria json for rule 2/i), { target: { value: '{"territory":"n","ownerId":"u1"}' } });
+    fireEvent.click(screen.getByRole("button", { name: /^create$/i }));
+    await waitFor(() => expect(as.createAssignmentRule).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByRole("button", { name: /^create$/i })).not.toBeInTheDocument());
+    // First row's unsaved edit survived, exactly once; the new rule appears once.
+    expect(screen.getAllByDisplayValue("First edited")).toHaveLength(1);
+    expect(screen.getAllByDisplayValue("Third")).toHaveLength(1);
+    // No duplicate-ordinal error blocks Save on any row.
+    expect(screen.queryByText(/already used/i)).not.toBeInTheDocument();
+    expect(screen.getAllByLabelText(/^name for rule \d+$/i)).toHaveLength(2);
+  });
+
+  it("says 'Saved just now' (not an older actor/date) after saving a row", async () => {
+    const withMeta: as.AssignmentRule = { ...r1, updatedBy: "Meera", updatedAt: "2026-09-01T10:00:00Z" };
+    vi.mocked(as.getAssignmentRules).mockResolvedValue({ data: [withMeta], source: "api" });
+    vi.mocked(as.updateAssignmentRule).mockResolvedValue(undefined);
+    renderWithIntl(<AssignmentRulesEditor />);
+    await waitFor(() => expect(screen.getByText(/by Meera/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/name for rule 1/i), { target: { value: "First edited" } });
+    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
+    await waitFor(() => expect(screen.getByText("Saved just now")).toBeInTheDocument());
+    expect(screen.queryByText(/by Meera/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("normaliseRule last-changed actor (GAP-CRM-ASSIGNMENT-RULES-05)", () => {
+  const base = { id: "r1", name: "R", ruleType: "territory", ordinal: 0, enabled: true, criteria: {} };
+  const uuid = "3f2a1b4c-0000-4000-8000-000000000001";
+
+  it("prefers the resolved display name over the raw user id", () => {
+    const r = as.normaliseRule({ ...base, updatedBy: uuid, updatedByName: "Meera Rao", updatedAt: "2026-09-01T10:00:00Z" });
+    expect(r?.updatedBy).toBe("Meera Rao");
+    expect(r?.updatedAt).toBe("2026-09-01T10:00:00Z");
+  });
+
+  it("never surfaces a bare user id as the actor", () => {
+    expect(as.normaliseRule({ ...base, updatedBy: uuid, updatedAt: "2026-09-01T10:00:00Z" })?.updatedBy).toBeUndefined();
+    // A non-id display value from an older contract is still carried through.
+    expect(as.normaliseRule({ ...base, updatedBy: "Meera" })?.updatedBy).toBe("Meera");
+  });
+});

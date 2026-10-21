@@ -93,6 +93,55 @@ describe("OwnershipDirectoryEditor (AS-002 admin)", () => {
     await waitFor(() => expect(as.deleteResource).toHaveBeenCalledWith("assignment-queues", "q1"));
   });
 
+  // GAP-CRM-ASSIGNMENT-DIRECTORY-04: a refused delete says WHAT still uses the entry,
+  // INSIDE the open dialog (not a page alert hidden behind it), and nothing is removed.
+  it("explains a 409 IN_USE refusal with the referencing rules/branches, inside the dialog", async () => {
+    vi.mocked(as.getResources).mockResolvedValue({ data: [{ id: "q1", name: "Inbound", description: "", enabled: true }], source: "api" });
+    vi.mocked(as.deleteResource).mockRejectedValue(
+      new as.ResourceInUseError({
+        assignmentRules: ["North zone", "Large deals"],
+        assignmentRuleCount: 2,
+        branches: ["Pune"],
+        branchCount: 1,
+      }),
+    );
+    render(<OwnershipDirectoryEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("Inbound")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /delete Inbound/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+
+    const reason = await within(dialog).findByText(/can’t be deleted because it is still used by/);
+    expect(reason.textContent).toContain("2 assignment rules and 1 branch");
+    expect(reason.textContent).toContain("North zone, Large deals, Pune");
+    // The generic conflict copy must not be what the admin sees.
+    expect(screen.queryByText(/changed by someone else/i)).not.toBeInTheDocument();
+    // Nothing was removed, and the dialog is still open for the admin to cancel.
+    expect(screen.getByDisplayValue("Inbound")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+  });
+
+  it("summarises a long reference list with 'and N more'", async () => {
+    vi.mocked(as.getResources).mockResolvedValue({ data: [{ id: "q1", name: "Inbound", description: "", enabled: true }], source: "api" });
+    vi.mocked(as.deleteResource).mockRejectedValue(
+      new as.ResourceInUseError({
+        assignmentRules: ["R1", "R2", "R3", "R4", "R5", "R6", "R7"],
+        assignmentRuleCount: 12,
+        branches: [],
+        branchCount: 0,
+      }),
+    );
+    render(<OwnershipDirectoryEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("Inbound")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /delete Inbound/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^delete$/i }));
+    const reason = await within(dialog).findByText(/12 assignment rules/);
+    expect(reason.textContent).toContain("R1, R2, R3, R4, R5");
+    expect(reason.textContent).toContain("…and 7 more.");
+  });
+
   it("surfaces a failed update and does not claim success", async () => {
     vi.mocked(as.getResources).mockResolvedValue({ data: [{ id: "q1", name: "Inbound", description: "", enabled: true }], source: "api" });
     vi.mocked(as.updateResource).mockRejectedValue(new Error("CONFLICT: renamed"));

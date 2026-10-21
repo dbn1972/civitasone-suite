@@ -16,15 +16,26 @@ import { Button, Card, Field, Input } from "../../../../_components/ds";
 import {
   postCampaignPeriod,
   CampaignPeriodValidationError,
+  MAX_CAMPAIGN_NAME_LENGTH,
 } from "@/lib/crm/campaignPeriods";
 
 /** Server cap on the responses count (PUT /v1/crm/campaigns/:id/performance). */
 const MAX_RESPONSES = 100_000_000;
 
-export function PostPeriodForm({ campaignId, currency }: { campaignId: string; currency: string }) {
+export function PostPeriodForm({
+  campaignId,
+  currency,
+  campaignName: currentName = "",
+}: {
+  campaignId: string;
+  currency: string;
+  /** The campaign's current name (if it has one), pre-filled so a post keeps it. */
+  campaignName?: string;
+}) {
   const t = useTranslations("crm.postPeriod");
   const formError = useFormError("campaign period");
   const router = useRouter();
+  const [campaignName, setCampaignName] = useState(currentName);
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
   const [costRupees, setCostRupees] = useState("");
@@ -47,6 +58,7 @@ export function PostPeriodForm({ campaignId, currency }: { campaignId: string; c
         revenueRupees,
         responses: Number(responses),
         currency,
+        campaignName,
       });
       setMessage(t("submitted"));
       setPeriodStart("");
@@ -70,6 +82,14 @@ export function PostPeriodForm({ campaignId, currency }: { campaignId: string; c
     <Card title={t("title")}>
       <form className="pad" style={{ display: "grid", gap: 12 }} onSubmit={(e) => void onSubmit(e)} aria-label={t("title")}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+          <Field label={t("campaignName")}>
+            <Input
+              value={campaignName}
+              maxLength={MAX_CAMPAIGN_NAME_LENGTH}
+              placeholder={t("campaignNamePlaceholder")}
+              onChange={(e) => setCampaignName(e.target.value)}
+            />
+          </Field>
           <Field label={t("periodStart")} required>
             <Input type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
           </Field>

@@ -1,11 +1,23 @@
+import type { Metadata } from "next";
 import { Card, DataTable, EmptyState, LoadErrorState, PageHeader, StatCard, StatGrid } from "../../../../_components/ds";
 import { getCrmCampaignRoi } from "../../../../_data/loaders";
 import { getTranslations } from "next-intl/server";
 import { formatMoneyIn } from "@/lib/formatters";
 import { formatRoiPercent, orderPeriods, periodLabel } from "../campaigns";
 import { PostPeriodForm } from "./PostPeriodForm";
+import { CopyIdButton } from "./CopyIdButton";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * GAP-CRM-CAMPAIGNS-DETAIL-01: the browser tab names the campaign (its name when the
+ * service has one, otherwise the neutral "Campaign"), never the raw id.
+ */
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const t = await getTranslations("crmCampaignDetail");
+  const { data: campaign } = await getCrmCampaignRoi(params.id);
+  return { title: `${campaign?.name ?? t("fallbackTitle")} — CivitasOne CRM` };
+}
 
 type PeriodRow = {
   id: string;
@@ -67,9 +79,9 @@ export default async function CampaignRoiPage({ params }: { params: { id: string
     roi: formatRoiPercent(period.roiPercent),
   }));
 
-  // GAP-CRM-CAMPAIGNS-DETAIL-01: the backend's campaign_performance rows carry
-  // no campaign name (only a campaign_id), so until a name is joined the title
-  // falls back to "Campaign" and the full id moves to the subtitle as a short id.
+  // GAP-CRM-CAMPAIGNS-DETAIL-01: the title is the campaign's name when the service
+  // has one (sent on the performance feed / the Post-period form below); a
+  // campaign never named falls back to "Campaign" with a SHORT id in the subtitle.
   const title = campaign.name ?? t("fallbackTitle");
   const subtitle = t("subtitleNamed", { id: shortId(campaign.campaignId), currency });
 
@@ -102,7 +114,10 @@ export default async function CampaignRoiPage({ params }: { params: { id: string
           </div>
           <div className="fld">
             <div className="l">{t("campaignId")}</div>
-            <div className="v" style={{ fontSize: 12, fontFamily: "monospace" }}>{campaign.campaignId}</div>
+            {/* Short id on screen; the copy button hands over the full one. */}
+            <div className="v" style={{ fontSize: 12, fontFamily: "monospace" }} title={campaign.campaignId}>
+              {shortId(campaign.campaignId)} <CopyIdButton value={campaign.campaignId} />
+            </div>
           </div>
         </div>
       </Card>
@@ -131,7 +146,7 @@ export default async function CampaignRoiPage({ params }: { params: { id: string
       {/* GAP-CRM-CAMPAIGNS-DETAIL-04: the empty-state instruction to "post a
           reporting period's cost and revenue" is now actionable from here.
           The write is admin-gated server-side; a non-admin's submit 403s. */}
-      <PostPeriodForm campaignId={campaign.campaignId} currency={currency} />
+      <PostPeriodForm campaignId={campaign.campaignId} currency={currency} {...(campaign.name ? { campaignName: campaign.name } : {})} />
     </>
   );
 }
