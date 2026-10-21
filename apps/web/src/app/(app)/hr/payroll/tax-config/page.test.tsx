@@ -6,7 +6,7 @@ import enMessages from "@/messages/en.json";
 // GAP2-PAYROLL-TAX-CONFIG-01 / -02: the Tax Configuration screen no longer
 // renders hard-coded ₹-slab literals. It fetches the tenant's EFFECTIVE
 // slab config for the selected FY and renders the fetched slabs/limits/
-// surcharge bands through formatRupees, with an FY selector and an error
+// surcharge bands through formatMoney, with an FY selector and an error
 // state. These tests mock the loader and assert the rendered rows equal the
 // API payload — the previous literal-asserting tests were pinning the exact
 // behaviour this HIGH item removes, so they are replaced here (SOLO: align a
@@ -63,7 +63,7 @@ describe("TaxConfigPage (GAP2-PAYROLL-TAX-CONFIG-01)", () => {
     fetchJsonMock.mockResolvedValue({ data: SEEDED, source: "api" });
     const ui = await TaxConfigPage({ searchParams: { fy: "2025-26" } });
     renderPage(ui);
-    // The seeded open-ended top slab (₹30,00,000) is rendered via formatRupees.
+    // The seeded open-ended top slab (₹30,00,000) is rendered via formatMoney.
     expect(screen.getByText("Above ₹30,00,000.00")).toBeInTheDocument();
     // The previous hard-coded literal must NOT appear.
     expect(screen.queryByText("₹20,00,001 – ₹24,00,000")).not.toBeInTheDocument();

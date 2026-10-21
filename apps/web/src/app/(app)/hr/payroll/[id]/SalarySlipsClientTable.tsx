@@ -2,22 +2,29 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { formatRupees } from "@/lib/formatters";
+import { formatMoney } from "@/lib/formatters";
+import { parseMinor } from "@/lib/payroll/minor";
 import { Button, Modal, StatusPill } from "@/app/_components/ds";
 
+/**
+ * GAP-PAYROLL-HOME-01: amounts are integer-paise strings (the API's
+ * grossMinor / deductionsMinor / netMinor), rendered with formatMoney. The
+ * legacy rupee floats on the same payload are not read here; a missing value
+ * shows "—" (unknown), never a made-up zero.
+ */
 type SlipRow = {
   id: string;
   employeeId: string;
   employeeName: string;
-  gross: number;
-  deductions: number;
-  net: number;
+  grossMinor?: string;
+  deductionsMinor?: string;
+  netMinor?: string;
   status: string;
 };
 
 // ─── Salary Slip Preview Modal ─────────────────────────────────────────────
 
-function SlipLine({ label, value, bold }: { label: string; value: number; bold?: boolean }) {
+function SlipLine({ label, value, bold }: { label: string; value: string | undefined; bold?: boolean }) {
   return (
     <tr>
       <td
@@ -38,7 +45,7 @@ function SlipLine({ label, value, bold }: { label: string; value: number; bold?:
           borderBottom: "1px solid var(--line)",
         }}
       >
-        {formatRupees(value)}
+        {formatMoney(value)}
       </td>
     </tr>
   );
@@ -89,7 +96,14 @@ function SalarySlipModal({
   // ignored). Only the real, API-backed figures are shown now: gross,
   // deductions and net, with an explicit check that they foot -- instead of
   // silently hiding a mismatch behind a 10px disclaimer.
-  const reconciles = slip.gross - slip.deductions === slip.net;
+  // Exact, in integer paise. When any of the three is missing there is nothing
+  // to compare, so no mismatch is claimed.
+  const grossMinor = parseMinor(slip.grossMinor);
+  const deductionsMinor = parseMinor(slip.deductionsMinor);
+  const netMinor = parseMinor(slip.netMinor);
+  const reconciles = grossMinor === null || deductionsMinor === null || netMinor === null
+    ? true
+    : grossMinor - deductionsMinor === netMinor;
 
   // SF-19: ds/Modal (focus trap, inert background, Escape, focus restore).
   return (
@@ -144,11 +158,11 @@ function SalarySlipModal({
         {/* Slip body -- only API-backed figures (see GAP-PAYROLL-DETAIL-01). */}
         <div style={{ padding: "14px 20px" }}>
           <SlipSection title={t("earningsSectionTitle")}>
-            <SlipLine label={t("grossEarningsLabel")} value={slip.gross} bold />
+            <SlipLine label={t("grossEarningsLabel")} value={slip.grossMinor} bold />
           </SlipSection>
 
           <SlipSection title={t("deductionsSectionTitle")}>
-            <SlipLine label={t("totalDeductionsLabel")} value={slip.deductions} bold />
+            <SlipLine label={t("totalDeductionsLabel")} value={slip.deductionsMinor} bold />
           </SlipSection>
 
           {!reconciles && (
@@ -170,7 +184,7 @@ function SalarySlipModal({
           >
             <span style={{ fontWeight: 700, fontSize: 15 }}>{t("netPayLabel")}</span>
             <span style={{ fontWeight: 700, fontSize: 17, color: "var(--primary)" }}>
-              {formatRupees(slip.net)}
+              {formatMoney(slip.netMinor)}
             </span>
           </div>
         </div>
@@ -285,13 +299,13 @@ export function SalarySlipsClientTable({
                 <tr key={slip.id} style={{ borderBottom: "1px solid var(--line)" }}>
                   <td style={{ padding: "10px 12px", fontWeight: 500 }}>{slip.employeeName?.trim() || tFallback("unknownEmployee")}</td>
                   <td style={{ padding: "10px 12px", textAlign: "end", fontVariantNumeric: "tabular-nums" }}>
-                    {formatRupees(slip.gross)}
+                    {formatMoney(slip.grossMinor)}
                   </td>
                   <td style={{ padding: "10px 12px", textAlign: "end", fontVariantNumeric: "tabular-nums" }}>
-                    {formatRupees(slip.deductions)}
+                    {formatMoney(slip.deductionsMinor)}
                   </td>
                   <td style={{ padding: "10px 12px", textAlign: "end", fontVariantNumeric: "tabular-nums", fontWeight: 600 }}>
-                    {formatRupees(slip.net)}
+                    {formatMoney(slip.netMinor)}
                   </td>
                   <td style={{ padding: "10px 12px" }}>
                     <StatusPill status={slip.status} />

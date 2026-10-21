@@ -29,6 +29,9 @@ const sampleRuns = [
     employeeCount: 120,
     grossAmount: 4500000,
     netAmount: 4100000,
+    // GAP-PAYROLL-HOME-01: the integer-paise strings the table actually renders.
+    grossMinor: "450000000",
+    netMinor: "410000000",
     status: "paid",
   },
 ] as never;
@@ -120,5 +123,40 @@ describe("PayrollRunsTable — COMP-019 (rupee/paise unit-convention regression)
     renderTable({ runs: sampleRuns, source: "api" });
     expectRupeeGroundTruthDisplayed(screen, 450000000n); // sampleRuns[0].grossAmount = Rs 45,00,000
     expectRupeeGroundTruthDisplayed(screen, 410000000n); // sampleRuns[0].netAmount = Rs 41,00,000
+  });
+});
+
+// GAP-PAYROLL-HOME-01 (contract test): the table renders the API's integer-paise
+// strings with formatMoney, and never reads the legacy rupee floats.
+describe("PayrollRunsTable — GAP-PAYROLL-HOME-01 (integer paise contract)", () => {
+  function renderWith(run: Record<string, unknown>) {
+    const runs = [{ id: "run-9", payPeriod: "2026-09", employeeCount: 3, status: "paid", ...run }] as never;
+    mockedHook.mockReturnValue({ data: runs, fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
+    renderTable({ runs, source: "api" });
+  }
+
+  it("grossMinor=9000000 renders ₹90,000.00 (and never the 100x-off ₹900.00)", () => {
+    renderWith({ grossMinor: "9000000", netMinor: "8100000" });
+    expect(screen.getByText("₹90,000.00")).toBeInTheDocument();
+    expect(screen.getByText("₹81,000.00")).toBeInTheDocument();
+    expect(screen.queryByText("₹900.00")).not.toBeInTheDocument();
+  });
+
+  it("renders from the paise string even when the legacy rupee float disagrees (the float is not read)", () => {
+    renderWith({ grossMinor: "9000000", netMinor: "8100000", grossAmount: 1, netAmount: 2 });
+    expect(screen.getByText("₹90,000.00")).toBeInTheDocument();
+    expect(screen.queryByText("₹1.00")).not.toBeInTheDocument();
+  });
+
+  it("shows an em dash, not a fabricated ₹0.00, when the payload carries no paise total", () => {
+    renderWith({ grossAmount: 90000, netAmount: 81000 });
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
+    expect(screen.queryByText("₹90,000.00")).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("keeps exact paise: ₹1,23,456.78 from 12345678", () => {
+    renderWith({ grossMinor: "12345678", netMinor: "12345678" });
+    expect(screen.getAllByText("₹1,23,456.78").length).toBeGreaterThanOrEqual(1);
   });
 });

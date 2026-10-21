@@ -3,7 +3,8 @@ import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { getPayrollRunDetails, getPayrollStructures } from "../../../_data/loaders";
 import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
-import { formatRupees } from "@/lib/formatters";
+import { formatMoney } from "@/lib/formatters";
+import { latestPaidRun, summariseRunStatuses } from "@/lib/payroll/runSummary";
 import { CreatePayrollRunForm } from "./CreatePayrollRunForm";
 import { PayrollRunsTable } from "./PayrollRunsTable";
 import { getActiveDdos, getActiveGroups } from "./pay-groups/payGroupData";
@@ -62,19 +63,16 @@ export default async function PayrollPage() {
   // grossAmount over EVERY paid-or-completed run ever: the same employees
   // counted again each month, and completed-but-unpaid runs folded into a
   // tile literally labelled "Paid". Use only the single most recent
-  // ACTUALLY-paid run instead.
-  const paidRuns = errored ? [] : runs.filter((r) => r.status === "paid");
-  const latestPaidRun = paidRuns.length > 0
-    ? paidRuns.reduce((a, b) => (b.payPeriod > a.payPeriod ? b : a))
-    : null;
-
-  const totalRuns = errored ? null : runs.length;
-  const totalEmployeesPaid = errored ? null : (latestPaidRun?.employeeCount ?? 0);
-  const totalGross = errored ? null : (latestPaidRun?.grossAmount ?? 0);
-  // "Pending" now means every run not yet actually paid (draft, processing,
-  // completed-awaiting-disbursement, or failed) -- it and the paid-run
-  // count above always sum to totalRuns.
-  const pending = errored ? null : runs.length - paidRuns.length;
+  // ACTUALLY-paid run instead, and say which period it is.
+  //
+  // The status tiles come from summariseRunStatuses: Paid + In progress +
+  // Awaiting disbursement + Failed always sum to Total runs.
+  const counts = errored ? null : summariseRunStatuses(runs);
+  const latestPaid = errored ? null : latestPaidRun(runs);
+  const latestPeriod = latestPaid?.payPeriod ?? null;
+  // Money is rendered from the API's integer-paise string (GAP-PAYROLL-HOME-01);
+  // a paid run whose payload lacks it shows "—" (unknown), never a made-up zero.
+  const totalGrossDisplay = errored ? "—" : latestPaid ? formatMoney(latestPaid.grossMinor) : formatMoney(0n);
   const existingPeriods = runs.map((r) => r.payPeriod);
 
   return (
@@ -107,10 +105,23 @@ export default async function PayrollPage() {
         )
       )}
       <StatGrid>
-        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalRuns")} value={totalRuns ?? "—"} />
-        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statEmployeesPaid")} value={totalEmployeesPaid === null ? "—" : totalEmployeesPaid.toLocaleString("en-IN")} />
-        <StatCard icon="🏛" iconBg="var(--warnbg)" label={t("statTotalGross")} value={totalGross === null ? "—" : formatRupees(totalGross)} />
-        <StatCard icon="📄" iconBg="var(--panel)" label={t("statPending")} value={pending ?? "—"} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalRuns")} value={counts?.total ?? "—"} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statPaid")} value={counts?.paid ?? "—"} />
+        <StatCard icon="📄" iconBg="var(--panel)" label={t("statInProgress")} value={counts?.inProgress ?? "—"} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statAwaitingDisbursement")} value={counts?.awaitingDisbursement ?? "—"} />
+        <StatCard icon="⚠️" iconBg="var(--badbg)" label={t("statFailed")} value={counts?.failed ?? "—"} />
+        <StatCard
+          icon="👥"
+          iconBg="var(--infobg)"
+          label={latestPeriod ? t("statEmployeesPaidPeriod", { period: latestPeriod }) : t("statEmployeesPaid")}
+          value={latestPaid ? latestPaid.employeeCount.toLocaleString("en-IN") : counts ? "0" : "—"}
+        />
+        <StatCard
+          icon="🏛"
+          iconBg="var(--warnbg)"
+          label={latestPeriod ? t("statTotalGrossPeriod", { period: latestPeriod }) : t("statTotalGross")}
+          value={totalGrossDisplay}
+        />
       </StatGrid>
       <Card title={t("runsCardTitle")}>
         {errored ? (

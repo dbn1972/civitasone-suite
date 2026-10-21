@@ -12,8 +12,11 @@ vi.mock("@/lib/auth/roleGuard", () => ({
   PAYROLL_ADMIN_ROLES: ["payroll_admin", "payroll_officer", "super_admin"],
   PAYROLL_READER_ROLES: ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"],
 }));
+// Echoes the key; a call with interpolation values (a period label) echoes
+// "key|name=value" so a test can assert what was interpolated.
 vi.mock("next-intl/server", () => ({
-  getTranslations: async () => (key: string) => key,
+  getTranslations: async () => (key: string, values?: Record<string, unknown>) =>
+    values ? `${key}|${Object.entries(values).map(([k, v]) => `${k}=${String(v)}`).join(",")}` : key,
 }));
 vi.mock("@/app/_components/ds/Toast", () => ({
   useToast: () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn() } }),
@@ -32,8 +35,8 @@ function renderPage(ui: React.ReactNode) {
 }
 
 const MOCK_RUNS = [
-  { id: "r1", payPeriod: "2026-08", employeeCount: 40, grossAmount: 400000, netAmount: 360000, status: "paid" },
-  { id: "r2", payPeriod: "2026-09", employeeCount: 42, grossAmount: 420000, netAmount: 378000, status: "draft" },
+  { id: "r1", payPeriod: "2026-08", employeeCount: 40, grossAmount: 400000, netAmount: 360000, grossMinor: "40000000", netMinor: "36000000", status: "paid" },
+  { id: "r2", payPeriod: "2026-09", employeeCount: 42, grossAmount: 420000, netAmount: 378000, grossMinor: "42000000", netMinor: "37800000", status: "draft" },
 ];
 const MOCK_STRUCTURES = [{ id: "s1", name: "General" }];
 
@@ -81,9 +84,9 @@ describe("PayrollPage", () => {
     expect(screen.queryByText(/No pay structures configured/)).not.toBeInTheDocument();
   });
 
-  // payroll-runs' grossAmount is already whole RUPEES (see PayrollRunsTable's
-  // own COMP-019 regression test and #312, the historical fix this mirrors:
-  // a real net pay of Rs 90,000 once rendered as Rs 900). GAP-PAYROLL-HOME-03:
+  // payroll-runs money is rendered from the API's integer-paise strings
+  // (grossMinor / netMinor; GAP-PAYROLL-HOME-01 -- historically a real net pay
+  // of Rs 90,000 once rendered as Rs 900, #312). GAP-PAYROLL-HOME-03:
   // this stat also used to SUM grossAmount across every paid run ever,
   // double-counting the same employees/money every month -- it now shows
   // only the single most recent actually-paid run. Two distinct "paid"
@@ -91,8 +94,8 @@ describe("PayrollPage", () => {
   // unit (rupees, not 100x smaller) AND the aggregation (latest run only,
   // not the sum of both -- Rs 8,00,000 would be the old, wrong total).
   it("renders the Total Gross stat as rupees, from the latest paid run only, not 100x smaller or summed across runs (GAP-PAYROLL-HOME-01/03, historically #312)", async () => {
-    const PAID_RUN_A = { id: "pr1", payPeriod: "2026-07", employeeCount: 10, grossAmount: 500000, netAmount: 450000, status: "paid" };
-    const PAID_RUN_B = { id: "pr2", payPeriod: "2026-08", employeeCount: 12, grossAmount: 300000, netAmount: 270000, status: "paid" };
+    const PAID_RUN_A = { id: "pr1", payPeriod: "2026-07", employeeCount: 10, grossAmount: 500000, netAmount: 450000, grossMinor: "50000000", netMinor: "45000000", status: "paid" };
+    const PAID_RUN_B = { id: "pr2", payPeriod: "2026-08", employeeCount: 12, grossAmount: 300000, netAmount: 270000, grossMinor: "30000000", netMinor: "27000000", status: "paid" };
     mockFetchJson({ data: [PAID_RUN_A, PAID_RUN_B], source: "api" });
     renderPage(await PayrollPage());
     // Latest period (2026-08) is PAID_RUN_B: Rs 3,00,000 -- which, by
@@ -102,5 +105,92 @@ describe("PayrollPage", () => {
     expect(screen.getAllByText("₹3,00,000.00").length).toBeGreaterThan(0);
     expect(screen.queryByText("₹3,000.00")).not.toBeInTheDocument(); // the classic 100x-smaller mistake
     expect(screen.queryByText("₹8,00,000.00")).not.toBeInTheDocument(); // the old, wrong sum of both runs
+  });
+
+  // ── GAP-PAYROLL-HOME-01/03/04 ──────────────────────────────────────────────
+  /** The rendered value of the stat tile whose label text is `label`. */
+  function tileValue(label: string): string {
+    const tile = screen.getByText(label).closest(".stat");
+    expect(tile).not.toBeNull();
+    return tile!.querySelector(".val")!.textContent ?? "";
+  }
+
+  const run = (id: string, payPeriod: string, status: string, employeeCount: number, grossMinor: string) =>
+    ({ id, payPeriod, status, employeeCount, grossAmount: Number(grossMinor) / 100, netAmount: 0, grossMinor, netMinor: grossMinor });
+
+  it("HOME-01 contract: a paid run with grossMinor=9000000 shows ₹90,000.00 in the Total Gross tile", async () => {
+    mockFetchJson({ data: [run("p1", "2026-08", "paid", 5, "9000000")], source: "api" });
+    renderPage(await PayrollPage());
+    expect(tileValue("statTotalGrossPeriod|period=2026-08")).toBe("₹90,000.00");
+    expect(screen.queryByText("₹900.00")).not.toBeInTheDocument();
+  });
+
+  it("HOME-01: the tile reads the paise string, not the legacy rupee float (a disagreeing float is ignored)", async () => {
+    mockFetchJson({ data: [{ ...run("p1", "2026-08", "paid", 5, "9000000"), grossAmount: 1 }], source: "api" });
+    renderPage(await PayrollPage());
+    expect(tileValue("statTotalGrossPeriod|period=2026-08")).toBe("₹90,000.00");
+  });
+
+  it("HOME-01: a paid run without its paise total shows a dash, not a fabricated ₹0.00", async () => {
+    mockFetchJson({ data: [{ id: "p1", payPeriod: "2026-08", status: "paid", employeeCount: 5, grossAmount: 90000, netAmount: 0 }], source: "api" });
+    renderPage(await PayrollPage());
+    expect(tileValue("statTotalGrossPeriod|period=2026-08")).toBe("—");
+  });
+
+  it("HOME-03: two paid runs of 100 employees show headcount 100 (the latest run), not 200, and name the period", async () => {
+    mockFetchJson({
+      data: [run("p1", "2026-07", "paid", 100, "50000000"), run("p2", "2026-08", "paid", 100, "50000000")],
+      source: "api",
+    });
+    renderPage(await PayrollPage());
+    expect(tileValue("statEmployeesPaidPeriod|period=2026-08")).toBe("100");
+    expect(screen.queryByText("200")).not.toBeInTheDocument();
+    // Gross is also the latest run's alone: 5,00,000.00, not the 10,00,000.00 sum.
+    expect(tileValue("statTotalGrossPeriod|period=2026-08")).toBe("₹5,00,000.00");
+  });
+
+  it("HOME-03: before any run is paid the tiles use the plain labels and show real zeros", async () => {
+    mockFetchJson({ data: [run("d1", "2026-09", "draft", 7, "1000000")], source: "api" });
+    renderPage(await PayrollPage());
+    expect(tileValue("statEmployeesPaid")).toBe("0");
+    expect(tileValue("statTotalGross")).toBe("₹0.00");
+  });
+
+  it("HOME-04: Paid + In Progress + Awaiting Disbursement + Failed always sum to Total Runs", async () => {
+    mockFetchJson({
+      data: [
+        run("1", "2026-04", "paid", 1, "100"),
+        run("2", "2026-05", "paid", 1, "100"),
+        run("3", "2026-06", "completed", 1, "100"),
+        run("4", "2026-07", "draft", 1, "100"),
+        run("5", "2026-07", "processing", 1, "100"),
+        run("6", "2026-08", "failed", 1, "100"),
+        run("7", "2026-08", "failed", 1, "100"),
+      ],
+      source: "api",
+    });
+    renderPage(await PayrollPage());
+    const total = Number(tileValue("statTotalRuns"));
+    const parts = ["statPaid", "statInProgress", "statAwaitingDisbursement", "statFailed"].map((k) => Number(tileValue(k)));
+    expect(total).toBe(7);
+    expect(parts).toEqual([2, 2, 1, 2]);
+    expect(parts.reduce((a, b) => a + b, 0)).toBe(total);
+  });
+
+  it("HOME-04: an approved run (wire 'completed') is counted as awaiting disbursement, never as paid or lumped into failed", async () => {
+    mockFetchJson({ data: [run("c1", "2026-09", "completed", 9, "100")], source: "api" });
+    renderPage(await PayrollPage());
+    expect(tileValue("statAwaitingDisbursement")).toBe("1");
+    expect(tileValue("statPaid")).toBe("0");
+    expect(tileValue("statFailed")).toBe("0");
+    expect(tileValue("statInProgress")).toBe("0");
+  });
+
+  it("HOME-04: every tile reads '—' (unknown) on a failed fetch", async () => {
+    mockFetchJson({ data: [], source: "error" });
+    renderPage(await PayrollPage());
+    for (const k of ["statTotalRuns", "statPaid", "statInProgress", "statAwaitingDisbursement", "statFailed", "statEmployeesPaid", "statTotalGross"]) {
+      expect(tileValue(k)).toBe("—");
+    }
   });
 });

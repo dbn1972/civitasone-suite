@@ -3,7 +3,8 @@
 import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "../../../../_components/ds";
 import { incomeTaxStatusLabel } from "@/lib/payroll/statusLabels";
-import { formatRupees } from "@/lib/formatters";
+import { formatMoney } from "@/lib/formatters";
+import { rupeesToMinorString } from "@/lib/money";
 
 type Row = {
   id: string;
@@ -25,7 +26,9 @@ type Row = {
  * means "not applicable", not "nothing declared".
  */
 function deductionCell(r: Row, value: string): string {
-  return r.regime === "new" ? "—" : formatRupees(value);
+  // The income-tax API sends whole-rupee strings; convert exactly to paise
+  // (no float) and render with formatMoney. Non-numeric -> "—" (unknown).
+  return r.regime === "new" ? "—" : formatMoney(rupeesToMinorString(value, { allowZero: true }));
 }
 
 /**

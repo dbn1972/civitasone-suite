@@ -1,11 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ConfirmDialog, Button } from "../../../../_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
-import { formatRupees } from "@/lib/formatters";
+import { formatMoney } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
 
 type Props = {
@@ -13,10 +13,21 @@ type Props = {
   status: string;
   /** Context for the irreversible-action summaries. */
   employeeCount: number;
-  grossAmount: number;
-  netAmount: number;
+  /** GAP-PAYROLL-HOME-01: integer-paise strings (the API's grossMinor / netMinor), rendered with formatMoney. */
+  grossMinor?: string;
+  netMinor?: string;
   payPeriod: string;
   canAdminister?: boolean;
+  /**
+   * GAP-PAYROLL-DETAIL-02 (maker-checker): the signed-in user's id and the run's
+   * maker / checker ids. The maker cannot approve their own run and the approver
+   * cannot disburse it; the buttons disable with an explanation instead of
+   * letting the user click into a guaranteed 403. The server is the authority
+   * (403 MAKER_CHECKER_VIOLATION); this is the hint, never the only control.
+   */
+  currentUserId?: string | null;
+  createdBy?: string | null;
+  approvedBy?: string | null;
   /** GAP-PAYROLL-DETAIL-05: employees with unresolved pre-disbursement issues; shown as a warning in the Approve / Disburse confirmations. */
   exceptionCount?: number;
 };
@@ -27,11 +38,14 @@ export function PayrollRunActions({
   runId,
   status,
   employeeCount,
-  grossAmount,
-  netAmount,
+  grossMinor,
+  netMinor,
   payPeriod,
   canAdminister = false,
   exceptionCount = 0,
+  currentUserId = null,
+  createdBy = null,
+  approvedBy = null,
 }: Props) {
   const t = useTranslations("payrollRunActions");
   const router = useRouter();
@@ -50,6 +64,8 @@ export function PayrollRunActions({
   const [settledAction, setSettledAction] = useState<PendingAction>(null);
   const { toast } = useToast();
   const formError = useFormError("payroll run");
+  const approveHintId = useId();
+  const disburseHintId = useId();
 
   useEffect(() => {
     setSettledAction(null);
@@ -80,14 +96,14 @@ export function PayrollRunActions({
         action === "approve"
           ? t("approvedMessage", { period: payPeriod })
           : action === "disburse"
-            ? t("disbursementInitiatedMessage", { amount: formatRupees(netAmount), count: employeeCount })
+            ? t("disbursementInitiatedMessage", { amount: formatMoney(netMinor), count: employeeCount })
             : t("revertedMessage", { period: payPeriod }),
       );
       toast.success(
         action === "approve"
           ? t("approvedToast", { period: payPeriod })
           : action === "disburse"
-            ? t("disbursementInitiatedToast", { amount: formatRupees(netAmount) })
+            ? t("disbursementInitiatedToast", { amount: formatMoney(netMinor) })
             : t("revertedToast"),
       );
       setPending(null);
@@ -119,6 +135,13 @@ export function PayrollRunActions({
 
   if (!canApprove && !canDisburse && !canRevert) return null;
 
+  // GAP-PAYROLL-DETAIL-02: maker-checker. Unknown ids (null) never block here;
+  // the server enforces the same rule either way.
+  const isMaker = currentUserId !== null && createdBy !== null && currentUserId === createdBy;
+  const isApprover = currentUserId !== null && approvedBy !== null && currentUserId === approvedBy;
+  const approveBlocked = canApprove && isMaker;
+  const disburseBlocked = canDisburse && isApprover;
+
   return (
     <section className="card" style={{ marginBottom: 16 }}>
       <div className="card-h">
@@ -129,6 +152,8 @@ export function PayrollRunActions({
           {canApprove && (
             <Button
               style={{ minHeight: 44 }}
+              disabled={approveBlocked}
+              aria-describedby={approveBlocked ? approveHintId : undefined}
               onClick={() => { setError(undefined); setPending("approve"); }}
             >
               {t("approveRunBtn")}
@@ -137,6 +162,8 @@ export function PayrollRunActions({
           {canDisburse && (
             <Button
               style={{ minHeight: 44 }}
+              disabled={disburseBlocked}
+              aria-describedby={disburseBlocked ? disburseHintId : undefined}
               onClick={() => { setError(undefined); setPending("disburse"); }}
             >
               {t("disburseRunBtn")}
@@ -152,6 +179,17 @@ export function PayrollRunActions({
             </Button>
           )}
         </div>
+
+        {approveBlocked && (
+          <p id={approveHintId} role="note" className="pill warn" style={{ marginTop: 14 }}>
+            {t("makerCheckerApproveHint")}
+          </p>
+        )}
+        {disburseBlocked && (
+          <p id={disburseHintId} role="note" className="pill warn" style={{ marginTop: 14 }}>
+            {t("makerCheckerDisburseHint")}
+          </p>
+        )}
 
         {message && (
           <p role="status" aria-live="polite" className={`pill ${messageTone}`} style={{ marginTop: 14 }}>
@@ -183,7 +221,7 @@ export function PayrollRunActions({
             {t.rich("approveDescription", {
               period: payPeriod,
               count: employeeCount,
-              amount: formatRupees(grossAmount),
+              amount: formatMoney(grossMinor),
               strong: (chunks) => <strong>{chunks}</strong>,
             })}
             {exceptionCount > 0 && <p role="note" className="pill warn" style={{ margin: "10px 0 0" }}>{t("exceptionsWarning", { count: exceptionCount })}</p>}
@@ -207,7 +245,7 @@ export function PayrollRunActions({
         description={(
           <>
             {t.rich("disburseDescription", {
-              amount: formatRupees(netAmount),
+              amount: formatMoney(netMinor),
               count: employeeCount,
               period: payPeriod,
               // GAP-PAYROLL-DETAIL-06: the channel is a translated, replaceable

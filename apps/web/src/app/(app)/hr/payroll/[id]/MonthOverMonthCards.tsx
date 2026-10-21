@@ -1,35 +1,45 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { formatRupees } from "@/lib/formatters";
+import { formatMoney } from "@/lib/formatters";
+import { formatTenths, parseMinor, tenthsOfPercent } from "@/lib/payroll/minor";
 
+/**
+ * GAP-PAYROLL-HOME-01: every amount here is an integer-paise string (the API's
+ * grossMinor / netMinor), compared with bigint arithmetic and rendered with
+ * formatMoney. The percentages are integer-rounded to one decimal, half away
+ * from zero (see lib/payroll/minor.ts tenthsOfPercent), not float math.
+ */
 type Props = {
-  currentGross: number;
+  currentGrossMinor: string | null;
   /**
    * null means "we don't know" (the prior-period fetch failed) — distinct
-   * from a real 0 (no prior period, or a prior period that genuinely had no
+   * from a real "0" (no prior period, or a prior period that genuinely had no
    * run). Only a real number renders a MoM delta; null renders "—" with no
    * delta line rather than a fabricated comparison against ₹0.
    */
-  previousGross: number | null;
-  currentNet: number;
+  previousGrossMinor: string | null;
+  currentNetMinor: string | null;
   currentPeriod: string;
   previousPeriod: string;
 };
 
 export function MonthOverMonthCards({
-  currentGross,
-  previousGross,
-  currentNet,
+  currentGrossMinor,
+  previousGrossMinor,
+  currentNetMinor,
   currentPeriod,
   previousPeriod,
 }: Props) {
   const t = useTranslations("monthOverMonthCards");
-  const diff  = previousGross !== null ? currentGross - previousGross : null;
-  const pct   = diff !== null && previousGross !== null && previousGross > 0 ? (diff / previousGross) * 100 : null;
-  const isUp  = diff !== null && diff >= 0;
-  const ratio = currentGross > 0
-    ? ((currentNet / currentGross) * 100).toFixed(1)
+  const currentGross = parseMinor(currentGrossMinor);
+  const previousGross = parseMinor(previousGrossMinor);
+  const currentNet = parseMinor(currentNetMinor);
+  const diff  = previousGross !== null && currentGross !== null ? currentGross - previousGross : null;
+  const pctTenths = diff !== null && previousGross !== null && previousGross > 0n ? tenthsOfPercent(diff, previousGross) : null;
+  const isUp  = diff !== null && diff >= 0n;
+  const ratio = currentGross !== null && currentNet !== null && currentGross > 0n
+    ? formatTenths(tenthsOfPercent(currentNet, currentGross))
     : "—";
 
   const cardStyle: React.CSSProperties = {
@@ -62,14 +72,14 @@ export function MonthOverMonthCards({
       {/* Current month gross */}
       <div style={cardStyle}>
         <div style={labelStyle}>{t("periodGrossLabel", { period: currentPeriod })}</div>
-        <div style={valueStyle}>{formatRupees(currentGross)}</div>
+        <div style={valueStyle}>{formatMoney(currentGrossMinor)}</div>
       </div>
 
       {/* Previous month gross + MoM delta */}
       <div style={cardStyle}>
         <div style={labelStyle}>{t("periodGrossLabel", { period: previousPeriod })}</div>
-        <div style={valueStyle}>{formatRupees(previousGross)}</div>
-        {pct !== null && (
+        <div style={valueStyle}>{formatMoney(previousGrossMinor)}</div>
+        {pctTenths !== null && (
           <div
             style={{
               marginTop: 4,
@@ -78,7 +88,7 @@ export function MonthOverMonthCards({
               color: isUp ? "var(--success)" : "var(--danger)",
             }}
           >
-            {t("vsPreviousPeriod", { arrow: isUp ? "↑" : "↓", pct: Math.abs(pct).toFixed(1), period: previousPeriod })}
+            {t("vsPreviousPeriod", { arrow: isUp ? "↑" : "↓", pct: formatTenths(pctTenths), period: previousPeriod })}
           </div>
         )}
       </div>
@@ -88,7 +98,7 @@ export function MonthOverMonthCards({
         <div style={labelStyle}>{t("netToGrossRatioLabel")}</div>
         <div style={valueStyle}>{ratio}{ratio !== "—" ? "%" : ""}</div>
         <div style={{ marginTop: 4, fontSize: 11, color: "var(--mut)" }}>
-          {t("netOfGrossSummary", { net: formatRupees(currentNet), gross: formatRupees(currentGross) })}
+          {t("netOfGrossSummary", { net: formatMoney(currentNetMinor), gross: formatMoney(currentGrossMinor) })}
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@ import { DataTable, StatusPill } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import type { PayrollRunDetail } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
-import { formatRupees } from "@/lib/formatters";
+import { formatMoney } from "@/lib/formatters";
 import { payrollRunStatusLabel, payrollRunStatusVariant } from "@/lib/payroll/statusLabels";
 
 export function PayrollRunsTable({ runs, source = "api", canAdminister = false }: { runs: PayrollRunDetail[]; source?: "api" | "error"; canAdminister?: boolean }) {
@@ -18,13 +18,14 @@ export function PayrollRunsTable({ runs, source = "api", canAdminister = false }
     (d) => d.length === 0,
   );
 
-  // grossAmount/netAmount come from the payroll-runs API already in RUPEES (not paise),
-  // so they must NOT use cellType:"amount" (which runs formatMoney and divides by 100).
+  // GAP-PAYROLL-HOME-01: money comes from the API's integer-paise strings
+  // (grossMinor / netMinor), rendered with formatMoney at the display edge.
+  // The legacy rupee floats (grossAmount / netAmount) are no longer read here.
   const columns: { key: keyof PayrollRunDetail & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount"; render?: (row: PayrollRunDetail) => ReactNode }[] = [
     { key: "payPeriod", label: t("colPeriod") },
     { key: "employeeCount", label: t("colEmployees"), align: "right" },
-    { key: "grossAmount", label: t("colGross"), align: "right", render: (r) => formatRupees(r.grossAmount) },
-    { key: "netAmount", label: t("colNet"), align: "right", render: (r) => formatRupees(r.netAmount) },
+    { key: "grossMinor", label: t("colGross"), align: "right", render: (r) => formatMoney(r.grossMinor) },
+    { key: "netMinor", label: t("colNet"), align: "right", render: (r) => formatMoney(r.netMinor) },
     // Hindi-locale finding: cellType:"status" rendered the raw backend enum
     // (draft/processing/completed/paid/disbursed/failed) verbatim -- no
     // i18n. `render` (checked before cellType by DataTable's cellValue())

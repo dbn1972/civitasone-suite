@@ -10,15 +10,19 @@ vi.mock("@/app/_components/ds/Toast", () => ({ useToast: () => ({ toast: { succe
 
 import { PayrollRunActions } from "./PayrollRunActions";
 
+// GAP-PAYROLL-HOME-01: integer-paise strings (Rs 5,00,000.00 gross / Rs 4,50,000.00 net).
 const PROPS = {
   runId: "r1",
   status: "processing",
   employeeCount: 50,
-  grossAmount: 500000,
-  netAmount: 450000,
+  grossMinor: "50000000",
+  netMinor: "45000000",
   payPeriod: "2026-09",
   canAdminister: true,
 };
+
+const ME = "11111111-0000-4000-8000-0000000000aa";
+const OTHER = "22222222-0000-4000-8000-0000000000bb";
 
 /**
  * UX-016: this used to show the raw backend response text (falling back to
@@ -85,5 +89,131 @@ describe("PayrollRunActions — pre-disbursement issues and disburse copy", () =
     expect(dialog).toHaveTextContent("irreversible");
     expect(dialog).not.toHaveTextContent("Funds are released to PFMS");
     expect(dialog).toHaveTextContent("1 employee still has an unresolved issue");
+  });
+});
+
+// GAP-PAYROLL-DETAIL-02: maker-checker. The server is the authority (403
+// MAKER_CHECKER_VIOLATION); the UI explains and disables instead of letting the
+// maker / approver click into a guaranteed refusal.
+describe("PayrollRunActions — GAP-PAYROLL-DETAIL-02 maker-checker", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  function renderActions(props: Record<string, unknown>) {
+    return render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <PayrollRunActions {...PROPS} {...props} />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("disables Approve with the maker-checker hint when the viewer created the run", () => {
+    renderActions({ currentUserId: ME, createdBy: ME, approvedBy: null });
+    const approve = screen.getByRole("button", { name: /approve run/i });
+    expect(approve).toBeDisabled();
+    const hint = screen.getByText("You created this run, so a different approver must approve it (maker-checker).");
+    expect(hint).toBeInTheDocument();
+    expect(approve).toHaveAttribute("aria-describedby", hint.id);
+    fireEvent.click(approve);
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("keeps Approve enabled for a different user", () => {
+    renderActions({ currentUserId: OTHER, createdBy: ME, approvedBy: null });
+    expect(screen.getByRole("button", { name: /approve run/i })).toBeEnabled();
+    expect(screen.queryByText(/maker-checker\)\./)).not.toBeInTheDocument();
+  });
+
+  it("does not block when the ids are unknown (older API, signed-out session): the server decides", () => {
+    renderActions({ currentUserId: null, createdBy: ME, approvedBy: null });
+    expect(screen.getByRole("button", { name: /approve run/i })).toBeEnabled();
+    renderActions({ currentUserId: ME, createdBy: null, approvedBy: null });
+    expect(screen.getAllByRole("button", { name: /approve run/i }).every((b) => !(b as HTMLButtonElement).disabled)).toBe(true);
+  });
+
+  it("disables Disburse with its hint when the viewer approved the run, but not for the creator or anyone else", () => {
+    const { unmount } = renderActions({ status: "completed", currentUserId: ME, createdBy: OTHER, approvedBy: ME });
+    expect(screen.getByRole("button", { name: /disburse run/i })).toBeDisabled();
+    expect(screen.getByText("You approved this run, so a different officer must disburse it (maker-checker).")).toBeInTheDocument();
+    unmount();
+
+    renderActions({ status: "completed", currentUserId: OTHER, createdBy: OTHER, approvedBy: ME });
+    expect(screen.getByRole("button", { name: /disburse run/i })).toBeEnabled();
+  });
+
+  it("the creator being the viewer does not disable Disburse (only the approver is excluded)", () => {
+    renderActions({ status: "completed", currentUserId: ME, createdBy: ME, approvedBy: OTHER });
+    expect(screen.getByRole("button", { name: /disburse run/i })).toBeEnabled();
+  });
+
+  it("shows the plain maker-checker sentence in the dialog when the server still answers 403 MAKER_CHECKER_VIOLATION", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: "MAKER_CHECKER_VIOLATION", message: "raw server text" }), { status: 403 }));
+    renderActions({ currentUserId: OTHER, createdBy: ME, approvedBy: null });
+    fireEvent.click(screen.getByRole("button", { name: /approve run/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/approval remarks/i), { target: { value: "Reviewed and correct" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /approve run/i }));
+
+    await waitFor(() => expect(dialog).toHaveTextContent(/someone other than the person who made it/i));
+    expect(dialog.textContent).not.toMatch(/raw server text/);
+    expect(dialog.textContent).not.toMatch(/couldn't save/i);
+  });
+
+  it("sends the typed reason in the PATCH body (>= 10 characters is enforced before it is sent)", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "r1", status: "accepted" }), { status: 202 }));
+    renderActions({ currentUserId: OTHER, createdBy: ME, approvedBy: null });
+    fireEvent.click(screen.getByRole("button", { name: /approve run/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    const confirm = within(dialog).getByRole("button", { name: /approve run/i });
+    fireEvent.change(within(dialog).getByLabelText(/approval remarks/i), { target: { value: "too short" } });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText(/approval remarks/i), { target: { value: "Register checked" } });
+    expect(confirm).toBeEnabled();
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("/api/proxy/v1/payroll/runs/r1/approve");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(init.body as string)).toEqual({ reason: "Register checked" });
+  });
+});
+
+// GAP-PAYROLL-HOME-01: the confirmation summaries render from integer paise.
+describe("PayrollRunActions — GAP-PAYROLL-HOME-01 amounts come from paise", () => {
+  function renderActions(props: Record<string, unknown>) {
+    return render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <PayrollRunActions {...PROPS} {...props} />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("the Approve dialog shows the exact gross (₹5,00,000.00) from grossMinor", async () => {
+    renderActions({});
+    fireEvent.click(screen.getByRole("button", { name: /approve run/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("₹5,00,000.00");
+    expect(dialog).not.toHaveTextContent("₹5,000.00");
+  });
+
+  it("the Disburse dialog shows the exact net (₹4,50,000.00) and the employee count", async () => {
+    renderActions({ status: "completed" });
+    fireEvent.click(screen.getByRole("button", { name: /disburse run/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("₹4,50,000.00");
+    expect(dialog).toHaveTextContent("50");
+  });
+
+  it("an unknown amount reads as a dash, never as ₹0.00", async () => {
+    renderActions({ grossMinor: undefined });
+    fireEvent.click(screen.getByRole("button", { name: /approve run/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).not.toHaveTextContent("₹0.00");
+    expect(dialog).toHaveTextContent("gross of —");
   });
 });
