@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import { RaiseEOfficeNote } from "./RaiseEOfficeNote";
+import { resetSessionIdentityCache } from "@/lib/auth/useSessionIdentity";
 
 // The officer pickers are EmployeePickers (next-intl), so every render needs the provider.
 function render(ui: React.ReactElement) {
@@ -322,5 +323,92 @@ describe("RaiseEOfficeNote classification, error mapping and notify warning", ()
     unmount();
     render(<RaiseEOfficeNote {...props} allowRaiseAfterTerminal />);
     expect(await screen.findByText("Raise for approval")).toBeInTheDocument();
+  });
+});
+
+// ── GAP-FINANCE-PAYMENTS-DETAIL-02: the forward-to directory follows the role ──
+// finance_officer / finance_admin may raise an eFile (estab INITIATOR_ROLES) but are NOT on the HR
+// employee directory's role list (DIRECTORY_ROLES): the HR search 403s for them. finance_officer can
+// reach the payroll employee lookup; finance_admin reaches neither.
+describe("RaiseEOfficeNote forward-to directory follows the signed-in role", () => {
+  const props = { refType: "finance_payment", refId: "p-9", subject: "Payment PAY-9", dept: "Finance" };
+
+  function mockSession(roles: string[], opts?: { hrmsStatus?: number; hrmsFailFirst?: boolean }) {
+    let hrmsCalls = 0;
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : (input as Request).url;
+      if (url.includes("/api/auth/session")) {
+        return new Response(JSON.stringify({ authenticated: true, userId: "u-1", roles }), { status: 200 });
+      }
+      if (url.includes("/estab/files/by-ref")) return new Response(null, { status: 404 });
+      if (url.includes("/hrms/me/profile")) return new Response(null, { status: 404 });
+      if (url.includes("/payroll/employee-lookup")) return new Response(JSON.stringify({ data: EMPLOYEES }), { status: 200 });
+      if (url.includes("/hrms/employees")) {
+        hrmsCalls += 1;
+        if (opts?.hrmsStatus) return new Response(null, { status: opts.hrmsStatus });
+        if (opts?.hrmsFailFirst && hrmsCalls === 1) return new Response(null, { status: 500 });
+        return new Response(JSON.stringify({ data: EMPLOYEES }), { status: 200 });
+      }
+      if (url.includes("/estab/files/from-module")) return new Response(JSON.stringify({ id: "f", fileNo: "EO/FIN/2026/010" }), { status: 201 });
+      return new Response(null, { status: 404 });
+    });
+    return spy;
+  }
+  const urlsOf = (spy: ReturnType<typeof mockSession>) => spy.mock.calls.map(([i]) => String(typeof i === "string" ? i : (i as Request).url));
+  /** Open the form and let the session answer (roles) land before anyone searches. */
+  async function openForm(spy: ReturnType<typeof mockSession>) {
+    await waitFor(() => expect(screen.getByText("Raise for approval")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Raise for approval"));
+    await waitFor(() => expect(urlsOf(spy).some((u) => u.includes("/api/auth/session"))).toBe(true));
+    await act(async () => { await new Promise((r) => setTimeout(r, 25)); });
+  }
+
+  beforeEach(() => { vi.restoreAllMocks(); resetSessionIdentityCache(); });
+
+  it("a finance_officer picks the forward-to officer from the payroll lookup (the HR directory is never called) and raises", async () => {
+    const spy = mockSession(["finance_officer"], { hrmsStatus: 403 });
+    render(<RaiseEOfficeNote {...props} />);
+    await openForm(spy);
+    fireEvent.change(screen.getByLabelText("Forward to officer"), { target: { value: "Ben" } });
+    fireEvent.mouseDown(await screen.findByText("Ben Iyer (E-002)"));
+    await screen.findByDisplayValue("Ben Iyer (E-002)");
+    expect(urlsOf(spy).some((u) => u.includes("/payroll/employee-lookup?q=Ben"))).toBe(true);
+    expect(urlsOf(spy).some((u) => u.includes("/hrms/employees"))).toBe(false);
+
+    fireEvent.change(screen.getByPlaceholderText(/Justification/i), { target: { value: "Please approve this payment." } });
+    fireEvent.click(screen.getByText("Submit to eOffice"));
+    await screen.findByText(/Raised eFile EO\/FIN\/2026\/010/);
+    const call = spy.mock.calls.find(([i]) => String(typeof i === "string" ? i : (i as Request).url).includes("from-module"))!;
+    expect(JSON.parse((call[1] as RequestInit).body as string).currentWith).toBe("abcdefab-abcd-abcd-abcd-abcdefabcdef");
+  });
+
+  it("an HR user still searches the HR employee directory", async () => {
+    const spy = mockSession(["hr_admin"]);
+    render(<RaiseEOfficeNote {...props} />);
+    await openForm(spy);
+    fireEvent.change(screen.getByLabelText("Forward to officer"), { target: { value: "Ben" } });
+    await screen.findByText("Ben Iyer (E-002)");
+    expect(urlsOf(spy).some((u) => u.includes("/hrms/employees?q=Ben"))).toBe(true);
+    expect(urlsOf(spy).some((u) => u.includes("/payroll/employee-lookup"))).toBe(false);
+  });
+
+  it("a finance_admin (no reachable directory) is told so plainly, with no picker that can only fail", async () => {
+    const spy = mockSession(["finance_admin"]);
+    render(<RaiseEOfficeNote {...props} />);
+    await openForm(spy);
+    expect(await screen.findByText(/cannot search the employee directory/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Forward to officer")).not.toBeInTheDocument();
+    expect(urlsOf(spy).some((u) => u.includes("/hrms/employees") || u.includes("/payroll/employee-lookup"))).toBe(false);
+  });
+
+  it("a failed officer search offers a retry that runs the same query again", async () => {
+    const spy = mockSession(["hr_admin"], { hrmsFailFirst: true });
+    render(<RaiseEOfficeNote {...props} />);
+    await openForm(spy);
+    fireEvent.change(screen.getByLabelText("Forward to officer"), { target: { value: "Ben" } });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not load employees");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByText("Ben Iyer (E-002)")).toBeInTheDocument();
+    expect(urlsOf(spy).filter((u) => u.includes("/hrms/employees?q=Ben"))).toHaveLength(2);
   });
 });

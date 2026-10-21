@@ -57,6 +57,12 @@ export interface EntityPickerProps {
    * not exist. Adapters signal failure by throwing; see lib/entityAdapters.
    */
   searchErrorText?: string;
+  /**
+   * Label for a "try again" button shown under the failure alert; clicking it re-runs the
+   * search for the text already typed (GAP-FINANCE-PAYMENTS-DETAIL-02). Opt-in: when omitted
+   * the picker keeps its alert-only failure state, and the only retry is editing the query.
+   */
+  retryText?: string;
   removeOptionAriaLabel?: (label: string) => string;
   /** Accessible name for standalone use (no ancestor Field, no visible label). Ignored when a Field label already provides one. */
   "aria-label"?: string;
@@ -127,6 +133,7 @@ export function EntityPicker({
   noResultsText = "No matches",
   searchingText = "Searching…",
   searchErrorText = "Couldn\u2019t load results. Please try again.",
+  retryText,
   removeOptionAriaLabel = (label: string) => `Remove ${label}`,
   "aria-label": ariaLabel,
   id,
@@ -410,6 +417,17 @@ export function EntityPicker({
       >
         {showStatus ? (loading ? searchingText : failed ? searchErrorText : noResultsText) : ""}
       </span>
+      {showStatus && failed && !loading && retryText ? (
+        <button
+          type="button"
+          className="btn ghost"
+          style={{ justifySelf: "start", minHeight: 44 }}
+          disabled={disabled}
+          onClick={() => runSearch(query)}
+        >
+          {retryText}
+        </button>
+      ) : null}
 
       {open && results.length > 0 && (
         <ul
