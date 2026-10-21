@@ -8,6 +8,7 @@ import { SeniorityListActions, type SeniorityListSummary } from "./_components/S
 import type { PromotionRow } from "../promotion/_components/PromotionCard";
 import { formatIndianDate } from "@/lib/formatters";
 import { HR_STAFF_ROLES } from "@/lib/auth/workRoles";
+import { DPC_IN_FLIGHT_STATUSES } from "./_components/batchStatuses";
 
 // DOM-023: mirrors the backend's HR_ROLES guard exactly
 // (services/hrms-service/src/modules/seniority/routes.ts) for the
@@ -48,12 +49,14 @@ async function getData() {
 
 async function getBatchPromotions(): Promise<LoaderResult<PromotionRow[]>> {
   // GAP-HR-DPC-02: exclude promotions that are already fully resolved
-  // (signed/completed) or cancelled -- there is no real DPC-batch linkage
-  // in the schema to scope this to "this DPC's batch" precisely (see that
-  // GAP's own note), but restricting to still-in-flight statuses is a
-  // meaningfully closer approximation than every promotion the tenant has
-  // ever made.
-  const r = await fetchJson<unknown, PromotionRow[]>("/api/v1/hrms/lifecycle/promotions?status=pending", [], {
+  // (completed) or cancelled -- there is no real DPC-batch linkage in the
+  // schema to scope this to "this DPC's batch" precisely (see that GAP's own
+  // note), but restricting to still-in-flight statuses is a meaningfully
+  // closer approximation than every promotion the tenant has ever made. The
+  // filter is the LIST of in-flight statuses the workflow really writes
+  // (batchStatuses.ts); it used to be `status=pending`, which no live write
+  // path ever produces, so the card was always empty.
+  const r = await fetchJson<unknown, PromotionRow[]>(`/api/v1/hrms/lifecycle/promotions?status=${DPC_IN_FLIGHT_STATUSES.join(",")}`, [], {
     telemetryKey: "hr.dpc.promotions",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: PromotionRow[] })?.data;
@@ -183,7 +186,12 @@ export default async function DpcPage() {
             {promoErrored ? (
               <LoadErrorState result={{ status: promoStatus, errorMessage: promoErrorMessage }} area="dpc" backHref="/hr" />
             ) : (
-              <PromotionBatchView promotions={batchPromotions} />
+              <>
+                {/* GAP-HR-DPC-02: the card is honest about its scope -- promotions are
+                    not linked to a particular DPC meeting in the data model. */}
+                <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--mut)" }}>{t("batchScopeNote")}</p>
+                <PromotionBatchView promotions={batchPromotions} />
+              </>
             )}
           </div>
         </Card>

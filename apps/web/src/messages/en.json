@@ -2529,6 +2529,7 @@
     "noEligibleTitle": "No eligible officers",
     "noEligibleMessage": "Officers who complete the minimum qualifying service period appear here in seniority order for DPC consideration.",
     "batchPromotionsTitle": "DPC Batch Promotions",
+    "batchScopeNote": "Shows promotions that are still in progress (raised, awaiting approval, or approved but not yet effective). Promotions are not yet linked to a particular DPC meeting.",
     "notYetEligibleTitle": "Not Yet Eligible — Service Below Minimum",
     "allEligibleTitle": "All officers are eligible",
     "allEligibleMessage": "Every officer in this list currently meets the minimum qualifying service.",
@@ -2548,6 +2549,8 @@
     "statTotalInBatch": "Total in Batch",
     "statInitiated": "Initiated",
     "statInApproval": "In Approval",
+    "statAwaitingEffective": "Approved, Awaiting Effective Date",
+    "statOther": "Other",
     "statSignedIssued": "Signed & Issued",
     "statCancelled": "Cancelled"
   },
